@@ -1,5 +1,9 @@
-interface IMeasureProps {}
-export default function Home(props: IMeasureProps) {
+import Note from "./Note";
+
+interface IMeasureProps {
+  lineCount?: 5 | 6;
+}
+export default function Measure({ lineCount = 5 }: IMeasureProps) {
   return (
     <svg
       className="w-1/3 min-w-[300px]"
@@ -14,7 +18,7 @@ export default function Home(props: IMeasureProps) {
         y2="100"
         style={{ stroke: "blue", strokeWidth: 1 }}
       />
-      {Array.from({ length: 5 }, (_, index) => {
+      {Array.from({ length: lineCount }, (_, index) => {
         const y = 10 + 10 * index;
         return (
           <line
@@ -34,6 +38,7 @@ export default function Home(props: IMeasureProps) {
         y2="100"
         style={{ stroke: "blue", strokeWidth: 1 }}
       />
+      <Note x={10} duration="quarter" />
     </svg>
   );
 }

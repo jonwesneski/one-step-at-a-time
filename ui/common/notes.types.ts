@@ -11,7 +11,9 @@ export type Note =
   | "F#"
   | "Gb"
   | "G"
-  | "G#";
+  | "G#"
+  | "Ab";
+
 export type ChordType = "" | "Min" | "Maj" | "Sus" | "Aug";
 export type Extension = "" | "5" | "7" | "9";
 export type SlashType = "" | `${Note}/`;
