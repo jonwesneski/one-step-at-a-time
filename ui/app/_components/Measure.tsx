@@ -38,7 +38,7 @@ export default function Measure({ lineCount = 5 }: IMeasureProps) {
         y2="100"
         style={{ stroke: "blue", strokeWidth: 1 }}
       />
-      <Note x={10} duration="quarter" />
+      <Note x={10} duration="whole" />
     </svg>
   );
 }
