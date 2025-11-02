@@ -54,7 +54,7 @@ export default function Note(props: INoteProps) {
         style={{
           stroke: "blue",
           fill: headFill,
-          strokeWidth: 1,
+          strokeWidth: 2,
         }}
       />
     </g>
