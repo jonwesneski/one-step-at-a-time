@@ -3,9 +3,13 @@ import "react";
 declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
-      "music-measure": {
+      "music-layer": {
         lineCount?: 5 | 6;
-        children?: Element[];
+        children?: React.ReactNode;
+      };
+      "music-measure": {
+        currentCount?: number;
+        children?: React.ReactNode;
       };
       "music-note": {
         x?: string | number;

@@ -1,5 +1,5 @@
 if (typeof window !== "undefined" && typeof customElements !== "undefined") {
-  class MeasureElement extends HTMLElement {
+  class LayerElement extends HTMLElement {
     static get observedAttributes(): string[] {
       return ["line-count"];
     }
@@ -88,5 +88,5 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
   }
 
-  customElements.define("music-measure", MeasureElement);
+  customElements.define("music-layer", LayerElement);
 }
