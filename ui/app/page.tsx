@@ -1,5 +1,6 @@
 "use client";
 // import Measure from "./_components/Measure";
+import "./_components/chord";
 import "./_components/layer";
 import "./_components/measure2";
 import "./_components/note_";
@@ -12,13 +13,14 @@ export default function Home() {
         <Measure /> */}
         <music-measure currentCount={1}>
           <music-layer>
-            <music-note x="10" duration="quarter"></music-note>
-            <music-note x="10" duration="quarter"></music-note>
+            <music-chord>
+              <music-note x="10" duration="quarter"></music-note>
+              <music-note x="10" duration="quarter"></music-note>
+            </music-chord>
           </music-layer>
-          <music-layer>
+          {/* <music-layer> 
             <music-note x="10" duration="quarter"></music-note>
-            {/* <music-note x="10" duration="quarter"></music-note> */}
-          </music-layer>
+           </music-layer> */}
         </music-measure>
         <music-measure currentCount={2}>
           <music-layer>
@@ -27,7 +29,6 @@ export default function Home() {
           </music-layer>
           <music-layer>
             <music-note x="10" duration="quarter"></music-note>
-            {/* <music-note x="10" duration="quarter"></music-note> */}
           </music-layer>
         </music-measure>
         <music-measure currentCount={3}>
@@ -37,7 +38,6 @@ export default function Home() {
           </music-layer>
           <music-layer>
             <music-note x="10" duration="quarter"></music-note>
-            {/* <music-note x="10" duration="quarter"></music-note> */}
           </music-layer>
         </music-measure>
       </main>

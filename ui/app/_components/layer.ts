@@ -6,6 +6,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
 
     constructor() {
       super();
+      this.attachShadow({ mode: "open" });
     }
 
     connectedCallback(): void {
@@ -32,9 +33,6 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
 
     private render(): void {
-      // Save existing children
-      const children = Array.from(this.childNodes);
-
       // Build horizontal staff lines
       let staffLines = "";
       for (let index = 0; index < this.lineCount; index++) {
@@ -51,7 +49,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
         `;
       }
 
-      this.innerHTML = `
+      this.shadowRoot!.innerHTML = `
         <div class="relative w-1/3 min-w-[300px] h-[100px]">
           <svg
             class="absolute top-0 left-0 w-full h-full"
@@ -77,14 +75,9 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
               stroke-width="1"
             />
           </svg>
-          <div class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+          <div id="children-container" class="absolute top-0 left-0 w-full h-full pointer-events-none"><slot></slot></div>
         </div>
       `;
-
-      const container = this.querySelector("div > div");
-      if (container) {
-        children.forEach((child) => container.appendChild(child));
-      }
     }
   }
 

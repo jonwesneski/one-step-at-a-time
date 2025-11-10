@@ -9,6 +9,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     constructor() {
       super();
       this._currentCount = ++MeasureElement.totalCount;
+      this.attachShadow({ mode: "open" });
     }
 
     connectedCallback(): void {
@@ -37,19 +38,12 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
 
     private render(): void {
-      // Save existing children
-      const children = Array.from(this.childNodes);
-
-      this.innerHTML = `
-        <div class="">
+      this.shadowRoot!.innerHTML = `
+        <div>
           <span>${this.currentCount}</span>
+          <slot></slot>
         </div>
       `;
-
-      const container = this.querySelector("div");
-      if (container) {
-        children.forEach((child) => container.appendChild(child));
-      }
     }
   }
 

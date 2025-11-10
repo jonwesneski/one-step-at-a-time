@@ -26,18 +26,23 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
 
     connectedCallback(): void {
-      this.render(this.parentElement?.offsetWidth ?? 100);
+      const measureElement = this.closest("music-measure");
+      const width = measureElement?.getAttribute("width") || "100";
+      this.render(parseFloat(width));
     }
 
-    attributeChangedCallback(
-      name: string,
-      oldValue: string | null,
-      newValue: string | null
-    ): void {
-      if (oldValue !== newValue) {
-        this.render(this.parentElement?.offsetWidth ?? 100);
-      }
-    }
+    // attributeChangedCallback(
+    //   name: string,
+    //   oldValue: string | null,
+    //   newValue: string | null
+    // ): void {
+    //   if (oldValue !== newValue) {
+    //     const measureElement = this.closest("music-measure");
+    //     const width = measureElement?.getAttribute("width") || "100";
+    //     this.render(parseFloat(width));
+    //     //todo maybe i want to just call this.connectedCallback() instead
+    //   }
+    // }
 
     get x(): number {
       return parseFloat(this.getAttribute("x") || "0");
@@ -92,11 +97,16 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     `
           : "";
 
-      console.log(parentWidth / widthMap[this.duration], {
-        parentWidth,
-        w: widthMap[this.duration],
-      });
+      const y = this.getAttribute("y") || "50";
       this.shadowRoot!.innerHTML = `
+      <style>
+        :host {
+          position: absolute;
+          top: ${y}%;
+          width: 100px;
+          transform: translateY(-50%);
+        }
+      </style>
       <svg xmlns="http://www.w3.org/2000/svg" width="${
         parentWidth / widthMap[this.duration]
       }px" height="100%">
