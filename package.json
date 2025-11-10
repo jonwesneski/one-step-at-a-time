@@ -1,0 +1,13 @@
+{
+  "name": "rest-in-time",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "devDependencies": {
+    "@nx/eslint": "22.0.2",
+    "@nx/next": "22.0.2",
+    "eslint": "~8.57.0",
+    "nx": "22.0.2"
+  },
+  "dependencies": {}
+}

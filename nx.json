@@ -1,0 +1,43 @@
+{
+  "installation": {
+    "version": "22.0.2",
+    "plugins": {
+      "@nx/eslint": "22.0.2",
+      "@nx/next": "22.0.2"
+    }
+  },
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "nxCloudId": "691137b7d9c3f143725b82ce",
+  "targetDefaults": {
+    "dev": {
+      "dependsOn": [
+        "^dev"
+      ]
+    },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "{projectRoot}/dist"
+      ],
+      "cache": true
+    },
+    "start": {
+      "dependsOn": [
+        "^start"
+      ]
+    },
+    "lint": {
+      "cache": true
+    }
+  },
+  "plugins": [
+    {
+      "plugin": "@nx/eslint/plugin",
+      "options": {
+        "targetName": "lint"
+      }
+    }
+  ]
+}
