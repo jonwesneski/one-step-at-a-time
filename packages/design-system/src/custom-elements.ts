@@ -9,5 +9,4 @@ import './layer';
 import './measure';
 import './note';
 
-// Keep the module as an ES module.
 export {};
