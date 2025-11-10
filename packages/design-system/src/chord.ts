@@ -1,16 +1,16 @@
-if (typeof window !== "undefined" && typeof customElements !== "undefined") {
-  class MeasureElement extends HTMLElement {
+if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
+  class ChordElement extends HTMLElement {
     static totalCount: number = 0;
     private _currentCount: number;
     private _shadow: ShadowRoot;
     static get observedAttributes(): string[] {
-      return ["currentCount"];
+      return ['currentCount'];
     }
 
     constructor() {
       super();
-      this._currentCount = ++MeasureElement.totalCount;
-      this._shadow = this.attachShadow({ mode: "open" });
+      this._currentCount = ++ChordElement.totalCount;
+      this._shadow = this.attachShadow({ mode: 'open' });
     }
 
     connectedCallback(): void {
@@ -29,13 +29,13 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
 
     get currentCount(): number {
       const count = parseInt(
-        this.getAttribute("currentCount") || this._currentCount.toString()
+        this.getAttribute('currentCount') || this._currentCount.toString()
       );
       return count;
     }
 
     set currentCount(value: number) {
-      this.setAttribute("currentCount", value.toString());
+      this.setAttribute('currentCount', value.toString());
     }
 
     private render(): void {
@@ -52,5 +52,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
   }
 
-  customElements.define("music-chord", MeasureElement);
+  if (!customElements.get('music-chord')) {
+    customElements.define('music-chord', ChordElement);
+  }
 }

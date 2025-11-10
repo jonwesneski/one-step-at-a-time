@@ -1,4 +1,4 @@
-type DurationType = "sixteenth" | "eighth" | "quarter" | "half" | "whole";
+type DurationType = 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
 const widthMap: Record<DurationType, number> = {
   eighth: 8,
   half: 2,
@@ -7,27 +7,27 @@ const widthMap: Record<DurationType, number> = {
   sixteenth: 16,
 };
 
-if (typeof window !== "undefined" && typeof customElements !== "undefined") {
+if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement {
     private durationToTailCountMap: Map<DurationType, number>;
 
     static get observedAttributes(): string[] {
-      return ["x", "duration"];
+      return ['x', 'duration'];
     }
 
     constructor() {
       super();
-      this.attachShadow({ mode: "open" });
+      this.attachShadow({ mode: 'open' });
 
       this.durationToTailCountMap = new Map<DurationType, number>([
-        ["sixteenth", 2],
-        ["eighth", 1],
+        ['sixteenth', 2],
+        ['eighth', 1],
       ]);
     }
 
     connectedCallback(): void {
-      const measureElement = this.closest("music-measure");
-      const width = measureElement?.getAttribute("width") || "100";
+      const measureElement = this.closest('music-measure');
+      const width = measureElement?.getAttribute('width') || '100';
       this.render(parseFloat(width));
     }
 
@@ -45,20 +45,20 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     // }
 
     get x(): number {
-      return parseFloat(this.getAttribute("x") || "0");
+      return parseFloat(this.getAttribute('x') || '0');
     }
 
     set x(value: number | string) {
-      this.setAttribute("x", value.toString());
+      this.setAttribute('x', value.toString());
     }
 
     get duration(): DurationType {
-      const duration = this.getAttribute("duration");
-      return (duration as DurationType) || "quarter";
+      const duration = this.getAttribute('duration');
+      return (duration as DurationType) || 'quarter';
     }
 
     set duration(value: DurationType) {
-      this.setAttribute("duration", value);
+      this.setAttribute('duration', value);
     }
 
     private render(parentWidth: number): void {
@@ -66,11 +66,11 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
       const stemLength = 25;
       const stemEnd = stemStart + stemLength;
       const headFill =
-        this.duration === "half" || this.duration === "whole" ? "none" : "blue";
+        this.duration === 'half' || this.duration === 'whole' ? 'none' : 'blue';
       const tailCount = this.durationToTailCountMap.get(this.duration) || 0;
 
       // Build tails
-      let tailsHTML = "";
+      let tailsHTML = '';
       for (let index = 0; index < tailCount; index++) {
         const y = stemEnd - 5 * index;
         tailsHTML += `
@@ -84,7 +84,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
 
       // Build stem
       const stemHTML =
-        this.duration !== "whole"
+        this.duration !== 'whole'
           ? `
       <line
         x1="${this.x}"
@@ -95,9 +95,9 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
         stroke-width="1"
       />
     `
-          : "";
+          : '';
 
-      const y = this.getAttribute("y") || "50";
+      const y = this.getAttribute('y') || '50';
       this.shadowRoot!.innerHTML = `
       <style>
         :host {
@@ -129,5 +129,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
   }
 
-  customElements.define("music-note", NoteElement);
+  if (!customElements.get('music-note')) {
+    customElements.define('music-note', NoteElement);
+  }
 }

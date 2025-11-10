@@ -1,12 +1,12 @@
-if (typeof window !== "undefined" && typeof customElements !== "undefined") {
+if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class LayerElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ["line-count"];
+      return ['line-count'];
     }
 
     constructor() {
       super();
-      this.attachShadow({ mode: "open" });
+      this.attachShadow({ mode: 'open' });
     }
 
     connectedCallback(): void {
@@ -24,17 +24,17 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
 
     get lineCount(): number {
-      const count = parseInt(this.getAttribute("line-count") || "5");
+      const count = parseInt(this.getAttribute('line-count') || '5');
       return count === 6 ? 6 : 5;
     }
 
     set lineCount(value: number) {
-      this.setAttribute("line-count", value.toString());
+      this.setAttribute('line-count', value.toString());
     }
 
     private render(): void {
       // Build horizontal staff lines
-      let staffLines = "";
+      let staffLines = '';
       for (let index = 0; index < this.lineCount; index++) {
         const y = 10 + 10 * index;
         staffLines += `
@@ -81,5 +81,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     }
   }
 
-  customElements.define("music-layer", LayerElement);
+  if (!customElements.get('music-layer')) {
+    customElements.define('music-layer', LayerElement);
+  }
 }
