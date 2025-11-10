@@ -50,9 +50,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.shadowRoot!.innerHTML = `
-        <div class="relative w-1/3 min-w-[300px] h-[100px]">
+        <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
           <svg
-            class="absolute top-0 left-0 w-full h-full"
+            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
             height="100"
             viewBox="0 0 200 100"
             preserveAspectRatio="none"
@@ -75,7 +75,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               stroke-width="1"
             />
           </svg>
-          <div id="children-container" class="absolute top-0 left-0 w-full h-full pointer-events-none"><slot></slot></div>
+          <div id="children-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"><slot></slot></div>
         </div>
       `;
     }

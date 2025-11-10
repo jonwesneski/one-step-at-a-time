@@ -12,7 +12,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     private durationToTailCountMap: Map<DurationType, number>;
 
     static get observedAttributes(): string[] {
-      return ['x', 'duration'];
+      return ['x', 'y', 'duration'];
     }
 
     constructor() {
@@ -50,6 +50,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     set x(value: number | string) {
       this.setAttribute('x', value.toString());
+    }
+
+    get y(): number {
+      return parseFloat(this.getAttribute('y') || '0');
+    }
+
+    set y(value: number | string) {
+      this.setAttribute('y', value.toString());
     }
 
     get duration(): DurationType {
@@ -97,23 +105,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     `
           : '';
 
-      const y = this.getAttribute('y') || '50';
-      this.shadowRoot!.innerHTML = `
-      <style>
-        :host {
-          position: absolute;
-          top: ${y}%;
-          width: 100px;
-          transform: translateY(-50%);
-        }
-      </style>
-      <svg xmlns="http://www.w3.org/2000/svg" width="${
-        parentWidth / widthMap[this.duration]
-      }px" height="100%">
-        <g id="note">
-          ${tailsHTML}
-          ${stemHTML}
-          <ellipse
+      // Build head
+      const headHTML = `<ellipse
             cx="${this.x + 3}"
             cy="${stemStart}"
             rx="4"
@@ -122,7 +115,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             stroke="blue"
             fill="${headFill}"
             stroke-width="2"
-          />
+          />`;
+
+      this.shadowRoot!.innerHTML = `
+      <style>
+        :host {
+          position: absolute;
+          top: ${this.y}px;
+          left: 0;
+        }
+      </style>
+      <svg xmlns="http://www.w3.org/2000/svg" width="${
+        parentWidth / widthMap[this.duration]
+      }px" height="100%">
+        <g id="note">
+          ${tailsHTML}
+          ${stemHTML}
+          ${headHTML}
         </g>
       </svg>
     `;

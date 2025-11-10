@@ -3,6 +3,10 @@
 // import './_components/chord';
 
 import '@rest-in-time/design-system/client';
+// apps/ui/src/app/layout.tsx
+import type {} from '@rest-in-time/design-system';
+import '../../../../packages/design-system/src/custom-elements.d.ts';
+// ... rest of your layout
 // import './_components/layer';
 // import './_components/measure2';
 // import './_components/note_';
@@ -16,8 +20,8 @@ export default function Home() {
         <music-measure currentCount={1}>
           <music-layer>
             <music-chord>
-              <music-note x="10" duration="quarter"></music-note>
-              <music-note x="10" duration="quarter"></music-note>
+              <music-note x="10" y="0" duration="quarter"></music-note>
+              <music-note x="10" y="10" duration="quarter"></music-note>
             </music-chord>
           </music-layer>
           {/* <music-layer> 

@@ -5,10 +5,15 @@
   "packageManager": "pnpm@10.11.0",
   "type": "module",
   "main": "./src/index.ts",
-  "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    ".": {
+      "types": "./src/custom-elements.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/custom-elements.d.ts",
+      "default": "./src/client.ts"
+    }
   },
   "dependencies": {},
   "devDependencies": {

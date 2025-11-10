@@ -42,7 +42,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this._shadow.innerHTML = `
        <style>
           :host {
-            position: absolute;
+            display: inline-block;
           }
         </style>
         <div style="position: relative; display: flex; flex-direction: column;">

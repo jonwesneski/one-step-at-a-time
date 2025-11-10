@@ -1,9 +1,19 @@
+/// <reference path="./custom-elements.d.ts" />
 'use client';
 
-// import './chord';
+import './chord';
 import './custom-elements';
-// import './layer';
-// import './measure';
-// import './note';
+import './layer';
+import './measure';
+import './note';
 
-export {};
+// 'use client';
+
+// // import './chord';
+// import './custom-elements';
+// // import './layer';
+// // import './measure';
+// // import './note';
+
+// // export {};
+// export type {} from './custom-elements.d';
