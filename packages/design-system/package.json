@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.11.0",
-  "devDependencies": {},
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5",
+    "eslint": "^9"
+  }
 }
