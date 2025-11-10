@@ -1,16 +1,12 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement {
-    static totalCount: number = 0;
-    private _currentCount: number;
-    private _shadow: ShadowRoot;
     static get observedAttributes(): string[] {
       return ['currentCount'];
     }
 
     constructor() {
       super();
-      this._currentCount = ++ChordElement.totalCount;
-      this._shadow = this.attachShadow({ mode: 'open' });
+      this.attachShadow({ mode: 'open' });
     }
 
     connectedCallback(): void {
@@ -27,19 +23,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    get currentCount(): number {
-      const count = parseInt(
-        this.getAttribute('currentCount') || this._currentCount.toString()
-      );
-      return count;
-    }
-
-    set currentCount(value: number) {
-      this.setAttribute('currentCount', value.toString());
-    }
-
     private render(): void {
-      this._shadow.innerHTML = `
+      this.shadowRoot!.innerHTML = `
        <style>
           :host {
             display: inline-block;

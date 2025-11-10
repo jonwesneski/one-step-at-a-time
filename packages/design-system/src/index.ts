@@ -5,5 +5,5 @@ import './custom-elements';
 // import './measure';
 // import './note';
 
-export * from './custom-elements.d';
+// export * from './custom-elements.d';
 export {};
