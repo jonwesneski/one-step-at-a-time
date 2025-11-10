@@ -1,4 +1,5 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -19,7 +20,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@rest-in-time/design-system": [
+        "../../packages/design-system/src/index.ts"
+      ],
+      "@rest-in-time/design-system/*": ["../../packages/design-system/src/*"]
     }
   },
   "include": [
@@ -28,7 +33,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "../../packages/design-system/src/**/*"
   ],
   "exclude": ["node_modules"]
 }

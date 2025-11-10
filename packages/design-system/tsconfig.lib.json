@@ -1,16 +1,23 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
+    "declaration": true,
+    "declarationMap": true,
     "allowJs": true,
-    "lib": ["es2022", "dom"],
+    "lib": ["es2022", "dom", "dom.iterable"],
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"]
+    "types": ["node"],
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "target": "es2022",
+    "jsx": "react-jsx",
+    "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.js"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js"],
   "references": [],
   "exclude": [
     "jest.config.js",

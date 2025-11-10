@@ -1,9 +1,11 @@
-"use client";
+'use client';
 // import Measure from "./_components/Measure";
-import "./_components/chord";
-import "./_components/layer";
-import "./_components/measure2";
-import "./_components/note_";
+// import './_components/chord';
+
+import '@rest-in-time/design-system/client';
+// import './_components/layer';
+// import './_components/measure2';
+// import './_components/note_';
 
 export default function Home() {
   return (
