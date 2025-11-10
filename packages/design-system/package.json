@@ -1,5 +1,5 @@
 {
-  "name": "design-system",
+  "name": "@rest-in-time/design-system",
   "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.11.0",

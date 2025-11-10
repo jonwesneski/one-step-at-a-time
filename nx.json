@@ -10,26 +10,20 @@
   "nxCloudId": "691137b7d9c3f143725b82ce",
   "targetDefaults": {
     "dev": {
-      "dependsOn": [
-        "^dev"
-      ]
+      "dependsOn": ["^dev"]
     },
     "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        "{projectRoot}/dist"
-      ],
+      "dependsOn": ["^build"],
       "cache": true
     },
     "start": {
-      "dependsOn": [
-        "^start"
-      ]
+      "dependsOn": ["^start"]
     },
     "lint": {
       "cache": true
+    },
+    "test": {
+      "dependsOn": ["^build"]
     }
   },
   "plugins": [
@@ -38,6 +32,31 @@
       "options": {
         "targetName": "lint"
       }
+    },
+    {
+      "plugin": "@nx/js/typescript",
+      "options": {
+        "typecheck": {
+          "targetName": "typecheck"
+        },
+        "build": {
+          "targetName": "build",
+          "configName": "tsconfig.lib.json",
+          "buildDepsName": "build-deps",
+          "watchDepsName": "watch-deps"
+        }
+      }
+    },
+    {
+      "plugin": "@nx/jest/plugin",
+      "options": {
+        "targetName": "test"
+      }
     }
-  ]
+  ],
+  "release": {
+    "version": {
+      "preVersionCommand": "pnpm dlx nx run-many -t build"
+    }
+  }
 }
