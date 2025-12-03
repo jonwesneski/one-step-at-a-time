@@ -4,7 +4,6 @@ declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
       'music-layer': {
-        lineCount?: 5 | 6 | '5' | '6';
         children?: React.ReactNode;
       };
       'music-measure': {
@@ -14,7 +13,7 @@ declare module 'react' {
       'music-chord': {};
       'music-note': {
         x?: number | string;
-        y?: number | string;
+        note?: string;
         duration?: 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
         class?: string;
       };

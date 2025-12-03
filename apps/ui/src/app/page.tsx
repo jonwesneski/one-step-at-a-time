@@ -20,8 +20,8 @@ export default function Home() {
         <music-measure currentCount={1}>
           <music-layer>
             <music-chord>
-              <music-note x="10" y="0" duration="quarter"></music-note>
-              <music-note x="10" y="10" duration="quarter"></music-note>
+              <music-note x="10" note="A" duration="quarter"></music-note>
+              <music-note x="10" note="E" duration="quarter"></music-note>
             </music-chord>
           </music-layer>
           {/* <music-layer> 
@@ -30,20 +30,20 @@ export default function Home() {
         </music-measure>
         <music-measure currentCount={2}>
           <music-layer>
-            <music-note x="10" duration="quarter"></music-note>
-            <music-note x="10" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="quarter"></music-note>
           </music-layer>
           <music-layer>
-            <music-note x="10" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="quarter"></music-note>
           </music-layer>
         </music-measure>
         <music-measure currentCount={3}>
           <music-layer>
-            <music-note x="10" duration="quarter"></music-note>
-            <music-note x="10" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="quarter"></music-note>
           </music-layer>
           <music-layer>
-            <music-note x="10" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="quarter"></music-note>
           </music-layer>
         </music-measure>
       </main>

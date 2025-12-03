@@ -1,3 +1,5 @@
+// todo figure out how to import this into app
+
 // import type * as React from 'react';
 
 // declare global {
@@ -14,7 +16,7 @@
 //       'music-chord': {};
 //       'music-note': {
 //         x?: number | string;
-//         y?: number | string;
+//         note?: number | string;
 //         duration?: 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
 //         class?: string;
 //       };

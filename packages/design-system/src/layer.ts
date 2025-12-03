@@ -1,12 +1,47 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class LayerElement extends HTMLElement {
+    #trebleYCoordinates: { [x in string]: number } = {
+      F: 10,
+      E: 15,
+      D: 20,
+      C: 25,
+      B: 30,
+      A: 35,
+      G: 40,
+      F2: 45,
+      E2: 50,
+      D2: 55,
+      C2: 60,
+      B2: 65,
+      A2: 70,
+      G2: 75,
+      F3: 80,
+      E3: 85,
+      D3: 90,
+    };
+    #trebleMainLines: string[] = ['F', 'D', 'B', 'G', 'E2'];
     static get observedAttributes(): string[] {
-      return ['line-count'];
+      return [];
     }
 
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
+    }
+
+    // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
+    public getYCoordinate(note: string): number {
+      if (!note) return 0;
+      const key = note.trim().toUpperCase();
+      // direct match
+      if (this.#trebleYCoordinates[key] !== undefined) {
+        return this.#trebleYCoordinates[key];
+      }
+      // try with a suffix like '2' if the user provided octave info loosely
+      if (this.#trebleYCoordinates[`${key}2`] !== undefined) {
+        return this.#trebleYCoordinates[`${key}2`];
+      }
+      return 0;
     }
 
     connectedCallback(): void {
@@ -23,20 +58,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    get lineCount(): number {
-      const count = parseInt(this.getAttribute('line-count') || '5');
-      return count === 6 ? 6 : 5;
-    }
-
-    set lineCount(value: number) {
-      this.setAttribute('line-count', value.toString());
-    }
-
     private render(): void {
       // Build horizontal staff lines
+      // from top to bottom
       let staffLines = '';
-      for (let index = 0; index < this.lineCount; index++) {
-        const y = 10 + 10 * index;
+      for (const key of this.#trebleMainLines) {
+        const y = this.#trebleYCoordinates[key];
         staffLines += `
           <line
             x1="0"

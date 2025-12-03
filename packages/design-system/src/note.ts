@@ -12,7 +12,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     private durationToTailCountMap: Map<DurationType, number>;
 
     static get observedAttributes(): string[] {
-      return ['x', 'y', 'duration'];
+      return ['x', 'duration', 'note'];
     }
 
     constructor() {
@@ -52,14 +52,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('x', value.toString());
     }
 
-    get y(): number {
-      return parseFloat(this.getAttribute('y') || '0');
-    }
-
-    set y(value: number | string) {
-      this.setAttribute('y', value.toString());
-    }
-
     get duration(): DurationType {
       const duration = this.getAttribute('duration');
       return (duration as DurationType) || 'quarter';
@@ -67,6 +59,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     set duration(value: DurationType) {
       this.setAttribute('duration', value);
+    }
+
+    get note(): string | null {
+      return this.getAttribute('note');
+    }
+
+    set note(value: string | null) {
+      if (value === null) this.removeAttribute('note');
+      else this.setAttribute('note', value);
     }
 
     private render(parentWidth: number): void {
@@ -117,17 +118,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             stroke-width="2"
           />`;
 
+      const top = this.getYCoordinate() - stemLength; // adjust top based on stem
+      const svgHeight = stemEnd + 5; // add small padding
       this.shadowRoot!.innerHTML = `
       <style>
         :host {
           position: absolute;
-          top: ${this.y}px;
+          top: ${top}px;
           left: 0;
         }
       </style>
       <svg xmlns="http://www.w3.org/2000/svg" width="${
         parentWidth / widthMap[this.duration]
-      }px" height="100%">
+      }px" height="${svgHeight}px">
         <g id="note">
           ${tailsHTML}
           ${stemHTML}
@@ -135,6 +138,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         </g>
       </svg>
     `;
+    }
+
+    private getYCoordinate(): number {
+      // Gets nearest music-layer and finds y offset from the note name as a key
+      let finalY = NaN;
+      const noteName = this.getAttribute('note');
+      if (noteName) {
+        const layerElement = this.closest('music-layer') as any;
+        if (layerElement && typeof layerElement.getYCoordinate === 'function') {
+          const mapped = layerElement.getYCoordinate(noteName);
+          if (typeof mapped === 'number' && !Number.isNaN(mapped)) {
+            finalY = mapped;
+          }
+        } else {
+          throw new Error(
+            `music-note: Unable to find closest music-layer for note: ${noteName}`
+          );
+        }
+      }
+      if (Number.isNaN(finalY)) {
+        throw new Error(`Unable to find Y coordinate for note: ${noteName}`);
+      }
+      return finalY;
     }
   }
 
