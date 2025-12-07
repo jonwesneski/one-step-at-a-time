@@ -3,7 +3,7 @@ import 'react';
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'music-layer': {
+      'music-staff-treble': {
         children?: React.ReactNode;
       };
       'music-measure': {

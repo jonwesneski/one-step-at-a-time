@@ -1,5 +1,5 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  class LayerElement extends HTMLElement {
+  class StaffTrebleElement extends HTMLElement {
     #trebleYCoordinates: { [x in string]: number } = {
       F: 10,
       E: 15,
@@ -31,7 +31,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
     public getYCoordinate(note: string): number {
-      if (!note) return 0;
+      if (!note) {
+        return 0;
+      }
+
       const key = note.trim().toUpperCase();
       // direct match
       if (this.#trebleYCoordinates[key] !== undefined) {
@@ -61,10 +64,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     private render(): void {
       // Build horizontal staff lines
       // from top to bottom
-      let staffLines = '';
+      const staffLines = ['<g>'];
       for (const key of this.#trebleMainLines) {
         const y = this.#trebleYCoordinates[key];
-        staffLines += `
+        staffLines.push(`
           <line
             x1="0"
             y1="${y}"
@@ -73,8 +76,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             stroke="blue"
             stroke-width="2"
           />
-        `;
+        `);
       }
+      staffLines.push('</g>');
 
       this.shadowRoot!.innerHTML = `
         <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
@@ -92,7 +96,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               stroke="blue"
               stroke-width="1"
             />
-            ${staffLines}
+            ${staffLines.join('')}
             <line
               x1="200"
               y1="0"
@@ -108,7 +112,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  if (!customElements.get('music-layer')) {
-    customElements.define('music-layer', LayerElement);
+  if (!customElements.get('music-staff-treble')) {
+    customElements.define('music-staff-treble', StaffTrebleElement);
   }
 }

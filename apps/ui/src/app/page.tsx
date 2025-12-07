@@ -18,33 +18,33 @@ export default function Home() {
         {/* <Measure />
         <Measure /> */}
         <music-measure currentCount={1}>
-          <music-layer>
+          <music-staff-treble>
             <music-chord>
               <music-note x="10" note="A" duration="quarter"></music-note>
               <music-note x="10" note="E" duration="quarter"></music-note>
             </music-chord>
-          </music-layer>
-          {/* <music-layer> 
+          </music-staff-treble>
+          {/* <music-staff-treble> 
             <music-note x="10" duration="quarter"></music-note>
-           </music-layer> */}
+           </music-staff-treble> */}
         </music-measure>
         <music-measure currentCount={2}>
-          <music-layer>
+          <music-staff-treble>
             <music-note x="10" note="A" duration="quarter"></music-note>
             <music-note x="10" note="A" duration="quarter"></music-note>
-          </music-layer>
-          <music-layer>
+          </music-staff-treble>
+          <music-staff-treble>
             <music-note x="10" note="A" duration="quarter"></music-note>
-          </music-layer>
+          </music-staff-treble>
         </music-measure>
         <music-measure currentCount={3}>
-          <music-layer>
+          <music-staff-treble>
             <music-note x="10" note="A" duration="quarter"></music-note>
             <music-note x="10" note="A" duration="quarter"></music-note>
-          </music-layer>
-          <music-layer>
+          </music-staff-treble>
+          <music-staff-treble>
             <music-note x="10" note="A" duration="quarter"></music-note>
-          </music-layer>
+          </music-staff-treble>
         </music-measure>
       </main>
     </div>

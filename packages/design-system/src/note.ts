@@ -145,7 +145,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       let finalY = NaN;
       const noteName = this.getAttribute('note');
       if (noteName) {
-        const layerElement = this.closest('music-layer') as any;
+        const layerElement = this.closest('music-staff-treble') as any;
         if (layerElement && typeof layerElement.getYCoordinate === 'function') {
           const mapped = layerElement.getYCoordinate(noteName);
           if (typeof mapped === 'number' && !Number.isNaN(mapped)) {
@@ -153,7 +153,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
         } else {
           throw new Error(
-            `music-note: Unable to find closest music-layer for note: ${noteName}`
+            `music-note: Unable to find closest music-staff-treble for note: ${noteName}`
           );
         }
       }

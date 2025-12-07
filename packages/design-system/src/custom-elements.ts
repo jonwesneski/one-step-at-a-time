@@ -5,8 +5,9 @@
 // the package is imported (their modules already guard with
 // `typeof window !== 'undefined'`).
 import './chord';
-import './layer';
 import './measure';
+import './staff-treble'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
+
 import './note';
 
 export {};
