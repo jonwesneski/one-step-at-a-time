@@ -75,7 +75,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const stemLength = 25;
       const stemEnd = stemStart + stemLength;
       const headFill =
-        this.duration === 'half' || this.duration === 'whole' ? 'none' : 'blue';
+        this.duration === 'half' || this.duration === 'whole'
+          ? 'none'
+          : 'currentColor';
       const tailCount = this.durationToTailCountMap.get(this.duration) || 0;
 
       // Build tails
@@ -85,7 +87,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         tailsHTML += `
         <path
           d="M ${this.x} ${y} Q ${this.x + 8} ${y - 2} ${this.x + 6} ${y + 5}"
-          fill="blue"
+          fill="currentColor"
           stroke="none"
         />
       `;
@@ -100,7 +102,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         y1="${stemStart}"
         x2="${this.x}"
         y2="${stemEnd}"
-        stroke="blue"
+        stroke="currentColor"
         stroke-width="1"
       />
     `
@@ -113,7 +115,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             rx="4"
             ry="3"
             transform="rotate(-20 ${this.x + 3} ${stemStart})"
-            stroke="blue"
+            stroke="currentColor"
             fill="${headFill}"
             stroke-width="2"
           />`;

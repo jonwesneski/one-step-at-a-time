@@ -45,7 +45,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             y1="${y}"
             x2="200"
             y2="${y}"
-            stroke="blue"
+            stroke="currentColor"
             stroke-width="2"
           />
         `);
@@ -65,7 +65,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               y1="0"
               x2="0"
               y2="100"
-              stroke="blue"
+              stroke="currentColor"
               stroke-width="1"
             />
             ${innerSvg}
@@ -75,7 +75,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               y1="0"
               x2="200"
               y2="100"
-              stroke="blue"
+              stroke="currentColor"
               stroke-width="1"
             />
           </svg>
