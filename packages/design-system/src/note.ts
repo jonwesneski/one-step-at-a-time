@@ -125,9 +125,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.shadowRoot!.innerHTML = `
       <style>
         :host {
-          position: absolute;
+          display: inline-block;
+          position: relative;
           top: ${top}px;
-          left: 0;
         }
       </style>
       <svg xmlns="http://www.w3.org/2000/svg" width="${

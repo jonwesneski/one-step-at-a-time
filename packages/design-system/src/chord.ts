@@ -24,6 +24,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
+      // TODO: since i am setting style top in note.ts, Check to see if I might be
+      // calculating top incorrectly in chords
       this.shadowRoot!.innerHTML = `
        <style>
           :host {

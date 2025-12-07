@@ -30,8 +30,8 @@ export default function Home() {
         </music-measure>
         <music-measure currentCount={2}>
           <music-staff-treble>
-            <music-note x="10" note="A" duration="quarter"></music-note>
-            <music-note x="10" note="A" duration="quarter"></music-note>
+            <music-note x="10" note="A" duration="eighth"></music-note>
+            <music-note x="10" note="A" duration="eighth"></music-note>
           </music-staff-treble>
           <music-staff-bass>
             <music-note x="10" note="A" duration="quarter"></music-note>
