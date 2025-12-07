@@ -3,7 +3,8 @@
 
 import './chord';
 import './custom-elements';
-import './staff-treble';
+import './staffBass';
+import './staffTreble';
 
 import './measure';
 import './note';

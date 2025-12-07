@@ -145,15 +145,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       let finalY = NaN;
       const noteName = this.getAttribute('note');
       if (noteName) {
-        const layerElement = this.closest('music-staff-treble') as any;
-        if (layerElement && typeof layerElement.getYCoordinate === 'function') {
-          const mapped = layerElement.getYCoordinate(noteName);
+        const staffElement = (this.closest('music-staff-treble') ||
+          this.closest('music-staff-bass')) as any;
+        if (staffElement && typeof staffElement.getYCoordinate === 'function') {
+          const mapped = staffElement.getYCoordinate(noteName);
           if (typeof mapped === 'number' && !Number.isNaN(mapped)) {
             finalY = mapped;
           }
         } else {
           throw new Error(
-            `music-note: Unable to find closest music-staff-treble for note: ${noteName}`
+            `music-note: Unable to find closest music-staff for note: ${noteName}`
           );
         }
       }

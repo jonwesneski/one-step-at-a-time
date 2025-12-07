@@ -6,7 +6,8 @@
 // `typeof window !== 'undefined'`).
 import './chord';
 import './measure';
-import './staff-treble'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
+import './staffBass';
+import './staffTreble'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
 
 import './note';
 

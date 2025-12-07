@@ -33,9 +33,9 @@ export default function Home() {
             <music-note x="10" note="A" duration="quarter"></music-note>
             <music-note x="10" note="A" duration="quarter"></music-note>
           </music-staff-treble>
-          <music-staff-treble>
+          <music-staff-bass>
             <music-note x="10" note="A" duration="quarter"></music-note>
-          </music-staff-treble>
+          </music-staff-bass>
         </music-measure>
         <music-measure currentCount={3}>
           <music-staff-treble>

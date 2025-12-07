@@ -3,6 +3,9 @@ import 'react';
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
+      'music-staff-bass': {
+        children?: React.ReactNode;
+      };
       'music-staff-treble': {
         children?: React.ReactNode;
       };
@@ -10,7 +13,7 @@ declare module 'react' {
         currentCount?: number | string;
         children?: React.ReactNode;
       };
-      'music-chord': {};
+      'music-chord': { children?: React.ReactNode };
       'music-note': {
         x?: number | string;
         note?: string;
