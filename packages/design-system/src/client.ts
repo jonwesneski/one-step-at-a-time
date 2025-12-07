@@ -4,6 +4,7 @@
 import './chord';
 import './custom-elements';
 import './staffBass';
+import './staffGuitarTab';
 import './staffTreble';
 
 import './measure';

@@ -5,7 +5,7 @@ const _MaybeHTMLElement: any =
     : class {};
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
-  #linesY: number[] = [10, 20, 30, 40, 50];
+  protected linesY: number[] = [10, 20, 30, 40, 50];
   static get observedAttributes(): string[] {
     return [];
   }
@@ -38,7 +38,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     // Build horizontal staff lines
     // from top to bottom
     const staffLines = ['<g>'];
-    for (const y of this.#linesY) {
+    for (const y of this.linesY) {
       staffLines.push(`
           <line
             x1="0"

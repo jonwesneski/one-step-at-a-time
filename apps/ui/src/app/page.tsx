@@ -42,9 +42,7 @@ export default function Home() {
             <music-note x="10" note="A" duration="quarter"></music-note>
             <music-note x="10" note="A" duration="quarter"></music-note>
           </music-staff-treble>
-          <music-staff-treble>
-            <music-note x="10" note="A" duration="quarter"></music-note>
-          </music-staff-treble>
+          <music-staff-guitar-tab></music-staff-guitar-tab>
         </music-measure>
       </main>
     </div>
