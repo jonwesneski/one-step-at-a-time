@@ -1,3 +1,6 @@
+import { DurationType } from './types';
+import { createNoteSvgDom } from './utls';
+
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 const _MaybeHTMLElement: any =
   typeof globalThis !== 'undefined' && (globalThis as any).HTMLElement
@@ -20,18 +23,23 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   #handleSlotChange(event: Event) {
     const slot = event.target as HTMLSlotElement;
-    const assignedNodes = slot.assignedElements({ flatten: true });
-    const assignedElements = slot.assignedElements({ flatten: true });
+    const assignedNodes = slot
+      .assignedNodes({ flatten: true })
+      .filter((n) => n.nodeName === 'MUSIC-NOTE');
+    const assignedElements = slot
+      .assignedElements({ flatten: true })
+      .filter((e) => e.nodeName === 'MUSIC-NOTE');
     // Handle added/removed here
+
+    this.#renderNotes(assignedElements);
+
     // TODO: add handler. And remove observer when removed(add random key generated in music-note class, update observers to me hash of key: observer)
-    this.#drawBeamIfNecessary(assignedElements);
 
     assignedNodes.forEach((node) => {
       // Handle when each node has been mutated here
       // TODO: // only create the observer if it is new
       const observer = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
-          console.log(mutation);
         }
       });
       observer.observe(node, {
@@ -44,13 +52,27 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     });
   }
 
+  #renderNotes(elements: Element[]) {
+    const notes = [];
+    for (const element of elements) {
+      const duration = (element.getAttribute('duration') ||
+        'quarter') as DurationType;
+      notes.push(createNoteSvgDom({ duration }).outerHTML);
+    }
+    notes.push();
+    this.#drawBeamIfNecessary(elements);
+    const svgsString = notes.join('\n');
+    this.shadowRoot
+      .querySelector('#children-container')
+      .insertAdjacentHTML('beforeend', svgsString);
+  }
+
   #drawBeamIfNecessary(nodes: Element[]) {
     const consecutives: number[] = [];
     for (let i = 0; i < nodes.length; i++) {
       if (
-        nodes[i].nodeName === 'MUSIC-NOTE' &&
-        (nodes[i].getAttribute('duration') === 'eighth' ||
-          nodes[i].getAttribute('duration') === 'sixteenth')
+        nodes[i].getAttribute('duration') === 'eighth' ||
+        nodes[i].getAttribute('duration') === 'sixteenth'
       ) {
         if (consecutives.length === 0) {
           consecutives.push(i);
@@ -109,21 +131,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected abstract render(): void;
 
-  protected build(innerSvg: string = ''): string {
+  protected build(clefSvg: string = ''): string {
     // Build horizontal staff lines
     // from top to bottom
     const staffLines = ['<g>'];
     for (const y of this.linesY) {
       staffLines.push(`
           <line
-            x1="0"
-            y1="${y}"
-            x2="200"
-            y2="${y}"
-            stroke="currentColor"
-            stroke-width="2"
+          x1="0"
+          y1="${y}"
+          x2="200"
+          y2="${y}"
+          stroke="currentColor"
+          stroke-width="2"
           />
-        `);
+      `);
     }
     staffLines.push('</g>');
 
@@ -143,7 +165,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               stroke="currentColor"
               stroke-width="1"
             />
-            ${innerSvg}
             ${staffLines.join('')}
             <line
               x1="200"
@@ -154,7 +175,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               stroke-width="1"
             />
           </svg>
-          <div id="children-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"><slot></slot></div>
+          <div id="children-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+            ${clefSvg}
+            <slot></slot>
+          </div>
         </div>
       `;
   }

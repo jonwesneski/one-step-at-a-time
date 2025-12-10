@@ -1,3 +1,5 @@
+import { createNoteSvgDom } from './utls';
+
 type DurationType = 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
 const widthMap: Record<DurationType, number> = {
   eighth: 8,
@@ -26,9 +28,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     connectedCallback(): void {
-      const measureElement = this.closest('music-measure');
-      const width = measureElement?.getAttribute('width') || '100';
-      this.render(parseFloat(width));
+      const staffElement =
+        this.closest('music-staff-treble') || this.closest('music-staff-bass');
+      if (!staffElement) {
+        this.render(100, true);
+      }
+      // else let the staffElement build the note
     }
 
     // attributeChangedCallback(
@@ -70,7 +75,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       else this.setAttribute('note', value);
     }
 
-    private render(parentWidth: number): void {
+    private render(parentWidth: number, includeStyle: boolean): void {
+      this.shadowRoot!.innerHTML = this.build(parentWidth, includeStyle);
+    }
+
+    public build(parentWidth: number, includeStyle: boolean): string {
+      return createNoteSvgDom({ duration: this.duration }).outerHTML;
+
       const stemStart = 10;
       const stemLength = 25;
       const stemEnd = stemStart + stemLength;
@@ -122,22 +133,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const top = this.getYCoordinate() - stemLength; // adjust top based on stem
       const svgHeight = stemEnd + 5; // add small padding
-      this.shadowRoot!.innerHTML = `
+
+      const style = includeStyle
+        ? `
       <style>
         :host {
           display: inline-block;
           position: relative;
           top: ${top}px;
         }
-      </style>
+      </style>`
+        : '';
+      return `${style}
       <svg xmlns="http://www.w3.org/2000/svg" width="${
         parentWidth / widthMap[this.duration]
       }px" height="${svgHeight}px">
-        <g id="note">
           ${tailsHTML}
           ${stemHTML}
           ${headHTML}
-        </g>
       </svg>
     `;
     }

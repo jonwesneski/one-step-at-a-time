@@ -93,9 +93,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   }
 
   if (!customElements.get('music-staff-guitar-tab')) {
-    customElements.define(
-      'music-staff-guitar-tab',
-      StaffGuitarTabElement as any
-    );
+    customElements.define('music-staff-guitar-tab', StaffGuitarTabElement);
   }
 }
