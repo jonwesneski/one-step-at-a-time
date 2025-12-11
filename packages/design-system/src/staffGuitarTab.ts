@@ -1,7 +1,7 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends HTMLElement {
     static #tabSvg = `
-      <svg id="clef" height="80px" width="80px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:svg="http://www.w3.org/2000/svg" version="1.1">
+      <svg class="clef" height="80px" width="80px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:svg="http://www.w3.org/2000/svg" version="1.1">
         <text x="40" font-size="20" text-anchor="middle" fill="currentColor" font-weight="bold">
             <tspan x="20" dy="20">T</tspan>
             <tspan x="20" dy="20">A</tspan>
@@ -86,7 +86,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               stroke-width="1"
             />
           </svg>
-          <div id="children-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"><slot></slot></div>
+          <div class="children-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"><slot></slot></div>
         </div>
       `;
     }

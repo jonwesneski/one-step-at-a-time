@@ -56,9 +56,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const beamSvg = this.#buildBeamIfNecessary(elements);
     const needsBeam = beamSvg !== null;
     const notesContainer = this.shadowRoot
-      .querySelector('#staff-container')
-      .querySelector('#notes-container');
-    const clef = this.shadowRoot.querySelector('#describe-container');
+      .querySelector('.staff-container')
+      .querySelector('.notes-container');
+    const clef = this.shadowRoot.querySelector('.describe-container');
     let xOffsetOfNote: number = clef.getBoundingClientRect().width;
 
     // todo determine if all notes should be stemup or not before creating svgs
@@ -199,7 +199,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return `
         <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
           <svg
-            id="staff-container"
+            class="staff-container"
             style="position: absolute; top: 0; left: 0; width: 100%"
             height="100"
             viewBox="0 0 200 100"
@@ -214,10 +214,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               stroke-width="1"
             />
             ${staffLines.join('')}
-            <g id="describe-container">
+            <g class="describe-container">
               ${clefSvg}
             </g>
-            <g id="notes-container">
+            <g class="notes-container">
             </g>
             <line
               x1="200"
@@ -228,10 +228,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               stroke-width="1"
             />
           </svg>
-          <div id="children-container" style="position: absolute; top: 0; left: 0; display: flex; width: 100%; height: 100%; pointer-events: none;">
-            <svg id="notes-container" viewBox="0 0 200 100"></svg>
-            <slot></slot>
-          </div>
+          <slot></slot>
         </div>
       `;
   }
