@@ -12,7 +12,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       D: 20,
       C: 25,
       B: 30,
-      A: 35,
+      A: 25, //todo need to update other coordinates
       G: 40,
       F2: 45,
       E2: 50,

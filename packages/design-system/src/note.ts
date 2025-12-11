@@ -1,18 +1,8 @@
-import { createNoteSvgDom } from './utls';
-
-type DurationType = 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
-const widthMap: Record<DurationType, number> = {
-  eighth: 8,
-  half: 2,
-  quarter: 4,
-  whole: 1,
-  sixteenth: 16,
-};
+import { DurationType } from './types';
+import { createNoteSvgDom } from './utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement {
-    private durationToTailCountMap: Map<DurationType, number>;
-
     static get observedAttributes(): string[] {
       return ['x', 'duration', 'note'];
     }
@@ -20,11 +10,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-
-      this.durationToTailCountMap = new Map<DurationType, number>([
-        ['sixteenth', 2],
-        ['eighth', 1],
-      ]);
     }
 
     connectedCallback(): void {
@@ -82,77 +67,77 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     public build(parentWidth: number, includeStyle: boolean): string {
       return createNoteSvgDom({ duration: this.duration }).outerHTML;
 
-      const stemStart = 10;
-      const stemLength = 25;
-      const stemEnd = stemStart + stemLength;
-      const headFill =
-        this.duration === 'half' || this.duration === 'whole'
-          ? 'none'
-          : 'currentColor';
-      const tailCount = this.durationToTailCountMap.get(this.duration) || 0;
+      //   const stemStart = 10;
+      //   const stemLength = 25;
+      //   const stemEnd = stemStart + stemLength;
+      //   const headFill =
+      //     this.duration === 'half' || this.duration === 'whole'
+      //       ? 'none'
+      //       : 'currentColor';
+      //   const tailCount = this.durationToTailCountMap.get(this.duration) || 0;
 
-      // Build tails
-      let tailsHTML = '';
-      for (let index = 0; index < tailCount; index++) {
-        const y = stemEnd - 5 * index;
-        tailsHTML += `
-        <path
-          d="M ${this.x} ${y} Q ${this.x + 8} ${y - 2} ${this.x + 6} ${y + 5}"
-          fill="currentColor"
-          stroke="none"
-        />
-      `;
-      }
+      //   // Build tails
+      //   let tailsHTML = '';
+      //   for (let index = 0; index < tailCount; index++) {
+      //     const y = stemEnd - 5 * index;
+      //     tailsHTML += `
+      //     <path
+      //       d="M ${this.x} ${y} Q ${this.x + 8} ${y - 2} ${this.x + 6} ${y + 5}"
+      //       fill="currentColor"
+      //       stroke="none"
+      //     />
+      //   `;
+      //   }
 
-      // Build stem
-      const stemHTML =
-        this.duration !== 'whole'
-          ? `
-      <line
-        x1="${this.x}"
-        y1="${stemStart}"
-        x2="${this.x}"
-        y2="${stemEnd}"
-        stroke="currentColor"
-        stroke-width="1"
-      />
-    `
-          : '';
+      //   // Build stem
+      //   const stemHTML =
+      //     this.duration !== 'whole'
+      //       ? `
+      //   <line
+      //     x1="${this.x}"
+      //     y1="${stemStart}"
+      //     x2="${this.x}"
+      //     y2="${stemEnd}"
+      //     stroke="currentColor"
+      //     stroke-width="1"
+      //   />
+      // `
+      //       : '';
 
-      // Build head
-      const headHTML = `<ellipse
-            cx="${this.x + 3}"
-            cy="${stemStart}"
-            rx="4"
-            ry="3"
-            transform="rotate(-20 ${this.x + 3} ${stemStart})"
-            stroke="currentColor"
-            fill="${headFill}"
-            stroke-width="2"
-          />`;
+      //   // Build head
+      //   const headHTML = `<ellipse
+      //         cx="${this.x + 3}"
+      //         cy="${stemStart}"
+      //         rx="4"
+      //         ry="3"
+      //         transform="rotate(-20 ${this.x + 3} ${stemStart})"
+      //         stroke="currentColor"
+      //         fill="${headFill}"
+      //         stroke-width="2"
+      //       />`;
 
-      const top = this.getYCoordinate() - stemLength; // adjust top based on stem
-      const svgHeight = stemEnd + 5; // add small padding
+      //   const top = this.getYCoordinate() - stemLength; // adjust top based on stem
+      //   const svgHeight = stemEnd + 5; // add small padding
 
-      const style = includeStyle
-        ? `
-      <style>
-        :host {
-          display: inline-block;
-          position: relative;
-          top: ${top}px;
-        }
-      </style>`
-        : '';
-      return `${style}
-      <svg xmlns="http://www.w3.org/2000/svg" width="${
-        parentWidth / widthMap[this.duration]
-      }px" height="${svgHeight}px">
-          ${tailsHTML}
-          ${stemHTML}
-          ${headHTML}
-      </svg>
-    `;
+      //   const style = includeStyle
+      //     ? `
+      //   <style>
+      //     :host {
+      //       display: inline-block;
+      //       position: relative;
+      //       top: ${top}px;
+      //     }
+      //   </style>`
+      //     : '';
+      //   return `${style}
+      //   <svg xmlns="http://www.w3.org/2000/svg" width="${
+      //     parentWidth / widthMap[this.duration]
+      //   }px" height="${svgHeight}px">
+      //       ${tailsHTML}
+      //       ${stemHTML}
+      //       ${headHTML}
+      //   </svg>
+      // `;
     }
 
     private getYCoordinate(): number {
