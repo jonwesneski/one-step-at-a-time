@@ -10,7 +10,12 @@ const _MaybeHTMLElement: any =
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   #mutationObservers: MutationObserver[];
-  protected linesY: number[] = [10, 20, 30, 40, 50];
+  protected static lineStart = 30;
+  protected static lineSpacing = 10;
+  protected static linesY: number[] = Array.from(
+    { length: 5 },
+    (_, i) => StaffElementBase.lineStart + i * StaffElementBase.lineSpacing
+  );
 
   constructor() {
     super();
@@ -71,6 +76,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       const staffYCoordinate = this.getYCoordinate(
         elements[i].getAttribute('note') || 'A'
       );
+      debugger;
       const noteSvg = createNoteSvgDom({
         duration,
         flagsIfNeeded: !needsBeam,
@@ -92,15 +98,12 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
       if (beamSvg) {
         const stemSvg = noteSvg.querySelector('.stem');
-        const x = stemUp
-          ? xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0')
-          : xOffsetOfNote;
+        const x = xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
         const stemYAttribute = stemUp ? 'y1' : 'y2';
-        const y = parseInt(
-          stemUp
-            ? stemSvg?.getAttribute(stemYAttribute) || '0'
-            : stemSvg?.getAttribute(stemYAttribute) || '0'
-        );
+        const y = stemUp
+          ? yHeadOffset
+          : yHeadOffset +
+            parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
         if (i === 0) {
           beamSvg.setAttribute('x1', x.toString());
           beamSvg.setAttribute('y1', y.toString());
@@ -181,8 +184,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected build(clefSvg: string = ''): string {
     // Build horizontal staff lines
     // from top to bottom
-    const staffLines = ['<g>'];
-    for (const y of this.linesY) {
+    const staffLines = ['<g class="staff-lines">'];
+    for (const y of StaffElementBase.linesY) {
       staffLines.push(`
           <line
           x1="0"
