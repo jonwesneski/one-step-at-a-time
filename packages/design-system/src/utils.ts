@@ -5,14 +5,20 @@ type NoteProps = {
   duration: DurationType;
   flagsIfNeeded?: boolean;
   stemUp?: boolean;
+  qualifiedElementName?: 'svg' | 'g';
 };
 export const createNoteSvgDom = ({
   duration,
   flagsIfNeeded = true,
   stemUp = true,
+  qualifiedElementName = 'svg',
 }: NoteProps) => {
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('xmlns', svgNS);
+  const svg = document.createElementNS(svgNS, qualifiedElementName);
+  if (qualifiedElementName === 'svg') {
+    svg.setAttribute('xmlns', svgNS);
+    //svg.setAttribute('viewBox', '8 8 12 30');
+  }
+
   svg.setAttribute('width', '37.5px');
   svg.setAttribute('height', '40px');
 
@@ -39,6 +45,7 @@ export const createNoteSvgDom = ({
 
   const stemX = stemUp ? (x + 4).toString() : x.toString();
   const stemHtml = document.createElementNS(svgNS, 'line');
+  stemHtml.setAttribute('class', 'stem');
   stemHtml.setAttribute('x1', stemX);
   stemHtml.setAttribute('y1', stemStart.toString());
   stemHtml.setAttribute('x2', stemX);

@@ -30,11 +30,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const assignedElements = slot
       .assignedElements({ flatten: true })
       .filter((e) => e.nodeName === 'MUSIC-NOTE');
-    // Handle added/removed here
+    // TODO: Handle added/removed here; which is different than the mutation observer
+    //  - maybe add random key generated in music-note class, update observers to me hash of key: observer)
 
     this.#renderNotes(assignedElements);
-
-    // TODO: add handler. And remove observer when removed(add random key generated in music-note class, update observers to me hash of key: observer)
 
     assignedNodes.forEach((node) => {
       // Handle when each node has been mutated here
@@ -54,39 +53,64 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   #renderNotes(elements: Element[]) {
-    const notes = [];
-    const beamCoordinates = this.#getBeamCoordinates(elements);
-    const notesContainer = this.shadowRoot.querySelector('#notes-container');
-    let xOffsetOfNote = 0;
-    for (const element of elements) {
-      const duration = (element.getAttribute('duration') ||
+    const beamCoordinates = this.#buildBeamCoordinates(elements);
+    const needsBeam = beamCoordinates !== null;
+    const notesContainer = this.shadowRoot
+      .querySelector('#staff-container')
+      .querySelector('#notes-container');
+    const clef = this.shadowRoot.querySelector('#describe-container');
+    let xOffsetOfNote = clef.getBoundingClientRect().width;
+
+    // todo determine if all notes should be stemup or not before creating svgs
+    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
+    let stemUp = true;
+    for (let i = 0; i < elements.length; i++) {
+      const duration = (elements[i].getAttribute('duration') ||
         'quarter') as DurationType;
 
       const staffYCoordinate = this.getYCoordinate(
-        element.getAttribute('note') || 'A'
+        elements[i].getAttribute('note') || 'A'
       );
       const noteSvg = createNoteSvgDom({
         duration,
-        flagsIfNeeded: beamCoordinates === null,
-        stemUp: true, // todo if above middle line of staff: stemdown (use staffYCoordinate to determine that)
+        flagsIfNeeded: !needsBeam,
+        stemUp,
+        qualifiedElementName: 'g',
       });
-
-      //notesContainer.insertAdjacentHTML('beforeend', noteSvg.outerHTML);
+      // Need to append node before I can get width and height
       notesContainer.appendChild(noteSvg);
+
       const { width, height } = noteSvg.getBoundingClientRect();
       const halfOfHead = 4;
-      // head bottom
-      const answer1 = staffYCoordinate - height + halfOfHead;
-      // head top
-      const answer2 = staffYCoordinate + halfOfHead;
+      const yHeadOffset = stemUp
+        ? staffYCoordinate - height + halfOfHead
+        : staffYCoordinate + halfOfHead;
       noteSvg.setAttribute(
         'transform',
-        `translate(${xOffsetOfNote}, ${answer1})`
+        `translate(${xOffsetOfNote}, ${yHeadOffset})`
       );
-      notes.push(noteSvg.outerHTML);
+
+      if (beamCoordinates) {
+        const stemSvg = noteSvg.querySelector('.stem');
+        const x = stemUp
+          ? xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0')
+          : xOffsetOfNote;
+        const stemYAttribute = stemUp ? 'y1' : 'y2';
+        const y = parseInt(
+          stemUp
+            ? stemSvg?.getAttribute(stemYAttribute) || '0'
+            : stemSvg?.getAttribute(stemYAttribute) || '0'
+        );
+        if (i === 0) {
+          beamCoordinates.startX = x;
+          beamCoordinates.startY = y;
+        } else if (i === elements.length - 1) {
+          beamCoordinates.endX = x;
+          beamCoordinates.endY = y;
+        }
+      }
       xOffsetOfNote += width;
     }
-    notes.push();
 
     if (beamCoordinates) {
       const beamHtml = document.createElementNS(svgNS, 'line');
@@ -96,12 +120,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       beamHtml.setAttribute('y2', beamCoordinates.endY.toString());
       beamHtml.setAttribute('stroke', 'currentColor');
       beamHtml.setAttribute('stroke-width', '6');
-      notesContainer.insertAdjacentHTML('beforeend', beamHtml.outerHTML);
+      notesContainer.appendChild(beamHtml);
     }
-    //notesContainer.insertAdjacentHTML('beforeend', notes.join('\n'));
   }
 
-  #getBeamCoordinates(nodes: Element[]) {
+  #buildBeamCoordinates(nodes: Element[]) {
     const consecutives: number[] = [];
     for (let i = 0; i < nodes.length; i++) {
       if (
@@ -116,12 +139,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
     }
     if (consecutives.length && consecutives.length % 2 === 0) {
-      const lastIndex = consecutives.length - 1;
       return {
-        startX: parseInt(nodes[consecutives[0]].getAttribute('x') || '0'),
-        startY: parseInt(nodes[consecutives[0]].getAttribute('y') || '0'),
-        endX: parseInt(nodes[consecutives[lastIndex]].getAttribute('x') || '0'),
-        endY: parseInt(nodes[consecutives[lastIndex]].getAttribute('y') || '0'),
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0,
       };
     }
     return null;
@@ -189,6 +211,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return `
         <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
           <svg
+            id="staff-container"
             style="position: absolute; top: 0; left: 0; width: 100%"
             height="100"
             viewBox="0 0 200 100"
@@ -203,6 +226,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
               stroke-width="1"
             />
             ${staffLines.join('')}
+            <g id="describe-container">
+              ${clefSvg}
+            </g>
+            <g id="notes-container">
+            </g>
             <line
               x1="200"
               y1="0"
@@ -213,7 +241,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             />
           </svg>
           <div id="children-container" style="position: absolute; top: 0; left: 0; display: flex; width: 100%; height: 100%; pointer-events: none;">
-            ${clefSvg}
             <svg id="notes-container" viewBox="0 0 200 100"></svg>
             <slot></slot>
           </div>
