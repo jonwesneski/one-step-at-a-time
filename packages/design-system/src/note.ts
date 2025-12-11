@@ -16,7 +16,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const staffElement =
         this.closest('music-staff-treble') || this.closest('music-staff-bass');
       if (!staffElement) {
-        this.render(100, true);
+        this.render();
       }
       // else let the staffElement build the note
     }
@@ -60,108 +60,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       else this.setAttribute('note', value);
     }
 
-    private render(parentWidth: number, includeStyle: boolean): void {
-      this.shadowRoot!.innerHTML = this.build(parentWidth, includeStyle);
-    }
-
-    public build(parentWidth: number, includeStyle: boolean): string {
-      return createNoteSvgDom({ duration: this.duration }).outerHTML;
-
-      //   const stemStart = 10;
-      //   const stemLength = 25;
-      //   const stemEnd = stemStart + stemLength;
-      //   const headFill =
-      //     this.duration === 'half' || this.duration === 'whole'
-      //       ? 'none'
-      //       : 'currentColor';
-      //   const tailCount = this.durationToTailCountMap.get(this.duration) || 0;
-
-      //   // Build tails
-      //   let tailsHTML = '';
-      //   for (let index = 0; index < tailCount; index++) {
-      //     const y = stemEnd - 5 * index;
-      //     tailsHTML += `
-      //     <path
-      //       d="M ${this.x} ${y} Q ${this.x + 8} ${y - 2} ${this.x + 6} ${y + 5}"
-      //       fill="currentColor"
-      //       stroke="none"
-      //     />
-      //   `;
-      //   }
-
-      //   // Build stem
-      //   const stemHTML =
-      //     this.duration !== 'whole'
-      //       ? `
-      //   <line
-      //     x1="${this.x}"
-      //     y1="${stemStart}"
-      //     x2="${this.x}"
-      //     y2="${stemEnd}"
-      //     stroke="currentColor"
-      //     stroke-width="1"
-      //   />
-      // `
-      //       : '';
-
-      //   // Build head
-      //   const headHTML = `<ellipse
-      //         cx="${this.x + 3}"
-      //         cy="${stemStart}"
-      //         rx="4"
-      //         ry="3"
-      //         transform="rotate(-20 ${this.x + 3} ${stemStart})"
-      //         stroke="currentColor"
-      //         fill="${headFill}"
-      //         stroke-width="2"
-      //       />`;
-
-      //   const top = this.getYCoordinate() - stemLength; // adjust top based on stem
-      //   const svgHeight = stemEnd + 5; // add small padding
-
-      //   const style = includeStyle
-      //     ? `
-      //   <style>
-      //     :host {
-      //       display: inline-block;
-      //       position: relative;
-      //       top: ${top}px;
-      //     }
-      //   </style>`
-      //     : '';
-      //   return `${style}
-      //   <svg xmlns="http://www.w3.org/2000/svg" width="${
-      //     parentWidth / widthMap[this.duration]
-      //   }px" height="${svgHeight}px">
-      //       ${tailsHTML}
-      //       ${stemHTML}
-      //       ${headHTML}
-      //   </svg>
-      // `;
-    }
-
-    private getYCoordinate(): number {
-      // Gets nearest music-layer and finds y offset from the note name as a key
-      let finalY = NaN;
-      const noteName = this.getAttribute('note');
-      if (noteName) {
-        const staffElement = (this.closest('music-staff-treble') ||
-          this.closest('music-staff-bass')) as any;
-        if (staffElement && typeof staffElement.getYCoordinate === 'function') {
-          const mapped = staffElement.getYCoordinate(noteName);
-          if (typeof mapped === 'number' && !Number.isNaN(mapped)) {
-            finalY = mapped;
-          }
-        } else {
-          throw new Error(
-            `music-note: Unable to find closest music-staff for note: ${noteName}`
-          );
-        }
-      }
-      if (Number.isNaN(finalY)) {
-        throw new Error(`Unable to find Y coordinate for note: ${noteName}`);
-      }
-      return finalY;
+    private render(): void {
+      this.shadowRoot!.innerHTML = createNoteSvgDom({
+        duration: this.duration,
+      }).outerHTML;
     }
   }
 

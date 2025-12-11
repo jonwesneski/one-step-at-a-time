@@ -53,13 +53,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   #renderNotes(elements: Element[]) {
-    const beamCoordinates = this.#buildBeamCoordinates(elements);
-    const needsBeam = beamCoordinates !== null;
+    const beamSvg = this.#buildBeamIfNecessary(elements);
+    const needsBeam = beamSvg !== null;
     const notesContainer = this.shadowRoot
       .querySelector('#staff-container')
       .querySelector('#notes-container');
     const clef = this.shadowRoot.querySelector('#describe-container');
-    let xOffsetOfNote = clef.getBoundingClientRect().width;
+    let xOffsetOfNote: number = clef.getBoundingClientRect().width;
 
     // todo determine if all notes should be stemup or not before creating svgs
     // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
@@ -90,7 +90,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         `translate(${xOffsetOfNote}, ${yHeadOffset})`
       );
 
-      if (beamCoordinates) {
+      if (beamSvg) {
         const stemSvg = noteSvg.querySelector('.stem');
         const x = stemUp
           ? xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0')
@@ -102,30 +102,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             : stemSvg?.getAttribute(stemYAttribute) || '0'
         );
         if (i === 0) {
-          beamCoordinates.startX = x;
-          beamCoordinates.startY = y;
+          beamSvg.setAttribute('x1', x.toString());
+          beamSvg.setAttribute('y1', y.toString());
         } else if (i === elements.length - 1) {
-          beamCoordinates.endX = x;
-          beamCoordinates.endY = y;
+          beamSvg.setAttribute('x2', x.toString());
+          beamSvg.setAttribute('y2', y.toString());
+          notesContainer.appendChild(beamSvg);
         }
       }
       xOffsetOfNote += width;
     }
-
-    if (beamCoordinates) {
-      const beamHtml = document.createElementNS(svgNS, 'line');
-      beamHtml.setAttribute('x1', beamCoordinates.startX.toString());
-      beamHtml.setAttribute('y1', beamCoordinates.startY.toString());
-      beamHtml.setAttribute('x2', beamCoordinates.endX.toString());
-      beamHtml.setAttribute('y2', beamCoordinates.endY.toString());
-      beamHtml.setAttribute('stroke', 'currentColor');
-      beamHtml.setAttribute('stroke-width', '6');
-      notesContainer.appendChild(beamHtml);
-    }
   }
 
-  #buildBeamCoordinates(nodes: Element[]) {
+  #buildBeamIfNecessary(nodes: Element[]) {
     const consecutives: number[] = [];
+    let beamSvg: SVGLineElement | null = null;
     for (let i = 0; i < nodes.length; i++) {
       if (
         nodes[i].getAttribute('duration') === 'eighth' ||
@@ -139,14 +130,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
     }
     if (consecutives.length && consecutives.length % 2 === 0) {
-      return {
-        startX: 0,
-        startY: 0,
-        endX: 0,
-        endY: 0,
-      };
+      beamSvg = document.createElementNS(svgNS, 'line');
+      beamSvg.setAttribute('stroke', 'currentColor');
+      beamSvg.setAttribute('stroke-width', '6');
     }
-    return null;
+    return beamSvg;
   }
 
   // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
