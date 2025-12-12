@@ -13,24 +13,24 @@ export default function Home() {
           <music-measure>
             <music-staff-treble>
               <music-chord>
-                <music-note x="10" note="A" duration="quarter"></music-note>
-                <music-note x="10" note="E" duration="quarter"></music-note>
+                <music-note value="A" duration="quarter"></music-note>
+                <music-note value="E" duration="quarter"></music-note>
               </music-chord>
             </music-staff-treble>
           </music-measure>
           <music-measure currentCount={2}>
             <music-staff-treble>
-              <music-note x="10" note="A" duration="eighth"></music-note>
-              <music-note x="10" note="A" duration="eighth"></music-note>
+              <music-note value="A" duration="eighth"></music-note>
+              <music-note value="A" duration="eighth"></music-note>
             </music-staff-treble>
             <music-staff-bass>
-              <music-note x="10" note="A" duration="quarter"></music-note>
+              <music-note value="A" duration="quarter"></music-note>
             </music-staff-bass>
           </music-measure>
           <music-measure currentCount={3}>
             <music-staff-treble>
-              <music-note x="10" note="A" duration="quarter"></music-note>
-              <music-note x="10" note="A" duration="quarter"></music-note>
+              <music-note value="A" duration="quarter"></music-note>
+              <music-note value="A" duration="quarter"></music-note>
             </music-staff-treble>
             <music-staff-guitar-tab></music-staff-guitar-tab>
           </music-measure>

@@ -4,20 +4,12 @@ import { createNoteSvgDom } from './utils';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['x', 'duration', 'note'];
+      return ['duration', 'value'];
     }
 
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-    }
-
-    get x(): number {
-      return parseFloat(this.getAttribute('x') || '0');
-    }
-
-    set x(value: number | string) {
-      this.setAttribute('x', value.toString());
     }
 
     get duration(): DurationType {
@@ -29,13 +21,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('duration', value);
     }
 
-    get note(): string | null {
-      return this.getAttribute('note');
+    get value(): string | null {
+      return this.getAttribute('value');
     }
 
-    set note(value: string | null) {
-      if (value === null) this.removeAttribute('note');
-      else this.setAttribute('note', value);
+    set value(val: string | null) {
+      if (val === null) this.removeAttribute('value');
+      else this.setAttribute('value', val);
     }
 
     connectedCallback(): void {

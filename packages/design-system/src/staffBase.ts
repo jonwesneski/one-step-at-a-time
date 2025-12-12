@@ -205,7 +205,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         'quarter') as DurationType;
 
       const staffYCoordinate = this.getYCoordinate(
-        elements[i].getAttribute('note') || 'A'
+        elements[i].getAttribute('value') || 'C'
       );
       const noteSvg = createNoteSvgDom({
         duration,

@@ -11,8 +11,7 @@ declare module 'react' {
         children?: React.ReactNode;
       };
       'music-note': {
-        x?: number | string;
-        note?: string;
+        value?: string;
         duration?: 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
         class?: string;
       };
