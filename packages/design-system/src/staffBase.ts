@@ -9,26 +9,61 @@ const _MaybeHTMLElement: any =
     : class {};
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
+  #mutationObservers: MutationObserver[];
+
   protected static lineStart = 30;
   protected static lineSpacing = 10;
   protected static linesY: number[] = Array.from(
     { length: 5 },
     (_, i) => StaffElementBase.lineStart + i * StaffElementBase.lineSpacing
   );
-  #mutationObservers: MutationObserver[];
 
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
     this.#mutationObservers = [];
+
+    this.attachShadow({ mode: 'open' });
+
+    const measure = this.closest('music-measure');
+    if (measure) {
+      this.time = measure.getAttribute('time') ?? '4/4';
+      this.mode = measure.getAttribute('mode') ?? 'major';
+      this.key = measure.getAttribute('key') ?? 'C';
+    }
   }
 
   static get observedAttributes(): string[] {
-    return [];
+    return ['key', 'mode', 'time'];
+  }
+
+  get key(): string {
+    return this.getAttribute('key') ?? 'C';
+  }
+
+  set key(value: string) {
+    this.setAttribute('key', value);
+  }
+
+  get mode(): string {
+    return this.getAttribute('mode') ?? 'major';
+  }
+
+  set mode(value: string) {
+    this.setAttribute('mode', value);
+  }
+
+  get time(): string | null {
+    return this.getAttribute('time');
+  }
+
+  set time(value: string) {
+    this.setAttribute('time', value);
   }
 
   // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
   public abstract getYCoordinate(note: string): number;
+
+  public abstract getKeyYCoordinates(): number[];
 
   connectedCallback(): void {
     this.render();

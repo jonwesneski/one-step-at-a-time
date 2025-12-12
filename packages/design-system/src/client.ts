@@ -2,6 +2,7 @@
 'use client';
 
 import './chord';
+import './composition';
 import './custom-elements';
 import './staffBass';
 import './staffGuitarTab';

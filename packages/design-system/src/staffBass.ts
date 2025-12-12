@@ -6,7 +6,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         <path style="fill:currentColor" d="m190.85 451.25c11.661 14.719 32.323 24.491 55.844 24.491 36.401 0 65.889-23.372 65.889-52.214s-29.488-52.214-65.889-52.214c-20.314 4.1522-28.593 9.0007-33.143-2.9091 17.976-54.327 46.918-66.709 96.546-66.709 65.914 0 96.969 59.897 96.969 142.97-18.225 190.63-205.95 286.75-246.57 316.19 5.6938 13.103 5.3954 12.631 5.3954 12.009 189.78-86.203 330.69-204.43 330.69-320.74 0-92.419-58.579-175.59-187.72-172.8-77.575 0-170.32 86.203-118 171.93zm328.1-89.88c0 17.852 14.471 32.323 32.323 32.323s32.323-14.471 32.323-32.323-14.471-32.323-32.323-32.323-32.323 14.471-32.323 32.323zm0 136.75c0 17.852 14.471 32.323 32.323 32.323s32.323-14.471 32.323-32.323-14.471-32.323-32.323-32.323-32.323 14.471-32.323 32.323z" stroke="currentColor"/>
       </svg>
     `;
-    static #bassYCoordinates: { [x in string]: number } = {
+    static #yCoordinates: { [x in string]: number } = {
       // Above 1st line
       E4: 10,
       D4: 15,
@@ -27,8 +27,72 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       F2: 75,
       E2: 80,
     };
-    // TODO: do I still need this?, figure out once class is more fleshed out
-    // #bassMainLines: string[] = ['G', 'E', 'C', 'A', 'F2'];
+    static #sharps = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
+    static #majorSharpYCoordinates = {
+      G: StaffBassElement.#sharps
+        .filter((_, i) => i < 1)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      D: StaffBassElement.#sharps
+        .filter((_, i) => i < 2)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      A: StaffBassElement.#sharps
+        .filter((_, i) => i < 3)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      E: StaffBassElement.#sharps
+        .filter((_, i) => i < 4)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      B: StaffBassElement.#sharps
+        .filter((_, i) => i < 5)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      ['F#']: StaffBassElement.#sharps
+        .filter((_, i) => i < 6)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      ['C#']: StaffBassElement.#sharps
+        .filter((_, i) => i < 7)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+    };
+    static #minorSharpYCoordinates = {
+      E: StaffBassElement.#majorSharpYCoordinates.G,
+      B: StaffBassElement.#majorSharpYCoordinates.D,
+      ['F#']: StaffBassElement.#majorSharpYCoordinates.A,
+      ['C#']: StaffBassElement.#majorSharpYCoordinates.E,
+      ['G#']: StaffBassElement.#majorSharpYCoordinates.B,
+      ['D#']: StaffBassElement.#majorSharpYCoordinates['F#'],
+      ['A#']: StaffBassElement.#majorSharpYCoordinates['C#'],
+    };
+    static #flats = ['B4', 'E5', 'A4', 'D5', 'G4', 'C5', 'F4'];
+    static #majorFlatYCoordinates = {
+      F: StaffBassElement.#flats
+        .filter((_, i) => i < 1)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      Bb: StaffBassElement.#flats
+        .filter((_, i) => i < 2)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      Eb: StaffBassElement.#flats
+        .filter((_, i) => i < 3)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      Ab: StaffBassElement.#flats
+        .filter((_, i) => i < 4)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      Db: StaffBassElement.#flats
+        .filter((_, i) => i < 5)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      Gb: StaffBassElement.#flats
+        .filter((_, i) => i < 6)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+      Cb: StaffBassElement.#flats
+        .filter((_, i) => i < 7)
+        .map((note) => StaffBassElement.#yCoordinates[note]),
+    };
+    static #minorFlatYCoordinates = {
+      D: StaffBassElement.#majorFlatYCoordinates.F,
+      G: StaffBassElement.#majorFlatYCoordinates.Bb,
+      C: StaffBassElement.#majorFlatYCoordinates.Eb,
+      F: StaffBassElement.#majorFlatYCoordinates.Ab,
+      Bb: StaffBassElement.#majorFlatYCoordinates.Db,
+      Eb: StaffBassElement.#majorFlatYCoordinates.Gb,
+      Ab: StaffBassElement.#majorFlatYCoordinates.Cb,
+    };
 
     // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
     public getYCoordinate(note: string): number {
@@ -38,17 +102,31 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const key = note.trim().toUpperCase();
       // direct match
-      if (StaffBassElement.#bassYCoordinates[key] !== undefined) {
-        return StaffBassElement.#bassYCoordinates[key];
+      if (StaffBassElement.#yCoordinates[key] !== undefined) {
+        return StaffBassElement.#yCoordinates[key];
       }
 
       // try with a suffix like '2' if the user provided octave info loosely
       for (const n of [2, 3, 4]) {
-        if (StaffBassElement.#bassYCoordinates[`${key}${n}`] !== undefined) {
-          return StaffBassElement.#bassYCoordinates[`${key}${n}`];
+        if (StaffBassElement.#yCoordinates[`${key}${n}`] !== undefined) {
+          return StaffBassElement.#yCoordinates[`${key}${n}`];
         }
       }
       return 0;
+    }
+
+    public getKeyYCoordinates(): number[] {
+      const _key = this.key as never;
+      return (
+        {
+          major:
+            StaffBassElement.#majorSharpYCoordinates[_key] ??
+            StaffBassElement.#majorFlatYCoordinates[_key],
+          minor:
+            StaffBassElement.#minorSharpYCoordinates[_key] ??
+            StaffBassElement.#minorFlatYCoordinates[_key],
+        }[this.mode] || []
+      );
     }
 
     protected render(): void {

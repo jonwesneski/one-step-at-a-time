@@ -1,19 +1,62 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {
-    static totalCount: number = 0;
-    private _currentCount: number;
     static get observedAttributes(): string[] {
-      return ['currentCount'];
+      return ['number', 'key', 'mode', 'time'];
     }
 
     constructor() {
       super();
-      this._currentCount = ++MeasureElement.totalCount;
       this.attachShadow({ mode: 'open' });
+      const composition = this.closest('music-composition');
+      if (composition) {
+        //this.time = composition.getAttribute('time') ?? '4/4';
+        this.mode = composition.getAttribute('mode') ?? 'major';
+        this.key = composition.getAttribute('key') ?? 'C';
+      }
+    }
+
+    get number(): number | null {
+      const value = this.getAttribute('number');
+      if (value === null) return null;
+      return parseInt(value);
+    }
+
+    set number(value: number | null) {
+      if (value === null) this.removeAttribute('number');
+      else this.setAttribute('number', value.toString());
+    }
+
+    get key(): string {
+      return this.getAttribute('key') ?? 'C';
+    }
+
+    set key(value: string) {
+      this.setAttribute('key', value);
+    }
+
+    get mode(): string {
+      return this.getAttribute('mode') ?? 'major';
+    }
+
+    set mode(value: string) {
+      this.setAttribute('mode', value);
+    }
+
+    get time(): string | null {
+      return this.getAttribute('time');
+    }
+
+    set time(value: string) {
+      this.setAttribute('time', value);
     }
 
     connectedCallback(): void {
       this.render();
+
+      // const slot = this.shadowRoot?.querySelector('slot');
+      // if (slot) {
+      //   slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
+      // }
     }
 
     attributeChangedCallback(
@@ -26,25 +69,31 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    get currentCount(): number {
-      const count = parseInt(
-        this.getAttribute('currentCount') || this._currentCount.toString()
-      );
-      return count;
-    }
-
-    set currentCount(value: number) {
-      this.setAttribute('currentCount', value.toString());
-    }
-
     private render(): void {
       this.shadowRoot!.innerHTML = `
         <div>
-          <span>${this.currentCount}</span>
+          <span>${this.number}</span>
           <slot></slot>
         </div>
       `;
     }
+
+    // #handleSlotChange(event: Event) {
+    //   const slot = event.target as HTMLSlotElement;
+    //   const staffMap = {
+    //     'MUSIC-STAFF-TREBLE': true,
+    //     'MUSIC-STAFF-BASS': true,
+    //     'MUSIC-STAFF-GUITAR-TAB': true,
+    //   };
+    //   const assignedNodes = slot
+    //     .assignedNodes({ flatten: true })
+    //     .filter((n) => staffMap[n.nodeName as keyof typeof staffMap]);
+    //   const assignedElements = slot
+    //     .assignedElements({ flatten: true })
+    //     .filter((e) => staffMap[e.nodeName as keyof typeof staffMap]);
+
+    //   for (let i = 0; i < assignedElements.length; i++) {}
+    // }
   }
 
   if (!customElements.get('music-measure')) {
