@@ -27,7 +27,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       F2: 75,
       E2: 80,
     };
-    static #sharps = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
+    static #sharps = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
     static #majorSharpYCoordinates = {
       G: StaffBassElement.#sharps
         .filter((_, i) => i < 1)
@@ -60,7 +60,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['D#']: StaffBassElement.#majorSharpYCoordinates['F#'],
       ['A#']: StaffBassElement.#majorSharpYCoordinates['C#'],
     };
-    static #flats = ['B4', 'E5', 'A4', 'D5', 'G4', 'C5', 'F4'];
+    static #flats = ['B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2'];
     static #majorFlatYCoordinates = {
       F: StaffBassElement.#flats
         .filter((_, i) => i < 1)
@@ -115,18 +115,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return 0;
     }
 
-    public getKeyYCoordinates(): number[] {
-      const _key = this.key as never;
-      return (
-        {
-          major:
-            StaffBassElement.#majorSharpYCoordinates[_key] ??
-            StaffBassElement.#majorFlatYCoordinates[_key],
-          minor:
-            StaffBassElement.#minorSharpYCoordinates[_key] ??
-            StaffBassElement.#minorFlatYCoordinates[_key],
-        }[this.mode] || []
-      );
+    public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
+      const _key = this.keySig as never;
+      const answer: { useSharps: boolean; coordinates: number[] } = {
+        useSharps: Boolean(
+          StaffBassElement.#majorSharpYCoordinates[_key] ??
+            StaffBassElement.#minorSharpYCoordinates[_key]
+        ),
+        coordinates: [],
+      };
+      if (answer.useSharps) {
+        answer.coordinates =
+          StaffBassElement.#majorSharpYCoordinates[_key] ??
+          StaffBassElement.#minorSharpYCoordinates[_key];
+      } else {
+        answer.coordinates =
+          StaffBassElement.#majorFlatYCoordinates[_key] ??
+          StaffBassElement.#minorFlatYCoordinates[_key] ??
+          [];
+      }
+      return answer;
     }
 
     protected render(): void {

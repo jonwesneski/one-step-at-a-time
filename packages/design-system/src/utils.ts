@@ -1,4 +1,4 @@
-import { durationToFlagCountMap, svgNS } from './consts';
+import { durationToFlagCountMap, SVG_NS } from './consts';
 import { DurationType } from './types';
 
 type NoteProps = {
@@ -13,9 +13,9 @@ export const createNoteSvgDom = ({
   stemUp = true,
   qualifiedElementName = 'svg',
 }: NoteProps) => {
-  const svg = document.createElementNS(svgNS, qualifiedElementName);
+  const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
-    svg.setAttribute('xmlns', svgNS);
+    svg.setAttribute('xmlns', SVG_NS);
     //svg.setAttribute('viewBox', '8 8 12 30');
   }
 
@@ -32,7 +32,7 @@ export const createNoteSvgDom = ({
     // todo need to calculate flags with stemup or not
     const flagCount = durationToFlagCountMap.get(duration) || 0;
     for (let index = 0; index < flagCount; index++) {
-      const flagHtml = document.createElementNS(svgNS, 'path');
+      const flagHtml = document.createElementNS(SVG_NS, 'path');
       const y = stemEnd - 5 * index;
       flagHtml.setAttribute(
         'd',
@@ -45,7 +45,7 @@ export const createNoteSvgDom = ({
   }
 
   const stemX = stemUp ? (x + headWidth).toString() : x.toString();
-  const stemHtml = document.createElementNS(svgNS, 'line');
+  const stemHtml = document.createElementNS(SVG_NS, 'line');
   stemHtml.setAttribute('class', 'stem');
   stemHtml.setAttribute('x1', stemX);
   stemHtml.setAttribute('y1', stemStart.toString());
@@ -61,7 +61,7 @@ export const createNoteSvgDom = ({
     : (stemStart - 4).toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
-  const headHtml = document.createElementNS(svgNS, 'ellipse');
+  const headHtml = document.createElementNS(SVG_NS, 'ellipse');
   headHtml.setAttribute('cx', headXStartStr);
   headHtml.setAttribute('cy', headYStartStr);
   headHtml.setAttribute('rx', headWidth.toString());
@@ -79,8 +79,8 @@ export const createNoteSvgDom = ({
 };
 
 export const createChordSvgDom = (duration: DurationType, notes: string[]) => {
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('xmlns', svgNS);
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('xmlns', SVG_NS);
   // svg.setAttribute('width', '37.5px');
   // svg.setAttribute('height', '40px');
   for (const note of notes) {

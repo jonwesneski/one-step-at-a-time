@@ -5,7 +5,7 @@ declare module 'react' {
     interface IntrinsicElements {
       'music-chord': { children?: React.ReactNode };
       'music-composition': {
-        key?: string;
+        keySig?: string;
         mode?: string;
         time?: string;
         children?: React.ReactNode;
@@ -16,7 +16,6 @@ declare module 'react' {
         class?: string;
       };
       'music-measure': {
-        currentCount?: number | string;
         children?: React.ReactNode;
       };
       'music-staff-bass': {

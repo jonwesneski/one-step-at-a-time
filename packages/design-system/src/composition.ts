@@ -1,21 +1,20 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['key', 'mode', 'time'];
+      return ['keySig', 'mode', 'time'];
     }
 
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-      this.shadowRoot!.ATTRIBUTE_NODE;
     }
 
-    get key(): string {
-      return this.getAttribute('key') || 'C';
+    get keySig(): string {
+      return this.getAttribute('keySig') || 'C';
     }
 
-    set key(value: string) {
-      this.setAttribute('key', value);
+    set keySig(value: string) {
+      this.setAttribute('keySig', value);
     }
 
     get mode(): string {

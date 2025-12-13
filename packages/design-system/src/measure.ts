@@ -6,12 +6,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     constructor() {
       super();
+
       this.attachShadow({ mode: 'open' });
       const composition = this.closest('music-composition');
       if (composition) {
         //this.time = composition.getAttribute('time') ?? '4/4';
         this.mode = composition.getAttribute('mode') ?? 'major';
-        this.key = composition.getAttribute('key') ?? 'C';
+        this.keySig = composition.getAttribute('keySig') ?? 'C';
       }
     }
 
@@ -26,12 +27,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       else this.setAttribute('number', value.toString());
     }
 
-    get key(): string {
-      return this.getAttribute('key') ?? 'C';
+    get keySig(): string {
+      return this.getAttribute('keySig') ?? 'C';
     }
 
-    set key(value: string) {
-      this.setAttribute('key', value);
+    set keySig(value: string) {
+      this.setAttribute('keySig', value);
     }
 
     get mode(): string {

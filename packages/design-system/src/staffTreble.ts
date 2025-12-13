@@ -123,18 +123,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return 0;
     }
 
-    public getKeyYCoordinates(): number[] {
-      const _key = this.key as never;
-      return (
-        {
-          major:
-            StaffTrebleElement.#majorSharpYCoordinates[_key] ??
-            StaffTrebleElement.#majorFlatYCoordinates[_key],
-          minor:
-            StaffTrebleElement.#minorSharpYCoordinates[_key] ??
-            StaffTrebleElement.#minorFlatYCoordinates[_key],
-        }[this.mode] || []
-      );
+    public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
+      const _key = this.keySig as never;
+      const answer: { useSharps: boolean; coordinates: number[] } = {
+        useSharps:
+          StaffTrebleElement.#majorSharpYCoordinates[_key] ||
+          StaffTrebleElement.#minorSharpYCoordinates[_key],
+        coordinates: [],
+      };
+      if (answer.useSharps) {
+        answer.coordinates =
+          StaffTrebleElement.#majorSharpYCoordinates[_key] ??
+          StaffTrebleElement.#minorSharpYCoordinates[_key];
+      } else {
+        answer.coordinates =
+          StaffTrebleElement.#majorFlatYCoordinates[_key] ??
+          StaffTrebleElement.#minorFlatYCoordinates[_key] ??
+          [];
+      }
+      return answer;
     }
 
     protected render(): void {

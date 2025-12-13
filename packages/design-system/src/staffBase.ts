@@ -1,4 +1,4 @@
-import { svgNS } from './consts';
+import { SVG_NS } from './consts';
 import { DurationType } from './types';
 import { createNoteSvgDom } from './utils';
 
@@ -28,20 +28,24 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     if (measure) {
       this.time = measure.getAttribute('time') ?? '4/4';
       this.mode = measure.getAttribute('mode') ?? 'major';
-      this.key = measure.getAttribute('key') ?? 'C';
+      this.keySig = measure.getAttribute('keySig') ?? 'C';
     }
   }
 
   static get observedAttributes(): string[] {
-    return ['key', 'mode', 'time'];
+    return ['keySig', 'mode', 'time'];
   }
 
-  get key(): string {
-    return this.getAttribute('key') ?? 'C';
+  get keySig(): string {
+    return (
+      this.getAttribute('keySig') ??
+      this.closest('music-composition').getAttribute('keySig') ??
+      'C'
+    );
   }
 
-  set key(value: string) {
-    this.setAttribute('key', value);
+  set keySig(value: string) {
+    this.setAttribute('keySig', value);
   }
 
   get mode(): string {
@@ -63,7 +67,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
   public abstract getYCoordinate(note: string): number;
 
-  public abstract getKeyYCoordinates(): number[];
+  public abstract getKeyYCoordinates(): {
+    useSharps: boolean;
+    coordinates: number[];
+  };
 
   connectedCallback(): void {
     this.render();
@@ -104,58 +111,95 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected abstract render(): void;
 
   protected build(clefSvg: string = ''): string {
-    // Build horizontal staff lines
-    // from top to bottom
-    const staffLines = ['<g class="staff-lines">'];
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'staff-container');
+    svg.setAttribute(
+      'style',
+      'position: absolute; top: 0; left: 0; width: 100%'
+    );
+    svg.setAttribute('height', '100');
+    svg.setAttribute('viewBox', '0 0 200 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+
+    // Left/Opening vertical line
+    const leftLine = document.createElementNS(SVG_NS, 'line');
+    leftLine.setAttribute('x1', '0');
+    leftLine.setAttribute('y1', '0');
+    leftLine.setAttribute('x2', '0');
+    leftLine.setAttribute('y2', '100');
+    leftLine.setAttribute('stroke', 'currentColor');
+    leftLine.setAttribute('stroke-width', '1');
+    svg.appendChild(leftLine);
+
+    // Horizontal staff lines: from top to bottom
+    const gLines = document.createElementNS(SVG_NS, 'g');
+    gLines.setAttribute('class', 'staff-lines');
     for (const y of StaffElementBase.linesY) {
-      staffLines.push(`
-          <line
-          x1="0"
-          y1="${y}"
-          x2="200"
-          y2="${y}"
-          stroke="currentColor"
-          stroke-width="2"
-          />
-      `);
+      const lineSvg = document.createElementNS(SVG_NS, 'line');
+      lineSvg.setAttribute('x1', '0');
+      lineSvg.setAttribute('y1', y.toString());
+      lineSvg.setAttribute('x2', '200');
+      lineSvg.setAttribute('y2', y.toString());
+      lineSvg.setAttribute('stroke', 'currentColor');
+      lineSvg.setAttribute('stroke-width', '2');
+      gLines.appendChild(lineSvg);
     }
-    staffLines.push('</g>');
+    svg.appendChild(gLines);
+
+    // Describe (clef, key signature, time signature)
+    const gDescribe = document.createElementNS(SVG_NS, 'g');
+    gDescribe.setAttribute('class', 'describe-container');
+    gDescribe.innerHTML = clefSvg; //todo do appendchild instead
+    svg.appendChild(gDescribe);
+
+    const keySignatureSvg = this.#buildKeySignatureSvg();
+    gDescribe.appendChild(keySignatureSvg);
+
+    // Notes are added here at runtime
+    const gNotes = document.createElementNS(SVG_NS, 'g');
+    gNotes.setAttribute('class', 'notes-container');
+    svg.appendChild(gNotes);
+
+    // Right/Closing vertical line
+    const rightLine = document.createElementNS(SVG_NS, 'line');
+    rightLine.setAttribute('x1', '200');
+    rightLine.setAttribute('y1', '0');
+    rightLine.setAttribute('x2', '200');
+    rightLine.setAttribute('y2', '100');
+    rightLine.setAttribute('stroke', 'currentColor');
+    rightLine.setAttribute('stroke-width', '1');
+    svg.appendChild(rightLine);
 
     return `
         <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
-          <svg
-            class="staff-container"
-            style="position: absolute; top: 0; left: 0; width: 100%"
-            height="100"
-            viewBox="0 0 200 100"
-            preserveAspectRatio="none"
-          >
-            <line
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="100"
-              stroke="currentColor"
-              stroke-width="1"
-            />
-            ${staffLines.join('')}
-            <g class="describe-container">
-              ${clefSvg}
-            </g>
-            <g class="notes-container">
-            </g>
-            <line
-              x1="200"
-              y1="0"
-              x2="200"
-              y2="100"
-              stroke="currentColor"
-              stroke-width="1"
-            />
-          </svg>
+          ${svg.outerHTML}
           <slot></slot>
         </div>
       `;
+  }
+
+  #buildKeySignatureSvg(): SVGGElement {
+    const yCoordinates = this.getKeyYCoordinates();
+    const svg = document.createElementNS(SVG_NS, 'g');
+    svg.setAttribute('class', 'key-signature');
+    svg.setAttribute('width', '37.5px');
+    svg.setAttribute('height', '40px');
+    const x = 30; // todo hardcoding for now; x is width of clef svg is 30px
+    if (yCoordinates.coordinates.length) {
+      if (yCoordinates.useSharps) {
+        const lineSvg = document.createElementNS(SVG_NS, 'line');
+        lineSvg.setAttribute('x1', x.toString());
+        lineSvg.setAttribute('y1', yCoordinates.coordinates[0].toString());
+        lineSvg.setAttribute('x2', (x + 10).toString());
+        lineSvg.setAttribute('y2', yCoordinates.coordinates[0].toString());
+        lineSvg.setAttribute('stroke', 'currentColor');
+        lineSvg.setAttribute('stroke-width', '3');
+        svg.appendChild(lineSvg);
+      } else {
+        // Add flats
+      }
+    }
+    return svg;
   }
 
   #handleSlotChange(event: Event) {
@@ -194,12 +238,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const notesContainer = this.shadowRoot
       .querySelector('.staff-container')
       .querySelector('.notes-container');
-    const clef = this.shadowRoot.querySelector('.describe-container');
-    let xOffsetOfNote: number = clef.getBoundingClientRect().width;
+    const describe = this.shadowRoot.querySelector('.describe-container');
+    let xOffsetOfNote: number = describe.getBoundingClientRect().width;
+    const stemUp = this.#determineIsStemUp(elements);
 
-    // todo determine if all notes should be stemup or not before creating svgs
-    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
-    let stemUp = true;
     for (let i = 0; i < elements.length; i++) {
       const duration = (elements[i].getAttribute('duration') ||
         'quarter') as DurationType;
@@ -263,10 +305,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
     }
     if (consecutives.length && consecutives.length % 2 === 0) {
-      beamSvg = document.createElementNS(svgNS, 'line');
+      beamSvg = document.createElementNS(SVG_NS, 'line');
       beamSvg.setAttribute('stroke', 'currentColor');
       beamSvg.setAttribute('stroke-width', '6');
     }
     return beamSvg;
+  }
+
+  #determineIsStemUp(nodes: Element[]): boolean {
+    // todo determine if all notes should be stemup or not before creating svgs
+    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
+    return true;
+    // for (const node of nodes) {
+    //   const staffYCoordinate = this.getYCoordinate(
+    //     node.getAttribute('value') || 'C'
+    //   );
+    // }
   }
 }

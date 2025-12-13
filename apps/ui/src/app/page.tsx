@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans">
       <main>
-        <music-composition key="G" mode="major" time="4/4">
+        <music-composition keySig="G" mode="major" time="4/4">
           <music-measure>
             <music-staff-treble>
               <music-chord>
@@ -18,7 +18,7 @@ export default function Home() {
               </music-chord>
             </music-staff-treble>
           </music-measure>
-          <music-measure currentCount={2}>
+          <music-measure>
             <music-staff-treble>
               <music-note value="A" duration="eighth"></music-note>
               <music-note value="A" duration="eighth"></music-note>
@@ -27,7 +27,7 @@ export default function Home() {
               <music-note value="A" duration="quarter"></music-note>
             </music-staff-bass>
           </music-measure>
-          <music-measure currentCount={3}>
+          <music-measure>
             <music-staff-treble>
               <music-note value="A" duration="quarter"></music-note>
               <music-note value="A" duration="quarter"></music-note>
