@@ -180,26 +180,66 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   #buildKeySignatureSvg(): SVGGElement {
     const yCoordinates = this.getKeyYCoordinates();
-    const svg = document.createElementNS(SVG_NS, 'g');
-    svg.setAttribute('class', 'key-signature');
-    svg.setAttribute('width', '37.5px');
-    svg.setAttribute('height', '40px');
-    const x = 30; // todo hardcoding for now; x is width of clef svg is 30px
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'key-signature');
+    const xOffset = 30; // todo hardcoding for now; x is width of clef svg is 30px
+    g.setAttribute('transform', `translate(${xOffset}, 0)`);
     if (yCoordinates.coordinates.length) {
       if (yCoordinates.useSharps) {
-        const lineSvg = document.createElementNS(SVG_NS, 'line');
-        lineSvg.setAttribute('x1', x.toString());
-        lineSvg.setAttribute('y1', yCoordinates.coordinates[0].toString());
-        lineSvg.setAttribute('x2', (x + 10).toString());
-        lineSvg.setAttribute('y2', yCoordinates.coordinates[0].toString());
-        lineSvg.setAttribute('stroke', 'currentColor');
-        lineSvg.setAttribute('stroke-width', '3');
-        svg.appendChild(lineSvg);
+        const sharpWith = 15;
+        let sharpsXOffset = 0;
+        for (const y of yCoordinates.coordinates) {
+          const sharpSvg = document.createElementNS(SVG_NS, 'svg');
+          sharpSvg.setAttribute('viewBox', '0 0 100 100');
+          sharpSvg.setAttribute('width', '12px');
+          sharpSvg.setAttribute('height', '12px');
+          sharpSvg.setAttribute('transform', `translate(0, ${y.toString()})`);
+
+          const topHorizontal = document.createElementNS(SVG_NS, 'line');
+          topHorizontal.setAttribute('stroke', 'currentColor');
+          topHorizontal.setAttribute('stroke-width', '15');
+          topHorizontal.setAttribute('x1', '0');
+          topHorizontal.setAttribute('y1', '50');
+          topHorizontal.setAttribute('x2', '100');
+          topHorizontal.setAttribute('y2', '30');
+          sharpSvg.appendChild(topHorizontal);
+
+          const bottomHorizontal = document.createElementNS(SVG_NS, 'line');
+          bottomHorizontal.setAttribute('stroke', 'currentColor');
+          bottomHorizontal.setAttribute('stroke-width', '15');
+          bottomHorizontal.setAttribute('x1', '0');
+          bottomHorizontal.setAttribute('y1', '70');
+          bottomHorizontal.setAttribute('x2', '100');
+          bottomHorizontal.setAttribute('y2', '50');
+          sharpSvg.appendChild(bottomHorizontal);
+
+          const leftVertical = document.createElementNS(SVG_NS, 'line');
+          leftVertical.setAttribute('stroke', 'currentColor');
+          leftVertical.setAttribute('stroke-width', '15');
+          leftVertical.setAttribute('x1', '30');
+          leftVertical.setAttribute('y1', '10');
+          leftVertical.setAttribute('x2', '30');
+          leftVertical.setAttribute('y2', '100');
+          sharpSvg.appendChild(leftVertical);
+
+          const rightVertical = document.createElementNS(SVG_NS, 'line');
+          rightVertical.setAttribute('stroke', 'currentColor');
+          rightVertical.setAttribute('stroke-width', '15');
+          rightVertical.setAttribute('x1', '70');
+          rightVertical.setAttribute('y1', '0');
+          rightVertical.setAttribute('x2', '70');
+          rightVertical.setAttribute('y2', '90');
+          sharpSvg.appendChild(rightVertical);
+
+          g.appendChild(sharpSvg);
+        }
+
+        sharpsXOffset += sharpWith;
       } else {
         // Add flats
       }
     }
-    return svg;
+    return g;
   }
 
   #handleSlotChange(event: Event) {
