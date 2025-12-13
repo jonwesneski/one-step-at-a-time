@@ -1,5 +1,5 @@
 import { DurationType } from './types';
-import { createNoteSvgDom } from './utils';
+import { createNoteSvg } from './utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement {
@@ -53,7 +53,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // }
 
     private render(): void {
-      this.shadowRoot!.innerHTML = createNoteSvgDom({
+      this.shadowRoot!.innerHTML = createNoteSvg({
         duration: this.duration,
       }).outerHTML;
     }

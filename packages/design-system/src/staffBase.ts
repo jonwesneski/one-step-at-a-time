@@ -1,6 +1,6 @@
 import { SVG_NS } from './consts';
 import { DurationType } from './types';
-import { createNoteSvgDom } from './utils';
+import { createNoteSvg, createSharpSvg } from './utils';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 const _MaybeHTMLElement: any =
@@ -186,55 +186,17 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     g.setAttribute('transform', `translate(${xOffset}, 0)`);
     if (yCoordinates.coordinates.length) {
       if (yCoordinates.useSharps) {
-        const sharpWith = 15;
+        const sharpWith = 10;
         let sharpsXOffset = 0;
         for (const y of yCoordinates.coordinates) {
-          const sharpSvg = document.createElementNS(SVG_NS, 'svg');
-          sharpSvg.setAttribute('viewBox', '0 0 100 100');
-          sharpSvg.setAttribute('width', '12px');
-          sharpSvg.setAttribute('height', '12px');
-          sharpSvg.setAttribute('transform', `translate(0, ${y.toString()})`);
-
-          const topHorizontal = document.createElementNS(SVG_NS, 'line');
-          topHorizontal.setAttribute('stroke', 'currentColor');
-          topHorizontal.setAttribute('stroke-width', '15');
-          topHorizontal.setAttribute('x1', '0');
-          topHorizontal.setAttribute('y1', '50');
-          topHorizontal.setAttribute('x2', '100');
-          topHorizontal.setAttribute('y2', '30');
-          sharpSvg.appendChild(topHorizontal);
-
-          const bottomHorizontal = document.createElementNS(SVG_NS, 'line');
-          bottomHorizontal.setAttribute('stroke', 'currentColor');
-          bottomHorizontal.setAttribute('stroke-width', '15');
-          bottomHorizontal.setAttribute('x1', '0');
-          bottomHorizontal.setAttribute('y1', '70');
-          bottomHorizontal.setAttribute('x2', '100');
-          bottomHorizontal.setAttribute('y2', '50');
-          sharpSvg.appendChild(bottomHorizontal);
-
-          const leftVertical = document.createElementNS(SVG_NS, 'line');
-          leftVertical.setAttribute('stroke', 'currentColor');
-          leftVertical.setAttribute('stroke-width', '15');
-          leftVertical.setAttribute('x1', '30');
-          leftVertical.setAttribute('y1', '10');
-          leftVertical.setAttribute('x2', '30');
-          leftVertical.setAttribute('y2', '100');
-          sharpSvg.appendChild(leftVertical);
-
-          const rightVertical = document.createElementNS(SVG_NS, 'line');
-          rightVertical.setAttribute('stroke', 'currentColor');
-          rightVertical.setAttribute('stroke-width', '15');
-          rightVertical.setAttribute('x1', '70');
-          rightVertical.setAttribute('y1', '0');
-          rightVertical.setAttribute('x2', '70');
-          rightVertical.setAttribute('y2', '90');
-          sharpSvg.appendChild(rightVertical);
-
+          const sharpSvg = createSharpSvg();
+          sharpSvg.setAttribute(
+            'transform',
+            `translate(${sharpsXOffset}, ${y.toString()})`
+          );
           g.appendChild(sharpSvg);
+          sharpsXOffset += sharpWith;
         }
-
-        sharpsXOffset += sharpWith;
       } else {
         // Add flats
       }
@@ -289,7 +251,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       const staffYCoordinate = this.getYCoordinate(
         elements[i].getAttribute('value') || 'C'
       );
-      const noteSvg = createNoteSvgDom({
+      const noteSvg = createNoteSvg({
         duration,
         flagsIfNeeded: !needsBeam,
         stemUp,
