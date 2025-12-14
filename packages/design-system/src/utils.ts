@@ -1,4 +1,4 @@
-import { durationToFlagCountMap, svgNS } from './consts';
+import { durationToFlagCountMap, SVG_NS } from './consts';
 import { DurationType } from './types';
 
 type NoteProps = {
@@ -7,15 +7,15 @@ type NoteProps = {
   stemUp?: boolean;
   qualifiedElementName?: 'svg' | 'g';
 };
-export const createNoteSvgDom = ({
+export const createNoteSvg = ({
   duration,
   flagsIfNeeded = true,
   stemUp = true,
   qualifiedElementName = 'svg',
 }: NoteProps) => {
-  const svg = document.createElementNS(svgNS, qualifiedElementName);
+  const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
-    svg.setAttribute('xmlns', svgNS);
+    svg.setAttribute('xmlns', SVG_NS);
     //svg.setAttribute('viewBox', '8 8 12 30');
   }
 
@@ -32,7 +32,7 @@ export const createNoteSvgDom = ({
     // todo need to calculate flags with stemup or not
     const flagCount = durationToFlagCountMap.get(duration) || 0;
     for (let index = 0; index < flagCount; index++) {
-      const flagHtml = document.createElementNS(svgNS, 'path');
+      const flagHtml = document.createElementNS(SVG_NS, 'path');
       const y = stemEnd - 5 * index;
       flagHtml.setAttribute(
         'd',
@@ -45,7 +45,7 @@ export const createNoteSvgDom = ({
   }
 
   const stemX = stemUp ? (x + headWidth).toString() : x.toString();
-  const stemHtml = document.createElementNS(svgNS, 'line');
+  const stemHtml = document.createElementNS(SVG_NS, 'line');
   stemHtml.setAttribute('class', 'stem');
   stemHtml.setAttribute('x1', stemX);
   stemHtml.setAttribute('y1', stemStart.toString());
@@ -61,7 +61,7 @@ export const createNoteSvgDom = ({
     : (stemStart - 4).toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
-  const headHtml = document.createElementNS(svgNS, 'ellipse');
+  const headHtml = document.createElementNS(SVG_NS, 'ellipse');
   headHtml.setAttribute('cx', headXStartStr);
   headHtml.setAttribute('cy', headYStartStr);
   headHtml.setAttribute('rx', headWidth.toString());
@@ -78,13 +78,13 @@ export const createNoteSvgDom = ({
   return svg;
 };
 
-export const createChordSvgDom = (duration: DurationType, notes: string[]) => {
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('xmlns', svgNS);
+export const createChordSvg = (duration: DurationType, notes: string[]) => {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('xmlns', SVG_NS);
   // svg.setAttribute('width', '37.5px');
   // svg.setAttribute('height', '40px');
   for (const note of notes) {
-    const noteSvg = createNoteSvgDom({ duration });
+    const noteSvg = createNoteSvg({ duration });
     for (let i = noteSvg.childNodes.length - 1; i >= 0; i--) {
       const child = noteSvg.childNodes[i];
       svg.appendChild(child);
@@ -93,12 +93,72 @@ export const createChordSvgDom = (duration: DurationType, notes: string[]) => {
   return svg;
 };
 
-export const createNotesBeamSvgDom = (
-  duration: Extract<DurationType, 'eighth' | 'sixteenth'>,
-  notes: string[]
-) => {};
+export const createSharpSvg = () => {
+  const sharpSvg = document.createElementNS(SVG_NS, 'svg');
+  sharpSvg.setAttribute('viewBox', '0 0 100 300');
+  sharpSvg.setAttribute('width', '10px');
+  sharpSvg.setAttribute('height', '30px');
 
-export const createChordBeamSvgDom = (
-  duration: Extract<DurationType, 'eighth' | 'sixteenth'>,
-  chords: string[]
-) => {};
+  const topHorizontal = document.createElementNS(SVG_NS, 'line');
+  topHorizontal.setAttribute('stroke', 'currentColor');
+  topHorizontal.setAttribute('stroke-width', '30');
+  topHorizontal.setAttribute('x1', '0');
+  topHorizontal.setAttribute('y1', '120');
+  topHorizontal.setAttribute('x2', '100');
+  topHorizontal.setAttribute('y2', '70');
+  sharpSvg.appendChild(topHorizontal);
+
+  const bottomHorizontal = document.createElementNS(SVG_NS, 'line');
+  bottomHorizontal.setAttribute('stroke', 'currentColor');
+  bottomHorizontal.setAttribute('stroke-width', '30');
+  bottomHorizontal.setAttribute('x1', '0');
+  bottomHorizontal.setAttribute('y1', '220');
+  bottomHorizontal.setAttribute('x2', '100');
+  bottomHorizontal.setAttribute('y2', '170');
+  sharpSvg.appendChild(bottomHorizontal);
+
+  const leftVertical = document.createElementNS(SVG_NS, 'line');
+  leftVertical.setAttribute('stroke', 'currentColor');
+  leftVertical.setAttribute('stroke-width', '15');
+  leftVertical.setAttribute('x1', '30');
+  leftVertical.setAttribute('y1', '20');
+  leftVertical.setAttribute('x2', '30');
+  leftVertical.setAttribute('y2', '300');
+  sharpSvg.appendChild(leftVertical);
+
+  const rightVertical = document.createElementNS(SVG_NS, 'line');
+  rightVertical.setAttribute('stroke', 'currentColor');
+  rightVertical.setAttribute('stroke-width', '15');
+  rightVertical.setAttribute('x1', '70');
+  rightVertical.setAttribute('y1', '0');
+  rightVertical.setAttribute('x2', '70');
+  rightVertical.setAttribute('y2', '280');
+  sharpSvg.appendChild(rightVertical);
+
+  return sharpSvg;
+};
+
+export const createFlatSvg = () => {
+  const sharpSvg = document.createElementNS(SVG_NS, 'svg');
+  sharpSvg.setAttribute('viewBox', '0 0 100 300');
+  sharpSvg.setAttribute('width', '10px');
+  sharpSvg.setAttribute('height', '25px');
+
+  const line = document.createElementNS(SVG_NS, 'line');
+  line.setAttribute('stroke', 'currentColor');
+  line.setAttribute('stroke-width', '25');
+  line.setAttribute('x1', '0');
+  line.setAttribute('y1', '0');
+  line.setAttribute('x2', '0');
+  line.setAttribute('y2', '300');
+  sharpSvg.appendChild(line);
+
+  const loop = document.createElementNS(SVG_NS, 'path');
+  loop.setAttribute('stroke', 'currentColor');
+  loop.setAttribute('stroke-width', '20');
+  loop.setAttribute('fill', 'none');
+  loop.setAttribute('d', 'M0,250 C9,100 150,150 0,299');
+  sharpSvg.appendChild(loop);
+
+  return sharpSvg;
+};

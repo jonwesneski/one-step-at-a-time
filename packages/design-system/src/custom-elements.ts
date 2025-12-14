@@ -5,6 +5,7 @@
 // the package is imported (their modules already guard with
 // `typeof window !== 'undefined'`).
 import './chord';
+import './composition';
 import './measure';
 import './staffBass';
 import './staffGuitarTab';

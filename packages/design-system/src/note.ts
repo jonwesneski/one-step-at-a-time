@@ -1,15 +1,33 @@
 import { DurationType } from './types';
-import { createNoteSvgDom } from './utils';
+import { createNoteSvg } from './utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['x', 'duration', 'note'];
+      return ['duration', 'value'];
     }
 
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
+    }
+
+    get duration(): DurationType {
+      const duration = this.getAttribute('duration');
+      return (duration as DurationType) || 'quarter';
+    }
+
+    set duration(value: DurationType) {
+      this.setAttribute('duration', value);
+    }
+
+    get value(): string | null {
+      return this.getAttribute('value');
+    }
+
+    set value(val: string | null) {
+      if (val === null) this.removeAttribute('value');
+      else this.setAttribute('value', val);
     }
 
     connectedCallback(): void {
@@ -34,34 +52,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     //   }
     // }
 
-    get x(): number {
-      return parseFloat(this.getAttribute('x') || '0');
-    }
-
-    set x(value: number | string) {
-      this.setAttribute('x', value.toString());
-    }
-
-    get duration(): DurationType {
-      const duration = this.getAttribute('duration');
-      return (duration as DurationType) || 'quarter';
-    }
-
-    set duration(value: DurationType) {
-      this.setAttribute('duration', value);
-    }
-
-    get note(): string | null {
-      return this.getAttribute('note');
-    }
-
-    set note(value: string | null) {
-      if (value === null) this.removeAttribute('note');
-      else this.setAttribute('note', value);
-    }
-
     private render(): void {
-      this.shadowRoot!.innerHTML = createNoteSvgDom({
+      this.shadowRoot!.innerHTML = createNoteSvg({
         duration: this.duration,
       }).outerHTML;
     }
