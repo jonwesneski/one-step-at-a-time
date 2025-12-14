@@ -1,6 +1,6 @@
 import { SVG_NS } from './consts';
 import { DurationType } from './types';
-import { createNoteSvg, createSharpSvg } from './utils';
+import { createFlatSvg, createNoteSvg, createSharpSvg } from './utils';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 const _MaybeHTMLElement: any =
@@ -171,11 +171,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     svg.appendChild(rightLine);
 
     return `
-        <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
-          ${svg.outerHTML}
-          <slot></slot>
-        </div>
-      `;
+      <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
+        ${svg.outerHTML}
+        <slot></slot>
+      </div>
+    `;
   }
 
   #buildKeySignatureSvg(): SVGGElement {
@@ -185,20 +185,17 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const xOffset = 30; // todo hardcoding for now; x is width of clef svg is 30px
     g.setAttribute('transform', `translate(${xOffset}, 0)`);
     if (yCoordinates.coordinates.length) {
-      if (yCoordinates.useSharps) {
-        const sharpWith = 10;
-        let sharpsXOffset = 0;
-        for (const y of yCoordinates.coordinates) {
-          const sharpSvg = createSharpSvg();
-          sharpSvg.setAttribute(
-            'transform',
-            `translate(${sharpsXOffset}, ${y.toString()})`
-          );
-          g.appendChild(sharpSvg);
-          sharpsXOffset += sharpWith;
-        }
-      } else {
-        // Add flats
+      const createSvgFunc = yCoordinates.useSharps
+        ? createSharpSvg
+        : createFlatSvg;
+      const Width = yCoordinates.useSharps ? 10 : 8;
+      let xOffset = 0;
+      const yOffset = yCoordinates.useSharps ? 0 : -18;
+      for (const y of yCoordinates.coordinates) {
+        const svg = createSvgFunc();
+        svg.setAttribute('transform', `translate(${xOffset}, ${y + yOffset})`);
+        g.appendChild(svg);
+        xOffset += Width;
       }
     }
     return g;

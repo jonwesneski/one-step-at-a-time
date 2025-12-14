@@ -10,7 +10,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.attachShadow({ mode: 'open' });
       const composition = this.closest('music-composition');
       if (composition) {
-        //this.time = composition.getAttribute('time') ?? '4/4';
+        this.time = composition.getAttribute('time') ?? '4/4';
         this.mode = composition.getAttribute('mode') ?? 'major';
         this.keySig = composition.getAttribute('keySig') ?? 'C';
       }
