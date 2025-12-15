@@ -168,6 +168,7 @@ export const createTimeSignatureSvg = (
   denominator: BeatTypeInMeasure
 ) => {
   const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'time-signature');
   // svg.setAttribute('xmlns', SVG_NS);
   // svg.setAttribute('viewBox', '0 0 100 230');
   // svg.setAttribute('width', '80px');
