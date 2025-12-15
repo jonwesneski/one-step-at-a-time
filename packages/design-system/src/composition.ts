@@ -3,9 +3,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     static get observedAttributes(): string[] {
       return ['keySig', 'mode', 'time'];
     }
+    #observer: MutationObserver | null;
+    #measureCount: number;
 
     constructor() {
       super();
+      this.#observer = null;
+      this.#measureCount = 0;
       this.attachShadow({ mode: 'open' });
     }
 
@@ -35,6 +39,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     connectedCallback(): void {
       this.render();
+      this.#manageMeasureCount();
+
       const slot = this.shadowRoot?.querySelector('slot');
       if (slot) {
         slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
@@ -59,16 +65,45 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       `;
     }
 
+    #manageMeasureCount() {
+      // Existing measures
+      Array.from(this.children).forEach((node) => {
+        if (node.nodeName === 'MUSIC-MEASURE') {
+          this.#setMeasure(node as HTMLElement);
+        }
+      });
+
+      // Dynamically added measures
+      this.#observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node.nodeName === 'MUSIC-MEASURE') {
+              this.#setMeasure(node as HTMLElement);
+            }
+          }
+        }
+      });
+
+      this.#observer.observe(this, {
+        childList: true,
+      });
+    }
+
+    #setMeasure(measure: HTMLElement) {
+      if (this.#measureCount === 0) {
+        measure.setAttribute('time', this.time);
+      }
+      measure.setAttribute('number', (++this.#measureCount).toString());
+    }
+
     #handleSlotChange(event: Event) {
+      // TODO: see if I still need this
+      // right now I'm adjusting in #manageMeasureCount
+      // slotChange event gets fired after all children it's children are rendered first
       const slot = event.target as HTMLSlotElement;
       const assignedElements = slot
         .assignedElements({ flatten: true })
         .filter((e) => e.nodeName === 'MUSIC-MEASURE');
-
-      assignedElements[0].setAttribute('time', this.time);
-      for (let i = 0; i < assignedElements.length; i++) {
-        assignedElements[i].setAttribute('number', (i + 1).toString());
-      }
     }
   }
 
