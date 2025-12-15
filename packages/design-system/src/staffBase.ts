@@ -199,29 +199,34 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   // Describe is: clef, key signature, time signature
-  #appendDescribe(clefSvg: string, staff: SVGElement) {
+  #appendDescribe(clefSvgStr: string, staff: SVGElement) {
     const gDescribe = document.createElementNS(SVG_NS, 'g');
     gDescribe.setAttribute('class', 'describe-container');
-    gDescribe.innerHTML = clefSvg;
+    gDescribe.innerHTML = clefSvgStr;
     staff.appendChild(gDescribe);
 
-    this.#appendKeySignatureSvg(gDescribe);
+    const xOffsetOfClef = 13;
+    const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
+      gDescribe,
+      xOffsetOfClef
+    );
 
-    this.#appendTimeSignatureSvgIfNecessary(gDescribe);
+    this.#appendTimeSignatureSvgIfNecessary(
+      gDescribe,
+      xOffsetOfKeySignature + 5
+    );
   }
 
-  #appendKeySignatureSvg(svg: SVGElement) {
+  #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
     const yCoordinates = this.getKeyYCoordinates();
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('class', 'key-signature');
-    const xOffset = 30; // todo hardcoding for now; x is width of clef svg is 30px
-    g.setAttribute('transform', `translate(${xOffset}, 0)`);
+    g.setAttribute('transform', `translate(${xOffset}, -15)`);
     if (yCoordinates.coordinates.length) {
       const createSvgFunc = yCoordinates.useSharps
         ? createSharpSvg
         : createFlatSvg;
       const Width = yCoordinates.useSharps ? 10 : 8;
-      let xOffset = 0;
       const yOffset = yCoordinates.useSharps ? 0 : -18;
       for (const y of yCoordinates.coordinates) {
         const svg = createSvgFunc();
@@ -232,9 +237,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     svg.appendChild(g);
+
+    return xOffset;
   }
 
-  #appendTimeSignatureSvgIfNecessary(parentSvg: SVGElement) {
+  #appendTimeSignatureSvgIfNecessary(parentSvg: SVGElement, xOffset: number) {
     const measure = this.closest('music-measure');
     const measureNumberStr: string | null = measure?.getAttribute('number');
     const firstMeasureOrNoCompositionTime =
@@ -252,7 +259,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           BeatTypeInMeasure
         ])
       );
-      timeSigSvg.setAttribute('transform', 'translate(60, 30)');
+      timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
     }
   }

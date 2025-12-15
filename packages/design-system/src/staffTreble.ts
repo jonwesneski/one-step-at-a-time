@@ -126,18 +126,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
       const _key = this.keySig as never;
       const answer: { useSharps: boolean; coordinates: number[] } = {
-        useSharps:
-          StaffTrebleElement.#majorSharpYCoordinates[_key] ||
-          StaffTrebleElement.#minorSharpYCoordinates[_key],
+        useSharps: false,
         coordinates: [],
       };
-      if (answer.useSharps) {
+      if (this.mode === 'major') {
+        answer.useSharps = !!StaffTrebleElement.#majorSharpYCoordinates[_key];
         answer.coordinates =
           StaffTrebleElement.#majorSharpYCoordinates[_key] ??
-          StaffTrebleElement.#minorSharpYCoordinates[_key];
-      } else {
-        answer.coordinates =
           StaffTrebleElement.#majorFlatYCoordinates[_key] ??
+          [];
+      } else {
+        answer.useSharps = !!StaffTrebleElement.#minorSharpYCoordinates[_key];
+        answer.coordinates =
+          StaffTrebleElement.#minorSharpYCoordinates[_key] ??
           StaffTrebleElement.#minorFlatYCoordinates[_key] ??
           [];
       }

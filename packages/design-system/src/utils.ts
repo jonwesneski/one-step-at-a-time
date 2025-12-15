@@ -168,13 +168,14 @@ export const createTimeSignatureSvg = (
   denominator: BeatTypeInMeasure
 ) => {
   const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('xmlns', SVG_NS);
+  // svg.setAttribute('xmlns', SVG_NS);
   // svg.setAttribute('viewBox', '0 0 100 230');
-  //svg.setAttribute('width', '80px');
+  // svg.setAttribute('width', '80px');
   svg.setAttribute('height', '80px');
 
   const text = document.createElementNS(SVG_NS, 'text');
   text.setAttribute('x', '40');
+  text.setAttribute('font-family', 'Leland, Bravura, serif');
   text.setAttribute('font-size', '28');
   text.setAttribute('font-weight', 'bold');
   text.setAttribute('text-anchor', 'middle');
