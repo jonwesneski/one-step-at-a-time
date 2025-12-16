@@ -1,4 +1,5 @@
 export type DurationType =
+  | 'thirtysecond'
   | 'sixteenth'
   | 'eighth'
   | 'quarter'
@@ -10,6 +11,7 @@ export type Note =
   | 'A#'
   | 'Bb'
   | 'B'
+  | 'C'
   | 'C#'
   | 'Db'
   | 'D#'

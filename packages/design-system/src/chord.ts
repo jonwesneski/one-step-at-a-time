@@ -1,5 +1,8 @@
+import { ChordNote, IChordElement, NoteElementType } from './types/elements';
+import { Chord, DurationType } from './types/theory';
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  class ChordElement extends HTMLElement {
+  class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
       return ['currentCount'];
     }
@@ -7,6 +10,39 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
+    }
+
+    get duration(): DurationType {
+      return (this.getAttribute('duration') as DurationType) ?? 'quarter';
+    }
+
+    set duration(value: DurationType) {
+      this.setAttribute('duration', value);
+    }
+
+    get value(): Chord | null {
+      return this.getAttribute('value') as Chord | null;
+    }
+
+    set value(val: Chord | null) {
+      if (val === null) this.removeAttribute('value');
+      else this.setAttribute('value', val);
+    }
+
+    get notes(): ChordNote[] {
+      const noteElements: NodeListOf<NoteElementType> =
+        this.querySelectorAll('music-note');
+      const notes: ChordNote[] = [];
+      if (noteElements.length) {
+        noteElements.forEach((node) => {
+          notes.push({ value: node.value, duration: node.duration });
+        });
+      } else {
+        // todo build out notes from value: Chord
+        // like if Amaj then notes will be: A, C, E
+        // need chord formulas built out first
+      }
+      return notes;
     }
 
     connectedCallback(): void {
