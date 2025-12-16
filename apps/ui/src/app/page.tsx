@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans">
       <main>
-        <music-composition keySig="Ab" mode="major" time="4/4">
+        <music-composition keySig="D" mode="major" time="4/4">
           <music-measure>
             <music-staff-treble>
               <music-chord>

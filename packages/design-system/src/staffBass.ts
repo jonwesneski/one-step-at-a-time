@@ -117,20 +117,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
       const _key = this.keySig as never;
+
       const answer: { useSharps: boolean; coordinates: number[] } = {
-        useSharps: Boolean(
-          StaffBassElement.#majorSharpYCoordinates[_key] ??
-            StaffBassElement.#minorSharpYCoordinates[_key]
-        ),
+        useSharps: false,
         coordinates: [],
       };
-      if (answer.useSharps) {
+      if (this.mode === 'major') {
+        answer.useSharps = !!StaffBassElement.#majorSharpYCoordinates[_key];
         answer.coordinates =
           StaffBassElement.#majorSharpYCoordinates[_key] ??
-          StaffBassElement.#minorSharpYCoordinates[_key];
-      } else {
-        answer.coordinates =
           StaffBassElement.#majorFlatYCoordinates[_key] ??
+          [];
+      } else {
+        answer.useSharps = !!StaffBassElement.#minorSharpYCoordinates[_key];
+        answer.coordinates =
+          StaffBassElement.#minorSharpYCoordinates[_key] ??
           StaffBassElement.#minorFlatYCoordinates[_key] ??
           [];
       }

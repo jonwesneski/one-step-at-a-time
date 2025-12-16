@@ -1,6 +1,11 @@
 import { SVG_NS } from './consts';
-import { DurationType } from './types';
-import { createFlatSvg, createNoteSvg, createSharpSvg } from './utils';
+import { BeatsInMeasure, BeatTypeInMeasure, DurationType } from './types';
+import {
+  createFlatSvg,
+  createNoteSvg,
+  createSharpSvg,
+  createTimeSignatureSvg,
+} from './utils';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 const _MaybeHTMLElement: any =
@@ -10,7 +15,7 @@ const _MaybeHTMLElement: any =
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   #mutationObservers: MutationObserver[];
-
+  #thisTimeInts: [BeatsInMeasure, BeatTypeInMeasure] | null = null;
   protected static lineStart = 30;
   protected static lineSpacing = 10;
   protected static linesY: number[] = Array.from(
@@ -29,6 +34,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       this.time = measure.getAttribute('time') ?? '4/4';
       this.mode = measure.getAttribute('mode') ?? 'major';
       this.keySig = measure.getAttribute('keySig') ?? 'C';
+    }
+
+    const timeTime = this.getAttribute('time');
+    if (timeTime) {
+      this.#thisTimeInts = this.#convertTotimeInts(timeTime);
     }
   }
 
@@ -56,8 +66,22 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.setAttribute('mode', value);
   }
 
-  get time(): string | null {
+  get thisTime(): string | null {
     return this.getAttribute('time');
+  }
+
+  get time(): string {
+    return (
+      this.getAttribute('time') ??
+      this.closest('music-measure').getAttribute('time') ??
+      this.closest('music-composition').getAttribute('time') ??
+      '4/4'
+    );
+  }
+
+  #convertTotimeInts(time: string): [BeatsInMeasure, BeatTypeInMeasure] {
+    const [beats, beatType] = time.split('/').map((n) => parseInt(n, 10));
+    return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
   }
 
   set time(value: string) {
@@ -131,29 +155,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     leftLine.setAttribute('stroke-width', '1');
     svg.appendChild(leftLine);
 
-    // Horizontal staff lines: from top to bottom
-    const gLines = document.createElementNS(SVG_NS, 'g');
-    gLines.setAttribute('class', 'staff-lines');
-    for (const y of StaffElementBase.linesY) {
-      const lineSvg = document.createElementNS(SVG_NS, 'line');
-      lineSvg.setAttribute('x1', '0');
-      lineSvg.setAttribute('y1', y.toString());
-      lineSvg.setAttribute('x2', '200');
-      lineSvg.setAttribute('y2', y.toString());
-      lineSvg.setAttribute('stroke', 'currentColor');
-      lineSvg.setAttribute('stroke-width', '2');
-      gLines.appendChild(lineSvg);
-    }
-    svg.appendChild(gLines);
+    this.#appendStaffLines(svg);
 
-    // Describe (clef, key signature, time signature)
-    const gDescribe = document.createElementNS(SVG_NS, 'g');
-    gDescribe.setAttribute('class', 'describe-container');
-    gDescribe.innerHTML = clefSvg; //todo do appendchild instead
-    svg.appendChild(gDescribe);
-
-    const keySignatureSvg = this.#buildKeySignatureSvg();
-    gDescribe.appendChild(keySignatureSvg);
+    this.#appendDescribe(clefSvg, svg);
 
     // Notes are added here at runtime
     const gNotes = document.createElementNS(SVG_NS, 'g');
@@ -178,18 +182,51 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     `;
   }
 
-  #buildKeySignatureSvg(): SVGGElement {
+  #appendStaffLines(svg: SVGElement) {
+    const gLines = document.createElementNS(SVG_NS, 'g');
+    gLines.setAttribute('class', 'staff-lines');
+    for (const y of StaffElementBase.linesY) {
+      const lineSvg = document.createElementNS(SVG_NS, 'line');
+      lineSvg.setAttribute('x1', '0');
+      lineSvg.setAttribute('y1', y.toString());
+      lineSvg.setAttribute('x2', '200');
+      lineSvg.setAttribute('y2', y.toString());
+      lineSvg.setAttribute('stroke', 'currentColor');
+      lineSvg.setAttribute('stroke-width', '2');
+      gLines.appendChild(lineSvg);
+    }
+    svg.appendChild(gLines);
+  }
+
+  // Describe is: clef, key signature, time signature
+  #appendDescribe(clefSvgStr: string, staff: SVGElement) {
+    const gDescribe = document.createElementNS(SVG_NS, 'g');
+    gDescribe.setAttribute('class', 'describe-container');
+    gDescribe.innerHTML = clefSvgStr;
+    staff.appendChild(gDescribe);
+
+    const xOffsetOfClef = 13;
+    const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
+      gDescribe,
+      xOffsetOfClef
+    );
+
+    this.#appendTimeSignatureSvgIfNecessary(
+      gDescribe,
+      xOffsetOfKeySignature + 5
+    );
+  }
+
+  #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
     const yCoordinates = this.getKeyYCoordinates();
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('class', 'key-signature');
-    const xOffset = 30; // todo hardcoding for now; x is width of clef svg is 30px
-    g.setAttribute('transform', `translate(${xOffset}, 0)`);
+    g.setAttribute('transform', `translate(${xOffset}, -15)`);
     if (yCoordinates.coordinates.length) {
       const createSvgFunc = yCoordinates.useSharps
         ? createSharpSvg
         : createFlatSvg;
       const Width = yCoordinates.useSharps ? 10 : 8;
-      let xOffset = 0;
       const yOffset = yCoordinates.useSharps ? 0 : -18;
       for (const y of yCoordinates.coordinates) {
         const svg = createSvgFunc();
@@ -198,7 +235,33 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         xOffset += Width;
       }
     }
-    return g;
+
+    svg.appendChild(g);
+
+    return xOffset;
+  }
+
+  #appendTimeSignatureSvgIfNecessary(parentSvg: SVGElement, xOffset: number) {
+    const measure = this.closest('music-measure');
+    const measureNumberStr: string | null = measure?.getAttribute('number');
+    const firstMeasureOrNoCompositionTime =
+      measureNumberStr === '1' || !measure
+        ? this.#convertTotimeInts(this.time)
+        : null;
+    const timeChangedInMeasure =
+      !firstMeasureOrNoCompositionTime && measure && this.thisTime
+        ? this.#thisTimeInts
+        : null;
+    if (firstMeasureOrNoCompositionTime || timeChangedInMeasure) {
+      const timeSigSvg = createTimeSignatureSvg(
+        ...((firstMeasureOrNoCompositionTime ?? timeChangedInMeasure) as [
+          BeatsInMeasure,
+          BeatTypeInMeasure
+        ])
+      );
+      timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
+      parentSvg.appendChild(timeSigSvg);
+    }
   }
 
   #handleSlotChange(event: Event) {
