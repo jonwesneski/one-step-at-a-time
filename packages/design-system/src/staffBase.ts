@@ -48,7 +48,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       measure?.getAttribute('mode') ?? composition.getAttribute('mode');
     this.#parentKeySig =
       measure?.getAttribute('keySig') ?? composition.getAttribute('keySig');
-
+    console.log(this.#parentKeySig, this.#parentMode, 'making tsc eslint happy')
     const timeTime = this.getAttribute('time');
     if (timeTime) {
       this.#timeInts = this.#convertTotimeInts(timeTime);
@@ -284,7 +284,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       // Handle when each node has been mutated here
       // TODO: // only create the observer if it is new
       const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
+        for (const _mutation of mutations) {
         }
       });
       observer.observe(node, {

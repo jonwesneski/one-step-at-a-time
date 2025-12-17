@@ -100,10 +100,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // TODO: see if I still need this
       // right now I'm adjusting in #manageMeasureCount
       // slotChange event gets fired after all children it's children are rendered first
-      const slot = event.target as HTMLSlotElement;
-      const assignedElements = slot
-        .assignedElements({ flatten: true })
-        .filter((e) => e.nodeName === 'MUSIC-MEASURE');
+      // const slot = event.target as HTMLSlotElement;
+      // const assignedElements = slot
+      //   .assignedElements({ flatten: true })
+      //   .filter((e) => e.nodeName === 'MUSIC-MEASURE');
     }
   }
 
