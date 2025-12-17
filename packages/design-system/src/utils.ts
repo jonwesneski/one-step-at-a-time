@@ -110,7 +110,7 @@ export const createChordSvg = ({
   flagsIfNeeded = true,
   stemUp = true,
   qualifiedElementName = 'g',
-}: ChordProps) => {
+}: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   svg.setAttribute('xmlns', SVG_NS);
   // svg.setAttribute('width', '37.5px');
@@ -130,12 +130,8 @@ export const createChordSvg = ({
     });
     currentY = mathFunc(currentY, yOffset);
     svg.appendChild(noteSvg);
-    // for (let i = noteSvg.childNodes.length - 1; i >= 0; i--) {
-    //   const child = noteSvg.childNodes[i];
-    //   svg.appendChild(child);
-    // }
   }
-  return svg;
+  return [svg, currentY];
 };
 
 export const createSharpSvg = () => {

@@ -333,7 +333,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           staffYCoordinates.push(this.getYCoordinate(note.value));
         }
 
-        noteSvg = createChordSvg({
+        const values = createChordSvg({
           duration,
           staffXCoordinate: xOffsetOfNote,
           staffYCoordinates,
@@ -341,52 +341,54 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           stemUp,
           qualifiedElementName: 'g',
         });
+        noteSvg = values[0];
+        yOffset = values[1];
       }
 
-      // Need to append node before I can get width and height
+      // Need to append node before I can get width and height (getBoundingClientRect)
       notesContainer.appendChild(noteSvg);
-      const staffYCoordinate = this.getYCoordinate(
-        elements[i].getAttribute('value') || 'C'
-      );
-      const { width, height } = noteSvg.getBoundingClientRect();
-
-      const halfOfHead = 4;
-      const yHeadOffset = stemUp
-        ? staffYCoordinate - height + halfOfHead
-        : staffYCoordinate + halfOfHead;
-      // noteSvg.setAttribute(
-      //   'transform',
-      //   `translate(${xOffsetOfNote}, ${yHeadOffset})`
-      // );
+      // todo: get rid of this somehow, probably return
+      // xoffset/width from createNote/ChordSvg()
+      const { width } = noteSvg.getBoundingClientRect();
 
       if (beamSvg) {
-        const stemSvg = noteSvg.querySelector('.stem');
-        const x = xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
-        const stemYAttribute = stemUp ? 'y1' : 'y2';
-        const y = stemUp
-          ? yHeadOffset - 1
-          : yHeadOffset +
-            parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
         if (i === 0) {
-          beamSvg.setAttribute('x1', x.toString());
-          beamSvg.setAttribute('y1', y.toString());
+          this.#updateBeam({
+            beamSvg,
+            noteSvg,
+            xOffsetOfNote,
+            stemUp,
+            yOffset,
+            xAttribute: 'x1',
+            yAttribute: 'y1',
+          });
         } else if (i === elements.length - 1) {
-          beamSvg.setAttribute('x2', x.toString());
-          beamSvg.setAttribute('y2', y.toString());
-          notesContainer.appendChild(beamSvg);
+          this.#updateBeam({
+            beamSvg,
+            noteSvg,
+            xOffsetOfNote,
+            stemUp,
+            yOffset,
+            xAttribute: 'x2',
+            yAttribute: 'y2',
+          });
         }
       }
       xOffsetOfNote += width;
     }
+    if (beamSvg) {
+      notesContainer.appendChild(beamSvg);
+    }
   }
 
-  #buildBeamIfNecessary(nodes: NoteOrChordElementType[]) {
+  #buildBeamIfNecessary(elements: NoteOrChordElementType[]) {
     const consecutives: number[] = [];
     let beamSvg: SVGLineElement | null = null;
-    for (let i = 0; i < nodes.length; i++) {
+    for (let i = 0; i < elements.length; i++) {
       if (
-        nodes[i].getAttribute('duration') === 'eighth' ||
-        nodes[i].getAttribute('duration') === 'sixteenth'
+        elements[i].duration === 'eighth' ||
+        elements[i].duration === 'sixteenth' ||
+        elements[i].duration === 'thirtysecond'
       ) {
         if (consecutives.length === 0) {
           consecutives.push(i);
@@ -401,6 +403,27 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       beamSvg.setAttribute('stroke-width', '6');
     }
     return beamSvg;
+  }
+
+  #updateBeam(props: {
+    beamSvg: SVGLineElement;
+    noteSvg: SVGElement;
+    xOffsetOfNote: number;
+    stemUp: boolean;
+    yOffset: number;
+    xAttribute: string;
+    yAttribute: string;
+  }) {
+    const stemSvg = props.noteSvg.querySelector('.stem');
+    const x =
+      props.xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
+    const stemYAttribute = props.stemUp ? 'y1' : 'y2';
+    const y = props.stemUp
+      ? props.yOffset - 1
+      : props.yOffset + parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
+
+    props.beamSvg.setAttribute(props.xAttribute, x.toString());
+    props.beamSvg.setAttribute(props.yAttribute, y.toString());
   }
 
   #determineIsStemUp(nodes: NoteOrChordElementType[]): boolean {

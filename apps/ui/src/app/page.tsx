@@ -12,17 +12,17 @@ export default function Home() {
         <music-composition keySig="D" mode="major" time="4/4">
           <music-measure>
             <music-staff-treble>
-              <music-chord>
-                <music-note value="A" duration="eighth"></music-note>
-                <music-note value="E" duration="eighth"></music-note>
+              <music-chord duration="eighth">
+                <music-note value="A"></music-note>
+                <music-note value="E"></music-note>
               </music-chord>
-              <music-chord>
-                <music-note value="A" duration="eighth"></music-note>
-                <music-note value="E" duration="eighth"></music-note>
+              <music-chord duration="eighth">
+                <music-note value="A"></music-note>
+                <music-note value="E"></music-note>
               </music-chord>
             </music-staff-treble>
           </music-measure>
-          {/* <music-measure>
+          <music-measure>
             <music-staff-treble>
               <music-note value="A" duration="eighth"></music-note>
               <music-note value="D" duration="eighth"></music-note>
@@ -37,7 +37,7 @@ export default function Home() {
               <music-note value="A" duration="quarter"></music-note>
             </music-staff-treble>
             <music-staff-guitar-tab></music-staff-guitar-tab>
-          </music-measure> */}
+          </music-measure>
         </music-composition>
       </main>
     </div>
