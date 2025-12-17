@@ -7,5 +7,4 @@ import './staffTreble'; // order of import matters for some reason, otherwise <n
 
 import './note';
 
-export { };
-
+export {};

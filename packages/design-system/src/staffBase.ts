@@ -48,7 +48,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       measure?.getAttribute('mode') ?? composition.getAttribute('mode');
     this.#parentKeySig =
       measure?.getAttribute('keySig') ?? composition.getAttribute('keySig');
-    console.log(this.#parentKeySig, this.#parentMode, 'making tsc eslint happy')
+    console.log(
+      this.#parentKeySig,
+      this.#parentMode,
+      'making tsc eslint happy'
+    );
     const timeTime = this.getAttribute('time');
     if (timeTime) {
       this.#timeInts = this.#convertTotimeInts(timeTime);

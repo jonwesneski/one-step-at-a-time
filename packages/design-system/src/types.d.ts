@@ -45,4 +45,3 @@ declare module 'react' {
     }
   }
 }
-
