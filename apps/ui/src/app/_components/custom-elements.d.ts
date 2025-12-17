@@ -3,7 +3,11 @@ import 'react';
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'music-chord': { children?: React.ReactNode };
+      'music-chord': {
+        value?: string;
+        duration?: 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'whole';
+        children?: React.ReactNode;
+      };
       'music-composition': {
         keySig?: string;
         mode?: string;

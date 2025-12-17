@@ -1,18 +1,27 @@
 import { durationToFlagCountMap, SVG_NS } from './consts';
-import { BeatsInMeasure, BeatTypeInMeasure, DurationType } from './types';
+import {
+  BeatsInMeasure,
+  BeatTypeInMeasure,
+  DurationType,
+} from './types/theory';
 
 type NoteProps = {
   duration: DurationType;
   flagsIfNeeded?: boolean;
   stemUp?: boolean;
   qualifiedElementName?: 'svg' | 'g';
+  translate?: {
+    staffXCoordinate: number;
+    staffYCoordinate: number;
+  };
 };
 export const createNoteSvg = ({
   duration,
   flagsIfNeeded = true,
   stemUp = true,
   qualifiedElementName = 'svg',
-}: NoteProps) => {
+  translate = undefined,
+}: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
@@ -75,22 +84,54 @@ export const createNoteSvg = ({
   headHtml.setAttribute('stroke-width', '2');
   svg.appendChild(headHtml);
 
-  return svg;
+  let yHeadOffset: number = NaN;
+  if (translate) {
+    const height = stemLength + headWidth;
+    yHeadOffset = stemUp
+      ? translate.staffYCoordinate - height
+      : translate.staffYCoordinate + headWidth;
+    svg.setAttribute(
+      'transform',
+      `translate(${translate.staffXCoordinate}, ${yHeadOffset})`
+    );
+  }
+
+  return [svg, yHeadOffset];
 };
 
-export const createChordSvg = (duration: DurationType, notes: string[]) => {
-  const svg = document.createElementNS(SVG_NS, 'svg');
+type ChordProps = Omit<NoteProps, 'translate'> & {
+  staffXCoordinate: number;
+  staffYCoordinates: number[];
+};
+export const createChordSvg = ({
+  duration,
+  staffXCoordinate,
+  staffYCoordinates,
+  flagsIfNeeded = true,
+  stemUp = true,
+  qualifiedElementName = 'g',
+}: ChordProps): [SVGElement | SVGGElement, number] => {
+  const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   svg.setAttribute('xmlns', SVG_NS);
   // svg.setAttribute('width', '37.5px');
   // svg.setAttribute('height', '40px');
-  for (const note of notes) {
-    const noteSvg = createNoteSvg({ duration });
-    for (let i = noteSvg.childNodes.length - 1; i >= 0; i--) {
-      const child = noteSvg.childNodes[i];
-      svg.appendChild(child);
-    }
+  const mathFunc = stemUp ? Math.min : Math.max;
+  let currentY = stemUp ? Infinity : -Infinity;
+  for (const staffYCoordinate of staffYCoordinates) {
+    const [noteSvg, yOffset] = createNoteSvg({
+      duration,
+      flagsIfNeeded,
+      stemUp,
+      qualifiedElementName,
+      translate: {
+        staffXCoordinate,
+        staffYCoordinate,
+      },
+    });
+    currentY = mathFunc(currentY, yOffset);
+    svg.appendChild(noteSvg);
   }
-  return svg;
+  return [svg, currentY];
 };
 
 export const createSharpSvg = () => {

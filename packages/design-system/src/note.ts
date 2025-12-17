@@ -1,8 +1,9 @@
-import { DurationType } from './types';
+import { INoteElement } from './types/elements';
+import { DurationType, Note } from './types/theory';
 import { createNoteSvg } from './utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  class NoteElement extends HTMLElement {
+  class NoteElement extends HTMLElement implements INoteElement {
     static get observedAttributes(): string[] {
       return ['duration', 'value'];
     }
@@ -13,19 +14,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get duration(): DurationType {
-      const duration = this.getAttribute('duration');
-      return (duration as DurationType) || 'quarter';
+      return (this.getAttribute('duration') as DurationType) ?? 'quarter';
     }
 
     set duration(value: DurationType) {
       this.setAttribute('duration', value);
     }
 
-    get value(): string | null {
-      return this.getAttribute('value');
+    get value(): Note {
+      return (this.getAttribute('value') as Note) ?? 'C';
     }
 
-    set value(val: string | null) {
+    set value(val: Note | null) {
       if (val === null) this.removeAttribute('value');
       else this.setAttribute('value', val);
     }
@@ -44,18 +44,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     //   oldValue: string | null,
     //   newValue: string | null
     // ): void {
-    //   if (oldValue !== newValue) {
-    //     const measureElement = this.closest("music-measure");
-    //     const width = measureElement?.getAttribute("width") || "100";
-    //     this.render(parseFloat(width));
-    //     //todo maybe i want to just call this.connectedCallback() instead
-    //   }
+    //   // if (oldValue !== newValue) {
+    //   //   const measureElement = this.closest("music-measure");
+    //   //   const width = measureElement?.getAttribute("width") || "100";
+    //   //   this.render(parseFloat(width));
+    //   //   //todo maybe i want to just call this.connectedCallback() instead
+    //   // }
     // }
 
     private render(): void {
-      this.shadowRoot!.innerHTML = createNoteSvg({
+      const [noteSvg] = createNoteSvg({
         duration: this.duration,
-      }).outerHTML;
+      });
+      this.shadowRoot!.innerHTML = noteSvg.outerHTML;
     }
   }
 

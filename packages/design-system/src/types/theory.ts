@@ -1,4 +1,5 @@
 export type DurationType =
+  | 'thirtysecond'
   | 'sixteenth'
   | 'eighth'
   | 'quarter'
@@ -10,6 +11,7 @@ export type Note =
   | 'A#'
   | 'Bb'
   | 'B'
+  | 'C'
   | 'C#'
   | 'Db'
   | 'D#'
@@ -23,9 +25,8 @@ export type Note =
 
 export type ChordType = '' | 'Min' | 'Maj' | 'Sus' | 'Aug';
 export type Extension = '' | '5' | '7' | '9';
-export type SlashType = '' | `${Note}/`;
 
-type BaseChord = `${Note}${ChordType}${Extension}`;
+type NormalChord = `${Note}${ChordType}${Extension}`;
 
 // Slash chord where the bass note is different from root
 type SlashChord<Bass extends Note, Root extends Note> = Bass extends Root
@@ -39,7 +40,7 @@ type AllSlashChords = {
   }[Note];
 }[Note];
 
-export type Chord = BaseChord | AllSlashChords;
+export type Chord = NormalChord | AllSlashChords;
 
 export type BeatsInMeasure = 2 | 3 | 4 | 6 | 9 | 12;
 export type BeatTypeInMeasure = 2 | 3 | 4;

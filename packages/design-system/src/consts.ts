@@ -1,4 +1,4 @@
-import { DurationType } from './types';
+import { DurationType } from './types/theory';
 
 export const durationToFlagCountMap = new Map<DurationType, number>([
   ['sixteenth', 2],
