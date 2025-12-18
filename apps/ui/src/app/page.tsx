@@ -1,9 +1,6 @@
 'use client';
 
-import '@rest-in-time/design-system/client';
-
-import type {} from '@rest-in-time/design-system';
-import '../../../../packages/design-system/src/custom-elements.d.ts';
+import '@rest-in-time/design-system';
 
 export default function Home() {
   return (

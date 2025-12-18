@@ -41,10 +41,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.render();
       this.#manageMeasureCount();
 
-      const slot = this.shadowRoot?.querySelector('slot');
-      if (slot) {
-        slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
-      }
+      // const slot = this.shadowRoot?.querySelector('slot');
+      // if (slot) {
+      //   slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
+      // }
     }
 
     attributeChangedCallback(
@@ -58,6 +58,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
         <div style="display: flex; flex-wrap: wrap; min-height: 100vh; width: 100%; max-width: 900px; padding-top: 8rem; padding-bottom: 8rem;">
           <slot></slot>
@@ -96,15 +97,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       measure.setAttribute('number', (++this.#measureCount).toString());
     }
 
-    #handleSlotChange(event: Event) {
-      // TODO: see if I still need this
-      // right now I'm adjusting in #manageMeasureCount
-      // slotChange event gets fired after all children it's children are rendered first
-      const slot = event.target as HTMLSlotElement;
-      const assignedElements = slot
-        .assignedElements({ flatten: true })
-        .filter((e) => e.nodeName === 'MUSIC-MEASURE');
-    }
+    // #handleSlotChange(event: Event) {
+    //   // TODO: see if I still need this
+    //   // right now I'm adjusting in #manageMeasureCount
+    //   // slotChange event gets fired after all children it's children are rendered first
+    //   const slot = event.target as HTMLSlotElement;
+    //   const assignedElements = slot
+    //     .assignedElements({ flatten: true })
+    //     .filter((e) => e.nodeName === 'MUSIC-MEASURE');
+    // }
   }
 
   if (!customElements.get('music-composition')) {

@@ -1,3 +1,5 @@
+// Placeholder ambient types to satisfy implicit 'types' reference used by TypeScript
+// This file intentionally exports nothing but allows the compiler to resolve the 'types' library.
 import 'react';
 
 declare module 'react' {

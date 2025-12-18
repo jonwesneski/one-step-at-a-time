@@ -1,0 +1,13 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "ignorePatterns": [
+    ".next/",
+    "out/",
+    "build/",
+    "next-env.d.ts",
+    "src/types/next-generated-modules.d.ts",
+    "src/types/routes.d.ts",
+    "src/types/validator.ts"
+  ]
+}

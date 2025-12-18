@@ -26,9 +26,8 @@
       ],
       "@rest-in-time/design-system/*": ["../../packages/design-system/src/*"]
     },
-    "typeRoots": ["./node_modules/@types", "../../packages/design-system/src"]
+    "typeRoots": ["../../packages/design-system/src"]
   },
-  "files": ["../../packages/design-system/src/custom-elements.d.ts"],
   "include": [
     "next-env.d.ts",
     "**/*.ts",

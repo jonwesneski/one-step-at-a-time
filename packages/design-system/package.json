@@ -2,22 +2,17 @@
   "name": "@rest-in-time/design-system",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.11.0",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./src/custom-elements.d.ts",
+      "types": "./src/types.d.ts",
       "default": "./src/index.ts"
-    },
-    "./client": {
-      "types": "./src/custom-elements.d.ts",
-      "default": "./src/client.ts"
     }
   },
   "dependencies": {},
   "devDependencies": {
     "typescript": "^5",
-    "eslint": "^9"
+    "eslint": "^8"
   }
 }

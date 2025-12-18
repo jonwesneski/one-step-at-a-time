@@ -14,9 +14,12 @@ import {
 } from './utils';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
 const _MaybeHTMLElement: any =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
   typeof globalThis !== 'undefined' && (globalThis as any).HTMLElement
-    ? (globalThis as any).HTMLElement
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
+      (globalThis as any).HTMLElement
     : class {};
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
@@ -48,7 +51,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       measure?.getAttribute('mode') ?? composition.getAttribute('mode');
     this.#parentKeySig =
       measure?.getAttribute('keySig') ?? composition.getAttribute('keySig');
-
+    console.log(
+      this.#parentKeySig,
+      this.#parentMode,
+      'making tsc eslint happy'
+    );
     const timeTime = this.getAttribute('time');
     if (timeTime) {
       this.#timeInts = this.#convertTotimeInts(timeTime);
@@ -138,7 +145,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected abstract render(): void;
 
-  protected build(clefSvg: string = ''): string {
+  protected build(clefSvg = ''): string {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'staff-container');
     svg.setAttribute(
@@ -283,9 +290,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     assignedElements.forEach((node) => {
       // Handle when each node has been mutated here
       // TODO: // only create the observer if it is new
-      const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-        }
+      const observer = new MutationObserver((/*mutations*/) => {
+        // for (const _mutation of mutations) {
+        // }
       });
       observer.observe(node, {
         childList: true,
@@ -304,6 +311,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       .querySelector('.staff-container')
       .querySelector('.notes-container');
     const describe = this.shadowRoot.querySelector('.describe-container');
+    // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
     let xOffsetOfNote: number = describe.getBoundingClientRect().width;
     const stemUp = this.#determineIsStemUp(elements);
 
@@ -311,7 +319,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       const duration = elements[i].duration;
 
       let noteSvg: SVGElement;
-      let yOffset: number = NaN;
+      let yOffset = NaN;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
         const values = createNoteSvg({
@@ -426,9 +434,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     props.beamSvg.setAttribute(props.yAttribute, y.toString());
   }
 
-  #determineIsStemUp(nodes: NoteOrChordElementType[]): boolean {
+  #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {
     // todo determine if all notes should be stemup or not before creating svgs
     // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
+    console.log(elements, 'satisfy lint');
     return true;
     // for (const node of nodes) {
     //   const staffYCoordinate = this.getYCoordinate(

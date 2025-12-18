@@ -146,6 +146,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     protected render(): void {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = this.build(
         StaffTrebleElement.#trebleClefSvg
       );
@@ -153,6 +154,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   }
 
   if (!customElements.get('music-staff-treble')) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Base-Element has runtime typing
     customElements.define('music-staff-treble', StaffTrebleElement as any);
   }
 }

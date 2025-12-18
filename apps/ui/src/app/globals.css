@@ -5,6 +5,11 @@
   --foreground: #171717;
 }
 
+/* @font-face {
+  font-family: 'Bravura';
+  src: url('Bravura.woff') format('woff');
+} */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

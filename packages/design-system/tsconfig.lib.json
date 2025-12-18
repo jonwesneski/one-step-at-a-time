@@ -20,7 +20,7 @@
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js"],
   "references": [],
   "exclude": [
-    "jest.config.js",
+    "jest.config.cjs",
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
     "src/**/*.spec.js",
