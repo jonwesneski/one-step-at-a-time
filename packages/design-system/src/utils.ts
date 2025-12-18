@@ -84,7 +84,7 @@ export const createNoteSvg = ({
   headHtml.setAttribute('stroke-width', '2');
   svg.appendChild(headHtml);
 
-  let yHeadOffset: number = NaN;
+  let yHeadOffset = NaN;
   if (translate) {
     const height = stemLength + headWidth;
     yHeadOffset = stemUp

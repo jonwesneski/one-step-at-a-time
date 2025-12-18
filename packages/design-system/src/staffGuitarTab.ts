@@ -29,8 +29,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.render();
     }
 
-    disconnectedCallback(): void {}
-
     attributeChangedCallback(
       name: string,
       oldValue: string | null,
@@ -59,6 +57,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       staffLines.push('</g>');
 
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
         <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
           <svg

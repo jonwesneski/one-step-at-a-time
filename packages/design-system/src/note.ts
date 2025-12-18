@@ -56,6 +56,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const [noteSvg] = createNoteSvg({
         duration: this.duration,
       });
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = noteSvg.outerHTML;
     }
   }
