@@ -1,9 +1,9 @@
-import { durationToFlagCountMap, SVG_NS } from './consts';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
-} from './types/theory';
+} from '../types/theory';
+import { durationToFlagCountMap, SVG_NS } from './consts';
 
 type NoteProps = {
   duration: DurationType;

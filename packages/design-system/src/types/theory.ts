@@ -13,8 +13,10 @@ export type Note =
   | 'B'
   | 'C'
   | 'C#'
+  | 'D'
   | 'Db'
   | 'D#'
+  | 'Eb'
   | 'E'
   | 'F'
   | 'F#'
@@ -23,7 +25,7 @@ export type Note =
   | 'G#'
   | 'Ab';
 
-export type ChordType = '' | 'Min' | 'Maj' | 'Sus' | 'Aug';
+export type ChordType = '' | 'Min' | 'Maj' | 'Sus2' | 'Sus4' | 'Aug' | 'Dim';
 export type Extension = '' | '5' | '7' | '9';
 
 type NormalChord = `${Note}${ChordType}${Extension}`;

@@ -1,4 +1,3 @@
-import { SVG_NS } from './consts';
 import {
   ChordElementType,
   NoteElementType,
@@ -12,6 +11,7 @@ import {
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
+import { SVG_NS } from './utils/consts';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
