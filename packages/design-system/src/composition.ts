@@ -69,10 +69,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           music-measure {
-            flex: 1 1 100px; /* Allow items to grow and shrink */
-            min-width: 100px; /* Minimum width for each item */
+            flex: 1 1 100px;
+            min-width: 100px;
             box-sizing: border-box;
-            border: 1px solid blue; /* Optional: for visibility */
           }
         </style>
         <div class="composition-grid">

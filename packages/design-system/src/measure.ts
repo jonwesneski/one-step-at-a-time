@@ -75,9 +75,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.shadowRoot!.innerHTML = `
         <style>
           :host {
-            display: block; /* Ensure it behaves as a block element */
-            flex: 1 1 280px; /* Allow it to grow and shrink */
-            min-width: 100px; /* Minimum width for responsiveness */
+            display: block;
+            flex: 1 1 280px;
+            min-width: 100px;
           }
         </style>
         <div>

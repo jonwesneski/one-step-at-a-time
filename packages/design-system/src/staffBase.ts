@@ -152,7 +152,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       'style',
       'position: absolute; inset: 0; width: 100%; height: 100px; display: block;'
     );
-    // svg.setAttribute('height', '100px'); //set it style
     svg.setAttribute('viewBox', '0 0 200 100');
     svg.setAttribute('preserveAspectRatio', 'none');
 
@@ -168,19 +167,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     this.#appendStaffLines(svg);
 
-    // Notes are added here at runtime
-    const transribe = document.createElementNS(SVG_NS, 'svg');
-    transribe.setAttribute('class', 'transcribe-container');
-    transribe.setAttribute(
-      'style',
-      'position: absolute; inset: 0; pointer-events: none'
-    );
-    // svg.appendChild(gNotes);
-
-    this.#appendDescribe(clefSvg, transribe);
-    const gNotes = document.createElementNS(SVG_NS, 'g');
-    gNotes.setAttribute('class', 'notes-container');
-    transribe.appendChild(gNotes);
+    const transribe = this.#createTranscribe(clefSvg);
 
     // Right/Closing vertical line
     const rightLine = document.createElementNS(SVG_NS, 'line');
@@ -239,12 +226,19 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     svg.appendChild(gLines);
   }
 
-  // Describe is: clef, key signature, time signature
-  #appendDescribe(clefSvgStr: string, staff: SVGElement) {
+  // Transcribe is: clef, key signature, time signature, and notes
+  #createTranscribe(clefSvgStr: string) {
+    const transcribe = document.createElementNS(SVG_NS, 'svg');
+    transcribe.setAttribute('class', 'transcribe-container');
+    transcribe.setAttribute(
+      'style',
+      'position: absolute; inset: 0; pointer-events: none'
+    );
+
     const gDescribe = document.createElementNS(SVG_NS, 'g');
     gDescribe.setAttribute('class', 'describe-container');
     gDescribe.innerHTML = clefSvgStr;
-    staff.appendChild(gDescribe);
+    transcribe.appendChild(gDescribe);
 
     const xOffsetOfClef = 13;
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
@@ -256,6 +250,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       gDescribe,
       xOffsetOfKeySignature + 5
     );
+
+    // Notes are added here at runtime
+    const gNotes = document.createElementNS(SVG_NS, 'g');
+    gNotes.setAttribute('class', 'notes-container');
+    transcribe.appendChild(gNotes);
+
+    return transcribe;
   }
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
@@ -338,9 +339,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #renderNotes(elements: NoteOrChordElementType[]) {
     const beamSvg = this.#buildBeamIfNecessary(elements);
     const needsBeam = beamSvg !== null;
-    const notesContainer = this.shadowRoot
-      // .querySelector('.staff-container')
-      .querySelector('.notes-container');
+    const notesContainer = this.shadowRoot.querySelector('.notes-container');
     const describe = this.shadowRoot.querySelector('.describe-container');
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
     let xOffsetOfNote: number = describe.getBoundingClientRect().width;
