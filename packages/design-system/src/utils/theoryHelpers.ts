@@ -18,7 +18,6 @@ export const getChordNotes = (chord: Chord) => {
   const semitones =
     ChordSemitoneMap[chordSignature] ??
     ChordSemitoneMap[ChordSemitoneMapAliases[chordSignature]];
-  console.log({ semitones });
   return getNotes(root as Note, semitones);
 };
 
@@ -41,11 +40,10 @@ export const getNotes = (root: Note, semitones: number[]) => {
   const notes: Note[] = [root];
   // 2nd index in possibleNotes is for flats
   const firstChoice = useFirstIndex[root] ? 0 : 1;
-  let rootPosition = noteSemitoneMap.get(root);
+  const rootPosition = noteSemitoneMap.get(root);
   if (rootPosition !== undefined) {
     for (const s of semitones) {
       let position = rootPosition + s;
-      console.log({ position });
       position =
         position <= 11 ? position : (position % 11) - Math.floor(position / 11);
       // If position is less than zero then we need to go backwards
