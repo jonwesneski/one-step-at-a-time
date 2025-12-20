@@ -10,9 +10,12 @@
       "default": "./src/index.ts"
     }
   },
-  "dependencies": {},
+  "scripts": {
+    "test": "jest"
+  },
   "devDependencies": {
-    "typescript": "^5",
-    "eslint": "^8"
+    "@types/jest": "^30.0.0",
+    "eslint": "^8",
+    "typescript": "^5"
   }
 }
