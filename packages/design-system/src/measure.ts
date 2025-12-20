@@ -73,6 +73,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     private render(): void {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
+        <style>
+          :host {
+            display: block; /* Ensure it behaves as a block element */
+            flex: 1 1 280px; /* Allow it to grow and shrink */
+            min-width: 100px; /* Minimum width for responsiveness */
+          }
+        </style>
         <div>
           <span>${this.number}</span>
           <slot></slot>

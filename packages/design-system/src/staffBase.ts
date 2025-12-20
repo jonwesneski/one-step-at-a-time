@@ -150,9 +150,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     svg.setAttribute('class', 'staff-container');
     svg.setAttribute(
       'style',
-      'position: absolute; top: 0; left: 0; width: 100%'
+      'position: absolute; inset: 0; width: 100%; height: 100px; display: block;'
     );
-    svg.setAttribute('height', '100');
+    // svg.setAttribute('height', '100px'); //set it style
     svg.setAttribute('viewBox', '0 0 200 100');
     svg.setAttribute('preserveAspectRatio', 'none');
 
@@ -168,12 +168,19 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     this.#appendStaffLines(svg);
 
-    this.#appendDescribe(clefSvg, svg);
-
     // Notes are added here at runtime
+    const transribe = document.createElementNS(SVG_NS, 'svg');
+    transribe.setAttribute('class', 'transcribe-container');
+    transribe.setAttribute(
+      'style',
+      'position: absolute; inset: 0; pointer-events: none'
+    );
+    // svg.appendChild(gNotes);
+
+    this.#appendDescribe(clefSvg, transribe);
     const gNotes = document.createElementNS(SVG_NS, 'g');
     gNotes.setAttribute('class', 'notes-container');
-    svg.appendChild(gNotes);
+    transribe.appendChild(gNotes);
 
     // Right/Closing vertical line
     const rightLine = document.createElementNS(SVG_NS, 'line');
@@ -186,8 +193,31 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     svg.appendChild(rightLine);
 
     return `
-      <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
+      <style>
+      :host {
+          /* Inherit flex behavior from CSS vars set by parent */
+          flex: var(--flex-staff-basis, 1 1 280px);
+          min-width: var(--flex-staff-minw, 280px);
+          box-sizing: border-box;
+          display: block;
+        }
+
+        .staff-wrapper {
+          position: relative;
+          min-height: 100px;  /* minimum */
+        }
+
+        .staff-container {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+      </style>
+      <div class="staff-wrapper">
         ${svg.outerHTML}
+        ${transribe.outerHTML}
         <slot></slot>
       </div>
     `;
@@ -242,6 +272,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       for (const y of yCoordinates.coordinates) {
         const svg = createSvgFunc();
         svg.setAttribute('transform', `translate(${xOffset}, ${y + yOffset})`);
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         g.appendChild(svg);
         xOffset += Width;
       }
@@ -308,7 +339,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const beamSvg = this.#buildBeamIfNecessary(elements);
     const needsBeam = beamSvg !== null;
     const notesContainer = this.shadowRoot
-      .querySelector('.staff-container')
+      // .querySelector('.staff-container')
       .querySelector('.notes-container');
     const describe = this.shadowRoot.querySelector('.describe-container');
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
@@ -326,13 +357,14 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           duration,
           flagsIfNeeded: !needsBeam,
           stemUp,
-          qualifiedElementName: 'g',
+          qualifiedElementName: 'svg',
           translate: {
             staffXCoordinate: xOffsetOfNote,
             staffYCoordinate: this.getYCoordinate(element.value),
           },
         });
         noteSvg = values[0];
+        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         yOffset = values[1];
       } else {
         const element = elements[i] as ChordElementType;

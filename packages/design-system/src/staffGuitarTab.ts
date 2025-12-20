@@ -59,10 +59,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
-        <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
+        <div style="position: relative; flex: 1 1 33.333%; min-width: 300px; height: 100px;">
           <svg
-            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-            height="100"
+            style="position: absolute; top: 0; left: 0; width: 100%; display: block;"
             viewBox="0 0 200 100"
             preserveAspectRatio="none"
           >

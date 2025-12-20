@@ -60,7 +60,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     private render(): void {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
-        <div style="display: flex; flex-wrap: wrap; min-height: 100vh; width: 100%; max-width: 900px; padding-top: 8rem; padding-bottom: 8rem;">
+        <style>
+          .composition-grid {
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 900px;
+          }
+
+          music-measure {
+            flex: 1 1 100px; /* Allow items to grow and shrink */
+            min-width: 100px; /* Minimum width for each item */
+            box-sizing: border-box;
+            border: 1px solid blue; /* Optional: for visibility */
+          }
+        </style>
+        <div class="composition-grid">
           <slot></slot>
         </div>
       `;
