@@ -25,8 +25,7 @@
         "../../packages/design-system/src/index.ts"
       ],
       "@rest-in-time/design-system/*": ["../../packages/design-system/src/*"]
-    },
-    "typeRoots": ["../../packages/design-system/src"]
+    }
   },
   "include": [
     "next-env.d.ts",

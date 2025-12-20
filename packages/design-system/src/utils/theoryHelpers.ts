@@ -1,4 +1,4 @@
-import { Note } from '../types/theory';
+import { Chord, Note } from '../types/theory';
 import {
   ChordSemitoneMap,
   ChordSemitoneMapAliases,
@@ -6,9 +6,7 @@ import {
   semitoneNoteMap,
 } from './consts';
 
-export const getChordNotes = (
-  chord: string /**TODO make type Chord when union literals are fixed */
-) => {
+export const getChordNotes = (chord: Chord) => {
   const isSlash = chord[1] === '/';
   let root = isSlash ? chord[2] : chord[0];
   let startIndex = isSlash ? 3 : 1;

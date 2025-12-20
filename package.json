@@ -13,6 +13,7 @@
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
     "@swc/jest": "~0.2.38",
+    "@types/minimatch": "^6.0.0",
     "@types/node": "20.19.9",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",
@@ -28,7 +29,6 @@
     "tslib": "^2.3.0",
     "verdaccio": "^6.0.5"
   },
-  "dependencies": {},
   "nx": {
     "includedScripts": [],
     "targets": {
