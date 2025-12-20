@@ -19,10 +19,7 @@
         "name": "next"
       }
     ],
-    "typeRoots": [
-      "./types",
-      "../../node_modules/@types"
-    ],
+    "typeRoots": ["./types", "../../node_modules/@types"],
     "paths": {
       "@/*": ["./*"],
       "@rest-in-time/design-system": [
