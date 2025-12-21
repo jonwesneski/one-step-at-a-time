@@ -146,6 +146,40 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected abstract render(): void;
 
   protected build(clefSvg = ''): string {
+    const staffLines = this.#buildStaffLines();
+    const transribe = this.#buildTranscribe(clefSvg);
+
+    return `
+      <style>
+      :host {
+          flex: var(--flex-staff-basis, 1 1 280px);
+          min-width: var(--flex-staff-minw, 280px);
+          box-sizing: border-box;
+          display: block;
+        }
+
+        .staff-wrapper {
+          position: relative;
+          min-height: 100px;
+        }
+
+        .staff-container {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+      </style>
+      <div class="staff-wrapper">
+        ${staffLines.outerHTML}
+        ${transribe.outerHTML}
+        <slot></slot>
+      </div>
+    `;
+  }
+
+  #buildStaffLines() {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'staff-container');
     svg.setAttribute(
@@ -165,52 +199,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     leftLine.setAttribute('stroke-width', '1');
     svg.appendChild(leftLine);
 
-    this.#appendStaffLines(svg);
-
-    const transribe = this.#createTranscribe(clefSvg);
-
-    // Right/Closing vertical line
-    const rightLine = document.createElementNS(SVG_NS, 'line');
-    rightLine.setAttribute('x1', '200');
-    rightLine.setAttribute('y1', '0');
-    rightLine.setAttribute('x2', '200');
-    rightLine.setAttribute('y2', '100');
-    rightLine.setAttribute('stroke', 'currentColor');
-    rightLine.setAttribute('stroke-width', '1');
-    svg.appendChild(rightLine);
-
-    return `
-      <style>
-      :host {
-          /* Inherit flex behavior from CSS vars set by parent */
-          flex: var(--flex-staff-basis, 1 1 280px);
-          min-width: var(--flex-staff-minw, 280px);
-          box-sizing: border-box;
-          display: block;
-        }
-
-        .staff-wrapper {
-          position: relative;
-          min-height: 100px;  /* minimum */
-        }
-
-        .staff-container {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          display: block;
-        }
-      </style>
-      <div class="staff-wrapper">
-        ${svg.outerHTML}
-        ${transribe.outerHTML}
-        <slot></slot>
-      </div>
-    `;
-  }
-
-  #appendStaffLines(svg: SVGElement) {
     const gLines = document.createElementNS(SVG_NS, 'g');
     gLines.setAttribute('class', 'staff-lines');
     for (const y of StaffElementBase.linesY) {
@@ -224,15 +212,26 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       gLines.appendChild(lineSvg);
     }
     svg.appendChild(gLines);
+
+    // Right/Closing vertical line
+    const rightLine = document.createElementNS(SVG_NS, 'line');
+    rightLine.setAttribute('x1', '200');
+    rightLine.setAttribute('y1', '0');
+    rightLine.setAttribute('x2', '200');
+    rightLine.setAttribute('y2', '100');
+    rightLine.setAttribute('stroke', 'currentColor');
+    rightLine.setAttribute('stroke-width', '1');
+    svg.appendChild(rightLine);
+    return svg;
   }
 
   // Transcribe is: clef, key signature, time signature, and notes
-  #createTranscribe(clefSvgStr: string) {
+  #buildTranscribe(clefSvgStr: string) {
     const transcribe = document.createElementNS(SVG_NS, 'svg');
     transcribe.setAttribute('class', 'transcribe-container');
     transcribe.setAttribute(
       'style',
-      'position: absolute; inset: 0; pointer-events: none'
+      'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
     );
 
     const gDescribe = document.createElementNS(SVG_NS, 'g');

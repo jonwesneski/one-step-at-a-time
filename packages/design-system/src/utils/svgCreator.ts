@@ -25,7 +25,6 @@ export const createNoteSvg = ({
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
-    //svg.setAttribute('viewBox', '8 8 12 30');
   }
 
   svg.setAttribute('width', '37.5px');
@@ -34,7 +33,6 @@ export const createNoteSvg = ({
   const stemStart = 0;
   const stemLength = 25;
   const stemEnd = stemStart + stemLength;
-  const headWidth = 4;
   const x = 10; //todo see if I need this to be dynamic or maybe just come up with a better name
 
   if (flagsIfNeeded) {
@@ -53,6 +51,7 @@ export const createNoteSvg = ({
     }
   }
 
+  const headWidth = 4;
   const stemX = stemUp ? (x + headWidth).toString() : x.toString();
   const stemHtml = document.createElementNS(SVG_NS, 'line');
   stemHtml.setAttribute('class', 'stem');
@@ -65,9 +64,7 @@ export const createNoteSvg = ({
   svg.appendChild(stemHtml);
 
   const headXStartStr = stemUp ? x.toString() : (x + 3).toString();
-  const headYStartStr = stemUp
-    ? stemEnd.toString()
-    : (stemStart - 4).toString();
+  const headYStartStr = stemUp ? stemEnd.toString() : headWidth.toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
   const headHtml = document.createElementNS(SVG_NS, 'ellipse');
@@ -86,10 +83,9 @@ export const createNoteSvg = ({
 
   let yHeadOffset = NaN;
   if (translate) {
-    const height = stemLength + headWidth;
     yHeadOffset = stemUp
-      ? translate.staffYCoordinate - height
-      : translate.staffYCoordinate + headWidth;
+      ? translate.staffYCoordinate - stemLength
+      : translate.staffYCoordinate - headWidth;
     svg.setAttribute(
       'transform',
       `translate(${translate.staffXCoordinate}, ${yHeadOffset})`

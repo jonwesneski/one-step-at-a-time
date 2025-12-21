@@ -35,6 +35,7 @@ export default function Home() {
           <music-staff-bass>
             <music-note value="A" duration="quarter"></music-note>
           </music-staff-bass>
+          <music-staff-guitar-tab></music-staff-guitar-tab>
         </music-measure>
       </music-composition>
     </main>
