@@ -289,6 +289,8 @@ export class BeamCreator {
   buildBeams() {
     const thickness = 8;
     const beam = document.createElementNS(SVG_NS, 'polygon');
+    beam.classList.add('beam');
+    beam.setAttribute('fill', 'currentColor');
     const leftTop = `${this.x1},${this.y1}`;
     const leftBottom = `${this.x1},${this.y1 + thickness}`;
     const rightBottom = `${this.x2},${this.y2 + thickness}`;
@@ -297,7 +299,7 @@ export class BeamCreator {
       'points',
       `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
     );
-    beam.setAttribute('fill', 'currentColor');
+
     return beam;
   }
 }
