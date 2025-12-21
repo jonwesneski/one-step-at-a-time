@@ -1,3 +1,4 @@
+import { NoteOrChordElementType } from '../types/elements';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
@@ -230,3 +231,75 @@ export const createTimeSignatureSvg = (
 
   return svg;
 };
+
+export class BeamCreator {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+  constructor() {
+    this.x1 = NaN;
+    this.x2 = NaN;
+    this.y1 = NaN;
+    this.y2 = NaN;
+  }
+
+  static ifNecessary(elements: NoteOrChordElementType[]) {
+    const consecutives: number[] = [];
+    let beamCreator: BeamCreator | null = null;
+    for (let i = 0; i < elements.length; i++) {
+      if (
+        elements[i].duration === 'eighth' ||
+        elements[i].duration === 'sixteenth' ||
+        elements[i].duration === 'thirtysecond'
+      ) {
+        if (consecutives.length === 0) {
+          consecutives.push(i);
+        } else if (consecutives[i - 1] !== undefined) {
+          consecutives.push(i);
+        }
+      }
+    }
+    if (consecutives.length && consecutives.length % 2 === 0) {
+      beamCreator = new BeamCreator();
+    }
+    return beamCreator;
+  }
+
+  updateBeamCoordinates(props: {
+    noteSvg: SVGElement;
+    xOffsetOfNote: number;
+    stemUp: boolean;
+    yOffset: number;
+    xAttribute: 'x1' | 'x2';
+    yAttribute: 'y1' | 'y2';
+  }) {
+    const stemSvg = props.noteSvg.querySelector('.stem');
+    const x =
+      props.xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
+    const stemYAttribute = props.stemUp ? 'y1' : 'y2';
+    const y = props.stemUp
+      ? props.yOffset - 1
+      : props.yOffset + parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
+
+    this[props.xAttribute] = x;
+    this[props.yAttribute] = y;
+  }
+
+  buildBeams() {
+    const thickness = 8;
+    const beam = document.createElementNS(SVG_NS, 'polygon');
+    beam.classList.add('beam');
+    beam.setAttribute('fill', 'currentColor');
+    const leftTop = `${this.x1},${this.y1}`;
+    const leftBottom = `${this.x1},${this.y1 + thickness}`;
+    const rightBottom = `${this.x2},${this.y2 + thickness}`;
+    const rightTop = `${this.x2},${this.y2}`;
+    beam.setAttribute(
+      'points',
+      `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
+    );
+
+    return beam;
+  }
+}

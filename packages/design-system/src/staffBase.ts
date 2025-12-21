@@ -5,6 +5,7 @@ import {
 } from './types/elements';
 import { BeatsInMeasure, BeatTypeInMeasure } from './types/theory';
 import {
+  BeamCreator,
   createChordSvg,
   createFlatSvg,
   createNoteSvg,
@@ -342,8 +343,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
-    const beamSvg = this.#buildBeamIfNecessary(elements);
-    const needsBeam = beamSvg !== null;
+    const beamCreator = BeamCreator.ifNecessary(elements);
+    const needsBeam = beamCreator !== null;
     const notesContainer = this.shadowRoot.querySelector('.notes-container');
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
     let xOffsetOfNote: number = 0;
@@ -394,10 +395,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       // xoffset/width from createNote/ChordSvg()
       const { width } = noteSvg.getBoundingClientRect();
 
-      if (beamSvg) {
+      if (beamCreator) {
         if (i === 0) {
-          this.#updateBeam({
-            beamSvg,
+          beamCreator.updateBeamCoordinates({
             noteSvg,
             xOffsetOfNote,
             stemUp,
@@ -406,8 +406,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             yAttribute: 'y1',
           });
         } else if (i === elements.length - 1) {
-          this.#updateBeam({
-            beamSvg,
+          beamCreator.updateBeamCoordinates({
             noteSvg,
             xOffsetOfNote,
             stemUp,
@@ -419,54 +418,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
       xOffsetOfNote += width;
     }
-    if (beamSvg) {
-      notesContainer.appendChild(beamSvg);
-    }
-  }
 
-  #buildBeamIfNecessary(elements: NoteOrChordElementType[]) {
-    const consecutives: number[] = [];
-    let beamSvg: SVGLineElement | null = null;
-    for (let i = 0; i < elements.length; i++) {
-      if (
-        elements[i].duration === 'eighth' ||
-        elements[i].duration === 'sixteenth' ||
-        elements[i].duration === 'thirtysecond'
-      ) {
-        if (consecutives.length === 0) {
-          consecutives.push(i);
-        } else if (consecutives[i - 1] !== undefined) {
-          consecutives.push(i);
-        }
-      }
+    if (beamCreator) {
+      notesContainer.appendChild(beamCreator.buildBeams());
     }
-    if (consecutives.length && consecutives.length % 2 === 0) {
-      beamSvg = document.createElementNS(SVG_NS, 'line');
-      beamSvg.setAttribute('stroke', 'currentColor');
-      beamSvg.setAttribute('stroke-width', '6');
-    }
-    return beamSvg;
-  }
-
-  #updateBeam(props: {
-    beamSvg: SVGLineElement;
-    noteSvg: SVGElement;
-    xOffsetOfNote: number;
-    stemUp: boolean;
-    yOffset: number;
-    xAttribute: string;
-    yAttribute: string;
-  }) {
-    const stemSvg = props.noteSvg.querySelector('.stem');
-    const x =
-      props.xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
-    const stemYAttribute = props.stemUp ? 'y1' : 'y2';
-    const y = props.stemUp
-      ? props.yOffset - 1
-      : props.yOffset + parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
-
-    props.beamSvg.setAttribute(props.xAttribute, x.toString());
-    props.beamSvg.setAttribute(props.yAttribute, y.toString());
   }
 
   #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {
