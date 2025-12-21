@@ -228,7 +228,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   // Transcribe is: clef, key signature, time signature, and notes
   #buildTranscribe(clefSvgStr: string) {
     const transcribe = document.createElementNS(SVG_NS, 'svg');
-    transcribe.setAttribute('class', 'transcribe-container');
+    transcribe.classList.add('transcribe-container');
     transcribe.setAttribute(
       'style',
       'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
@@ -239,20 +239,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     gDescribe.innerHTML = clefSvgStr;
     transcribe.appendChild(gDescribe);
 
-    const xOffsetOfClef = 13;
+    const xOffsetOfClef = 14;
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
       gDescribe,
       xOffsetOfClef
     );
 
-    this.#appendTimeSignatureSvgIfNecessary(
+    const timeSigOffset = this.#appendTimeSignatureSvgIfNecessary(
       gDescribe,
       xOffsetOfKeySignature + 5
     );
 
     // Notes are added here at runtime
-    const gNotes = document.createElementNS(SVG_NS, 'g');
+    const gNotes = document.createElementNS(SVG_NS, 'svg');
     gNotes.setAttribute('class', 'notes-container');
+    gNotes.setAttribute('x', (timeSigOffset + 10).toString());
     transcribe.appendChild(gNotes);
 
     return transcribe;
@@ -260,9 +261,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
     const yCoordinates = this.getKeyYCoordinates();
-    const g = document.createElementNS(SVG_NS, 'g');
+    const g = document.createElementNS(SVG_NS, 'svg');
     g.setAttribute('class', 'key-signature');
-    g.setAttribute('transform', `translate(${xOffset}, -15)`);
+    g.setAttribute('x', xOffset.toString());
+    g.setAttribute('y', '-15');
     if (yCoordinates.coordinates.length) {
       const createSvgFunc = yCoordinates.useSharps
         ? createSharpSvg
@@ -294,6 +296,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       !firstMeasureOrNoCompositionTime && measure && this.#timeInts
         ? this.#timeInts
         : null;
+
+    let timeSigOffset = xOffset;
     if (firstMeasureOrNoCompositionTime || timeChangedInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
         ...((firstMeasureOrNoCompositionTime ?? timeChangedInMeasure) as [
@@ -303,7 +307,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
+      timeSigOffset += 14;
     }
+    return timeSigOffset;
   }
 
   #handleSlotChange(event: Event) {
@@ -339,9 +345,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const beamSvg = this.#buildBeamIfNecessary(elements);
     const needsBeam = beamSvg !== null;
     const notesContainer = this.shadowRoot.querySelector('.notes-container');
-    const describe = this.shadowRoot.querySelector('.describe-container');
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
-    let xOffsetOfNote: number = describe.getBoundingClientRect().width;
+    let xOffsetOfNote: number = 0;
     const stemUp = this.#determineIsStemUp(elements);
 
     for (let i = 0; i < elements.length; i++) {
