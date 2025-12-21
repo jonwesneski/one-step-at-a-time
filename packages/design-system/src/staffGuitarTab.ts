@@ -1,3 +1,5 @@
+import { SVG_NS } from './utils';
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends HTMLElement {
     static #tabSvg = `
@@ -9,7 +11,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         </text>
       </svg>
     `;
-    #linesY: number[] = [10, 20, 30, 40, 50, 60];
+    protected static lineStart = 10;
+    protected static lineSpacing = 10;
+    protected static linesY: number[] = Array.from(
+      { length: 6 },
+      (_, i) =>
+        StaffGuitarTabElement.lineStart + i * StaffGuitarTabElement.lineSpacing
+    );
 
     constructor() {
       super();
@@ -40,54 +48,108 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     protected render(): void {
-      // Build horizontal staff lines
-      // from top to bottom
-      const staffLines = ['<g>'];
-      for (const y of this.#linesY) {
-        staffLines.push(`
-          <line
-            x1="0"
-            y1="${y}"
-            x2="200"
-            y2="${y}"
-            stroke="currentColor"
-            stroke-width="2"
-          />
-        `);
-      }
-      staffLines.push('</g>');
+      const staffLines = this.#buildStaffLines();
+      const transribe = this.#buildTranscribe();
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
-        <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
-          <svg
-            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-            height="100"
-            viewBox="0 0 200 100"
-            preserveAspectRatio="none"
-          >
-            <line
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="100"
-              stroke="currentColor"
-              stroke-width="1"
-            />
-            ${StaffGuitarTabElement.#tabSvg}
-            ${staffLines.join('')}
-            <line
-              x1="200"
-              y1="0"
-              x2="200"
-              y2="100"
-              stroke="currentColor"
-              stroke-width="1"
-            />
-          </svg>
-          <div class="children-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"><slot></slot></div>
-        </div>
+        <style>
+      :host {
+          flex: var(--flex-staff-basis, 1 1 280px);
+          min-width: var(--flex-staff-minw, 280px);
+          box-sizing: border-box;
+          display: block;
+        }
+
+        .staff-wrapper {
+          position: relative;
+          min-height: 100px;
+        }
+
+        .staff-container {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+      </style>
+      <div class="staff-wrapper">
+        ${staffLines.outerHTML}
+        ${transribe.outerHTML}
+        <slot></slot>
+      </div>
       `;
+    }
+
+    #buildStaffLines() {
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('class', 'staff-container');
+      svg.setAttribute(
+        'style',
+        'position: absolute; inset: 0; width: 100%; height: 100px; display: block;'
+      );
+      svg.setAttribute('viewBox', '0 0 200 100');
+      svg.setAttribute('preserveAspectRatio', 'none');
+
+      // Left/Opening vertical line
+      const leftLine = document.createElementNS(SVG_NS, 'line');
+      leftLine.setAttribute('x1', '0');
+      leftLine.setAttribute('y1', '0');
+      leftLine.setAttribute('x2', '0');
+      leftLine.setAttribute('y2', '100');
+      leftLine.setAttribute('stroke', 'currentColor');
+      leftLine.setAttribute('stroke-width', '1');
+      svg.appendChild(leftLine);
+
+      // Build horizontal staff lines
+      // from top to bottom
+      const gLines = document.createElementNS(SVG_NS, 'g');
+      gLines.setAttribute('class', 'staff-lines');
+      for (const y of StaffGuitarTabElement.linesY) {
+        const lineSvg = document.createElementNS(SVG_NS, 'line');
+        lineSvg.setAttribute('x1', '0');
+        lineSvg.setAttribute('y1', y.toString());
+        lineSvg.setAttribute('x2', '200');
+        lineSvg.setAttribute('y2', y.toString());
+        lineSvg.setAttribute('stroke', 'currentColor');
+        lineSvg.setAttribute('stroke-width', '2');
+        gLines.appendChild(lineSvg);
+      }
+      svg.appendChild(gLines);
+
+      // Right/Closing vertical line
+      const rightLine = document.createElementNS(SVG_NS, 'line');
+      rightLine.setAttribute('x1', '200');
+      rightLine.setAttribute('y1', '0');
+      rightLine.setAttribute('x2', '200');
+      rightLine.setAttribute('y2', '100');
+      rightLine.setAttribute('stroke', 'currentColor');
+      rightLine.setAttribute('stroke-width', '1');
+      svg.appendChild(rightLine);
+      return svg;
+    }
+
+    // Transcribe is: TAB and notes
+    #buildTranscribe() {
+      const transcribe = document.createElementNS(SVG_NS, 'svg');
+      transcribe.setAttribute('class', 'transcribe-container');
+      transcribe.setAttribute(
+        'style',
+        'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
+      );
+
+      const gDescribe = document.createElementNS(SVG_NS, 'g');
+      gDescribe.setAttribute('class', 'describe-container');
+      gDescribe.innerHTML = StaffGuitarTabElement.#tabSvg;
+      transcribe.appendChild(gDescribe);
+
+      // Notes are added here at runtime
+      const gNotes = document.createElementNS(SVG_NS, 'g');
+      gNotes.setAttribute('class', 'notes-container');
+      transcribe.appendChild(gNotes);
+
+      return transcribe;
     }
   }
 

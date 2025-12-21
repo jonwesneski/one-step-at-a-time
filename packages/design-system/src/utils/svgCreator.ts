@@ -25,7 +25,6 @@ export const createNoteSvg = ({
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
-    //svg.setAttribute('viewBox', '8 8 12 30');
   }
 
   svg.setAttribute('width', '37.5px');
@@ -34,66 +33,63 @@ export const createNoteSvg = ({
   const stemStart = 0;
   const stemLength = 25;
   const stemEnd = stemStart + stemLength;
-  const headWidth = 4;
   const x = 10; //todo see if I need this to be dynamic or maybe just come up with a better name
 
   if (flagsIfNeeded) {
     // todo need to calculate flags with stemup or not
     const flagCount = durationToFlagCountMap.get(duration) || 0;
     for (let index = 0; index < flagCount; index++) {
-      const flagHtml = document.createElementNS(SVG_NS, 'path');
+      const flag = document.createElementNS(SVG_NS, 'path');
+      flag.classList.add('flag');
       const y = stemEnd - 5 * index;
-      flagHtml.setAttribute(
+      flag.setAttribute(
         'd',
         `M ${x} ${y} Q ${x + 8} ${y - 2} ${x + 6} ${y + 5}`
       );
-      flagHtml.setAttribute('fill', 'currentColor');
-      flagHtml.setAttribute('stroke', 'none');
-      svg.appendChild(flagHtml);
+      flag.setAttribute('fill', 'currentColor');
+      flag.setAttribute('stroke', 'none');
+      svg.appendChild(flag);
     }
   }
 
+  const headWidth = 4;
   const stemX = stemUp ? (x + headWidth).toString() : x.toString();
-  const stemHtml = document.createElementNS(SVG_NS, 'line');
-  stemHtml.setAttribute('class', 'stem');
-  stemHtml.setAttribute('x1', stemX);
-  stemHtml.setAttribute('y1', stemStart.toString());
-  stemHtml.setAttribute('x2', stemX);
-  stemHtml.setAttribute('y2', stemEnd.toString());
-  stemHtml.setAttribute('stroke', 'currentColor');
-  stemHtml.setAttribute('stroke-width', '1');
-  svg.appendChild(stemHtml);
+  const stem = document.createElementNS(SVG_NS, 'line');
+  stem.classList.add('stem');
+  stem.setAttribute('x1', stemX);
+  stem.setAttribute('y1', stemStart.toString());
+  stem.setAttribute('x2', stemX);
+  stem.setAttribute('y2', stemEnd.toString());
+  stem.setAttribute('stroke', 'currentColor');
+  stem.setAttribute('stroke-width', '1');
+  svg.appendChild(stem);
 
   const headXStartStr = stemUp ? x.toString() : (x + 3).toString();
-  const headYStartStr = stemUp
-    ? stemEnd.toString()
-    : (stemStart - 4).toString();
+  const headYStartStr = stemUp ? stemEnd.toString() : headWidth.toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
-  const headHtml = document.createElementNS(SVG_NS, 'ellipse');
-  headHtml.setAttribute('cx', headXStartStr);
-  headHtml.setAttribute('cy', headYStartStr);
-  headHtml.setAttribute('rx', headWidth.toString());
-  headHtml.setAttribute('ry', '3');
-  headHtml.setAttribute(
+  const head = document.createElementNS(SVG_NS, 'ellipse');
+  head.classList.add('head');
+  head.setAttribute('cx', headXStartStr);
+  head.setAttribute('cy', headYStartStr);
+  head.setAttribute('rx', headWidth.toString());
+  head.setAttribute('ry', '3');
+  head.setAttribute(
     'transform',
     `rotate(-20 ${headXStartStr} ${headYStartStr})`
   );
-  headHtml.setAttribute('stroke', 'currentColor');
-  headHtml.setAttribute('fill', headFill);
-  headHtml.setAttribute('stroke-width', '2');
-  svg.appendChild(headHtml);
+  head.setAttribute('stroke', 'currentColor');
+  head.setAttribute('fill', headFill);
+  head.setAttribute('stroke-width', '2');
+  svg.appendChild(head);
 
   let yHeadOffset = NaN;
   if (translate) {
-    const height = stemLength + headWidth;
     yHeadOffset = stemUp
-      ? translate.staffYCoordinate - height
-      : translate.staffYCoordinate + headWidth;
-    svg.setAttribute(
-      'transform',
-      `translate(${translate.staffXCoordinate}, ${yHeadOffset})`
-    );
+      ? translate.staffYCoordinate - stemLength
+      : translate.staffYCoordinate - headWidth;
+    svg.setAttribute('x', translate.staffXCoordinate.toString());
+    svg.setAttribute('y', yHeadOffset.toString());
   }
 
   return [svg, yHeadOffset];
@@ -109,12 +105,10 @@ export const createChordSvg = ({
   staffYCoordinates,
   flagsIfNeeded = true,
   stemUp = true,
-  qualifiedElementName = 'g',
 }: ChordProps): [SVGElement | SVGGElement, number] => {
-  const svg = document.createElementNS(SVG_NS, qualifiedElementName);
-  svg.setAttribute('xmlns', SVG_NS);
-  // svg.setAttribute('width', '37.5px');
-  // svg.setAttribute('height', '40px');
+  const svg = document.createElementNS(SVG_NS, 'g');
+  svg.classList.add('chord');
+
   const mathFunc = stemUp ? Math.min : Math.max;
   let currentY = stemUp ? Infinity : -Infinity;
   for (const staffYCoordinate of staffYCoordinates) {
@@ -122,7 +116,7 @@ export const createChordSvg = ({
       duration,
       flagsIfNeeded,
       stemUp,
-      qualifiedElementName,
+      qualifiedElementName: 'svg',
       translate: {
         staffXCoordinate,
         staffYCoordinate,
@@ -210,9 +204,6 @@ export const createTimeSignatureSvg = (
 ) => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'time-signature');
-  // svg.setAttribute('xmlns', SVG_NS);
-  // svg.setAttribute('viewBox', '0 0 100 230');
-  // svg.setAttribute('width', '80px');
   svg.setAttribute('height', '80px');
 
   const text = document.createElementNS(SVG_NS, 'text');

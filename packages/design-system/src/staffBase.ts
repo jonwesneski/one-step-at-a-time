@@ -146,13 +146,46 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected abstract render(): void;
 
   protected build(clefSvg = ''): string {
+    const staffLines = this.#buildStaffLines();
+    const transribe = this.#buildTranscribe(clefSvg);
+
+    return `
+      <style>
+      :host {
+          flex: var(--flex-staff-basis, 1 1 280px);
+          min-width: var(--flex-staff-minw, 280px);
+          box-sizing: border-box;
+          display: block;
+        }
+
+        .staff-wrapper {
+          position: relative;
+          min-height: 100px;
+        }
+
+        .staff-container {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+      </style>
+      <div class="staff-wrapper">
+        ${staffLines.outerHTML}
+        ${transribe.outerHTML}
+        <slot></slot>
+      </div>
+    `;
+  }
+
+  #buildStaffLines() {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'staff-container');
     svg.setAttribute(
       'style',
-      'position: absolute; top: 0; left: 0; width: 100%'
+      'position: absolute; inset: 0; width: 100%; height: 100px; display: block;'
     );
-    svg.setAttribute('height', '100');
     svg.setAttribute('viewBox', '0 0 200 100');
     svg.setAttribute('preserveAspectRatio', 'none');
 
@@ -166,34 +199,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     leftLine.setAttribute('stroke-width', '1');
     svg.appendChild(leftLine);
 
-    this.#appendStaffLines(svg);
-
-    this.#appendDescribe(clefSvg, svg);
-
-    // Notes are added here at runtime
-    const gNotes = document.createElementNS(SVG_NS, 'g');
-    gNotes.setAttribute('class', 'notes-container');
-    svg.appendChild(gNotes);
-
-    // Right/Closing vertical line
-    const rightLine = document.createElementNS(SVG_NS, 'line');
-    rightLine.setAttribute('x1', '200');
-    rightLine.setAttribute('y1', '0');
-    rightLine.setAttribute('x2', '200');
-    rightLine.setAttribute('y2', '100');
-    rightLine.setAttribute('stroke', 'currentColor');
-    rightLine.setAttribute('stroke-width', '1');
-    svg.appendChild(rightLine);
-
-    return `
-      <div style="position: relative; width: 33.333333%; min-width: 300px; height: 100px;">
-        ${svg.outerHTML}
-        <slot></slot>
-      </div>
-    `;
-  }
-
-  #appendStaffLines(svg: SVGElement) {
     const gLines = document.createElementNS(SVG_NS, 'g');
     gLines.setAttribute('class', 'staff-lines');
     for (const y of StaffElementBase.linesY) {
@@ -207,32 +212,59 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       gLines.appendChild(lineSvg);
     }
     svg.appendChild(gLines);
+
+    // Right/Closing vertical line
+    const rightLine = document.createElementNS(SVG_NS, 'line');
+    rightLine.setAttribute('x1', '200');
+    rightLine.setAttribute('y1', '0');
+    rightLine.setAttribute('x2', '200');
+    rightLine.setAttribute('y2', '100');
+    rightLine.setAttribute('stroke', 'currentColor');
+    rightLine.setAttribute('stroke-width', '1');
+    svg.appendChild(rightLine);
+    return svg;
   }
 
-  // Describe is: clef, key signature, time signature
-  #appendDescribe(clefSvgStr: string, staff: SVGElement) {
+  // Transcribe is: clef, key signature, time signature, and notes
+  #buildTranscribe(clefSvgStr: string) {
+    const transcribe = document.createElementNS(SVG_NS, 'svg');
+    transcribe.classList.add('transcribe-container');
+    transcribe.setAttribute(
+      'style',
+      'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
+    );
+
     const gDescribe = document.createElementNS(SVG_NS, 'g');
     gDescribe.setAttribute('class', 'describe-container');
     gDescribe.innerHTML = clefSvgStr;
-    staff.appendChild(gDescribe);
+    transcribe.appendChild(gDescribe);
 
-    const xOffsetOfClef = 13;
+    const xOffsetOfClef = 14;
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
       gDescribe,
       xOffsetOfClef
     );
 
-    this.#appendTimeSignatureSvgIfNecessary(
+    const timeSigOffset = this.#appendTimeSignatureSvgIfNecessary(
       gDescribe,
       xOffsetOfKeySignature + 5
     );
+
+    // Notes are added here at runtime
+    const gNotes = document.createElementNS(SVG_NS, 'svg');
+    gNotes.setAttribute('class', 'notes-container');
+    gNotes.setAttribute('x', (timeSigOffset + 10).toString());
+    transcribe.appendChild(gNotes);
+
+    return transcribe;
   }
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
     const yCoordinates = this.getKeyYCoordinates();
-    const g = document.createElementNS(SVG_NS, 'g');
+    const g = document.createElementNS(SVG_NS, 'svg');
     g.setAttribute('class', 'key-signature');
-    g.setAttribute('transform', `translate(${xOffset}, -15)`);
+    g.setAttribute('x', xOffset.toString());
+    g.setAttribute('y', '-15');
     if (yCoordinates.coordinates.length) {
       const createSvgFunc = yCoordinates.useSharps
         ? createSharpSvg
@@ -242,6 +274,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       for (const y of yCoordinates.coordinates) {
         const svg = createSvgFunc();
         svg.setAttribute('transform', `translate(${xOffset}, ${y + yOffset})`);
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         g.appendChild(svg);
         xOffset += Width;
       }
@@ -263,6 +296,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       !firstMeasureOrNoCompositionTime && measure && this.#timeInts
         ? this.#timeInts
         : null;
+
+    let timeSigOffset = xOffset;
     if (firstMeasureOrNoCompositionTime || timeChangedInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
         ...((firstMeasureOrNoCompositionTime ?? timeChangedInMeasure) as [
@@ -272,7 +307,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
+      timeSigOffset += 14;
     }
+    return timeSigOffset;
   }
 
   #handleSlotChange(event: Event) {
@@ -307,12 +344,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #renderNotes(elements: NoteOrChordElementType[]) {
     const beamSvg = this.#buildBeamIfNecessary(elements);
     const needsBeam = beamSvg !== null;
-    const notesContainer = this.shadowRoot
-      .querySelector('.staff-container')
-      .querySelector('.notes-container');
-    const describe = this.shadowRoot.querySelector('.describe-container');
+    const notesContainer = this.shadowRoot.querySelector('.notes-container');
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
-    let xOffsetOfNote: number = describe.getBoundingClientRect().width;
+    let xOffsetOfNote: number = 0;
     const stemUp = this.#determineIsStemUp(elements);
 
     for (let i = 0; i < elements.length; i++) {
@@ -326,13 +360,14 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           duration,
           flagsIfNeeded: !needsBeam,
           stemUp,
-          qualifiedElementName: 'g',
+          qualifiedElementName: 'svg',
           translate: {
             staffXCoordinate: xOffsetOfNote,
             staffYCoordinate: this.getYCoordinate(element.value),
           },
         });
         noteSvg = values[0];
+        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         yOffset = values[1];
       } else {
         const element = elements[i] as ChordElementType;
