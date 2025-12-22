@@ -31,6 +31,8 @@ export default function Home() {
           <music-staff-treble>
             <music-note value="A" duration="quarter"></music-note>
             <music-note value="A" duration="quarter"></music-note>
+            <music-note value="A" duration="quarter"></music-note>
+            <music-note value="A" duration="quarter"></music-note>
           </music-staff-treble>
           <music-staff-bass>
             <music-note value="A" duration="quarter"></music-note>

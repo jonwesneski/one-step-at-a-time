@@ -27,7 +27,7 @@ export const createNoteSvg = ({
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
   }
-
+  svg.dataset.duration = duration;
   svg.setAttribute('width', '37.5px');
   svg.setAttribute('height', '40px');
 
