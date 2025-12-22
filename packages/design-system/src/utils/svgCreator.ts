@@ -28,6 +28,8 @@ export const createNoteSvg = ({
     svg.setAttribute('xmlns', SVG_NS);
   }
   svg.dataset.duration = duration;
+  svg.dataset.stemUp = 'true';
+
   svg.setAttribute('width', '37.5px');
   svg.setAttribute('height', '40px');
 
@@ -38,7 +40,7 @@ export const createNoteSvg = ({
 
   if (flagsIfNeeded) {
     // todo need to calculate flags with stemup or not
-    const flagCount = durationToFlagCountMap.get(duration) || 0;
+    const flagCount = durationToFlagCountMap.get(duration) ?? 0;
     for (let index = 0; index < flagCount; index++) {
       const flag = document.createElementNS(SVG_NS, 'path');
       flag.classList.add('flag');
@@ -89,7 +91,6 @@ export const createNoteSvg = ({
     yHeadOffset = stemUp
       ? translate.staffYCoordinate - stemLength
       : translate.staffYCoordinate - headWidth;
-    svg.setAttribute('x', translate.staffXCoordinate.toString());
     svg.setAttribute('y', yHeadOffset.toString());
   }
 
@@ -107,8 +108,9 @@ export const createChordSvg = ({
   flagsIfNeeded = true,
   stemUp = true,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
-  const svg = document.createElementNS(SVG_NS, 'g');
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
+  svg.dataset.duration = duration;
 
   const mathFunc = stemUp ? Math.min : Math.max;
   let currentY = stemUp ? Infinity : -Infinity;
@@ -244,14 +246,21 @@ export class BeamCreator {
     this.y2 = NaN;
   }
 
-  static ifNecessary(elements: NoteOrChordElementType[]) {
+  static ifNecessary(
+    elements: NoteOrChordElementType[] | SVGElement[]
+  ): BeamCreator | null {
     const consecutives: number[] = [];
     let beamCreator: BeamCreator | null = null;
     for (let i = 0; i < elements.length; i++) {
+      const duration =
+        elements[i].nodeName === 'MUSIC-NOTE' ||
+        elements[i].nodeName === 'MUSIC-CHORD'
+          ? elements[i].getAttribute('duration')
+          : elements[i].dataset.duration;
       if (
-        elements[i].duration === 'eighth' ||
-        elements[i].duration === 'sixteenth' ||
-        elements[i].duration === 'thirtysecond'
+        duration === 'eighth' ||
+        duration === 'sixteenth' ||
+        duration === 'thirtysecond'
       ) {
         if (consecutives.length === 0) {
           consecutives.push(i);
@@ -301,5 +310,24 @@ export class BeamCreator {
     );
 
     return beam;
+  }
+
+  reSpaceBeam(beam: SVGPolygonElement) {
+    const pointsArray = beam.getAttribute('points')?.split(' ');
+    if (pointsArray) {
+      const yLeft = pointsArray[0].split(',')[1];
+      const yLeftBottom = pointsArray[1].split(',')[1];
+      const yRightBottom = pointsArray[2].split(',')[1];
+      const yRight = pointsArray[3].split(',')[1];
+      const leftTop = `${this.x1},${yLeft}`;
+      const leftBottom = `${this.x1},${yLeftBottom}`;
+      const rightBottom = `${this.x2},${yRightBottom}`;
+      const rightTop = `${this.x2},${yRight}`;
+
+      beam.setAttribute(
+        'points',
+        `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
+      );
+    }
   }
 }

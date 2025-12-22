@@ -7,6 +7,8 @@ import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
+  Mode,
+  Note,
 } from './types/theory';
 import {
   BeamCreator,
@@ -16,7 +18,7 @@ import {
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
-import { SVG_NS } from './utils/consts';
+import { durationToFactor, SVG_NS } from './utils/consts';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
@@ -31,13 +33,14 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #mutationObservers: MutationObserver[];
   #timeInts: [BeatsInMeasure, BeatTypeInMeasure] | null = null;
   #parentTime: string;
-  #parentMode: string | null;
-  #parentKeySig: string | null;
+  #parentMode: Mode | null;
+  #parentKeySig: Note | null;
   #staffContainer: SVGSVGElement;
   #transcribeContainer: SVGSVGElement;
   #describeContainer: SVGGElement;
   #notesContainer: SVGSVGElement;
   #staffResizeObserver: ResizeObserver;
+  #lastStaffWidth: number;
   protected static lineStart = 30;
   protected static lineSpacing = 10;
   protected static linesY: number[] = Array.from(
@@ -55,29 +58,33 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const composition = this.closest('music-composition');
     this.#parentTime =
       measure?.getAttribute('time') ??
-      composition.getAttribute('time') ??
+      composition?.getAttribute('time') ??
       '4/4';
     this.#parentMode =
-      measure?.getAttribute('mode') ?? composition.getAttribute('mode');
+      measure?.getAttribute('mode') ??
+      composition.getAttribute('mode') ??
+      'major';
     this.#parentKeySig =
-      measure?.getAttribute('keySig') ?? composition.getAttribute('keySig');
-    console.log(
-      this.#parentKeySig,
-      this.#parentMode,
-      'making tsc eslint happy'
-    );
+      measure?.getAttribute('keySig') ??
+      composition?.getAttribute('keySig') ??
+      'C';
     const timeTime = this.getAttribute('time');
     if (timeTime) {
       this.#timeInts = this.#convertTotimeInts(timeTime);
     }
 
+    this.#lastStaffWidth = 0;
     this.#staffContainer = document.createElementNS(SVG_NS, 'svg');
     this.#transcribeContainer = document.createElementNS(SVG_NS, 'svg');
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
 
-    this.#staffResizeObserver = new ResizeObserver(() => {
-      this.#reSpaceNotes();
+    this.#staffResizeObserver = new ResizeObserver((entries) => {
+      const newWidth = entries[0].contentRect.width;
+      if (newWidth !== this.#lastStaffWidth) {
+        this.#lastStaffWidth = newWidth;
+        this.#reSpaceNotes();
+      }
     });
   }
 
@@ -85,20 +92,16 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return ['keySig', 'mode', 'time'];
   }
 
-  get keySig(): string {
-    return (
-      this.getAttribute('keySig') ??
-      this.closest('music-composition').getAttribute('keySig') ??
-      'C'
-    );
+  get keySig(): Note {
+    return (this.getAttribute('keySig') as Note) ?? this.#parentKeySig;
   }
 
   set keySig(value: string) {
     this.setAttribute('keySig', value);
   }
 
-  get mode(): string {
-    return this.getAttribute('mode') ?? 'major';
+  get mode(): Mode {
+    return this.getAttribute('mode') ?? this.#parentMode;
   }
 
   set mode(value: string) {
@@ -363,10 +366,14 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
     let xOffsetOfNote: number = 0;
     const stemUp = this.#determineIsStemUp(elements);
+    const { width: transcribeWidth } =
+      this.#transcribeContainer.getBoundingClientRect();
+    const { width: describeWidth } =
+      this.#describeContainer.getBoundingClientRect();
+    const remainingWidth = transcribeWidth - (describeWidth + 15);
 
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
-
       let noteSvg: SVGElement;
       let yOffset = NaN;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
@@ -390,7 +397,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         for (const note of element.notes) {
           staffYCoordinates.push(this.getYCoordinate(note.value));
         }
-
         const values = createChordSvg({
           duration,
           staffXCoordinate: xOffsetOfNote,
@@ -402,12 +408,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         noteSvg = values[0];
         yOffset = values[1];
       }
-
-      // Need to append node before I can get width and height (getBoundingClientRect)
-      this.#notesContainer.appendChild(noteSvg);
-      // todo: get rid of this somehow, probably return
-      // xoffset/width from createNote/ChordSvg()
-      // const { width } = notesContainer.getBoundingClientRect();
 
       if (beamCreator) {
         if (i === 0) {
@@ -430,21 +430,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           });
         }
       }
-      const durationToFactor: Record<DurationType, number> = {
-        eighth: 0.125,
-        half: 0.5,
-        quarter: 0.25,
-        sixteenth: 0.0625,
-        thirtysecond: 0.03125,
-        whole: 1,
-      };
-      const { width: transcribeWidth } =
-        this.#transcribeContainer.getBoundingClientRect();
-      const { width: describeWidth } =
-        this.#describeContainer.getBoundingClientRect();
-      const width = transcribeWidth - (describeWidth + 15);
-      console.log(width, width * durationToFactor[elements[i].duration]);
-      xOffsetOfNote += width * durationToFactor[elements[i].duration];
+
+      xOffsetOfNote = this.#spaceNote(noteSvg, xOffsetOfNote, remainingWidth);
+      this.#notesContainer.appendChild(noteSvg);
     }
 
     if (beamCreator) {
@@ -452,30 +440,63 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
   }
 
-  #reSpaceNotes() {
-    const notes = this.#notesContainer.querySelectorAll(
-      ':scope > svg'
-    ) as NodeListOf<Element>;
-
-    const durationToFactor: Record<DurationType, number> = {
-      eighth: 0.125,
-      half: 0.5,
-      quarter: 0.25,
-      sixteenth: 0.0625,
-      thirtysecond: 0.03125,
-      whole: 1,
-    };
+  #spaceNotes(elements: SVGElement[]) {
+    const beamCreator = BeamCreator.ifNecessary(elements);
+    let xOffsetOfNote = 0;
     const { width: transcribeWidth } =
       this.#transcribeContainer.getBoundingClientRect();
     const { width: describeWidth } =
       this.#describeContainer.getBoundingClientRect();
     const width = transcribeWidth - (describeWidth + 15);
-    let startX = 0;
-    notes.forEach((note) => {
-      const duration = (note as SVGElement).dataset.duration as DurationType;
-      note.setAttribute('x', startX.toString());
-      startX += width * durationToFactor[duration];
-    });
+    const beams = [
+      ...this.#notesContainer.querySelectorAll('.beam'),
+    ] as SVGPolygonElement[];
+    let beamIndex = beams.length > 0 ? 0 : null;
+    for (let i = 0; i < elements.length; i++) {
+      const stemUp = elements[i].dataset.stempUp === 'true';
+      if (beamCreator) {
+        if (i === 0) {
+          beamCreator.updateBeamCoordinates({
+            noteSvg: elements[i],
+            xOffsetOfNote,
+            stemUp,
+            yOffset: NaN,
+            xAttribute: 'x1',
+            yAttribute: 'y1',
+          });
+        } else if (i === elements.length - 1) {
+          beamCreator.updateBeamCoordinates({
+            noteSvg: elements[i],
+            xOffsetOfNote,
+            stemUp,
+            yOffset: NaN,
+            xAttribute: 'x2',
+            yAttribute: 'y2',
+          });
+          if (beamIndex !== null) {
+            beamCreator.reSpaceBeam(beams[beamIndex++]);
+          }
+        }
+        xOffsetOfNote = this.#spaceNote(elements[i], xOffsetOfNote, width);
+      }
+    }
+  }
+
+  #spaceNote(element: SVGElement, xOffsetOfNote: number, width: number) {
+    element.setAttribute('x', xOffsetOfNote.toString());
+    return (
+      xOffsetOfNote +
+      width * durationToFactor[element.dataset.duration as DurationType]
+    );
+  }
+
+  #reSpaceNotes() {
+    const notes = [
+      ...(this.#notesContainer.querySelectorAll(
+        ':scope > svg'
+      ) as NodeListOf<Element>),
+    ] as SVGElement[];
+    this.#spaceNotes(notes);
   }
 
   #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {

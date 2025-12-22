@@ -59,13 +59,13 @@ export const ChordSemitoneMap: Record<string, number[]> = {
   'min(maj7)': [3, 7, 11],
   min9: [3, 7, 10, 14],
   min11: [3, 7, 10, 17],
-  '7': [4, 7, 10], // Dominant
+  '7': [4, 7, 10], // Dominants
   '7sus4': [5, 7, 10],
   '7b5': [4, 6, 10],
   '9': [4, 7, 10, 14],
   '7#9': [4, 7, 10, 15],
   '11': [4, 7, 10, 14, 17],
-  '13': [4, 7, 10, 14, 21],
+  '13': [4, 7, 10, 14, 21], // End Dominants
   aug: [4, 8],
   '7#5': [4, 8, 10],
   dim: [3, 6],
@@ -99,4 +99,13 @@ export const ChordSemitoneMapAliases: Record<
   '+': 'aug',
   '(#5)': 'aug',
   '+7': '7#5',
+};
+
+export const durationToFactor: Record<DurationType, number> = {
+  eighth: 0.125,
+  half: 0.5,
+  quarter: 0.25,
+  sixteenth: 0.0625,
+  thirtysecond: 0.03125,
+  whole: 1,
 };

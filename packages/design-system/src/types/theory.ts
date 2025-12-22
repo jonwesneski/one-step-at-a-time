@@ -64,3 +64,5 @@ export type Chord = NormalChord | AllSlashChords;
 
 export type BeatsInMeasure = 2 | 3 | 4 | 6 | 9 | 12;
 export type BeatTypeInMeasure = 2 | 3 | 4;
+
+export type Mode = 'major' | 'minor';
