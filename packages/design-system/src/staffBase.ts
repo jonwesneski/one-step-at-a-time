@@ -33,6 +33,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #parentTime: string;
   #parentMode: string | null;
   #parentKeySig: string | null;
+  #staffContainer: SVGSVGElement;
+  #transcribeContainer: SVGSVGElement;
+  #describeContainer: SVGGElement;
+  #notesContainer: SVGSVGElement;
   #staffResizeObserver: ResizeObserver;
   protected static lineStart = 30;
   protected static lineSpacing = 10;
@@ -67,10 +71,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       this.#timeInts = this.#convertTotimeInts(timeTime);
     }
 
-    this.#staffResizeObserver = new ResizeObserver((entries) => {
-      // for (let entry of entries) {
+    this.#staffContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#transcribeContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#describeContainer = document.createElementNS(SVG_NS, 'g');
+    this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
+
+    this.#staffResizeObserver = new ResizeObserver(() => {
       this.#reSpaceNotes();
-      // }
     });
   }
 
@@ -121,14 +128,17 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   connectedCallback(): void {
     this.render();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
+    const wrapper = this.shadowRoot.querySelector('.staff-wrapper')!;
+    wrapper.appendChild(this.#staffContainer);
+    wrapper.appendChild(this.#transcribeContainer);
 
     // Also listen for `slotchange` events from the slot to detect when nodes
     // are assigned/removed from slots. This is the proper API for slotted
     // content changes.
-    const slot = this.shadowRoot?.querySelector('slot');
-    if (slot) {
-      slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
-    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
+    const slot = this.shadowRoot.querySelector('slot')!;
+    slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
   }
 
   disconnectedCallback(): void {
@@ -160,8 +170,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected abstract render(): void;
 
   protected build(clefSvg = ''): string {
-    const staffLines = this.#buildStaffLines();
-    const transribe = this.#buildTranscribe(clefSvg);
+    this.#buildStaffLines();
+    this.#buildTranscribe(clefSvg);
 
     return `
       <style>
@@ -186,22 +196,19 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         }
       </style>
       <div class="staff-wrapper">
-        ${staffLines.outerHTML}
-        ${transribe.outerHTML}
         <slot></slot>
       </div>
     `;
   }
 
   #buildStaffLines() {
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'staff-container');
-    svg.setAttribute(
+    this.#staffContainer.classList.add('staff-container');
+    this.#staffContainer.setAttribute(
       'style',
       'position: absolute; inset: 0; width: 100%; height: 100px; display: block;'
     );
-    svg.setAttribute('viewBox', '0 0 200 100');
-    svg.setAttribute('preserveAspectRatio', 'none');
+    this.#staffContainer.setAttribute('viewBox', '0 0 200 100');
+    this.#staffContainer.setAttribute('preserveAspectRatio', 'none');
 
     // Left/Opening vertical line
     const leftLine = document.createElementNS(SVG_NS, 'line');
@@ -211,10 +218,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     leftLine.setAttribute('y2', '100');
     leftLine.setAttribute('stroke', 'currentColor');
     leftLine.setAttribute('stroke-width', '1');
-    svg.appendChild(leftLine);
+    this.#staffContainer.appendChild(leftLine);
 
     const gLines = document.createElementNS(SVG_NS, 'g');
-    gLines.setAttribute('class', 'staff-lines');
+    gLines.classList.add('staff-lines');
     for (const y of StaffElementBase.linesY) {
       const lineSvg = document.createElementNS(SVG_NS, 'line');
       lineSvg.setAttribute('x1', '0');
@@ -225,7 +232,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       lineSvg.setAttribute('stroke-width', '2');
       gLines.appendChild(lineSvg);
     }
-    svg.appendChild(gLines);
+    this.#staffContainer.appendChild(gLines);
 
     // Right/Closing vertical line
     const rightLine = document.createElementNS(SVG_NS, 'line');
@@ -235,44 +242,36 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     rightLine.setAttribute('y2', '100');
     rightLine.setAttribute('stroke', 'currentColor');
     rightLine.setAttribute('stroke-width', '1');
-    svg.appendChild(rightLine);
-    return svg;
+    this.#staffContainer.appendChild(rightLine);
   }
 
   // Transcribe is: clef, key signature, time signature, and notes
   #buildTranscribe(clefSvgStr: string) {
-    const transcribe = document.createElementNS(SVG_NS, 'svg');
-    transcribe.classList.add('transcribe-container');
-    transcribe.setAttribute(
+    this.#transcribeContainer.classList.add('transcribe-container');
+    this.#transcribeContainer.setAttribute(
       'style',
       'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
     );
-    //transcribe.setAttribute('viewBox', '0 0 200 100');
-    // transcribe.setAttribute('preserveAspectRatio', 'none');
 
-    const gDescribe = document.createElementNS(SVG_NS, 'g');
-    gDescribe.setAttribute('class', 'describe-container');
-    gDescribe.innerHTML = clefSvgStr;
-    transcribe.appendChild(gDescribe);
+    this.#describeContainer.classList.add('describe-container');
+    this.#describeContainer.innerHTML = clefSvgStr;
+    this.#transcribeContainer.appendChild(this.#describeContainer);
 
     const xOffsetOfClef = 14;
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
-      gDescribe,
+      this.#describeContainer,
       xOffsetOfClef
     );
 
     const timeSigOffset = this.#appendTimeSignatureSvgIfNecessary(
-      gDescribe,
+      this.#describeContainer,
       xOffsetOfKeySignature + 5
     );
 
     // Notes are added here at runtime
-    const gNotes = document.createElementNS(SVG_NS, 'svg');
-    gNotes.setAttribute('class', 'notes-container');
-    gNotes.setAttribute('x', (timeSigOffset + 20).toString());
-    transcribe.appendChild(gNotes);
-
-    return transcribe;
+    this.#notesContainer.classList.add('notes-container');
+    this.#notesContainer.setAttribute('x', (timeSigOffset + 20).toString());
+    this.#transcribeContainer.appendChild(this.#notesContainer);
   }
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
@@ -339,9 +338,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     //  - maybe add random key generated in music-note class, update observers to me hash of key: observer)
 
     this.#renderNotes(assignedElements);
-    this.#staffResizeObserver.observe(
-      this.shadowRoot.querySelector('.staff-container')
-    );
+    this.#staffResizeObserver.observe(this.#staffContainer);
 
     assignedElements.forEach((node) => {
       // Handle when each node has been mutated here
@@ -363,13 +360,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #renderNotes(elements: NoteOrChordElementType[]) {
     const beamCreator = BeamCreator.ifNecessary(elements);
     const needsBeam = beamCreator !== null;
-    const notesContainer = this.shadowRoot.querySelector('.notes-container');
-    const transcribeContainer = this.shadowRoot.querySelector(
-      '.transcribe-container'
-    );
-    const describeContainer = this.shadowRoot.querySelector(
-      '.describe-container'
-    );
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
     let xOffsetOfNote: number = 0;
     const stemUp = this.#determineIsStemUp(elements);
@@ -414,7 +404,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
 
       // Need to append node before I can get width and height (getBoundingClientRect)
-      notesContainer.appendChild(noteSvg);
+      this.#notesContainer.appendChild(noteSvg);
       // todo: get rid of this somehow, probably return
       // xoffset/width from createNote/ChordSvg()
       // const { width } = notesContainer.getBoundingClientRect();
@@ -449,28 +439,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         whole: 1,
       };
       const { width: transcribeWidth } =
-        transcribeContainer.getBoundingClientRect();
+        this.#transcribeContainer.getBoundingClientRect();
       const { width: describeWidth } =
-        describeContainer.getBoundingClientRect();
+        this.#describeContainer.getBoundingClientRect();
       const width = transcribeWidth - (describeWidth + 15);
       console.log(width, width * durationToFactor[elements[i].duration]);
       xOffsetOfNote += width * durationToFactor[elements[i].duration];
     }
 
     if (beamCreator) {
-      notesContainer.appendChild(beamCreator.buildBeams());
+      this.#notesContainer.appendChild(beamCreator.buildBeams());
     }
   }
 
   #reSpaceNotes() {
-    const notesContainer = this.shadowRoot.querySelector('.notes-container')!;
-    const transcribeContainer = this.shadowRoot.querySelector(
-      '.transcribe-container'
-    );
-    const describeContainer = this.shadowRoot.querySelector(
-      '.describe-container'
-    );
-    const notes = notesContainer.querySelectorAll(
+    const notes = this.#notesContainer.querySelectorAll(
       ':scope > svg'
     ) as NodeListOf<Element>;
 
@@ -483,8 +466,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       whole: 1,
     };
     const { width: transcribeWidth } =
-      transcribeContainer.getBoundingClientRect();
-    const { width: describeWidth } = describeContainer.getBoundingClientRect();
+      this.#transcribeContainer.getBoundingClientRect();
+    const { width: describeWidth } =
+      this.#describeContainer.getBoundingClientRect();
     const width = transcribeWidth - (describeWidth + 15);
     let startX = 0;
     notes.forEach((note) => {
