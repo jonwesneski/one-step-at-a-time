@@ -66,6 +66,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             flex-wrap: wrap;
             width: 100%;
             max-width: 900px;
+            padding-left: 10px;
+            padding-right: 10px;
           }
 
           music-measure {

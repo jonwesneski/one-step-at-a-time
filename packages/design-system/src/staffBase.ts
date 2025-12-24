@@ -35,7 +35,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #parentTime: string;
   #parentMode: Mode | null;
   #parentKeySig: Note | null;
-  #staffContainer: SVGSVGElement;
+  #staffContainer: HTMLDivElement;
   #transcribeContainer: SVGSVGElement;
   #describeContainer: SVGGElement;
   #notesContainer: SVGSVGElement;
@@ -74,7 +74,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     this.#lastStaffWidth = 0;
-    this.#staffContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#staffContainer = document.createElement('div');
     this.#transcribeContainer = document.createElementNS(SVG_NS, 'svg');
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
@@ -193,9 +193,18 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         .staff-container {
           position: absolute;
           inset: 0;
+          top: -1px;
           width: 100%;
           height: 100%;
           display: block;
+        }
+
+        .staff-line {
+          position: absolute;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: currentColor;
         }
       </style>
       <div class="staff-wrapper">
@@ -206,46 +215,25 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   #buildStaffLines() {
     this.#staffContainer.classList.add('staff-container');
-    this.#staffContainer.setAttribute(
-      'style',
-      'position: absolute; inset: 0; width: 100%; height: 100px; display: block;'
-    );
-    this.#staffContainer.setAttribute('viewBox', '0 0 200 100');
-    this.#staffContainer.setAttribute('preserveAspectRatio', 'none');
 
-    // Left/Opening vertical line
-    const leftLine = document.createElementNS(SVG_NS, 'line');
-    leftLine.setAttribute('x1', '0');
-    leftLine.setAttribute('y1', '0');
-    leftLine.setAttribute('x2', '0');
-    leftLine.setAttribute('y2', '100');
-    leftLine.setAttribute('stroke', 'currentColor');
-    leftLine.setAttribute('stroke-width', '1');
-    this.#staffContainer.appendChild(leftLine);
+    // Left bar line
+    const leftBar = document.createElement('div');
+    leftBar.style.position = 'absolute';
+    leftBar.style.left = '0';
+    leftBar.style.top = '0';
+    leftBar.style.bottom = '0';
+    leftBar.style.width = '1px';
+    leftBar.style.background = 'currentColor';
+    this.#staffContainer.appendChild(leftBar);
 
-    const gLines = document.createElementNS(SVG_NS, 'g');
-    gLines.classList.add('staff-lines');
     for (const y of StaffElementBase.linesY) {
-      const lineSvg = document.createElementNS(SVG_NS, 'line');
-      lineSvg.setAttribute('x1', '0');
-      lineSvg.setAttribute('y1', y.toString());
-      lineSvg.setAttribute('x2', '200');
-      lineSvg.setAttribute('y2', y.toString());
-      lineSvg.setAttribute('stroke', 'currentColor');
-      lineSvg.setAttribute('stroke-width', '2');
-      gLines.appendChild(lineSvg);
+      const line = document.createElement('div');
+      line.classList.add('staff-line');
+      line.style.top = `${y}px`;
+      this.#staffContainer.appendChild(line);
     }
-    this.#staffContainer.appendChild(gLines);
 
-    // Right/Closing vertical line
-    const rightLine = document.createElementNS(SVG_NS, 'line');
-    rightLine.setAttribute('x1', '200');
-    rightLine.setAttribute('y1', '0');
-    rightLine.setAttribute('x2', '200');
-    rightLine.setAttribute('y2', '100');
-    rightLine.setAttribute('stroke', 'currentColor');
-    rightLine.setAttribute('stroke-width', '1');
-    this.#staffContainer.appendChild(rightLine);
+    return this.#staffContainer;
   }
 
   // Transcribe is: clef, key signature, time signature, and notes
@@ -448,6 +436,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const { width: describeWidth } =
       this.#describeContainer.getBoundingClientRect();
     const width = transcribeWidth - (describeWidth + 15);
+
     const beams = [
       ...this.#notesContainer.querySelectorAll('.beam'),
     ] as SVGPolygonElement[];
@@ -477,8 +466,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             beamCreator.reSpaceBeam(beams[beamIndex++]);
           }
         }
-        xOffsetOfNote = this.#spaceNote(elements[i], xOffsetOfNote, width);
       }
+      xOffsetOfNote = this.#spaceNote(elements[i], xOffsetOfNote, width);
     }
   }
 
