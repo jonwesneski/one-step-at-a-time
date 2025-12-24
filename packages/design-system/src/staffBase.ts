@@ -41,8 +41,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #notesContainer: SVGSVGElement;
   #staffResizeObserver: ResizeObserver;
   #lastStaffWidth: number;
-  protected static lineStart = 30;
-  protected static lineSpacing = 10;
+  private static staffHeight = 40;
+  protected static lineStart = 28;
+  protected static lineSpacing = StaffElementBase.staffHeight / 4;
   protected static linesY: number[] = Array.from(
     { length: 5 },
     (_, i) => StaffElementBase.lineStart + i * StaffElementBase.lineSpacing
@@ -195,8 +196,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           inset: 0;
           top: -1px;
           width: 100%;
-          height: 100%;
+          height: ${StaffElementBase.staffHeight}px;
           display: block;
+          border-top: 2px solid currentColor;
+          border-right: 2px solid currentColor;
+          border-bottom: 2px solid currentColor;
+          margin-top: ${StaffElementBase.lineStart}px;
+          margin-bottom: 30px;
         }
 
         .staff-line {
@@ -216,24 +222,17 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #buildStaffLines() {
     this.#staffContainer.classList.add('staff-container');
 
-    // Left bar line
-    const leftBar = document.createElement('div');
-    leftBar.style.position = 'absolute';
-    leftBar.style.left = '0';
-    leftBar.style.top = '0';
-    leftBar.style.bottom = '0';
-    leftBar.style.width = '1px';
-    leftBar.style.background = 'currentColor';
-    this.#staffContainer.appendChild(leftBar);
-
-    for (const y of StaffElementBase.linesY) {
+    let yOffset = StaffElementBase.lineSpacing;
+    for (const _ of StaffElementBase.linesY.slice(
+      1,
+      StaffElementBase.linesY.length - 1
+    )) {
       const line = document.createElement('div');
       line.classList.add('staff-line');
-      line.style.top = `${y}px`;
+      line.style.top = `${yOffset}px`;
       this.#staffContainer.appendChild(line);
+      yOffset += StaffElementBase.lineSpacing;
     }
-
-    return this.#staffContainer;
   }
 
   // Transcribe is: clef, key signature, time signature, and notes
