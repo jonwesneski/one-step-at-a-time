@@ -66,6 +66,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // }
     }
 
+    disconnectedCallback(): void {
+      this.#staffConnectorObserver.disconnect();
+    }
+
     attributeChangedCallback(
       name: string,
       oldValue: string | null,

@@ -146,7 +146,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   disconnectedCallback(): void {
-    // Clean up observer and slot listener
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
