@@ -40,11 +40,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     connectedCallback(): void {
       this.render();
       this.#manageMeasureCount();
-
-      const slot = this.shadowRoot?.querySelector('slot');
-      if (slot) {
-        slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
-      }
     }
 
     attributeChangedCallback(
@@ -75,41 +70,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             min-width: 100px;
             box-sizing: border-box;
           }
-
-          .staff-connector {
-            position: absolute;
-            left: 0;
-            top: 51px; /* Match treble staff top margin */
-            width: 1px; /* Slightly thicker line */
-            background-color: currentColor;
-            z-index: 5;
-          }
         </style>
         <div class="composition-grid">
-          <div class="staff-connector"></div>
           <slot></slot>
         </div>
       `;
-    }
-
-    #handleSlotChange(event: Event) {
-      const slot = event.target as HTMLSlotElement;
-      const assignedElements = slot
-        .assignedElements({ flatten: true })
-        .filter((e) => e.nodeName === 'MUSIC-MEASURE');
-
-      const total = Array.from(assignedElements[0].children).filter((e) =>
-        e.nodeName.startsWith('MUSIC-STAFF-')
-      ).length;
-      const staffConnector =
-        this.shadowRoot?.querySelector<HTMLElement>('.staff-connector');
-      if (staffConnector) {
-        const staffHeight = 44;
-        const paddingAndMargin = 54;
-        const connectorHeight =
-          staffHeight * total + paddingAndMargin * (total - 1);
-        staffConnector.style.height = `${connectorHeight}px`;
-      }
     }
 
     #manageMeasureCount() {

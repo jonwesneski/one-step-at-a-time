@@ -223,6 +223,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#staffContainer.classList.add('staff-container');
 
     let yOffset = StaffElementBase.lineSpacing;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- cant loop without variable
     for (const _ of StaffElementBase.linesY.slice(
       1,
       StaffElementBase.linesY.length - 1
