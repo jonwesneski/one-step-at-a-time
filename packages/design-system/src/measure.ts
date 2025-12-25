@@ -3,6 +3,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     static get observedAttributes(): string[] {
       return ['number', 'key', 'mode', 'time'];
     }
+    #staffConnectorObserver: ResizeObserver;
 
     constructor() {
       super();
@@ -14,6 +15,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.mode = composition.getAttribute('mode') ?? 'major';
         this.keySig = composition.getAttribute('keySig') ?? 'C';
       }
+
+      this.#staffConnectorObserver = new ResizeObserver(
+        this.#updateConnectorVisibility.bind(this)
+      );
     }
 
     get number(): number | null {
@@ -53,11 +58,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     connectedCallback(): void {
       this.render();
-
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- won't be null
+      this.#staffConnectorObserver.observe(this.parentElement!);
       // const slot = this.shadowRoot?.querySelector('slot');
       // if (slot) {
       //   slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
       // }
+    }
+
+    disconnectedCallback(): void {
+      this.#staffConnectorObserver.disconnect();
     }
 
     attributeChangedCallback(
@@ -78,9 +88,27 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             display: block;
             flex: 1 1 280px;
             min-width: 100px;
+            box-sizing: border-box;
+            position: relative;
+          }
+
+          .staff-connector {
+            position: absolute;
+            left: 0;
+            top: 51px;
+            width: 1px;
+            background-color: currentColor;
+            z-index: 5;
+            opacity: 1;
+            transition: opacity 0.3s;
+          }
+
+          .staff-connector.hidden {
+            opacity: 0;
           }
         </style>
         <div>
+          <div class="staff-connector"></div>
           <span>${this.number}</span>
           <slot></slot>
         </div>
@@ -103,6 +131,50 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     //   for (let i = 0; i < assignedElements.length; i++) {}
     // }
+
+    #updateConnectorVisibility() {
+      const staffConnector =
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- it does exist
+        this.shadowRoot!.querySelector<HTMLElement>('.staff-connector')!;
+      const allMeasures = Array.from(
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- it does exist
+        this.parentNode!.querySelectorAll('music-measure')
+      );
+
+      const currentIndex = allMeasures.indexOf(this);
+      const total = Array.from(allMeasures[currentIndex].children).filter((n) =>
+        n.nodeName.startsWith('MUSIC-STAFF-')
+      ).length;
+      const staffHeight = 44;
+      const paddingAndMargin = 54;
+      const connectorHeight =
+        staffHeight * total + paddingAndMargin * (total - 1);
+      staffConnector.style.height = `${connectorHeight}px`;
+
+      if (currentIndex === 0) {
+        // First measure always shows connector
+        staffConnector.classList.remove('hidden');
+        return;
+      }
+
+      const prevMeasure = allMeasures[currentIndex - 1];
+      if (!prevMeasure) {
+        staffConnector.classList.add('hidden');
+        return;
+      }
+
+      const prevRect = prevMeasure.getBoundingClientRect();
+      const currentRect = this.getBoundingClientRect();
+
+      // Check if this measure is on a new row (wrapped)
+      // Tolerance of 5px for rounding errors
+      const isNewRow = Math.abs(currentRect.top - prevRect.top) > 5;
+      if (isNewRow) {
+        staffConnector.classList.remove('hidden');
+      } else {
+        staffConnector.classList.add('hidden');
+      }
+    }
   }
 
   if (!customElements.get('music-measure')) {

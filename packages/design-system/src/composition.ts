@@ -40,11 +40,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     connectedCallback(): void {
       this.render();
       this.#manageMeasureCount();
-
-      // const slot = this.shadowRoot?.querySelector('slot');
-      // if (slot) {
-      //   slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
-      // }
     }
 
     attributeChangedCallback(
@@ -62,11 +57,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.shadowRoot!.innerHTML = `
         <style>
           .composition-grid {
+            position: relative;
             display: flex;
             flex-wrap: wrap;
             width: 100%;
             max-width: 900px;
-            padding-left: 10px;
             padding-right: 10px;
           }
 
