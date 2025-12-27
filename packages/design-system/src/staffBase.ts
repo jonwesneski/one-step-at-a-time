@@ -367,7 +367,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         const element = elements[i] as NoteElementType;
         const values = createNoteSvg({
           duration,
-          flagsIfNeeded: !needsBeam,
+          noFlags: needsBeam,
           stemUp,
           qualifiedElementName: 'svg',
           translate: {
@@ -388,7 +388,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           duration,
           staffXCoordinate: xOffsetOfNote,
           staffYCoordinates,
-          flagsIfNeeded: !needsBeam,
+          noFlags: needsBeam,
           stemUp,
           qualifiedElementName: 'g',
         });

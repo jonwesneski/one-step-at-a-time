@@ -8,7 +8,7 @@ import { durationToFlagCountMap, SVG_NS } from './consts';
 
 type NoteProps = {
   duration: DurationType;
-  flagsIfNeeded?: boolean;
+  noFlags?: boolean;
   stemUp?: boolean;
   qualifiedElementName?: 'svg' | 'g';
   translate?: {
@@ -18,7 +18,7 @@ type NoteProps = {
 };
 export const createNoteSvg = ({
   duration,
-  flagsIfNeeded = true,
+  noFlags = true,
   stemUp = true,
   qualifiedElementName = 'svg',
   translate = undefined,
@@ -38,7 +38,7 @@ export const createNoteSvg = ({
   const stemEnd = stemStart + stemLength;
   const x = 10; //todo see if I need this to be dynamic or maybe just come up with a better name
 
-  if (flagsIfNeeded) {
+  if (noFlags) {
     // todo need to calculate flags with stemup or not
     const flagCount = durationToFlagCountMap.get(duration) ?? 0;
     for (let index = 0; index < flagCount; index++) {
@@ -101,7 +101,7 @@ export const createNoteSvg = ({
 
 export const createNoteSvg2 = ({
   duration,
-  flagsIfNeeded = true,
+  noFlags = false,
   stemUp = true,
   qualifiedElementName = 'svg',
   translate = undefined,
@@ -136,7 +136,7 @@ export const createNoteSvg2 = ({
   }
 
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
-  if (flagsIfNeeded && flagCount > 0) {
+  if (!noFlags && flagCount > 0) {
     // todo need to calculate flags with stemup or not
     const xFlagStart = stemX; //+ stemWidth - 20;
     const name = 'flag';
@@ -221,7 +221,7 @@ export const createChordSvg = ({
   duration,
   staffXCoordinate,
   staffYCoordinates,
-  flagsIfNeeded = true,
+  noFlags = true,
   stemUp = true,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -233,7 +233,7 @@ export const createChordSvg = ({
   for (const staffYCoordinate of staffYCoordinates) {
     const [noteSvg, yOffset] = createNoteSvg({
       duration,
-      flagsIfNeeded,
+      noFlags,
       stemUp,
       qualifiedElementName: 'svg',
       translate: {
