@@ -57,15 +57,17 @@ export const createNoteSvg = ({
 
   const headWidth = 4;
   const stemX = stemUp ? (x + headWidth).toString() : x.toString();
-  const stem = document.createElementNS(SVG_NS, 'line');
-  stem.classList.add('stem');
-  stem.setAttribute('x1', stemX);
-  stem.setAttribute('y1', stemStart.toString());
-  stem.setAttribute('x2', stemX);
-  stem.setAttribute('y2', stemEnd.toString());
-  stem.setAttribute('stroke', 'currentColor');
-  stem.setAttribute('stroke-width', '1');
-  svg.appendChild(stem);
+  if (duration !== 'whole') {
+    const stem = document.createElementNS(SVG_NS, 'line');
+    stem.classList.add('stem');
+    stem.setAttribute('x1', stemX);
+    stem.setAttribute('y1', stemStart.toString());
+    stem.setAttribute('x2', stemX);
+    stem.setAttribute('y2', stemEnd.toString());
+    stem.setAttribute('stroke', 'currentColor');
+    stem.setAttribute('stroke-width', '1');
+    svg.appendChild(stem);
+  }
 
   const headXStartStr = stemUp ? x.toString() : (x + 3).toString();
   const headYStartStr = stemUp ? stemEnd.toString() : headWidth.toString();
@@ -80,6 +82,120 @@ export const createNoteSvg = ({
   head.setAttribute(
     'transform',
     `rotate(-20 ${headXStartStr} ${headYStartStr})`
+  );
+  head.setAttribute('stroke', 'currentColor');
+  head.setAttribute('fill', headFill);
+  head.setAttribute('stroke-width', '2');
+  svg.appendChild(head);
+
+  let yHeadOffset = NaN;
+  if (translate) {
+    yHeadOffset = stemUp
+      ? translate.staffYCoordinate - stemLength
+      : translate.staffYCoordinate - headWidth;
+    svg.setAttribute('y', yHeadOffset.toString());
+  }
+
+  return [svg, yHeadOffset];
+};
+
+export const createNoteSvg2 = ({
+  duration,
+  flagsIfNeeded = true,
+  stemUp = true,
+  qualifiedElementName = 'svg',
+  translate = undefined,
+}: NoteProps): [SVGElement | SVGGElement, number] => {
+  const svg = document.createElementNS(SVG_NS, qualifiedElementName);
+  if (qualifiedElementName === 'svg') {
+    svg.setAttribute('xmlns', SVG_NS);
+  }
+  svg.dataset.duration = duration;
+  svg.dataset.stemUp = 'true';
+  svg.setAttribute('viewBox', '0 0 600 738');
+  svg.setAttribute('height', '50px');
+
+  const xStart = 300;
+  const yStemStart = 100;
+  const stemLength = 330;
+  const yStemEnd = yStemStart + stemLength;
+
+  const headWidth = 80;
+  const stemX = stemUp ? xStart + headWidth - 10 : xStart;
+  const stemWidth = 22;
+  if (duration !== 'whole') {
+    const stem = document.createElementNS(SVG_NS, 'line');
+    stem.classList.add('stem');
+    stem.setAttribute('x1', stemX.toString());
+    stem.setAttribute('y1', yStemStart.toString());
+    stem.setAttribute('x2', stemX.toString());
+    stem.setAttribute('y2', yStemEnd.toString());
+    stem.setAttribute('stroke', 'currentColor');
+    stem.setAttribute('stroke-width', stemWidth.toString());
+    svg.appendChild(stem);
+  }
+
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  if (flagsIfNeeded && flagCount > 0) {
+    // todo need to calculate flags with stemup or not
+    const xFlagStart = stemX; //+ stemWidth - 20;
+    const name = 'flag';
+    const flag = document.createElementNS(SVG_NS, 'g');
+    flag.classList.add(name);
+    flag.id = name;
+    const yPartialFlag1Start = yStemStart + 30;
+    const partialFlag1 = document.createElementNS(SVG_NS, 'path');
+    partialFlag1.setAttribute(
+      'd',
+      `M${xFlagStart},${yPartialFlag1Start} C${xFlagStart + 60},${
+        yPartialFlag1Start + 40
+      } ${xFlagStart + 170},${yPartialFlag1Start + 95} ${xFlagStart + 80},${
+        yPartialFlag1Start + 240
+      }`
+    );
+    partialFlag1.setAttribute('fill', 'none');
+    partialFlag1.setAttribute('stroke', 'currentColor');
+    partialFlag1.setAttribute('stroke-width', '30');
+    flag.appendChild(partialFlag1);
+    const yPartialFlag2Start = yStemStart + 20;
+    const partialFlag2 = document.createElementNS(SVG_NS, 'path');
+    partialFlag2.setAttribute(
+      'd',
+      `M${xFlagStart},${yPartialFlag2Start} C${xFlagStart + 10},${
+        yPartialFlag2Start + 20
+      } ${xFlagStart + 35},${yPartialFlag2Start + 35} ${xFlagStart + 80},${
+        yPartialFlag2Start + 60
+      }`
+    );
+    partialFlag2.setAttribute('fill', 'none');
+    partialFlag2.setAttribute('stroke', 'currentColor');
+    partialFlag2.setAttribute('stroke-width', '30');
+    flag.appendChild(partialFlag2);
+    svg.appendChild(flag);
+
+    for (let i = 0; i < flagCount - 1; i++) {
+      const flagCopy = document.createElementNS(SVG_NS, 'use');
+      flagCopy.setAttribute('href', `#${name}`);
+      flagCopy.setAttribute('transform', `translate(0, ${80 * (i + 1)})`);
+      svg.appendChild(flagCopy);
+    }
+  }
+
+  const headXStartStr = stemUp
+    ? xStart.toString()
+    : (xStart + stemWidth).toString();
+  const headYStartStr = stemUp ? yStemEnd.toString() : headWidth.toString();
+  const headFill =
+    duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
+  const head = document.createElementNS(SVG_NS, 'ellipse');
+  head.classList.add('head');
+  head.setAttribute('cx', headXStartStr);
+  head.setAttribute('cy', headYStartStr);
+  head.setAttribute('rx', headWidth.toString());
+  head.setAttribute('ry', (headWidth * 0.75).toString());
+  head.setAttribute(
+    'transform',
+    `rotate(-30 ${headXStartStr} ${headYStartStr})`
   );
   head.setAttribute('stroke', 'currentColor');
   head.setAttribute('fill', headFill);

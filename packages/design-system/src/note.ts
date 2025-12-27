@@ -1,6 +1,6 @@
 import { INoteElement } from './types/elements';
 import { DurationType, Note } from './types/theory';
-import { createNoteSvg } from './utils';
+import { createNoteSvg, createNoteSvg2 } from './utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement implements INoteElement {
@@ -53,11 +53,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // }
 
     private render(): void {
-      const [noteSvg] = createNoteSvg({
-        duration: this.duration,
-      });
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = noteSvg.outerHTML;
+      if (this.value === 'A#') {
+        const [noteSvg] = createNoteSvg2({
+          duration: this.duration,
+        });
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+        this.shadowRoot!.innerHTML = noteSvg.outerHTML;
+      } else {
+        const [noteSvg] = createNoteSvg({
+          duration: this.duration,
+        });
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+        this.shadowRoot!.innerHTML = noteSvg.outerHTML;
+      }
     }
   }
 

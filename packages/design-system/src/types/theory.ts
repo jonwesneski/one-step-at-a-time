@@ -1,10 +1,12 @@
 export type DurationType =
-  | 'thirtysecond'
-  | 'sixteenth'
-  | 'eighth'
-  | 'quarter'
+  | 'whole'
   | 'half'
-  | 'whole';
+  | 'quarter'
+  | 'eighth'
+  | 'sixteenth'
+  | 'thirtysecond'
+  | 'sixtyfourth'
+  | 'hundredtwentyeighth';
 
 export type Note =
   | 'A'

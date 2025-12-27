@@ -1,8 +1,11 @@
 import { DurationType, Note } from '../types/theory';
 
 export const durationToFlagCountMap = new Map<DurationType, number>([
-  ['sixteenth', 2],
   ['eighth', 1],
+  ['sixteenth', 2],
+  ['thirtysecond', 3],
+  ['sixtyfourth', 4],
+  ['hundredtwentyeighth', 5],
 ]);
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -102,10 +105,12 @@ export const ChordSemitoneMapAliases: Record<
 };
 
 export const durationToFactor: Record<DurationType, number> = {
-  eighth: 0.125,
+  whole: 1,
   half: 0.5,
   quarter: 0.25,
+  eighth: 0.125,
   sixteenth: 0.0625,
   thirtysecond: 0.03125,
-  whole: 1,
+  sixtyfourth: 0.015625,
+  hundredtwentyeighth: 0.0078125,
 };
