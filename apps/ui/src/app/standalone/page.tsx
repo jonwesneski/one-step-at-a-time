@@ -1,6 +1,8 @@
 'use client';
 
 import '@rest-in-time/design-system';
+import type {} from '@rest-in-time/design-system';
+
 import { PropsWithChildren } from 'react';
 
 export default function Home() {
