@@ -164,7 +164,7 @@ export const createNoteSvg2 = ({
       `M${xFlagStart},${yPartialFlag2Start} C${xFlagStart + 10},${
         yPartialFlag2Start + 20
       } ${xFlagStart + 35},${yPartialFlag2Start + 35} ${xFlagStart + 80},${
-        yPartialFlag2Start + 60
+        yPartialFlag2Start + 70
       }`
     );
     partialFlag2.setAttribute('fill', 'none');
