@@ -1,7 +1,5 @@
-// Placeholder ambient types to satisfy implicit 'types' reference used by TypeScript
-// This file intentionally exports nothing but allows the compiler to resolve the 'types' library.
 import 'react';
-import type { Chord, DurationType, Note } from './types/theory';
+import type { Chord, DurationType, LetterNote, Note } from './types/theory';
 
 declare module 'react' {
   namespace JSX {
@@ -12,7 +10,7 @@ declare module 'react' {
         children?: React.ReactNode;
       };
       'music-composition': {
-        keySig?: Note;
+        keySig?: LetterNote;
         mode?: string;
         time?: string;
         children?: React.ReactNode;
@@ -23,19 +21,19 @@ declare module 'react' {
         class?: string;
       };
       'music-measure': {
-        keySig?: Note;
+        keySig?: LetterNote;
         mode?: string;
         time?: string;
         children?: React.ReactNode;
       };
       'music-staff-bass': {
-        keySig?: Note;
+        keySig?: LetterNote;
         mode?: string;
         time?: string;
         children?: React.ReactNode;
       };
       'music-staff-treble': {
-        keySig?: Note;
+        keySig?: LetterNote;
         time?: string;
         children?: React.ReactNode;
       };

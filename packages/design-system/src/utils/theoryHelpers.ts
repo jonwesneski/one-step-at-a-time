@@ -1,4 +1,4 @@
-import { Chord, Note } from '../types/theory';
+import { Chord, LetterNote } from '../types/theory';
 import {
   ChordSemitoneMap,
   ChordSemitoneMapAliases,
@@ -18,7 +18,7 @@ export const getChordNotes = (chord: Chord) => {
   const semitones =
     ChordSemitoneMap[chordSignature] ??
     ChordSemitoneMap[ChordSemitoneMapAliases[chordSignature]];
-  return getNotes(root as Note, semitones);
+  return getNotes(root as LetterNote, semitones);
 };
 
 const useFirstIndex: Record<string, true> = {
@@ -36,8 +36,8 @@ const useFirstIndex: Record<string, true> = {
   'A#': true,
   B: true,
 };
-export const getNotes = (root: Note, semitones: number[]) => {
-  const notes: Note[] = [root];
+export const getNotes = (root: LetterNote, semitones: number[]) => {
+  const notes: LetterNote[] = [root];
   // 2nd index in possibleNotes is for flats
   const firstChoice = useFirstIndex[root] ? 0 : 1;
   const rootPosition = noteSemitoneMap.get(root);

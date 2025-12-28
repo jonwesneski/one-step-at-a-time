@@ -7,8 +7,8 @@ import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
+  LetterNote,
   Mode,
-  Note,
 } from './types/theory';
 import {
   BeamCreator,
@@ -34,7 +34,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #timeInts: [BeatsInMeasure, BeatTypeInMeasure] | null = null;
   #parentTime: string;
   #parentMode: Mode | null;
-  #parentKeySig: Note | null;
+  #parentKeySig: LetterNote | null;
   #staffContainer: HTMLDivElement;
   #transcribeContainer: SVGSVGElement;
   #describeContainer: SVGGElement;
@@ -93,8 +93,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return ['keySig', 'mode', 'time'];
   }
 
-  get keySig(): Note {
-    return (this.getAttribute('keySig') as Note) ?? this.#parentKeySig;
+  get keySig(): LetterNote {
+    return (this.getAttribute('keySig') as LetterNote) ?? this.#parentKeySig;
   }
 
   set keySig(value: string) {
