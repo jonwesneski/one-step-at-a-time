@@ -14,7 +14,7 @@ import {
   BeamCreator,
   createChordSvg,
   createFlatSvg,
-  createNoteSvg,
+  createNoteSvg2,
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
@@ -38,7 +38,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #staffContainer: HTMLDivElement;
   #transcribeContainer: SVGSVGElement;
   #describeContainer: SVGGElement;
-  #notesContainer: SVGSVGElement;
+  #notesContainer: SVGGElement;
   #staffResizeObserver: ResizeObserver;
   #lastStaffWidth: number;
   private static staffHeight = 40;
@@ -78,7 +78,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#staffContainer = document.createElement('div');
     this.#transcribeContainer = document.createElementNS(SVG_NS, 'svg');
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
-    this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#notesContainer = document.createElementNS(SVG_NS, 'g');
 
     this.#staffResizeObserver = new ResizeObserver((entries) => {
       const newWidth = entries[0].contentRect.width;
@@ -197,9 +197,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           width: 100%;
           height: ${StaffElementBase.staffHeight}px;
           display: block;
-          border-top: 2px solid currentColor;
-          border-right: 2px solid currentColor;
-          border-bottom: 2px solid currentColor;
+          border-top: 1px solid currentColor;
+          border-right: 1px solid currentColor;
+          border-bottom: 1px solid currentColor;
           margin-top: ${StaffElementBase.lineStart}px;
           margin-bottom: 30px;
         }
@@ -208,7 +208,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           position: absolute;
           left: 0;
           right: 0;
-          height: 2px;
+          height: 1px;
           background: currentColor;
         }
       </style>
@@ -260,11 +260,18 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     // Notes are added here at runtime
     this.#notesContainer.classList.add('notes-container');
-    this.#notesContainer.setAttribute('x', (timeSigOffset + 20).toString());
+    //this.#notesContainer.setAttribute('x', (timeSigOffset + 20).toString());
+    this.#notesContainer.setAttribute(
+      'transform',
+      `translate(${(timeSigOffset + 20).toString()}, 0)`
+    );
+    // this.#notesContainer.setAttribute('transform', `translate(-150, 0)`);
+    this.#notesContainer.setAttribute('width', '100%');
+    this.#notesContainer.setAttribute('height', '100px');
     this.#transcribeContainer.appendChild(this.#notesContainer);
   }
 
-  #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
+  #appendKeySignatureSvg(parentSvg: SVGElement, xOffset: number) {
     const yCoordinates = this.getKeyYCoordinates();
     const g = document.createElementNS(SVG_NS, 'svg');
     g.setAttribute('class', 'key-signature');
@@ -285,7 +292,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
     }
 
-    svg.appendChild(g);
+    parentSvg.appendChild(g);
 
     return xOffset;
   }
@@ -365,18 +372,32 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       let yOffset = NaN;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
-        const values = createNoteSvg({
+        const values = createNoteSvg2({
           duration,
           noFlags: needsBeam,
           stemUp,
-          qualifiedElementName: 'svg',
+          qualifiedElementName: 'g',
           translate: {
             staffXCoordinate: xOffsetOfNote,
             staffYCoordinate: this.getYCoordinate(element.value),
           },
         });
+        const gg = document.createElementNS(SVG_NS, 'g');
+        // gg.setAttribute(
+        //   'transform',
+        //   `translate(0, ${this.getYCoordinate(element.value)}) scale(0.06)`
+        // );
+        console.log({ note: this.getYCoordinate(element.value), heigh: 35 });
+        const headOffset = 37;
+        values[0].setAttribute(
+          'transform',
+          `translate(0, ${
+            this.getYCoordinate(element.value) - headOffset
+          }) scale(0.07)`
+        );
+        //gg.innerHTML = values[0].innerHTML;
         noteSvg = values[0];
-        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        // noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         yOffset = values[1];
       } else {
         const element = elements[i] as ChordElementType;

@@ -104,7 +104,6 @@ export const createNoteSvg2 = ({
   noFlags = false,
   stemUp = true,
   qualifiedElementName = 'svg',
-  translate = undefined,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -113,11 +112,11 @@ export const createNoteSvg2 = ({
   svg.dataset.duration = duration;
   svg.dataset.stemUp = 'true';
   svg.setAttribute('viewBox', '0 0 600 738');
-  svg.setAttribute('height', '50px');
+  svg.setAttribute('height', '40px');
 
   const xStart = 300;
   const yStemStart = 100;
-  const stemLength = 330;
+  const stemLength = 400;
   const yStemEnd = yStemStart + stemLength;
 
   const headWidth = 80;
@@ -222,14 +221,7 @@ export const createNoteSvg2 = ({
   head.setAttribute('stroke-width', '2');
   svg.appendChild(head);
 
-  let yHeadOffset = NaN;
-  if (translate) {
-    yHeadOffset = stemUp
-      ? translate.staffYCoordinate - stemLength
-      : translate.staffYCoordinate - headWidth;
-    svg.setAttribute('y', yHeadOffset.toString());
-  }
-
+  const yHeadOffset = stemUp ? 37 : 7;
   return [svg, yHeadOffset];
 };
 
