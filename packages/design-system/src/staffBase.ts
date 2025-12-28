@@ -260,7 +260,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     // Notes are added here at runtime
     this.#notesContainer.classList.add('notes-container');
-    this.#notesContainer.setAttribute('x', (timeSigOffset + 20).toString());
+    this.#notesContainer.style.overflow = 'initial';
+    // Not sure why I have to do a negative offset here after this change: https://github.com/jonwesneski/music-notation/pull/11
+    this.#notesContainer.style.transform = `translateX(${-(
+      80 - timeSigOffset
+    )}px)`;
     this.#transcribeContainer.appendChild(this.#notesContainer);
   }
 
