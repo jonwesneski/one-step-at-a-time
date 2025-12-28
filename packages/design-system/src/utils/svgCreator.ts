@@ -138,11 +138,13 @@ export const createNoteSvg2 = ({
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   if (!noFlags && flagCount > 0) {
     // todo need to calculate flags with stemup or not; assuming stemp fo now
-    const xFlagStart = stemX; //+ stemWidth - 20;
-    const name = 'flag';
+    const xFlagStart = stemX;
     const flag = document.createElementNS(SVG_NS, 'g');
-    flag.classList.add(name);
-    flag.id = name;
+    flag.classList.add('flag');
+    const name = 'partial-flag';
+    const partialFlag = document.createElementNS(SVG_NS, 'g');
+    partialFlag.classList.add(name);
+    partialFlag.id = name;
     const yPartialFlagLongStart = yStemStart + 30;
     const partialFlagLong = document.createElementNS(SVG_NS, 'path');
     const xPartialFlagLongEnd = xFlagStart + 110;
@@ -158,7 +160,7 @@ export const createNoteSvg2 = ({
     partialFlagLong.setAttribute('fill', 'none');
     partialFlagLong.setAttribute('stroke', 'currentColor');
     partialFlagLong.setAttribute('stroke-width', '30');
-    flag.appendChild(partialFlagLong);
+    partialFlag.appendChild(partialFlagLong);
 
     const yPartialFlagTopStart = yStemStart + 20;
     const partialFlagTop = document.createElementNS(SVG_NS, 'path');
@@ -173,8 +175,8 @@ export const createNoteSvg2 = ({
     partialFlagTop.setAttribute('fill', 'none');
     partialFlagTop.setAttribute('stroke', 'currentColor');
     partialFlagTop.setAttribute('stroke-width', '25');
-    flag.appendChild(partialFlagTop);
-    svg.appendChild(flag);
+    partialFlag.appendChild(partialFlagTop);
+    flag.appendChild(partialFlag);
 
     let yPartialFlagTailStart = yPartialFlagLongEnd;
     for (let i = 0; i < flagCount - 1; i++) {
@@ -183,7 +185,7 @@ export const createNoteSvg2 = ({
       yPartialFlagTailStart = yPartialFlagLongEnd + y;
       flagCopy.setAttribute('href', `#${name}`);
       flagCopy.setAttribute('y', y.toString());
-      svg.appendChild(flagCopy);
+      flag.appendChild(flagCopy);
     }
 
     const partialFlagTail = document.createElementNS(SVG_NS, 'line');
@@ -194,7 +196,9 @@ export const createNoteSvg2 = ({
     partialFlagTail.setAttribute('fill', 'none');
     partialFlagTail.setAttribute('stroke', 'currentColor');
     partialFlagTail.setAttribute('stroke-width', '28');
-    svg.appendChild(partialFlagTail);
+    flag.appendChild(partialFlagTail);
+
+    svg.appendChild(flag);
   }
 
   const headXStartStr = stemUp

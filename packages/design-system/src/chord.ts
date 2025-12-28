@@ -35,7 +35,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node) => {
-          notes.push({ value: node.value, duration: node.duration });
+          if (node.value !== 'rest') {
+            notes.push({ value: node.value, duration: node.duration });
+          }
         });
       } else {
         // todo build out notes from value: Chord
