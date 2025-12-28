@@ -14,7 +14,7 @@ import {
   BeamCreator,
   createChordSvg,
   createFlatSvg,
-  createNoteSvg,
+  createNoteSvg2,
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
@@ -197,9 +197,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           width: 100%;
           height: ${StaffElementBase.staffHeight}px;
           display: block;
-          border-top: 2px solid currentColor;
-          border-right: 2px solid currentColor;
-          border-bottom: 2px solid currentColor;
+          border-top: 1px solid currentColor;
+          border-right: 1px solid currentColor;
+          border-bottom: 1px solid currentColor;
           margin-top: ${StaffElementBase.lineStart}px;
           margin-bottom: 30px;
         }
@@ -208,7 +208,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           position: absolute;
           left: 0;
           right: 0;
-          height: 2px;
+          height: 0.5px;
           background: currentColor;
         }
       </style>
@@ -358,6 +358,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const { width: describeWidth } =
       this.#describeContainer.getBoundingClientRect();
     const remainingWidth = transcribeWidth - (describeWidth + 15);
+    this.#notesContainer.setAttribute('width', `${remainingWidth}px`);
 
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
@@ -365,7 +366,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       let yOffset = NaN;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
-        const values = createNoteSvg({
+        const values = createNoteSvg2({
           duration,
           noFlags: needsBeam,
           stemUp,
@@ -377,6 +378,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         });
         noteSvg = values[0];
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        noteSvg.setAttribute(
+          'y',
+          (10 + this.getYCoordinate(element.value) - values[1]).toString()
+        );
         yOffset = values[1];
       } else {
         const element = elements[i] as ChordElementType;
