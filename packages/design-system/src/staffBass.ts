@@ -94,24 +94,33 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Ab: StaffBassElement.#majorFlatYCoordinates.Cb,
     };
 
-    // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
+    // Return the y-coordinate for a given note name (e.g., 'A', 'E2', 'C#3').
+    // Accidentals are ignored for vertical placement — C# and C natural occupy
+    // the same staff line/space.
     public getYCoordinate(note: string): number {
-      if (!note) {
-        return 0;
-      }
+      if (!note) return 0;
 
-      const key = note.trim().toUpperCase();
-      // direct match
-      if (StaffBassElement.#yCoordinates[key] !== undefined) {
-        return StaffBassElement.#yCoordinates[key];
-      }
+      // Extract letter (A-G) and optional octave digit, discarding accidentals.
+      const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
+      if (!match) return 0;
 
-      // try with a suffix like '2' if the user provided octave info loosely
-      for (const n of [2, 3, 4]) {
-        if (StaffBassElement.#yCoordinates[`${key}${n}`] !== undefined) {
-          return StaffBassElement.#yCoordinates[`${key}${n}`];
+      const letter = match[1].toUpperCase();
+      const octave = match[2];
+
+      if (octave) {
+        const key = `${letter}${octave}`;
+        if (StaffBassElement.#yCoordinates[key] !== undefined) {
+          return StaffBassElement.#yCoordinates[key];
+        }
+      } else {
+        for (const n of [2, 3, 4]) {
+          const key = `${letter}${n}`;
+          if (StaffBassElement.#yCoordinates[key] !== undefined) {
+            return StaffBassElement.#yCoordinates[key];
+          }
         }
       }
+
       return 0;
     }
 

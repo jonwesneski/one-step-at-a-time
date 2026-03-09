@@ -17,6 +17,8 @@ import {
   createNoteSvg2,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_STEM_X_OFFSET,
+  NOTE_STEM_TIP_Y_OFFSET,
 } from './utils';
 import { durationToFactor, SVG_NS } from './utils/consts';
 
@@ -365,10 +367,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
+    // Clear any previously rendered notes. `slotchange` can fire multiple times
+    // as a framework (e.g. React) adds children incrementally, so without this
+    // each call would append on top of the last, leaving stale/duplicate SVGs.
+    this.#notesContainer.innerHTML = '';
     const beamCreator = BeamCreator.ifNecessary(elements);
     const needsBeam = beamCreator !== null;
-    // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
-    let xOffsetOfNote: number = 0;
+    let xOffsetOfNote = 0;
     const stemUp = this.#determineIsStemUp(elements);
     const transcribeRect = this.#transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
@@ -383,7 +388,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
       let noteSvg: SVGElement;
-      let yOffset = NaN;
+      let beamY: number;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
         const values = createNoteSvg2({
@@ -398,11 +403,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         });
         noteSvg = values[0];
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        noteSvg.setAttribute(
-          'y',
-          (10 + this.getYCoordinate(element.value) - values[1]).toString()
-        );
-        yOffset = values[1];
+        const noteY = 10 + this.getYCoordinate(element.value) - values[1];
+        noteSvg.setAttribute('y', noteY.toString());
+        beamY = noteY;
       } else {
         const element = elements[i] as ChordElementType;
         const staffYCoordinates: number[] = [];
@@ -418,29 +421,20 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           qualifiedElementName: 'g',
         });
         noteSvg = values[0];
-        yOffset = values[1];
+        noteSvg.setAttribute('overflow', 'visible');
+        // Beam y: use the topmost note's y position within the chord
+        const topmostStaffY = stemUp
+          ? Math.min(...staffYCoordinates)
+          : Math.max(...staffYCoordinates);
+        beamY = 10 + topmostStaffY - values[1];
       }
 
-      if (beamCreator) {
-        if (i === 0) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg,
-            xOffsetOfNote,
-            stemUp,
-            yOffset,
-            xAttribute: 'x1',
-            yAttribute: 'y1',
-          });
-        } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg,
-            xOffsetOfNote,
-            stemUp,
-            yOffset,
-            xAttribute: 'x2',
-            yAttribute: 'y2',
-          });
-        }
+      if (beamCreator && (i === 0 || i === elements.length - 1)) {
+        beamCreator.updateBeamCoordinates(
+          xOffsetOfNote + NOTE_STEM_X_OFFSET,
+          beamY + NOTE_STEM_TIP_Y_OFFSET,
+          i === 0 ? 'start' : 'end'
+        );
       }
 
       xOffsetOfNote = this.#spaceNote(noteSvg, xOffsetOfNote, remainingWidth);
@@ -465,30 +459,22 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     const beams = [
       ...this.#notesContainer.querySelectorAll('.beam'),
-    ] as SVGPolygonElement[];
+    ] as SVGGElement[];
     let beamIndex = beams.length > 0 ? 0 : null;
     for (let i = 0; i < elements.length; i++) {
-      const stemUp = elements[i].dataset.stempUp === 'true';
       if (beamCreator) {
         if (i === 0) {
-          //debugger;
-          beamCreator.updateBeamCoordinates({
-            noteSvg: elements[i],
-            xOffsetOfNote,
-            stemUp,
-            yOffset: NaN,
-            xAttribute: 'x1',
-            yAttribute: 'y1',
-          });
+          beamCreator.updateBeamCoordinates(
+            xOffsetOfNote + NOTE_STEM_X_OFFSET,
+            parseFloat(elements[i].getAttribute('y') || '0') + NOTE_STEM_TIP_Y_OFFSET,
+            'start'
+          );
         } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg: elements[i],
-            xOffsetOfNote,
-            stemUp,
-            yOffset: NaN,
-            xAttribute: 'x2',
-            yAttribute: 'y2',
-          });
+          beamCreator.updateBeamCoordinates(
+            xOffsetOfNote + NOTE_STEM_X_OFFSET,
+            parseFloat(elements[i].getAttribute('y') || '0') + NOTE_STEM_TIP_Y_OFFSET,
+            'end'
+          );
           if (beamIndex !== null) {
             beamCreator.reSpaceBeam(beams[beamIndex++]);
           }

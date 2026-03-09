@@ -376,6 +376,12 @@ export const createTimeSignatureSvg = (
   return svg;
 };
 
+// Stem geometry constants derived from createNoteSvg2's 600-unit coordinate space
+// scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
+const NOTE_SCALE = 32 / 600;
+export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG (~19.47px)
+export const NOTE_STEM_TIP_Y_OFFSET = 100 * NOTE_SCALE; // stem tip y for stem-up (~5.33px)
+
 export class BeamCreator {
   x1: number;
   x2: number;
@@ -417,61 +423,44 @@ export class BeamCreator {
     return beamCreator;
   }
 
-  updateBeamCoordinates(props: {
-    noteSvg: SVGElement;
-    xOffsetOfNote: number;
-    stemUp: boolean;
-    yOffset: number;
-    xAttribute: 'x1' | 'x2';
-    yAttribute: 'y1' | 'y2';
-  }) {
-    const stemSvg = props.noteSvg
-      .querySelector('.stem')
-      ?.getBoundingClientRect()!;
-    const x = props.xOffsetOfNote + stemSvg.x;
-    const stemYAttribute = props.stemUp ? 'y1' : 'y2';
-    const y = props.stemUp ? props.yOffset - 1 : props.yOffset + stemSvg.y;
-
-    this[props.xAttribute] = x;
-    this[props.yAttribute] = y;
-  }
-
-  buildBeams() {
-    const thickness = 8;
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    const beam = document.createElementNS(SVG_NS, 'polygon');
-    svg.classList.add('beam');
-    svg.setAttribute('fill', 'currentColor');
-    const leftTop = `${this.x1},${this.y1}`;
-    const leftBottom = `${this.x1},${this.y1 + thickness}`;
-    const rightBottom = `${this.x2},${this.y2 + thickness}`;
-    const rightTop = `${this.x2},${this.y2}`;
-    beam.setAttribute(
-      'points',
-      `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
-    );
-    svg.appendChild(beam);
-
-    return svg;
-  }
-
-  reSpaceBeam(beam: SVGPolygonElement) {
-    const pointsArray = beam.getAttribute('points')?.split(' ');
-    if (pointsArray) {
-      //debugger;
-      const yLeft = pointsArray[0].split(',')[1];
-      const yLeftBottom = pointsArray[1].split(',')[1];
-      const yRightBottom = pointsArray[2].split(',')[1];
-      const yRight = pointsArray[3].split(',')[1];
-      const leftTop = `${this.x1},${yLeft}`;
-      const leftBottom = `${this.x1},${yLeftBottom}`;
-      const rightBottom = `${this.x2},${yRightBottom}`;
-      const rightTop = `${this.x2},${yRight}`;
-
-      // beam.setAttribute(
-      //   'points',
-      //   `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
-      // );
+  // x, y are in #notesContainer's coordinate space (1:1 with CSS px).
+  // Call with 'start' for the first beamed note and 'end' for the last.
+  updateBeamCoordinates(x: number, y: number, which: 'start' | 'end') {
+    if (which === 'start') {
+      this.x1 = x;
+      this.y1 = y;
+    } else {
+      this.x2 = x;
+      this.y2 = y;
     }
+  }
+
+  buildBeams(): SVGGElement {
+    const thickness = 8;
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.classList.add('beam');
+    const polygon = document.createElementNS(SVG_NS, 'polygon');
+    polygon.setAttribute('fill', 'currentColor');
+    polygon.setAttribute(
+      'points',
+      `${this.x1},${this.y1} ${this.x1},${this.y1 + thickness} ${this.x2},${this.y2 + thickness} ${this.x2},${this.y2}`
+    );
+    g.appendChild(polygon);
+    return g;
+  }
+
+  reSpaceBeam(beamGroup: SVGGElement) {
+    const polygon = beamGroup.querySelector('polygon');
+    if (!polygon) return;
+    const pointsArray = polygon.getAttribute('points')?.split(' ');
+    if (!pointsArray) return;
+    const yLeft = pointsArray[0].split(',')[1];
+    const yLeftBottom = pointsArray[1].split(',')[1];
+    const yRightBottom = pointsArray[2].split(',')[1];
+    const yRight = pointsArray[3].split(',')[1];
+    polygon.setAttribute(
+      'points',
+      `${this.x1},${yLeft} ${this.x1},${yLeftBottom} ${this.x2},${yRightBottom} ${this.x2},${yRight}`
+    );
   }
 }
