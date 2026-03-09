@@ -31,6 +31,7 @@ const _MaybeHTMLElement: any =
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   #mutationObservers: MutationObserver[];
+  // todo: now that i have timeInts, do i need parentTime
   #timeInts: [BeatsInMeasure, BeatTypeInMeasure] | null = null;
   #parentTime: string;
   #parentMode: Mode | null;
@@ -131,6 +132,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   };
 
   connectedCallback(): void {
+    // todo: derived class is meant to implement render
+    // and it calls build, but probably shouldn't. Fix in the future
+    // As I am scrolling through the code top to bottom,
+    // it would be nice to see the html string before i see this connectedCallback()
     this.render();
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
     const wrapper = this.shadowRoot.querySelector('.staff-wrapper')!;
@@ -222,6 +227,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#staffContainer.classList.add('staff-container');
 
     let yOffset = StaffElementBase.lineSpacing;
+    // todo: update to use .forEach
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- cant loop without variable
     for (const _ of StaffElementBase.linesY.slice(
       1,
@@ -260,11 +266,18 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     // Notes are added here at runtime
     this.#notesContainer.classList.add('notes-container');
-    this.#notesContainer.style.overflow = 'initial';
+    this.#notesContainer.style.overflow = 'hidden';
     // Not sure why I have to do a negative offset here after this change: https://github.com/jonwesneski/music-notation/pull/11
-    this.#notesContainer.style.transform = `translateX(${-(
-      80 - timeSigOffset
-    )}px)`;
+    // this.#notesContainer.style.transform = `translateX(${-(
+    //   80 - timeSigOffset
+    // )}px)`;
+    // this.#notesContainer.setAttribute(
+    //   'transform',
+    //   `translate(${-(80 - timeSigOffset)}, 0)`
+    // );
+    // const g = document.createElementNS(SVG_NS, 'g');
+    // g.setAttribute('transform', `translate(${-(80 - timeSigOffset)}, 0)`);
+    // this.#notesContainer.appendChild(g);
     this.#transcribeContainer.appendChild(this.#notesContainer);
   }
 
@@ -357,12 +370,15 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
     let xOffsetOfNote: number = 0;
     const stemUp = this.#determineIsStemUp(elements);
-    const { width: transcribeWidth } =
-      this.#transcribeContainer.getBoundingClientRect();
-    const { width: describeWidth } =
-      this.#describeContainer.getBoundingClientRect();
-    const remainingWidth = transcribeWidth - (describeWidth + 15);
-    this.#notesContainer.setAttribute('width', `${remainingWidth}px`);
+    const transcribeRect = this.#transcribeContainer.getBoundingClientRect();
+    const describeRect = this.#describeContainer.getBoundingClientRect();
+    const transcribeWidth = transcribeRect.width;
+    const notesX = Math.round(describeRect.right - transcribeRect.left);
+    const remainingWidth = transcribeWidth - notesX;
+    this.#notesContainer.setAttribute('x', `${notesX}`);
+    this.#notesContainer.setAttribute('width', `${remainingWidth}`);
+    this.#notesContainer.setAttribute('height', '100');
+    this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
 
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
@@ -439,11 +455,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #spaceNotes(elements: SVGElement[]) {
     const beamCreator = BeamCreator.ifNecessary(elements);
     let xOffsetOfNote = 0;
-    const { width: transcribeWidth } =
-      this.#transcribeContainer.getBoundingClientRect();
-    const { width: describeWidth } =
-      this.#describeContainer.getBoundingClientRect();
-    const width = transcribeWidth - (describeWidth + 15);
+    const transcribeRect = this.#transcribeContainer.getBoundingClientRect();
+    const describeRect = this.#describeContainer.getBoundingClientRect();
+    const notesX = Math.round(describeRect.right - transcribeRect.left);
+    const width = transcribeRect.width - notesX;
+    this.#notesContainer.setAttribute('x', `${notesX}`);
+    this.#notesContainer.setAttribute('width', `${width}`);
+    this.#notesContainer.setAttribute('viewBox', `0 0 ${width} 100`);
 
     const beams = [
       ...this.#notesContainer.querySelectorAll('.beam'),
@@ -453,6 +471,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       const stemUp = elements[i].dataset.stempUp === 'true';
       if (beamCreator) {
         if (i === 0) {
+          //debugger;
           beamCreator.updateBeamCoordinates({
             noteSvg: elements[i],
             xOffsetOfNote,

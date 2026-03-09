@@ -111,9 +111,18 @@ export const createNoteSvg2 = ({
   }
   svg.dataset.duration = duration;
   svg.dataset.stemUp = 'true';
-  svg.setAttribute('viewBox', '0 0 600 738');
+  const width = 32;
   const height = 40;
-  svg.setAttribute('height', `${height}px`);
+  svg.setAttribute('width', `${width}`);
+  svg.setAttribute('height', `${height}`);
+
+  // Draw in a 600x750 coordinate space scaled down to the 32x40 viewport via a
+  // transform on a wrapper <g>. This avoids viewBox-based sizing quirks when
+  // the SVG is nested inside other SVG elements.
+  const COORD_WIDTH = 600;
+  const scale = width / COORD_WIDTH; // 32/600 — same ratio for both axes (600:750 == 32:40)
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.setAttribute('transform', `scale(${scale})`);
 
   const xStart = 300;
   const yStemStart = 100;
@@ -132,7 +141,7 @@ export const createNoteSvg2 = ({
     stem.setAttribute('y2', yStemEnd.toString());
     stem.setAttribute('stroke', 'currentColor');
     stem.setAttribute('stroke-width', stemWidth.toString());
-    svg.appendChild(stem);
+    g.appendChild(stem);
   }
 
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
@@ -198,7 +207,7 @@ export const createNoteSvg2 = ({
     partialFlagTail.setAttribute('stroke-width', '28');
     flag.appendChild(partialFlagTail);
 
-    svg.appendChild(flag);
+    g.appendChild(flag);
   }
 
   const headXStartStr = stemUp
@@ -220,7 +229,9 @@ export const createNoteSvg2 = ({
   head.setAttribute('stroke', 'currentColor');
   head.setAttribute('fill', headFill);
   head.setAttribute('stroke-width', '2');
-  svg.appendChild(head);
+  g.appendChild(head);
+
+  svg.appendChild(g);
 
   const yHeadOffset = stemUp ? height - 3 : 7;
   return [svg, yHeadOffset];
@@ -244,7 +255,7 @@ export const createChordSvg = ({
   const mathFunc = stemUp ? Math.min : Math.max;
   let currentY = stemUp ? Infinity : -Infinity;
   for (const staffYCoordinate of staffYCoordinates) {
-    const [noteSvg, yOffset] = createNoteSvg({
+    const [noteSvg, yOffset] = createNoteSvg2({
       duration,
       noFlags,
       stemUp,
@@ -255,6 +266,8 @@ export const createChordSvg = ({
       },
     });
     currentY = mathFunc(currentY, yOffset);
+    noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    noteSvg.setAttribute('y', (10 + staffYCoordinate - yOffset).toString());
     svg.appendChild(noteSvg);
   }
   return [svg, currentY];
@@ -412,13 +425,12 @@ export class BeamCreator {
     xAttribute: 'x1' | 'x2';
     yAttribute: 'y1' | 'y2';
   }) {
-    const stemSvg = props.noteSvg.querySelector('.stem');
-    const x =
-      props.xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
+    const stemSvg = props.noteSvg
+      .querySelector('.stem')
+      ?.getBoundingClientRect()!;
+    const x = props.xOffsetOfNote + stemSvg.x;
     const stemYAttribute = props.stemUp ? 'y1' : 'y2';
-    const y = props.stemUp
-      ? props.yOffset - 1
-      : props.yOffset + parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
+    const y = props.stemUp ? props.yOffset - 1 : props.yOffset + stemSvg.y;
 
     this[props.xAttribute] = x;
     this[props.yAttribute] = y;
@@ -426,9 +438,10 @@ export class BeamCreator {
 
   buildBeams() {
     const thickness = 8;
+    const svg = document.createElementNS(SVG_NS, 'svg');
     const beam = document.createElementNS(SVG_NS, 'polygon');
-    beam.classList.add('beam');
-    beam.setAttribute('fill', 'currentColor');
+    svg.classList.add('beam');
+    svg.setAttribute('fill', 'currentColor');
     const leftTop = `${this.x1},${this.y1}`;
     const leftBottom = `${this.x1},${this.y1 + thickness}`;
     const rightBottom = `${this.x2},${this.y2 + thickness}`;
@@ -437,13 +450,15 @@ export class BeamCreator {
       'points',
       `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
     );
+    svg.appendChild(beam);
 
-    return beam;
+    return svg;
   }
 
   reSpaceBeam(beam: SVGPolygonElement) {
     const pointsArray = beam.getAttribute('points')?.split(' ');
     if (pointsArray) {
+      //debugger;
       const yLeft = pointsArray[0].split(',')[1];
       const yLeftBottom = pointsArray[1].split(',')[1];
       const yRightBottom = pointsArray[2].split(',')[1];
@@ -453,10 +468,10 @@ export class BeamCreator {
       const rightBottom = `${this.x2},${yRightBottom}`;
       const rightTop = `${this.x2},${yRight}`;
 
-      beam.setAttribute(
-        'points',
-        `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
-      );
+      // beam.setAttribute(
+      //   'points',
+      //   `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
+      // );
     }
   }
 }
