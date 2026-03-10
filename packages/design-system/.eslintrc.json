@@ -1,6 +1,6 @@
 {
   "extends": ["../../.eslintrc.json"],
-  "ignorePatterns": ["!**/*", "**/out-tsc"],
+  "ignorePatterns": ["!**/*", "**/out-tsc", "dist"],
   "overrides": [
     {
       "files": ["*.ts", "*.tsx", "*.js", "*.jsx"],
@@ -23,7 +23,8 @@
           {
             "ignoredFiles": [
               "{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}"
-            ]
+            ],
+            "ignoredDependencies": ["react", "tslib"]
           }
         ]
       }
