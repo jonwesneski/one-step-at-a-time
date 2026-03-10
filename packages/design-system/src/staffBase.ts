@@ -14,11 +14,9 @@ import {
   BeamCreator,
   createChordSvg,
   createFlatSvg,
-  createNoteSvg2,
+  createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
-  NOTE_STEM_X_OFFSET,
-  NOTE_STEM_TIP_Y_OFFSET,
 } from './utils';
 import { durationToFactor, SVG_NS } from './utils/consts';
 
@@ -125,7 +123,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
   }
 
-  // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
+  // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
   public abstract getYCoordinate(note: string): number;
 
   public abstract getKeyYCoordinates(): {
@@ -229,18 +227,15 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#staffContainer.classList.add('staff-container');
 
     let yOffset = StaffElementBase.lineSpacing;
-    // todo: update to use .forEach
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- cant loop without variable
-    for (const _ of StaffElementBase.linesY.slice(
-      1,
-      StaffElementBase.linesY.length - 1
-    )) {
-      const line = document.createElement('div');
-      line.classList.add('staff-line');
-      line.style.top = `${yOffset}px`;
-      this.#staffContainer.appendChild(line);
-      yOffset += StaffElementBase.lineSpacing;
-    }
+    StaffElementBase.linesY
+      .slice(1, StaffElementBase.linesY.length - 1)
+      .forEach(() => {
+        const line = document.createElement('div');
+        line.classList.add('staff-line');
+        line.style.top = `${yOffset}px`;
+        this.#staffContainer.appendChild(line);
+        yOffset += StaffElementBase.lineSpacing;
+      });
   }
 
   // Transcribe is: clef, key signature, time signature, and notes
@@ -261,7 +256,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       xOffsetOfClef
     );
 
-    const timeSigOffset = this.#appendTimeSignatureSvgIfNecessary(
+    this.#appendTimeSignatureSvgIfNecessary(
       this.#describeContainer,
       xOffsetOfKeySignature + 5
     );
@@ -269,17 +264,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     // Notes are added here at runtime
     this.#notesContainer.classList.add('notes-container');
     this.#notesContainer.style.overflow = 'hidden';
-    // Not sure why I have to do a negative offset here after this change: https://github.com/jonwesneski/music-notation/pull/11
-    // this.#notesContainer.style.transform = `translateX(${-(
-    //   80 - timeSigOffset
-    // )}px)`;
-    // this.#notesContainer.setAttribute(
-    //   'transform',
-    //   `translate(${-(80 - timeSigOffset)}, 0)`
-    // );
-    // const g = document.createElementNS(SVG_NS, 'g');
-    // g.setAttribute('transform', `translate(${-(80 - timeSigOffset)}, 0)`);
-    // this.#notesContainer.appendChild(g);
     this.#transcribeContainer.appendChild(this.#notesContainer);
   }
 
@@ -321,7 +305,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         ? this.#timeInts
         : null;
 
-    let timeSigOffset = xOffset;
     if (firstMeasureOrNoCompositionTime || timeChangedInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
         ...((firstMeasureOrNoCompositionTime ?? timeChangedInMeasure) as [
@@ -331,9 +314,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
-      timeSigOffset += 14;
     }
-    return timeSigOffset;
   }
 
   #handleSlotChange(event: Event) {
@@ -391,7 +372,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       let beamY: number;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
-        const values = createNoteSvg2({
+        const values = createNoteSvg({
           duration,
           noFlags: needsBeam,
           stemUp,
@@ -431,8 +412,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
       if (beamCreator && (i === 0 || i === elements.length - 1)) {
         beamCreator.updateBeamCoordinates(
-          xOffsetOfNote + NOTE_STEM_X_OFFSET,
-          beamY + NOTE_STEM_TIP_Y_OFFSET,
+          xOffsetOfNote,
+          beamY,
           i === 0 ? 'start' : 'end'
         );
       }
@@ -465,16 +446,14 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       if (beamCreator) {
         if (i === 0) {
           beamCreator.updateBeamCoordinates(
-            xOffsetOfNote + NOTE_STEM_X_OFFSET,
-            parseFloat(elements[i].getAttribute('y') || '0') +
-              NOTE_STEM_TIP_Y_OFFSET,
+            xOffsetOfNote,
+            parseFloat(elements[i].getAttribute('y') || '0'),
             'start'
           );
         } else if (i === elements.length - 1) {
           beamCreator.updateBeamCoordinates(
-            xOffsetOfNote + NOTE_STEM_X_OFFSET,
-            parseFloat(elements[i].getAttribute('y') || '0') +
-              NOTE_STEM_TIP_Y_OFFSET,
+            xOffsetOfNote,
+            parseFloat(elements[i].getAttribute('y') || '0'),
             'end'
           );
           if (beamIndex !== null) {
