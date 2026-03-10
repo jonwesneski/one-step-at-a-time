@@ -443,7 +443,9 @@ export class BeamCreator {
     polygon.setAttribute('fill', 'currentColor');
     polygon.setAttribute(
       'points',
-      `${this.x1},${this.y1} ${this.x1},${this.y1 + thickness} ${this.x2},${this.y2 + thickness} ${this.x2},${this.y2}`
+      `${this.x1},${this.y1} ${this.x1},${this.y1 + thickness} ${this.x2},${
+        this.y2 + thickness
+      } ${this.x2},${this.y2}`
     );
     g.appendChild(polygon);
     return g;

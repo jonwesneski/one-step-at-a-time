@@ -3,23 +3,23 @@
 // TypeScript may not find those exact .js files in a TSX project, so provide permissive
 // module declarations to avoid the "Cannot find module ..." errors.
 
-declare module "*app/page.js" {
+declare module '*app/page.js' {
   const value: any;
   export default value;
 }
 
-declare module "*app/layout.js" {
+declare module '*app/layout.js' {
   const value: any;
   export default value;
 }
 
-declare module "*app/error.js" {
+declare module '*app/error.js' {
   const value: any;
   export default value;
 }
 
 // Fallback for other generated files used by Next's type validator
-declare module "*app/*.js" {
+declare module '*app/*.js' {
   const value: any;
   export default value;
 }

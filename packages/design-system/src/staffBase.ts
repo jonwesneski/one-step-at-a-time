@@ -466,13 +466,15 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         if (i === 0) {
           beamCreator.updateBeamCoordinates(
             xOffsetOfNote + NOTE_STEM_X_OFFSET,
-            parseFloat(elements[i].getAttribute('y') || '0') + NOTE_STEM_TIP_Y_OFFSET,
+            parseFloat(elements[i].getAttribute('y') || '0') +
+              NOTE_STEM_TIP_Y_OFFSET,
             'start'
           );
         } else if (i === elements.length - 1) {
           beamCreator.updateBeamCoordinates(
             xOffsetOfNote + NOTE_STEM_X_OFFSET,
-            parseFloat(elements[i].getAttribute('y') || '0') + NOTE_STEM_TIP_Y_OFFSET,
+            parseFloat(elements[i].getAttribute('y') || '0') +
+              NOTE_STEM_TIP_Y_OFFSET,
             'end'
           );
           if (beamIndex !== null) {
