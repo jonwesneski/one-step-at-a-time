@@ -1,11 +1,11 @@
-import { Chord, DurationType, Note } from './theory';
+import { Chord, DurationType, LetterNote, Note } from './theory';
 
 export interface INoteElement {
   readonly duration: DurationType;
   readonly value: Note;
 }
 
-export type ChordNote = { value: Note; duration: DurationType };
+export type ChordNote = { value: LetterNote; duration: DurationType };
 export interface IChordElement {
   readonly duration: DurationType;
   readonly value: Chord | null;

@@ -1,6 +1,7 @@
 'use client';
 
 import '@rest-in-time/design-system';
+import type {} from '@rest-in-time/design-system';
 
 export default function Home() {
   return (

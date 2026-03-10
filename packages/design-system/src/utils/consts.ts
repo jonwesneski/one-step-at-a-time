@@ -1,12 +1,15 @@
-import { DurationType, Note } from '../types/theory';
+import { DurationType, LetterNote } from '../types/theory';
 
 export const durationToFlagCountMap = new Map<DurationType, number>([
-  ['sixteenth', 2],
   ['eighth', 1],
+  ['sixteenth', 2],
+  ['thirtysecond', 3],
+  ['sixtyfourth', 4],
+  ['hundredtwentyeighth', 5],
 ]);
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export const noteSemitoneMap: Map<Note, number> = new Map();
+export const noteSemitoneMap: Map<LetterNote, number> = new Map();
 noteSemitoneMap.set('A', 0);
 noteSemitoneMap.set('A#', 1);
 noteSemitoneMap.set('Bb', 1);
@@ -25,7 +28,7 @@ noteSemitoneMap.set('G', 10);
 noteSemitoneMap.set('G#', 11);
 noteSemitoneMap.set('Ab', 11);
 
-export const semitoneNoteMap: Map<number, Note[]> = new Map();
+export const semitoneNoteMap: Map<number, LetterNote[]> = new Map();
 semitoneNoteMap.set(0, ['A']);
 semitoneNoteMap.set(1, ['A#', 'Bb']);
 semitoneNoteMap.set(2, ['B']);
@@ -102,10 +105,12 @@ export const ChordSemitoneMapAliases: Record<
 };
 
 export const durationToFactor: Record<DurationType, number> = {
-  eighth: 0.125,
+  whole: 1,
   half: 0.5,
   quarter: 0.25,
+  eighth: 0.125,
   sixteenth: 0.0625,
   thirtysecond: 0.03125,
-  whole: 1,
+  sixtyfourth: 0.015625,
+  hundredtwentyeighth: 0.0078125,
 };

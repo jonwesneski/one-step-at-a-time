@@ -6,9 +6,22 @@ import {
 } from '../types/theory';
 import { durationToFlagCountMap, SVG_NS } from './consts';
 
+// Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
+// scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
+const NOTE_SVG_WIDTH = 32;
+// Draw in a 600x750 coordinate space scaled down to the 32x40 viewport via a
+// transform on a wrapper <g>. This avoids viewBox-based sizing quirks when
+// the SVG is nested inside other SVG elements.
+const COORD_WIDTH = 600;
+// 32/600 — same ratio for both axes (600:750 == 32:40)
+const NOTE_SCALE = NOTE_SVG_WIDTH / COORD_WIDTH;
+const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG (~19.47px)
+const NOTE_Y_STEM_START = 100;
+const NOTE_STEM_TIP_Y_OFFSET = NOTE_Y_STEM_START * NOTE_SCALE; // stem tip y for stem-up (~5.33px)
+
 type NoteProps = {
   duration: DurationType;
-  flagsIfNeeded?: boolean;
+  noFlags?: boolean;
   stemUp?: boolean;
   qualifiedElementName?: 'svg' | 'g';
   translate?: {
@@ -18,10 +31,9 @@ type NoteProps = {
 };
 export const createNoteSvg = ({
   duration,
-  flagsIfNeeded = true,
+  noFlags = false,
   stemUp = true,
   qualifiedElementName = 'svg',
-  translate = undefined,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -29,46 +41,103 @@ export const createNoteSvg = ({
   }
   svg.dataset.duration = duration;
   svg.dataset.stemUp = 'true';
+  const width = NOTE_SVG_WIDTH;
+  const height = 40;
+  svg.setAttribute('width', `${width}`);
+  svg.setAttribute('height', `${height}`);
 
-  svg.setAttribute('width', '37.5px');
-  svg.setAttribute('height', '40px');
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
-  const stemStart = 0;
-  const stemLength = 25;
-  const stemEnd = stemStart + stemLength;
-  const x = 10; //todo see if I need this to be dynamic or maybe just come up with a better name
+  const xStart = 300;
+  const stemLength = 400;
+  const yStemEnd = NOTE_Y_STEM_START + stemLength;
 
-  if (flagsIfNeeded) {
-    // todo need to calculate flags with stemup or not
-    const flagCount = durationToFlagCountMap.get(duration) ?? 0;
-    for (let index = 0; index < flagCount; index++) {
-      const flag = document.createElementNS(SVG_NS, 'path');
-      flag.classList.add('flag');
-      const y = stemEnd - 5 * index;
-      flag.setAttribute(
-        'd',
-        `M ${x} ${y} Q ${x + 8} ${y - 2} ${x + 6} ${y + 5}`
-      );
-      flag.setAttribute('fill', 'currentColor');
-      flag.setAttribute('stroke', 'none');
-      svg.appendChild(flag);
-    }
+  const headWidth = 80;
+  const stemX = stemUp ? xStart + headWidth - 15 : xStart;
+  const stemWidth = 22;
+  if (duration !== 'whole') {
+    const stem = document.createElementNS(SVG_NS, 'line');
+    stem.classList.add('stem');
+    stem.setAttribute('x1', stemX.toString());
+    stem.setAttribute('y1', NOTE_Y_STEM_START.toString());
+    stem.setAttribute('x2', stemX.toString());
+    stem.setAttribute('y2', yStemEnd.toString());
+    stem.setAttribute('stroke', 'currentColor');
+    stem.setAttribute('stroke-width', stemWidth.toString());
+    g.appendChild(stem);
   }
 
-  const headWidth = 4;
-  const stemX = stemUp ? (x + headWidth).toString() : x.toString();
-  const stem = document.createElementNS(SVG_NS, 'line');
-  stem.classList.add('stem');
-  stem.setAttribute('x1', stemX);
-  stem.setAttribute('y1', stemStart.toString());
-  stem.setAttribute('x2', stemX);
-  stem.setAttribute('y2', stemEnd.toString());
-  stem.setAttribute('stroke', 'currentColor');
-  stem.setAttribute('stroke-width', '1');
-  svg.appendChild(stem);
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  if (!noFlags && flagCount > 0) {
+    // todo need to calculate flags with stemup or not; assuming stemp fo now
+    const xFlagStart = stemX;
+    const flag = document.createElementNS(SVG_NS, 'g');
+    flag.classList.add('flag');
+    const name = 'partial-flag';
+    const partialFlag = document.createElementNS(SVG_NS, 'g');
+    partialFlag.classList.add(name);
+    partialFlag.id = name;
+    const yPartialFlagLongStart = NOTE_Y_STEM_START + 30;
+    const partialFlagLong = document.createElementNS(SVG_NS, 'path');
+    const xPartialFlagLongEnd = xFlagStart + 110;
+    const yPartialFlagLongEnd = yPartialFlagLongStart + 190;
+    partialFlagLong.setAttribute(
+      'd',
+      `M${xFlagStart},${yPartialFlagLongStart} C${xFlagStart + 60},${
+        yPartialFlagLongStart + 40
+      } ${xFlagStart + 170},${
+        yPartialFlagLongStart + 95
+      } ${xPartialFlagLongEnd},${yPartialFlagLongEnd}`
+    );
+    partialFlagLong.setAttribute('fill', 'none');
+    partialFlagLong.setAttribute('stroke', 'currentColor');
+    partialFlagLong.setAttribute('stroke-width', '30');
+    partialFlag.appendChild(partialFlagLong);
 
-  const headXStartStr = stemUp ? x.toString() : (x + 3).toString();
-  const headYStartStr = stemUp ? stemEnd.toString() : headWidth.toString();
+    const yPartialFlagTopStart = NOTE_Y_STEM_START + 20;
+    const partialFlagTop = document.createElementNS(SVG_NS, 'path');
+    partialFlagTop.setAttribute(
+      'd',
+      `M${xFlagStart},${yPartialFlagTopStart} C${xFlagStart + 10},${
+        yPartialFlagTopStart + 20
+      } ${xFlagStart + 35},${yPartialFlagTopStart + 35} ${xFlagStart + 80},${
+        yPartialFlagTopStart + 70
+      }`
+    );
+    partialFlagTop.setAttribute('fill', 'none');
+    partialFlagTop.setAttribute('stroke', 'currentColor');
+    partialFlagTop.setAttribute('stroke-width', '25');
+    partialFlag.appendChild(partialFlagTop);
+    flag.appendChild(partialFlag);
+
+    let yPartialFlagTailStart = yPartialFlagLongEnd;
+    for (let i = 0; i < flagCount - 1; i++) {
+      const flagCopy = document.createElementNS(SVG_NS, 'use');
+      const y = 80 * (i + 1);
+      yPartialFlagTailStart = yPartialFlagLongEnd + y;
+      flagCopy.setAttribute('href', `#${name}`);
+      flagCopy.setAttribute('y', y.toString());
+      flag.appendChild(flagCopy);
+    }
+
+    const partialFlagTail = document.createElementNS(SVG_NS, 'line');
+    partialFlagTail.setAttribute('x1', (xPartialFlagLongEnd + 5).toString());
+    partialFlagTail.setAttribute('y1', (yPartialFlagTailStart - 5).toString());
+    partialFlagTail.setAttribute('x2', (xPartialFlagLongEnd - 40).toString());
+    partialFlagTail.setAttribute('y2', (yPartialFlagTailStart + 50).toString());
+    partialFlagTail.setAttribute('fill', 'none');
+    partialFlagTail.setAttribute('stroke', 'currentColor');
+    partialFlagTail.setAttribute('stroke-width', '28');
+    flag.appendChild(partialFlagTail);
+
+    g.appendChild(flag);
+  }
+
+  const headXStartStr = stemUp
+    ? xStart.toString()
+    : (xStart + stemWidth).toString();
+  const headYStartStr = stemUp ? yStemEnd.toString() : headWidth.toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
   const head = document.createElementNS(SVG_NS, 'ellipse');
@@ -76,24 +145,19 @@ export const createNoteSvg = ({
   head.setAttribute('cx', headXStartStr);
   head.setAttribute('cy', headYStartStr);
   head.setAttribute('rx', headWidth.toString());
-  head.setAttribute('ry', '3');
+  head.setAttribute('ry', (headWidth * 0.75).toString());
   head.setAttribute(
     'transform',
-    `rotate(-20 ${headXStartStr} ${headYStartStr})`
+    `rotate(-30 ${headXStartStr} ${headYStartStr})`
   );
   head.setAttribute('stroke', 'currentColor');
   head.setAttribute('fill', headFill);
   head.setAttribute('stroke-width', '2');
-  svg.appendChild(head);
+  g.appendChild(head);
 
-  let yHeadOffset = NaN;
-  if (translate) {
-    yHeadOffset = stemUp
-      ? translate.staffYCoordinate - stemLength
-      : translate.staffYCoordinate - headWidth;
-    svg.setAttribute('y', yHeadOffset.toString());
-  }
+  svg.appendChild(g);
 
+  const yHeadOffset = stemUp ? height - 3 : 7;
   return [svg, yHeadOffset];
 };
 
@@ -105,7 +169,7 @@ export const createChordSvg = ({
   duration,
   staffXCoordinate,
   staffYCoordinates,
-  flagsIfNeeded = true,
+  noFlags = true,
   stemUp = true,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -117,7 +181,7 @@ export const createChordSvg = ({
   for (const staffYCoordinate of staffYCoordinates) {
     const [noteSvg, yOffset] = createNoteSvg({
       duration,
-      flagsIfNeeded,
+      noFlags,
       stemUp,
       qualifiedElementName: 'svg',
       translate: {
@@ -126,6 +190,8 @@ export const createChordSvg = ({
       },
     });
     currentY = mathFunc(currentY, yOffset);
+    noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    noteSvg.setAttribute('y', (10 + staffYCoordinate - yOffset).toString());
     svg.appendChild(noteSvg);
   }
   return [svg, currentY];
@@ -275,59 +341,46 @@ export class BeamCreator {
     return beamCreator;
   }
 
-  updateBeamCoordinates(props: {
-    noteSvg: SVGElement;
-    xOffsetOfNote: number;
-    stemUp: boolean;
-    yOffset: number;
-    xAttribute: 'x1' | 'x2';
-    yAttribute: 'y1' | 'y2';
-  }) {
-    const stemSvg = props.noteSvg.querySelector('.stem');
-    const x =
-      props.xOffsetOfNote + parseInt(stemSvg?.getAttribute('x1') || '0');
-    const stemYAttribute = props.stemUp ? 'y1' : 'y2';
-    const y = props.stemUp
-      ? props.yOffset - 1
-      : props.yOffset + parseInt(stemSvg?.getAttribute(stemYAttribute) || '0');
-
-    this[props.xAttribute] = x;
-    this[props.yAttribute] = y;
-  }
-
-  buildBeams() {
-    const thickness = 8;
-    const beam = document.createElementNS(SVG_NS, 'polygon');
-    beam.classList.add('beam');
-    beam.setAttribute('fill', 'currentColor');
-    const leftTop = `${this.x1},${this.y1}`;
-    const leftBottom = `${this.x1},${this.y1 + thickness}`;
-    const rightBottom = `${this.x2},${this.y2 + thickness}`;
-    const rightTop = `${this.x2},${this.y2}`;
-    beam.setAttribute(
-      'points',
-      `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
-    );
-
-    return beam;
-  }
-
-  reSpaceBeam(beam: SVGPolygonElement) {
-    const pointsArray = beam.getAttribute('points')?.split(' ');
-    if (pointsArray) {
-      const yLeft = pointsArray[0].split(',')[1];
-      const yLeftBottom = pointsArray[1].split(',')[1];
-      const yRightBottom = pointsArray[2].split(',')[1];
-      const yRight = pointsArray[3].split(',')[1];
-      const leftTop = `${this.x1},${yLeft}`;
-      const leftBottom = `${this.x1},${yLeftBottom}`;
-      const rightBottom = `${this.x2},${yRightBottom}`;
-      const rightTop = `${this.x2},${yRight}`;
-
-      beam.setAttribute(
-        'points',
-        `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
-      );
+  // x, y are in #notesContainer's coordinate space (1:1 with CSS px).
+  // Call with 'start' for the first beamed note and 'end' for the last.
+  updateBeamCoordinates(x: number, y: number, which: 'start' | 'end') {
+    if (which === 'start') {
+      this.x1 = x + NOTE_STEM_X_OFFSET;
+      this.y1 = y + NOTE_STEM_TIP_Y_OFFSET;
+    } else {
+      this.x2 = x + NOTE_STEM_X_OFFSET;
+      this.y2 = y + NOTE_STEM_TIP_Y_OFFSET;
     }
+  }
+
+  buildBeams(): SVGGElement {
+    const thickness = 8;
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.classList.add('beam');
+    const polygon = document.createElementNS(SVG_NS, 'polygon');
+    polygon.setAttribute('fill', 'currentColor');
+    polygon.setAttribute(
+      'points',
+      `${this.x1},${this.y1} ${this.x1},${this.y1 + thickness} ${this.x2},${
+        this.y2 + thickness
+      } ${this.x2},${this.y2}`
+    );
+    g.appendChild(polygon);
+    return g;
+  }
+
+  reSpaceBeam(beamGroup: SVGGElement) {
+    const polygon = beamGroup.querySelector('polygon');
+    if (!polygon) return;
+    const pointsArray = polygon.getAttribute('points')?.split(' ');
+    if (!pointsArray) return;
+    const yLeft = pointsArray[0].split(',')[1];
+    const yLeftBottom = pointsArray[1].split(',')[1];
+    const yRightBottom = pointsArray[2].split(',')[1];
+    const yRight = pointsArray[3].split(',')[1];
+    polygon.setAttribute(
+      'points',
+      `${this.x1},${yLeft} ${this.x1},${yLeftBottom} ${this.x2},${yRightBottom} ${this.x2},${yRight}`
+    );
   }
 }

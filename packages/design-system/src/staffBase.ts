@@ -7,8 +7,8 @@ import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
+  LetterNote,
   Mode,
-  Note,
 } from './types/theory';
 import {
   BeamCreator,
@@ -31,10 +31,11 @@ const _MaybeHTMLElement: any =
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   #mutationObservers: MutationObserver[];
+  // todo: now that i have timeInts, do i need parentTime
   #timeInts: [BeatsInMeasure, BeatTypeInMeasure] | null = null;
   #parentTime: string;
   #parentMode: Mode | null;
-  #parentKeySig: Note | null;
+  #parentKeySig: LetterNote | null;
   #staffContainer: HTMLDivElement;
   #transcribeContainer: SVGSVGElement;
   #describeContainer: SVGGElement;
@@ -93,8 +94,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return ['keySig', 'mode', 'time'];
   }
 
-  get keySig(): Note {
-    return (this.getAttribute('keySig') as Note) ?? this.#parentKeySig;
+  get keySig(): LetterNote {
+    return (this.getAttribute('keySig') as LetterNote) ?? this.#parentKeySig;
   }
 
   set keySig(value: string) {
@@ -122,7 +123,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
   }
 
-  // Return the y-coordinate for a given note name (e.g., 'A', 'E', 'C2')
+  // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
   public abstract getYCoordinate(note: string): number;
 
   public abstract getKeyYCoordinates(): {
@@ -131,6 +132,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   };
 
   connectedCallback(): void {
+    // todo: derived class is meant to implement render
+    // and it calls build, but probably shouldn't. Fix in the future
+    // As I am scrolling through the code top to bottom,
+    // it would be nice to see the html string before i see this connectedCallback()
     this.render();
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
     const wrapper = this.shadowRoot.querySelector('.staff-wrapper')!;
@@ -197,9 +202,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           width: 100%;
           height: ${StaffElementBase.staffHeight}px;
           display: block;
-          border-top: 2px solid currentColor;
-          border-right: 2px solid currentColor;
-          border-bottom: 2px solid currentColor;
+          border-top: 1px solid currentColor;
+          border-right: 1px solid currentColor;
+          border-bottom: 1px solid currentColor;
           margin-top: ${StaffElementBase.lineStart}px;
           margin-bottom: 30px;
         }
@@ -208,7 +213,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           position: absolute;
           left: 0;
           right: 0;
-          height: 2px;
+          height: 0.5px;
           background: currentColor;
         }
       </style>
@@ -222,17 +227,15 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#staffContainer.classList.add('staff-container');
 
     let yOffset = StaffElementBase.lineSpacing;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- cant loop without variable
-    for (const _ of StaffElementBase.linesY.slice(
-      1,
-      StaffElementBase.linesY.length - 1
-    )) {
-      const line = document.createElement('div');
-      line.classList.add('staff-line');
-      line.style.top = `${yOffset}px`;
-      this.#staffContainer.appendChild(line);
-      yOffset += StaffElementBase.lineSpacing;
-    }
+    StaffElementBase.linesY
+      .slice(1, StaffElementBase.linesY.length - 1)
+      .forEach(() => {
+        const line = document.createElement('div');
+        line.classList.add('staff-line');
+        line.style.top = `${yOffset}px`;
+        this.#staffContainer.appendChild(line);
+        yOffset += StaffElementBase.lineSpacing;
+      });
   }
 
   // Transcribe is: clef, key signature, time signature, and notes
@@ -253,14 +256,14 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       xOffsetOfClef
     );
 
-    const timeSigOffset = this.#appendTimeSignatureSvgIfNecessary(
+    this.#appendTimeSignatureSvgIfNecessary(
       this.#describeContainer,
       xOffsetOfKeySignature + 5
     );
 
     // Notes are added here at runtime
     this.#notesContainer.classList.add('notes-container');
-    this.#notesContainer.setAttribute('x', (timeSigOffset + 20).toString());
+    this.#notesContainer.style.overflow = 'hidden';
     this.#transcribeContainer.appendChild(this.#notesContainer);
   }
 
@@ -302,7 +305,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         ? this.#timeInts
         : null;
 
-    let timeSigOffset = xOffset;
     if (firstMeasureOrNoCompositionTime || timeChangedInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
         ...((firstMeasureOrNoCompositionTime ?? timeChangedInMeasure) as [
@@ -312,9 +314,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
-      timeSigOffset += 14;
     }
-    return timeSigOffset;
   }
 
   #handleSlotChange(event: Event) {
@@ -348,26 +348,33 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
+    // Clear any previously rendered notes. `slotchange` can fire multiple times
+    // as a framework (e.g. React) adds children incrementally, so without this
+    // each call would append on top of the last, leaving stale/duplicate SVGs.
+    this.#notesContainer.innerHTML = '';
     const beamCreator = BeamCreator.ifNecessary(elements);
     const needsBeam = beamCreator !== null;
-    // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- coming back as any
-    let xOffsetOfNote: number = 0;
+    let xOffsetOfNote = 0;
     const stemUp = this.#determineIsStemUp(elements);
-    const { width: transcribeWidth } =
-      this.#transcribeContainer.getBoundingClientRect();
-    const { width: describeWidth } =
-      this.#describeContainer.getBoundingClientRect();
-    const remainingWidth = transcribeWidth - (describeWidth + 15);
+    const transcribeRect = this.#transcribeContainer.getBoundingClientRect();
+    const describeRect = this.#describeContainer.getBoundingClientRect();
+    const transcribeWidth = transcribeRect.width;
+    const notesX = Math.round(describeRect.right - transcribeRect.left);
+    const remainingWidth = transcribeWidth - notesX;
+    this.#notesContainer.setAttribute('x', `${notesX}`);
+    this.#notesContainer.setAttribute('width', `${remainingWidth}`);
+    this.#notesContainer.setAttribute('height', '100');
+    this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
 
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
       let noteSvg: SVGElement;
-      let yOffset = NaN;
+      let beamY: number;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
         const values = createNoteSvg({
           duration,
-          flagsIfNeeded: !needsBeam,
+          noFlags: needsBeam,
           stemUp,
           qualifiedElementName: 'svg',
           translate: {
@@ -377,7 +384,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         });
         noteSvg = values[0];
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        yOffset = values[1];
+        const noteY = 10 + this.getYCoordinate(element.value) - values[1];
+        noteSvg.setAttribute('y', noteY.toString());
+        beamY = noteY;
       } else {
         const element = elements[i] as ChordElementType;
         const staffYCoordinates: number[] = [];
@@ -388,34 +397,25 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           duration,
           staffXCoordinate: xOffsetOfNote,
           staffYCoordinates,
-          flagsIfNeeded: !needsBeam,
+          noFlags: needsBeam,
           stemUp,
           qualifiedElementName: 'g',
         });
         noteSvg = values[0];
-        yOffset = values[1];
+        noteSvg.setAttribute('overflow', 'visible');
+        // Beam y: use the topmost note's y position within the chord
+        const topmostStaffY = stemUp
+          ? Math.min(...staffYCoordinates)
+          : Math.max(...staffYCoordinates);
+        beamY = 10 + topmostStaffY - values[1];
       }
 
-      if (beamCreator) {
-        if (i === 0) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg,
-            xOffsetOfNote,
-            stemUp,
-            yOffset,
-            xAttribute: 'x1',
-            yAttribute: 'y1',
-          });
-        } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg,
-            xOffsetOfNote,
-            stemUp,
-            yOffset,
-            xAttribute: 'x2',
-            yAttribute: 'y2',
-          });
-        }
+      if (beamCreator && (i === 0 || i === elements.length - 1)) {
+        beamCreator.updateBeamCoordinates(
+          xOffsetOfNote,
+          beamY,
+          i === 0 ? 'start' : 'end'
+        );
       }
 
       xOffsetOfNote = this.#spaceNote(noteSvg, xOffsetOfNote, remainingWidth);
@@ -430,37 +430,32 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #spaceNotes(elements: SVGElement[]) {
     const beamCreator = BeamCreator.ifNecessary(elements);
     let xOffsetOfNote = 0;
-    const { width: transcribeWidth } =
-      this.#transcribeContainer.getBoundingClientRect();
-    const { width: describeWidth } =
-      this.#describeContainer.getBoundingClientRect();
-    const width = transcribeWidth - (describeWidth + 15);
+    const transcribeRect = this.#transcribeContainer.getBoundingClientRect();
+    const describeRect = this.#describeContainer.getBoundingClientRect();
+    const notesX = Math.round(describeRect.right - transcribeRect.left);
+    const width = transcribeRect.width - notesX;
+    this.#notesContainer.setAttribute('x', `${notesX}`);
+    this.#notesContainer.setAttribute('width', `${width}`);
+    this.#notesContainer.setAttribute('viewBox', `0 0 ${width} 100`);
 
     const beams = [
       ...this.#notesContainer.querySelectorAll('.beam'),
-    ] as SVGPolygonElement[];
+    ] as SVGGElement[];
     let beamIndex = beams.length > 0 ? 0 : null;
     for (let i = 0; i < elements.length; i++) {
-      const stemUp = elements[i].dataset.stempUp === 'true';
       if (beamCreator) {
         if (i === 0) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg: elements[i],
+          beamCreator.updateBeamCoordinates(
             xOffsetOfNote,
-            stemUp,
-            yOffset: NaN,
-            xAttribute: 'x1',
-            yAttribute: 'y1',
-          });
+            parseFloat(elements[i].getAttribute('y') || '0'),
+            'start'
+          );
         } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates({
-            noteSvg: elements[i],
+          beamCreator.updateBeamCoordinates(
             xOffsetOfNote,
-            stemUp,
-            yOffset: NaN,
-            xAttribute: 'x2',
-            yAttribute: 'y2',
-          });
+            parseFloat(elements[i].getAttribute('y') || '0'),
+            'end'
+          );
           if (beamIndex !== null) {
             beamCreator.reSpaceBeam(beams[beamIndex++]);
           }
