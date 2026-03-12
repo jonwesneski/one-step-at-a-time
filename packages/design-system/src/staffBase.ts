@@ -85,7 +85,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       const newWidth = entries[0].contentRect.width;
       if (newWidth !== this.#lastStaffWidth) {
         this.#lastStaffWidth = newWidth;
-        this.#reSpaceNotes();
+        this.#respaceNotes();
       }
     });
   }
@@ -352,10 +352,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     // as a framework (e.g. React) adds children incrementally, so without this
     // each call would append on top of the last, leaving stale/duplicate SVGs.
     this.#notesContainer.innerHTML = '';
-    const beamCreator = BeamCreator.ifNecessary(elements);
-    const needsBeam = beamCreator !== null;
-    let xOffsetOfNote = 0;
-    const stemUp = this.#determineIsStemUp(elements);
+
     const transcribeRect = this.#transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const transcribeWidth = transcribeRect.width;
@@ -363,16 +360,23 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const remainingWidth = transcribeWidth - notesX;
     this.#notesContainer.setAttribute('x', `${notesX}`);
     this.#notesContainer.setAttribute('width', `${remainingWidth}`);
+    // todo: make a height const if it doesn't already exist. Or maybe just grab
+    // value from staffContainer
     this.#notesContainer.setAttribute('height', '100');
     this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
 
+    const beamCreator = BeamCreator.ifNecessary(elements);
+    const needsBeam = beamCreator !== null;
+    const stemUp = this.#determineIsStemUp(elements);
+    let xOffsetOfNote = 0;
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
       let noteSvg: SVGElement;
       let beamY: number;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
         const element = elements[i] as NoteElementType;
-        const values = createNoteSvg({
+        let yOffset = NaN;
+        [noteSvg, yOffset] = createNoteSvg({
           duration,
           noFlags: needsBeam,
           stemUp,
@@ -382,9 +386,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             staffYCoordinate: this.getYCoordinate(element.value),
           },
         });
-        noteSvg = values[0];
+
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        const noteY = 10 + this.getYCoordinate(element.value) - values[1];
+        const noteY = 10 + this.getYCoordinate(element.value) - yOffset;
         noteSvg.setAttribute('y', noteY.toString());
         beamY = noteY;
       } else {
@@ -393,7 +397,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         for (const note of element.notes) {
           staffYCoordinates.push(this.getYCoordinate(note.value));
         }
-        const values = createChordSvg({
+        let yOffset = NaN;
+        [noteSvg, yOffset] = createChordSvg({
           duration,
           staffXCoordinate: xOffsetOfNote,
           staffYCoordinates,
@@ -401,20 +406,20 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           stemUp,
           qualifiedElementName: 'g',
         });
-        noteSvg = values[0];
         noteSvg.setAttribute('overflow', 'visible');
         // Beam y: use the topmost note's y position within the chord
         const topmostStaffY = stemUp
           ? Math.min(...staffYCoordinates)
           : Math.max(...staffYCoordinates);
-        beamY = 10 + topmostStaffY - values[1];
+        beamY = 10 + topmostStaffY - yOffset;
       }
 
-      if (beamCreator && (i === 0 || i === elements.length - 1)) {
+      const isBeamStart = i === 0;
+      if (beamCreator && (isBeamStart || i === elements.length - 1)) {
         beamCreator.updateBeamCoordinates(
           xOffsetOfNote,
           beamY,
-          i === 0 ? 'start' : 'end'
+          isBeamStart ? 'start' : 'end'
         );
       }
 
@@ -436,10 +441,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const width = transcribeRect.width - notesX;
     this.#notesContainer.setAttribute('x', `${notesX}`);
     this.#notesContainer.setAttribute('width', `${width}`);
+    // todo: handle height instead of using literal
     this.#notesContainer.setAttribute('viewBox', `0 0 ${width} 100`);
 
     const beams = [
-      ...this.#notesContainer.querySelectorAll('.beam'),
+      ...this.#notesContainer.querySelectorAll('.beam-group'),
     ] as SVGGElement[];
     let beamIndex = beams.length > 0 ? 0 : null;
     for (let i = 0; i < elements.length; i++) {
@@ -457,7 +463,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
             'end'
           );
           if (beamIndex !== null) {
-            beamCreator.reSpaceBeam(beams[beamIndex++]);
+            beamCreator.respaceBeam(beams[beamIndex++]);
           }
         }
       }
@@ -473,7 +479,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     );
   }
 
-  #reSpaceNotes() {
+  #respaceNotes() {
     const notes = [
       ...(this.#notesContainer.querySelectorAll(
         ':scope > svg'

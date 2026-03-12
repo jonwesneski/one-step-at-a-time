@@ -35,6 +35,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node) => {
+          // todo: maybe throw an error instead of any of the notes equal rest
           if (node.value !== 'rest') {
             notes.push({ value: node.value, duration: node.duration });
           }

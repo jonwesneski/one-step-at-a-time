@@ -98,6 +98,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Accidentals are ignored for vertical placement — C# and C natural occupy
     // the same staff line/space.
     public getYCoordinate(note: string): number {
+      //todo: rename function to getNoteYCoordinate
+      // todo: re-work this since the logic is mostly the same between treble and bass
       if (!note) return 0;
 
       // Extract letter (A-G) and optional octave digit, discarding accidentals.
