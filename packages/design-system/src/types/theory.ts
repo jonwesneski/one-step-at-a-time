@@ -8,6 +8,10 @@ export type DurationType =
   | 'sixtyfourth'
   | 'hundredtwentyeighth';
 
+export type Letter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
+export type Octave = 2 | 3 | 4 | 5 | 6;
+export type LetterOctave = `${Letter}${Octave}`;
+
 export type LetterNote =
   | 'A'
   | 'A#'

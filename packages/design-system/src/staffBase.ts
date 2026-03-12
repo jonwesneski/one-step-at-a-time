@@ -2,13 +2,16 @@ import {
   ChordElementType,
   NoteElementType,
   NoteOrChordElementType,
+  YCoordinates,
 } from './types/elements';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
   LetterNote,
+  LetterOctave,
   Mode,
+  Octave,
 } from './types/theory';
 import {
   BeamCreator,
@@ -123,8 +126,43 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
   }
 
+  abstract get yCoordinates(): YCoordinates;
+  abstract get octaves(): Octave[];
+
   // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
-  public abstract getYCoordinate(note: string): number;
+  // Accidentals are ignored for vertical placement — C# and C natural occupy
+  // the same staff line/space.
+  public getYCoordinate(note: string): number {
+    //todo: rename function to getNoteYCoordinate
+    // todo: re-work this since the logic is mostly the same between treble and bass
+    if (!note) return 0;
+
+    // Extract letter (A-G) and optional octave digit, discarding accidentals.
+    const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
+    if (!match) return 0;
+
+    const letter = match[1].toUpperCase();
+    const octave = match[2];
+
+    if (octave) {
+      const yCoordinate =
+        this.yCoordinates[`${letter}${octave}` as LetterOctave];
+      if (yCoordinate !== undefined) {
+        return yCoordinate;
+      }
+    } else {
+      for (const n of this.octaves) {
+        const yCoordinate = this.yCoordinates[`${letter}${n}` as LetterOctave];
+        if (yCoordinate !== undefined) {
+          return yCoordinate;
+        }
+      }
+    }
+
+    return 0;
+  }
+
+  // public abstract getNoteYCoordinates(): [YCoordinates, number[]];
 
   public abstract getKeyYCoordinates(): {
     useSharps: boolean;

@@ -1,4 +1,4 @@
-import { Chord, DurationType, LetterNote, Note } from './theory';
+import { Chord, DurationType, LetterNote, LetterOctave, Note } from './theory';
 
 export interface INoteElement {
   readonly duration: DurationType;
@@ -15,3 +15,5 @@ export interface IChordElement {
 export type NoteElementType = HTMLElement & INoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
+
+export type YCoordinates = Partial<Record<LetterOctave, number>>;
