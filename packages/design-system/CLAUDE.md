@@ -83,20 +83,29 @@ type BeatsInMeasure = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 | `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`) |
 | `durationToFactor`        | Duration → relative x-spacing factor                  |
 
-## Staff Base Class (`staffBase.ts`)
+## Staff Class Hierarchy
 
-`StaffElementBase extends HTMLElement` — abstract, never instantiated directly.
+```
+StaffElementBase              (staffBase.ts)         — shadow DOM, lifecycle, abstract render()
+├── StaffClassicalElementBase (staffClassicalBase.ts) — key sig, time sig, note Y-coords, beam/note rendering
+│   ├── StaffTrebleElement    (staffTreble.ts)        — treble clef, Y-coord map, key sig Y-coords
+│   └── StaffBassElement      (staffBass.ts)          — bass clef, Y-coord map, key sig Y-coords
+└── StaffGuitarTabElement     (staffGuitarTab.ts)     — 6-line tab staff, no music theory
+```
 
-Key abstract methods subclasses must implement:
+`StaffElementBase` — minimal abstract base. Handles only shadow DOM setup and lifecycle (`connectedCallback`, `attributeChangedCallback`). Never instantiated directly.
 
-- `getYCoordinate(note: string): number` — pixel Y for a note name
-- `getKeyYCoordinates(keySig, mode): { sharps, flats }` — Y positions for key sig accidentals
+`StaffClassicalElementBase` — adds all classical notation logic: key/time signature rendering, note Y-coordinate lookup, note/chord SVG rendering with beams, resize-aware note spacing. Abstract methods subclasses must implement:
 
-Rendering flow:
+- `get yCoordinates(): YCoordinates` — map of note+octave string to pixel Y
+- `get octaves(): Octave[]` — octave search order when no octave is specified
+- `getKeyYCoordinates(): { useSharps, coordinates }` — Y positions for key sig accidentals
+
+Rendering flow (classical staves):
 
 1. `render()` builds staff lines, clef SVG, key signature, time signature
 2. `slotchange` event fires when notes/chords are added as children
-3. Notes converted to SVG via `createNoteSvg2()` from `svgCreator.ts`
+3. Notes converted to SVG via `createNoteSvg()` from `svgCreator.ts`
 4. Notes spaced by duration factor
 5. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
 

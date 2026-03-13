@@ -1,6 +1,7 @@
 # music-notation
 
 Music notation creator.
+app names: one at a time, rest in time, walk in time, walk in the park
 
 ## Packages
 

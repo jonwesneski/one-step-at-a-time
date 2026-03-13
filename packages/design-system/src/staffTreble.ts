@@ -1,8 +1,8 @@
-import { StaffElementBase } from './staffBase';
+import { StaffClassicalElementBase } from './staffClassicalBase';
 import { YCoordinates } from './types/elements';
 import { Octave } from './types/theory';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  class StaffTrebleElement extends StaffElementBase {
+  class StaffTrebleElement extends StaffClassicalElementBase {
     static #trebleClefSvg = `
       <svg x="0" y="24" width="30px" height="60px">
         <svg class="clef" version="1.1" xmlns="www.w3.org" viewBox="150 0 165.4 496.2" stroke="currentColor" preserveAspectRatio="xMidYMid meet">
