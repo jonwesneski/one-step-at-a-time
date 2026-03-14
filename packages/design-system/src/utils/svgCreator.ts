@@ -40,20 +40,20 @@ export const createNoteSvg = ({
     svg.setAttribute('xmlns', SVG_NS);
   }
   svg.dataset.duration = duration;
-  svg.dataset.stemUp = 'true';
-  const width = NOTE_SVG_WIDTH;
+  svg.dataset.stemUp = `${stemUp}`;
   const height = 40;
-  svg.setAttribute('width', `${width}`);
+  svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
   svg.setAttribute('height', `${height}`);
 
   const g = document.createElementNS(SVG_NS, 'g');
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
-  const xStart = 300;
+  const xStart = COORD_WIDTH / 2;
   const stemLength = 400;
   const yStemEnd = NOTE_Y_STEM_START + stemLength;
-
   const headWidth = 80;
+
+  // Stem
   const stemX = stemUp ? xStart + headWidth - 15 : xStart;
   const stemWidth = 22;
   if (duration !== 'whole') {
@@ -68,6 +68,7 @@ export const createNoteSvg = ({
     g.appendChild(stem);
   }
 
+  // Flag(s)
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   if (!noFlags && flagCount > 0) {
     // todo need to calculate flags with stemup or not; assuming stemp fo now
@@ -134,8 +135,9 @@ export const createNoteSvg = ({
     g.appendChild(flag);
   }
 
+  // Head
   const headXStartStr = stemUp
-    ? xStart.toString()
+    ? (xStart - 10).toString()
     : (xStart + stemWidth).toString();
   const headYStartStr = stemUp ? yStemEnd.toString() : headWidth.toString();
   const headFill =
@@ -152,7 +154,7 @@ export const createNoteSvg = ({
   );
   head.setAttribute('stroke', 'currentColor');
   head.setAttribute('fill', headFill);
-  head.setAttribute('stroke-width', '2');
+  head.setAttribute('stroke-width', '30');
   g.appendChild(head);
 
   svg.appendChild(g);
@@ -169,7 +171,7 @@ export const createChordSvg = ({
   duration,
   staffXCoordinate,
   staffYCoordinates,
-  noFlags = true,
+  noFlags = false,
   stemUp = true,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -344,6 +346,7 @@ export class BeamCreator {
   // x, y are in #notesContainer's coordinate space (1:1 with CSS px).
   // Call with 'start' for the first beamed note and 'end' for the last.
   updateBeamCoordinates(x: number, y: number, which: 'start' | 'end') {
+    // todo: i probably need to account for stemdown
     if (which === 'start') {
       this.x1 = x + NOTE_STEM_X_OFFSET;
       this.y1 = y + NOTE_STEM_TIP_Y_OFFSET;
@@ -356,20 +359,24 @@ export class BeamCreator {
   buildBeams(): SVGGElement {
     const thickness = 8;
     const g = document.createElementNS(SVG_NS, 'g');
-    g.classList.add('beam');
+    g.classList.add('beam-group');
+
+    const leftTop = `${this.x1},${this.y1}`;
+    const leftBottom = `${this.x1},${this.y1 + thickness}`;
+    const rightBottom = `${this.x2},${this.y2 + thickness}`;
+    const rightTop = `${this.x2},${this.y2}`;
+
     const polygon = document.createElementNS(SVG_NS, 'polygon');
     polygon.setAttribute('fill', 'currentColor');
     polygon.setAttribute(
       'points',
-      `${this.x1},${this.y1} ${this.x1},${this.y1 + thickness} ${this.x2},${
-        this.y2 + thickness
-      } ${this.x2},${this.y2}`
+      `${leftTop} ${leftBottom} ${rightBottom} ${rightTop}`
     );
     g.appendChild(polygon);
     return g;
   }
 
-  reSpaceBeam(beamGroup: SVGGElement) {
+  respaceBeam(beamGroup: SVGGElement) {
     const polygon = beamGroup.querySelector('polygon');
     if (!polygon) return;
     const pointsArray = polygon.getAttribute('points')?.split(' ');

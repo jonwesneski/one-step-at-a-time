@@ -9,10 +9,11 @@ music-notation/
 │           ├── types.d.ts     # React JSX declarations for custom elements
 │           ├── composition.ts
 │           ├── measure.ts
-│           ├── staffBase.ts   # Abstract base for all staff types
+│           ├── staffBase.ts          # Minimal abstract base (shadow DOM + lifecycle)
+│           ├── staffClassicalBase.ts # Classical notation logic (key sig, notes, beams)
 │           ├── staffTreble.ts
 │           ├── staffBass.ts
-│           ├── staffGuitarTab.ts  # Incomplete — Y-coords not yet mapped
+│           ├── staffGuitarTab.ts     # Incomplete — Y-coords not yet mapped
 │           ├── note.ts
 │           ├── chord.ts
 │           ├── types/

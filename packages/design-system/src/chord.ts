@@ -35,6 +35,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node) => {
+          // todo: maybe throw an error instead of any of the notes equal rest
           if (node.value !== 'rest') {
             notes.push({ value: node.value, duration: node.duration });
           }
@@ -62,8 +63,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
-      // TODO: since i am setting style top in note.ts, Check to see if I might be
-      // calculating top incorrectly in chords
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
        <style>

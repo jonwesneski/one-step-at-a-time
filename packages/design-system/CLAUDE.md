@@ -83,26 +83,43 @@ type BeatsInMeasure = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 | `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`) |
 | `durationToFactor`        | Duration → relative x-spacing factor                  |
 
-## Staff Base Class (`staffBase.ts`)
+## Staff Class Hierarchy
 
-`StaffElementBase extends HTMLElement` — abstract, never instantiated directly.
+```
+StaffElementBase              (staffBase.ts)         — shadow DOM, staff lines, resize observer, template method lifecycle
+├── StaffClassicalElementBase (staffClassicalBase.ts) — key sig, time sig, note Y-coords, beam/note rendering
+│   ├── StaffTrebleElement    (staffTreble.ts)        — treble clef, Y-coord map, key sig Y-coords
+│   └── StaffBassElement      (staffBass.ts)          — bass clef, Y-coord map, key sig Y-coords
+└── StaffGuitarTabElement     (staffGuitarTab.ts)     — 6-line tab staff, no music theory
+```
 
-Key abstract methods subclasses must implement:
+`StaffElementBase` — abstract base that owns the shadow DOM, staff line construction, `staffContainer` (div), `transcribeContainer` (SVG), and `staffResizeObserver`. All three are `protected readonly` so subclasses can access them. Implements `connectedCallback` (builds staff lines, appends containers, wires `slotchange`, starts resize observer) and `disconnectedCallback`. Uses a template method pattern — subclasses implement:
 
-- `getYCoordinate(note: string): number` — pixel Y for a note name
-- `getKeyYCoordinates(keySig, mode): { sharps, flats }` — Y positions for key sig accidentals
+- `get staffLineCount(): number` — number of staff lines (e.g. 5 for classical)
+- `onConnectedCallback()` — called after containers are appended; add clef/key/time SVG here
+- `onHandleSlotChange(event)` — called when slotted notes/chords change
+- `onStaffResize()` — called when staff container width changes
+- `onDisconnectedCallback()` — cleanup (e.g. disconnect mutation observers)
 
-Rendering flow:
+`StaffClassicalElementBase` — implements classical notation logic on top of `StaffElementBase`: key/time signature rendering, note Y-coordinate lookup, note/chord SVG rendering with beams, resize-aware note spacing. Abstract methods subclasses must implement:
 
-1. `render()` builds staff lines, clef SVG, key signature, time signature
-2. `slotchange` event fires when notes/chords are added as children
-3. Notes converted to SVG via `createNoteSvg2()` from `svgCreator.ts`
-4. Notes spaced by duration factor
-5. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
+- `get yCoordinates(): YCoordinates` — map of note+octave string to pixel Y
+- `get octaves(): Octave[]` — octave search order when no octave is specified
+- `getKeyYCoordinates(): { useSharps, coordinates }` — Y positions for key sig accidentals
+- `get clefSvg(): string` — raw SVG string for the clef symbol
+
+Rendering flow (classical staves):
+
+1. `render()` (in `StaffElementBase`) sets shadow DOM HTML: wrapper div, slot, CSS
+2. `connectedCallback()` (in `StaffElementBase`) builds staff lines, appends `staffContainer` and `transcribeContainer`, wires `slotchange`, starts `staffResizeObserver`
+3. `onConnectedCallback()` (in `StaffClassicalElementBase`) calls `#buildDescribe()`: injects clef SVG, key signature, and time signature into `transcribeContainer`
+4. `slotchange` fires → `onHandleSlotChange()` → `#renderNotes()` converts notes/chords to SVG
+5. Notes spaced by duration factor
+6. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
 
 ## Known Incomplete Areas
 
-- **`staffGuitarTab.ts`**: 6-line tab staff exists but `getYCoordinate()` is not implemented
+- **`staffGuitarTab.ts`**: 6-line tab staff with TAB clef SVG exists, but `onHandleSlotChange`, `onStaffResize`, and `onDisconnectedCallback` are all empty stubs — note rendering is not yet implemented
 - **Stem direction**: Always defaults to stem-up; no automatic stem direction logic yet
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
 - **Beam re-spacing**: Partial logic exists with a debugger statement left in

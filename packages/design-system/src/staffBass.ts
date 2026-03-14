@@ -1,12 +1,14 @@
-import { StaffElementBase } from './staffBase';
+import { StaffClassicalElementBase } from './staffClassicalBase';
+import { YCoordinates } from './types/elements';
+import { LetterOctave, Octave } from './types/theory';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  class StaffBassElement extends StaffElementBase {
+  class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = `
-      <svg class="clef" height="60px" width="30px" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:svg="http://www.w3.org/2000/svg" viewBox="0 0 744.09 1052.4" version="1.1" transform="translate(0, 15)">
+      <svg class="clef" y="15" height="60px" width="30px" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:svg="http://www.w3.org/2000/svg" viewBox="0 0 744.09 1052.4" version="1.1">
         <path style="fill:currentColor" d="m190.85 451.25c11.661 14.719 32.323 24.491 55.844 24.491 36.401 0 65.889-23.372 65.889-52.214s-29.488-52.214-65.889-52.214c-20.314 4.1522-28.593 9.0007-33.143-2.9091 17.976-54.327 46.918-66.709 96.546-66.709 65.914 0 96.969 59.897 96.969 142.97-18.225 190.63-205.95 286.75-246.57 316.19 5.6938 13.103 5.3954 12.631 5.3954 12.009 189.78-86.203 330.69-204.43 330.69-320.74 0-92.419-58.579-175.59-187.72-172.8-77.575 0-170.32 86.203-118 171.93zm328.1-89.88c0 17.852 14.471 32.323 32.323 32.323s32.323-14.471 32.323-32.323-14.471-32.323-32.323-32.323-32.323 14.471-32.323 32.323zm0 136.75c0 17.852 14.471 32.323 32.323 32.323s32.323-14.471 32.323-32.323-14.471-32.323-32.323-32.323-32.323 14.471-32.323 32.323z" stroke="currentColor"/>
       </svg>
     `;
-    static #yCoordinates: { [x in string]: number } = {
+    static #yCoordinates: YCoordinates = {
       // Above 1st line
       E4: 10,
       D4: 15,
@@ -27,7 +29,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       F2: 75,
       E2: 80,
     };
-    static #sharps = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
+    static #sharps: LetterOctave[] = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
     static #majorSharpYCoordinates = {
       G: StaffBassElement.#sharps
         .filter((_, i) => i < 1)
@@ -60,7 +62,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['D#']: StaffBassElement.#majorSharpYCoordinates['F#'],
       ['A#']: StaffBassElement.#majorSharpYCoordinates['C#'],
     };
-    static #flats = ['B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2'];
+    static #flats: LetterOctave[] = ['B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2'];
     static #majorFlatYCoordinates = {
       F: StaffBassElement.#flats
         .filter((_, i) => i < 1)
@@ -94,34 +96,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Ab: StaffBassElement.#majorFlatYCoordinates.Cb,
     };
 
-    // Return the y-coordinate for a given note name (e.g., 'A', 'E2', 'C#3').
-    // Accidentals are ignored for vertical placement — C# and C natural occupy
-    // the same staff line/space.
-    public getYCoordinate(note: string): number {
-      if (!note) return 0;
+    protected get clefSvg() {
+      return StaffBassElement.#bassClefSvg;
+    }
 
-      // Extract letter (A-G) and optional octave digit, discarding accidentals.
-      const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
-      if (!match) return 0;
+    get yCoordinates(): YCoordinates {
+      return StaffBassElement.#yCoordinates;
+    }
 
-      const letter = match[1].toUpperCase();
-      const octave = match[2];
-
-      if (octave) {
-        const key = `${letter}${octave}`;
-        if (StaffBassElement.#yCoordinates[key] !== undefined) {
-          return StaffBassElement.#yCoordinates[key];
-        }
-      } else {
-        for (const n of [2, 3, 4]) {
-          const key = `${letter}${n}`;
-          if (StaffBassElement.#yCoordinates[key] !== undefined) {
-            return StaffBassElement.#yCoordinates[key];
-          }
-        }
-      }
-
-      return 0;
+    get octaves(): Octave[] {
+      return [2, 3, 4];
     }
 
     public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
@@ -145,11 +129,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           [];
       }
       return answer;
-    }
-
-    protected render(): void {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = this.build(StaffBassElement.#bassClefSvg);
     }
   }
 

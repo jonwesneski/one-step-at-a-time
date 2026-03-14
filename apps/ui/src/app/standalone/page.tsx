@@ -12,12 +12,12 @@ export default function Home() {
         <music-note duration="whole"></music-note>
         <music-note duration="half"></music-note>
         <music-note></music-note>
-        {/**todo: remove value A# */}
-        <music-note value="A#" duration="eighth"></music-note>
-        <music-note value="A#" duration="sixteenth"></music-note>
-        <music-note value="A#" duration="thirtysecond"></music-note>
-        <music-note value="A#" duration="sixtyfourth"></music-note>
-        <music-note value="A#" duration="hundredtwentyeighth"></music-note>
+
+        <music-note duration="eighth"></music-note>
+        <music-note duration="sixteenth"></music-note>
+        <music-note duration="thirtysecond"></music-note>
+        <music-note duration="sixtyfourth"></music-note>
+        <music-note duration="hundredtwentyeighth"></music-note>
       </Card>
       <Card title="Chords">
         <music-chord>
