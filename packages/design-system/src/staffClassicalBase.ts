@@ -46,7 +46,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       '4/4';
     this.#parentMode =
       measure?.getAttribute('mode') ??
-      composition.getAttribute('mode') ??
+      composition?.getAttribute('mode') ??
       'major';
     this.#parentKeySig =
       measure?.getAttribute('keySig') ??

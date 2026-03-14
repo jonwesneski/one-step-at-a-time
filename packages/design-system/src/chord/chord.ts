@@ -1,5 +1,5 @@
-import { ChordNote, IChordElement, NoteElementType } from './types/elements';
-import { Chord, DurationType } from './types/theory';
+import { ChordNote, IChordElement, NoteElementType } from '../types/elements';
+import { Chord, DurationType } from '../types/theory';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {

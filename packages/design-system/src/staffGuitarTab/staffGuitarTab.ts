@@ -1,5 +1,5 @@
-import { StaffElementBase } from './staffBase';
-import { SVG_NS } from './utils';
+import { StaffElementBase } from '../staffBase';
+import { SVG_NS } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends StaffElementBase {

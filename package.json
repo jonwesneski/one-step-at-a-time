@@ -26,6 +26,7 @@
     "eslint": "~8.57.0",
     "eslint-config-prettier": "^10.0.0",
     "jest": "^30.0.2",
+    "jest-environment-jsdom": "^30.3.0",
     "jest-environment-node": "^30.0.2",
     "jest-util": "^30.0.2",
     "jsonc-eslint-parser": "^2.1.0",
