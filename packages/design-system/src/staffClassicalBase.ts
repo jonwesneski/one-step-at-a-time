@@ -61,6 +61,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
   }
 
+  #convertTotimeInts(time: string): [BeatsInMeasure, BeatTypeInMeasure] {
+    const [beats, beatType] = time.split('/').map((n) => parseInt(n, 10));
+    return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
+  }
+
   protected get staffLineCount(): number {
     return 5;
   }
@@ -93,46 +98,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return this.getAttribute('time') ?? this.#parentTime;
   }
 
-  #convertTotimeInts(time: string): [BeatsInMeasure, BeatTypeInMeasure] {
-    const [beats, beatType] = time.split('/').map((n) => parseInt(n, 10));
-    return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
-  }
-
   abstract get yCoordinates(): YCoordinates;
+
   abstract get octaves(): Octave[];
-
-  // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
-  // Accidentals are ignored for vertical placement — C# and C natural occupy
-  // the same staff line/space.
-  public getYCoordinate(note: string): number {
-    //todo: rename function to getNoteYCoordinate
-    // todo: re-work this since the logic is mostly the same between treble and bass
-    if (!note) return 0;
-
-    // Extract letter (A-G) and optional octave digit, discarding accidentals.
-    const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
-    if (!match) return 0;
-
-    const letter = match[1].toUpperCase();
-    const octave = match[2];
-
-    if (octave) {
-      const yCoordinate =
-        this.yCoordinates[`${letter}${octave}` as LetterOctave];
-      if (yCoordinate !== undefined) {
-        return yCoordinate;
-      }
-    } else {
-      for (const n of this.octaves) {
-        const yCoordinate = this.yCoordinates[`${letter}${n}` as LetterOctave];
-        if (yCoordinate !== undefined) {
-          return yCoordinate;
-        }
-      }
-    }
-
-    return 0;
-  }
 
   public abstract getKeyYCoordinates(): {
     useSharps: boolean;
@@ -143,14 +111,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected onConnectedCallback() {
     this.#buildDescribe(this.clefSvg);
-  }
-
-  protected override onDisconnectedCallback(): void {
-    try {
-      this.#mutationObservers.forEach((m) => m.disconnect());
-    } catch (e) {
-      // ignore
-    }
   }
 
   // Describe is: clef, key signature, time signature, and notes
@@ -209,20 +169,28 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       measureNumberStr === '1' || !measure
         ? this.#convertTotimeInts(this.#parentTime)
         : null;
-    const timeChangedInMeasure =
+    const timeChangeInMeasure =
       !firstMeasureOrNoCompositionTime && measure && this.#timeInts
         ? this.#timeInts
         : null;
 
-    if (firstMeasureOrNoCompositionTime || timeChangedInMeasure) {
+    if (firstMeasureOrNoCompositionTime || timeChangeInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
-        ...((firstMeasureOrNoCompositionTime ?? timeChangedInMeasure) as [
+        ...((firstMeasureOrNoCompositionTime ?? timeChangeInMeasure) as [
           BeatsInMeasure,
           BeatTypeInMeasure
         ])
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
+    }
+  }
+
+  protected override onDisconnectedCallback(): void {
+    try {
+      this.#mutationObservers.forEach((m) => m.disconnect());
+    } catch (e) {
+      // ignore
     }
   }
 
@@ -340,6 +308,51 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   }
 
+  #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {
+    // todo determine if all notes should be stemup or not before creating svgs
+    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
+    console.log(elements, 'satisfy lint');
+    return true;
+    // for (const node of nodes) {
+    //   const staffYCoordinate = this.getYCoordinate(
+    //     node.getAttribute('value') || 'C'
+    //   );
+    // }
+  }
+
+  // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
+  // Accidentals are ignored for vertical placement — C# and C natural occupy
+  // the same staff line/space.
+  public getYCoordinate(note: string): number {
+    //todo: rename function to getNoteYCoordinate
+    // todo: re-work this since the logic is mostly the same between treble and bass
+    if (!note) return 0;
+
+    // Extract letter (A-G) and optional octave digit, discarding accidentals.
+    const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
+    if (!match) return 0;
+
+    const letter = match[1].toUpperCase();
+    const octave = match[2];
+
+    if (octave) {
+      const yCoordinate =
+        this.yCoordinates[`${letter}${octave}` as LetterOctave];
+      if (yCoordinate !== undefined) {
+        return yCoordinate;
+      }
+    } else {
+      for (const n of this.octaves) {
+        const yCoordinate = this.yCoordinates[`${letter}${n}` as LetterOctave];
+        if (yCoordinate !== undefined) {
+          return yCoordinate;
+        }
+      }
+    }
+
+    return 0;
+  }
+
   #spaceNotes(elements: SVGElement[]) {
     const beamCreator = BeamCreator.ifNecessary(elements);
     let xOffsetOfNote = 0;
@@ -395,17 +408,5 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       ) as NodeListOf<Element>),
     ] as SVGElement[];
     this.#spaceNotes(notes);
-  }
-
-  #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {
-    // todo determine if all notes should be stemup or not before creating svgs
-    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
-    console.log(elements, 'satisfy lint');
-    return true;
-    // for (const node of nodes) {
-    //   const staffYCoordinate = this.getYCoordinate(
-    //     node.getAttribute('value') || 'C'
-    //   );
-    // }
   }
 }
