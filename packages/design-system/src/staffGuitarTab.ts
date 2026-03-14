@@ -42,17 +42,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.transcribeContainer.appendChild(gNotes);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onDisconnectedCallback(): void {}
 
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onHandleSlotChange(event: Event): void {}
 
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onStaffResize(): void {}
   }
 
   if (!customElements.get('music-staff-guitar-tab')) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Base-Element has runtime typing
     customElements.define(
       'music-staff-guitar-tab',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Base-Element has runtime typing
       StaffGuitarTabElement as any
     );
   }
