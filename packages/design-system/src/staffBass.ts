@@ -96,9 +96,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Ab: StaffBassElement.#majorFlatYCoordinates.Cb,
     };
 
+    protected get clefSvg() {
+      return StaffBassElement.#bassClefSvg;
+    }
+
     get yCoordinates(): YCoordinates {
       return StaffBassElement.#yCoordinates;
     }
+
     get octaves(): Octave[] {
       return [2, 3, 4];
     }
@@ -124,11 +129,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           [];
       }
       return answer;
-    }
-
-    protected render(): void {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = this.build(StaffBassElement.#bassClefSvg);
     }
   }
 

@@ -29,83 +29,31 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return 0;
     }
 
-    protected render(): void {
-      const staffHeight =
-        (this.staffLineCount - 1) * this.staffLineSpacing;
-      const transcribe = this.#buildTranscribe();
-
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = `
-        <style>
-          :host {
-            flex: var(--flex-staff-basis, 1 1 280px);
-            min-width: var(--flex-staff-minw, 280px);
-            box-sizing: border-box;
-            display: block;
-          }
-
-          .staff-wrapper {
-            position: relative;
-            min-height: 100px;
-          }
-
-          .staff-container {
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: ${staffHeight}px;
-            display: block;
-            border-top: 1px solid currentColor;
-            border-right: 1px solid currentColor;
-            border-bottom: 1px solid currentColor;
-            border-left: 1px solid currentColor;
-            margin-top: ${this.staffLineStart}px;
-          }
-
-          .staff-line {
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 0.5px;
-            background: currentColor;
-          }
-        </style>
-        <div class="staff-wrapper">
-          ${transcribe.outerHTML}
-          <slot></slot>
-        </div>
-      `;
-
-      const wrapper = this.shadowRoot!.querySelector('.staff-wrapper')!;
-      this.buildStaffLines(this.staffContainer);
-      wrapper.prepend(this.staffContainer);
-    }
-
-    // Transcribe is: TAB and notes
-    #buildTranscribe() {
-      const transcribe = document.createElementNS(SVG_NS, 'svg');
-      transcribe.setAttribute('class', 'transcribe-container');
-      transcribe.setAttribute(
-        'style',
-        'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
-      );
-
+    protected onConnectedCallback() {
+      // todo: do i need a g element?
       const gDescribe = document.createElementNS(SVG_NS, 'g');
       gDescribe.setAttribute('class', 'describe-container');
       gDescribe.innerHTML = StaffGuitarTabElement.#tabSvg;
-      transcribe.appendChild(gDescribe);
+      this.transcribeContainer.appendChild(gDescribe);
 
       // Notes are added here at runtime
       const gNotes = document.createElementNS(SVG_NS, 'g');
       gNotes.setAttribute('class', 'notes-container');
-      transcribe.appendChild(gNotes);
-
-      return transcribe;
+      this.transcribeContainer.appendChild(gNotes);
     }
+
+    protected override onDisconnectedCallback(): void {}
+
+    protected override onHandleSlotChange(event: Event): void {}
+
+    protected override onStaffResize(): void {}
   }
 
   if (!customElements.get('music-staff-guitar-tab')) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Base-Element has runtime typing
-    customElements.define('music-staff-guitar-tab', StaffGuitarTabElement as any);
+    customElements.define(
+      'music-staff-guitar-tab',
+      StaffGuitarTabElement as any
+    );
   }
 }

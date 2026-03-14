@@ -135,11 +135,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return answer;
     }
 
-    protected render(): void {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = this.build(
-        StaffTrebleElement.#trebleClefSvg
-      );
+    protected get clefSvg() {
+      return StaffTrebleElement.#trebleClefSvg;
     }
   }
 
