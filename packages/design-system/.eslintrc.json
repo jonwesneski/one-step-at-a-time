@@ -1,6 +1,6 @@
 {
   "extends": ["../../.eslintrc.json"],
-  "ignorePatterns": ["!**/*", "**/out-tsc", "dist"],
+  "ignorePatterns": ["!**/*", "**/out-tsc", "dist", "storybook-static"],
   "overrides": [
     {
       "files": ["*.ts", "*.tsx", "*.js", "*.jsx"],
