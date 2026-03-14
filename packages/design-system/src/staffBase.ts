@@ -13,7 +13,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
   protected readonly staffResizeObserver: ResizeObserver;
   #lastStaffWidth: number;
-  static #lineStart = 28;
+  static #staffLineStart = 28;
+  static #staffLineSpacing = 10;
 
   protected readonly transcribeContainer: SVGSVGElement;
 
@@ -22,24 +23,19 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.attachShadow({ mode: 'open' });
 
     this.staffContainer = document.createElement('div');
+    this.transcribeContainer = document.createElementNS(SVG_NS, 'svg');
+
     this.#lastStaffWidth = 0;
     this.staffResizeObserver = new ResizeObserver((entries) => {
       const newWidth = entries[0].contentRect.width;
       if (newWidth !== this.#lastStaffWidth) {
         this.#lastStaffWidth = newWidth;
-        //this.#respaceNotes();
         this.onStaffResize();
       }
     });
-
-    this.transcribeContainer = document.createElementNS(SVG_NS, 'svg');
   }
 
   protected abstract onStaffResize(): void;
-
-  protected abstract onHandleSlotChange(event: Event): void;
-
-  protected abstract onConnectedCallback(): void;
 
   protected render() {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
@@ -67,7 +63,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           border-top: 1px solid currentColor;
           border-right: 1px solid currentColor;
           border-bottom: 1px solid currentColor;
-          margin-top: ${StaffElementBase.#lineStart}px;
+          margin-top: ${StaffElementBase.#staffLineStart}px;
           margin-bottom: 30px;
         }
 
@@ -84,6 +80,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       </div>
     `;
   }
+
+  get #staffHeight() {
+    return (this.staffLineCount - 1) * StaffElementBase.#staffLineSpacing;
+  }
+
+  protected abstract get staffLineCount(): number;
+
   connectedCallback(): void {
     this.render();
 
@@ -105,6 +108,32 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     this.staffResizeObserver.observe(this.staffContainer);
   }
+
+  #buildStaffLines(): void {
+    this.staffContainer.classList.add('staff-container');
+
+    let yOffset = StaffElementBase.#staffLineSpacing;
+    Array.from({ length: this.staffLineCount - 1 }).forEach(() => {
+      const line = document.createElement('div');
+      line.classList.add('staff-line');
+      line.style.top = `${yOffset}px`;
+      this.staffContainer.appendChild(line);
+      yOffset += StaffElementBase.#staffLineSpacing;
+    });
+  }
+
+  // Transcribe sits on top of staff to be written on
+  #buildTranscribe() {
+    this.transcribeContainer.classList.add('transcribe-container');
+    this.transcribeContainer.setAttribute(
+      'style',
+      'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
+    );
+  }
+
+  protected abstract onConnectedCallback(): void;
+
+  protected abstract onHandleSlotChange(event: Event): void;
 
   disconnectedCallback(): void {
     this.staffResizeObserver.disconnect();
@@ -130,41 +159,5 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     if (oldValue !== newValue) {
       this.render();
     }
-  }
-
-  get #staffHeight() {
-    return (this.staffLineCount - 1) * this.staffLineSpacing;
-  }
-
-  protected abstract get staffLineCount(): number;
-
-  protected get staffLineStart(): number {
-    return 10;
-  }
-
-  protected get staffLineSpacing(): number {
-    return 10;
-  }
-
-  #buildStaffLines(): void {
-    this.staffContainer.classList.add('staff-container');
-
-    let yOffset = this.staffLineSpacing;
-    Array.from({ length: this.staffLineCount - 1 }).forEach(() => {
-      const line = document.createElement('div');
-      line.classList.add('staff-line');
-      line.style.top = `${yOffset}px`;
-      this.staffContainer.appendChild(line);
-      yOffset += this.staffLineSpacing;
-    });
-  }
-
-  // Transcribe sits on top of staff to be written on
-  #buildTranscribe() {
-    this.transcribeContainer.classList.add('transcribe-container');
-    this.transcribeContainer.setAttribute(
-      'style',
-      'position: absolute; inset: 0; width: 100%; height: 100px; pointer-events: none'
-    );
   }
 }
