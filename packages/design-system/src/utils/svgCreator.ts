@@ -159,13 +159,11 @@ export const createNoteSvg = ({
   return [svg, yHeadOffset];
 };
 
-type ChordProps = Omit<NoteProps, 'translate'> & {
-  staffXCoordinate: number;
+type ChordProps = NoteProps & {
   staffYCoordinates: number[];
 };
 export const createChordSvg = ({
   duration,
-  staffXCoordinate,
   staffYCoordinates,
   noFlags = false,
   stemUp = true,

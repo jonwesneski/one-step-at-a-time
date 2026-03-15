@@ -176,6 +176,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (firstMeasureOrNoCompositionTime || timeChangeInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- will not be null
         ...(firstMeasureOrNoCompositionTime ?? timeChangeInMeasure)!
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
@@ -280,10 +281,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         );
         const [chordSvg, yOffset] = createChordSvg({
           duration,
-          staffXCoordinate: 0,
           staffYCoordinates,
           noFlags: needsBeam,
           stemUp,
+          // todo: not using at the moment; check if i still need it
           qualifiedElementName: 'g',
         });
         chordSvg.setAttribute('overflow', 'visible');

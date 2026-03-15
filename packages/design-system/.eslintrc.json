@@ -44,7 +44,7 @@
       }
     },
     {
-      "files": ["*.spec.ts", "*.test.ts"],
+      "files": ["*.spec.ts", "*.test.ts", "jest.setup.ts"],
       "rules": {
         "@typescript-eslint/no-empty-function": "off",
         "@typescript-eslint/no-explicit-any": "off"
