@@ -21,7 +21,23 @@ const meta: Meta = {
   argTypes: {
     keySig: {
       control: 'select',
-      options: ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'],
+      options: [
+        'C',
+        'G',
+        'D',
+        'A',
+        'E',
+        'B',
+        'F#',
+        'C#',
+        'F',
+        'Bb',
+        'Eb',
+        'Ab',
+        'Db',
+        'Gb',
+        'Cb',
+      ],
     },
     mode: {
       control: 'radio',
@@ -64,7 +80,11 @@ export const AMinor: Story = {
 export const WithEighthNotes: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <music-staff-treble keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+    <music-staff-treble
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
       <music-note value="C" duration="eighth"></music-note>
       <music-note value="D" duration="eighth"></music-note>
       <music-note value="E" duration="eighth"></music-note>
@@ -80,7 +100,11 @@ export const WithEighthNotes: Story = {
 export const WithChords: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <music-staff-treble keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+    <music-staff-treble
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
       <music-chord duration="quarter">
         <music-note value="C" duration="quarter"></music-note>
         <music-note value="E" duration="quarter"></music-note>
@@ -96,7 +120,11 @@ export const WithChords: Story = {
 export const ThreeQuarterTime: Story = {
   args: { keySig: 'C', mode: 'major', time: '3/4' },
   render: (args) => html`
-    <music-staff-treble keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+    <music-staff-treble
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
       <music-note value="G" duration="quarter"></music-note>
       <music-note value="E" duration="quarter"></music-note>
       <music-note value="C" duration="quarter"></music-note>

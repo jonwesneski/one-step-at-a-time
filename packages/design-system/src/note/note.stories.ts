@@ -7,19 +7,44 @@ const meta: Meta = {
   title: 'Components/MusicNote',
   tags: ['autodocs'],
   render: (args) => html`
-    <music-note
-      duration=${args.duration}
-      value=${args.value}
-    ></music-note>
+    <music-note duration=${args.duration} value=${args.value}></music-note>
   `,
   argTypes: {
     duration: {
       control: 'select',
-      options: ['whole', 'half', 'quarter', 'eighth', 'sixteenth', 'thirtysecond', 'sixtyfourth', 'hundredtwentyeighth'],
+      options: [
+        'whole',
+        'half',
+        'quarter',
+        'eighth',
+        'sixteenth',
+        'thirtysecond',
+        'sixtyfourth',
+        'hundredtwentyeighth',
+      ],
     },
     value: {
       control: 'select',
-      options: ['A', 'A#', 'Bb', 'B', 'C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'rest'],
+      options: [
+        'A',
+        'A#',
+        'Bb',
+        'B',
+        'C',
+        'C#',
+        'Db',
+        'D',
+        'D#',
+        'Eb',
+        'E',
+        'F',
+        'F#',
+        'Gb',
+        'G',
+        'G#',
+        'Ab',
+        'rest',
+      ],
     },
   },
   args: {

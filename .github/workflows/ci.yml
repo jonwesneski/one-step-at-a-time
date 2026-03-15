@@ -54,7 +54,7 @@ jobs:
       - name: Prettier Check
         run: npx nx-cloud record -- npx nx format:check  --base="remotes/origin/main"
 
-      - name: Lint, Build, Typecheck
+      - name: Lint, Build, Typecheck, Test
         run: npx nx run-many -t lint build typecheck test
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
       - run: npx nx fix-ci

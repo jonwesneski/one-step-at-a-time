@@ -13,7 +13,11 @@ const meta: Meta = {
       mode=${args.mode}
       time=${args.time}
     >
-      <music-staff-treble keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+      <music-staff-treble
+        keySig=${args.keySig}
+        mode=${args.mode}
+        time=${args.time}
+      >
         <music-note value="C" duration="quarter"></music-note>
         <music-note value="E" duration="quarter"></music-note>
         <music-note value="G" duration="quarter"></music-note>
@@ -25,7 +29,23 @@ const meta: Meta = {
     number: { control: 'number' },
     keySig: {
       control: 'select',
-      options: ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'],
+      options: [
+        'C',
+        'G',
+        'D',
+        'A',
+        'E',
+        'B',
+        'F#',
+        'C#',
+        'F',
+        'Bb',
+        'Eb',
+        'Ab',
+        'Db',
+        'Gb',
+        'Cb',
+      ],
     },
     mode: {
       control: 'radio',
@@ -51,14 +71,27 @@ export const TrebleOnly: Story = {
 export const TrebleAndBass: Story = {
   args: { number: 1, keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <music-measure number=${args.number} keySig=${args.keySig} mode=${args.mode} time=${args.time}>
-      <music-staff-treble keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+    <music-measure
+      number=${args.number}
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-staff-treble
+        keySig=${args.keySig}
+        mode=${args.mode}
+        time=${args.time}
+      >
         <music-note value="C" duration="quarter"></music-note>
         <music-note value="E" duration="quarter"></music-note>
         <music-note value="G" duration="quarter"></music-note>
         <music-note value="C" duration="quarter"></music-note>
       </music-staff-treble>
-      <music-staff-bass keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+      <music-staff-bass
+        keySig=${args.keySig}
+        mode=${args.mode}
+        time=${args.time}
+      >
         <music-note value="C" duration="half"></music-note>
         <music-note value="G" duration="half"></music-note>
       </music-staff-bass>
@@ -69,8 +102,17 @@ export const TrebleAndBass: Story = {
 export const WithGuitarTab: Story = {
   args: { number: 1, keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <music-measure number=${args.number} keySig=${args.keySig} mode=${args.mode} time=${args.time}>
-      <music-staff-treble keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+    <music-measure
+      number=${args.number}
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-staff-treble
+        keySig=${args.keySig}
+        mode=${args.mode}
+        time=${args.time}
+      >
         <music-note value="E" duration="quarter"></music-note>
         <music-note value="G" duration="quarter"></music-note>
         <music-note value="B" duration="quarter"></music-note>

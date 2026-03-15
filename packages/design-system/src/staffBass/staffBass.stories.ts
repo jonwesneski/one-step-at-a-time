@@ -7,11 +7,7 @@ const meta: Meta = {
   title: 'Components/StaffBass',
   tags: ['autodocs'],
   render: (args) => html`
-    <music-staff-bass
-      keySig=${args.keySig}
-      mode=${args.mode}
-      time=${args.time}
-    >
+    <music-staff-bass keySig=${args.keySig} mode=${args.mode} time=${args.time}>
       <music-note value="C" duration="quarter"></music-note>
       <music-note value="E" duration="quarter"></music-note>
       <music-note value="G" duration="quarter"></music-note>
@@ -21,7 +17,23 @@ const meta: Meta = {
   argTypes: {
     keySig: {
       control: 'select',
-      options: ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'],
+      options: [
+        'C',
+        'G',
+        'D',
+        'A',
+        'E',
+        'B',
+        'F#',
+        'C#',
+        'F',
+        'Bb',
+        'Eb',
+        'Ab',
+        'Db',
+        'Gb',
+        'Cb',
+      ],
     },
     mode: {
       control: 'radio',
