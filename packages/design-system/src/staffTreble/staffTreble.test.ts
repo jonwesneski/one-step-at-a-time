@@ -2,7 +2,10 @@
  * @jest-environment jsdom
  */
 import './index';
-import '../note/index';
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
 
 describe('music-staff-treble', () => {
   it('registers as a custom element', () => {
@@ -20,67 +23,5 @@ describe('music-staff-treble', () => {
     expect(el.mode).toBe('major');
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
-  });
-
-  it('logs an error when a 5th quarter note would overflow a 4/4 measure', () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-    const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('time', '4/4');
-    document.body.appendChild(el);
-
-    const notes = Array.from({ length: 5 }, () => {
-      const note = document.createElement('music-note') as any;
-      note.setAttribute('duration', 'quarter');
-      note.setAttribute('value', 'C4');
-      return note;
-    });
-
-    const slot = el.shadowRoot.querySelector('slot');
-    slot.assignedElements = () => notes;
-    slot.dispatchEvent(new Event('slotchange'));
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('no more room for note(s)')
-    );
-
-    errorSpy.mockRestore();
-    el.remove();
-  });
-
-  it('logs an error when a half note partially overflows a 4/4 measure with 3 quarters already placed', () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-    const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('time', '4/4');
-    document.body.appendChild(el);
-
-    const notes = [
-      ...Array.from({ length: 3 }, () => {
-        const note = document.createElement('music-note') as any;
-        note.setAttribute('duration', 'quarter');
-        note.setAttribute('value', 'C4');
-        return note;
-      }),
-      (() => {
-        const note = document.createElement('music-note') as any;
-        note.setAttribute('duration', 'half');
-        note.setAttribute('value', 'C4');
-        return note;
-      })(),
-    ];
-
-    const slot = el.shadowRoot.querySelector('slot');
-    slot.assignedElements = () => notes;
-    slot.dispatchEvent(new Event('slotchange'));
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('no more room for note(s)')
-    );
-
-    errorSpy.mockRestore();
-    el.remove();
   });
 });

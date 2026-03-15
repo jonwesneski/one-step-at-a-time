@@ -3,6 +3,10 @@
  */
 import './index';
 
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 describe('music-note', () => {
   it('registers as a custom element', () => {
     expect(customElements.get('music-note')).toBeDefined();
@@ -16,7 +20,5 @@ describe('music-note', () => {
     expect(el.value).toBe('C');
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
   });
 });

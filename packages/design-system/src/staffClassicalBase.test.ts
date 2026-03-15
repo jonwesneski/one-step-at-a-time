@@ -4,6 +4,10 @@
 import './index';
 
 
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 // I'm using <music-staff-treble /> to test staffClassicalBase specific scenarios
 describe('staffClassicalBase', () => {
   it('logs an error when adding another note on a filled measure', () => {
@@ -29,7 +33,6 @@ describe('staffClassicalBase', () => {
     );
 
     errorSpy.mockRestore();
-    el.remove();
   });
 
   it('logs an error when adding a note that partially exceeds the remaining available space in measure', () => {
@@ -63,6 +66,5 @@ describe('staffClassicalBase', () => {
     );
 
     errorSpy.mockRestore();
-    el.remove();
   });
 });

@@ -4,6 +4,10 @@
 import './index';
 
 
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 describe('music-staff-guitar-tab', () => {
   it('registers as a custom element', () => {
     expect(customElements.get('music-staff-guitar-tab')).toBeDefined();
@@ -15,7 +19,5 @@ describe('music-staff-guitar-tab', () => {
 
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
   });
 });
