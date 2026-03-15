@@ -24,6 +24,8 @@
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
     "src/**/*.spec.js",
-    "src/**/*.test.js"
+    "src/**/*.test.js",
+    "**/*.stories.ts",
+    "**/*.stories.js"
   ]
 }

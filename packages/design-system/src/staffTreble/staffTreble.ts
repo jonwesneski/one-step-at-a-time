@@ -1,6 +1,6 @@
-import { StaffClassicalElementBase } from './staffClassicalBase';
-import { YCoordinates } from './types/elements';
-import { Octave } from './types/theory';
+import { StaffClassicalElementBase } from '../staffClassicalBase';
+import { YCoordinates } from '../types/elements';
+import { Octave } from '../types/theory';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffTrebleElement extends StaffClassicalElementBase {
     static #trebleClefSvg = `

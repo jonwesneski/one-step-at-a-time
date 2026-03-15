@@ -1,6 +1,12 @@
 {
   "extends": ["../../.eslintrc.json"],
-  "ignorePatterns": ["!**/*", "**/out-tsc", "dist"],
+  "ignorePatterns": [
+    "!**/*",
+    "**/out-tsc",
+    "dist",
+    "storybook-static",
+    "node_modules"
+  ],
   "overrides": [
     {
       "files": ["*.ts", "*.tsx", "*.js", "*.jsx"],
@@ -24,9 +30,24 @@
             "ignoredFiles": [
               "{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}"
             ],
-            "ignoredDependencies": ["react", "tslib"]
+            "ignoredDependencies": [
+              "react",
+              "tslib",
+              "@storybook/web-components-vite",
+              "@storybook/web-components",
+              "@nx/vite",
+              "vite",
+              "lit"
+            ]
           }
         ]
+      }
+    },
+    {
+      "files": ["*.spec.ts", "*.test.ts"],
+      "rules": {
+        "@typescript-eslint/no-empty-function": "off",
+        "@typescript-eslint/no-explicit-any": "off"
       }
     }
   ]

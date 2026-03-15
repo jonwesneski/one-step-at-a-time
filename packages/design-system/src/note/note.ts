@@ -1,6 +1,6 @@
-import { INoteElement } from './types/elements';
-import { DurationType, Note } from './types/theory';
-import { createNoteSvg } from './utils';
+import { INoteElement } from '../types/elements';
+import { DurationType, Note } from '../types/theory';
+import { createNoteSvg } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement implements INoteElement {

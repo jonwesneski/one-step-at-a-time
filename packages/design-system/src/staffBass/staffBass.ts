@@ -1,6 +1,6 @@
-import { StaffClassicalElementBase } from './staffClassicalBase';
-import { YCoordinates } from './types/elements';
-import { LetterOctave, Octave } from './types/theory';
+import { StaffClassicalElementBase } from '../staffClassicalBase';
+import { YCoordinates } from '../types/elements';
+import { LetterOctave, Octave } from '../types/theory';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = `
