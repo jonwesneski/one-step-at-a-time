@@ -269,14 +269,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         noteSvg.setAttribute(
           'y',
-          (10 + this.getYCoordinate(noteElement.value) - yOffset).toString()
+          (10 + this.noteToYCoordinate(noteElement.value) - yOffset).toString()
         );
 
         noteSvgs.push(noteSvg);
       } else {
         const chordElement = element as ChordElementType;
         const staffYCoordinates = chordElement.notes.map((note) =>
-          this.getYCoordinate(note.value)
+          this.noteToYCoordinate(note.value)
         );
         const [chordSvg, yOffset] = createChordSvg({
           duration,
@@ -320,7 +320,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     console.log(elements, 'satisfy lint');
     return true;
     // for (const node of nodes) {
-    //   const staffYCoordinate = this.getYCoordinate(
+    //   const staffYCoordinate = this.noteToYCoordinate(
     //     node.getAttribute('value') || 'C'
     //   );
     // }
@@ -329,9 +329,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
-  public getYCoordinate(note: string): number {
-    //todo: rename function to getNoteYCoordinate
-    // todo: re-work this since the logic is mostly the same between treble and bass
+  public noteToYCoordinate(note: string): number {
     if (!note) return 0;
 
     // Extract letter (A-G) and optional octave digit, discarding accidentals.
