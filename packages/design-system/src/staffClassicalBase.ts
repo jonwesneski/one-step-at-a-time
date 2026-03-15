@@ -22,7 +22,7 @@ import {
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
-import { durationToFactor, SVG_NS } from './utils/consts';
+import { durationToFactor, factorToDuration, SVG_NS } from './utils/consts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -176,10 +176,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (firstMeasureOrNoCompositionTime || timeChangeInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
-        ...((firstMeasureOrNoCompositionTime ?? timeChangeInMeasure) as [
-          BeatsInMeasure,
-          BeatTypeInMeasure
-        ])
+        ...(firstMeasureOrNoCompositionTime ?? timeChangeInMeasure)!
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
@@ -235,18 +232,40 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const notesX = Math.round(describeRect.right - transcribeRect.left);
     const remainingWidth = transcribeWidth - notesX;
     this.#notesContainer.setAttribute('x', `${notesX}`);
+    this.#notesContainer.setAttribute('height', '100');
+
     this.#notesContainer.setAttribute('width', `${remainingWidth}`);
     // todo: make a height const if it doesn't already exist. Or maybe just grab
     // value from staffContainer
-    this.#notesContainer.setAttribute('height', '100');
     this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
+
+    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
+    const measureDuration = beatsInMeasure / beatType;
 
     const beamCreator = BeamCreator.ifNecessary(elements);
     const needsBeam = beamCreator !== null;
     const stemUp = this.#determineIsStemUp(elements);
-    let xOffsetOfNote = 0;
+    // Running beat position as a fraction of a whole note. Each note advances
+    // this by its own duration factor, so each note's x is derived from its
+    // absolute position in the measure rather than from the previous note.
+    let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].duration;
+      if (
+        beatOffset + durationToFactor[duration as DurationType] >
+        measureDuration
+      ) {
+        console.error(
+          `no more room for note(s); remaining duration is "${
+            factorToDuration.get(measureDuration - beatOffset) ??
+            measureDuration - beatOffset
+          }", tried to add "${duration}"`
+        );
+        break;
+      }
+
+      const xOffsetOfNote = (beatOffset / measureDuration) * remainingWidth;
       let noteSvg: SVGElement;
       let beamY: number;
       if (elements[i].nodeName === 'MUSIC-NOTE') {
@@ -299,8 +318,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         );
       }
 
-      xOffsetOfNote = this.#spaceNote(noteSvg, xOffsetOfNote, remainingWidth);
+      this.#spaceNote(noteSvg, xOffsetOfNote);
       this.#notesContainer.appendChild(noteSvg);
+      beatOffset += durationToFactor[duration as DurationType];
     }
 
     if (beamCreator) {
@@ -354,32 +374,37 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #spaceNotes(elements: SVGElement[]) {
-    const beamCreator = BeamCreator.ifNecessary(elements);
-    let xOffsetOfNote = 0;
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const notesX = Math.round(describeRect.right - transcribeRect.left);
     const width = transcribeRect.width - notesX;
-    this.#notesContainer.setAttribute('x', `${notesX}`);
     this.#notesContainer.setAttribute('width', `${width}`);
     // todo: handle height instead of using literal
     this.#notesContainer.setAttribute('viewBox', `0 0 ${width} 100`);
 
+    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    const measureDuration = beatsInMeasure / beatType;
+
+    const beamCreator = BeamCreator.ifNecessary(elements);
     const beams = [
       ...this.#notesContainer.querySelectorAll('.beam-group'),
     ] as SVGGElement[];
     let beamIndex = beams.length > 0 ? 0 : null;
+    let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
+      const duration = elements[i].dataset.duration as DurationType;
+      const xOffset = (beatOffset / measureDuration) * width;
+      //const beamCreator = BeamCreator.ifNecessary(elements);
       if (beamCreator) {
         if (i === 0) {
           beamCreator.updateBeamCoordinates(
-            xOffsetOfNote,
+            xOffset,
             parseFloat(elements[i].getAttribute('y') || '0'),
             'start'
           );
         } else if (i === elements.length - 1) {
           beamCreator.updateBeamCoordinates(
-            xOffsetOfNote,
+            xOffset,
             parseFloat(elements[i].getAttribute('y') || '0'),
             'end'
           );
@@ -388,16 +413,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           }
         }
       }
-      xOffsetOfNote = this.#spaceNote(elements[i], xOffsetOfNote, width);
+      this.#spaceNote(elements[i], xOffset);
+      beatOffset += durationToFactor[duration];
     }
   }
 
-  #spaceNote(element: SVGElement, xOffsetOfNote: number, width: number) {
-    element.setAttribute('x', xOffsetOfNote.toString());
-    return (
-      xOffsetOfNote +
-      width * durationToFactor[element.dataset.duration as DurationType]
-    );
+  #spaceNote(element: SVGElement, xOffset: number) {
+    element.setAttribute('x', xOffset.toString());
   }
 
   // Respace notes
