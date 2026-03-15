@@ -3,7 +3,6 @@
  */
 import './index';
 
-
 afterEach(() => {
   document.body.innerHTML = '';
 });
