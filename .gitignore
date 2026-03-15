@@ -50,3 +50,5 @@ test-output
 
 
 storybook-static
+
+out-tsc

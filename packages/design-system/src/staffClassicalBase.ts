@@ -94,7 +94,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return this.getAttribute('time');
   }
 
-  get time(): string | null {
+  get time(): string {
     return this.getAttribute('time') ?? this.#parentTime;
   }
 
@@ -167,7 +167,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureNumberStr: string | null = measure?.getAttribute('number');
     const firstMeasureOrNoCompositionTime =
       measureNumberStr === '1' || !measure
-        ? this.#convertTotimeInts(this.#parentTime)
+        ? this.#convertTotimeInts(this.time)
         : null;
     const timeChangeInMeasure =
       !firstMeasureOrNoCompositionTime && measure && this.#timeInts

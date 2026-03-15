@@ -1,1 +1,2 @@
-export * from './composition';
+import './composition';
+export {};
