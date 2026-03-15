@@ -2,29 +2,11 @@
  * @jest-environment jsdom
  */
 import './index';
-import '../note/index';
 
-describe('music-staff-treble', () => {
-  it('registers as a custom element', () => {
-    expect(customElements.get('music-staff-treble')).toBeDefined();
-  });
 
-  it('renders shadow root with provided key signature attributes', () => {
-    const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('keySig', 'C');
-    el.setAttribute('mode', 'major');
-    el.setAttribute('time', '4/4');
-    document.body.appendChild(el);
-
-    expect(el.keySig).toBe('C');
-    expect(el.mode).toBe('major');
-    expect(el.shadowRoot).not.toBeNull();
-    expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
-  });
-
-  it('logs an error when a 5th quarter note would overflow a 4/4 measure', () => {
+// I'm using <music-staff-treble /> to test staffClassicalBase specific scenarios
+describe('staffClassicalBase', () => {
+  it('logs an error when adding another note on a filled measure', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const el = document.createElement('music-staff-treble') as any;
@@ -50,7 +32,7 @@ describe('music-staff-treble', () => {
     el.remove();
   });
 
-  it('logs an error when a half note partially overflows a 4/4 measure with 3 quarters already placed', () => {
+  it('logs an error when adding a note that partially exceeds the remaining available space in measure', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const el = document.createElement('music-staff-treble') as any;

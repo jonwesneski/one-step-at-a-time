@@ -13,6 +13,7 @@ module.exports = {
   displayName: '@myorg/ui-design-system-js',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',
+  setupFiles: ['<rootDir>/src/jest.setup.ts'],
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },

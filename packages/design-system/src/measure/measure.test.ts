@@ -3,13 +3,6 @@
  */
 import './index';
 
-beforeAll(() => {
-  global.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-});
 
 describe('music-measure', () => {
   it('registers as a custom element', () => {
