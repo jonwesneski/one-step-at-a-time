@@ -37,7 +37,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     "../../packages/design-system/src/**/*",
-    "../../packages/design-system/src/**/*.d.ts"
+    "../../packages/design-system/src/**/*.d.ts",
+    "../../packages/design-system/jest.setup.ts"
   ],
   "exclude": ["node_modules"],
   "references": [

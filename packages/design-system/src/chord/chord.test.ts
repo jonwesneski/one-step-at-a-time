@@ -3,6 +3,10 @@
  */
 import './index';
 
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 describe('music-chord', () => {
   it('registers as a custom element', () => {
     expect(customElements.get('music-chord')).toBeDefined();
@@ -15,7 +19,5 @@ describe('music-chord', () => {
     expect(el.duration).toBe('quarter');
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
   });
 });

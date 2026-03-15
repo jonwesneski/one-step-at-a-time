@@ -3,12 +3,8 @@
  */
 import './index';
 
-beforeAll(() => {
-  global.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
+afterEach(() => {
+  document.body.innerHTML = '';
 });
 
 describe('music-measure', () => {
@@ -24,7 +20,5 @@ describe('music-measure', () => {
     expect(el.mode).toBe('major');
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
   });
 });

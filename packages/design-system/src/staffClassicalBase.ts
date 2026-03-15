@@ -22,7 +22,7 @@ import {
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
-import { durationToFactor, SVG_NS } from './utils/consts';
+import { durationToFactor, factorToDuration, SVG_NS } from './utils/consts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -176,10 +176,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (firstMeasureOrNoCompositionTime || timeChangeInMeasure) {
       const timeSigSvg = createTimeSignatureSvg(
-        ...((firstMeasureOrNoCompositionTime ?? timeChangeInMeasure) as [
-          BeatsInMeasure,
-          BeatTypeInMeasure
-        ])
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- will not be null
+        ...(firstMeasureOrNoCompositionTime ?? timeChangeInMeasure)!
       );
       timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
       parentSvg.appendChild(timeSigSvg);
@@ -231,80 +229,89 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
-    const transcribeWidth = transcribeRect.width;
-    const notesX = Math.round(describeRect.right - transcribeRect.left);
-    const remainingWidth = transcribeWidth - notesX;
-    this.#notesContainer.setAttribute('x', `${notesX}`);
-    this.#notesContainer.setAttribute('width', `${remainingWidth}`);
-    // todo: make a height const if it doesn't already exist. Or maybe just grab
-    // value from staffContainer
+    const describeEndX = Math.round(describeRect.right - transcribeRect.left);
+    this.#notesContainer.setAttribute('x', `${describeEndX}`);
     this.#notesContainer.setAttribute('height', '100');
-    this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
+
+    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
+    const measureDuration = beatsInMeasure / beatType;
 
     const beamCreator = BeamCreator.ifNecessary(elements);
     const needsBeam = beamCreator !== null;
     const stemUp = this.#determineIsStemUp(elements);
-    let xOffsetOfNote = 0;
-    for (let i = 0; i < elements.length; i++) {
-      const duration = elements[i].duration;
-      let noteSvg: SVGElement;
-      let beamY: number;
-      if (elements[i].nodeName === 'MUSIC-NOTE') {
-        const element = elements[i] as NoteElementType;
-        let yOffset = NaN;
-        [noteSvg, yOffset] = createNoteSvg({
+
+    // Create all note SVGs (y-positioned, not yet x-positioned or appended)
+    const noteSvgs: SVGElement[] = [];
+    let beatOffset = 0;
+    for (const element of elements) {
+      const duration = element.duration;
+      if (
+        beatOffset + durationToFactor[duration as DurationType] >
+        measureDuration
+      ) {
+        console.error(
+          `no more room for note(s); remaining duration is "${
+            factorToDuration.get(measureDuration - beatOffset) ??
+            measureDuration - beatOffset
+          }", tried to add "${duration}"`
+        );
+        break;
+      }
+
+      if (element.nodeName === 'MUSIC-NOTE') {
+        const noteElement = element as NoteElementType;
+        const [noteSvg, yOffset] = createNoteSvg({
           duration,
           noFlags: needsBeam,
           stemUp,
           qualifiedElementName: 'svg',
-          translate: {
-            staffXCoordinate: xOffsetOfNote,
-            staffYCoordinate: this.getYCoordinate(element.value),
-          },
         });
-
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        const noteY = 10 + this.getYCoordinate(element.value) - yOffset;
-        noteSvg.setAttribute('y', noteY.toString());
-        beamY = noteY;
+        noteSvg.setAttribute(
+          'y',
+          (10 + this.noteToYCoordinate(noteElement.value) - yOffset).toString()
+        );
+
+        noteSvgs.push(noteSvg);
       } else {
-        const element = elements[i] as ChordElementType;
-        const staffYCoordinates: number[] = [];
-        for (const note of element.notes) {
-          staffYCoordinates.push(this.getYCoordinate(note.value));
-        }
-        let yOffset = NaN;
-        [noteSvg, yOffset] = createChordSvg({
+        const chordElement = element as ChordElementType;
+        const staffYCoordinates = chordElement.notes.map((note) =>
+          this.noteToYCoordinate(note.value)
+        );
+        const [chordSvg, yOffset] = createChordSvg({
           duration,
-          staffXCoordinate: xOffsetOfNote,
           staffYCoordinates,
           noFlags: needsBeam,
           stemUp,
+          // todo: not using at the moment; check if i still need it
           qualifiedElementName: 'g',
         });
-        noteSvg.setAttribute('overflow', 'visible');
-        // Beam y: use the topmost note's y position within the chord
+        chordSvg.setAttribute('overflow', 'visible');
         const topmostStaffY = stemUp
           ? Math.min(...staffYCoordinates)
           : Math.max(...staffYCoordinates);
-        beamY = 10 + topmostStaffY - yOffset;
+        // Store beam y in dataset since createChordSvg already positions
+        // each note inside the chord SVG relative to its own origin.
+        // Setting y on the outer <svg> would double-offset the chord notes visually.
+        chordSvg.dataset.beamY = (10 + topmostStaffY - yOffset).toString();
+
+        noteSvgs.push(chordSvg);
       }
 
-      const isBeamStart = i === 0;
-      if (beamCreator && (isBeamStart || i === elements.length - 1)) {
-        beamCreator.updateBeamCoordinates(
-          xOffsetOfNote,
-          beamY,
-          isBeamStart ? 'start' : 'end'
-        );
-      }
-
-      xOffsetOfNote = this.#spaceNote(noteSvg, xOffsetOfNote, remainingWidth);
-      this.#notesContainer.appendChild(noteSvg);
+      beatOffset += durationToFactor[duration as DurationType];
     }
 
-    if (beamCreator) {
-      this.#notesContainer.appendChild(beamCreator.buildBeams());
+    // Build beam groups (coords are NaN until spaceNotes fills them in)
+    const beamGroups = beamCreator ? [beamCreator.buildBeams()] : [];
+
+    this.#spaceNotes(noteSvgs, beamGroups);
+
+    for (const svg of noteSvgs) {
+      this.#notesContainer.appendChild(svg);
+    }
+    for (const beamGroup of beamGroups) {
+      this.#notesContainer.appendChild(beamGroup);
     }
   }
 
@@ -314,7 +321,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     console.log(elements, 'satisfy lint');
     return true;
     // for (const node of nodes) {
-    //   const staffYCoordinate = this.getYCoordinate(
+    //   const staffYCoordinate = this.noteToYCoordinate(
     //     node.getAttribute('value') || 'C'
     //   );
     // }
@@ -323,9 +330,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
-  public getYCoordinate(note: string): number {
-    //todo: rename function to getNoteYCoordinate
-    // todo: re-work this since the logic is mostly the same between treble and bass
+  public noteToYCoordinate(note: string): number {
     if (!note) return 0;
 
     // Extract letter (A-G) and optional octave digit, discarding accidentals.
@@ -353,51 +358,46 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
-  #spaceNotes(elements: SVGElement[]) {
-    const beamCreator = BeamCreator.ifNecessary(elements);
-    let xOffsetOfNote = 0;
+  #spaceNotes(elements: SVGElement[], beamGroups: SVGGElement[]) {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
-    const notesX = Math.round(describeRect.right - transcribeRect.left);
-    const width = transcribeRect.width - notesX;
-    this.#notesContainer.setAttribute('x', `${notesX}`);
-    this.#notesContainer.setAttribute('width', `${width}`);
+    const describeEndX = Math.round(describeRect.right - transcribeRect.left);
+    const remainingWidth = transcribeRect.width - describeEndX;
+    this.#notesContainer.setAttribute('width', `${remainingWidth}`);
     // todo: handle height instead of using literal
-    this.#notesContainer.setAttribute('viewBox', `0 0 ${width} 100`);
+    this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
 
-    const beams = [
-      ...this.#notesContainer.querySelectorAll('.beam-group'),
-    ] as SVGGElement[];
-    let beamIndex = beams.length > 0 ? 0 : null;
+    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    const measureDuration = beatsInMeasure / beatType;
+
+    const beamCreator =
+      beamGroups.length > 0 ? BeamCreator.ifNecessary(elements) : null;
+    let beamGroupIndex = 0;
+    let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
+      const duration = elements[i].dataset.duration as DurationType;
+      const xOffset = (beatOffset / measureDuration) * remainingWidth;
+
       if (beamCreator) {
+        // Notes use the `y` attribute; chords store beam y in `dataset.beamY`
+        // since their outer <svg> y stays at 0 (notes inside are self-positioned).
+        const beamY = parseFloat(
+          elements[i].dataset.beamY ?? elements[i].getAttribute('y') ?? '0'
+        );
         if (i === 0) {
-          beamCreator.updateBeamCoordinates(
-            xOffsetOfNote,
-            parseFloat(elements[i].getAttribute('y') || '0'),
-            'start'
-          );
+          beamCreator.updateBeamCoordinates(xOffset, beamY, 'start');
         } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates(
-            xOffsetOfNote,
-            parseFloat(elements[i].getAttribute('y') || '0'),
-            'end'
-          );
-          if (beamIndex !== null) {
-            beamCreator.respaceBeam(beams[beamIndex++]);
-          }
+          beamCreator.updateBeamCoordinates(xOffset, beamY, 'end');
+          beamCreator.respaceBeam(beamGroups[beamGroupIndex++]);
         }
       }
-      xOffsetOfNote = this.#spaceNote(elements[i], xOffsetOfNote, width);
+      this.#spaceNote(elements[i], xOffset);
+      beatOffset += durationToFactor[duration];
     }
   }
 
-  #spaceNote(element: SVGElement, xOffsetOfNote: number, width: number) {
-    element.setAttribute('x', xOffsetOfNote.toString());
-    return (
-      xOffsetOfNote +
-      width * durationToFactor[element.dataset.duration as DurationType]
-    );
+  #spaceNote(element: SVGElement, xOffset: number) {
+    element.setAttribute('x', xOffset.toString());
   }
 
   // Respace notes
@@ -407,6 +407,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ':scope > svg'
       ) as NodeListOf<Element>),
     ] as SVGElement[];
-    this.#spaceNotes(notes);
+    const beamGroups = [
+      ...this.#notesContainer.querySelectorAll('.beam-group'),
+    ] as SVGGElement[];
+    this.#spaceNotes(notes, beamGroups);
   }
 }

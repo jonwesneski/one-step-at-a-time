@@ -3,6 +3,10 @@
  */
 import './index';
 
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 describe('music-composition', () => {
   it('registers as a custom element', () => {
     expect(customElements.get('music-composition')).toBeDefined();
@@ -17,7 +21,5 @@ describe('music-composition', () => {
     expect(el.time).toBe('4/4');
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
-
-    el.remove();
   });
 });

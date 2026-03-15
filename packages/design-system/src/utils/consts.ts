@@ -113,4 +113,10 @@ export const durationToFactor: Record<DurationType, number> = {
   thirtysecond: 0.03125,
   sixtyfourth: 0.015625,
   hundredtwentyeighth: 0.0078125,
-};
+} as const;
+
+export const factorToDuration: Map<number, DurationType> = new Map(
+  (Object.entries(durationToFactor) as [DurationType, number][]).map(
+    ([duration, factor]) => [factor, duration]
+  )
+);

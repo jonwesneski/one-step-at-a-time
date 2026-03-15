@@ -24,10 +24,6 @@ type NoteProps = {
   noFlags?: boolean;
   stemUp?: boolean;
   qualifiedElementName?: 'svg' | 'g';
-  translate?: {
-    staffXCoordinate: number;
-    staffYCoordinate: number;
-  };
 };
 export const createNoteSvg = ({
   duration,
@@ -163,13 +159,11 @@ export const createNoteSvg = ({
   return [svg, yHeadOffset];
 };
 
-type ChordProps = Omit<NoteProps, 'translate'> & {
-  staffXCoordinate: number;
+type ChordProps = NoteProps & {
   staffYCoordinates: number[];
 };
 export const createChordSvg = ({
   duration,
-  staffXCoordinate,
   staffYCoordinates,
   noFlags = false,
   stemUp = true,
@@ -186,10 +180,6 @@ export const createChordSvg = ({
       noFlags,
       stemUp,
       qualifiedElementName: 'svg',
-      translate: {
-        staffXCoordinate,
-        staffYCoordinate,
-      },
     });
     currentY = mathFunc(currentY, yOffset);
     noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -303,10 +293,12 @@ export const createTimeSignatureSvg = (
 };
 
 export class BeamCreator {
+  static #thickness = 8;
   x1: number;
   x2: number;
   y1: number;
   y2: number;
+
   constructor() {
     this.x1 = NaN;
     this.x2 = NaN;
@@ -357,13 +349,12 @@ export class BeamCreator {
   }
 
   buildBeams(): SVGGElement {
-    const thickness = 8;
     const g = document.createElementNS(SVG_NS, 'g');
     g.classList.add('beam-group');
 
     const leftTop = `${this.x1},${this.y1}`;
-    const leftBottom = `${this.x1},${this.y1 + thickness}`;
-    const rightBottom = `${this.x2},${this.y2 + thickness}`;
+    const leftBottom = `${this.x1},${this.y1 + BeamCreator.#thickness}`;
+    const rightBottom = `${this.x2},${this.y2 + BeamCreator.#thickness}`;
     const rightTop = `${this.x2},${this.y2}`;
 
     const polygon = document.createElementNS(SVG_NS, 'polygon');
@@ -379,15 +370,12 @@ export class BeamCreator {
   respaceBeam(beamGroup: SVGGElement) {
     const polygon = beamGroup.querySelector('polygon');
     if (!polygon) return;
-    const pointsArray = polygon.getAttribute('points')?.split(' ');
-    if (!pointsArray) return;
-    const yLeft = pointsArray[0].split(',')[1];
-    const yLeftBottom = pointsArray[1].split(',')[1];
-    const yRightBottom = pointsArray[2].split(',')[1];
-    const yRight = pointsArray[3].split(',')[1];
+
     polygon.setAttribute(
       'points',
-      `${this.x1},${yLeft} ${this.x1},${yLeftBottom} ${this.x2},${yRightBottom} ${this.x2},${yRight}`
+      `${this.x1},${this.y1} ${this.x1},${this.y1 + BeamCreator.#thickness} ${
+        this.x2
+      },${this.y2 + BeamCreator.#thickness} ${this.x2},${this.y2}`
     );
   }
 }

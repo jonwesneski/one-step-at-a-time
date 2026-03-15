@@ -12,6 +12,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         </text>
       </svg>
     `;
+    #describeContainer: SVGGElement;
+
+    constructor() {
+      super();
+      // this.#mutationObservers = [];
+
+      // const measure = this.closest('music-measure');
+      // const composition = this.closest('music-composition');
+      // this.#parentTime =
+      //   measure?.getAttribute('time') ??
+      //   composition?.getAttribute('time') ??
+      //   '4/4';
+      // const timeTime = this.getAttribute('time');
+      // if (timeTime) {
+      //   this.#timeInts = this.#convertTotimeInts(timeTime);
+      // }
+
+      this.#describeContainer = document.createElementNS(SVG_NS, 'g');
+    }
+
     protected override get staffLineCount(): number {
       return 6;
     }
@@ -30,11 +50,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     protected onConnectedCallback() {
-      // todo: do i need a g element?
-      const gDescribe = document.createElementNS(SVG_NS, 'g');
-      gDescribe.setAttribute('class', 'describe-container');
-      gDescribe.innerHTML = StaffGuitarTabElement.#tabSvg;
-      this.transcribeContainer.appendChild(gDescribe);
+      this.#describeContainer.setAttribute('class', 'describe-container');
+      this.#describeContainer.innerHTML = StaffGuitarTabElement.#tabSvg;
+      this.transcribeContainer.appendChild(this.#describeContainer);
 
       // Notes are added here at runtime
       const gNotes = document.createElementNS(SVG_NS, 'g');

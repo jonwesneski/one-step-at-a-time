@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   main:
-    name: Check (Format, Lint, Test, Build)
+    name: PR Job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +51,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
-      - name: Prettier Check
+      - name: Prettier/Format Check
         run: npx nx-cloud record -- npx nx format:check  --base="remotes/origin/main"
 
       - name: Lint, Build, Typecheck, Test
