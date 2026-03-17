@@ -30,7 +30,7 @@ All components use shadow DOM (`attachShadow({ mode: 'open' })`). Style encapsul
 - Y-coordinates are looked up from static maps keyed by note name + octave (e.g., `'C4'`, `'G5'`)
 - Each staff subclass defines its own `noteYCoordinateMap` for its clef range
 - X-spacing is derived from `durationToFactor`: whole=1.0, half=0.5, quarter=0.25, etc.
-- SVG rendering lives entirely in `utils/svgCreator.ts`
+- SVG rendering lives entirely in `utils/svgCreator/`
 
 ### Semitone System
 
