@@ -15,7 +15,8 @@ import {
   Octave,
 } from './types/theory';
 import {
-  BeamCreator,
+  BeamCreatorType,
+  createBeamCreators,
   createChordSvg,
   createFlatSvg,
   createNoteSvg,
@@ -33,6 +34,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #parentKeySig: LetterNote | null;
   #describeContainer: SVGGElement;
   #notesContainer: SVGSVGElement;
+  #beamCreators: BeamCreatorType[] = [];
+  #beamGroups: SVGGElement[] = [];
 
   constructor() {
     super();
@@ -237,14 +240,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
-    const beamCreator = BeamCreator.ifNecessary(elements);
-    const needsBeam = beamCreator !== null;
+    this.#beamCreators = createBeamCreators(elements);
+    const needsBeam = this.#beamCreators.length > 0;
     const stemUp = this.#determineIsStemUp(elements);
 
     // Create all note SVGs (y-positioned, not yet x-positioned or appended)
     const noteSvgs: SVGElement[] = [];
     let beatOffset = 0;
-    for (const element of elements) {
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
       const duration = element.duration;
       if (
         beatOffset + durationToFactor[duration as DurationType] >
@@ -259,6 +263,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         break;
       }
 
+      let beamY: number;
       if (element.nodeName === 'MUSIC-NOTE') {
         const noteElement = element as NoteElementType;
         const [noteSvg, yOffset] = createNoteSvg({
@@ -268,10 +273,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           qualifiedElementName: 'svg',
         });
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        noteSvg.setAttribute(
-          'y',
-          (10 + this.noteToYCoordinate(noteElement.value) - yOffset).toString()
-        );
+        beamY = 10 + this.noteToYCoordinate(noteElement.value) - yOffset;
+        noteSvg.setAttribute('y', beamY.toString());
 
         noteSvgs.push(noteSvg);
       } else {
@@ -294,23 +297,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // Store beam y in dataset since createChordSvg already positions
         // each note inside the chord SVG relative to its own origin.
         // Setting y on the outer <svg> would double-offset the chord notes visually.
-        chordSvg.dataset.beamY = (10 + topmostStaffY - yOffset).toString();
+        beamY = 10 + topmostStaffY - yOffset;
+        chordSvg.dataset.beamY = beamY.toString();
 
         noteSvgs.push(chordSvg);
       }
 
+      for (const bc of this.#beamCreators) {
+        bc.setNoteY(i, beamY);
+      }
       beatOffset += durationToFactor[duration as DurationType];
     }
 
     // Build beam groups (coords are NaN until spaceNotes fills them in)
-    const beamGroups = beamCreator ? [beamCreator.buildBeams()] : [];
+    this.#beamGroups = this.#beamCreators.map((c) => c.buildBeams());
 
-    this.#spaceNotes(noteSvgs, beamGroups);
+    this.#spaceNotes(noteSvgs);
 
     for (const svg of noteSvgs) {
       this.#notesContainer.appendChild(svg);
     }
-    for (const beamGroup of beamGroups) {
+    for (const beamGroup of this.#beamGroups) {
       this.#notesContainer.appendChild(beamGroup);
     }
   }
@@ -358,7 +365,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
-  #spaceNotes(elements: SVGElement[], beamGroups: SVGGElement[]) {
+  #spaceNotes(elements: SVGElement[]) {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const describeEndX = Math.round(describeRect.right - transcribeRect.left);
@@ -370,27 +377,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     const measureDuration = beatsInMeasure / beatType;
 
-    const beamCreator =
-      beamGroups.length > 0 ? BeamCreator.ifNecessary(elements) : null;
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].dataset.duration as DurationType;
       const xOffset = (beatOffset / measureDuration) * remainingWidth;
 
-      if (beamCreator) {
-        // Notes use the `y` attribute; chords store beam y in `dataset.beamY`
-        // since their outer <svg> y stays at 0 (notes inside are self-positioned).
-        const beamY = parseFloat(
-          elements[i].dataset.beamY ?? elements[i].getAttribute('y') ?? '0'
-        );
-        beamCreator.setNotePosition(i, xOffset, beamY);
+      for (const beamCreator of this.#beamCreators) {
+        beamCreator.setNoteX(i, xOffset);
       }
       this.#spaceNote(elements[i], xOffset);
       beatOffset += durationToFactor[duration];
     }
-    if (beamCreator) {
-      beamCreator.respaceBeam(beamGroups[0]);
-    }
+    this.#beamCreators.forEach((creator, j) =>
+      creator.spaceBeam(this.#beamGroups[j])
+    );
   }
 
   #spaceNote(element: SVGElement, xOffset: number) {
@@ -404,9 +404,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ':scope > svg'
       ) as NodeListOf<Element>),
     ] as SVGElement[];
-    const beamGroups = [
-      ...this.#notesContainer.querySelectorAll('.beam-group'),
-    ] as SVGGElement[];
-    this.#spaceNotes(notes, beamGroups);
+    this.#spaceNotes(notes);
   }
 }

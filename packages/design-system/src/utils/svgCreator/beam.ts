@@ -10,21 +10,22 @@ interface NoteData {
 }
 
 interface BeamSegment {
-  x1: number;
-  x2: number;
+  noteIndex1: number;
+  noteIndex2: number;
   beamIndex: number;
+  stubDirection?: 'left' | 'right';
 }
 
-export class BeamCreator {
+class _BeamCreator {
   static #thickness = 8;
   static #gap = 4;
   static #stubWidth = 6;
 
-  #notes: NoteData[];
+  #noteBeams: NoteData[];
   #segments: BeamSegment[];
 
   constructor(beamCounts: number[]) {
-    this.#notes = beamCounts.map((beamCount) => ({
+    this.#noteBeams = beamCounts.map((beamCount) => ({
       x: NaN,
       y: NaN,
       beamCount,
@@ -32,43 +33,55 @@ export class BeamCreator {
     this.#segments = this.#computeSegments();
   }
 
-  static ifNecessary(
-    elements: NoteOrChordElementType[] | SVGElement[]
-  ): BeamCreator | null {
-    const consecutives: number[] = [];
-    for (let i = 0; i < elements.length; i++) {
-      const duration =
-        elements[i].dataset.duration ?? elements[i].getAttribute('duration');
-      if (
-        duration !== 'quarter' &&
-        duration !== 'half' &&
-        duration !== 'whole'
-      ) {
-        if (consecutives.length === 0) {
-          consecutives.push(i);
-        } else if (consecutives[i - 1] !== undefined) {
-          consecutives.push(i);
+  #computeSegments(): BeamSegment[] {
+    const segments: BeamSegment[] = [];
+    const maxBeamCount = Math.max(...this.#noteBeams.map((n) => n.beamCount));
+
+    for (let beamIndex = 0; beamIndex < maxBeamCount; beamIndex++) {
+      let runStart = -1;
+      for (let i = 0; i <= this.#noteBeams.length; i++) {
+        const needsThisBeam =
+          i < this.#noteBeams.length &&
+          this.#noteBeams[i].beamCount > beamIndex;
+
+        if (needsThisBeam && runStart === -1) {
+          runStart = i;
+        } else if (!needsThisBeam && runStart !== -1) {
+          const runEnd = i - 1;
+          if (runEnd > runStart) {
+            // Multiple notes in the run — full beam across the span
+            segments.push({
+              noteIndex1: runStart,
+              noteIndex2: runEnd,
+              beamIndex,
+            });
+          } else {
+            // Single isolated note — draw a stub toward the nearest neighbor
+            const goLeft = runStart > 0;
+            segments.push({
+              noteIndex1: runStart,
+              noteIndex2: runStart,
+              beamIndex,
+              stubDirection: goLeft ? 'left' : 'right',
+            });
+          }
+          runStart = -1;
         }
       }
     }
-    if (consecutives.length && consecutives.length % 2 === 0) {
-      const beamCounts = consecutives.map((idx) => {
-        const duration = (elements[idx].dataset.duration ??
-          elements[idx].getAttribute('duration')) as DurationType;
-        return durationToFlagCountMap.get(duration) ?? 1;
-      });
-      return new BeamCreator(beamCounts);
-    }
-    return null;
+
+    return segments;
   }
 
-  // x, y are in #notesContainer's coordinate space (1:1 with CSS px).
-  // Call once per note as it is spaced; y is the note SVG's top-left y
-  // (beamY for chords). Stem offsets are applied internally.
+  // y is the note SVG's top-left y (beamY for chords). Call once per render.
   // todo: account for stem-down
-  setNotePosition(index: number, x: number, y: number) {
-    this.#notes[index].x = x + NOTE_STEM_X_OFFSET;
-    this.#notes[index].y = y + NOTE_STEM_TIP_Y_OFFSET;
+  setNoteY(index: number, y: number) {
+    this.#noteBeams[index].y = y + NOTE_STEM_TIP_Y_OFFSET;
+  }
+
+  // x is in #notesContainer's coordinate space (1:1 with CSS px). Call on every spacing/resize.
+  setNoteX(index: number, x: number) {
+    this.#noteBeams[index].x = x + NOTE_STEM_X_OFFSET;
   }
 
   buildBeams(): SVGGElement {
@@ -82,69 +95,66 @@ export class BeamCreator {
     return g;
   }
 
-  respaceBeam(beamGroup: SVGGElement) {
-    this.#segments = this.#computeSegments();
+  spaceBeam(beamGroup: SVGGElement) {
     const polygons = beamGroup.querySelectorAll('polygon');
     this.#segments.forEach((seg, i) => {
+      const noteX1 = this.#noteBeams[seg.noteIndex1].x;
+      const noteX2 = this.#noteBeams[seg.noteIndex2].x;
+      const x1 =
+        seg.stubDirection === 'left'
+          ? noteX1 - _BeamCreator.#stubWidth
+          : noteX1;
+      const x2 =
+        seg.stubDirection === 'right'
+          ? noteX2 + _BeamCreator.#stubWidth
+          : noteX2;
       const yOffset =
-        seg.beamIndex * (BeamCreator.#thickness + BeamCreator.#gap);
-      const y1 = this.#yAtX(seg.x1) + yOffset;
-      const y2 = this.#yAtX(seg.x2) + yOffset;
+        seg.beamIndex * (_BeamCreator.#thickness + _BeamCreator.#gap);
+      const y1 = this.#yAtX(x1) + yOffset;
+      const y2 = this.#yAtX(x2) + yOffset;
       polygons[i].setAttribute(
         'points',
-        `${seg.x1},${y1} ${seg.x1},${y1 + BeamCreator.#thickness} ${seg.x2},${
-          y2 + BeamCreator.#thickness
-        } ${seg.x2},${y2}`
+        `${x1},${y1} ${x1},${y1 + _BeamCreator.#thickness} ${x2},${
+          y2 + _BeamCreator.#thickness
+        } ${x2},${y2}`
       );
     });
   }
 
   #yAtX(x: number): number {
-    const first = this.#notes[0];
-    const last = this.#notes[this.#notes.length - 1];
+    const first = this.#noteBeams[0];
+    const last = this.#noteBeams[this.#noteBeams.length - 1];
     if (first.x === last.x) return first.y;
     return first.y + (last.y - first.y) * ((x - first.x) / (last.x - first.x));
   }
+}
 
-  #computeSegments(): BeamSegment[] {
-    const segments: BeamSegment[] = [];
-    const maxBeamCount = Math.max(...this.#notes.map((n) => n.beamCount));
+export type BeamCreator = _BeamCreator;
 
-    for (let beamIndex = 0; beamIndex < maxBeamCount; beamIndex++) {
-      let runStart = -1;
-      for (let i = 0; i <= this.#notes.length; i++) {
-        const needsThisBeam =
-          i < this.#notes.length && this.#notes[i].beamCount > beamIndex;
-
-        if (needsThisBeam && runStart === -1) {
-          runStart = i;
-        } else if (!needsThisBeam && runStart !== -1) {
-          const runEnd = i - 1;
-          if (runEnd > runStart) {
-            // Multiple notes in the run — full beam across the span
-            segments.push({
-              x1: this.#notes[runStart].x,
-              x2: this.#notes[runEnd].x,
-              beamIndex,
-            });
-          } else {
-            // Single isolated note — draw a stub toward the nearest neighbor
-            const goLeft = runStart > 0;
-            segments.push({
-              x1: goLeft
-                ? this.#notes[runStart].x - BeamCreator.#stubWidth
-                : this.#notes[runStart].x,
-              x2: goLeft
-                ? this.#notes[runStart].x
-                : this.#notes[runStart].x + BeamCreator.#stubWidth,
-              beamIndex,
-            });
-          }
-          runStart = -1;
-        }
+export const createBeamCreators = (
+  elements: NoteOrChordElementType[]
+): BeamCreator[] => {
+  const beamCreators: BeamCreator[] = [];
+  const consecutives: number[] = [];
+  for (let i = 0; i < elements.length; i++) {
+    const duration =
+      elements[i].dataset.duration ?? elements[i].getAttribute('duration');
+    if (duration !== 'quarter' && duration !== 'half' && duration !== 'whole') {
+      if (consecutives.length === 0) {
+        consecutives.push(i);
+      } else if (consecutives[i - 1] !== undefined) {
+        consecutives.push(i);
       }
     }
-
-    return segments;
   }
-}
+  if (consecutives.length && consecutives.length % 2 === 0) {
+    const beamCounts = consecutives.map((idx) => {
+      const duration = (elements[idx].dataset.duration ??
+        elements[idx].getAttribute('duration')) as DurationType;
+      return durationToFlagCountMap.get(duration) ?? 1;
+    });
+    // todo: need to properly handle more than 1
+    beamCreators.push(new _BeamCreator(beamCounts));
+  }
+  return beamCreators;
+};
