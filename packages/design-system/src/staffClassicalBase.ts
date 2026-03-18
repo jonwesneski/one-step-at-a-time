@@ -372,7 +372,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const beamCreator =
       beamGroups.length > 0 ? BeamCreator.ifNecessary(elements) : null;
-    let beamGroupIndex = 0;
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].dataset.duration as DurationType;
@@ -384,15 +383,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const beamY = parseFloat(
           elements[i].dataset.beamY ?? elements[i].getAttribute('y') ?? '0'
         );
-        if (i === 0) {
-          beamCreator.updateBeamCoordinates(xOffset, beamY, 'start');
-        } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates(xOffset, beamY, 'end');
-          beamCreator.respaceBeam(beamGroups[beamGroupIndex++]);
-        }
+        beamCreator.setNotePosition(i, xOffset, beamY);
       }
       this.#spaceNote(elements[i], xOffset);
       beatOffset += durationToFactor[duration];
+    }
+    if (beamCreator) {
+      beamCreator.respaceBeam(beamGroups[0]);
     }
   }
 

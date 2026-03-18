@@ -1,5 +1,7 @@
 import { DurationType, LetterNote } from '../types/theory';
 
+export const SVG_NS = 'http://www.w3.org/2000/svg';
+
 export const durationToFlagCountMap = new Map<DurationType, number>([
   ['eighth', 1],
   ['sixteenth', 2],
@@ -7,7 +9,6 @@ export const durationToFlagCountMap = new Map<DurationType, number>([
   ['sixtyfourth', 4],
   ['hundredtwentyeighth', 5],
 ]);
-export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const noteSemitoneMap: Map<LetterNote, number> = new Map();
 noteSemitoneMap.set('A', 0);
