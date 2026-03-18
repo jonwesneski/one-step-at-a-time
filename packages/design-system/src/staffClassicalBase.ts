@@ -304,7 +304,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
 
       for (const bc of this.#beamCreators) {
-        bc.setNoteY(i, beamY);
+        bc.setNoteBeamY(i, beamY);
       }
       beatOffset += durationToFactor[duration as DurationType];
     }
@@ -383,7 +383,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const xOffset = (beatOffset / measureDuration) * remainingWidth;
 
       for (const beamCreator of this.#beamCreators) {
-        beamCreator.setNoteX(i, xOffset);
+        beamCreator.setNoteBeamX(i, xOffset);
       }
       this.#spaceNote(elements[i], xOffset);
       beatOffset += durationToFactor[duration];
