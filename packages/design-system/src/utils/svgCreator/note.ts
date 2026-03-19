@@ -23,7 +23,7 @@ export const NOTE_Y_HEAD_OFFSET_STEM_UP = 47; // Math.round(10 + 700 * (32/600))
 const BASE_STEM_LENGTH = 600; // ~32px at NOTE_SCALE (~4 staff line spaces)
 const STEM_WIDTH = 22;
 const HEAD_WIDTH = 80;
-const FLAG_Y_SPACING = 80;
+const FLAG_Y_SPACING = 120;
 
 export type NoteProps = {
   duration: DurationType;
@@ -93,36 +93,36 @@ export const createNoteSvg = ({
     const partialFlag = document.createElementNS(SVG_NS, 'g');
     partialFlag.classList.add(name);
     partialFlag.id = name;
-    const yPartialFlagLongStart = NOTE_Y_STEM_START + 30;
+    const yPartialFlagLongStart = NOTE_Y_STEM_START + 45;
     const partialFlagLong = document.createElementNS(SVG_NS, 'path');
-    const xPartialFlagLongEnd = xFlagStart + 110;
-    const yPartialFlagLongEnd = yPartialFlagLongStart + 190;
+    const xPartialFlagLongEnd = xFlagStart + 165;
+    const yPartialFlagLongEnd = yPartialFlagLongStart + 285;
     partialFlagLong.setAttribute(
       'd',
-      `M${xFlagStart},${yPartialFlagLongStart} C${xFlagStart + 60},${
-        yPartialFlagLongStart + 40
-      } ${xFlagStart + 170},${
-        yPartialFlagLongStart + 95
+      `M${xFlagStart},${yPartialFlagLongStart} C${xFlagStart + 90},${
+        yPartialFlagLongStart + 60
+      } ${xFlagStart + 255},${
+        yPartialFlagLongStart + 143
       } ${xPartialFlagLongEnd},${yPartialFlagLongEnd}`
     );
     partialFlagLong.setAttribute('fill', 'none');
     partialFlagLong.setAttribute('stroke', 'currentColor');
-    partialFlagLong.setAttribute('stroke-width', '30');
+    partialFlagLong.setAttribute('stroke-width', '45');
     partialFlag.appendChild(partialFlagLong);
 
-    const yPartialFlagTopStart = NOTE_Y_STEM_START + 20;
+    const yPartialFlagTopStart = NOTE_Y_STEM_START + 30;
     const partialFlagTop = document.createElementNS(SVG_NS, 'path');
     partialFlagTop.setAttribute(
       'd',
-      `M${xFlagStart},${yPartialFlagTopStart} C${xFlagStart + 10},${
-        yPartialFlagTopStart + 20
-      } ${xFlagStart + 35},${yPartialFlagTopStart + 35} ${xFlagStart + 80},${
-        yPartialFlagTopStart + 70
+      `M${xFlagStart},${yPartialFlagTopStart} C${xFlagStart + 15},${
+        yPartialFlagTopStart + 30
+      } ${xFlagStart + 53},${yPartialFlagTopStart + 53} ${xFlagStart + 120},${
+        yPartialFlagTopStart + 105
       }`
     );
     partialFlagTop.setAttribute('fill', 'none');
     partialFlagTop.setAttribute('stroke', 'currentColor');
-    partialFlagTop.setAttribute('stroke-width', '25');
+    partialFlagTop.setAttribute('stroke-width', '38');
     partialFlag.appendChild(partialFlagTop);
     flag.appendChild(partialFlag);
 
@@ -137,13 +137,13 @@ export const createNoteSvg = ({
     }
 
     const partialFlagTail = document.createElementNS(SVG_NS, 'line');
-    partialFlagTail.setAttribute('x1', (xPartialFlagLongEnd + 5).toString());
-    partialFlagTail.setAttribute('y1', (yPartialFlagTailStart - 5).toString());
-    partialFlagTail.setAttribute('x2', (xPartialFlagLongEnd - 40).toString());
-    partialFlagTail.setAttribute('y2', (yPartialFlagTailStart + 50).toString());
+    partialFlagTail.setAttribute('x1', (xPartialFlagLongEnd + 8).toString());
+    partialFlagTail.setAttribute('y1', (yPartialFlagTailStart - 8).toString());
+    partialFlagTail.setAttribute('x2', (xPartialFlagLongEnd - 60).toString());
+    partialFlagTail.setAttribute('y2', (yPartialFlagTailStart + 75).toString());
     partialFlagTail.setAttribute('fill', 'none');
     partialFlagTail.setAttribute('stroke', 'currentColor');
-    partialFlagTail.setAttribute('stroke-width', '28');
+    partialFlagTail.setAttribute('stroke-width', '42');
     flag.appendChild(partialFlagTail);
 
     g.appendChild(flag);
