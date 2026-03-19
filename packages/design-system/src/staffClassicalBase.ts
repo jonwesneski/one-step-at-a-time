@@ -15,8 +15,7 @@ import {
   Octave,
 } from './types/theory';
 import {
-  BeamCreatorType,
-  createBeamCreators,
+  BeamsBuilder,
   createChordSvg,
   createFlatSvg,
   createNoteSvg,
@@ -34,8 +33,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #parentKeySig: LetterNote | null;
   #describeContainer: SVGGElement;
   #notesContainer: SVGSVGElement;
-  #beamCreators: BeamCreatorType[] = [];
-  #beamGroups: SVGGElement[] = [];
+  #beamsBuilder: BeamsBuilder | null = null;
 
   constructor() {
     super();
@@ -240,8 +238,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
-    this.#beamCreators = createBeamCreators(elements);
-    const needsBeam = this.#beamCreators.length > 0;
+    this.#beamsBuilder = new BeamsBuilder(elements);
     const stemUp = this.#determineIsStemUp(elements);
 
     // Create all note SVGs (y-positioned, not yet x-positioned or appended)
@@ -268,7 +265,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const noteElement = element as NoteElementType;
         const [noteSvg, yOffset] = createNoteSvg({
           duration,
-          noFlags: needsBeam,
+          noFlags: this.#beamsBuilder.isBeamed(i),
           stemUp,
           qualifiedElementName: 'svg',
         });
@@ -285,7 +282,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const [chordSvg, yOffset] = createChordSvg({
           duration,
           staffYCoordinates,
-          noFlags: needsBeam,
+          noFlags: this.#beamsBuilder.isBeamed(i),
           stemUp,
           // todo: not using at the moment; check if i still need it
           qualifiedElementName: 'g',
@@ -303,21 +300,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         noteSvgs.push(chordSvg);
       }
 
-      for (const bc of this.#beamCreators) {
-        bc.setNoteBeamY(i, beamY);
-      }
+      this.#beamsBuilder.setY(i, beamY);
       beatOffset += durationToFactor[duration as DurationType];
     }
 
-    // Build beam groups (coords are NaN until spaceNotes fills them in)
-    this.#beamGroups = this.#beamCreators.map((c) => c.buildBeams());
+    // Build beam groups (x coords are NaN until spaceNotes fills them in)
+    const beamGroups = this.#beamsBuilder.buildGroups();
 
     this.#spaceNotes(noteSvgs);
 
     for (const svg of noteSvgs) {
       this.#notesContainer.appendChild(svg);
     }
-    for (const beamGroup of this.#beamGroups) {
+    for (const beamGroup of beamGroups) {
       this.#notesContainer.appendChild(beamGroup);
     }
   }
@@ -377,20 +372,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     const measureDuration = beatsInMeasure / beatType;
 
+    const minNoteWidth = 20; // px — minimum space per note to prevent notehead overlap
+    const proportionalWidth = remainingWidth - elements.length * minNoteWidth;
+
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].dataset.duration as DurationType;
-      const xOffset = (beatOffset / measureDuration) * remainingWidth;
+      const xOffset =
+        i * minNoteWidth + (beatOffset / measureDuration) * proportionalWidth;
 
-      for (const beamCreator of this.#beamCreators) {
-        beamCreator.setNoteBeamX(i, xOffset);
-      }
+      this.#beamsBuilder?.setX(i, xOffset);
       this.#spaceNote(elements[i], xOffset);
       beatOffset += durationToFactor[duration];
     }
-    this.#beamCreators.forEach((creator, j) =>
-      creator.spaceBeam(this.#beamGroups[j])
-    );
+    this.#beamsBuilder?.spaceAll();
   }
 
   #spaceNote(element: SVGElement, xOffset: number) {

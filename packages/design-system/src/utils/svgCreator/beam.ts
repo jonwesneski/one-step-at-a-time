@@ -88,7 +88,22 @@ Beams in music notation – concise reference
   - Do not over-slant; keep the slant modest (roughly within about one staff space between ends).
   - The slant should follow the general contour, not every small jump.
 
-10. Positioning and spacing of beams
+10. Fractional beams (partial beams)
+------------------------------------
+- A fractional (partial) beam is a beam that connects only part of a group of fast notes, instead of running across all stems.
+- They are used when a shorter-value note is adjacent to a longer-value note:
+  - Example: eighth–two sixteenths.
+    - All three notes share the primary beam (eighth level).
+    - The two sixteenths each have a short extra beam “stub” (fractional beam) toward the inside of the group to show their extra subdivision.
+- Fractional beams always attach to the stem of the shorter-value note and point toward the note(s) they subdivide with.
+- They visually encode both:
+  - Which notes belong to the same main beat group (via the primary beam), and
+  - Which notes are faster subdivisions (via the fractional, extra beams).
+- In more complex patterns (e.g., sixteenth–eighth–sixteenth, or runs mixing 16ths and 32nds), fractional beams:
+  - Keep the main beam continuous at the slower common value.
+  - Use partial inner beams only where the faster values occur.
+
+11. Positioning and spacing of beams
 ------------------------------------
 - The beam is positioned such that:
   - All stems are roughly the same length within a group.
@@ -97,7 +112,7 @@ Beams in music notation – concise reference
   - The beam may be nearly horizontal with some stems longer/shorter, or
   - The group may be split if readability is compromised.
 
-11. Primary vs secondary beams
+12. Primary vs secondary beams
 ------------------------------
 - Primary beam:
   - The outermost beam connecting the group (for the “base” short value).
@@ -105,14 +120,15 @@ Beams in music notation – concise reference
 - Secondary (and further) beams:
   - Inner beams that can be broken to show sub-groupings.
   - Example: in a run of 16ths, you might keep the primary beam continuous but break secondary beams at beat boundaries to show 2+2 or 4+4.
+- Fractional beams are often secondary/tertiary beams applied only to stems of shorter values inside a mixed group.
 
-12. Tuplets and beams
+13. Tuplets and beams
 ---------------------
 - Tuplets (e.g., triplets, quintuplets) of short notes are often beamed.
 - The beam groups the tuplet notes; a tuplet number/ratio is written above or below.
 - The tuplet beam should still respect meter clarity where possible, but may override standard grouping to show the tuplet as a unit.
 
-13. Style differences: instrumental vs vocal
+14. Style differences: instrumental vs vocal
 --------------------------------------------
 - Instrumental writing:
   - Strong preference for beams on short notes whenever grouped.
@@ -121,7 +137,7 @@ Beams in music notation – concise reference
   - Traditional: flags per note, especially when syllables change on each note.
   - Modern editions increasingly use beams for clarity, but often still break beams at syllable boundaries.
 
-14. Common do’s
+15. Common do’s
 ---------------
 - Do beam notes:
   - That belong in the same rhythmic group within a bar.
@@ -130,7 +146,7 @@ Beams in music notation – concise reference
 - Do adjust beams:
   - To avoid ambiguity and to match the perceived pulse, even if this means deviating slightly from strict mechanical grouping.
 
-15. Common don’ts
+16. Common don’ts
 -----------------
 - Don’t beam:
   - Across barlines.
@@ -150,62 +166,64 @@ import { NOTE_STEM_TIP_Y_OFFSET, NOTE_STEM_X_OFFSET } from './note';
 interface NoteData {
   x: number;
   y: number;
-  beamCount: number;
+  beamOrder: number; // 1 = eighth (primary only), 2 = sixteenth (primary + secondary), etc.
 }
 
 interface BeamSegment {
   noteIndex1: number;
   noteIndex2: number;
-  beamIndex: number;
+  layer: number; // 0 = primary, 1 = secondary, 2 = tertiary, …
   fractionalBeamDirection?: 'left' | 'right';
 }
 
-class _BeamCreator {
+// Owns one contiguous beam group (e.g. four consecutive sixteenth notes).
+// Indexed by local position (0..n-1 within the group); global-to-local
+// mapping is handled by BeamsBuilder via #globalIndices.
+class BeamGroup {
   static #thickness = 8;
   static #gap = 4;
   static #fractionalBeamWidth = 6;
 
-  #noteBeams: NoteData[];
+  #notes: NoteData[];
   #segments: BeamSegment[];
+  #globalIndices: number[];
 
-  constructor(beamCounts: number[]) {
-    this.#noteBeams = beamCounts.map((beamCount) => ({
+  constructor(beamOrders: number[], globalIndices: number[]) {
+    this.#notes = beamOrders.map((beamOrder) => ({
       x: NaN,
       y: NaN,
-      beamCount,
+      beamOrder,
     }));
+    this.#globalIndices = globalIndices;
     this.#segments = this.#computeSegments();
   }
 
+  // Segments are structural (based on beamOrder relationships) and computed
+  // once at construction. Only x/y coordinates change on resize.
   #computeSegments(): BeamSegment[] {
     const segments: BeamSegment[] = [];
-    const maxBeamCount = Math.max(...this.#noteBeams.map((n) => n.beamCount));
+    const layerCount = Math.max(...this.#notes.map((n) => n.beamOrder));
 
-    for (let beamIndex = 0; beamIndex < maxBeamCount; beamIndex++) {
+    for (let layer = 0; layer < layerCount; layer++) {
       let runStart = -1;
-      for (let i = 0; i <= this.#noteBeams.length; i++) {
-        const needsThisBeam =
-          i < this.#noteBeams.length &&
-          this.#noteBeams[i].beamCount > beamIndex;
+      for (let i = 0; i <= this.#notes.length; i++) {
+        const inThisLayer =
+          i < this.#notes.length && this.#notes[i].beamOrder > layer;
 
-        if (needsThisBeam && runStart === -1) {
+        if (inThisLayer && runStart === -1) {
           runStart = i;
-        } else if (!needsThisBeam && runStart !== -1) {
+        } else if (!inThisLayer && runStart !== -1) {
           const runEnd = i - 1;
           if (runEnd > runStart) {
-            // Multiple notes in the run — full beam across the span
-            segments.push({
-              noteIndex1: runStart,
-              noteIndex2: runEnd,
-              beamIndex,
-            });
+            // Multiple notes in the run — primary or secondary beam across the span
+            segments.push({ noteIndex1: runStart, noteIndex2: runEnd, layer });
           } else {
-            // Single isolated note — draw a fractional beam toward the nearest neighbor
+            // Single isolated note — fractional beam toward the nearest neighbor
             const goLeft = runStart > 0;
             segments.push({
               noteIndex1: runStart,
               noteIndex2: runStart,
-              beamIndex,
+              layer,
               fractionalBeamDirection: goLeft ? 'left' : 'right',
             });
           }
@@ -217,18 +235,23 @@ class _BeamCreator {
     return segments;
   }
 
-  // y is the note SVG's top-left y (beamY for chords). Call once per render.
+  // Called once per render from BeamsBuilder.setY(); ignored if globalIndex not in this group.
   // todo: account for stem-down
-  setNoteBeamY(index: number, y: number) {
-    this.#noteBeams[index].y = y + NOTE_STEM_TIP_Y_OFFSET;
+  setY(globalIndex: number, y: number) {
+    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    if (localIndex === -1) return;
+    this.#notes[localIndex].y = y + NOTE_STEM_TIP_Y_OFFSET;
   }
 
-  // x is in #notesContainer's coordinate space (1:1 with CSS px). Call on every spacing/resize.
-  setNoteBeamX(index: number, x: number) {
-    this.#noteBeams[index].x = x + NOTE_STEM_X_OFFSET;
+  // Called on every spacing/resize from BeamsBuilder.setX(); ignored if globalIndex not in this group.
+  setX(globalIndex: number, x: number) {
+    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    if (localIndex === -1) return;
+    this.#notes[localIndex].x = x + NOTE_STEM_X_OFFSET;
   }
 
-  buildBeams(): SVGGElement {
+  // Creates the <g> with one <polygon> per segment. Called once per render.
+  buildSvgGroup(): SVGGElement {
     const g = document.createElementNS(SVG_NS, 'g');
     g.classList.add('beam-group');
     for (let i = 0; i < this.#segments.length; i++) {
@@ -239,66 +262,119 @@ class _BeamCreator {
     return g;
   }
 
-  spaceBeam(beamGroup: SVGGElement) {
-    const polygons = beamGroup.querySelectorAll('polygon');
+  // Updates polygon points using current x/y. Called on every spacing/resize.
+  space(svgGroup: SVGGElement) {
+    const polygons = svgGroup.querySelectorAll('polygon');
     this.#segments.forEach((seg, i) => {
-      const noteX1 = this.#noteBeams[seg.noteIndex1].x;
-      const noteX2 = this.#noteBeams[seg.noteIndex2].x;
+      const noteX1 = this.#notes[seg.noteIndex1].x;
+      const noteX2 = this.#notes[seg.noteIndex2].x;
       const x1 =
         seg.fractionalBeamDirection === 'left'
-          ? noteX1 - _BeamCreator.#fractionalBeamWidth
+          ? noteX1 - BeamGroup.#fractionalBeamWidth
           : noteX1;
       const x2 =
         seg.fractionalBeamDirection === 'right'
-          ? noteX2 + _BeamCreator.#fractionalBeamWidth
+          ? noteX2 + BeamGroup.#fractionalBeamWidth
           : noteX2;
-      const yOffset =
-        seg.beamIndex * (_BeamCreator.#thickness + _BeamCreator.#gap);
+      const yOffset = seg.layer * (BeamGroup.#thickness + BeamGroup.#gap);
       const y1 = this.#yAtX(x1) + yOffset;
       const y2 = this.#yAtX(x2) + yOffset;
       polygons[i].setAttribute(
         'points',
-        `${x1},${y1} ${x1},${y1 + _BeamCreator.#thickness} ${x2},${
-          y2 + _BeamCreator.#thickness
+        `${x1},${y1} ${x1},${y1 + BeamGroup.#thickness} ${x2},${
+          y2 + BeamGroup.#thickness
         } ${x2},${y2}`
       );
     });
   }
 
   #yAtX(x: number): number {
-    const first = this.#noteBeams[0];
-    const last = this.#noteBeams[this.#noteBeams.length - 1];
+    const first = this.#notes[0];
+    const last = this.#notes[this.#notes.length - 1];
     if (first.x === last.x) return first.y;
     return first.y + (last.y - first.y) * ((x - first.x) / (last.x - first.x));
   }
 }
 
-export type BeamCreator = _BeamCreator;
+// Analyzes a measure's note elements at construction, determines beam groups,
+// and provides setY / setX / spaceAll to drive rendering and resize.
+export class BeamsBuilder {
+  #groups: BeamGroup[];
+  #beamedIndices: Set<number>;
+  #svgGroups: SVGGElement[] = [];
 
-export const createBeamCreators = (
-  elements: NoteOrChordElementType[]
-): BeamCreator[] => {
-  const beamCreators: BeamCreator[] = [];
-  const consecutives: number[] = [];
-  for (let i = 0; i < elements.length; i++) {
-    const duration =
-      elements[i].dataset.duration ?? elements[i].getAttribute('duration');
-    if (duration !== 'quarter' && duration !== 'half' && duration !== 'whole') {
-      if (consecutives.length === 0) {
-        consecutives.push(i);
-      } else if (consecutives[i - 1] !== undefined) {
-        consecutives.push(i);
+  constructor(elements: NoteOrChordElementType[]) {
+    const { groups, beamedIndices } = BeamsBuilder.#scan(elements);
+    this.#groups = groups;
+    this.#beamedIndices = beamedIndices;
+  }
+
+  static #scan(elements: NoteOrChordElementType[]): {
+    groups: BeamGroup[];
+    beamedIndices: Set<number>;
+  } {
+    const groups: BeamGroup[] = [];
+    const beamedIndices = new Set<number>();
+    // todo: need to properly handle more than 1 beam group per measure
+    const beamableIndices: number[] = [];
+
+    for (let i = 0; i < elements.length; i++) {
+      const duration =
+        elements[i].dataset.duration ?? elements[i].getAttribute('duration');
+      if (
+        duration !== 'quarter' &&
+        duration !== 'half' &&
+        duration !== 'whole'
+      ) {
+        if (beamableIndices.length === 0) {
+          beamableIndices.push(i);
+        } else if (beamableIndices[i - 1] !== undefined) {
+          beamableIndices.push(i);
+        }
       }
     }
+
+    if (beamableIndices.length && beamableIndices.length % 2 === 0) {
+      const beamOrders = beamableIndices.map((idx) => {
+        const duration = (elements[idx].dataset.duration ??
+          elements[idx].getAttribute('duration')) as DurationType;
+        return durationToFlagCountMap.get(duration) ?? 1;
+      });
+      groups.push(new BeamGroup(beamOrders, beamableIndices));
+      beamableIndices.forEach((i) => beamedIndices.add(i));
+    }
+
+    return { groups, beamedIndices };
   }
-  if (consecutives.length && consecutives.length % 2 === 0) {
-    const beamCounts = consecutives.map((idx) => {
-      const duration = (elements[idx].dataset.duration ??
-        elements[idx].getAttribute('duration')) as DurationType;
-      return durationToFlagCountMap.get(duration) ?? 1;
-    });
-    // todo: need to properly handle more than 1
-    beamCreators.push(new _BeamCreator(beamCounts));
+
+  // Returns true if the note at globalIndex belongs to a beam group.
+  // Use inside the note SVG creation loop to suppress flags.
+  isBeamed(globalIndex: number): boolean {
+    return this.#beamedIndices.has(globalIndex);
   }
-  return beamCreators;
-};
+
+  // Sets the y coordinate for note at globalIndex. Call once per render after creating the note SVG.
+  setY(globalIndex: number, y: number) {
+    for (const group of this.#groups) {
+      group.setY(globalIndex, y);
+    }
+  }
+
+  // Creates SVG <g> elements (one per beam group) and returns them for appending to the DOM.
+  buildGroups(): SVGGElement[] {
+    this.#svgGroups = this.#groups.map((g) => g.buildSvgGroup());
+    return this.#svgGroups;
+  }
+
+  // Sets the x coordinate for note at globalIndex. Call on every spacing/resize.
+  setX(globalIndex: number, x: number) {
+    for (const group of this.#groups) {
+      group.setX(globalIndex, x);
+    }
+  }
+
+  // Updates all beam polygon points using current x/y. Call after all setX calls.
+  spaceAll() {
+    this.#groups.forEach((group, j) => group.space(this.#svgGroups[j]));
+  }
+}
