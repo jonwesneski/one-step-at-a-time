@@ -243,6 +243,20 @@ class BeamGroup {
     this.#notes[localIndex].y = y + NOTE_STEM_TIP_Y_OFFSET;
   }
 
+  // Returns how much the stem tip must move (in px, positive = up) so the stem
+  // reaches the slanted primary beam at this note's position.
+  // Returns null if globalIndex is not in this group.
+  calculateStemExtension(globalIndex: number): number | null {
+    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    if (localIndex === -1) return null;
+    if (this.#notes.length <= 1) return 0;
+    const first = this.#notes[0];
+    const last = this.#notes[this.#notes.length - 1];
+    const t = localIndex / (this.#notes.length - 1);
+    const primaryBeamYAtNote = first.y + (last.y - first.y) * t;
+    return this.#notes[localIndex].y - primaryBeamYAtNote;
+  }
+
   // Called on every spacing/resize from BeamsBuilder.setX(); ignored if globalIndex not in this group.
   setX(globalIndex: number, x: number) {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
@@ -255,16 +269,16 @@ class BeamGroup {
     const g = document.createElementNS(SVG_NS, 'g');
     g.classList.add('beam-group');
     for (let i = 0; i < this.#segments.length; i++) {
-      const polygon = document.createElementNS(SVG_NS, 'polygon');
-      polygon.setAttribute('fill', 'currentColor');
-      g.appendChild(polygon);
+      const beam = document.createElementNS(SVG_NS, 'polygon');
+      beam.setAttribute('fill', 'currentColor');
+      g.appendChild(beam);
     }
     return g;
   }
 
   // Updates polygon points using current x/y. Called on every spacing/resize.
   space(svgGroup: SVGGElement) {
-    const polygons = svgGroup.querySelectorAll('polygon');
+    const beamPolygons = svgGroup.querySelectorAll('polygon');
     this.#segments.forEach((seg, i) => {
       const noteX1 = this.#notes[seg.noteIndex1].x;
       const noteX2 = this.#notes[seg.noteIndex2].x;
@@ -279,7 +293,7 @@ class BeamGroup {
       const yOffset = seg.layer * (BeamGroup.#thickness + BeamGroup.#gap);
       const y1 = this.#yAtX(x1) + yOffset;
       const y2 = this.#yAtX(x2) + yOffset;
-      polygons[i].setAttribute(
+      beamPolygons[i].setAttribute(
         'points',
         `${x1},${y1} ${x1},${y1 + BeamGroup.#thickness} ${x2},${
           y2 + BeamGroup.#thickness
@@ -351,6 +365,16 @@ export class BeamsBuilder {
   // Use inside the note SVG creation loop to suppress flags.
   isBeamed(globalIndex: number): boolean {
     return this.#beamedIndices.has(globalIndex);
+  }
+
+  // Returns the stem extension (px, positive = upward shift of stem tip) needed
+  // for this note to reach the slanted primary beam. Returns 0 if not beamed.
+  calculateStemExtension(globalIndex: number): number {
+    for (const group of this.#groups) {
+      const ext = group.calculateStemExtension(globalIndex);
+      if (ext !== null) return ext;
+    }
+    return 0;
   }
 
   // Sets the y coordinate for note at globalIndex. Call once per render after creating the note SVG.

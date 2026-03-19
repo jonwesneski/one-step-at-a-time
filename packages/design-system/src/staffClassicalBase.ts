@@ -21,6 +21,7 @@ import {
   createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from './utils';
 import { durationToFactor, factorToDuration, SVG_NS } from './utils/consts';
 
@@ -241,6 +242,31 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#beamsBuilder = new BeamsBuilder(elements);
     const stemUp = this.#determineIsStemUp(elements);
 
+    // Pre-pass: set y for all beamed notes so BeamsBuilder can compute slant
+    // before we create the note SVGs in the main loop.
+    const yHeadOffset = stemUp ? NOTE_Y_HEAD_OFFSET_STEM_UP : 7;
+    for (let i = 0; i < elements.length; i++) {
+      if (!this.#beamsBuilder.isBeamed(i)) continue;
+      const element = elements[i];
+      let preBeamY: number;
+      if (element.nodeName === 'MUSIC-NOTE') {
+        preBeamY =
+          10 +
+          this.noteToYCoordinate((element as NoteElementType).value) -
+          yHeadOffset;
+      } else {
+        const chordElement = element as ChordElementType;
+        const staffYCoordinates = chordElement.notes.map((note) =>
+          this.noteToYCoordinate(note.value)
+        );
+        const topmostStaffY = stemUp
+          ? Math.min(...staffYCoordinates)
+          : Math.max(...staffYCoordinates);
+        preBeamY = 10 + topmostStaffY - yHeadOffset;
+      }
+      this.#beamsBuilder.setY(i, preBeamY);
+    }
+
     // Create all note SVGs (y-positioned, not yet x-positioned or appended)
     const noteSvgs: SVGElement[] = [];
     let beatOffset = 0;
@@ -260,18 +286,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         break;
       }
 
-      let beamY: number;
       if (element.nodeName === 'MUSIC-NOTE') {
         const noteElement = element as NoteElementType;
         const [noteSvg, yOffset] = createNoteSvg({
           duration,
           noFlags: this.#beamsBuilder.isBeamed(i),
           stemUp,
+          stemExtension: this.#beamsBuilder.calculateStemExtension(i),
           qualifiedElementName: 'svg',
         });
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        beamY = 10 + this.noteToYCoordinate(noteElement.value) - yOffset;
-        noteSvg.setAttribute('y', beamY.toString());
+        const noteY = 10 + this.noteToYCoordinate(noteElement.value) - yOffset;
+        noteSvg.setAttribute('y', noteY.toString());
 
         noteSvgs.push(noteSvg);
       } else {
@@ -294,13 +320,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // Store beam y in dataset since createChordSvg already positions
         // each note inside the chord SVG relative to its own origin.
         // Setting y on the outer <svg> would double-offset the chord notes visually.
-        beamY = 10 + topmostStaffY - yOffset;
+        const beamY = 10 + topmostStaffY - yOffset;
         chordSvg.dataset.beamY = beamY.toString();
 
         noteSvgs.push(chordSvg);
       }
 
-      this.#beamsBuilder.setY(i, beamY);
       beatOffset += durationToFactor[duration as DurationType];
     }
 

@@ -5,26 +5,33 @@ import { durationToFlagCountMap, SVG_NS } from '../consts';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
 export const NOTE_SVG_WIDTH = 32;
-// Draw in a 600x750 coordinate space scaled down to the 32x40 viewport via a
-// transform on a wrapper <g>. This avoids viewBox-based sizing quirks when
-// the SVG is nested inside other SVG elements.
+// Draw in a 600-unit-wide coordinate space scaled to a 32x60 viewport via a
+// uniform scale transform on a wrapper <g>. This avoids viewBox-based sizing
+// quirks when the SVG is nested inside other SVG elements.
 export const COORD_WIDTH = 600;
-// 32/600 — same ratio for both axes (600:750 == 32:40)
+// 32/600 — applied uniformly to both axes
 const NOTE_SCALE = NOTE_SVG_WIDTH / COORD_WIDTH;
+// SVG viewport height (px). Must be tall enough to contain the notehead.
+export const NOTE_SVG_HEIGHT = 60;
 export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG (~19.47px)
 export const NOTE_Y_STEM_START = 100;
 export const NOTE_STEM_TIP_Y_OFFSET = NOTE_Y_STEM_START * NOTE_SCALE; // stem tip y for stem-up (~5.33px)
+// Y offset used to align the notehead with a staff line when positioning the note SVG.
+// Equals NOTE_SVG_HEIGHT - 3 for stem-up; must stay in sync with createNoteSvg's yHeadOffset.
+export const NOTE_Y_HEAD_OFFSET_STEM_UP = NOTE_SVG_HEIGHT - 3; // 57px
 
 export type NoteProps = {
   duration: DurationType;
   noFlags?: boolean;
   stemUp?: boolean;
+  stemExtension?: number; // px to shift the stem tip upward (positive = longer stem)
   qualifiedElementName?: 'svg' | 'g';
 };
 export const createNoteSvg = ({
   duration,
   noFlags = false,
   stemUp = true,
+  stemExtension = 0,
   qualifiedElementName = 'svg',
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
@@ -33,7 +40,7 @@ export const createNoteSvg = ({
   }
   svg.dataset.duration = duration;
   svg.dataset.stemUp = `${stemUp}`;
-  const height = 40;
+  const height = NOTE_SVG_HEIGHT;
   svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
   svg.setAttribute('height', `${height}`);
 
@@ -41,7 +48,7 @@ export const createNoteSvg = ({
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
   const xStart = COORD_WIDTH / 2;
-  const stemLength = 400;
+  const stemLength = 760; // ~40px at NOTE_SCALE; gives visible stem below the beam
   const yStemEnd = NOTE_Y_STEM_START + stemLength;
   const headWidth = 80;
 
@@ -49,12 +56,18 @@ export const createNoteSvg = ({
   const stemX = stemUp ? xStart + headWidth - 15 : xStart;
   const stemWidth = 22;
   if (duration !== 'whole') {
+    const stemExtensionInternal = stemExtension / NOTE_SCALE;
+    const stemTipY = NOTE_Y_STEM_START - stemExtensionInternal;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
-    stem.setAttribute('y1', NOTE_Y_STEM_START.toString());
+    // todo: need to consider flags for stem length; 16ths and smaller
+    stem.setAttribute('y1', stemTipY.toString());
     stem.setAttribute('x2', stemX.toString());
     stem.setAttribute('y2', yStemEnd.toString());
+    if (stemExtension !== 0) {
+      svg.setAttribute('overflow', 'visible');
+    }
     stem.setAttribute('stroke', 'currentColor');
     stem.setAttribute('stroke-width', stemWidth.toString());
     g.appendChild(stem);
@@ -63,7 +76,7 @@ export const createNoteSvg = ({
   // Flag(s)
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   if (!noFlags && flagCount > 0) {
-    // todo need to calculate flags with stemup or not; assuming stemp fo now
+    // todo need to calculate flags with stemup or not; assuming stem up for now
     const xFlagStart = stemX;
     const flag = document.createElementNS(SVG_NS, 'g');
     flag.classList.add('flag');

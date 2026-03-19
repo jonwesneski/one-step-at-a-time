@@ -88,6 +88,19 @@ OR
 nx run packages/design-system:test
 ```
 
+### Format
+
+```bash
+# Format all files in the repo
+npx nx format:write
+
+# Format only files you've changed (affected by current branch vs main)
+npx nx format:write --base=main
+
+# Format only uncommitted changes
+npx nx format:write --uncommitted
+```
+
 ### Type check
 
 ```bash
