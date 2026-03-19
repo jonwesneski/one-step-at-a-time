@@ -17,14 +17,19 @@ export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG 
 export const NOTE_Y_STEM_START = 100;
 export const NOTE_STEM_TIP_Y_OFFSET = NOTE_Y_STEM_START * NOTE_SCALE; // stem tip y for stem-up (~5.33px)
 // Y offset used to align the notehead with a staff line when positioning the note SVG.
-// Equals NOTE_SVG_HEIGHT - 3 for stem-up; must stay in sync with createNoteSvg's yHeadOffset.
-export const NOTE_Y_HEAD_OFFSET_STEM_UP = NOTE_SVG_HEIGHT - 3; // 57px
+// = Math.round(10 + (NOTE_Y_STEM_START + 760) * NOTE_SCALE). Must stay in sync with
+// createNoteSvg's yHeadOffset formula for the base stem length (no flag extension).
+export const NOTE_Y_HEAD_OFFSET_STEM_UP = 47; // Math.round(10 + 700 * (32/600))
+const BASE_STEM_LENGTH = 600; // ~32px at NOTE_SCALE (~4 staff line spaces)
+const STEM_WIDTH = 22;
+const HEAD_WIDTH = 80;
+const FLAG_Y_SPACING = 80;
 
 export type NoteProps = {
   duration: DurationType;
   noFlags?: boolean;
   stemUp?: boolean;
-  stemExtension?: number; // px to shift the stem tip upward (positive = longer stem)
+  stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
 };
 export const createNoteSvg = ({
@@ -43,38 +48,42 @@ export const createNoteSvg = ({
   const height = NOTE_SVG_HEIGHT;
   svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
   svg.setAttribute('height', `${height}`);
+  // Not using viewbox but it should be somewhere around
+  // COORD_WIDTH and BASE_STEM_LENGTH
 
   const g = document.createElementNS(SVG_NS, 'g');
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
   const xStart = COORD_WIDTH / 2;
-  const stemLength = 760; // ~40px at NOTE_SCALE; gives visible stem below the beam
-  const yStemEnd = NOTE_Y_STEM_START + stemLength;
-  const headWidth = 80;
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+
+  // Each flag beyond the first needs FLAG_Y_SPACING more internal units so the
+  // lowest flag stays comfortably above the notehead. Skipped for beamed notes
+  // (noFlags=true) since their stems are positioned by the beam slant mechanism.
+  const flagStemExtension =
+    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
 
   // Stem
-  const stemX = stemUp ? xStart + headWidth - 15 : xStart;
-  const stemWidth = 22;
+  const stemX = stemUp ? xStart + HEAD_WIDTH - 15 : xStart;
   if (duration !== 'whole') {
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
     const stemTipY = NOTE_Y_STEM_START - stemExtensionInternal;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
-    // todo: need to consider flags for stem length; 16ths and smaller
     stem.setAttribute('y1', stemTipY.toString());
     stem.setAttribute('x2', stemX.toString());
     stem.setAttribute('y2', yStemEnd.toString());
-    if (stemExtension !== 0) {
+    if (stemExtension !== 0 || flagStemExtension > 0) {
       svg.setAttribute('overflow', 'visible');
     }
     stem.setAttribute('stroke', 'currentColor');
-    stem.setAttribute('stroke-width', stemWidth.toString());
+    stem.setAttribute('stroke-width', STEM_WIDTH.toString());
     g.appendChild(stem);
   }
 
   // Flag(s)
-  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   if (!noFlags && flagCount > 0) {
     // todo need to calculate flags with stemup or not; assuming stem up for now
     const xFlagStart = stemX;
@@ -120,7 +129,7 @@ export const createNoteSvg = ({
     let yPartialFlagTailStart = yPartialFlagLongEnd;
     for (let i = 0; i < flagCount - 1; i++) {
       const flagCopy = document.createElementNS(SVG_NS, 'use');
-      const y = 80 * (i + 1);
+      const y = FLAG_Y_SPACING * (i + 1);
       yPartialFlagTailStart = yPartialFlagLongEnd + y;
       flagCopy.setAttribute('href', `#${name}`);
       flagCopy.setAttribute('y', y.toString());
@@ -143,16 +152,16 @@ export const createNoteSvg = ({
   // Head
   const headXStartStr = stemUp
     ? (xStart - 10).toString()
-    : (xStart + stemWidth).toString();
-  const headYStartStr = stemUp ? yStemEnd.toString() : headWidth.toString();
+    : (xStart + STEM_WIDTH).toString();
+  const headYStartStr = stemUp ? yStemEnd.toString() : HEAD_WIDTH.toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
   const head = document.createElementNS(SVG_NS, 'ellipse');
   head.classList.add('head');
   head.setAttribute('cx', headXStartStr);
   head.setAttribute('cy', headYStartStr);
-  head.setAttribute('rx', headWidth.toString());
-  head.setAttribute('ry', (headWidth * 0.75).toString());
+  head.setAttribute('rx', HEAD_WIDTH.toString());
+  head.setAttribute('ry', (HEAD_WIDTH * 0.75).toString());
   head.setAttribute(
     'transform',
     `rotate(-30 ${headXStartStr} ${headYStartStr})`
@@ -164,6 +173,6 @@ export const createNoteSvg = ({
 
   svg.appendChild(g);
 
-  const yHeadOffset = stemUp ? height - 3 : 7;
+  const yHeadOffset = stemUp ? Math.round(10 + yStemEnd * NOTE_SCALE) : 7;
   return [svg, yHeadOffset];
 };
