@@ -239,7 +239,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
-    this.#beamsBuilder = new BeamsBuilder(elements);
+    this.#beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
     const stemUp = this.#determineIsStemUp(elements);
 
     // Pre-pass: set y for all beamed notes so BeamsBuilder can compute slant

@@ -159,8 +159,8 @@ Beams in music notation – concise reference
 */
 
 import { NoteOrChordElementType } from '../../types/elements';
-import { DurationType } from '../../types/theory';
-import { SVG_NS, durationToFlagCountMap } from '../consts';
+import { BeatsInMeasure, BeatTypeInMeasure, DurationType } from '../../types/theory';
+import { SVG_NS, durationToFactor, durationToFlagCountMap } from '../consts';
 import { NOTE_STEM_TIP_Y_OFFSET, NOTE_STEM_X_OFFSET } from './note';
 
 interface NoteData {
@@ -317,45 +317,100 @@ export class BeamsBuilder {
   #beamedIndices: Set<number>;
   #svgGroups: SVGGElement[] = [];
 
-  constructor(elements: NoteOrChordElementType[]) {
-    const { groups, beamedIndices } = BeamsBuilder.#scan(elements);
+  constructor(
+    elements: NoteOrChordElementType[],
+    time: [BeatsInMeasure, BeatTypeInMeasure]
+  ) {
+    const { groups, beamedIndices } = BeamsBuilder.#scan(elements, time);
     this.#groups = groups;
     this.#beamedIndices = beamedIndices;
   }
 
-  static #scan(elements: NoteOrChordElementType[]): {
+  // Returns the size (in whole-note fractions) of each beam group window for a
+  // given time signature. This is the single place to extend grouping policy.
+  static #beamGroupDuration(
+    beats: BeatsInMeasure,
+    beatType: BeatTypeInMeasure
+  ): number {
+    // Compound time (6/8, 9/8, 12/8 …): one dotted-quarter per group
+    if (beatType === 8 && beats % 3 === 0) return 3 / 8;
+    // 4/4: half-measure groups — (beats 1–2) and (beats 3–4)
+    if (beats === 4 && beatType === 4) return 2 / 4;
+    // All other simple time: one group per beat
+    return 1 / beatType;
+  }
+
+  static #scan(
+    elements: NoteOrChordElementType[],
+    time: [BeatsInMeasure, BeatTypeInMeasure]
+  ): {
     groups: BeamGroup[];
     beamedIndices: Set<number>;
   } {
+    const [beats, beatType] = time;
+    const measureDuration = beats / beatType;
+    const windowSize = BeamsBuilder.#beamGroupDuration(beats, beatType);
     const groups: BeamGroup[] = [];
     const beamedIndices = new Set<number>();
-    // todo: need to properly handle more than 1 beam group per measure
-    const beamableIndices: number[] = [];
 
-    for (let i = 0; i < elements.length; i++) {
-      const duration =
-        elements[i].dataset.duration ?? elements[i].getAttribute('duration');
-      if (
-        duration !== 'quarter' &&
-        duration !== 'half' &&
-        duration !== 'whole'
-      ) {
-        if (beamableIndices.length === 0) {
-          beamableIndices.push(i);
-        } else if (beamableIndices[i - 1] !== undefined) {
-          beamableIndices.push(i);
-        }
-      }
+    // Compute the beat offset (whole-note fraction) at which each element starts.
+    const elementOffsets: number[] = [];
+    let offset = 0;
+    for (const el of elements) {
+      elementOffsets.push(offset);
+      const dur = (el.dataset.duration ??
+        el.getAttribute('duration')) as DurationType;
+      offset += durationToFactor[dur] ?? 0;
     }
 
-    if (beamableIndices.length && beamableIndices.length % 2 === 0) {
-      const beamOrders = beamableIndices.map((idx) => {
-        const duration = (elements[idx].dataset.duration ??
-          elements[idx].getAttribute('duration')) as DurationType;
-        return durationToFlagCountMap.get(duration) ?? 1;
-      });
-      groups.push(new BeamGroup(beamOrders, beamableIndices));
-      beamableIndices.forEach((i) => beamedIndices.add(i));
+    // Helper: flush a completed consecutive run; creates a BeamGroup only when
+    // the run has ≥ 2 notes (lone notes fall back to flags).
+    const flushRun = (runOrders: number[], runIndices: number[]) => {
+      if (runIndices.length >= 2) {
+        groups.push(new BeamGroup(runOrders, runIndices));
+        runIndices.forEach((i) => beamedIndices.add(i));
+      }
+    };
+
+    // Walk each beat-group window and collect consecutive beamable runs.
+    for (
+      let windowStart = 0;
+      windowStart < measureDuration - 1e-9;
+      windowStart += windowSize
+    ) {
+      const windowEnd = windowStart + windowSize;
+      let runOrders: number[] = [];
+      let runIndices: number[] = [];
+
+      for (let i = 0; i < elements.length; i++) {
+        const elOffset = elementOffsets[i];
+        if (elOffset < windowStart - 1e-9 || elOffset >= windowEnd - 1e-9)
+          continue;
+
+        const dur = (elements[i].dataset.duration ??
+          elements[i].getAttribute('duration')) as DurationType;
+        const flagCount = durationToFlagCountMap.get(dur);
+
+        if (flagCount !== undefined) {
+          // Non-adjacent index means a non-beamable note broke the run.
+          if (
+            runIndices.length > 0 &&
+            runIndices[runIndices.length - 1] !== i - 1
+          ) {
+            flushRun(runOrders, runIndices);
+            runOrders = [];
+            runIndices = [];
+          }
+          runOrders.push(flagCount);
+          runIndices.push(i);
+        } else {
+          flushRun(runOrders, runIndices);
+          runOrders = [];
+          runIndices = [];
+        }
+      }
+
+      flushRun(runOrders, runIndices); // flush any open run at window end
     }
 
     return { groups, beamedIndices };

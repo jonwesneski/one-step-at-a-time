@@ -139,4 +139,3 @@ Rendering flow (classical staves):
 - Use `SVG_NS = 'http://www.w3.org/2000/svg'` with `createElementNS()` for all SVG creation
 - CSS custom properties: `--flex-staff-basis`, `--flex-staff-minw` for layout overrides
 - `currentColor` used in SVG so staff color inherits from CSS
-- Import order in `index.ts` matters — maintain dependency order

@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
-// Import order matters — use the index to register all components
 import '../index';
 
 const meta: Meta = {
