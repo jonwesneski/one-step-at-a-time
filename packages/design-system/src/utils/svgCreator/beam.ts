@@ -198,6 +198,8 @@ class BeamGroup {
   static #minBeamStemPx = 25;
   // Maximum shortening allowed before a stem hits the minimum length.
   static #maxShortening = BeamGroup.#baseStemPx - BeamGroup.#minBeamStemPx; // 7px
+  // Extra px stems extend past the beam edge so sub-pixel rendering doesn't leave a gap.
+  static #stemOverlap = 2;
 
   #notes: NoteData[];
   #segments: BeamSegment[];
@@ -282,9 +284,13 @@ class BeamGroup {
       minExt = Math.min(minExt, rawExt);
     }
 
-    if (minExt < -BeamGroup.#maxShortening) {
+    // #stemOverlap is subtracted inside calculateStemExtension, so it effectively
+    // reduces the usable shortening budget.  Trigger and magnitude must both account
+    // for it so the worst-case rendered stem is exactly #minBeamStemPx long.
+    const adjustedMax = BeamGroup.#maxShortening - BeamGroup.#stemOverlap;
+    if (minExt < -adjustedMax) {
       // Shift the beam toward the noteheads so the shortest stem reaches the minimum.
-      const shortage = -minExt - BeamGroup.#maxShortening;
+      const shortage = -minExt - adjustedMax;
       this.#beamShift = this.#stemUp ? -shortage : shortage;
     }
   }
@@ -304,7 +310,9 @@ class BeamGroup {
     const delta = this.#notes[localIndex].y - primaryBeamYAtNote;
     // Stem-up: positive delta = stem tip is below beam → extend up.
     // Stem-down: flip sign since beam is below noteheads.
-    return this.#stemUp ? delta : -delta;
+    // Subtract overlap so the stem tip sits slightly inside the beam polygon rather than
+    // exactly at its edge, preventing sub-pixel rendering gaps.
+    return (this.#stemUp ? delta : -delta) - BeamGroup.#stemOverlap;
   }
 
   // Returns the global indices of all notes in this group if globalIndex belongs to it,
@@ -330,6 +338,7 @@ class BeamGroup {
     g.classList.add('beam-group');
     for (let i = 0; i < this.#segments.length; i++) {
       const beam = document.createElementNS(SVG_NS, 'polygon');
+      beam.classList.add('beam');
       beam.setAttribute('fill', 'currentColor');
       g.appendChild(beam);
     }

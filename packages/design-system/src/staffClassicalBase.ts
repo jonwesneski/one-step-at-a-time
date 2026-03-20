@@ -264,8 +264,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           this.noteToYCoordinate(note.value)
         );
         const extremalStaffY = stemUp
-          ? Math.min(...staffYCoordinates)
-          : Math.max(...staffYCoordinates);
+          ? Math.max(...staffYCoordinates)
+          : Math.min(...staffYCoordinates);
         preBeamY = 10 + extremalStaffY - yHeadOffset;
       }
       this.#beamsBuilder.setY(i, preBeamY, stemUp);
@@ -314,23 +314,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const staffYCoordinates = chordElement.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        const [chordSvg, yOffset] = createChordSvg({
+        const [chordSvg] = createChordSvg({
           duration,
           staffYCoordinates,
           noFlags: this.#beamsBuilder.isBeamed(i),
           stemUp,
-          // todo: not using at the moment; check if i still need it
+          stemExtension: this.#beamsBuilder.calculateStemExtension(i),
           qualifiedElementName: 'g',
         });
         chordSvg.setAttribute('overflow', 'visible');
-        const extremalStaffY = stemUp
-          ? Math.min(...staffYCoordinates)
-          : Math.max(...staffYCoordinates);
-        // Store beam y in dataset since createChordSvg already positions
-        // each note inside the chord SVG relative to its own origin.
-        // Setting y on the outer <svg> would double-offset the chord notes visually.
-        const beamY = 10 + extremalStaffY - yOffset;
-        chordSvg.dataset.beamY = beamY.toString();
 
         noteSvgs.push(chordSvg);
       }

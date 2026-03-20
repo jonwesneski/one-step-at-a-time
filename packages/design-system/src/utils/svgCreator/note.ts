@@ -10,7 +10,7 @@ export const NOTE_SVG_WIDTH = 32;
 // quirks when the SVG is nested inside other SVG elements.
 export const COORD_WIDTH = 600;
 // 32/600 — applied uniformly to both axes
-const NOTE_SCALE = NOTE_SVG_WIDTH / COORD_WIDTH;
+export const NOTE_SCALE = NOTE_SVG_WIDTH / COORD_WIDTH;
 // SVG viewport height (px). Must be tall enough to contain the notehead.
 export const NOTE_SVG_HEIGHT = 60;
 export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG, stem-up (~19.47px)
@@ -36,6 +36,7 @@ export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
 export type NoteProps = {
   duration: DurationType;
   noFlags?: boolean;
+  noStem?: boolean; // true for non-extremal chord notes — renders head only, no stem or flags
   stemUp?: boolean;
   stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
@@ -43,6 +44,7 @@ export type NoteProps = {
 export const createNoteSvg = ({
   duration,
   noFlags = false,
+  noStem = false,
   stemUp = true,
   stemExtension = 0,
   qualifiedElementName = 'svg',
@@ -77,7 +79,7 @@ export const createNoteSvg = ({
   const stemX = stemUp
     ? xStart + HEAD_WIDTH - 15
     : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
-  if (duration !== 'whole') {
+  if (!noStem && duration !== 'whole') {
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
     // Stem-up: tip at top (y1), head end at bottom (y2).
     // Stem-down: head end at top (y1), tip at bottom (y2).
@@ -105,7 +107,7 @@ export const createNoteSvg = ({
   }
 
   // Flag(s)
-  if (!noFlags && flagCount > 0) {
+  if (!noStem && !noFlags && flagCount > 0) {
     // todo need to calculate flags with stemup or not; assuming stem up for now
     const xFlagStart = stemX;
     const flag = document.createElementNS(SVG_NS, 'g');

@@ -18,6 +18,7 @@ export const Primary: Story = {
       <music-note value="D" duration="eighth"></music-note>
       <music-note value="E" duration="eighth"></music-note>
       <music-note value="F" duration="eighth"></music-note>
+
       <music-note value="G" duration="eighth"></music-note>
       <music-note value="F" duration="eighth"></music-note>
       <music-note value="E" duration="eighth"></music-note>
@@ -36,12 +37,31 @@ export const Secondary: Story = {
       <music-note value="F" duration="eighth"></music-note>
       <music-note value="G" duration="sixteenth"></music-note>
       <music-note value="A" duration="sixteenth"></music-note>
-      <music-note value="G" duration="eighth"></music-note>
-      <music-note value="F" duration="sixteenth"></music-note>
-      <music-note value="E" duration="sixteenth"></music-note>
-      <music-note value="D" duration="eighth"></music-note>
-      <music-note value="C" duration="sixteenth"></music-note>
-      <music-note value="B" duration="sixteenth"></music-note>
+
+      <music-chord duration="eighth">
+        <music-note value="G" duration="eighth"></music-note>
+        <music-note value="B" duration="eighth"></music-note>
+      </music-chord>
+      <music-chord duration="sixteenth">
+        <music-note value="F" duration="sixteenth"></music-note>
+        <music-note value="A" duration="sixteenth"></music-note>
+      </music-chord>
+      <music-chord duration="sixteenth">
+        <music-note value="E" duration="sixteenth"></music-note>
+        <music-note value="G" duration="sixteenth"></music-note>
+      </music-chord>
+      <music-chord duration="eighth">
+        <music-note value="D" duration="eighth"></music-note>
+        <music-note value="F" duration="eighth"></music-note>
+      </music-chord>
+      <music-chord duration="sixteenth">
+        <music-note value="C" duration="sixteenth"></music-note>
+        <music-note value="E" duration="sixteenth"></music-note>
+      </music-chord>
+      <music-chord duration="sixteenth">
+        <music-note value="B" duration="sixteenth"></music-note>
+        <music-note value="D" duration="sixteenth"></music-note>
+      </music-chord>
     </music-staff-treble>
   `,
 };
