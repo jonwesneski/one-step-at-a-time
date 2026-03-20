@@ -21,6 +21,7 @@ import {
   createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from './utils';
 import { durationToFactor, factorToDuration, SVG_NS } from './utils/consts';
@@ -240,13 +241,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureDuration = beatsInMeasure / beatType;
 
     this.#beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
-    const stemUp = this.#determineIsStemUp(elements);
+    const stemDirections = this.#determineStemDirections(elements);
 
     // Pre-pass: set y for all beamed notes so BeamsBuilder can compute slant
     // before we create the note SVGs in the main loop.
-    const yHeadOffset = stemUp ? NOTE_Y_HEAD_OFFSET_STEM_UP : 7;
     for (let i = 0; i < elements.length; i++) {
       if (!this.#beamsBuilder.isBeamed(i)) continue;
+      const stemUp = stemDirections[i];
+      const yHeadOffset = stemUp
+        ? NOTE_Y_HEAD_OFFSET_STEM_UP
+        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
       const element = elements[i];
       let preBeamY: number;
       if (element.nodeName === 'MUSIC-NOTE') {
@@ -259,13 +263,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const staffYCoordinates = chordElement.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        const topmostStaffY = stemUp
+        const extremalStaffY = stemUp
           ? Math.min(...staffYCoordinates)
           : Math.max(...staffYCoordinates);
-        preBeamY = 10 + topmostStaffY - yHeadOffset;
+        preBeamY = 10 + extremalStaffY - yHeadOffset;
       }
-      this.#beamsBuilder.setY(i, preBeamY);
+      this.#beamsBuilder.setY(i, preBeamY, stemUp);
     }
+
+    // Shift beam lines so no stem in any group is shorter than the minimum.
+    this.#beamsBuilder.finalizeBeams();
 
     // Create all note SVGs (y-positioned, not yet x-positioned or appended)
     const noteSvgs: SVGElement[] = [];
@@ -285,6 +292,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         );
         break;
       }
+
+      const stemUp = stemDirections[i];
 
       if (element.nodeName === 'MUSIC-NOTE') {
         const noteElement = element as NoteElementType;
@@ -314,13 +323,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           qualifiedElementName: 'g',
         });
         chordSvg.setAttribute('overflow', 'visible');
-        const topmostStaffY = stemUp
+        const extremalStaffY = stemUp
           ? Math.min(...staffYCoordinates)
           : Math.max(...staffYCoordinates);
         // Store beam y in dataset since createChordSvg already positions
         // each note inside the chord SVG relative to its own origin.
         // Setting y on the outer <svg> would double-offset the chord notes visually.
-        const beamY = 10 + topmostStaffY - yOffset;
+        const beamY = 10 + extremalStaffY - yOffset;
         chordSvg.dataset.beamY = beamY.toString();
 
         noteSvgs.push(chordSvg);
@@ -342,16 +351,58 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   }
 
-  #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {
-    // todo determine if all notes should be stemup or not before creating svgs
-    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
-    console.log(elements, 'satisfy lint');
-    return true;
-    // for (const node of nodes) {
-    //   const staffYCoordinate = this.noteToYCoordinate(
-    //     node.getAttribute('value') || 'C'
-    //   );
-    // }
+  // Rules (per standard music notation):
+  //   - Notes below the middle staff line → stem up.
+  //   - Notes on or above the middle staff line → stem down.
+  //   - Beam groups: the note farthest from the middle line determines direction for the whole group.
+  //   - Chords: the note farthest from the middle line determines direction.
+  #determineStemDirections(elements: NoteOrChordElementType[]): boolean[] {
+    const MIDDLE_STAFF_Y = 50;
+    const stemDirections = new Array<boolean>(elements.length).fill(true);
+    const processed = new Set<number>();
+
+    const getStaffYs = (el: NoteOrChordElementType): number[] => {
+      if (el.nodeName === 'MUSIC-NOTE') {
+        return [this.noteToYCoordinate((el as NoteElementType).value)];
+      }
+      return (el as ChordElementType).notes.map((n) =>
+        this.noteToYCoordinate(n.value)
+      );
+    };
+
+    // Among the given Y values, find the one farthest from the middle line
+    // and return the stem direction it implies.
+    const stemUpForYs = (ys: number[]): boolean => {
+      let maxDist = -1;
+      let stemUp = true;
+      for (const y of ys) {
+        const dist = Math.abs(y - MIDDLE_STAFF_Y);
+        if (dist > maxDist) {
+          maxDist = dist;
+          stemUp = y > MIDDLE_STAFF_Y; // below middle (larger Y) → stem up
+        }
+      }
+      return stemUp;
+    };
+
+    for (let i = 0; i < elements.length; i++) {
+      if (processed.has(i)) continue;
+      const groupIndices = this.#beamsBuilder!.beamGroupIndicesFor(i);
+      if (groupIndices) {
+        // All notes in a beam group share one direction: use the extremal note across the group.
+        const allYs = groupIndices.flatMap((idx) => getStaffYs(elements[idx]));
+        const stemUp = stemUpForYs(allYs);
+        for (const idx of groupIndices) {
+          stemDirections[idx] = stemUp;
+          processed.add(idx);
+        }
+      } else {
+        stemDirections[i] = stemUpForYs(getStaffYs(elements[i]));
+        processed.add(i);
+      }
+    }
+
+    return stemDirections;
   }
 
   // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')

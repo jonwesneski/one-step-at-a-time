@@ -161,7 +161,12 @@ Beams in music notation – concise reference
 import { NoteOrChordElementType } from '../../types/elements';
 import { BeatsInMeasure, BeatTypeInMeasure, DurationType } from '../../types/theory';
 import { SVG_NS, durationToFactor, durationToFlagCountMap } from '../consts';
-import { NOTE_STEM_TIP_Y_OFFSET, NOTE_STEM_X_OFFSET } from './note';
+import {
+  NOTE_STEM_TIP_Y_OFFSET,
+  NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
+  NOTE_STEM_X_OFFSET,
+  NOTE_STEM_X_OFFSET_STEM_DOWN,
+} from './note';
 
 interface NoteData {
   x: number;
@@ -183,10 +188,20 @@ class BeamGroup {
   static #thickness = 8;
   static #gap = 4;
   static #fractionalBeamWidth = 6;
+  // Base stem length in pixels (BASE_STEM_LENGTH * NOTE_SCALE = 600 * 32/600).
+  static #baseStemPx = 32;
+  // Minimum beamed stem length: 2.5 staff spaces × 10px/space.
+  static #minBeamStemPx = 25;
+  // Maximum shortening allowed before a stem hits the minimum length.
+  static #maxShortening = BeamGroup.#baseStemPx - BeamGroup.#minBeamStemPx; // 7px
 
   #notes: NoteData[];
   #segments: BeamSegment[];
   #globalIndices: number[];
+  #stemUp = true;
+  // Global Y offset applied to the whole beam line to ensure no stem is shorter than the minimum.
+  // Negative = beam moves up (stem-up groups); positive = beam moves down (stem-down groups).
+  #beamShift = 0;
 
   constructor(beamOrders: number[], globalIndices: number[]) {
     this.#notes = beamOrders.map((beamOrder) => ({
@@ -236,14 +251,39 @@ class BeamGroup {
   }
 
   // Called once per render from BeamsBuilder.setY(); ignored if globalIndex not in this group.
-  // todo: account for stem-down
-  setY(globalIndex: number, y: number) {
+  // All notes in a beam group share the same stem direction, so #stemUp is set on every call.
+  setY(globalIndex: number, y: number, stemUp: boolean) {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
-    this.#notes[localIndex].y = y + NOTE_STEM_TIP_Y_OFFSET;
+    this.#stemUp = stemUp;
+    const tipOffset = stemUp ? NOTE_STEM_TIP_Y_OFFSET : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    this.#notes[localIndex].y = y + tipOffset;
   }
 
-  // Returns how much the stem tip must move (in px, positive = up) so the stem
+  // After all setY calls, shifts the entire beam line so that no stem is shorter than the
+  // minimum. Must be called before calculateStemExtension or space().
+  finalizeBeam() {
+    if (this.#notes.length <= 1) return;
+    const first = this.#notes[0];
+    const last = this.#notes[this.#notes.length - 1];
+
+    let minExt = Infinity;
+    for (let i = 0; i < this.#notes.length; i++) {
+      const t = i / (this.#notes.length - 1);
+      const beamY = first.y + (last.y - first.y) * t;
+      const delta = this.#notes[i].y - beamY;
+      const rawExt = this.#stemUp ? delta : -delta;
+      minExt = Math.min(minExt, rawExt);
+    }
+
+    if (minExt < -BeamGroup.#maxShortening) {
+      // Shift the beam toward the noteheads so the shortest stem reaches the minimum.
+      const shortage = -minExt - BeamGroup.#maxShortening;
+      this.#beamShift = this.#stemUp ? -shortage : shortage;
+    }
+  }
+
+  // Returns how much the stem tip must move (in px, positive = toward beam) so the stem
   // reaches the slanted primary beam at this note's position.
   // Returns null if globalIndex is not in this group.
   calculateStemExtension(globalIndex: number): number | null {
@@ -253,15 +293,26 @@ class BeamGroup {
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
     const t = localIndex / (this.#notes.length - 1);
-    const primaryBeamYAtNote = first.y + (last.y - first.y) * t;
-    return this.#notes[localIndex].y - primaryBeamYAtNote;
+    const primaryBeamYAtNote = first.y + (last.y - first.y) * t + this.#beamShift;
+    const delta = this.#notes[localIndex].y - primaryBeamYAtNote;
+    // Stem-up: positive delta = stem tip is below beam → extend up.
+    // Stem-down: flip sign since beam is below noteheads.
+    return this.#stemUp ? delta : -delta;
+  }
+
+  // Returns the global indices of all notes in this group if globalIndex belongs to it,
+  // or null if globalIndex is not in this group.
+  getGlobalIndices(globalIndex: number): number[] | null {
+    if (!this.#globalIndices.includes(globalIndex)) return null;
+    return [...this.#globalIndices];
   }
 
   // Called on every spacing/resize from BeamsBuilder.setX(); ignored if globalIndex not in this group.
   setX(globalIndex: number, x: number) {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
-    this.#notes[localIndex].x = x + NOTE_STEM_X_OFFSET;
+    const xOffset = this.#stemUp ? NOTE_STEM_X_OFFSET : NOTE_STEM_X_OFFSET_STEM_DOWN;
+    this.#notes[localIndex].x = x + xOffset;
   }
 
   // Creates the <g> with one <polygon> per segment. Called once per render.
@@ -279,6 +330,10 @@ class BeamGroup {
   // Updates polygon points using current x/y. Called on every spacing/resize.
   space(svgGroup: SVGGElement) {
     const beamPolygons = svgGroup.querySelectorAll('polygon');
+    // Stem-up: layers grow downward (toward noteheads); beam polygon grows downward.
+    // Stem-down: layers grow upward (toward noteheads); beam polygon grows upward.
+    const layerDir = this.#stemUp ? 1 : -1;
+    const tk = BeamGroup.#thickness * layerDir;
     this.#segments.forEach((seg, i) => {
       const noteX1 = this.#notes[seg.noteIndex1].x;
       const noteX2 = this.#notes[seg.noteIndex2].x;
@@ -290,14 +345,12 @@ class BeamGroup {
         seg.fractionalBeamDirection === 'right'
           ? noteX2 + BeamGroup.#fractionalBeamWidth
           : noteX2;
-      const yOffset = seg.layer * (BeamGroup.#thickness + BeamGroup.#gap);
+      const yOffset = seg.layer * layerDir * (BeamGroup.#thickness + BeamGroup.#gap);
       const y1 = this.#yAtX(x1) + yOffset;
       const y2 = this.#yAtX(x2) + yOffset;
       beamPolygons[i].setAttribute(
         'points',
-        `${x1},${y1} ${x1},${y1 + BeamGroup.#thickness} ${x2},${
-          y2 + BeamGroup.#thickness
-        } ${x2},${y2}`
+        `${x1},${y1} ${x1},${y1 + tk} ${x2},${y2 + tk} ${x2},${y2}`
       );
     });
   }
@@ -305,8 +358,12 @@ class BeamGroup {
   #yAtX(x: number): number {
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
-    if (first.x === last.x) return first.y;
-    return first.y + (last.y - first.y) * ((x - first.x) / (last.x - first.x));
+    if (first.x === last.x) return first.y + this.#beamShift;
+    return (
+      first.y +
+      (last.y - first.y) * ((x - first.x) / (last.x - first.x)) +
+      this.#beamShift
+    );
   }
 }
 
@@ -432,10 +489,29 @@ export class BeamsBuilder {
     return 0;
   }
 
-  // Sets the y coordinate for note at globalIndex. Call once per render after creating the note SVG.
-  setY(globalIndex: number, y: number) {
+  // Sets the y coordinate for note at globalIndex. stemUp determines beam layer direction.
+  // Call once per render (pre-pass) after computing stem direction but before creating note SVGs.
+  setY(globalIndex: number, y: number, stemUp: boolean) {
     for (const group of this.#groups) {
-      group.setY(globalIndex, y);
+      group.setY(globalIndex, y, stemUp);
+    }
+  }
+
+  // Returns the global indices of all notes in the same beam group as globalIndex,
+  // or null if globalIndex is not beamed.
+  beamGroupIndicesFor(globalIndex: number): number[] | null {
+    for (const group of this.#groups) {
+      const indices = group.getGlobalIndices(globalIndex);
+      if (indices !== null) return indices;
+    }
+    return null;
+  }
+
+  // Shifts each beam group's line so no stem is shorter than the minimum.
+  // Call after all setY calls and before calculateStemExtension / buildGroups.
+  finalizeBeams() {
+    for (const group of this.#groups) {
+      group.finalizeBeam();
     }
   }
 

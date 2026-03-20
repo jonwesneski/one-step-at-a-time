@@ -1,6 +1,10 @@
 export { BeamsBuilder } from './beam';
 export { createChordSvg } from './chord';
 export { createFlatSvg } from './flat';
-export { createNoteSvg, NOTE_Y_HEAD_OFFSET_STEM_UP } from './note';
+export {
+  createNoteSvg,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+} from './note';
 export { createSharpSvg } from './sharp';
 export { createTimeSignatureSvg } from './timeSignature';

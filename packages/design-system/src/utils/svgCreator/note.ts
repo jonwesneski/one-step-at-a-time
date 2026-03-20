@@ -13,7 +13,8 @@ export const COORD_WIDTH = 600;
 const NOTE_SCALE = NOTE_SVG_WIDTH / COORD_WIDTH;
 // SVG viewport height (px). Must be tall enough to contain the notehead.
 export const NOTE_SVG_HEIGHT = 60;
-export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG (~19.47px)
+export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG, stem-up (~19.47px)
+export const NOTE_STEM_X_OFFSET_STEM_DOWN = 247 * NOTE_SCALE; // stem x within a note SVG, stem-down (~13.17px)
 export const NOTE_Y_STEM_START = 100;
 export const NOTE_STEM_TIP_Y_OFFSET = NOTE_Y_STEM_START * NOTE_SCALE; // stem tip y for stem-up (~5.33px)
 // Y offset used to align the notehead with a staff line when positioning the note SVG.
@@ -24,6 +25,11 @@ const BASE_STEM_LENGTH = 600; // ~32px at NOTE_SCALE (~4 staff line spaces)
 const STEM_WIDTH = 22;
 const HEAD_WIDTH = 80;
 const FLAG_Y_SPACING = 120;
+// Y offset to align the notehead when stem is down (head is near the top of the SVG).
+export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(10 + HEAD_WIDTH * NOTE_SCALE); // 14
+// Pixel distance from top of the note SVG to the stem tip when stem is down.
+export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
+  (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
 
 export type NoteProps = {
   duration: DurationType;
@@ -65,16 +71,24 @@ export const createNoteSvg = ({
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
 
   // Stem
-  const stemX = stemUp ? xStart + HEAD_WIDTH - 15 : xStart;
+  // Stem-up: right side of head. Stem-down: left side of head (mirror).
+  const stemX = stemUp
+    ? xStart + HEAD_WIDTH - 15
+    : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
   if (duration !== 'whole') {
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
-    const stemTipY = NOTE_Y_STEM_START - stemExtensionInternal;
+    // Stem-up: tip at top (y1), head end at bottom (y2).
+    // Stem-down: head end at top (y1), tip at bottom (y2).
+    const stemY1 = stemUp ? NOTE_Y_STEM_START - stemExtensionInternal : HEAD_WIDTH;
+    const stemY2 = stemUp
+      ? yStemEnd
+      : HEAD_WIDTH + BASE_STEM_LENGTH + flagStemExtension + stemExtensionInternal;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
-    stem.setAttribute('y1', stemTipY.toString());
+    stem.setAttribute('y1', stemY1.toString());
     stem.setAttribute('x2', stemX.toString());
-    stem.setAttribute('y2', yStemEnd.toString());
+    stem.setAttribute('y2', stemY2.toString());
     if (stemExtension !== 0 || flagStemExtension > 0) {
       svg.setAttribute('overflow', 'visible');
     }
@@ -173,6 +187,6 @@ export const createNoteSvg = ({
 
   svg.appendChild(g);
 
-  const yHeadOffset = stemUp ? Math.round(10 + yStemEnd * NOTE_SCALE) : 7;
+  const yHeadOffset = stemUp ? Math.round(10 + yStemEnd * NOTE_SCALE) : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
   return [svg, yHeadOffset];
 };

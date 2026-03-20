@@ -13,8 +13,8 @@ const meta: Meta = {
     >
       <music-note value="C" duration="quarter"></music-note>
       <music-note value="E" duration="quarter"></music-note>
-      <music-note value="G" duration="quarter"></music-note>
-      <music-note value="C" duration="quarter"></music-note>
+      <music-note value="C5" duration="quarter"></music-note>
+      <music-note value="E5" duration="quarter"></music-note>
     </music-staff-treble>
   `,
   argTypes: {
