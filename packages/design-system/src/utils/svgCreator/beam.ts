@@ -159,7 +159,11 @@ Beams in music notation – concise reference
 */
 
 import { NoteOrChordElementType } from '../../types/elements';
-import { BeatsInMeasure, BeatTypeInMeasure, DurationType } from '../../types/theory';
+import {
+  BeatsInMeasure,
+  BeatTypeInMeasure,
+  DurationType,
+} from '../../types/theory';
 import { SVG_NS, durationToFactor, durationToFlagCountMap } from '../consts';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
@@ -256,7 +260,9 @@ class BeamGroup {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
     this.#stemUp = stemUp;
-    const tipOffset = stemUp ? NOTE_STEM_TIP_Y_OFFSET : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    const tipOffset = stemUp
+      ? NOTE_STEM_TIP_Y_OFFSET
+      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
     this.#notes[localIndex].y = y + tipOffset;
   }
 
@@ -293,7 +299,8 @@ class BeamGroup {
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
     const t = localIndex / (this.#notes.length - 1);
-    const primaryBeamYAtNote = first.y + (last.y - first.y) * t + this.#beamShift;
+    const primaryBeamYAtNote =
+      first.y + (last.y - first.y) * t + this.#beamShift;
     const delta = this.#notes[localIndex].y - primaryBeamYAtNote;
     // Stem-up: positive delta = stem tip is below beam → extend up.
     // Stem-down: flip sign since beam is below noteheads.
@@ -311,7 +318,9 @@ class BeamGroup {
   setX(globalIndex: number, x: number) {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
-    const xOffset = this.#stemUp ? NOTE_STEM_X_OFFSET : NOTE_STEM_X_OFFSET_STEM_DOWN;
+    const xOffset = this.#stemUp
+      ? NOTE_STEM_X_OFFSET
+      : NOTE_STEM_X_OFFSET_STEM_DOWN;
     this.#notes[localIndex].x = x + xOffset;
   }
 
@@ -345,7 +354,8 @@ class BeamGroup {
         seg.fractionalBeamDirection === 'right'
           ? noteX2 + BeamGroup.#fractionalBeamWidth
           : noteX2;
-      const yOffset = seg.layer * layerDir * (BeamGroup.#thickness + BeamGroup.#gap);
+      const yOffset =
+        seg.layer * layerDir * (BeamGroup.#thickness + BeamGroup.#gap);
       const y1 = this.#yAtX(x1) + yOffset;
       const y2 = this.#yAtX(x2) + yOffset;
       beamPolygons[i].setAttribute(

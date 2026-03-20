@@ -26,7 +26,9 @@ const STEM_WIDTH = 22;
 const HEAD_WIDTH = 80;
 const FLAG_Y_SPACING = 120;
 // Y offset to align the notehead when stem is down (head is near the top of the SVG).
-export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(10 + HEAD_WIDTH * NOTE_SCALE); // 14
+export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(
+  10 + HEAD_WIDTH * NOTE_SCALE
+); // 14
 // Pixel distance from top of the note SVG to the stem tip when stem is down.
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
@@ -79,10 +81,15 @@ export const createNoteSvg = ({
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
     // Stem-up: tip at top (y1), head end at bottom (y2).
     // Stem-down: head end at top (y1), tip at bottom (y2).
-    const stemY1 = stemUp ? NOTE_Y_STEM_START - stemExtensionInternal : HEAD_WIDTH;
+    const stemY1 = stemUp
+      ? NOTE_Y_STEM_START - stemExtensionInternal
+      : HEAD_WIDTH;
     const stemY2 = stemUp
       ? yStemEnd
-      : HEAD_WIDTH + BASE_STEM_LENGTH + flagStemExtension + stemExtensionInternal;
+      : HEAD_WIDTH +
+        BASE_STEM_LENGTH +
+        flagStemExtension +
+        stemExtensionInternal;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
@@ -187,6 +194,8 @@ export const createNoteSvg = ({
 
   svg.appendChild(g);
 
-  const yHeadOffset = stemUp ? Math.round(10 + yStemEnd * NOTE_SCALE) : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const yHeadOffset = stemUp
+    ? Math.round(10 + yStemEnd * NOTE_SCALE)
+    : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
   return [svg, yHeadOffset];
 };
