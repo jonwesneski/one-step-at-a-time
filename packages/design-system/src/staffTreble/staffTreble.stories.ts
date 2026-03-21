@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
-// Import order matters — use the index to register all components
 import '../index';
 
 const meta: Meta = {
@@ -14,8 +13,8 @@ const meta: Meta = {
     >
       <music-note value="C" duration="quarter"></music-note>
       <music-note value="E" duration="quarter"></music-note>
-      <music-note value="G" duration="quarter"></music-note>
-      <music-note value="C" duration="quarter"></music-note>
+      <music-note value="C5" duration="quarter"></music-note>
+      <music-note value="E5" duration="quarter"></music-note>
     </music-staff-treble>
   `,
   argTypes: {

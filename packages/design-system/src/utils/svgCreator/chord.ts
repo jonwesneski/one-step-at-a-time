@@ -9,26 +9,35 @@ export const createChordSvg = ({
   staffYCoordinates,
   noFlags = false,
   stemUp = true,
+  stemExtension = 0,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
   svg.dataset.duration = duration;
 
-  const mathFunc = stemUp ? Math.min : Math.max;
-  let currentY = stemUp ? Infinity : -Infinity;
+  // For stem-up the stem belongs to the bottommost note (highest staffY);
+  // for stem-down it belongs to the topmost note (lowest staffY).
+  const stemNoteY = stemUp
+    ? Math.max(...staffYCoordinates)
+    : Math.min(...staffYCoordinates);
+
+  let extremalYOffset = 0;
   for (const staffYCoordinate of staffYCoordinates) {
+    const isExtremal = staffYCoordinate === stemNoteY;
     const [noteSvg, yOffset] = createNoteSvg({
       duration,
       noFlags,
+      noStem: !isExtremal,
       stemUp,
+      stemExtension: isExtremal ? stemExtension : 0,
       qualifiedElementName: 'svg',
     });
-    currentY = mathFunc(currentY, yOffset);
+    if (isExtremal) extremalYOffset = yOffset;
     noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    noteSvg.setAttribute('y', (10 + staffYCoordinate - yOffset).toString());
+    noteSvg.setAttribute('y', (8 + staffYCoordinate - yOffset).toString());
     svg.appendChild(noteSvg);
   }
-  return [svg, currentY];
+  return [svg, extremalYOffset];
 };
 
 export const createSharpSvg = () => {

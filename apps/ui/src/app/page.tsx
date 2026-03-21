@@ -24,7 +24,7 @@ export default function Home() {
         </music-measure>
         <music-measure>
           <music-staff-treble>
-            <music-note value="A" duration="eighth"></music-note>
+            <music-note value="A" duration="thirtysecond"></music-note>
             <music-note value="D" duration="eighth"></music-note>
           </music-staff-treble>
           <music-staff-bass>

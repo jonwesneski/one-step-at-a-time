@@ -15,14 +15,22 @@ import {
   Octave,
 } from './types/theory';
 import {
-  BeamCreator,
+  BeamsBuilder,
   createChordSvg,
   createFlatSvg,
   createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
+  type NoteYPosition,
 } from './utils';
-import { durationToFactor, factorToDuration, SVG_NS } from './utils/consts';
+import {
+  durationToFactor,
+  durationToFlagCountMap,
+  factorToDuration,
+  SVG_NS,
+} from './utils/consts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -33,6 +41,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #parentKeySig: LetterNote | null;
   #describeContainer: SVGGElement;
   #notesContainer: SVGSVGElement;
+  #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
 
   constructor() {
     super();
@@ -53,6 +62,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       composition?.getAttribute('keySig') ??
       'C';
     const timeTime = this.getAttribute('time');
+    // todo: remove if-condition; that way I just call once
     if (timeTime) {
       this.#timeInts = this.#convertTotimeInts(timeTime);
     }
@@ -237,14 +247,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
-    const beamCreator = BeamCreator.ifNecessary(elements);
-    const needsBeam = beamCreator !== null;
-    const stemUp = this.#determineIsStemUp(elements);
+    const { beamsBuilder, beamRenderer, stemDirections } =
+      this.#buildBeamsRenderer(elements);
+    this.#beamRenderer = beamRenderer;
 
     // Create all note SVGs (y-positioned, not yet x-positioned or appended)
     const noteSvgs: SVGElement[] = [];
     let beatOffset = 0;
-    for (const element of elements) {
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
       const duration = element.duration;
       if (
         beatOffset + durationToFactor[duration as DurationType] >
@@ -259,19 +270,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         break;
       }
 
+      const stemUp = stemDirections[i];
+
       if (element.nodeName === 'MUSIC-NOTE') {
         const noteElement = element as NoteElementType;
         const [noteSvg, yOffset] = createNoteSvg({
           duration,
-          noFlags: needsBeam,
+          noFlags: beamsBuilder.isBeamed(i),
           stemUp,
+          stemExtension: this.#beamRenderer.stemExtension(i),
           qualifiedElementName: 'svg',
         });
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        noteSvg.setAttribute(
-          'y',
-          (10 + this.noteToYCoordinate(noteElement.value) - yOffset).toString()
-        );
+        const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
+        noteSvg.setAttribute('y', noteY.toString());
 
         noteSvgs.push(noteSvg);
       } else {
@@ -279,22 +291,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const staffYCoordinates = chordElement.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        const [chordSvg, yOffset] = createChordSvg({
+        const [chordSvg] = createChordSvg({
           duration,
           staffYCoordinates,
-          noFlags: needsBeam,
+          noFlags: beamsBuilder.isBeamed(i),
           stemUp,
-          // todo: not using at the moment; check if i still need it
+          stemExtension: this.#beamRenderer.stemExtension(i),
           qualifiedElementName: 'g',
         });
         chordSvg.setAttribute('overflow', 'visible');
-        const topmostStaffY = stemUp
-          ? Math.min(...staffYCoordinates)
-          : Math.max(...staffYCoordinates);
-        // Store beam y in dataset since createChordSvg already positions
-        // each note inside the chord SVG relative to its own origin.
-        // Setting y on the outer <svg> would double-offset the chord notes visually.
-        chordSvg.dataset.beamY = (10 + topmostStaffY - yOffset).toString();
 
         noteSvgs.push(chordSvg);
       }
@@ -302,29 +307,156 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beatOffset += durationToFactor[duration as DurationType];
     }
 
-    // Build beam groups (coords are NaN until spaceNotes fills them in)
-    const beamGroups = beamCreator ? [beamCreator.buildBeams()] : [];
-
-    this.#spaceNotes(noteSvgs, beamGroups);
+    this.#spaceNotes(noteSvgs);
 
     for (const svg of noteSvgs) {
       this.#notesContainer.appendChild(svg);
     }
-    for (const beamGroup of beamGroups) {
-      this.#notesContainer.appendChild(beamGroup);
+
+    for (const svgGroup of this.#beamRenderer.svgGroups) {
+      this.#notesContainer.appendChild(svgGroup);
     }
   }
 
-  #determineIsStemUp(elements: NoteOrChordElementType[]): boolean {
-    // todo determine if all notes should be stemup or not before creating svgs
-    // - middle and below of staff is up; otherwise down (but also need to factor in beamed notes and chords)
-    console.log(elements, 'satisfy lint');
-    return true;
-    // for (const node of nodes) {
-    //   const staffYCoordinate = this.noteToYCoordinate(
-    //     node.getAttribute('value') || 'C'
-    //   );
-    // }
+  #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
+    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    const beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
+    const stemDirections = this.#determineStemDirections(
+      elements,
+      beamsBuilder
+    );
+
+    const noteYPositions: (NoteYPosition | null)[] = elements.map(
+      (element, i) => {
+        if (!beamsBuilder.isBeamed(i)) return null;
+        const stemUp = stemDirections[i];
+        const yHeadOffset = stemUp
+          ? NOTE_Y_HEAD_OFFSET_STEM_UP
+          : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+
+        if (element.nodeName === 'MUSIC-NOTE') {
+          return {
+            // todo: anywhere where I am doing an `8 + noteYCoord`,
+            //  will revisit to figure out how to handle better. Basically need
+            // account for margin-top (currently 28px); not sure why it is only 8 though.
+            y:
+              8 +
+              this.noteToYCoordinate((element as NoteElementType).value) -
+              yHeadOffset,
+            stemUp,
+          };
+        }
+
+        // Chord — beam Y is anchored to the extremal (stem-owning) notehead.
+        const chordElement = element as ChordElementType;
+        const staffYCoordinates = chordElement.notes.map((note) =>
+          this.noteToYCoordinate(note.value)
+        );
+        const extremalStaffY = stemUp
+          ? Math.max(...staffYCoordinates)
+          : Math.min(...staffYCoordinates);
+
+        // The beam must also clear every non-extremal notehead.
+        // The clearance must cover ALL beam layers at this chord's position
+        // (primary + secondary + any further layers), plus a comfortable visual
+        // gap between the innermost beam's inner edge and the notehead top.
+        //
+        // Derivation (stem-up, per-beam layer × beamCount):
+        //   notehead v-radius  : 3.2 px  (HEAD_WIDTH × 0.75 × NOTE_SCALE)
+        //   total beam height  : beamCount × 8 + (beamCount-1) × 4  = 12·n − 4
+        //   visual gap         : 8 px  (~one staff space, prevents anti-alias touch)
+        //   ─────────────────────────────────────────────────────────────────────
+        //   total              : 3.2 + 12·n − 4 + 8  =  7.2 + 12·n
+        //
+        // Examples:
+        //   eighth (n=1): 19.2 px   sixteenth (n=2): 31.2 px
+        //   32nd   (n=3): 43.2 px   64th      (n=4): 55.2 px
+        // notehead_v_radius = HEAD_WIDTH(80) * 0.75 * NOTE_SCALE(32/600) ≈ 3.2 px
+        const beamCount =
+          durationToFlagCountMap.get(chordElement.duration as DurationType) ??
+          1;
+        const NOTEHEAD_BEAM_CLEAR = 7.2 + beamCount * 12;
+        const nonExtStaffYs = staffYCoordinates.filter(
+          (y) => y !== extremalStaffY
+        );
+
+        let chordClearanceY: number | undefined;
+        if (nonExtStaffYs.length > 0) {
+          chordClearanceY = stemUp
+            ? Math.min(...nonExtStaffYs) - NOTEHEAD_BEAM_CLEAR
+            : Math.max(...nonExtStaffYs) + NOTEHEAD_BEAM_CLEAR;
+        }
+
+        return {
+          y: 8 + extremalStaffY - yHeadOffset,
+          stemUp,
+          chordClearanceY,
+        };
+      }
+    );
+
+    return {
+      beamsBuilder,
+      beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
+      stemDirections,
+    };
+  }
+
+  // Rules (per standard music notation):
+  //   - Notes below the middle staff line → stem up.
+  //   - Notes on or above the middle staff line → stem down.
+  //   - Beam groups: the note farthest from the middle line determines direction for the whole group.
+  //   - Chords: the note farthest from the middle line determines direction.
+  #determineStemDirections(
+    elements: NoteOrChordElementType[],
+    beamsBuilder: BeamsBuilder
+  ): boolean[] {
+    const MIDDLE_STAFF_Y = 50;
+    const stemDirections = new Array<boolean>(elements.length).fill(true);
+    const processed = new Set<number>();
+
+    const getStaffYs = (el: NoteOrChordElementType): number[] => {
+      if (el.nodeName === 'MUSIC-NOTE') {
+        return [this.noteToYCoordinate((el as NoteElementType).value)];
+      }
+      return (el as ChordElementType).notes.map((n) =>
+        this.noteToYCoordinate(n.value)
+      );
+    };
+
+    // Among the given Y values, find the one farthest from the middle line
+    // and return the stem direction it implies.
+    const stemUpForYs = (ys: number[]): boolean => {
+      let maxDist = -1;
+      let stemUp = true;
+      for (const y of ys) {
+        const dist = Math.abs(y - MIDDLE_STAFF_Y);
+        if (dist > maxDist) {
+          maxDist = dist;
+          stemUp = y > MIDDLE_STAFF_Y; // below middle (larger Y) → stem up
+        }
+      }
+      return stemUp;
+    };
+
+    for (let i = 0; i < elements.length; i++) {
+      if (processed.has(i)) continue;
+      const groupIndices = beamsBuilder.beamGroupFor(i);
+      if (groupIndices) {
+        // All notes in a beam group share one direction: use the extremal note across the group.
+        const allYs = groupIndices.flatMap((idx) => getStaffYs(elements[idx]));
+        const stemUp = stemUpForYs(allYs);
+        for (const idx of groupIndices) {
+          stemDirections[idx] = stemUp;
+          processed.add(idx);
+        }
+      } else {
+        stemDirections[i] = stemUpForYs(getStaffYs(elements[i]));
+        processed.add(i);
+      }
+    }
+
+    return stemDirections;
   }
 
   // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
@@ -358,7 +490,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
-  #spaceNotes(elements: SVGElement[], beamGroups: SVGGElement[]) {
+  #spaceNotes(elements: SVGElement[]) {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const describeEndX = Math.round(describeRect.right - transcribeRect.left);
@@ -370,30 +502,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     const measureDuration = beatsInMeasure / beatType;
 
-    const beamCreator =
-      beamGroups.length > 0 ? BeamCreator.ifNecessary(elements) : null;
-    let beamGroupIndex = 0;
+    const minNoteWidth = 20; // px — minimum space per note to prevent notehead overlap
+    const proportionalWidth = remainingWidth - elements.length * minNoteWidth;
+
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const duration = elements[i].dataset.duration as DurationType;
-      const xOffset = (beatOffset / measureDuration) * remainingWidth;
+      const xOffset =
+        i * minNoteWidth + (beatOffset / measureDuration) * proportionalWidth;
 
-      if (beamCreator) {
-        // Notes use the `y` attribute; chords store beam y in `dataset.beamY`
-        // since their outer <svg> y stays at 0 (notes inside are self-positioned).
-        const beamY = parseFloat(
-          elements[i].dataset.beamY ?? elements[i].getAttribute('y') ?? '0'
-        );
-        if (i === 0) {
-          beamCreator.updateBeamCoordinates(xOffset, beamY, 'start');
-        } else if (i === elements.length - 1) {
-          beamCreator.updateBeamCoordinates(xOffset, beamY, 'end');
-          beamCreator.respaceBeam(beamGroups[beamGroupIndex++]);
-        }
-      }
+      this.#beamRenderer?.setX(i, xOffset);
       this.#spaceNote(elements[i], xOffset);
       beatOffset += durationToFactor[duration];
     }
+    this.#beamRenderer?.spaceAll();
   }
 
   #spaceNote(element: SVGElement, xOffset: number) {
@@ -407,9 +529,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ':scope > svg'
       ) as NodeListOf<Element>),
     ] as SVGElement[];
-    const beamGroups = [
-      ...this.#notesContainer.querySelectorAll('.beam-group'),
-    ] as SVGGElement[];
-    this.#spaceNotes(notes, beamGroups);
+    this.#spaceNotes(notes);
   }
 }
