@@ -1,17 +1,11 @@
 /**
  * @jest-environment jsdom
- *
- * Treble-staff Y coordinates used throughout these tests:
- *   C4=80  D4=75  E4=70  G4=60  A4=55  B4=50 (middle line)
- *   C5=45  D5=40  E5=35  G5=25
- * Notes with staffY > 50 (below middle line) get stem-up.
- * Notes with staffY ≤ 50 (on/above middle line) get stem-down.
  */
 
-import '../../index'; // registers all custom elements
+import '../../index';
+import { NOTE_SCALE } from './note';
 
-// Internal scale: 600-unit note coordinate space → 32 px viewport.
-const NOTE_SCALE = 32 / 600;
+const NOTE_STEM_X_OFFSET_PX = 365 * NOTE_SCALE;
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -52,24 +46,25 @@ function parsePoints(polygon: Element): number[][] {
     .map((p) => p.split(',').map(Number));
 }
 
-// Width of the beam polygon in pixels.
 function beamWidth(polygon: Element): number {
-  const pts = parsePoints(polygon);
-  return Math.abs(pts[3][0] - pts[0][0]);
+  const points = parsePoints(polygon);
+  return Math.abs(points[3][0] - points[0][0]);
 }
 
 // Interpolated y on the outer edge (toward stem tips) at x.
 function outerEdgeY(polygon: Element, x: number): number {
-  const pts = parsePoints(polygon);
-  const t = (x - pts[0][0]) / (pts[3][0] - pts[0][0]);
-  return pts[0][1] + (pts[3][1] - pts[0][1]) * t;
+  const points = parsePoints(polygon);
+  const interpolationFactor =
+    (x - points[0][0]) / (points[3][0] - points[0][0]);
+  return points[0][1] + (points[3][1] - points[0][1]) * interpolationFactor;
 }
 
 // Interpolated y on the inner edge (toward noteheads) at x.
 function innerEdgeY(polygon: Element, x: number): number {
-  const pts = parsePoints(polygon);
-  const t = (x - pts[1][0]) / (pts[2][0] - pts[1][0]);
-  return pts[1][1] + (pts[2][1] - pts[1][1]) * t;
+  const points = parsePoints(polygon);
+  const interpolationFactor =
+    (x - points[1][0]) / (points[2][0] - points[1][0]);
+  return points[1][1] + (points[2][1] - points[1][1]) * interpolationFactor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,7 +91,6 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // Only one eighth note — too few to beam.
       const notes = [makeNote('C4', 'quarter'), makeNote('E4', 'eighth')];
       triggerSlotChange(staff, notes);
 
@@ -110,12 +104,13 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // 4/4 window = 0.5 whole note. Offsets 0–3/8 → group 1; 4/8–7/8 → group 2.
       const notes = [
+        // group 1
         makeNote('C4', 'eighth'),
         makeNote('D4', 'eighth'),
         makeNote('E4', 'eighth'),
         makeNote('F4', 'eighth'),
+        // group 2
         makeNote('G4', 'eighth'),
         makeNote('A4', 'eighth'),
         makeNote('B4', 'eighth'),
@@ -133,11 +128,12 @@ describe('beams', () => {
       staff.setAttribute('time', '6/8');
       document.body.appendChild(staff);
 
-      // 6/8 window = 3/8. Offsets 0,1/8,2/8 → group 1; 3/8,4/8,5/8 → group 2.
       const notes = [
+        // group 1
         makeNote('C4', 'eighth'),
         makeNote('D4', 'eighth'),
         makeNote('E4', 'eighth'),
+        // group 2
         makeNote('F4', 'eighth'),
         makeNote('G4', 'eighth'),
         makeNote('A4', 'eighth'),
@@ -196,7 +192,6 @@ describe('beams', () => {
       triggerSlotChange(staff, notes);
 
       const beamGroup = staff.shadowRoot.querySelector('.beam-group');
-      // Primary beam + secondary beam = 2 polygons.
       expect(beamGroup.querySelectorAll('.beam')).toHaveLength(2);
     });
 
@@ -221,15 +216,13 @@ describe('beams', () => {
   });
 
   describe('fractional beams', () => {
-    it('adds a narrow stub when a single sixteenth is adjacent to an eighth', () => {
+    it('adds a fractional when a single sixteenth is adjacent to an eighth', () => {
       const staff = document.createElement('music-staff-treble') as any;
       staff.setAttribute('keySig', 'C');
       staff.setAttribute('mode', 'major');
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // The isolated sixteenth needs a left-pointing fractional stub for its
-      // second beam level.
       const notes = [makeNote('C4', 'eighth'), makeNote('D4', 'sixteenth')];
       triggerSlotChange(staff, notes);
 
@@ -237,10 +230,10 @@ describe('beams', () => {
       expect(beams).toHaveLength(2);
       const [primary, stub] = beams;
       expect(beamWidth(stub)).toBeLessThan(beamWidth(primary));
-      expect(beamWidth(stub)).toBeLessThanOrEqual(10); // fractionalBeamWidth = 6 px
+      expect(beamWidth(stub)).toBeLessThanOrEqual(10);
     });
 
-    it('adds two stubs for a sixteenth–eighth–sixteenth pattern', () => {
+    it('adds two fractionals for a sixteenth-eighth-sixteenth pattern', () => {
       const staff = document.createElement('music-staff-treble') as any;
       staff.setAttribute('keySig', 'C');
       staff.setAttribute('mode', 'major');
@@ -248,14 +241,13 @@ describe('beams', () => {
       document.body.appendChild(staff);
 
       const notes = [
-        makeNote('C4', 'sixteenth'),
+        makeNote('C4', 'sixteenth'), // left fractional
         makeNote('D4', 'eighth'),
-        makeNote('E4', 'sixteenth'),
+        makeNote('E4', 'sixteenth'), // right fractional
       ];
       triggerSlotChange(staff, notes);
 
       const beams = staff.shadowRoot.querySelectorAll('.beam-group .beam');
-      // primary + right-pointing stub (C4) + left-pointing stub (E4)
       expect(beams).toHaveLength(3);
       const [primary, stub1, stub2] = beams;
       expect(beamWidth(stub1)).toBeLessThan(beamWidth(primary));
@@ -277,7 +269,6 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // C4 (staffY=80) and D4 (staffY=75) are both below the middle line → stem-up.
       const notes = [makeNote('C4', 'eighth'), makeNote('D4', 'eighth')];
       triggerSlotChange(staff, notes);
 
@@ -293,7 +284,7 @@ describe('beams', () => {
         const noteY = parseFloat(svg.getAttribute('y') ?? '0');
         const noteX = parseFloat(svg.getAttribute('x') ?? '0');
         const stem = svg.querySelector('.stem')!;
-        // Stem-up: tip is at y1 (smaller y = top of stem).
+
         const tipY = noteY + parseFloat(stem.getAttribute('y1')!) * NOTE_SCALE;
         const tipX = noteX + parseFloat(stem.getAttribute('x1')!) * NOTE_SCALE;
 
@@ -311,7 +302,6 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // C5 (staffY=45) and D5 (staffY=40) are above the middle line → stem-down.
       const notes = [makeNote('C5', 'eighth'), makeNote('D5', 'eighth')];
       triggerSlotChange(staff, notes);
 
@@ -327,7 +317,7 @@ describe('beams', () => {
         const noteY = parseFloat(svg.getAttribute('y') ?? '0');
         const noteX = parseFloat(svg.getAttribute('x') ?? '0');
         const stem = svg.querySelector('.stem')!;
-        // Stem-down: tip is at y2 (larger y = bottom of stem).
+
         const tipY = noteY + parseFloat(stem.getAttribute('y2')!) * NOTE_SCALE;
         const tipX = noteX + parseFloat(stem.getAttribute('x1')!) * NOTE_SCALE;
 
@@ -356,15 +346,13 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // C4 (staffY=80, lower pitch) → A4 (staffY=55, higher pitch)
       const notes = [makeNote('C4', 'eighth'), makeNote('A4', 'eighth')];
       triggerSlotChange(staff, notes);
 
-      const pts = parsePoints(
+      const points = parsePoints(
         staff.shadowRoot.querySelector('.beam-group .beam')
       );
-      // Outer-left y is larger (beam starts lower) than outer-right y (beam ends higher).
-      expect(pts[0][1]).toBeGreaterThan(pts[3][1]);
+      expect(points[0][1]).toBeGreaterThan(points[3][1]);
     });
 
     it('beam descends when the first note is higher than the last', () => {
@@ -374,15 +362,13 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // A4 (staffY=55, higher pitch) → C4 (staffY=80, lower pitch)
       const notes = [makeNote('A4', 'eighth'), makeNote('C4', 'eighth')];
       triggerSlotChange(staff, notes);
 
-      const pts = parsePoints(
+      const points = parsePoints(
         staff.shadowRoot.querySelector('.beam-group .beam')
       );
-      // Outer-left y is smaller (beam starts higher) than outer-right y (beam ends lower).
-      expect(pts[0][1]).toBeLessThan(pts[3][1]);
+      expect(points[0][1]).toBeLessThan(points[3][1]);
     });
 
     it('beam is horizontal when all notes are the same pitch', () => {
@@ -415,10 +401,6 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // Chord 1: C4(staffY≈80)+E4(staffY≈70) eighth — extremal=C4, non-ext=E4
-      // Chord 2: B4(staffY≈50)+D4(staffY≈75) eighth — extremal=D4, non-ext=B4
-      // Without the fix the beam descends to D4's stem level and its inner edge
-      // (≈51 px) overlaps B4's notehead top (≈46.8 px).
       triggerSlotChange(staff, [
         makeChord('eighth', ['C4', 'E4']),
         makeChord('eighth', ['B4', 'D4']),
@@ -432,13 +414,10 @@ describe('beams', () => {
       ] as SVGElement[];
       expect(chordSvgs.length).toBe(2);
 
-      // B4 notehead: center ≈ staffY = 50 px, v-radius ≈ 3.2 px → top ≈ 46.8 px.
-      // Only chord2 (index 1) contains B4 as a non-extremal note.
       const B4_STAFF_Y = 50;
       const NOTEHEAD_V_RADIUS = 3.2;
       const noteheadTop = B4_STAFF_Y - NOTEHEAD_V_RADIUS;
 
-      const NOTE_STEM_X_OFFSET_PX = 365 * (32 / 600); // ≈ 19.47 px
       const chord2Svg = chordSvgs[1];
       const chord2X = parseFloat(chord2Svg.getAttribute('x') ?? '0');
       const stemX = chord2X + NOTE_STEM_X_OFFSET_PX;
@@ -465,19 +444,17 @@ describe('beams', () => {
         ),
       ] as SVGElement[];
 
-      const NOTE_STEM_X_OFFSET_PX = 365 * (32 / 600);
       for (const chordSvg of chordSvgs) {
         const chordX = parseFloat(chordSvg.getAttribute('x') ?? '0');
         const stemX = chordX + NOTE_STEM_X_OFFSET_PX;
-        // Stem tip must be inside the beam: between outer and inner edges (1 px tolerance).
         const stem = chordSvg.querySelector('.stem')!;
-        // Use the note SVG that actually owns the stem (the extremal note's svg).
         const extremalNoteSvg = stem.closest('svg') as SVGElement;
         const stemNoteY = parseFloat(extremalNoteSvg.getAttribute('y') ?? '0');
         const tipY =
           stemNoteY + parseFloat(stem.getAttribute('y1')!) * NOTE_SCALE;
         const outer = outerEdgeY(primaryBeam, stemX);
         const inner = innerEdgeY(primaryBeam, stemX);
+
         expect(tipY).toBeGreaterThanOrEqual(Math.min(outer, inner) - 1);
         expect(tipY).toBeLessThanOrEqual(Math.max(outer, inner) + 1);
       }
@@ -490,9 +467,6 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // G+B eighth (extremal=G4/60, non-ext=B4/50) followed by B+D sixteenth
-      // (extremal=D4/75, non-ext=B4/50). B+D has a secondary beam 12px below
-      // the primary — clearance must account for both layers.
       triggerSlotChange(staff, [
         makeChord('eighth', ['G4', 'B4']),
         makeChord('sixteenth', ['B4', 'D4']),
@@ -501,7 +475,7 @@ describe('beams', () => {
       const beams = [
         ...staff.shadowRoot.querySelectorAll('.beam-group .beam'),
       ] as Element[];
-      // primary beam + secondary beam (stub or span for the lone sixteenth)
+
       expect(beams.length).toBeGreaterThanOrEqual(2);
       const primaryBeam = beams[0];
       const secondaryBeam = beams[1];
@@ -515,7 +489,6 @@ describe('beams', () => {
       const NOTE_STEM_X_OFFSET_PX = 365 * (32 / 600);
       const stemX = chord2X + NOTE_STEM_X_OFFSET_PX;
 
-      // B4 notehead top ≈ 50 - 3.2 = 46.8 px.
       const B4_TOP = 50 - 3.2;
       expect(innerEdgeY(primaryBeam, stemX)).toBeLessThan(B4_TOP);
       expect(innerEdgeY(secondaryBeam, stemX)).toBeLessThan(B4_TOP);
@@ -530,16 +503,13 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      // C4 (staffY=80) alternating with G5 (staffY=25) creates a steep beam.
-      // The beam-shift mechanism must raise the beam so the shortened stems
-      // (on G5 notes) still reach the 25 px minimum beamed-stem length.
-      const notes = [
+      const steepGapNotes = [
         makeNote('C4', 'eighth'),
         makeNote('G5', 'eighth'),
         makeNote('C4', 'eighth'),
         makeNote('G5', 'eighth'),
       ];
-      triggerSlotChange(staff, notes);
+      triggerSlotChange(staff, steepGapNotes);
 
       const noteSvgs = staff.shadowRoot.querySelectorAll(
         '.notes-container > svg[data-duration]'
@@ -552,7 +522,7 @@ describe('beams', () => {
         const y1 = parseFloat(stem.getAttribute('y1')!);
         const y2 = parseFloat(stem.getAttribute('y2')!);
         const stemLengthPx = Math.abs(y2 - y1) * NOTE_SCALE;
-        // 1 px tolerance for floating-point arithmetic.
+
         expect(stemLengthPx).toBeGreaterThanOrEqual(24);
       }
     });

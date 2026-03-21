@@ -34,7 +34,7 @@ export const createChordSvg = ({
     });
     if (isExtremal) extremalYOffset = yOffset;
     noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    noteSvg.setAttribute('y', (10 + staffYCoordinate - yOffset).toString());
+    noteSvg.setAttribute('y', (8 + staffYCoordinate - yOffset).toString());
     svg.appendChild(noteSvg);
   }
   return [svg, extremalYOffset];

@@ -16,7 +16,6 @@ import {
 } from './types/theory';
 import {
   BeamsBuilder,
-  type NoteYPosition,
   createChordSvg,
   createFlatSvg,
   createNoteSvg,
@@ -24,6 +23,7 @@ import {
   createTimeSignatureSvg,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
+  type NoteYPosition,
 } from './utils';
 import {
   durationToFactor,
@@ -264,8 +264,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
         if (element.nodeName === 'MUSIC-NOTE') {
           return {
+            // todo: anywhere where I am doing an `8 + noteYCoord`,
+            //  will revisit to figure out how to handle better. Basically need
+            // account for margin-top (currently 28px); not sure why it is only 8 though.
             y:
-              10 +
+              8 +
               this.noteToYCoordinate((element as NoteElementType).value) -
               yHeadOffset,
             stemUp,
@@ -313,7 +316,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
 
         return {
-          y: 10 + extremalStaffY - yHeadOffset,
+          y: 8 + extremalStaffY - yHeadOffset,
           stemUp,
           chordClearanceY,
         };
@@ -353,7 +356,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           qualifiedElementName: 'svg',
         });
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        const noteY = 10 + this.noteToYCoordinate(noteElement.value) - yOffset;
+        const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
         noteSvg.setAttribute('y', noteY.toString());
 
         noteSvgs.push(noteSvg);
