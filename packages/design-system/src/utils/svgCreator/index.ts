@@ -1,4 +1,4 @@
-export { BeamsBuilder } from './beams';
+export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export { createFlatSvg } from './flat';
 export {
