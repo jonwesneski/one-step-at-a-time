@@ -208,6 +208,9 @@ class BeamGroup {
   // Global Y offset applied to the whole beam line to ensure no stem is shorter than the minimum.
   // Negative = beam moves up (stem-up groups); positive = beam moves down (stem-down groups).
   #beamShift = 0;
+  // Per-note beam outer-edge y constraints from chord non-extremal noteheads.
+  // For stem-up: beam outer y must be ≤ value; for stem-down: must be ≥ value.
+  #maxBeamOuterY: Array<number | null>;
 
   constructor(beamOrders: number[], globalIndices: number[]) {
     this.#notes = beamOrders.map((beamOrder) => ({
@@ -216,6 +219,7 @@ class BeamGroup {
       beamOrder,
     }));
     this.#globalIndices = globalIndices;
+    this.#maxBeamOuterY = new Array(beamOrders.length).fill(null);
     this.#segments = this.#computeSegments();
   }
 
@@ -256,6 +260,15 @@ class BeamGroup {
     return segments;
   }
 
+  // Sets the maximum beam outer-edge y at globalIndex's position, enforced in finalizeBeam().
+  // For stem-up groups the beam outer edge must be ≤ maxY; for stem-down it must be ≥ maxY.
+  // Used to ensure the beam doesn't overlap non-extremal chord noteheads.
+  setMaxBeamOuterY(globalIndex: number, maxY: number) {
+    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    if (localIndex === -1) return;
+    this.#maxBeamOuterY[localIndex] = maxY;
+  }
+
   // Called once per render from BeamsBuilder.setY(); ignored if globalIndex not in this group.
   // All notes in a beam group share the same stem direction, so #stemUp is set on every call.
   setY(globalIndex: number, y: number, stemUp: boolean) {
@@ -268,13 +281,19 @@ class BeamGroup {
     this.#notes[localIndex].y = y + tipOffset;
   }
 
-  // After all setY calls, shifts the entire beam line so that no stem is shorter than the
-  // minimum. Must be called before calculateStemExtension or space().
+  // After all setY calls, shifts the entire beam line so that:
+  //   1. No stem is shorter than the minimum (#minBeamStemPx).
+  //   2. The beam outer edge at any constrained index does not overlap chord noteheads.
+  // Must be called before calculateStemExtension or space().
   finalizeBeam() {
     if (this.#notes.length <= 1) return;
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
 
+    // --- Constraint 1: minimum stem length ---
+    // #stemOverlap is subtracted inside calculateStemExtension, so it effectively
+    // reduces the usable shortening budget.  Trigger and magnitude must both account
+    // for it so the worst-case rendered stem is exactly #minBeamStemPx long.
     let minExt = Infinity;
     for (let i = 0; i < this.#notes.length; i++) {
       const t = i / (this.#notes.length - 1);
@@ -283,16 +302,34 @@ class BeamGroup {
       const rawExt = this.#stemUp ? delta : -delta;
       minExt = Math.min(minExt, rawExt);
     }
-
-    // #stemOverlap is subtracted inside calculateStemExtension, so it effectively
-    // reduces the usable shortening budget.  Trigger and magnitude must both account
-    // for it so the worst-case rendered stem is exactly #minBeamStemPx long.
     const adjustedMax = BeamGroup.#maxShortening - BeamGroup.#stemOverlap;
+    let beamShift = 0;
     if (minExt < -adjustedMax) {
-      // Shift the beam toward the noteheads so the shortest stem reaches the minimum.
       const shortage = -minExt - adjustedMax;
-      this.#beamShift = this.#stemUp ? -shortage : shortage;
+      beamShift = this.#stemUp ? -shortage : shortage;
     }
+
+    // --- Constraint 2: chord non-extremal notehead clearance ---
+    // For each note with a maxBeamOuterY constraint, ensure the beam outer edge at that
+    // position (interpolated linearly) satisfies the constraint. Both constraints push
+    // the beam in the same direction (away from noteheads), so the more restrictive wins.
+    for (let i = 0; i < this.#notes.length; i++) {
+      const maxOuter = this.#maxBeamOuterY[i];
+      if (maxOuter === null) continue;
+      const t = i / (this.#notes.length - 1);
+      const beamYUnshifted = first.y + (last.y - first.y) * t;
+      if (this.#stemUp) {
+        // Beam outer edge (= beamYUnshifted + beamShift) must be ≤ maxOuter.
+        const maxAllowed = maxOuter - beamYUnshifted;
+        beamShift = Math.min(beamShift, maxAllowed);
+      } else {
+        // Beam outer edge (= beamYUnshifted + beamShift) must be ≥ maxOuter.
+        const minRequired = maxOuter - beamYUnshifted;
+        beamShift = Math.max(beamShift, minRequired);
+      }
+    }
+
+    this.#beamShift = beamShift;
   }
 
   // Returns how much the stem tip must move (in px, positive = toward beam) so the stem
@@ -513,6 +550,14 @@ export class BeamsBuilder {
   setY(globalIndex: number, y: number, stemUp: boolean) {
     for (const group of this.#groups) {
       group.setY(globalIndex, y, stemUp);
+    }
+  }
+
+  // Sets the maximum beam outer-edge y at globalIndex's position (for stem-up: ≤ maxY;
+  // for stem-down: ≥ maxY). Call after setY, before finalizeBeams().
+  setMaxBeamOuterY(globalIndex: number, maxY: number) {
+    for (const group of this.#groups) {
+      group.setMaxBeamOuterY(globalIndex, maxY);
     }
   }
 

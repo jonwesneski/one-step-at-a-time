@@ -24,6 +24,15 @@ function makeNote(value: string, duration: string): HTMLElement {
   return note;
 }
 
+function makeChord(duration: string, noteValues: string[]): HTMLElement {
+  const chord = document.createElement('music-chord') as any;
+  chord.setAttribute('duration', duration);
+  for (const value of noteValues) {
+    chord.appendChild(makeNote(value, duration));
+  }
+  return chord;
+}
+
 function triggerSlotChange(staff: any, notes: HTMLElement[]) {
   const slot = staff.shadowRoot.querySelector('slot');
   slot.assignedElements = () => notes;
@@ -390,6 +399,126 @@ describe('beams', () => {
         staff.shadowRoot.querySelector('.beam-group .beam')
       );
       expect(Math.abs(pts[0][1] - pts[3][1])).toBeLessThan(1);
+    });
+  });
+
+  describe('beam clears chord noteheads', () => {
+    // For stem-up chords the beam must not pass through non-extremal (upper) noteheads.
+    // The extremal note (bottom of chord) owns the stem; if the beam descends steeply the
+    // beam's inner edge can end up lower than the top of an upper notehead.  The fix adds a
+    // per-chord clearance constraint enforced via beamShift so the beam is raised as needed.
+
+    it('beam inner edge stays above the non-extremal notehead in a stem-up chord', () => {
+      const staff = document.createElement('music-staff-treble') as any;
+      staff.setAttribute('keySig', 'C');
+      staff.setAttribute('mode', 'major');
+      staff.setAttribute('time', '4/4');
+      document.body.appendChild(staff);
+
+      // Chord 1: C4(staffY≈80)+E4(staffY≈70) eighth — extremal=C4, non-ext=E4
+      // Chord 2: B4(staffY≈50)+D4(staffY≈75) eighth — extremal=D4, non-ext=B4
+      // Without the fix the beam descends to D4's stem level and its inner edge
+      // (≈51 px) overlaps B4's notehead top (≈46.8 px).
+      triggerSlotChange(staff, [
+        makeChord('eighth', ['C4', 'E4']),
+        makeChord('eighth', ['B4', 'D4']),
+      ]);
+
+      const primaryBeam = staff.shadowRoot.querySelector('.beam-group .beam');
+      const chordSvgs = [
+        ...staff.shadowRoot.querySelectorAll(
+          '.notes-container > svg[data-duration]'
+        ),
+      ] as SVGElement[];
+      expect(chordSvgs.length).toBe(2);
+
+      // B4 notehead: center ≈ staffY = 50 px, v-radius ≈ 3.2 px → top ≈ 46.8 px.
+      // Only chord2 (index 1) contains B4 as a non-extremal note.
+      const B4_STAFF_Y = 50;
+      const NOTEHEAD_V_RADIUS = 3.2;
+      const noteheadTop = B4_STAFF_Y - NOTEHEAD_V_RADIUS;
+
+      const NOTE_STEM_X_OFFSET_PX = 365 * (32 / 600); // ≈ 19.47 px
+      const chord2Svg = chordSvgs[1];
+      const chord2X = parseFloat(chord2Svg.getAttribute('x') ?? '0');
+      const stemX = chord2X + NOTE_STEM_X_OFFSET_PX;
+      const beamInnerY = innerEdgeY(primaryBeam, stemX);
+      expect(beamInnerY).toBeLessThan(noteheadTop);
+    });
+
+    it('extremal note stems in all chords still reach the beam after clearance shift', () => {
+      const staff = document.createElement('music-staff-treble') as any;
+      staff.setAttribute('keySig', 'C');
+      staff.setAttribute('mode', 'major');
+      staff.setAttribute('time', '4/4');
+      document.body.appendChild(staff);
+
+      triggerSlotChange(staff, [
+        makeChord('eighth', ['C4', 'E4']),
+        makeChord('eighth', ['B4', 'D4']),
+      ]);
+
+      const primaryBeam = staff.shadowRoot.querySelector('.beam-group .beam');
+      const chordSvgs = [
+        ...staff.shadowRoot.querySelectorAll(
+          '.notes-container > svg[data-duration]'
+        ),
+      ] as SVGElement[];
+
+      const NOTE_STEM_X_OFFSET_PX = 365 * (32 / 600);
+      for (const chordSvg of chordSvgs) {
+        const chordX = parseFloat(chordSvg.getAttribute('x') ?? '0');
+        const stemX = chordX + NOTE_STEM_X_OFFSET_PX;
+        // Stem tip must be inside the beam: between outer and inner edges (1 px tolerance).
+        const stem = chordSvg.querySelector('.stem')!;
+        // Use the note SVG that actually owns the stem (the extremal note's svg).
+        const extremalNoteSvg = stem.closest('svg') as SVGElement;
+        const stemNoteY = parseFloat(extremalNoteSvg.getAttribute('y') ?? '0');
+        const tipY =
+          stemNoteY + parseFloat(stem.getAttribute('y1')!) * NOTE_SCALE;
+        const outer = outerEdgeY(primaryBeam, stemX);
+        const inner = innerEdgeY(primaryBeam, stemX);
+        expect(tipY).toBeGreaterThanOrEqual(Math.min(outer, inner) - 1);
+        expect(tipY).toBeLessThanOrEqual(Math.max(outer, inner) + 1);
+      }
+    });
+
+    it('secondary beam inner edge stays above non-extremal notehead in sixteenth chord', () => {
+      const staff = document.createElement('music-staff-treble') as any;
+      staff.setAttribute('keySig', 'C');
+      staff.setAttribute('mode', 'major');
+      staff.setAttribute('time', '4/4');
+      document.body.appendChild(staff);
+
+      // G+B eighth (extremal=G4/60, non-ext=B4/50) followed by B+D sixteenth
+      // (extremal=D4/75, non-ext=B4/50). B+D has a secondary beam 12px below
+      // the primary — clearance must account for both layers.
+      triggerSlotChange(staff, [
+        makeChord('eighth', ['G4', 'B4']),
+        makeChord('sixteenth', ['B4', 'D4']),
+      ]);
+
+      const beams = [
+        ...staff.shadowRoot.querySelectorAll('.beam-group .beam'),
+      ] as Element[];
+      // primary beam + secondary beam (stub or span for the lone sixteenth)
+      expect(beams.length).toBeGreaterThanOrEqual(2);
+      const primaryBeam = beams[0];
+      const secondaryBeam = beams[1];
+
+      const chordSvgs = [
+        ...staff.shadowRoot.querySelectorAll(
+          '.notes-container > svg[data-duration]'
+        ),
+      ] as SVGElement[];
+      const chord2X = parseFloat(chordSvgs[1].getAttribute('x') ?? '0');
+      const NOTE_STEM_X_OFFSET_PX = 365 * (32 / 600);
+      const stemX = chord2X + NOTE_STEM_X_OFFSET_PX;
+
+      // B4 notehead top ≈ 50 - 3.2 = 46.8 px.
+      const B4_TOP = 50 - 3.2;
+      expect(innerEdgeY(primaryBeam, stemX)).toBeLessThan(B4_TOP);
+      expect(innerEdgeY(secondaryBeam, stemX)).toBeLessThan(B4_TOP);
     });
   });
 

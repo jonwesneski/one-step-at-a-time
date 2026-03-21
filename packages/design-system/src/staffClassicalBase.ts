@@ -24,7 +24,12 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from './utils';
-import { durationToFactor, factorToDuration, SVG_NS } from './utils/consts';
+import {
+  durationToFactor,
+  durationToFlagCountMap,
+  factorToDuration,
+  SVG_NS,
+} from './utils/consts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -267,6 +272,45 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           ? Math.max(...staffYCoordinates)
           : Math.min(...staffYCoordinates);
         preBeamY = 10 + extremalStaffY - yHeadOffset;
+
+        // For chords the beam must also clear every non-extremal notehead.
+        // The clearance must cover ALL beam layers at this chord's position
+        // (primary + secondary + any further layers), plus a comfortable visual
+        // gap between the innermost beam's inner edge and the notehead top.
+        //
+        // Derivation (stem-up, per-beam layer × beamCount):
+        //   notehead v-radius  : 3.2 px  (HEAD_WIDTH × 0.75 × NOTE_SCALE)
+        //   total beam height  : beamCount × 8 + (beamCount-1) × 4  = 12·n − 4
+        //   visual gap         : 8 px  (~one staff space, prevents anti-alias touch)
+        //   ─────────────────────────────────────────────────────────────────────
+        //   total              : 3.2 + 12·n − 4 + 8  =  7.2 + 12·n
+        //
+        // Examples:
+        //   eighth (n=1): 19.2 px   sixteenth (n=2): 31.2 px
+        //   32nd   (n=3): 43.2 px   64th      (n=4): 55.2 px
+        // notehead_v_radius = HEAD_WIDTH(80) * 0.75 * NOTE_SCALE(32/600) ≈ 3.2 px
+        const beamCount =
+          durationToFlagCountMap.get(chordElement.duration as DurationType) ??
+          1;
+        const NOTEHEAD_BEAM_CLEAR = 7.2 + beamCount * 12;
+        const nonExtStaffYs = staffYCoordinates.filter(
+          (y) => y !== extremalStaffY
+        );
+        if (nonExtStaffYs.length > 0) {
+          if (stemUp) {
+            const topmostNonExt = Math.min(...nonExtStaffYs);
+            this.#beamsBuilder.setMaxBeamOuterY(
+              i,
+              topmostNonExt - NOTEHEAD_BEAM_CLEAR
+            );
+          } else {
+            const bottommostNonExt = Math.max(...nonExtStaffYs);
+            this.#beamsBuilder.setMaxBeamOuterY(
+              i,
+              bottommostNonExt + NOTEHEAD_BEAM_CLEAR
+            );
+          }
+        }
       }
       this.#beamsBuilder.setY(i, preBeamY, stemUp);
     }
