@@ -62,6 +62,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       composition?.getAttribute('keySig') ??
       'C';
     const timeTime = this.getAttribute('time');
+    // todo: remove if-condition; that way I just call once
     if (timeTime) {
       this.#timeInts = this.#convertTotimeInts(timeTime);
     }
@@ -246,14 +247,85 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
+    const { beamsBuilder, beamRenderer, stemDirections } =
+      this.#buildBeamsRenderer(elements);
+    this.#beamRenderer = beamRenderer;
+
+    // Create all note SVGs (y-positioned, not yet x-positioned or appended)
+    const noteSvgs: SVGElement[] = [];
+    let beatOffset = 0;
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
+      const duration = element.duration;
+      if (
+        beatOffset + durationToFactor[duration as DurationType] >
+        measureDuration
+      ) {
+        console.error(
+          `no more room for note(s); remaining duration is "${
+            factorToDuration.get(measureDuration - beatOffset) ??
+            measureDuration - beatOffset
+          }", tried to add "${duration}"`
+        );
+        break;
+      }
+
+      const stemUp = stemDirections[i];
+
+      if (element.nodeName === 'MUSIC-NOTE') {
+        const noteElement = element as NoteElementType;
+        const [noteSvg, yOffset] = createNoteSvg({
+          duration,
+          noFlags: beamsBuilder.isBeamed(i),
+          stemUp,
+          stemExtension: this.#beamRenderer.stemExtension(i),
+          qualifiedElementName: 'svg',
+        });
+        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
+        noteSvg.setAttribute('y', noteY.toString());
+
+        noteSvgs.push(noteSvg);
+      } else {
+        const chordElement = element as ChordElementType;
+        const staffYCoordinates = chordElement.notes.map((note) =>
+          this.noteToYCoordinate(note.value)
+        );
+        const [chordSvg] = createChordSvg({
+          duration,
+          staffYCoordinates,
+          noFlags: beamsBuilder.isBeamed(i),
+          stemUp,
+          stemExtension: this.#beamRenderer.stemExtension(i),
+          qualifiedElementName: 'g',
+        });
+        chordSvg.setAttribute('overflow', 'visible');
+
+        noteSvgs.push(chordSvg);
+      }
+
+      beatOffset += durationToFactor[duration as DurationType];
+    }
+
+    this.#spaceNotes(noteSvgs);
+
+    for (const svg of noteSvgs) {
+      this.#notesContainer.appendChild(svg);
+    }
+
+    for (const svgGroup of this.#beamRenderer.svgGroups) {
+      this.#notesContainer.appendChild(svgGroup);
+    }
+  }
+
+  #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
+    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     const beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
     const stemDirections = this.#determineStemDirections(
       elements,
       beamsBuilder
     );
 
-    // Build the Y-position array for all beamed notes so BeamsBuilder can
-    // compute beam slant and vertical offset before the note SVGs are created.
     const noteYPositions: (NoteYPosition | null)[] = elements.map(
       (element, i) => {
         if (!beamsBuilder.isBeamed(i)) return null;
@@ -323,73 +395,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     );
 
-    this.#beamRenderer = beamsBuilder.buildRenderer(noteYPositions);
-
-    // Create all note SVGs (y-positioned, not yet x-positioned or appended)
-    const noteSvgs: SVGElement[] = [];
-    let beatOffset = 0;
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
-      const duration = element.duration;
-      if (
-        beatOffset + durationToFactor[duration as DurationType] >
-        measureDuration
-      ) {
-        console.error(
-          `no more room for note(s); remaining duration is "${
-            factorToDuration.get(measureDuration - beatOffset) ??
-            measureDuration - beatOffset
-          }", tried to add "${duration}"`
-        );
-        break;
-      }
-
-      const stemUp = stemDirections[i];
-
-      if (element.nodeName === 'MUSIC-NOTE') {
-        const noteElement = element as NoteElementType;
-        const [noteSvg, yOffset] = createNoteSvg({
-          duration,
-          noFlags: beamsBuilder.isBeamed(i),
-          stemUp,
-          stemExtension: this.#beamRenderer.stemExtension(i),
-          qualifiedElementName: 'svg',
-        });
-        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
-        noteSvg.setAttribute('y', noteY.toString());
-
-        noteSvgs.push(noteSvg);
-      } else {
-        const chordElement = element as ChordElementType;
-        const staffYCoordinates = chordElement.notes.map((note) =>
-          this.noteToYCoordinate(note.value)
-        );
-        const [chordSvg] = createChordSvg({
-          duration,
-          staffYCoordinates,
-          noFlags: beamsBuilder.isBeamed(i),
-          stemUp,
-          stemExtension: this.#beamRenderer.stemExtension(i),
-          qualifiedElementName: 'g',
-        });
-        chordSvg.setAttribute('overflow', 'visible');
-
-        noteSvgs.push(chordSvg);
-      }
-
-      beatOffset += durationToFactor[duration as DurationType];
-    }
-
-    this.#spaceNotes(noteSvgs);
-
-    for (const svg of noteSvgs) {
-      this.#notesContainer.appendChild(svg);
-    }
-    // Beam groups are appended after notes so they render on top in SVG z-order.
-    for (const svgGroup of this.#beamRenderer.svgGroups) {
-      this.#notesContainer.appendChild(svgGroup);
-    }
+    return {
+      beamsBuilder,
+      beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
+      stemDirections,
+    };
   }
 
   // Rules (per standard music notation):

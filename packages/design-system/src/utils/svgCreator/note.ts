@@ -58,8 +58,8 @@ export const createNoteSvg = ({
   const height = NOTE_SVG_HEIGHT;
   svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
   svg.setAttribute('height', `${height}`);
-  // Not using viewbox but it should be somewhere around
-  // COORD_WIDTH and BASE_STEM_LENGTH
+  // Not using viewbox but it should be somewhere around:
+  // COORD_WIDTH and BASE_STEM_LENGTH (height; just starting though)
 
   const g = document.createElementNS(SVG_NS, 'g');
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
@@ -67,22 +67,19 @@ export const createNoteSvg = ({
   const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
 
-  // Each flag beyond the first needs FLAG_Y_SPACING more internal units so the
-  // lowest flag stays comfortably above the notehead. Skipped for beamed notes
-  // (noFlags=true) since their stems are positioned by the beam slant mechanism.
+  // Extend stem on larger flag counts
   const flagStemExtension =
     !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
 
   // Stem
-  // Stem-up: right side of head. Stem-down: left side of head (mirror).
   const stemX = stemUp
     ? xStart + HEAD_WIDTH - 15
     : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
   if (!noStem && duration !== 'whole') {
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
-    // Stem-up: tip at top (y1), head end at bottom (y2).
-    // Stem-down: head end at top (y1), tip at bottom (y2).
+    // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
+    // Stem-down: left side of head, head end at top (y1), tip at bottom (y2).
     const stemY1 = stemUp
       ? NOTE_Y_STEM_START - stemExtensionInternal
       : HEAD_WIDTH;
