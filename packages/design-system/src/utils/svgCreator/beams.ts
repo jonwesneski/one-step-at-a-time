@@ -164,7 +164,7 @@ import {
   BeatTypeInMeasure,
   DurationType,
 } from '../../types/theory';
-import { SVG_NS, durationToFactor, durationToFlagCountMap } from '../consts';
+import { durationToFactor, durationToFlagCountMap, SVG_NS } from '../consts';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
@@ -217,7 +217,6 @@ class BeamLine {
     readonly beamLevel: number,
     readonly fractionalBeamSide?: 'left' | 'right'
   ) {}
-
 }
 
 // Handles SVG drawing and X-repositioning for one beam group after Y positions
@@ -334,7 +333,12 @@ class BeamGroupRenderer {
 // mapping is handled via #globalIndices.
 class BeamGroup {
   #notes: NoteData[];
-  #beamLines: BeamLine[];
+  // The single outermost beam connecting all notes in the group.
+  #primaryBeam: BeamLine;
+  // Full-span beams at level 1+ for consecutive runs of faster notes.
+  #secondaryBeams: BeamLine[];
+  // Fractional (partial/stub) beams for isolated faster notes at any level.
+  #fractionalBeams: BeamLine[];
   #globalIndices: number[];
   #stemUp = true;
   #chordClearanceY: Array<number | null>;
@@ -347,9 +351,13 @@ class BeamGroup {
     }));
     this.#globalIndices = globalIndices;
     this.#chordClearanceY = new Array(flagCounts.length).fill(null);
-    // Beam lines are structural (depend only on flag counts) and are computed
-    // once at construction. Only x/y coordinates change at render/resize time.
-    this.#beamLines = this.#computeBeamLines();
+    // Beam structure is derived only from flag counts and computed once at
+    // construction. Only x/y coordinates change at render/resize time.
+    const { primaryBeam, secondaryBeams, fractionalBeams } =
+      this.#computeBeamStructure();
+    this.#primaryBeam = primaryBeam;
+    this.#secondaryBeams = secondaryBeams;
+    this.#fractionalBeams = fractionalBeams;
   }
 
   containsNote(globalIndex: number): boolean {
@@ -385,10 +393,16 @@ class BeamGroup {
    */
   buildRenderer(): BeamGroupRenderer {
     const beamVerticalOffset = this.#computeBeamVerticalOffset();
-    const svgGroup = this.#buildSvgGroup();
+    // Rendering order: primary first, then secondary, then fractional.
+    const beamLines = [
+      this.#primaryBeam,
+      ...this.#secondaryBeams,
+      ...this.#fractionalBeams,
+    ];
+    const svgGroup = this.#buildSvgGroup(beamLines.length);
     return new BeamGroupRenderer(
       this.#notes,
-      this.#beamLines,
+      beamLines,
       this.#stemUp,
       beamVerticalOffset,
       this.#globalIndices,
@@ -396,12 +410,18 @@ class BeamGroup {
     );
   }
 
-  // Derives beam lines from the flag counts of each note. A beam line is created
-  // for each level (0 = primary, 1 = secondary, …) and for each consecutive run
-  // of notes that participate at that level. Isolated notes at a level produce
-  // a fractional (partial/stub) beam toward their nearest neighbor.
-  #computeBeamLines(): BeamLine[] {
-    const beamLines: BeamLine[] = [];
+  // Derives the beam structure from the flag counts of each note.
+  // Level 0 always produces exactly one full-span primary beam.
+  // Level 1+ produces either full-span secondary beams (for consecutive runs)
+  // or fractional (partial/stub) beams for isolated notes at that level.
+  #computeBeamStructure(): {
+    primaryBeam: BeamLine;
+    secondaryBeams: BeamLine[];
+    fractionalBeams: BeamLine[];
+  } {
+    let primaryBeam: BeamLine | undefined;
+    const secondaryBeams: BeamLine[] = [];
+    const fractionalBeams: BeamLine[] = [];
     const maxBeamCount = Math.max(...this.#notes.map((n) => n.beamCount));
 
     for (let level = 0; level < maxBeamCount; level++) {
@@ -416,11 +436,16 @@ class BeamGroup {
           const runEnd = i - 1;
           if (runEnd > beamRunStart) {
             // Multiple notes — full beam run at this level.
-            beamLines.push(new BeamLine(beamRunStart, runEnd, level));
+            const beamLine = new BeamLine(beamRunStart, runEnd, level);
+            if (level === 0) {
+              primaryBeam = beamLine;
+            } else {
+              secondaryBeams.push(beamLine);
+            }
           } else {
             // Single isolated note — fractional (partial/stub) beam toward the nearest neighbor.
             const fractionalBeamSide = beamRunStart > 0 ? 'left' : 'right';
-            beamLines.push(
+            fractionalBeams.push(
               new BeamLine(
                 beamRunStart,
                 beamRunStart,
@@ -434,7 +459,10 @@ class BeamGroup {
       }
     }
 
-    return beamLines;
+    // BeamGroup is only created for groups with ≥2 notes, all of which are
+    // beamable, so a primary beam spanning the full group is always guaranteed.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- I'll allow it
+    return { primaryBeam: primaryBeam!, secondaryBeams, fractionalBeams };
   }
 
   /**
@@ -492,10 +520,10 @@ class BeamGroup {
   }
 
   /** Creates the <g> element with one <polygon> per beam line. */
-  #buildSvgGroup(): SVGGElement {
+  #buildSvgGroup(beamLineCount: number): SVGGElement {
     const g = document.createElementNS(SVG_NS, 'g');
     g.classList.add('beam-group');
-    for (let i = 0; i < this.#beamLines.length; i++) {
+    for (let i = 0; i < beamLineCount; i++) {
       const beam = document.createElementNS(SVG_NS, 'polygon');
       beam.classList.add('beam');
       beam.setAttribute('fill', 'currentColor');
