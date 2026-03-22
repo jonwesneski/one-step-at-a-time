@@ -74,6 +74,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           height: 0.5px;
           background: currentColor;
         }
+
+        ::slotted(music-note),
+        ::slotted(music-chord) {
+          position: absolute;
+        }
       </style>
       <div class="staff-wrapper">
         <slot></slot>

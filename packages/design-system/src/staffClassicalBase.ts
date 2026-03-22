@@ -16,13 +16,13 @@ import {
 } from './types/theory';
 import {
   BeamsBuilder,
-  createChordSvg,
+  computeYHeadOffset,
   createFlatSvg,
-  createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
+  STAFF_Y_PADDING,
   type NoteYPosition,
 } from './utils';
 import {
@@ -40,8 +40,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #parentMode: Mode | null;
   #parentKeySig: LetterNote | null;
   #describeContainer: SVGGElement;
-  #notesContainer: SVGSVGElement;
+  #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
+  #currentElements: NoteOrChordElementType[] = [];
 
   constructor() {
     super();
@@ -68,7 +69,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
-    this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#beamsContainer = document.createElementNS(SVG_NS, 'svg');
   }
 
   #convertTotimeInts(time: string): [BeatsInMeasure, BeatTypeInMeasure] {
@@ -123,7 +124,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#buildDescribe(this.clefSvg);
   }
 
-  // Describe is: clef, key signature, time signature, and notes
+  // Describe is: clef, key signature, time signature, and beams overlay
   #buildDescribe(clefSvgStr: string) {
     this.#describeContainer.classList.add('describe-container');
     this.#describeContainer.innerHTML = clefSvgStr;
@@ -140,10 +141,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       xOffsetOfKeySignature + 5
     );
 
-    // Notes are added here at runtime
-    this.#notesContainer.classList.add('notes-container');
-    this.#notesContainer.style.overflow = 'hidden';
-    this.transcribeContainer.appendChild(this.#notesContainer);
+    // Beams overlay — beam polygons are appended here at runtime
+    this.#beamsContainer.classList.add('beams-container');
+    this.#beamsContainer.style.overflow = 'visible';
+    this.#beamsContainer.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(this.#beamsContainer);
   }
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
@@ -232,16 +234,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
-    // Clear any previously rendered notes. `slotchange` can fire multiple times
-    // as a framework (e.g. React) adds children incrementally, so without this
-    // each call would append on top of the last, leaving stale/duplicate SVGs.
-    this.#notesContainer.innerHTML = '';
-
-    const transcribeRect = this.transcribeContainer.getBoundingClientRect();
-    const describeRect = this.#describeContainer.getBoundingClientRect();
-    const describeEndX = Math.round(describeRect.right - transcribeRect.left);
-    this.#notesContainer.setAttribute('x', `${describeEndX}`);
-    this.#notesContainer.setAttribute('height', '100');
+    // Clear previously rendered beams
+    this.#beamsContainer.innerHTML = '';
 
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
@@ -251,8 +245,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#buildBeamsRenderer(elements);
     this.#beamRenderer = beamRenderer;
 
-    // Create all note SVGs (y-positioned, not yet x-positioned or appended)
-    const noteSvgs: SVGElement[] = [];
+    // Set rendering properties on each element (triggers their self-render via rAF)
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -271,50 +264,33 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
 
       const stemUp = stemDirections[i];
+      const isBeamed = beamsBuilder.isBeamed(i);
+      const extension = this.#beamRenderer.stemExtension(i);
 
       if (element.nodeName === 'MUSIC-NOTE') {
-        const noteElement = element as NoteElementType;
-        const [noteSvg, yOffset] = createNoteSvg({
-          duration,
-          noFlags: beamsBuilder.isBeamed(i),
-          stemUp,
-          stemExtension: this.#beamRenderer.stemExtension(i),
-          qualifiedElementName: 'svg',
-        });
-        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
-        noteSvg.setAttribute('y', noteY.toString());
-
-        noteSvgs.push(noteSvg);
+        const noteEl = element as NoteElementType;
+        noteEl.stemUp = stemUp;
+        noteEl.stemExtension = extension;
+        noteEl.noFlags = isBeamed;
       } else {
-        const chordElement = element as ChordElementType;
-        const staffYCoordinates = chordElement.notes.map((note) =>
+        const chordEl = element as ChordElementType;
+        const staffYCoordinates = chordEl.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        const [chordSvg] = createChordSvg({
-          duration,
-          staffYCoordinates,
-          noFlags: beamsBuilder.isBeamed(i),
-          stemUp,
-          stemExtension: this.#beamRenderer.stemExtension(i),
-          qualifiedElementName: 'g',
-        });
-        chordSvg.setAttribute('overflow', 'visible');
-
-        noteSvgs.push(chordSvg);
+        chordEl.stemUp = stemUp;
+        chordEl.stemExtension = extension;
+        chordEl.noFlags = isBeamed;
+        chordEl.staffYCoordinates = staffYCoordinates;
       }
 
       beatOffset += durationToFactor[duration as DurationType];
     }
 
-    this.#spaceNotes(noteSvgs);
-
-    for (const svg of noteSvgs) {
-      this.#notesContainer.appendChild(svg);
-    }
+    this.#currentElements = elements;
+    this.#spaceNotes(elements);
 
     for (const svgGroup of this.#beamRenderer.svgGroups) {
-      this.#notesContainer.appendChild(svgGroup);
+      this.#beamsContainer.appendChild(svgGroup);
     }
   }
 
@@ -336,11 +312,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
         if (element.nodeName === 'MUSIC-NOTE') {
           return {
-            // todo: anywhere where I am doing an `8 + noteYCoord`,
+            // todo: anywhere where I am doing an `STAFF_Y_PADDING + noteYCoord`,
             //  will revisit to figure out how to handle better. Basically need
             // account for margin-top (currently 28px); not sure why it is only 8 though.
             y:
-              8 +
+              STAFF_Y_PADDING +
               this.noteToYCoordinate((element as NoteElementType).value) -
               yHeadOffset,
             stemUp,
@@ -388,7 +364,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
 
         return {
-          y: 8 + extremalStaffY - yHeadOffset,
+          y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
           stemUp,
           chordClearanceY,
         };
@@ -490,14 +466,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
-  #spaceNotes(elements: SVGElement[]) {
+  #spaceNotes(elements: NoteOrChordElementType[]) {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const describeEndX = Math.round(describeRect.right - transcribeRect.left);
     const remainingWidth = transcribeRect.width - describeEndX;
-    this.#notesContainer.setAttribute('width', `${remainingWidth}`);
+
+    // Configure beams container to cover the notes area
+    this.#beamsContainer.setAttribute('x', `${describeEndX}`);
+    this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
     // todo: handle height instead of using literal
-    this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
+    this.#beamsContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
+    this.#beamsContainer.setAttribute('height', '100');
 
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     const measureDuration = beatsInMeasure / beatType;
@@ -507,28 +487,42 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
-      const duration = elements[i].dataset.duration as DurationType;
-      const xOffset =
+      const element = elements[i];
+      const duration = element.duration as DurationType;
+      const xOffsetInNotesSpace =
         i * minNoteWidth + (beatOffset / measureDuration) * proportionalWidth;
 
-      this.#beamRenderer?.setX(i, xOffset);
-      this.#spaceNote(elements[i], xOffset);
+      // Tell beam renderer about x position (in beamsContainer coordinate space)
+      this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
+
+      // Position the light DOM element via inline styles
+      const xInWrapper = describeEndX + xOffsetInNotesSpace;
+      element.style.left = `${xInWrapper}px`;
+
+      if (element.nodeName === 'MUSIC-NOTE') {
+        const noteEl = element as NoteElementType;
+        const yHeadOffset = computeYHeadOffset(
+          noteEl.stemUp,
+          duration,
+          noteEl.noFlags
+        );
+        const noteY =
+          STAFF_Y_PADDING + this.noteToYCoordinate(noteEl.value) - yHeadOffset;
+        element.style.top = `${noteY}px`;
+      } else {
+        // Chord y-positioning is handled internally by the chord's own SVG rendering
+        element.style.top = '0px';
+      }
+
       beatOffset += durationToFactor[duration];
     }
     this.#beamRenderer?.spaceAll();
   }
 
-  #spaceNote(element: SVGElement, xOffset: number) {
-    element.setAttribute('x', xOffset.toString());
-  }
-
-  // Respace notes
+  // Respace notes on resize
   onStaffResize() {
-    const notes = [
-      ...(this.#notesContainer.querySelectorAll(
-        ':scope > svg'
-      ) as NodeListOf<Element>),
-    ] as SVGElement[];
-    this.#spaceNotes(notes);
+    if (this.#currentElements.length > 0) {
+      this.#spaceNotes(this.#currentElements);
+    }
   }
 }

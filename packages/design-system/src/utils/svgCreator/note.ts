@@ -193,8 +193,26 @@ export const createNoteSvg = ({
 
   svg.appendChild(g);
 
-  const yHeadOffset = stemUp
-    ? Math.round(10 + yStemEnd * NOTE_SCALE)
-    : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);
   return [svg, yHeadOffset];
 };
+
+// Padding added to staff Y coordinate when positioning notes.
+// Accounts for the margin between the top of the transcribe container and the first staff line.
+export const STAFF_Y_PADDING = 8;
+
+// Compute the Y offset from the top of the note SVG to the notehead center.
+// Deterministic from rendering params — used by both createNoteSvg (return value)
+// and the staff (for positioning notes before their SVG renders).
+export function computeYHeadOffset(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean
+): number {
+  if (!stemUp) return NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  const flagStemExtension =
+    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
+  return Math.round(10 + yStemEnd * NOTE_SCALE);
+}

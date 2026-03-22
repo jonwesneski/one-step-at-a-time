@@ -8,6 +8,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return ['duration', 'value'];
     }
 
+    // Staff-controlled rendering properties (not HTML attributes).
+    // Set by the parent staff element to control stem direction, extension, and flags.
+    #stemUp = true;
+    #stemExtension = 0;
+    #noFlags = false;
+    #noStem = false;
+
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
@@ -30,34 +37,107 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       else this.setAttribute('value', val);
     }
 
-    connectedCallback(): void {
-      const staffElement =
-        this.closest('music-staff-treble') || this.closest('music-staff-bass');
-      if (!staffElement) {
-        this.render();
-      }
-      // else let the staffElement build the note
+    get stemUp(): boolean {
+      return this.#stemUp;
+    }
+    set stemUp(v: boolean) {
+      this.#stemUp = v;
+      if (this.shadowRoot) this.render();
     }
 
-    // attributeChangedCallback(
-    //   name: string,
-    //   oldValue: string | null,
-    //   newValue: string | null
-    // ): void {
-    //   // if (oldValue !== newValue) {
-    //   //   const measureElement = this.closest("music-measure");
-    //   //   const width = measureElement?.getAttribute("width") || "100";
-    //   //   this.render(parseFloat(width));
-    //   //   //todo maybe i want to just call this.connectedCallback() instead
-    //   // }
-    // }
+    get stemExtension(): number {
+      return this.#stemExtension;
+    }
+    set stemExtension(v: number) {
+      this.#stemExtension = v;
+      if (this.shadowRoot) this.render();
+    }
+
+    get noFlags(): boolean {
+      return this.#noFlags;
+    }
+    set noFlags(v: boolean) {
+      this.#noFlags = v;
+      if (this.shadowRoot) this.render();
+    }
+
+    get noStem(): boolean {
+      return this.#noStem;
+    }
+    set noStem(v: boolean) {
+      this.#noStem = v;
+      if (this.shadowRoot) this.render();
+    }
+
+    connectedCallback(): void {
+      this.render();
+    }
+
+    attributeChangedCallback(
+      _name: string,
+      oldValue: string | null,
+      newValue: string | null
+    ): void {
+      if (oldValue !== newValue && this.isConnected) {
+        this.render();
+      }
+    }
 
     private render(): void {
       const [noteSvg] = createNoteSvg({
         duration: this.duration,
+        stemUp: this.#stemUp,
+        stemExtension: this.#stemExtension,
+        noFlags: this.#noFlags,
+        noStem: this.#noStem,
       });
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = noteSvg.outerHTML;
+      this.shadowRoot!.innerHTML = `
+        <style>
+          :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
+        </style>
+      `;
+      this.shadowRoot!.appendChild(noteSvg);
+
+      noteSvg.addEventListener('click', (e) => {
+        this.dispatchEvent(
+          new CustomEvent('note-click', {
+            bubbles: true,
+            composed: true,
+            detail: {
+              value: this.value,
+              duration: this.duration,
+              originalEvent: e,
+            },
+          })
+        );
+      });
+      noteSvg.addEventListener('pointerdown', (e) => {
+        this.dispatchEvent(
+          new CustomEvent('note-pointerdown', {
+            bubbles: true,
+            composed: true,
+            detail: {
+              value: this.value,
+              duration: this.duration,
+              originalEvent: e,
+            },
+          })
+        );
+      });
+      noteSvg.addEventListener('pointerup', (e) => {
+        this.dispatchEvent(
+          new CustomEvent('note-pointerup', {
+            bubbles: true,
+            composed: true,
+            detail: {
+              value: this.value,
+              duration: this.duration,
+              originalEvent: e,
+            },
+          })
+        );
+      });
     }
   }
 

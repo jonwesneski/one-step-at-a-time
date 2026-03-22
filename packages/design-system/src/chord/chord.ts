@@ -1,11 +1,18 @@
 import { ChordNote, IChordElement, NoteElementType } from '../types/elements';
 import { Chord, DurationType } from '../types/theory';
+import { createChordSvg } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
-      return ['currentCount'];
+      return ['currentCount', 'duration'];
     }
+
+    // Staff-controlled rendering properties (not HTML attributes).
+    #stemUp = true;
+    #stemExtension = 0;
+    #noFlags = false;
+    #staffYCoordinates: number[] | null = null;
 
     constructor() {
       super();
@@ -48,32 +55,134 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return notes;
     }
 
+    get stemUp(): boolean {
+      return this.#stemUp;
+    }
+    set stemUp(v: boolean) {
+      this.#stemUp = v;
+      if (this.shadowRoot) this.render();
+    }
+
+    get stemExtension(): number {
+      return this.#stemExtension;
+    }
+    set stemExtension(v: number) {
+      this.#stemExtension = v;
+      if (this.shadowRoot) this.render();
+    }
+
+    get noFlags(): boolean {
+      return this.#noFlags;
+    }
+    set noFlags(v: boolean) {
+      this.#noFlags = v;
+      if (this.shadowRoot) this.render();
+    }
+
+    get staffYCoordinates(): number[] | null {
+      return this.#staffYCoordinates;
+    }
+    set staffYCoordinates(v: number[] | null) {
+      this.#staffYCoordinates = v;
+      if (this.shadowRoot) this.render();
+    }
+
     connectedCallback(): void {
       this.render();
     }
 
     attributeChangedCallback(
-      name: string,
+      _name: string,
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue !== newValue) {
+      if (oldValue !== newValue && this.isConnected) {
         this.render();
       }
     }
 
     private render(): void {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = `
-       <style>
-          :host {
-            display: inline-block;
-          }
-        </style>
-        <div style="position: relative; display: flex; flex-direction: column;">
-          <slot></slot>
-        </div>
-      `;
+      if (this.#staffYCoordinates) {
+        // Staff mode: render chord SVG directly
+        const [chordSvg] = createChordSvg({
+          duration: this.duration,
+          staffYCoordinates: this.#staffYCoordinates,
+          noFlags: this.#noFlags,
+          stemUp: this.#stemUp,
+          stemExtension: this.#stemExtension,
+          qualifiedElementName: 'g',
+        });
+        chordSvg.setAttribute('overflow', 'visible');
+
+        // Wrap in an SVG element for display
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+        this.shadowRoot!.innerHTML = `
+          <style>
+            :host { display: inline-block; overflow: visible; }
+            svg { overflow: visible; }
+          </style>
+        `;
+        const svg = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'svg'
+        );
+        svg.setAttribute('width', '32');
+        svg.setAttribute('height', '100');
+        svg.setAttribute('overflow', 'visible');
+        svg.appendChild(chordSvg);
+        this.shadowRoot!.appendChild(svg);
+
+        svg.addEventListener('click', (e) => {
+          this.dispatchEvent(
+            new CustomEvent('chord-click', {
+              bubbles: true,
+              composed: true,
+              detail: {
+                notes: this.notes,
+                duration: this.duration,
+                originalEvent: e,
+              },
+            })
+          );
+        });
+        svg.addEventListener('pointerdown', (e) => {
+          this.dispatchEvent(
+            new CustomEvent('chord-pointerdown', {
+              bubbles: true,
+              composed: true,
+              detail: {
+                notes: this.notes,
+                duration: this.duration,
+                originalEvent: e,
+              },
+            })
+          );
+        });
+        svg.addEventListener('pointerup', (e) => {
+          this.dispatchEvent(
+            new CustomEvent('chord-pointerup', {
+              bubbles: true,
+              composed: true,
+              detail: {
+                notes: this.notes,
+                duration: this.duration,
+                originalEvent: e,
+              },
+            })
+          );
+        });
+      } else {
+        // Standalone mode: slot-based rendering
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+        this.shadowRoot!.innerHTML = `
+          <style>
+            :host { display: inline-block; }
+          </style>
+          <div style="position: relative; display: flex; flex-direction: column;">
+            <slot></slot>
+          </div>
+        `;
+      }
     }
   }
 

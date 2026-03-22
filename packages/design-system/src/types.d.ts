@@ -8,6 +8,9 @@ declare module 'react' {
         value?: Chord;
         duration?: DurationType;
         children?: React.ReactNode;
+        onClick?: (e: MouseEvent) => void;
+        onPointerDown?: (e: PointerEvent) => void;
+        onPointerUp?: (e: PointerEvent) => void;
       };
       'music-composition': {
         keySig?: LetterNote;
@@ -19,6 +22,11 @@ declare module 'react' {
         value?: Note;
         duration?: DurationType;
         class?: string;
+        onClick?: (e: MouseEvent) => void;
+        onPointerDown?: (e: PointerEvent) => void;
+        onPointerUp?: (e: PointerEvent) => void;
+        // Custom events (note-click, note-pointerdown, note-pointerup) require
+        // useRef + addEventListener in React — they are not auto-wired by prop name.
       };
       'music-measure': {
         keySig?: LetterNote;
