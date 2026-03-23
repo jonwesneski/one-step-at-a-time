@@ -21,6 +21,7 @@ import {
   createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
+  NoteDragHandler,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   type NoteYPosition,
@@ -42,6 +43,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #describeContainer: SVGGElement;
   #notesContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
+  #dragHandler: NoteDragHandler | null = null;
+  #currentSlottedElements: NoteOrChordElementType[] = [];
 
   constructor() {
     super();
@@ -81,7 +84,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   static get observedAttributes(): string[] {
-    return ['keySig', 'mode', 'time'];
+    return ['keySig', 'mode', 'time', 'editable', 'managed'];
+  }
+
+  get editable(): boolean {
+    return this.hasAttribute('editable');
+  }
+
+  set editable(value: boolean) {
+    if (value) this.setAttribute('editable', '');
+    else this.removeAttribute('editable');
+  }
+
+  get managed(): boolean {
+    return this.hasAttribute('managed');
+  }
+
+  set managed(value: boolean) {
+    if (value) this.setAttribute('managed', '');
+    else this.removeAttribute('managed');
   }
 
   get keySig(): LetterNote {
@@ -121,6 +142,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected onConnectedCallback() {
     this.#buildDescribe(this.clefSvg);
+    if (this.editable) {
+      this.#enableDrag();
+    }
+  }
+
+  #enableDrag() {
+    // Recreate if managed flag changed
+    if (this.#dragHandler) this.#disableDrag();
+    this.#dragHandler = new NoteDragHandler(
+      this.#notesContainer,
+      this as unknown as HTMLElement,
+      () => [...this.#currentSlottedElements],
+      this.managed
+    );
+    this.#dragHandler.attach();
+  }
+
+  #disableDrag() {
+    if (!this.#dragHandler) return;
+    this.#dragHandler.detach();
+    this.#dragHandler = null;
   }
 
   // Describe is: clef, key signature, time signature, and notes
@@ -195,10 +237,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   protected override onDisconnectedCallback(): void {
+    this.#disableDrag();
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
       // ignore
+    }
+  }
+
+  override attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ): void {
+    super.attributeChangedCallback(name, oldValue, newValue);
+    if (name === 'editable') {
+      if (newValue !== null) this.#enableDrag();
+      else this.#disableDrag();
+    } else if (name === 'managed' && this.editable) {
+      this.#enableDrag(); // recreate handler with new managed flag
     }
   }
 
@@ -232,6 +289,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
+    // Cancel any in-progress drag before clearing rendered SVGs
+    this.#dragHandler?.cancelDrag();
+
+    this.#currentSlottedElements = elements;
+
     // Clear any previously rendered notes. `slotchange` can fire multiple times
     // as a framework (e.g. React) adds children incrementally, so without this
     // each call would append on top of the last, leaving stale/duplicate SVGs.
@@ -284,6 +346,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
         noteSvg.setAttribute('y', noteY.toString());
+        noteSvg.dataset.slotIndex = i.toString();
 
         noteSvgs.push(noteSvg);
       } else {
@@ -300,6 +363,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           qualifiedElementName: 'g',
         });
         chordSvg.setAttribute('overflow', 'visible');
+        chordSvg.dataset.slotIndex = i.toString();
 
         noteSvgs.push(chordSvg);
       }

@@ -7,4 +7,6 @@ import './staffTreble/staffTreble'; // order of import matters for some reason, 
 
 import './note/note';
 
+export * from './types/theory';
+
 export {};

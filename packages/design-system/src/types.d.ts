@@ -1,45 +1,50 @@
 import 'react';
 import type { Chord, DurationType, LetterNote, Note } from './types/theory';
 
+type WebComponentProps = {
+  key?: React.Key;
+  ref?: React.Ref<HTMLElement>;
+  children?: React.ReactNode;
+};
+
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'music-chord': {
+      'music-chord': WebComponentProps & {
         value?: Chord;
         duration?: DurationType;
-        children?: React.ReactNode;
       };
-      'music-composition': {
+      'music-composition': WebComponentProps & {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
-        children?: React.ReactNode;
       };
       'music-note': {
         value?: Note;
         duration?: DurationType;
         class?: string;
+        ref?: React.Ref<HTMLElement>;
       };
-      'music-measure': {
+      'music-measure': WebComponentProps & {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
-        children?: React.ReactNode;
       };
-      'music-staff-bass': {
+      'music-staff-bass': WebComponentProps & {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
-        children?: React.ReactNode;
+        editable?: boolean;
+        managed?: boolean;
       };
-      'music-staff-treble': {
+      'music-staff-treble': WebComponentProps & {
         keySig?: LetterNote;
         time?: string;
-        children?: React.ReactNode;
+        editable?: boolean;
+        managed?: boolean;
       };
-      'music-staff-guitar-tab': {
+      'music-staff-guitar-tab': WebComponentProps & {
         time?: string;
-        children?: React.ReactNode;
       };
     }
   }
