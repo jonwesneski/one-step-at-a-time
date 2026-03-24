@@ -153,7 +153,7 @@ export class NoteDragHandler {
     this.#updateDropIndicator(dropIndex);
   }
 
-  #onPointerUp(_e: PointerEvent) {
+  #onPointerUp() {
     if (!this.#dragState) return;
 
     const { sourceIndex, currentDropIndex } = this.#dragState;
@@ -189,7 +189,7 @@ export class NoteDragHandler {
     );
   }
 
-  #onPointerCancel(_e: PointerEvent) {
+  #onPointerCancel() {
     this.cancelDrag();
   }
 
