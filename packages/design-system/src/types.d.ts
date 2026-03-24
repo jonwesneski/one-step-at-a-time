@@ -1,51 +1,55 @@
 import 'react';
 import type { Chord, DurationType, LetterNote, Note } from './types/theory';
 
+type WebComponentProps = {
+  key?: React.Key;
+  ref?: React.Ref<HTMLElement>;
+  children?: React.ReactNode;
+};
+
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'music-chord': {
+      'music-chord': WebComponentProps & {
         value?: Chord;
         duration?: DurationType;
-        children?: React.ReactNode;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
       };
-      'music-composition': {
+      'music-composition': WebComponentProps & {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
-        children?: React.ReactNode;
       };
-      'music-note': {
+      'music-note': WebComponentProps & {
         value?: Note;
         duration?: DurationType;
-        class?: string;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
         // Custom events (note-click, note-pointerdown, note-pointerup) require
         // useRef + addEventListener in React — they are not auto-wired by prop name.
       };
-      'music-measure': {
+      'music-measure': WebComponentProps & {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
-        children?: React.ReactNode;
       };
-      'music-staff-bass': {
+      'music-staff-bass': WebComponentProps & {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
-        children?: React.ReactNode;
+        editable?: boolean;
+        managed?: boolean;
       };
-      'music-staff-treble': {
+      'music-staff-treble': WebComponentProps & {
         keySig?: LetterNote;
         time?: string;
-        children?: React.ReactNode;
+        editable?: boolean;
+        managed?: boolean;
       };
-      'music-staff-guitar-tab': {
+      'music-staff-guitar-tab': WebComponentProps & {
         time?: string;
         children?: React.ReactNode;
       };

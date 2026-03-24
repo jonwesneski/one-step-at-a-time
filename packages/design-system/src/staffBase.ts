@@ -65,6 +65,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           border-bottom: 1px solid currentColor;
           margin-top: ${StaffElementBase.#staffLineStart}px;
           margin-bottom: 30px;
+          pointer-events: none;
         }
 
         .staff-line {
@@ -78,6 +79,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         ::slotted(music-note),
         ::slotted(music-chord) {
           position: absolute;
+        }
+
+        :host([editable]) ::slotted(music-note),
+        :host([editable]) ::slotted(music-chord) {
+          cursor: grab;
         }
       </style>
       <div class="staff-wrapper">

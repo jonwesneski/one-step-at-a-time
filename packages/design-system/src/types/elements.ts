@@ -8,6 +8,7 @@ export interface INoteElement {
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
+  batchUpdate(fn: () => void): void;
 }
 
 export type ChordNote = { value: LetterNote; duration: DurationType };
@@ -20,6 +21,7 @@ export interface IChordElement {
   stemExtension: number;
   noFlags: boolean;
   staffYCoordinates: number[] | null;
+  batchUpdate(fn: () => void): void;
 }
 
 export type NoteElementType = HTMLElement & INoteElement;

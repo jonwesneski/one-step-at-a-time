@@ -14,6 +14,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #noStem = false;
+    #batchDepth = 0;
+    #renderPending = false;
 
     constructor() {
       super();
@@ -42,7 +44,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set stemUp(v: boolean) {
       this.#stemUp = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
     }
 
     get stemExtension(): number {
@@ -50,7 +52,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set stemExtension(v: number) {
       this.#stemExtension = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
     }
 
     get noFlags(): boolean {
@@ -58,7 +60,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set noFlags(v: boolean) {
       this.#noFlags = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
     }
 
     get noStem(): boolean {
@@ -66,7 +68,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set noStem(v: boolean) {
       this.#noStem = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
+    }
+
+    batchUpdate(fn: () => void): void {
+      this.#batchDepth++;
+      try {
+        fn();
+      } finally {
+        this.#batchDepth--;
+        if (this.#batchDepth === 0 && this.#renderPending) {
+          this.#renderPending = false;
+          this.render();
+        }
+      }
+    }
+
+    #scheduleRender(): void {
+      if (this.#batchDepth > 0) {
+        this.#renderPending = true;
+      } else if (this.shadowRoot) {
+        this.render();
+      }
     }
 
     connectedCallback(): void {
@@ -97,6 +120,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
         </style>
       `;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.appendChild(noteSvg);
 
       noteSvg.addEventListener('click', (e) => {

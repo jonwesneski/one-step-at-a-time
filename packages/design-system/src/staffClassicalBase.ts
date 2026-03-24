@@ -31,6 +31,7 @@ import {
   factorToDuration,
   SVG_NS,
 } from './utils/consts';
+import { NoteDragHandler } from './utils/noteDragHandler';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -43,6 +44,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteOrChordElementType[] = [];
+  #dragHandler: NoteDragHandler | null = null;
 
   constructor() {
     super();
@@ -82,7 +84,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   static get observedAttributes(): string[] {
-    return ['keySig', 'mode', 'time'];
+    return ['keySig', 'mode', 'time', 'editable', 'managed'];
+  }
+
+  get editable(): boolean {
+    return this.hasAttribute('editable');
+  }
+
+  set editable(v: boolean) {
+    if (v) this.setAttribute('editable', '');
+    else this.removeAttribute('editable');
+  }
+
+  get managed(): boolean {
+    return this.hasAttribute('managed');
+  }
+
+  set managed(v: boolean) {
+    if (v) this.setAttribute('managed', '');
+    else this.removeAttribute('managed');
   }
 
   get keySig(): LetterNote {
@@ -122,6 +142,33 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected onConnectedCallback() {
     this.#buildDescribe(this.clefSvg);
+    if (this.editable) {
+      this.#enableDrag();
+    }
+  }
+
+  #enableDrag() {
+    if (this.#dragHandler) return;
+    // attributeChangedCallback can fire before connectedCallback renders the
+    // shadow DOM, so the wrapper may not exist yet. In that case bail out —
+    // onConnectedCallback will retry once the DOM is ready.
+    const wrapper = this.shadowRoot?.querySelector(
+      '.staff-wrapper'
+    ) as HTMLElement | null;
+    if (!wrapper) return;
+    this.#dragHandler = new NoteDragHandler(
+      this as unknown as HTMLElement,
+      wrapper,
+      () => this.#currentElements as unknown as HTMLElement[],
+      this.managed
+    );
+    this.#dragHandler.attach();
+  }
+
+  #disableDrag() {
+    if (!this.#dragHandler) return;
+    this.#dragHandler.detach();
+    this.#dragHandler = null;
   }
 
   // Describe is: clef, key signature, time signature, and beams overlay
@@ -197,10 +244,35 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   protected override onDisconnectedCallback(): void {
+    this.#disableDrag();
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
       // ignore
+    }
+  }
+
+  override attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ): void {
+    if (oldValue === newValue) return;
+
+    if (name === 'editable') {
+      if (this.editable) {
+        this.#enableDrag();
+      } else {
+        this.#disableDrag();
+      }
+    } else if (name === 'managed') {
+      if (this.editable) {
+        this.#disableDrag();
+        this.#enableDrag();
+      }
+    } else {
+      // For keySig, mode, time — trigger full re-render
+      super.attributeChangedCallback(name, oldValue, newValue);
     }
   }
 
@@ -234,6 +306,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
+    // Cancel any in-progress drag before clearing rendered content
+    this.#dragHandler?.cancelDrag();
+
     // Clear previously rendered beams
     this.#beamsContainer.innerHTML = '';
 
@@ -269,18 +344,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       if (element.nodeName === 'MUSIC-NOTE') {
         const noteEl = element as NoteElementType;
-        noteEl.stemUp = stemUp;
-        noteEl.stemExtension = extension;
-        noteEl.noFlags = isBeamed;
+        noteEl.batchUpdate(() => {
+          noteEl.stemUp = stemUp;
+          noteEl.stemExtension = extension;
+          noteEl.noFlags = isBeamed;
+        });
       } else {
         const chordEl = element as ChordElementType;
         const staffYCoordinates = chordEl.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        chordEl.stemUp = stemUp;
-        chordEl.stemExtension = extension;
-        chordEl.noFlags = isBeamed;
-        chordEl.staffYCoordinates = staffYCoordinates;
+        chordEl.batchUpdate(() => {
+          chordEl.stemUp = stemUp;
+          chordEl.stemExtension = extension;
+          chordEl.noFlags = isBeamed;
+          chordEl.staffYCoordinates = staffYCoordinates;
+        });
       }
 
       beatOffset += durationToFactor[duration as DurationType];

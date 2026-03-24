@@ -13,6 +13,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #staffYCoordinates: number[] | null = null;
+    #batchDepth = 0;
+    #renderPending = false;
 
     constructor() {
       super();
@@ -60,7 +62,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set stemUp(v: boolean) {
       this.#stemUp = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
     }
 
     get stemExtension(): number {
@@ -68,7 +70,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set stemExtension(v: number) {
       this.#stemExtension = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
     }
 
     get noFlags(): boolean {
@@ -76,7 +78,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set noFlags(v: boolean) {
       this.#noFlags = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
     }
 
     get staffYCoordinates(): number[] | null {
@@ -84,7 +86,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set staffYCoordinates(v: number[] | null) {
       this.#staffYCoordinates = v;
-      if (this.shadowRoot) this.render();
+      this.#scheduleRender();
+    }
+
+    batchUpdate(fn: () => void): void {
+      this.#batchDepth++;
+      try {
+        fn();
+      } finally {
+        this.#batchDepth--;
+        if (this.#batchDepth === 0 && this.#renderPending) {
+          this.#renderPending = false;
+          this.render();
+        }
+      }
+    }
+
+    #scheduleRender(): void {
+      if (this.#batchDepth > 0) {
+        this.#renderPending = true;
+      } else if (this.shadowRoot) {
+        this.render();
+      }
     }
 
     connectedCallback(): void {
@@ -130,6 +153,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         svg.setAttribute('height', '100');
         svg.setAttribute('overflow', 'visible');
         svg.appendChild(chordSvg);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
         this.shadowRoot!.appendChild(svg);
 
         svg.addEventListener('click', (e) => {
