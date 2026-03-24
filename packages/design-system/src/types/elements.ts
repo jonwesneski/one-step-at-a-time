@@ -1,8 +1,8 @@
 import { Chord, DurationType, LetterNote, LetterOctave, Note } from './theory';
 
 export interface INoteElement {
-  readonly duration: DurationType;
-  readonly value: Note;
+  duration: DurationType;
+  value: Note;
   // Staff-controlled rendering properties
   stemUp: boolean;
   stemExtension: number;
@@ -13,8 +13,8 @@ export interface INoteElement {
 
 export type ChordNote = { value: LetterNote; duration: DurationType };
 export interface IChordElement {
-  readonly duration: DurationType;
-  readonly value: Chord | null;
+  duration: DurationType;
+  value: Chord | null;
   readonly notes: ChordNote[];
   // Staff-controlled rendering properties
   stemUp: boolean;

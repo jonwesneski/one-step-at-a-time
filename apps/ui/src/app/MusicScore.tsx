@@ -4,7 +4,12 @@ import '@rest-in-time/design-system';
 import type { DurationType, Note } from '@rest-in-time/design-system';
 import { useEffect, useRef, useState } from 'react';
 
-type NoteItem = { id: string; type: 'note'; value: Note; duration: DurationType };
+type NoteItem = {
+  id: string;
+  type: 'note';
+  value: Note;
+  duration: DurationType;
+};
 type ChordItem = {
   id: string;
   type: 'chord';
@@ -31,7 +36,7 @@ export default function MusicScore() {
 
     const onReorder = (e: Event) => {
       const { fromIndex, toIndex } = (e as CustomEvent).detail;
-      console.log(`Moved note from position ${fromIndex} to ${toIndex}`);
+
       setItems((prev) => {
         const next = [...prev];
         const [moved] = next.splice(fromIndex, 1);

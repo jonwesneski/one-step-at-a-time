@@ -68,13 +68,7 @@ function innerEdgeY(polygon: Element, x: number): number {
 }
 
 // ─── Note/chord position helpers ─────────────────────────────────────────────
-// After the refactor, notes render themselves in their own shadow DOM.
-// The staff positions them via inline styles (style.left, style.top).
-// Stem geometry lives inside note.shadowRoot.
 
-// Get the note's x position in the beams coordinate space.
-// In jsdom, getBoundingClientRect returns 0, so describeEndX = 0 and
-// style.left equals the beamsContainer-relative x coordinate.
 function getNoteX(note: HTMLElement): number {
   return parseFloat((note as HTMLElement).style.left) || 0;
 }
