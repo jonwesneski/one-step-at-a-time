@@ -7,6 +7,11 @@ type DragState = {
   currentDropIndex: number;
 };
 
+export type NoteTimingChangeDetail = {
+  fromIndex: number;
+  toIndex: number;
+};
+
 /**
  * Handles drag-and-drop reordering of note/chord elements within a staff.
  *
@@ -17,7 +22,7 @@ type DragState = {
  * On drop the handler either reorders the light DOM (unmanaged) or only
  * dispatches a `note-reorder` event (managed) so a framework can update state.
  */
-export class NoteDragHandler {
+export class NoteTimingDragHandler {
   #hostElement: HTMLElement;
   #wrapperElement: HTMLElement;
   #getSlottedElements: () => HTMLElement[];
@@ -175,7 +180,7 @@ export class NoteDragHandler {
           detail: {
             fromIndex: sourceIndex,
             toIndex: currentDropIndex,
-          },
+          } satisfies NoteTimingChangeDetail,
         })
       );
     }

@@ -31,7 +31,8 @@ import {
   factorToDuration,
   SVG_NS,
 } from './utils/consts';
-import { NoteDragHandler } from './utils/noteDragHandler';
+import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
+import { PitchDragHandler } from './utils/pitchDragHandler';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -44,7 +45,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteOrChordElementType[] = [];
-  #dragHandler: NoteDragHandler | null = null;
+  #noteTimingDragHandler: NoteTimingDragHandler | null = null;
+  #notePitchDragHandler: PitchDragHandler | null = null;
+  #boundPointerDown: ((e: PointerEvent) => void) | null = null;
 
   constructor() {
     super();
@@ -148,27 +151,202 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #enableDrag() {
-    if (this.#dragHandler) return;
-    // attributeChangedCallback can fire before connectedCallback renders the
-    // shadow DOM, so the wrapper may not exist yet. In that case bail out —
-    // onConnectedCallback will retry once the DOM is ready.
+    if (this.#noteTimingDragHandler) {
+      return;
+    }
+
     const wrapper = this.shadowRoot?.querySelector(
       '.staff-wrapper'
     ) as HTMLElement | null;
-    if (!wrapper) return;
-    this.#dragHandler = new NoteDragHandler(
-      this as unknown as HTMLElement,
+    if (!wrapper) {
+      return;
+    }
+
+    const host = this as unknown as HTMLElement;
+    const getElements = () => this.#currentElements as unknown as HTMLElement[];
+
+    this.#noteTimingDragHandler = new NoteTimingDragHandler(
+      host,
       wrapper,
-      () => this.#currentElements as unknown as HTMLElement[],
+      getElements,
       this.managed
     );
-    this.#dragHandler.attach();
+
+    this.#notePitchDragHandler = new PitchDragHandler(
+      host,
+      this.yCoordinates,
+      (elementIndex, newNote, chordNoteIndex) => {
+        this.#onPitchLivePreview(elementIndex, newNote, chordNoteIndex);
+      }
+    );
+
+    // Coordinated pointerdown: hit-test notehead → pitch drag, else → timing drag
+    this.#boundPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) {
+        return;
+      }
+
+      const elements = getElements();
+      if (elements.length === 0) {
+        return;
+      }
+
+      // Walk up from the composed event target to find which element was hit
+      const composedTarget = e.composedPath()[0] as Element;
+
+      if (PitchDragHandler.isNoteheadTarget(composedTarget)) {
+        // Notehead hit — start pitch drag
+        const { element, elementIndex, chordNoteIndex } =
+          this.#findPitchDragTarget(composedTarget, elements);
+        if (element) {
+          this.#notePitchDragHandler?.tryStart(
+            e,
+            element,
+            elementIndex,
+            chordNoteIndex
+          );
+          return;
+        }
+      }
+
+      // Not a notehead — let NoteDragHandler handle it (timing reorder)
+      // NoteDragHandler has its own pointerdown listener, so we don't need
+      // to forward the event manually.
+    };
+
+    host.addEventListener('pointerdown', this.#boundPointerDown);
+
+    // Attach timing drag handler (it registers its own pointerdown too,
+    // but the pitch handler's early return prevents conflicts)
+    this.#noteTimingDragHandler.attach();
   }
 
   #disableDrag() {
-    if (!this.#dragHandler) return;
-    this.#dragHandler.detach();
-    this.#dragHandler = null;
+    const host = this as unknown as HTMLElement;
+
+    if (this.#boundPointerDown) {
+      host.removeEventListener('pointerdown', this.#boundPointerDown);
+      this.#boundPointerDown = null;
+    }
+
+    if (this.#notePitchDragHandler) {
+      this.#notePitchDragHandler.detach();
+      this.#notePitchDragHandler = null;
+    }
+
+    if (this.#noteTimingDragHandler) {
+      this.#noteTimingDragHandler.detach();
+      this.#noteTimingDragHandler = null;
+    }
+  }
+
+  /**
+   * Identify which slotted element and (for chords) which notehead index
+   * corresponds to a clicked SVG target.
+   */
+  #findPitchDragTarget(
+    svgTarget: Element,
+    elements: HTMLElement[]
+  ): {
+    element: HTMLElement | null;
+    elementIndex: number;
+    chordNoteIndex: number | null;
+  } {
+    // Walk up from the SVG target through shadow DOM boundaries to find the host element
+    let current: Element | null = svgTarget;
+    while (current) {
+      const rootNode: Node = current.getRootNode();
+      if (rootNode instanceof ShadowRoot) {
+        const host: Element = rootNode.host;
+        const idx = elements.indexOf(host as HTMLElement);
+        if (idx !== -1) {
+          if (host.nodeName === 'MUSIC-CHORD') {
+            const chordNoteIndex = this.#findChordNoteIndex(
+              svgTarget,
+              host as HTMLElement
+            );
+            return {
+              element: host as HTMLElement,
+              elementIndex: idx,
+              chordNoteIndex,
+            };
+          }
+          return {
+            element: host as HTMLElement,
+            elementIndex: idx,
+            chordNoteIndex: null,
+          };
+        }
+        current = host;
+      } else {
+        current = current.parentElement;
+      }
+    }
+    return { element: null, elementIndex: -1, chordNoteIndex: null };
+  }
+
+  /**
+   * For a chord element, find which child note SVG contains the clicked target.
+   * Returns the index into the chord's <music-note> children.
+   */
+  #findChordNoteIndex(
+    svgTarget: Element,
+    chordElement: HTMLElement
+  ): number | null {
+    // The chord renders multiple note SVGs in its shadow DOM.
+    // Each note SVG is a direct child of the chord's shadow root's inner SVG.
+    // Walk up from svgTarget to find which top-level <svg> child it belongs to.
+    const chordShadow = chordElement.shadowRoot;
+    if (!chordShadow) {
+      return null;
+    }
+
+    const outerSvg = chordShadow.querySelector('svg');
+    if (!outerSvg) {
+      return null;
+    }
+
+    // Find which child <svg> (note SVG) contains the target
+    // todo: see if i can search by class name '.note' instead
+    const noteSvgs = Array.from(outerSvg.children).filter(
+      (c) => c.tagName === 'svg' || c.tagName === 'SVG'
+    );
+
+    let current: Element | null = svgTarget;
+    while (current && current !== outerSvg) {
+      const idx = noteSvgs.indexOf(current);
+      if (idx !== -1) return idx;
+      current = current.parentElement;
+    }
+
+    return null;
+  }
+
+  /**
+   * Live preview callback: temporarily update the element's pitch during drag.
+   */
+  #onPitchLivePreview(
+    elementIndex: number,
+    newNote: LetterOctave,
+    chordNoteIndex: number | null
+  ) {
+    const element = this.#currentElements[elementIndex];
+    if (!element) {
+      return;
+    }
+
+    if (element.nodeName === 'MUSIC-CHORD' && chordNoteIndex !== null) {
+      const noteElements = element.querySelectorAll('music-note');
+      const noteEl = noteElements[chordNoteIndex] as HTMLElement | undefined;
+      if (noteEl) {
+        noteEl.setAttribute('value', newNote);
+      }
+    } else if (element.nodeName === 'MUSIC-NOTE') {
+      element.setAttribute('value', newNote);
+    }
+
+    // Re-render this element in place (recalculate Y position, stem direction, beams)
+    this.#renderNotes(this.#currentElements);
   }
 
   // Describe is: clef, key signature, time signature, and beams overlay
@@ -307,7 +485,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #renderNotes(elements: NoteOrChordElementType[]) {
     // Cancel any in-progress drag before clearing rendered content
-    this.#dragHandler?.cancelDrag();
+    this.#noteTimingDragHandler?.cancelDrag();
 
     // Clear previously rendered beams
     this.#beamsContainer.innerHTML = '';

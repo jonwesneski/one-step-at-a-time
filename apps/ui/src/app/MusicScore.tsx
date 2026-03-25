@@ -1,7 +1,11 @@
 'use client';
 
 import '@rest-in-time/design-system';
-import type { DurationType, Note } from '@rest-in-time/design-system';
+import type {
+  DurationType,
+  Note,
+  PitchChangeDetail,
+} from '@rest-in-time/design-system';
 import { useEffect, useRef, useState } from 'react';
 
 type NoteItem = {
@@ -45,8 +49,32 @@ export default function MusicScore() {
       });
     };
 
+    const onPitchChange = (e: Event) => {
+      const { elementIndex, chordNoteIndex, toNote } = (e as CustomEvent)
+        .detail as PitchChangeDetail;
+      // todo: fixing typings on web components. I want note and chord type to support Note and Octave
+      const newValue = toNote as Note;
+
+      setItems((prev) => {
+        const next = [...prev];
+        const item = next[elementIndex];
+        if (item.type === 'chord' && chordNoteIndex !== null) {
+          const updatedNotes = [...item.notes];
+          updatedNotes[chordNoteIndex] = newValue;
+          next[elementIndex] = { ...item, notes: updatedNotes };
+        } else if (item.type === 'note') {
+          next[elementIndex] = { ...item, value: newValue };
+        }
+        return next;
+      });
+    };
+
     staff.addEventListener('note-reorder', onReorder);
-    return () => staff.removeEventListener('note-reorder', onReorder);
+    staff.addEventListener('note-pitch-change', onPitchChange);
+    return () => {
+      staff.removeEventListener('note-reorder', onReorder);
+      staff.removeEventListener('note-pitch-change', onPitchChange);
+    };
   }, []);
 
   return (

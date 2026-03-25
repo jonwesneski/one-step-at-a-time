@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { NoteDragHandler } from './noteDragHandler';
+import { NoteTimingDragHandler } from './noteTimingDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.
 if (typeof globalThis.PointerEvent === 'undefined') {
@@ -67,7 +67,12 @@ function setup(opts?: { managed?: boolean; elementCount?: number }) {
     elements.push(el);
   }
 
-  const handler = new NoteDragHandler(host, wrapper, () => elements, managed);
+  const handler = new NoteTimingDragHandler(
+    host,
+    wrapper,
+    () => elements,
+    managed
+  );
   handler.attach();
 
   return { host, wrapper, elements, handler };
@@ -119,7 +124,7 @@ afterEach(() => {
 
 // --- Tests ---
 
-describe('NoteDragHandler', () => {
+describe('NoteTimingDragHandler', () => {
   describe('drag start', () => {
     it('dispatches note-drag-start on pointerdown on a slotted element', () => {
       const { host, elements } = setup();
