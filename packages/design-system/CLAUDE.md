@@ -117,20 +117,46 @@ Rendering flow (classical staves):
 5. Notes spaced by duration factor
 6. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
 
+## Drag Handlers (`utils/`)
+
+Editable staves (`<music-staff-treble editable>`) support two drag interactions, coordinated by a single `pointerdown` listener in `StaffClassicalElementBase`. The listener uses `e.composedPath()[0]` to hit-test the SVG target:
+
+- **Notehead hit** (`.head` or `.head-hit-zone` class) → **PitchDragHandler** (vertical)
+- **Everything else** (stem, flag, body) → **NoteTimingDragHandler** (horizontal)
+
+### NoteTimingDragHandler (`noteTimingDragHandler.ts`)
+
+Horizontal drag-and-drop to reorder notes/chords in time. Creates a fixed-position clone that follows the pointer and a dashed drop indicator between elements. Two modes controlled by the `managed` attribute:
+
+- **Unmanaged**: reorders light DOM children directly on drop.
+- **Managed**: only dispatches `note-reorder` event with `{ fromIndex, toIndex }` — the framework (e.g. React) updates state.
+
+Events: `note-drag-start` (cancelable), `note-reorder`, `note-drag-end`.
+
+### PitchDragHandler (`pitchDragHandler.ts`)
+
+Vertical drag on noteheads to change pitch. Snaps to valid staff Y positions from the staff's `yCoordinates` map. Shows a tooltip with the note transition (e.g. "D4 → F4"). For chords, drags a single notehead and prevents snapping to a pitch already occupied by another note in the chord.
+
+During drag, calls a live preview callback that updates the element's `value` attribute and triggers a full `#renderNotes()` re-render (stem direction, beams, Y positioning all recalculate). On drop, dispatches `note-pitch-change` with `PitchChangeDetail: { element, elementIndex, chordNoteIndex, fromNote, toNote }` where notes are `LetterOctave` (e.g. "F5").
+
+**Important**: note values must include the octave digit (e.g. "C6" not "C") so that `noteToYCoordinate` resolves to the correct staff position. Without the octave, it falls back to the octave search order and may pick the wrong octave.
+
+### SVG Hit Zones
+
+Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead size) rendered behind the visible `.head` ellipse. This enlarged invisible target makes noteheads easier to click for pitch dragging. Both classes are checked by `PitchDragHandler.isNoteheadTarget()`.
+
 ## Known Incomplete Areas
 
 - **`staffGuitarTab.ts`**: 6-line tab staff with TAB clef SVG exists, but `onHandleSlotChange`, `onStaffResize`, and `onDisconnectedCallback` are all empty stubs — note rendering is not yet implemented
-- **Stem direction**: Always defaults to stem-up; no automatic stem direction logic yet
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
-- **Beam re-spacing**: Partial logic exists with a debugger statement left in
+- **Accidentals during pitch drag**: Pitch drag snaps to natural staff positions only; accidental changes (sharp/flat) need a separate mechanism
 
 ## Build & Test
 
 - Package name: `@rest-in-time/design-system`
 - Module type: ESM (`"type": "module"`)
 - Test runner: Jest via Nx (`@nx/jest`)
-- Run tests: `npm test` inside `packages/design-system/` or via root `jest.config.js`
-- No test files exist yet (`.spec.ts` files)
+- Run tests: `npx nx test design-system`
 
 ## Conventions
 
