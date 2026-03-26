@@ -113,6 +113,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     else this.removeAttribute('editable');
   }
 
+  // This piece of state is to help prevent double renders in UI Frameworks
+  // such as React. after 'certain' state changes, we then check this
+  // to see if we should render here or let the UI Framework do it.
+  // The only certain state change(s) this is for currently is:
+  // - When the timing changes on a note/chord
   get managed(): boolean {
     return this.hasAttribute('managed');
   }
@@ -165,7 +170,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #enableDrag() {
-    if (this.#noteTimingDragHandler) {
+    if (this.#boundPointerDown) {
       return;
     }
 
@@ -222,10 +227,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           return;
         }
       }
-
-      // Not a notehead — let NoteDragHandler handle it (timing reorder)
-      // NoteDragHandler has its own pointerdown listener, so we don't need
-      // to forward the event manually.
     };
 
     host.addEventListener('pointerdown', this.#boundPointerDown);
@@ -299,17 +300,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return { element: null, elementIndex: -1, chordNoteIndex: null };
   }
 
-  /**
-   * For a chord element, find which child note SVG contains the clicked target.
-   * Returns the index into the chord's <music-note> children.
-   */
   #findChordNoteIndex(
     svgTarget: Element,
     chordElement: HTMLElement
   ): number | null {
-    // The chord renders multiple note SVGs in its shadow DOM.
-    // Each note SVG is a direct child of the chord's shadow root's inner SVG.
-    // Walk up from svgTarget to find which top-level <svg> child it belongs to.
     const chordShadow = chordElement.shadowRoot;
     if (!chordShadow) {
       return null;
@@ -320,7 +314,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return null;
     }
 
-    // Find which child <svg> (note SVG) contains the target
     // todo: see if i can search by class name '.note' instead
     const noteSvgs = Array.from(outerSvg.children).filter(
       (c) => c.tagName === 'svg' || c.tagName === 'SVG'
@@ -534,22 +527,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const extension = this.#beamRenderer.stemExtension(i);
 
       if (element.nodeName === 'MUSIC-NOTE') {
-        const noteEl = element as NoteElementType;
-        noteEl.batchUpdate(() => {
-          noteEl.stemUp = stemUp;
-          noteEl.stemExtension = extension;
-          noteEl.noFlags = isBeamed;
+        const noteElement = element as NoteElementType;
+        noteElement.batchUpdate(() => {
+          noteElement.stemUp = stemUp;
+          noteElement.stemExtension = extension;
+          noteElement.noFlags = isBeamed;
         });
       } else {
-        const chordEl = element as ChordElementType;
-        const staffYCoordinates = chordEl.notes.map((note) =>
+        const chordElement = element as ChordElementType;
+        const staffYCoordinates = chordElement.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        chordEl.batchUpdate(() => {
-          chordEl.stemUp = stemUp;
-          chordEl.stemExtension = extension;
-          chordEl.noFlags = isBeamed;
-          chordEl.staffYCoordinates = staffYCoordinates;
+        chordElement.batchUpdate(() => {
+          chordElement.stemUp = stemUp;
+          chordElement.stemExtension = extension;
+          chordElement.noFlags = isBeamed;
+          chordElement.staffYCoordinates = staffYCoordinates;
         });
       }
 
@@ -557,7 +550,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     this.#currentElements = elements;
-    this.#spaceNotes(elements);
+    this.#spaceElements();
 
     for (const svgGroup of this.#beamRenderer.svgGroups) {
       this.#beamsContainer.appendChild(svgGroup);
@@ -709,11 +702,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
   public noteToYCoordinate(note: string): number {
-    if (!note) return 0;
+    if (!note) {
+      return 0;
+    }
 
     // Extract letter (A-G) and optional octave digit, discarding accidentals.
     const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
-    if (!match) return 0;
+    if (!match) {
+      return 0;
+    }
 
     const letter = match[1].toUpperCase();
     const octave = match[2];
@@ -736,7 +733,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
-  #spaceNotes(elements: NoteOrChordElementType[]) {
+  #spaceElements() {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const describeEndX = Math.round(describeRect.right - transcribeRect.left);
@@ -753,16 +750,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureDuration = beatsInMeasure / beatType;
 
     const minNoteWidth = 20; // px — minimum space per note to prevent notehead overlap
-    const proportionalWidth = remainingWidth - elements.length * minNoteWidth;
+    const proportionalWidth =
+      remainingWidth - this.#currentElements.length * minNoteWidth;
 
     let beatOffset = 0;
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
       const xOffsetInNotesSpace =
         i * minNoteWidth + (beatOffset / measureDuration) * proportionalWidth;
 
-      // Tell beam renderer about x position (in beamsContainer coordinate space)
       this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
 
       // Position the light DOM element via inline styles
@@ -792,7 +789,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Respace notes on resize
   onStaffResize() {
     if (this.#currentElements.length > 0) {
-      this.#spaceNotes(this.#currentElements);
+      this.#spaceElements();
     }
   }
 }
