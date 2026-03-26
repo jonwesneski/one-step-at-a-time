@@ -3,7 +3,6 @@ import { Chord, DurationType, LetterNote, LetterOctave, Note } from './theory';
 export interface INoteElement {
   duration: DurationType;
   value: Note;
-  // Staff-controlled rendering properties
   stemUp: boolean;
   stemExtension: number;
   noFlags: boolean;
@@ -16,7 +15,6 @@ export interface IChordElement {
   duration: DurationType;
   value: Chord | null;
   readonly notes: ChordNote[];
-  // Staff-controlled rendering properties
   stemUp: boolean;
   stemExtension: number;
   noFlags: boolean;

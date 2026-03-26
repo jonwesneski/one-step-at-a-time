@@ -8,7 +8,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return ['currentCount', 'duration'];
     }
 
-    // Staff-controlled rendering properties (not HTML attributes).
     #stemUp = true;
     #stemExtension = 0;
     #noFlags = false;
@@ -43,9 +42,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.querySelectorAll('music-note');
       const notes: ChordNote[] = [];
       if (noteElements.length) {
-        noteElements.forEach((node) => {
-          // todo: maybe throw an error instead of any of the notes equal rest
-          if (node.value !== 'rest') {
+        noteElements.forEach((node, i) => {
+          if (node.value === 'rest') {
+            console.error(
+              `Rests are not allowed in chords; note at index ${i} is a rest`
+            );
+          } else {
             notes.push({ value: node.value, duration: node.duration });
           }
         });
@@ -126,7 +128,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     private render(): void {
       if (this.#staffYCoordinates) {
-        // Staff mode: render chord SVG directly
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           staffYCoordinates: this.#staffYCoordinates,
@@ -196,6 +197,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           );
         });
       } else {
+        // todo: still need to properly set y/top coordinates of notes
         // Standalone mode: slot-based rendering
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
         this.shadowRoot!.innerHTML = `

@@ -2,8 +2,8 @@
  * @jest-environment jsdom
  */
 
-import { PitchDragHandler } from './pitchDragHandler';
 import { YCoordinates } from '../types/elements';
+import { PitchDragHandler } from './pitchDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.
 if (typeof globalThis.PointerEvent === 'undefined') {
@@ -222,7 +222,7 @@ describe('PitchDragHandler', () => {
 
   describe('tryStart', () => {
     it('starts a pitch drag and returns true for a valid note', () => {
-      const { host, elements, handler } = setup();
+      const { elements, handler } = setup();
 
       const e = pointerDown(elements[0]);
       const started = handler.tryStart(e, elements[0], 0, null);
@@ -233,7 +233,7 @@ describe('PitchDragHandler', () => {
 
     it('returns false for a note not in yCoordinates', () => {
       const el = makeNoteElement('X');
-      const { host, handler } = setup({ elements: [el] });
+      const { handler } = setup({ elements: [el] });
 
       const e = pointerDown(el);
       const started = handler.tryStart(e, el, 0, null);
@@ -349,7 +349,7 @@ describe('PitchDragHandler', () => {
     });
 
     it('removes tooltip on Escape', () => {
-      const { host, elements, handler } = setup();
+      const { elements, handler } = setup();
       const bodyChildrenBefore = document.body.children.length;
 
       const e = pointerDown(elements[0], { clientY: 75 });
@@ -385,7 +385,7 @@ describe('PitchDragHandler', () => {
 
   describe('detach', () => {
     it('cancels in-progress drag on detach', () => {
-      const { host, elements, handler } = setup();
+      const { elements, handler } = setup();
 
       const e = pointerDown(elements[0], { clientY: 75 });
       handler.tryStart(e, elements[0], 0, null);

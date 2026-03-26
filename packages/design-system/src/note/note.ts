@@ -8,8 +8,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return ['duration', 'value'];
     }
 
-    // Staff-controlled rendering properties (not HTML attributes).
-    // Set by the parent staff element to control stem direction, extension, and flags.
     #stemUp = true;
     #stemExtension = 0;
     #noFlags = false;

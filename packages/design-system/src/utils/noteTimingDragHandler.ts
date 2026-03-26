@@ -82,21 +82,31 @@ export class NoteTimingDragHandler {
   }
 
   cancelDrag(): void {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
     this.#cleanup();
   }
 
   #onPointerDown(e: PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0) {
+      return;
+    }
 
     const elements = this.#getSlottedElements();
-    if (elements.length <= 1) return;
+    if (elements.length <= 1) {
+      return;
+    }
 
     const target = this.#findSlottedElement(e.target as Element, elements);
-    if (!target) return;
+    if (!target) {
+      return;
+    }
 
     const sourceIndex = elements.indexOf(target);
-    if (sourceIndex === -1) return;
+    if (sourceIndex === -1) {
+      return;
+    }
 
     // Dispatch cancelable event
     const dragStartEvent = new CustomEvent('note-drag-start', {
@@ -105,7 +115,9 @@ export class NoteTimingDragHandler {
       cancelable: true,
       detail: { element: target, index: sourceIndex },
     });
-    if (!this.#hostElement.dispatchEvent(dragStartEvent)) return;
+    if (!this.#hostElement.dispatchEvent(dragStartEvent)) {
+      return;
+    }
 
     e.preventDefault();
 
@@ -141,7 +153,9 @@ export class NoteTimingDragHandler {
   }
 
   #onPointerMove(e: PointerEvent) {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
     const { clone, offsetX, offsetY } = this.#dragState;
 
@@ -159,7 +173,9 @@ export class NoteTimingDragHandler {
   }
 
   #onPointerUp() {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
     const { sourceIndex, currentDropIndex } = this.#dragState;
 
@@ -205,19 +221,17 @@ export class NoteTimingDragHandler {
   }
 
   #cleanup() {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
-    // Restore original opacity
     this.#dragState.sourceElement.style.opacity = '';
 
-    // Remove clone
     this.#dragState.clone.remove();
 
-    // Hide drop indicator
     this.#dropIndicator.style.display = 'none';
     this.#dropIndicator.remove();
 
-    // Remove event listeners
     this.#hostElement.removeEventListener(
       'pointermove',
       this.#bound.pointermove
@@ -329,10 +343,14 @@ export class NoteTimingDragHandler {
   #reorderLightDom(fromIndex: number, toIndex: number) {
     const elements = this.#getSlottedElements();
     const dragged = elements[fromIndex];
-    if (!dragged) return;
+    if (!dragged) {
+      return;
+    }
 
     const parent = dragged.parentElement;
-    if (!parent) return;
+    if (!parent) {
+      return;
+    }
 
     const adjustedToIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
     const remaining = elements.filter((_, i) => i !== fromIndex);

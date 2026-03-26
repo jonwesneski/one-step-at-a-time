@@ -76,15 +76,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           background: currentColor;
         }
 
-        ::slotted(music-note),
-        ::slotted(music-chord) {
-          position: absolute;
-        }
-
-        :host([editable]) ::slotted(music-note),
-        :host([editable]) ::slotted(music-chord) {
-          cursor: grab;
-        }
+        ${this.additionalStyles}
       </style>
       <div class="staff-wrapper">
         <slot></slot>
@@ -97,6 +89,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected abstract get staffLineCount(): number;
+
+  /** Override in subclasses to inject additional CSS into the shadow DOM style block. */
+  protected get additionalStyles(): string {
+    return '';
+  }
 
   connectedCallback(): void {
     this.render();

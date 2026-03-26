@@ -54,9 +54,6 @@ function makeStaff(): Element {
   return el;
 }
 
-// Renders a note inside the staff and returns the <music-note> element.
-// After the refactor, the staff positions the light DOM element via inline styles
-// rather than creating new SVGs in its shadow DOM.
 function renderNote(staff: Element, value: string): HTMLElement {
   const note = document.createElement('music-note') as any;
   note.setAttribute('duration', 'quarter');

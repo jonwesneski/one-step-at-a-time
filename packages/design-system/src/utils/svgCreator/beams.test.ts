@@ -275,7 +275,7 @@ describe('beams', () => {
   });
 
   describe('stem tips are inside the beam polygon', () => {
-    // After the refactor, notes render their own SVGs in their shadow DOM.
+    // Notes render their own SVGs in their shadow DOM.
     // The staff positions them via inline styles. Stem geometry is in note.shadowRoot.
     // In jsdom, getBoundingClientRect returns 0 so describeEndX = 0 and
     // style.left directly equals the beamsContainer-relative x coordinate.

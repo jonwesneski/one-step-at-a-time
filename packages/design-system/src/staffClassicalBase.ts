@@ -86,6 +86,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 5;
   }
 
+  protected override get additionalStyles(): string {
+    return `
+      ::slotted(music-note),
+      ::slotted(music-chord) {
+        position: absolute;
+      }
+
+      :host([editable]) ::slotted(music-note),
+      :host([editable]) ::slotted(music-chord) {
+        cursor: grab;
+      }
+    `;
+  }
+
   static get observedAttributes(): string[] {
     return ['keySig', 'mode', 'time', 'editable', 'managed'];
   }
@@ -366,7 +380,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       xOffsetOfKeySignature + 5
     );
 
-    // Beams overlay — beam polygons are appended here at runtime
     this.#beamsContainer.classList.add('beams-container');
     this.#beamsContainer.style.overflow = 'visible';
     this.#beamsContainer.style.pointerEvents = 'none';

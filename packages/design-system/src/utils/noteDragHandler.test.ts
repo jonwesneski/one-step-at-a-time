@@ -145,7 +145,6 @@ describe('NoteTimingDragHandler', () => {
       const dragStartHandler = jest.fn();
       host.addEventListener('note-drag-start', dragStartHandler);
 
-      // Click on the second element with clientX within its bounds
       pointerDown(elements[1], { clientX: 60 });
 
       expect(dragStartHandler).toHaveBeenCalledTimes(1);
@@ -189,7 +188,6 @@ describe('NoteTimingDragHandler', () => {
       const dragStartHandler = jest.fn();
       host.addEventListener('note-drag-start', dragStartHandler);
 
-      // Click on the wrapper itself, not a child
       pointerDown(wrapper);
 
       expect(dragStartHandler).not.toHaveBeenCalled();

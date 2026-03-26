@@ -94,10 +94,14 @@ export class PitchDragHandler {
     chordNoteIndex: number | null
   ): boolean {
     const originalNote = this.#resolveNote(element, chordNoteIndex);
-    if (!originalNote) return false;
+    if (!originalNote) {
+      return false;
+    }
 
     const originalY = this.#yCoordinates[originalNote];
-    if (originalY === undefined) return false;
+    if (originalY === undefined) {
+      return false;
+    }
 
     // Cancelable event
     const dragStartEvent = new CustomEvent('note-pitch-drag-start', {
@@ -106,7 +110,9 @@ export class PitchDragHandler {
       cancelable: true,
       detail: { element, elementIndex, chordNoteIndex, note: originalNote },
     });
-    if (!this.#hostElement.dispatchEvent(dragStartEvent)) return false;
+    if (!this.#hostElement.dispatchEvent(dragStartEvent)) {
+      return false;
+    }
 
     e.preventDefault();
 
@@ -136,7 +142,9 @@ export class PitchDragHandler {
   }
 
   cancelDrag(): void {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
     // Restore original pitch via live preview
     const { elementIndex, originalNote, chordNoteIndex } = this.#dragState;
@@ -156,7 +164,9 @@ export class PitchDragHandler {
   }
 
   #onPointerMove(e: PointerEvent) {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
     const deltaY = e.clientY - this.#dragState.startClientY;
     const targetY = this.#dragState.originalY + deltaY;
@@ -166,7 +176,9 @@ export class PitchDragHandler {
       this.#dragState.element,
       this.#dragState.chordNoteIndex
     );
-    if (!snapped) return;
+    if (!snapped) {
+      return;
+    }
 
     const [newNote] = snapped;
 
@@ -194,7 +206,9 @@ export class PitchDragHandler {
   }
 
   #onPointerUp() {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
     const { elementIndex, chordNoteIndex, originalNote, currentNote, element } =
       this.#dragState;
@@ -229,7 +243,9 @@ export class PitchDragHandler {
   }
 
   #cleanup() {
-    if (!this.#dragState) return;
+    if (!this.#dragState) {
+      return;
+    }
 
     this.#dragState.tooltip.remove();
 
@@ -278,7 +294,9 @@ export class PitchDragHandler {
 
     for (const [note, y] of this.#sortedPositions) {
       // Skip positions occupied by other chord notes
-      if (occupiedNotes.has(note)) continue;
+      if (occupiedNotes.has(note)) {
+        continue;
+      }
 
       const dist = Math.abs(y - targetY);
       if (dist < bestDist) {
