@@ -16,13 +16,13 @@ import {
 } from './types/theory';
 import {
   BeamsBuilder,
-  createChordSvg,
+  computeYHeadOffset,
   createFlatSvg,
-  createNoteSvg,
   createSharpSvg,
   createTimeSignatureSvg,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
+  STAFF_Y_PADDING,
   type NoteYPosition,
 } from './utils';
 import {
@@ -31,6 +31,8 @@ import {
   factorToDuration,
   SVG_NS,
 } from './utils/consts';
+import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
+import { PitchDragHandler } from './utils/pitchDragHandler';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
@@ -40,8 +42,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #parentMode: Mode | null;
   #parentKeySig: LetterNote | null;
   #describeContainer: SVGGElement;
-  #notesContainer: SVGSVGElement;
+  #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
+  #currentElements: NoteOrChordElementType[] = [];
+  #noteTimingDragHandler: NoteTimingDragHandler | null = null;
+  #notePitchDragHandler: PitchDragHandler | null = null;
+  #boundPointerDown: ((e: PointerEvent) => void) | null = null;
 
   constructor() {
     super();
@@ -68,7 +74,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
-    this.#notesContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#beamsContainer = document.createElementNS(SVG_NS, 'svg');
   }
 
   #convertTotimeInts(time: string): [BeatsInMeasure, BeatTypeInMeasure] {
@@ -80,8 +86,45 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 5;
   }
 
+  protected override get additionalStyles(): string {
+    return `
+      ::slotted(music-note),
+      ::slotted(music-chord) {
+        position: absolute;
+      }
+
+      :host([editable]) ::slotted(music-note),
+      :host([editable]) ::slotted(music-chord) {
+        cursor: grab;
+      }
+    `;
+  }
+
   static get observedAttributes(): string[] {
-    return ['keySig', 'mode', 'time'];
+    return ['keySig', 'mode', 'time', 'editable', 'managed'];
+  }
+
+  get editable(): boolean {
+    return this.hasAttribute('editable');
+  }
+
+  set editable(v: boolean) {
+    if (v) this.setAttribute('editable', '');
+    else this.removeAttribute('editable');
+  }
+
+  // This piece of state is to help prevent double renders in UI Frameworks
+  // such as React. after 'certain' state changes, we then check this
+  // to see if we should render here or let the UI Framework do it.
+  // The only certain state change(s) this is for currently is:
+  // - When the timing changes on a note/chord
+  get managed(): boolean {
+    return this.hasAttribute('managed');
+  }
+
+  set managed(v: boolean) {
+    if (v) this.setAttribute('managed', '');
+    else this.removeAttribute('managed');
   }
 
   get keySig(): LetterNote {
@@ -121,9 +164,199 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected onConnectedCallback() {
     this.#buildDescribe(this.clefSvg);
+    if (this.editable) {
+      this.#enableDrag();
+    }
   }
 
-  // Describe is: clef, key signature, time signature, and notes
+  #enableDrag() {
+    if (this.#boundPointerDown) {
+      return;
+    }
+
+    const wrapper = this.shadowRoot?.querySelector(
+      '.staff-wrapper'
+    ) as HTMLElement | null;
+    if (!wrapper) {
+      return;
+    }
+
+    const host = this as unknown as HTMLElement;
+    const getElements = () => this.#currentElements as unknown as HTMLElement[];
+
+    this.#noteTimingDragHandler = new NoteTimingDragHandler(
+      host,
+      wrapper,
+      getElements,
+      this.managed
+    );
+
+    this.#notePitchDragHandler = new PitchDragHandler(
+      host,
+      this.yCoordinates,
+      (elementIndex, newNote, chordNoteIndex) => {
+        this.#onPitchLivePreview(elementIndex, newNote, chordNoteIndex);
+      }
+    );
+
+    // Coordinated pointerdown: hit-test notehead → pitch drag, else → timing drag
+    this.#boundPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) {
+        return;
+      }
+
+      const elements = getElements();
+      if (elements.length === 0) {
+        return;
+      }
+
+      // Walk up from the composed event target to find which element was hit
+      const composedTarget = e.composedPath()[0] as Element;
+
+      if (PitchDragHandler.isNoteheadTarget(composedTarget)) {
+        // Notehead hit — start pitch drag
+        const { element, elementIndex, chordNoteIndex } =
+          this.#findPitchDragTarget(composedTarget, elements);
+        if (element) {
+          this.#notePitchDragHandler?.tryStart(
+            e,
+            element,
+            elementIndex,
+            chordNoteIndex
+          );
+          return;
+        }
+      }
+    };
+
+    host.addEventListener('pointerdown', this.#boundPointerDown);
+
+    // Attach timing drag handler (it registers its own pointerdown too,
+    // but the pitch handler's early return prevents conflicts)
+    this.#noteTimingDragHandler.attach();
+  }
+
+  #disableDrag() {
+    const host = this as unknown as HTMLElement;
+
+    if (this.#boundPointerDown) {
+      host.removeEventListener('pointerdown', this.#boundPointerDown);
+      this.#boundPointerDown = null;
+    }
+
+    if (this.#notePitchDragHandler) {
+      this.#notePitchDragHandler.detach();
+      this.#notePitchDragHandler = null;
+    }
+
+    if (this.#noteTimingDragHandler) {
+      this.#noteTimingDragHandler.detach();
+      this.#noteTimingDragHandler = null;
+    }
+  }
+
+  /**
+   * Identify which slotted element and (for chords) which notehead index
+   * corresponds to a clicked SVG target.
+   */
+  #findPitchDragTarget(
+    svgTarget: Element,
+    elements: HTMLElement[]
+  ): {
+    element: HTMLElement | null;
+    elementIndex: number;
+    chordNoteIndex: number | null;
+  } {
+    // Walk up from the SVG target through shadow DOM boundaries to find the host element
+    let current: Element | null = svgTarget;
+    while (current) {
+      const rootNode: Node = current.getRootNode();
+      if (rootNode instanceof ShadowRoot) {
+        const host: Element = rootNode.host;
+        const idx = elements.indexOf(host as HTMLElement);
+        if (idx !== -1) {
+          if (host.nodeName === 'MUSIC-CHORD') {
+            const chordNoteIndex = this.#findChordNoteIndex(
+              svgTarget,
+              host as HTMLElement
+            );
+            return {
+              element: host as HTMLElement,
+              elementIndex: idx,
+              chordNoteIndex,
+            };
+          }
+          return {
+            element: host as HTMLElement,
+            elementIndex: idx,
+            chordNoteIndex: null,
+          };
+        }
+        current = host;
+      } else {
+        current = current.parentElement;
+      }
+    }
+    return { element: null, elementIndex: -1, chordNoteIndex: null };
+  }
+
+  #findChordNoteIndex(
+    svgTarget: Element,
+    chordElement: HTMLElement
+  ): number | null {
+    const chordShadow = chordElement.shadowRoot;
+    if (!chordShadow) {
+      return null;
+    }
+
+    const outerSvg = chordShadow.querySelector('svg');
+    if (!outerSvg) {
+      return null;
+    }
+
+    // todo: see if i can search by class name '.note' instead
+    const noteSvgs = Array.from(outerSvg.children).filter(
+      (c) => c.tagName === 'svg' || c.tagName === 'SVG'
+    );
+
+    let current: Element | null = svgTarget;
+    while (current && current !== outerSvg) {
+      const idx = noteSvgs.indexOf(current);
+      if (idx !== -1) return idx;
+      current = current.parentElement;
+    }
+
+    return null;
+  }
+
+  /**
+   * Live preview callback: temporarily update the element's pitch during drag.
+   */
+  #onPitchLivePreview(
+    elementIndex: number,
+    newNote: LetterOctave,
+    chordNoteIndex: number | null
+  ) {
+    const element = this.#currentElements[elementIndex];
+    if (!element) {
+      return;
+    }
+
+    if (element.nodeName === 'MUSIC-CHORD' && chordNoteIndex !== null) {
+      const noteElements = element.querySelectorAll('music-note');
+      const noteEl = noteElements[chordNoteIndex] as HTMLElement | undefined;
+      if (noteEl) {
+        noteEl.setAttribute('value', newNote);
+      }
+    } else if (element.nodeName === 'MUSIC-NOTE') {
+      element.setAttribute('value', newNote);
+    }
+
+    // Re-render this element in place (recalculate Y position, stem direction, beams)
+    this.#renderNotes(this.#currentElements);
+  }
+
+  // Describe is: clef, key signature, time signature, and beams overlay
   #buildDescribe(clefSvgStr: string) {
     this.#describeContainer.classList.add('describe-container');
     this.#describeContainer.innerHTML = clefSvgStr;
@@ -140,10 +373,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       xOffsetOfKeySignature + 5
     );
 
-    // Notes are added here at runtime
-    this.#notesContainer.classList.add('notes-container');
-    this.#notesContainer.style.overflow = 'hidden';
-    this.transcribeContainer.appendChild(this.#notesContainer);
+    this.#beamsContainer.classList.add('beams-container');
+    this.#beamsContainer.style.overflow = 'visible';
+    this.#beamsContainer.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(this.#beamsContainer);
   }
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
@@ -195,10 +428,35 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   protected override onDisconnectedCallback(): void {
+    this.#disableDrag();
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
       // ignore
+    }
+  }
+
+  override attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ): void {
+    if (oldValue === newValue) return;
+
+    if (name === 'editable') {
+      if (this.editable) {
+        this.#enableDrag();
+      } else {
+        this.#disableDrag();
+      }
+    } else if (name === 'managed') {
+      if (this.editable) {
+        this.#disableDrag();
+        this.#enableDrag();
+      }
+    } else {
+      // For keySig, mode, time — trigger full re-render
+      super.attributeChangedCallback(name, oldValue, newValue);
     }
   }
 
@@ -232,16 +490,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
-    // Clear any previously rendered notes. `slotchange` can fire multiple times
-    // as a framework (e.g. React) adds children incrementally, so without this
-    // each call would append on top of the last, leaving stale/duplicate SVGs.
-    this.#notesContainer.innerHTML = '';
+    // Cancel any in-progress drag before clearing rendered content
+    this.#noteTimingDragHandler?.cancelDrag();
 
-    const transcribeRect = this.transcribeContainer.getBoundingClientRect();
-    const describeRect = this.#describeContainer.getBoundingClientRect();
-    const describeEndX = Math.round(describeRect.right - transcribeRect.left);
-    this.#notesContainer.setAttribute('x', `${describeEndX}`);
-    this.#notesContainer.setAttribute('height', '100');
+    // Clear previously rendered beams
+    this.#beamsContainer.innerHTML = '';
 
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
@@ -251,8 +504,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#buildBeamsRenderer(elements);
     this.#beamRenderer = beamRenderer;
 
-    // Create all note SVGs (y-positioned, not yet x-positioned or appended)
-    const noteSvgs: SVGElement[] = [];
+    // Set rendering properties on each element (triggers their self-render via rAF)
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -271,50 +523,37 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
 
       const stemUp = stemDirections[i];
+      const isBeamed = beamsBuilder.isBeamed(i);
+      const extension = this.#beamRenderer.stemExtension(i);
 
       if (element.nodeName === 'MUSIC-NOTE') {
         const noteElement = element as NoteElementType;
-        const [noteSvg, yOffset] = createNoteSvg({
-          duration,
-          noFlags: beamsBuilder.isBeamed(i),
-          stemUp,
-          stemExtension: this.#beamRenderer.stemExtension(i),
-          qualifiedElementName: 'svg',
+        noteElement.batchUpdate(() => {
+          noteElement.stemUp = stemUp;
+          noteElement.stemExtension = extension;
+          noteElement.noFlags = isBeamed;
         });
-        noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        const noteY = 8 + this.noteToYCoordinate(noteElement.value) - yOffset;
-        noteSvg.setAttribute('y', noteY.toString());
-
-        noteSvgs.push(noteSvg);
       } else {
         const chordElement = element as ChordElementType;
         const staffYCoordinates = chordElement.notes.map((note) =>
           this.noteToYCoordinate(note.value)
         );
-        const [chordSvg] = createChordSvg({
-          duration,
-          staffYCoordinates,
-          noFlags: beamsBuilder.isBeamed(i),
-          stemUp,
-          stemExtension: this.#beamRenderer.stemExtension(i),
-          qualifiedElementName: 'g',
+        chordElement.batchUpdate(() => {
+          chordElement.stemUp = stemUp;
+          chordElement.stemExtension = extension;
+          chordElement.noFlags = isBeamed;
+          chordElement.staffYCoordinates = staffYCoordinates;
         });
-        chordSvg.setAttribute('overflow', 'visible');
-
-        noteSvgs.push(chordSvg);
       }
 
       beatOffset += durationToFactor[duration as DurationType];
     }
 
-    this.#spaceNotes(noteSvgs);
-
-    for (const svg of noteSvgs) {
-      this.#notesContainer.appendChild(svg);
-    }
+    this.#currentElements = elements;
+    this.#spaceElements();
 
     for (const svgGroup of this.#beamRenderer.svgGroups) {
-      this.#notesContainer.appendChild(svgGroup);
+      this.#beamsContainer.appendChild(svgGroup);
     }
   }
 
@@ -336,11 +575,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
         if (element.nodeName === 'MUSIC-NOTE') {
           return {
-            // todo: anywhere where I am doing an `8 + noteYCoord`,
+            // todo: anywhere where I am doing an `STAFF_Y_PADDING + noteYCoord`,
             //  will revisit to figure out how to handle better. Basically need
             // account for margin-top (currently 28px); not sure why it is only 8 though.
             y:
-              8 +
+              STAFF_Y_PADDING +
               this.noteToYCoordinate((element as NoteElementType).value) -
               yHeadOffset,
             stemUp,
@@ -388,7 +627,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
 
         return {
-          y: 8 + extremalStaffY - yHeadOffset,
+          y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
           stemUp,
           chordClearanceY,
         };
@@ -463,11 +702,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
   public noteToYCoordinate(note: string): number {
-    if (!note) return 0;
+    if (!note) {
+      return 0;
+    }
 
     // Extract letter (A-G) and optional octave digit, discarding accidentals.
     const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
-    if (!match) return 0;
+    if (!match) {
+      return 0;
+    }
 
     const letter = match[1].toUpperCase();
     const octave = match[2];
@@ -490,45 +733,63 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
-  #spaceNotes(elements: SVGElement[]) {
+  #spaceElements() {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
     const describeEndX = Math.round(describeRect.right - transcribeRect.left);
     const remainingWidth = transcribeRect.width - describeEndX;
-    this.#notesContainer.setAttribute('width', `${remainingWidth}`);
+
+    // Configure beams container to cover the notes area
+    this.#beamsContainer.setAttribute('x', `${describeEndX}`);
+    this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
     // todo: handle height instead of using literal
-    this.#notesContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
+    this.#beamsContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
+    this.#beamsContainer.setAttribute('height', '100');
 
     const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
     const measureDuration = beatsInMeasure / beatType;
 
     const minNoteWidth = 20; // px — minimum space per note to prevent notehead overlap
-    const proportionalWidth = remainingWidth - elements.length * minNoteWidth;
+    const proportionalWidth =
+      remainingWidth - this.#currentElements.length * minNoteWidth;
 
     let beatOffset = 0;
-    for (let i = 0; i < elements.length; i++) {
-      const duration = elements[i].dataset.duration as DurationType;
-      const xOffset =
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      const duration = element.duration as DurationType;
+      const xOffsetInNotesSpace =
         i * minNoteWidth + (beatOffset / measureDuration) * proportionalWidth;
 
-      this.#beamRenderer?.setX(i, xOffset);
-      this.#spaceNote(elements[i], xOffset);
+      this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
+
+      // Position the light DOM element via inline styles
+      const xInWrapper = describeEndX + xOffsetInNotesSpace;
+      element.style.left = `${xInWrapper}px`;
+
+      if (element.nodeName === 'MUSIC-NOTE') {
+        const noteEl = element as NoteElementType;
+        const yHeadOffset = computeYHeadOffset(
+          noteEl.stemUp,
+          duration,
+          noteEl.noFlags
+        );
+        const noteY =
+          STAFF_Y_PADDING + this.noteToYCoordinate(noteEl.value) - yHeadOffset;
+        element.style.top = `${noteY}px`;
+      } else {
+        // Chord y-positioning is handled internally by the chord's own SVG rendering
+        element.style.top = '0px';
+      }
+
       beatOffset += durationToFactor[duration];
     }
     this.#beamRenderer?.spaceAll();
   }
 
-  #spaceNote(element: SVGElement, xOffset: number) {
-    element.setAttribute('x', xOffset.toString());
-  }
-
-  // Respace notes
+  // Respace notes on resize
   onStaffResize() {
-    const notes = [
-      ...(this.#notesContainer.querySelectorAll(
-        ':scope > svg'
-      ) as NodeListOf<Element>),
-    ] as SVGElement[];
-    this.#spaceNotes(notes);
+    if (this.#currentElements.length > 0) {
+      this.#spaceElements();
+    }
   }
 }

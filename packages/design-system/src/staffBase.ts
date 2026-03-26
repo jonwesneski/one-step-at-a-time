@@ -65,6 +65,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           border-bottom: 1px solid currentColor;
           margin-top: ${StaffElementBase.#staffLineStart}px;
           margin-bottom: 30px;
+          pointer-events: none;
         }
 
         .staff-line {
@@ -74,6 +75,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           height: 0.5px;
           background: currentColor;
         }
+
+        ${this.additionalStyles}
       </style>
       <div class="staff-wrapper">
         <slot></slot>
@@ -86,6 +89,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected abstract get staffLineCount(): number;
+
+  /** Override in subclasses to inject additional CSS into the shadow DOM style block. */
+  protected get additionalStyles(): string {
+    return '';
+  }
 
   connectedCallback(): void {
     this.render();

@@ -53,11 +53,11 @@ export const createNoteSvg = ({
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
   }
+  svg.classList.add('note');
   svg.dataset.duration = duration;
   svg.dataset.stemUp = `${stemUp}`;
-  const height = NOTE_SVG_HEIGHT;
   svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
-  svg.setAttribute('height', `${height}`);
+  svg.setAttribute('height', `${NOTE_SVG_HEIGHT}`);
   // Not using viewbox but it should be somewhere around:
   // COORD_WIDTH and BASE_STEM_LENGTH (height; just starting though)
 
@@ -176,6 +176,23 @@ export const createNoteSvg = ({
   const headYStartStr = stemUp ? yStemEnd.toString() : HEAD_WIDTH.toString();
   const headFill =
     duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
+
+  // Enlarged invisible hit zone behind the notehead for easier targeting.
+  // 1.5× the head size; transparent but captures pointer events.
+  const headHitZone = document.createElementNS(SVG_NS, 'ellipse');
+  headHitZone.classList.add('head-hit-zone');
+  headHitZone.setAttribute('cx', headXStartStr);
+  headHitZone.setAttribute('cy', headYStartStr);
+  headHitZone.setAttribute('rx', (HEAD_WIDTH * 1.5).toString());
+  headHitZone.setAttribute('ry', (HEAD_WIDTH * 0.75 * 1.5).toString());
+  headHitZone.setAttribute(
+    'transform',
+    `rotate(-30 ${headXStartStr} ${headYStartStr})`
+  );
+  headHitZone.setAttribute('fill', 'transparent');
+  headHitZone.setAttribute('stroke', 'none');
+  g.appendChild(headHitZone);
+
   const head = document.createElementNS(SVG_NS, 'ellipse');
   head.classList.add('head');
   head.setAttribute('cx', headXStartStr);
@@ -193,8 +210,26 @@ export const createNoteSvg = ({
 
   svg.appendChild(g);
 
-  const yHeadOffset = stemUp
-    ? Math.round(10 + yStemEnd * NOTE_SCALE)
-    : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);
   return [svg, yHeadOffset];
 };
+
+// Padding added to staff Y coordinate when positioning notes.
+// Accounts for the margin between the top of the transcribe container and the first staff line.
+export const STAFF_Y_PADDING = 8;
+
+// Compute the Y offset from the top of the note SVG to the notehead center.
+// Deterministic from rendering params — used by both createNoteSvg (return value)
+// and the staff (for positioning notes before their SVG renders).
+export function computeYHeadOffset(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean
+): number {
+  if (!stemUp) return NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  const flagStemExtension =
+    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
+  return Math.round(10 + yStemEnd * NOTE_SCALE);
+}

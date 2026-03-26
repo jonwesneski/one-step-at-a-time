@@ -1,15 +1,25 @@
 import { Chord, DurationType, LetterNote, LetterOctave, Note } from './theory';
 
 export interface INoteElement {
-  readonly duration: DurationType;
-  readonly value: Note;
+  duration: DurationType;
+  value: Note;
+  stemUp: boolean;
+  stemExtension: number;
+  noFlags: boolean;
+  noStem: boolean;
+  batchUpdate(fn: () => void): void;
 }
 
 export type ChordNote = { value: LetterNote; duration: DurationType };
 export interface IChordElement {
-  readonly duration: DurationType;
-  readonly value: Chord | null;
+  duration: DurationType;
+  value: Chord | null;
   readonly notes: ChordNote[];
+  stemUp: boolean;
+  stemExtension: number;
+  noFlags: boolean;
+  staffYCoordinates: number[] | null;
+  batchUpdate(fn: () => void): void;
 }
 
 export type NoteElementType = HTMLElement & INoteElement;

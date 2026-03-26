@@ -7,4 +7,5 @@ import './staffTreble/staffTreble'; // order of import matters for some reason, 
 
 import './note/note';
 
-export {};
+export type { DurationType, Note, LetterOctave } from './types/theory';
+export type { PitchChangeDetail } from './utils/pitchDragHandler';

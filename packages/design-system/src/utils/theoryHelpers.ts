@@ -39,7 +39,7 @@ const useFirstIndex: Record<string, true> = {
 export const getNotes = (root: LetterNote, semitones: number[]) => {
   const notes: LetterNote[] = [root];
   // 2nd index in possibleNotes is for flats
-  const firstChoice = useFirstIndex[root] ? 0 : 1;
+  const choiceIndex = useFirstIndex[root] ? 0 : 1;
   const rootPosition = noteSemitoneMap.get(root);
   if (rootPosition !== undefined) {
     for (const s of semitones) {
@@ -50,7 +50,7 @@ export const getNotes = (root: LetterNote, semitones: number[]) => {
       position = position < 0 ? 11 + position + 1 : position;
       const possibleNotes = semitoneNoteMap.get(position);
       if (possibleNotes) {
-        notes.push(possibleNotes[firstChoice] ?? possibleNotes[0]);
+        notes.push(possibleNotes[choiceIndex] ?? possibleNotes[0]);
       } else {
         throw new Error('possible note not found');
       }

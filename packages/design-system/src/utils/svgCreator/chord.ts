@@ -21,6 +21,11 @@ export const createChordSvg = ({
     ? Math.max(...staffYCoordinates)
     : Math.min(...staffYCoordinates);
 
+  // The stem must extend past all noteheads so the tip is the same height
+  // above the outermost notehead as a single note's stem would be.
+  const chordSpread =
+    Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates);
+
   let extremalYOffset = 0;
   for (const staffYCoordinate of staffYCoordinates) {
     const isExtremal = staffYCoordinate === stemNoteY;
@@ -29,7 +34,11 @@ export const createChordSvg = ({
       noFlags,
       noStem: !isExtremal,
       stemUp,
-      stemExtension: isExtremal ? stemExtension : 0,
+      stemExtension: isExtremal
+        ? noFlags
+          ? stemExtension
+          : Math.max(stemExtension, chordSpread)
+        : 0,
       qualifiedElementName: 'svg',
     });
     if (isExtremal) extremalYOffset = yOffset;
