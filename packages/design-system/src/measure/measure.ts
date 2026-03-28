@@ -62,7 +62,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#staffConnectorObserver.observe(this.parentElement!);
       // const slot = this.shadowRoot?.querySelector('slot');
       // if (slot) {
-      //   slot.addEventListener('slotchange', this.#handleSlotChange.bind(this));
+      //   slot.addEventListener('slotchange', this.#somebindedHandlerTbd);
       // }
     }
 
