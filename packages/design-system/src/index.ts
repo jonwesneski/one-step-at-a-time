@@ -4,6 +4,7 @@ import './measure/measure';
 import './staffBass/staffBass';
 import './staffGuitarTab/staffGuitarTab';
 import './staffTreble/staffTreble'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
+import './staffVocal/staffVocal';
 
 import './note/note';
 

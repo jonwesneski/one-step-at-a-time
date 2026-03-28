@@ -53,6 +53,17 @@ declare module 'react' {
         time?: string;
         children?: React.ReactNode;
       };
+      'music-staff-vocal': WebComponentProps & {
+        voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
+        keySig?: LetterNote;
+        mode?: string;
+        time?: string;
+        editable?: boolean;
+        managed?: boolean;
+      };
+      'music-lyrics': WebComponentProps & {
+        verse?: string;
+      };
     }
   }
 }
