@@ -51,23 +51,23 @@ const MEZZO_STAFF_Y: Record<string, number> = {
 };
 
 const ALTO_STAFF_Y: Record<string, number> = {
-  A5: 20,
-  G5: 25,
-  F5: 30,
-  E5: 35,
-  D5: 40,
-  C5: 45,
-  B4: 50,
-  A4: 55,
-  G4: 60,
-  F4: 65,
-  E4: 70,
-  D4: 75,
-  C4: 80,
-  B3: 85,
-  A3: 90,
-  G3: 95,
-  F3: 100,
+  A5: 10,
+  G5: 15,
+  F5: 20,
+  E5: 25,
+  D5: 30,
+  C5: 35,
+  B4: 40,
+  A4: 45,
+  G4: 50,
+  F4: 55,
+  E4: 60,
+  D4: 65,
+  C4: 70,
+  B3: 75,
+  A3: 80,
+  G3: 85,
+  F3: 90,
 };
 
 const TENOR_STAFF_Y: Record<string, number> = {
@@ -129,7 +129,9 @@ const STAFF_Y_PADDING = 8;
 // Expected `style.top` value on a positioned <music-note> element
 function expectedNoteTop(value: string, staffYMap: Record<string, number>): string {
   const staffY = staffYMap[value];
-  const middleStaffY = 50;
+  // Calculate middle Y as the average of min and max Y values in the map
+  const yValues = Object.values(staffYMap);
+  const middleStaffY = (Math.min(...yValues) + Math.max(...yValues)) / 2;
   const stemUp = staffY > middleStaffY;
   const yHeadOffset = stemUp
     ? NOTE_Y_HEAD_OFFSET_STEM_UP
@@ -155,22 +157,6 @@ function renderNote(staff: Element, value: string): HTMLElement {
   slot.assignedElements = () => [note];
   slot.dispatchEvent(new Event('slotchange'));
   return note;
-}
-
-function renderLyrics(staff: Element, text: string, verse: string = '1'): HTMLElement {
-  const lyrics = document.createElement('music-lyrics') as any;
-  lyrics.setAttribute('verse', verse);
-  lyrics.textContent = text;
-  (staff as any).appendChild(lyrics);
-  // Simulate slot change to trigger lyrics positioning
-  const slot = (staff as any).shadowRoot.querySelector('slot');
-  slot.assignedElements = () => {
-    const notes = (staff as any).querySelectorAll('music-note');
-    const lyricsList = (staff as any).querySelectorAll('music-lyrics');
-    return Array.from(notes).concat(Array.from(lyricsList));
-  };
-  slot.dispatchEvent(new Event('slotchange'));
-  return lyrics;
 }
 
 describe('music-staff-vocal', () => {

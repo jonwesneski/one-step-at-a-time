@@ -6,133 +6,22 @@ import {
   createTreble8ClefSvg,
   createTrebleClefSvg,
 } from '../utils/svgCreator/clefs';
+import { generateYCoordinates } from '../utils/theoryHelpers';
 import { MusicLyricsElement } from './lyrics';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  // Lyrics positioning constants
   const LYRICS_BASELINE_OFFSET = -25; // px below staff to first verse
   const LYRICS_VERSE_SPACING = 15; // px between verse lines
 
   class StaffVocalElement extends StaffClassicalElementBase {
-    // Soprano (Treble Clef)
-    static #sopYCoordinates: YCoordinates = {
-      C6: 10,
-      B5: 15,
-      A5: 20,
-      G5: 25,
-      F5: 30,
-      E5: 35,
-      D5: 40,
-      C5: 45,
-      B4: 50,
-      A4: 55,
-      G4: 60,
-      F4: 65,
-      E4: 70,
-      D4: 75,
-      C4: 80,
-    };
+    static #sopYCoordinates = generateYCoordinates('C6', 'C4');
+    static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
+    static #altoYCoordinates = generateYCoordinates('A5', 'F3');
+    static #tenorYCoordinates = generateYCoordinates('C5', 'C3');
+    static #bariYCoordinates = generateYCoordinates('E4', 'E2');
+    static #bassYCoordinates = generateYCoordinates('E4', 'E2');
 
-    // Mezzo-Soprano (Treble Clef, Extended Low)
-    static #mezzoYCoordinates: YCoordinates = {
-      C6: 10,
-      B5: 15,
-      A5: 20,
-      G5: 25,
-      F5: 30,
-      E5: 35,
-      D5: 40,
-      C5: 45,
-      B4: 50,
-      A4: 55,
-      G4: 60,
-      F4: 65,
-      E4: 70,
-      D4: 75,
-      C4: 80,
-      B3: 85,
-      A3: 90,
-    };
-
-    // Alto (Treble Clef, Extended Low)
-    static #altoYCoordinates: YCoordinates = {
-      A5: 20,
-      G5: 25,
-      F5: 30,
-      E5: 35,
-      D5: 40,
-      C5: 45,
-      B4: 50,
-      A4: 55,
-      G4: 60,
-      F4: 65,
-      E4: 70,
-      D4: 75,
-      C4: 80,
-      B3: 85,
-      A3: 90,
-      G3: 95,
-      F3: 100,
-    };
-
-    // Tenor (Treble-8 Clef - same pixel layout as treble, notes shifted down 1 octave)
-    static #tenorYCoordinates: YCoordinates = {
-      C5: 10,
-      B4: 15,
-      A4: 20,
-      G4: 25,
-      F4: 30,
-      E4: 35,
-      D4: 40,
-      C4: 45,
-      B3: 50,
-      A3: 55,
-      G3: 60,
-      F3: 65,
-      E3: 70,
-      D3: 75,
-      C3: 80,
-    };
-
-    // Baritone (Bass Clef)
-    static #bariYCoordinates: YCoordinates = {
-      E4: 10,
-      D4: 15,
-      C4: 20,
-      B3: 25,
-      A3: 30,
-      G3: 35,
-      F3: 40,
-      E3: 45,
-      D3: 50,
-      C3: 55,
-      B2: 60,
-      A2: 65,
-      G2: 70,
-      F2: 75,
-      E2: 80,
-    };
-
-    // Bass (Bass Clef)
-    static #bassYCoordinates: YCoordinates = {
-      E4: 10,
-      D4: 15,
-      C4: 20,
-      B3: 25,
-      A3: 30,
-      G3: 35,
-      F3: 40,
-      E3: 45,
-      D3: 50,
-      C3: 55,
-      B2: 60,
-      A2: 65,
-      G2: 70,
-      F2: 75,
-      E2: 80,
-    };
-
-    // Key signature arrays
+    // soprano, mezzo, alto (treble-based)
     static #trebleSharps: LetterOctave[] = [
       'F5',
       'C5',
@@ -150,44 +39,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'G4',
       'C5',
       'F4',
-    ];
-
-    static #tenorSharps: LetterOctave[] = [
-      'F4',
-      'C4',
-      'G4',
-      'D4',
-      'A3',
-      'E4',
-      'B3',
-    ];
-    static #tenorFlats: LetterOctave[] = [
-      'B3',
-      'E4',
-      'A3',
-      'D4',
-      'G3',
-      'C4',
-      'F3',
-    ];
-
-    static #bassSharps: LetterOctave[] = [
-      'F3',
-      'C3',
-      'G3',
-      'D3',
-      'A2',
-      'E3',
-      'B2',
-    ];
-    static #bassFlats: LetterOctave[] = [
-      'B2',
-      'E3',
-      'A2',
-      'D3',
-      'G2',
-      'C3',
-      'F2',
     ];
 
     static #trebleMajorSharpYCoordinates: { [key: string]: number[] } = {
@@ -300,6 +151,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Ab: StaffVocalElement.#trebleMajorFlatYCoordinates.Cb,
     };
 
+    static #tenorSharps: LetterOctave[] = [
+      'F4',
+      'C4',
+      'G4',
+      'D4',
+      'A3',
+      'E4',
+      'B3',
+    ];
+    static #tenorFlats: LetterOctave[] = [
+      'B3',
+      'E4',
+      'A3',
+      'D4',
+      'G3',
+      'C4',
+      'F3',
+    ];
+
     static #tenorMajorSharpYCoordinates: { [key: string]: number[] } = {
       G: StaffVocalElement.#tenorSharps
         .filter((_, i) => i < 1)
@@ -409,6 +279,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Eb: StaffVocalElement.#tenorMajorFlatYCoordinates.Gb,
       Ab: StaffVocalElement.#tenorMajorFlatYCoordinates.Cb,
     };
+
+    // baritone, bass (bass-based)
+    static #bassSharps: LetterOctave[] = [
+      'F3',
+      'C3',
+      'G3',
+      'D3',
+      'A2',
+      'E3',
+      'B2',
+    ];
+    static #bassFlats: LetterOctave[] = [
+      'B2',
+      'E3',
+      'A2',
+      'D3',
+      'G2',
+      'C3',
+      'F2',
+    ];
 
     static #bassMajorSharpYCoordinates: { [key: string]: number[] } = {
       G: StaffVocalElement.#bassSharps
@@ -645,20 +535,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (name === 'voice' && oldValue !== newValue) {
-        // Voice change triggers full re-render
-        super.attributeChangedCallback('mode', oldValue, newValue);
-      } else {
-        super.attributeChangedCallback(name, oldValue, newValue);
-      }
+      super.attributeChangedCallback(name, oldValue, newValue);
     }
 
-    /**
-     * Position lyrics syllables below the staff, aligned with note X-positions.
-     * Called by onStaffResize after notes are spaced.
-     */
     #positionLyricsIfPresent(): void {
-      const lyricsElements = this.querySelectorAll('music-lyrics');
+      const lyricsElements = this.querySelectorAll(
+        'music-lyrics'
+      ) as MusicLyricsElement[];
       if (lyricsElements.length === 0) return;
 
       const noteElements = Array.from(
@@ -720,9 +603,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       // Trigger lyrics elements to re-render
       for (const lyricEl of lyricsElements) {
-        if (lyricEl instanceof MusicLyricsElement) {
-          lyricEl.updatePositions();
-        }
+        lyricEl.updatePositions();
       }
     }
 
