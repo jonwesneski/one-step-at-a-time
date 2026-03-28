@@ -1,3 +1,4 @@
+import { YCoordinates } from '../types/elements';
 import { Chord, LetterNote, LetterOctave } from '../types/theory';
 import {
   ChordSemitoneMap,
@@ -5,7 +6,6 @@ import {
   noteSemitoneMap,
   semitoneNoteMap,
 } from './consts';
-import { YCoordinates } from '../types/elements';
 
 // Half of staffLineSpacing (10), one semitone step = 5px
 const Y_COORDINATE_INCREMENT = 5;
@@ -77,6 +77,28 @@ export const getNotes = (root: LetterNote, semitones: number[]) => {
  * @example
  * const sopranoYCoords = generateYCoordinates('C6', 'C4');
  * // { C6: 10, B5: 15, A5: 20, ..., C4: 80 }
+ *
+ * // Line y-positioning
+ * [
+ *   // Above 1st line
+ *   10,
+ *   15,
+ *   20,
+ *   25,
+ *
+ *   30, // 1st line
+ *   35,
+ *   40,
+ *   45,
+ *   50,
+ *   55,
+ *   60,
+ *   65,
+ *   70,
+ *   // Below last line
+ *   75,
+ *   80,
+ * ]
  */
 export const generateYCoordinates = (
   highestNote: LetterOctave,
@@ -84,7 +106,9 @@ export const generateYCoordinates = (
   startingY: number = 10
 ): YCoordinates => {
   // Parse note to extract letter and octave
-  const parseNote = (note: LetterOctave): { letter: string; octave: number } => {
+  const parseNote = (
+    note: LetterOctave
+  ): { letter: string; octave: number } => {
     // Strip accidentals if present, keep only the letter and octave
     const match = note.match(/^([A-G])#?b?(\d)$/);
     if (!match) throw new Error(`Invalid note format: ${note}`);

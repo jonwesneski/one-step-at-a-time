@@ -2,37 +2,11 @@ import { StaffClassicalElementBase } from '../staffClassicalBase';
 import { YCoordinates } from '../types/elements';
 import { Octave } from '../types/theory';
 import { createTrebleClefSvg } from '../utils/svgCreator/clefs';
+import { generateYCoordinates } from '../utils/theoryHelpers';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffTrebleElement extends StaffClassicalElementBase {
     static #trebleClefSvg = createTrebleClefSvg();
-    static #yCoordinates: { [x in string]: number } = {
-      // Above 1st line
-      C6: 10,
-      B5: 15,
-      A5: 20,
-      G5: 25,
-
-      // 1st line
-      F5: 30,
-      E5: 35,
-      D5: 40,
-      C5: 45,
-      B4: 50,
-      A4: 55,
-      G4: 60,
-      F4: 65,
-      E4: 70,
-
-      // Below last line
-      D4: 75,
-      C4: 80,
-      // B3: 65,
-      // A3: 70,
-      // G3: 75,
-      // F3: 80,
-      // E3: 85,
-      // D3: 90,
-    };
+    static #yCoordinates: { [x in string]: number } = generateYCoordinates('C6', 'C4');
     static #sharps = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
     static #majorSharpYCoordinates = {
       G: StaffTrebleElement.#sharps

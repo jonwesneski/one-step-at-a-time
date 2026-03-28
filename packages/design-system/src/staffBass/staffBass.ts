@@ -2,30 +2,11 @@ import { StaffClassicalElementBase } from '../staffClassicalBase';
 import { YCoordinates } from '../types/elements';
 import { LetterOctave, Octave } from '../types/theory';
 import { createBassClefSvg } from '../utils/svgCreator/clefs';
+import { generateYCoordinates } from '../utils/theoryHelpers';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = createBassClefSvg();
-    static #yCoordinates: YCoordinates = {
-      // Above 1st line
-      E4: 10,
-      D4: 15,
-      C4: 20,
-      B3: 25,
-
-      // 1st line
-      A3: 30,
-      G3: 35,
-      F3: 40,
-      E3: 45,
-      D3: 50,
-      C3: 55,
-      B2: 60,
-      A2: 65,
-      G2: 70,
-      // Below last line
-      F2: 75,
-      E2: 80,
-    };
+    static #yCoordinates: { [x in string]: number } = generateYCoordinates('E4', 'E2');
     static #sharps: LetterOctave[] = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
     static #majorSharpYCoordinates = {
       G: StaffBassElement.#sharps
