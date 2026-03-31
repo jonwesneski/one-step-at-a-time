@@ -534,12 +534,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return answer;
     }
 
-    override attributeChangedCallback(
-      name: string,
-      oldValue: string | null,
-      newValue: string | null
-    ): void {
-      super.attributeChangedCallback(name, oldValue, newValue);
+    override onStaffResize(): void {
+      super.onStaffResize();
+      this.#positionLyricsIfPresent();
     }
 
     #positionLyricsIfPresent(): void {
@@ -610,11 +607,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       for (const lyricEl of lyricsElements) {
         lyricEl.updatePositions();
       }
-    }
-
-    override onStaffResize(): void {
-      super.onStaffResize();
-      this.#positionLyricsIfPresent();
     }
 
     #parseLyricsText(text: string): Array<{

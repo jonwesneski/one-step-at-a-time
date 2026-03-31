@@ -6,21 +6,35 @@
 
 import { ILyricsElement, LyricSyllablePosition } from '../types/elements';
 
-export class MusicLyricsElement
-  extends HTMLElement
-  implements ILyricsElement
-{
+export class MusicLyricsElement extends HTMLElement implements ILyricsElement {
   #syllablePositions: LyricSyllablePosition[] = [];
-
-  #svgContainer: SVGSVGElement | null = null;
+  #lyricContainer: SVGSVGElement | null = null;
 
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
   }
 
+  get verse(): string {
+    return this.getAttribute('verse') ?? '1';
+  }
+
+  set verse(value: string) {
+    this.setAttribute('verse', value);
+  }
+
+  get syllables(): LyricSyllablePosition[] {
+    return this.#syllablePositions;
+  }
+
+  set syllables(value: LyricSyllablePosition[]) {
+    this.#syllablePositions = value;
+  }
+
   connectedCallback() {
-    if (!this.shadowRoot) return;
+    if (!this.shadowRoot) {
+      return;
+    }
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -51,23 +65,9 @@ export class MusicLyricsElement
       <svg></svg>
     `;
 
-    this.#svgContainer = this.shadowRoot.querySelector('svg') as SVGSVGElement;
-  }
-
-  get verse(): string {
-    return this.getAttribute('verse') ?? '1';
-  }
-
-  set verse(value: string) {
-    this.setAttribute('verse', value);
-  }
-
-  get syllables(): LyricSyllablePosition[] {
-    return this.#syllablePositions;
-  }
-
-  set syllables(value: LyricSyllablePosition[]) {
-    this.#syllablePositions = value;
+    this.#lyricContainer = this.shadowRoot.querySelector(
+      'svg'
+    ) as SVGSVGElement;
   }
 
   updatePositions() {
@@ -79,17 +79,17 @@ export class MusicLyricsElement
   }
 
   #render() {
-    if (!this.#svgContainer) {
+    if (!this.#lyricContainer) {
       return;
     }
 
     // Clear previous rendering
-    this.#svgContainer.innerHTML = '';
+    this.#lyricContainer.innerHTML = '';
 
     // Set SVG to use pixel coordinate system (no viewBox scaling)
-    this.#svgContainer.removeAttribute('viewBox');
-    this.#svgContainer.style.width = '100%';
-    this.#svgContainer.style.height = '100%';
+    this.#lyricContainer.removeAttribute('viewBox');
+    this.#lyricContainer.style.width = '100%';
+    this.#lyricContainer.style.height = '100%';
 
     for (let i = 0; i < this.#syllablePositions.length; i++) {
       const syllable = this.#syllablePositions[i];
@@ -105,7 +105,7 @@ export class MusicLyricsElement
       text.setAttribute('dominant-baseline', 'hanging');
       text.setAttribute('font-size', '12');
       text.textContent = syllable.text;
-      this.#svgContainer.appendChild(text);
+      this.#lyricContainer.appendChild(text);
 
       // Render hyphen if needed
       if (syllable.isHyphenated && i < this.#syllablePositions.length - 1) {
@@ -121,7 +121,7 @@ export class MusicLyricsElement
         hyphen.setAttribute('dominant-baseline', 'hanging');
         hyphen.setAttribute('class', 'hyphen');
         hyphen.textContent = '-';
-        this.#svgContainer.appendChild(hyphen);
+        this.#lyricContainer.appendChild(hyphen);
       }
 
       // Render extender line if melisma
@@ -137,7 +137,7 @@ export class MusicLyricsElement
         line.setAttribute('y2', (syllable.y + 6).toString());
         line.setAttribute('stroke', 'currentColor');
         line.setAttribute('stroke-width', '0.5');
-        this.#svgContainer.appendChild(line);
+        this.#lyricContainer.appendChild(line);
       }
     }
   }
