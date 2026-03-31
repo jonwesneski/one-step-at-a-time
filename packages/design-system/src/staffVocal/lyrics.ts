@@ -4,14 +4,13 @@
  * Maybe I'll think about supporting lyrics as a standalone in the future.
  */
 
-export class MusicLyricsElement extends HTMLElement {
-  #syllablePositions: Array<{
-    text: string;
-    x: number;
-    y: number;
-    isMelisma: boolean;
-    isHyphenated: boolean;
-  }> = [];
+import { ILyricsElement, LyricSyllablePosition } from '../types/elements';
+
+export class MusicLyricsElement
+  extends HTMLElement
+  implements ILyricsElement
+{
+  #syllablePositions: LyricSyllablePosition[] = [];
 
   #svgContainer: SVGSVGElement | null = null;
 
@@ -63,23 +62,20 @@ export class MusicLyricsElement extends HTMLElement {
     this.setAttribute('verse', value);
   }
 
+  get syllables(): LyricSyllablePosition[] {
+    return this.#syllablePositions;
+  }
+
+  set syllables(value: LyricSyllablePosition[]) {
+    this.#syllablePositions = value;
+  }
+
   updatePositions() {
-    if (!this.#svgContainer) {
+    if (this.#syllablePositions.length === 0) {
       return;
     }
 
-    const stored = this.dataset.syllables;
-    if (!stored) {
-      return;
-    }
-
-    try {
-      const positions = JSON.parse(stored);
-      this.#syllablePositions = positions;
-      this.#render();
-    } catch {
-      // Invalid JSON, skip
-    }
+    this.#render();
   }
 
   #render() {

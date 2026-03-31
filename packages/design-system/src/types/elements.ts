@@ -27,3 +27,19 @@ export type ChordElementType = HTMLElement & IChordElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
 
 export type YCoordinates = Partial<Record<LetterOctave, number>>;
+
+export type LyricSyllablePosition = {
+  text: string;
+  x: number;
+  y: number;
+  isMelisma: boolean;
+  isHyphenated: boolean;
+};
+
+export interface ILyricsElement {
+  syllables: LyricSyllablePosition[];
+  verse: string;
+  updatePositions(): void;
+}
+
+export type LyricsElementType = HTMLElement & ILyricsElement;

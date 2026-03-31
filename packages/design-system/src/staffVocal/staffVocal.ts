@@ -1,5 +1,9 @@
 import { StaffClassicalElementBase } from '../staffClassicalBase';
-import { YCoordinates } from '../types/elements';
+import {
+  LyricSyllablePosition,
+  LyricsElementType,
+  YCoordinates,
+} from '../types/elements';
 import { LetterOctave, Octave, VoiceType } from '../types/theory';
 import {
   createBassClefSvg,
@@ -542,18 +546,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const lyricsElements = this.querySelectorAll(
         'music-lyrics'
       ) as MusicLyricsElement[];
-      if (lyricsElements.length === 0) return;
+      if (lyricsElements.length === 0) {
+        return;
+      }
 
       const noteElements = Array.from(
         this.querySelectorAll('music-note, music-chord')
       ) as HTMLElement[];
-      if (noteElements.length === 0) return;
+      if (noteElements.length === 0) {
+        return;
+      }
 
       const staffRect = this.getBoundingClientRect();
       const transcribeContainer = this.shadowRoot?.querySelector(
         '.staff-wrapper'
       ) as HTMLElement | null;
-      if (!transcribeContainer) return;
+      if (!transcribeContainer) {
+        return;
+      }
 
       const transcribeRect = transcribeContainer.getBoundingClientRect();
       const baselineY = transcribeRect.bottom - staffRect.top;
@@ -564,6 +574,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // Get syllables from the lyrics element
         const syllablesText = lyricEl.textContent ?? '';
         const syllables = this.#parseLyricsText(syllablesText);
+        const positions: LyricSyllablePosition[] = [];
 
         // Position each syllable below its corresponding note
         syllables.forEach((syllable, sylIndex) => {
@@ -582,22 +593,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             LYRICS_BASELINE_OFFSET +
             verseIndex * LYRICS_VERSE_SPACING;
 
-          // Store syllable data on the lyrics element for rendering
-          if (!lyricEl.dataset.syllables) {
-            lyricEl.dataset.syllables = JSON.stringify([]);
-          }
-
-          const stored = JSON.parse(lyricEl.dataset.syllables || '[]');
-          stored[sylIndex] = {
+          positions[sylIndex] = {
             text: syllable.text,
             x: noteX,
             y: lyricY,
             isMelisma: syllable.isMelisma,
             isHyphenated: syllable.isHyphenated,
           };
-          lyricEl.dataset.syllables = JSON.stringify(stored);
         });
 
+        (lyricEl as LyricsElementType).syllables = positions;
         verseIndex++;
       }
 
