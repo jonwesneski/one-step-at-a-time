@@ -127,7 +127,10 @@ const BASS_STAFF_Y: Record<string, number> = {
 const STAFF_Y_PADDING = 8;
 
 // Expected `style.top` value on a positioned <music-note> element
-function expectedNoteTop(value: string, staffYMap: Record<string, number>): string {
+function expectedNoteTop(
+  value: string,
+  staffYMap: Record<string, number>
+): string {
   const staffY = staffYMap[value];
   // Calculate middle Y as the average of min and max Y values in the map
   const yValues = Object.values(staffYMap);
@@ -139,7 +142,7 @@ function expectedNoteTop(value: string, staffYMap: Record<string, number>): stri
   return `${STAFF_Y_PADDING + staffY - yHeadOffset}px`;
 }
 
-function makeStaff(voice: string = 'soprano'): Element {
+function makeStaff(voice = 'soprano'): Element {
   const el = document.createElement('music-staff-vocal') as any;
   el.setAttribute('voice', voice);
   el.setAttribute('keySig', 'C');

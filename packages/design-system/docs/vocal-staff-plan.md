@@ -272,7 +272,7 @@ Each note carries its own lyric syllable. Hyphens and extenders are derived from
 - [x] Adjust staff bottom margin/viewBox to accommodate lyrics
 - [x] Register `<music-lyrics>` custom element (if using Option C)
 - [x] Add `music-lyrics` to `src/types.d.ts` JSX declarations
-- [ ] Write tests for lyric parsing and alignment
+- [x] Write tests for lyric parsing and alignment
 
 ---
 
@@ -303,6 +303,19 @@ These are not in scope for the initial implementation but are documented here fo
 - Speech-like singing with flexible rhythm
 - Sometimes notated with stemless noteheads or "x" noteheads
 - Could be a `style="recitative"` attribute on the staff or individual notes
+
+### Tasks
+
+- [ ] Implement breath mark rendering (comma symbol or tick above staff)
+- [ ] Add `breath-after` attribute or `<music-breath>` element
+- [ ] Design vertical layout ordering (staff > dynamics > lyrics)
+- [ ] Create dynamics layer rendering (p, f, mf, ff, etc. below staff)
+- [ ] Implement melisma slur drawing (curved lines over multi-note syllables)
+- [ ] Add slur styling that ties to lyric data
+- [ ] Add recitative mode to staff (`recitative` attribute)
+- [ ] Implement stemless notehead rendering for recitative
+- [ ] Add recitative styling/behavior to note elements
+- [ ] Write tests for breath marks, dynamics, slurs, and recitative
 
 ---
 

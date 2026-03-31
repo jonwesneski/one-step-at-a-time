@@ -14,11 +14,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_VERSE_SPACING = 15; // px between verse lines
 
   class StaffVocalElement extends StaffClassicalElementBase {
-    static #sopYCoordinates = generateYCoordinates('C6', 'C4');
+    static #sopranoYCoordinates = generateYCoordinates('C6', 'C4');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
     static #altoYCoordinates = generateYCoordinates('A5', 'F3');
     static #tenorYCoordinates = generateYCoordinates('C5', 'C3');
-    static #bariYCoordinates = generateYCoordinates('E4', 'E2');
+    static #baritoneYCoordinates = generateYCoordinates('E4', 'E2');
     static #bassYCoordinates = generateYCoordinates('E4', 'E2');
 
     // soprano, mezzo, alto (treble-based)
@@ -46,43 +46,43 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         .filter((_, i) => i < 1)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       D: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 2)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       A: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 3)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       E: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 4)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       B: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 5)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       ['F#']: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 6)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       ['C#']: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 7)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
     };
 
@@ -91,43 +91,43 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         .filter((_, i) => i < 1)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       Bb: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 2)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       Eb: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 3)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       Ab: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 4)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       Db: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 5)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       Gb: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 6)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
       Cb: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 7)
         .map(
           (note) =>
-            StaffVocalElement.#sopYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
         ),
     };
 
@@ -305,43 +305,43 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         .filter((_, i) => i < 1)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       D: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 2)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       A: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 3)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       E: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 4)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       B: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 5)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       ['F#']: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 6)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       ['C#']: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 7)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
     };
 
@@ -350,43 +350,43 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         .filter((_, i) => i < 1)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       Bb: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 2)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       Eb: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 3)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       Ab: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 4)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       Db: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 5)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       Gb: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 6)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
       Cb: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 7)
         .map(
           (note) =>
-            StaffVocalElement.#bariYCoordinates[note as LetterOctave] ?? 0
+            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
         ),
     };
 
@@ -425,7 +425,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     get yCoordinates(): YCoordinates {
       switch (this.voice) {
         case 'soprano':
-          return StaffVocalElement.#sopYCoordinates;
+          return StaffVocalElement.#sopranoYCoordinates;
         case 'mezzo':
           return StaffVocalElement.#mezzoYCoordinates;
         case 'alto':
@@ -433,7 +433,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         case 'tenor':
           return StaffVocalElement.#tenorYCoordinates;
         case 'baritone':
-          return StaffVocalElement.#bariYCoordinates;
+          return StaffVocalElement.#baritoneYCoordinates;
         case 'bass':
           return StaffVocalElement.#bassYCoordinates;
       }

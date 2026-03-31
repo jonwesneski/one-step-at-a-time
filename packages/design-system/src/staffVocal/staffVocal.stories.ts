@@ -73,7 +73,7 @@ export const VoiceWithLyrics: Story = {
         ${notes.map((note, i) => {
           const duration = i === notes.length - 1 ? 'quarter' : 'eighth';
           return html`<music-note
-            value=${note as any}
+            value=${note}
             duration=${duration}
           ></music-note>`;
         })}

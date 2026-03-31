@@ -103,7 +103,7 @@ export const getNotes = (root: LetterNote, semitones: number[]) => {
 export const generateYCoordinates = (
   highestNote: LetterOctave,
   lowestNote: LetterOctave,
-  startingY: number = 10
+  startingY = 10
 ): YCoordinates => {
   // Parse note to extract letter and octave
   const parseNote = (
@@ -125,12 +125,8 @@ export const generateYCoordinates = (
   let currentNote = highest.letter;
   let currentOctave = highest.octave;
 
-  while (true) {
+  while (currentNote !== lowest.letter || currentOctave !== lowest.octave) {
     sequence.push({ note: currentNote, octave: currentOctave });
-
-    if (currentNote === lowest.letter && currentOctave === lowest.octave) {
-      break;
-    }
 
     // Move down one diatonic step
     const currentIndex = noteOrder.indexOf(currentNote);
@@ -143,6 +139,8 @@ export const generateYCoordinates = (
       currentNote = noteOrder[currentIndex - 1];
     }
   }
+
+  sequence.push({ note: lowest.letter, octave: lowest.octave });
 
   // Convert sequence to Y coordinates
   const result: YCoordinates = {};

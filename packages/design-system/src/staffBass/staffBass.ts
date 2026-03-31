@@ -6,7 +6,7 @@ import { generateYCoordinates } from '../utils/theoryHelpers';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = createBassClefSvg();
-    static #yCoordinates: { [x in string]: number } = generateYCoordinates('E4', 'E2');
+    static #yCoordinates = generateYCoordinates('E4', 'E2');
     static #sharps: LetterOctave[] = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
     static #majorSharpYCoordinates = {
       G: StaffBassElement.#sharps

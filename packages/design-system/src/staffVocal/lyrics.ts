@@ -1,6 +1,6 @@
 /**
  * I didn't create a separate /lyrics folder because it is not currently a
- * standalone like note or chord; it is only used in staffVocal for now.
+ * standalone like note or chord are; it is only used in staffVocal for now.
  * Maybe I'll think about supporting lyrics as a standalone in the future.
  */
 
@@ -92,31 +92,31 @@ export class MusicLyricsElement extends HTMLElement {
     this.#svgContainer.style.height = '100%';
 
     for (let i = 0; i < this.#syllablePositions.length; i++) {
-      const syl = this.#syllablePositions[i];
+      const syllable = this.#syllablePositions[i];
 
       // Render syllable text
       const text = document.createElementNS(
         'http://www.w3.org/2000/svg',
         'text'
       );
-      text.setAttribute('x', syl.x.toString());
-      text.setAttribute('y', syl.y.toString());
+      text.setAttribute('x', syllable.x.toString());
+      text.setAttribute('y', syllable.y.toString());
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('dominant-baseline', 'hanging');
       text.setAttribute('font-size', '12');
-      text.textContent = syl.text;
+      text.textContent = syllable.text;
       this.#svgContainer.appendChild(text);
 
       // Render hyphen if needed
-      if (syl.isHyphenated && i < this.#syllablePositions.length - 1) {
-        const nextSyl = this.#syllablePositions[i + 1];
-        const hyphenX = (syl.x + nextSyl.x) / 2;
+      if (syllable.isHyphenated && i < this.#syllablePositions.length - 1) {
+        const nextSyllable = this.#syllablePositions[i + 1];
+        const hyphenX = (syllable.x + nextSyllable.x) / 2;
         const hyphen = document.createElementNS(
           'http://www.w3.org/2000/svg',
           'text'
         );
         hyphen.setAttribute('x', hyphenX.toString());
-        hyphen.setAttribute('y', syl.y.toString());
+        hyphen.setAttribute('y', syllable.y.toString());
         hyphen.setAttribute('text-anchor', 'middle');
         hyphen.setAttribute('dominant-baseline', 'hanging');
         hyphen.setAttribute('class', 'hyphen');
@@ -125,16 +125,16 @@ export class MusicLyricsElement extends HTMLElement {
       }
 
       // Render extender line if melisma
-      if (syl.isMelisma && i < this.#syllablePositions.length - 1) {
-        const nextSyl = this.#syllablePositions[i + 1];
+      if (syllable.isMelisma && i < this.#syllablePositions.length - 1) {
+        const nextSyllable = this.#syllablePositions[i + 1];
         const line = document.createElementNS(
           'http://www.w3.org/2000/svg',
           'line'
         );
-        line.setAttribute('x1', (syl.x + 8).toString());
-        line.setAttribute('y1', (syl.y + 6).toString());
-        line.setAttribute('x2', (nextSyl.x - 8).toString());
-        line.setAttribute('y2', (syl.y + 6).toString());
+        line.setAttribute('x1', (syllable.x + 8).toString());
+        line.setAttribute('y1', (syllable.y + 6).toString());
+        line.setAttribute('x2', (nextSyllable.x - 8).toString());
+        line.setAttribute('y2', (syllable.y + 6).toString());
         line.setAttribute('stroke', 'currentColor');
         line.setAttribute('stroke-width', '0.5');
         this.#svgContainer.appendChild(line);
