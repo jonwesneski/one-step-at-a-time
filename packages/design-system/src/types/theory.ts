@@ -10,6 +10,8 @@ export type DurationType =
 
 export type Letter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 export type Octave = 2 | 3 | 4 | 5 | 6;
+export type Sharp = '#';
+export type Flat = 'b';
 export type LetterOctave = `${Letter}${Octave}`;
 
 export type LetterNote =
