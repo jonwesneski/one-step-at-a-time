@@ -64,10 +64,14 @@ export class MusicLyricsElement extends HTMLElement {
   }
 
   updatePositions() {
-    if (!this.#svgContainer) return;
+    if (!this.#svgContainer) {
+      return;
+    }
 
     const stored = this.dataset.syllables;
-    if (!stored) return;
+    if (!stored) {
+      return;
+    }
 
     try {
       const positions = JSON.parse(stored);
