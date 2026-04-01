@@ -50,9 +50,8 @@ jobs:
       - name: Install Deps
         run: pnpm install --frozen-lockfile
 
-      # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
       - name: Prettier/Format Check
-        run: npx nx-cloud record -- npx nx format:check  --base="remotes/origin/main"
+        run: npx nx format:check  --base="remotes/origin/main"
 
       - name: Lint, Build, Typecheck, Test
         run: npx nx run-many -t lint build typecheck test
