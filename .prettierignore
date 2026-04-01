@@ -1,7 +1,10 @@
 # Add files here to ignore them from prettier formatting
-/dist
-/coverage
+**/dist
+**/coverage
 /.nx/cache
 /.nx/workspace-data
+**/.next
+**/out-tsc
+**/storybook-static
 
 pnpm-lock.yaml

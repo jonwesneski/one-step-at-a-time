@@ -380,18 +380,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
-    const yCoordinates = this.getKeyYCoordinates();
+    const { useSharps, coordinates } = this.getKeyYCoordinates();
     const g = document.createElementNS(SVG_NS, 'svg');
     g.setAttribute('class', 'key-signature');
     g.setAttribute('x', xOffset.toString());
     g.setAttribute('y', '-15');
-    if (yCoordinates.coordinates.length) {
-      const createSvgFunc = yCoordinates.useSharps
-        ? createSharpSvg
-        : createFlatSvg;
-      const Width = yCoordinates.useSharps ? 10 : 8;
-      const yOffset = yCoordinates.useSharps ? 0 : -18;
-      for (const y of yCoordinates.coordinates) {
+    if (coordinates.length) {
+      const createSvgFunc = useSharps ? createSharpSvg : createFlatSvg;
+      const Width = useSharps ? 10 : 8;
+      const yOffset = useSharps ? 0 : -18;
+      for (const y of coordinates) {
         const svg = createSvgFunc();
         svg.setAttribute('transform', `translate(${xOffset}, ${y + yOffset})`);
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');

@@ -17,6 +17,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   static #staffLineSpacing = 10;
 
   protected readonly transcribeContainer: SVGSVGElement;
+  #slotChangeHandler = (event: Event) => this.onHandleSlotChange(event);
 
   constructor() {
     super();
@@ -82,6 +83,22 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         <slot></slot>
       </div>
     `;
+
+    // eslint-disbale-next-line @typescript-eslint/no-non-null-assertion -- won't be null
+    const wrapper = this.shadowRoot!.querySelector('.staff-wrapper');
+    if (!wrapper) {
+      return;
+    }
+
+    wrapper.appendChild(this.staffContainer);
+    wrapper.appendChild(this.transcribeContainer);
+
+    const slot = wrapper.querySelector('slot');
+    if (slot && this.isConnected) {
+      slot.addEventListener('slotchange', this.#slotChangeHandler);
+      this.onConnectedCallback();
+      slot.dispatchEvent(new Event('slotchange'));
+    }
   }
 
   get #staffHeight() {
@@ -112,7 +129,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     // content changes.
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
     const slot = this.shadowRoot.querySelector('slot')!;
-    slot.addEventListener('slotchange', this.onHandleSlotChange.bind(this));
+    slot.addEventListener('slotchange', this.#slotChangeHandler);
 
     this.staffResizeObserver.observe(this.staffContainer);
   }
@@ -148,10 +165,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     const slot = this.shadowRoot?.querySelector('slot');
     if (slot) {
-      slot.removeEventListener(
-        'slotchange',
-        this.onHandleSlotChange.bind(this)
-      );
+      slot.removeEventListener('slotchange', this.#slotChangeHandler);
     }
 
     this.onDisconnectedCallback();

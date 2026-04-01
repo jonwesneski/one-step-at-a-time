@@ -1,10 +1,14 @@
-import { Chord, LetterNote } from '../types/theory';
+import { YCoordinates } from '../types/elements';
+import { Chord, LetterNote, LetterOctave } from '../types/theory';
 import {
   ChordSemitoneMap,
   ChordSemitoneMapAliases,
   noteSemitoneMap,
   semitoneNoteMap,
 } from './consts';
+
+// Half of staffLineSpacing (10), one semitone step = 5px
+const Y_COORDINATE_INCREMENT = 5;
 
 export const getChordNotes = (chord: Chord) => {
   const isSlash = chord[1] === '/';
@@ -59,4 +63,94 @@ export const getNotes = (root: LetterNote, semitones: number[]) => {
     throw new Error('no root found');
   }
   return notes;
+};
+
+/**
+ * Generates Y coordinates for a staff range from highest to lowest note.
+ * Uses only natural notes (C, B, A, G, F, E, D) with 5px increments per note.
+ *
+ * @param highestNote - The highest note in the range (e.g., 'C6')
+ * @param lowestNote - The lowest note in the range (e.g., 'C4')
+ * @param startingY - The Y coordinate for the highest note (defaults to 10)
+ * @returns YCoordinates object mapping note names to pixel positions
+ *
+ * @example
+ * const sopranoYCoords = generateYCoordinates('C6', 'C4');
+ * // { C6: 10, B5: 15, A5: 20, ..., C4: 80 }
+ *
+ * // Line y-positioning
+ * [
+ *   // Above 1st line
+ *   10,
+ *   15,
+ *   20,
+ *   25,
+ *
+ *   30, // 1st line
+ *   35,
+ *   40,
+ *   45,
+ *   50,
+ *   55,
+ *   60,
+ *   65,
+ *   70,
+ *   // Below last line
+ *   75,
+ *   80,
+ * ]
+ */
+export const generateYCoordinates = (
+  highestNote: LetterOctave,
+  lowestNote: LetterOctave,
+  startingY = 10
+): YCoordinates => {
+  // Parse note to extract letter and octave
+  const parseNote = (
+    note: LetterOctave
+  ): { letter: string; octave: number } => {
+    // Strip accidentals if present, keep only the letter and octave
+    const match = note.match(/^([A-G])#?b?(\d)$/);
+    if (!match) throw new Error(`Invalid note format: ${note}`);
+    return { letter: match[1], octave: parseInt(match[2]) };
+  };
+
+  const highest = parseNote(highestNote);
+  const lowest = parseNote(lowestNote);
+
+  // Build note sequence from highest to lowest in natural note order
+  const noteOrder = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  const sequence: Array<{ note: string; octave: number }> = [];
+
+  let currentNote = highest.letter;
+  let currentOctave = highest.octave;
+
+  while (currentNote !== lowest.letter || currentOctave !== lowest.octave) {
+    sequence.push({ note: currentNote, octave: currentOctave });
+
+    // Move down one diatonic step
+    const currentIndex = noteOrder.indexOf(currentNote);
+    if (currentIndex === 0) {
+      // C → B of previous octave
+      currentNote = 'B';
+      currentOctave--;
+    } else {
+      // Move to previous note in sequence
+      currentNote = noteOrder[currentIndex - 1];
+    }
+  }
+
+  sequence.push({ note: lowest.letter, octave: lowest.octave });
+
+  // Convert sequence to Y coordinates
+  const result: YCoordinates = {};
+  let currentY = startingY;
+
+  for (const { note, octave } of sequence) {
+    const noteStr = `${note}${octave}` as LetterOctave;
+    result[noteStr] = currentY;
+    currentY += Y_COORDINATE_INCREMENT;
+  }
+
+  return result;
 };

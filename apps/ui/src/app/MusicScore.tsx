@@ -110,6 +110,20 @@ export default function MusicScore() {
           <music-note value="A" duration="quarter"></music-note>
           <music-note value="A" duration="quarter"></music-note>
         </music-staff-bass>
+
+        <music-staff-vocal voice="soprano">
+          <music-note value={'C5' as Note} duration="eighth"></music-note>
+          <music-note value={'D5' as Note} duration="eighth"></music-note>
+          <music-note value={'E5' as Note} duration="eighth"></music-note>
+          <music-note value={'F5' as Note} duration="eighth"></music-note>
+          <music-note value={'G5' as Note} duration="eighth"></music-note>
+          <music-note value={'A5' as Note} duration="eighth"></music-note>
+          <music-note value={'A5' as Note} duration="quarter"></music-note>
+          <music-lyrics verse="1">Hap-py birth-day to_ you you_</music-lyrics>
+          <music-lyrics verse="2">
+            Hap-py birth-day dear_ friend friend_
+          </music-lyrics>
+        </music-staff-vocal>
       </music-measure>
       <music-measure>
         <music-staff-treble>
