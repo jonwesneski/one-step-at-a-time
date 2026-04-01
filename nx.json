@@ -7,7 +7,6 @@
     }
   },
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
-  "nxCloudId": "691137b7d9c3f143725b82ce",
   "targetDefaults": {
     "dev": {
       "dependsOn": ["^build", "^dev"]
