@@ -1,43 +1,9 @@
 'use client';
 
-import '@rest-in-time/design-system';
-import type {} from '@rest-in-time/design-system';
+import dynamic from 'next/dynamic';
 
-import { PropsWithChildren } from 'react';
+const StandAlone = dynamic(() => import('./StandAlone'), { ssr: false });
 
-export default function Home() {
-  return (
-    <main className="p-9 flex flex-col gap-3">
-      <Card title="Notes">
-        <music-note duration="whole"></music-note>
-        <music-note duration="half"></music-note>
-        <music-note></music-note>
-
-        <music-note duration="eighth"></music-note>
-        <music-note duration="sixteenth"></music-note>
-        <music-note duration="thirtysecond"></music-note>
-        <music-note duration="sixtyfourth"></music-note>
-        <music-note duration="hundredtwentyeighth"></music-note>
-      </Card>
-      <Card title="Chords">
-        <music-chord>
-          <music-note></music-note>
-          <music-note></music-note>
-        </music-chord>
-      </Card>
-    </main>
-  );
+export default function Page() {
+  return <StandAlone />;
 }
-
-interface ICardProps {
-  title: string;
-}
-
-const Card = (props: PropsWithChildren<ICardProps>) => {
-  return (
-    <div>
-      <h1>{props.title}</h1>
-      {props.children}
-    </div>
-  );
-};
