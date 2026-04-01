@@ -1,6 +1,6 @@
 'use client';
 
-import '@rest-in-time/design-system';
+import '@one-step-at-a-time/web-components';
 
 import { PropsWithChildren } from 'react';
 

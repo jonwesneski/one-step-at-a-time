@@ -3,7 +3,7 @@
 ```
 music-notation/
 ├── packages/
-│   └── design-system/
+│   └── web-components/
 │       └── src/               # All source code
 │           ├── index.ts       # Entry point (import order matters)
 │           ├── types.d.ts     # React JSX declarations for custom elements

@@ -1,4 +1,4 @@
-# @rest-in-time/design-system
+# @one-step-at-a-time/web-components
 
 Web Components library for rendering music notation in the browser.
 

@@ -119,9 +119,9 @@ importers:
 
   apps/ui:
     dependencies:
-      '@rest-in-time/design-system':
+      '@one-step-at-a-time/web-components':
         specifier: workspace:*
-        version: link:../../packages/design-system
+        version: link:../../packages/web-components
       next:
         specifier: 16.0.1
         version: 16.0.1(@babel/core@7.28.5)(babel-plugin-macros@3.1.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.93.3)
@@ -163,7 +163,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  packages/design-system:
+  packages/web-components:
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0

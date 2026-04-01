@@ -184,7 +184,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 - [x] Add import to `src/index.ts`
 - [x] Add `music-staff-vocal` to `src/types.d.ts` JSX declarations
 - [x] Run `npx nx format:write`
-- [x] Run `npx nx test design-system`
+- [x] Run `npx nx test web-components`
 
 ---
 

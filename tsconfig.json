@@ -4,7 +4,7 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/design-system"
+      "path": "./packages/web-components"
     },
     {
       "path": "./apps/ui"

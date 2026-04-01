@@ -1,11 +1,11 @@
 'use client';
 
-import '@rest-in-time/design-system';
+import '@one-step-at-a-time/web-components';
 import type {
   DurationType,
   Note,
   PitchChangeDetail,
-} from '@rest-in-time/design-system';
+} from '@one-step-at-a-time/web-components';
 import { useEffect, useRef, useState } from 'react';
 
 type NoteItem = {

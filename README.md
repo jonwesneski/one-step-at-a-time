@@ -5,10 +5,10 @@ app names: one at a time, rest in time, walk in time, walk in the park
 
 ## Packages
 
-| Package                       | Description                                                     |
-| ----------------------------- | --------------------------------------------------------------- |
-| `@rest-in-time/design-system` | Web Components library for rendering music notation (SVG-based) |
-| `my-app` (`apps/ui`)          | Next.js app consuming the design system                         |
+| Package                              | Description                                                     |
+| ------------------------------------ | --------------------------------------------------------------- |
+| `@one-step-at-a-time/web-components` | Web Components library for rendering music notation (SVG-based) |
+| `my-app` (`apps/ui`)                 | Next.js app consuming the design system                         |
 
 ## Development
 
@@ -30,7 +30,7 @@ OR
 nx run my-app:dev
 ```
 
-Uses Turbopack and resolves `@rest-in-time/design-system` directly from source via tsconfig paths — no pre-build of the design system needed.
+Uses Turbopack and resolves `@one-step-at-a-time/web-components` directly from source via tsconfig paths — no pre-build of the design system needed.
 
 ## Commands
 
@@ -43,14 +43,14 @@ All commands run from the **monorepo root**.
 nx run-many -t build
 
 # Build a specific project
-nx run @rest-in-time/design-system:build
+nx run @one-step-at-a-time/web-components:build
 nx run my-app:build
 ```
 
 OR
 
 ```bash
-nx run packages/design-system:build
+nx run packages/web-components:build
 nx run apps/ui:build
 ```
 
@@ -61,14 +61,14 @@ nx run apps/ui:build
 nx run-many -t lint
 
 # Lint a specific project
-nx run @rest-in-time/design-system:lint
-nx run my-app:lint
+nx run @one-step-at-a-time/web-components:lint
+nx run apps/ui:lint
 ```
 
 OR
 
 ```bash
-nx run packages/design-system:lint
+nx run packages/web-components:lint
 nx run apps/ui:lint
 ```
 
@@ -79,13 +79,13 @@ nx run apps/ui:lint
 nx run-many -t test
 
 # Test a specific project
-nx run @rest-in-time/design-system:test
+nx run @one-step-at-a-time/web-components:test
 ```
 
 OR
 
 ```bash
-nx run packages/design-system:test
+nx run packages/web-components:test
 ```
 
 ### Format
@@ -108,7 +108,7 @@ npx nx format:write --uncommitted
 nx run-many -t typecheck
 
 # Type check a specific project
-nx run @rest-in-time/design-system:typecheck
+nx run @one-step-at-a-time/web-components:typecheck
 ```
 
 ### Affected only (useful in CI)
@@ -117,34 +117,34 @@ nx run @rest-in-time/design-system:typecheck
 nx affected -t build lint test
 ```
 
-## Watching design-system during development
+## Watching web-components during development
 
-The default dev setup (Turbopack + tsconfig paths) resolves design-system source directly so no watch process is needed.
+The default dev setup (Turbopack + tsconfig paths) resolves web-components source directly so no watch process is needed.
 
 If you ever need to run the TypeScript compiler in watch mode instead (e.g. to validate the compiled `dist/` output continuously):
 
 ```bash
 # Terminal 1
-nx run @rest-in-time/design-system:watch-deps
+nx run @one-step-at-a-time/web-components:watch-deps
 
 # Terminal 2
-nx run my-app:dev
+nx run apps/ui:dev
 ```
 
 Or directly with tsc:
 
 ```bash
-cd packages/design-system
+cd packages/web-components
 pnpm exec tsc --build tsconfig.lib.json --watch
 ```
 
 ## Hot reload limitation with Web Components
 
-`@rest-in-time/design-system` uses the browser's [Web Components](https://developer.mozilla.org/en-US/docs/Web/Web_Components) API (`customElements.define()`). This has a known incompatibility with hot module replacement (HMR):
+`@one-step-at-a-time/web-components` uses the browser's [Web Components](https://developer.mozilla.org/en-US/docs/Web/Web_Components) API (`customElements.define()`). This has a known incompatibility with hot module replacement (HMR):
 
 > The browser does not allow a custom element tag name to be registered more than once. Calling `customElements.define('music-note', ...)` a second time throws a `NotSupportedError`.
 
-When you edit a design-system source file:
+When you edit a web-components source file:
 
 1. Turbopack detects the change and recompiles (~13ms) ✓
 2. The updated module is sent to the browser ✓

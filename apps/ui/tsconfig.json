@@ -22,10 +22,10 @@
     "typeRoots": ["./types", "../../node_modules/@types"],
     "paths": {
       "@/*": ["./*"],
-      "@rest-in-time/design-system": [
-        "../../packages/design-system/src/index.ts"
+      "@one-step-at-a-time/web-components": [
+        "../../packages/web-components/src/index.ts"
       ],
-      "@rest-in-time/design-system/*": ["../../packages/design-system/src/*"]
+      "@one-step-at-a-time/web-components/*": ["../../packages/web-components/src/*"]
     }
   },
   "include": [
@@ -36,14 +36,14 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts",
-    "../../packages/design-system/src/**/*",
-    "../../packages/design-system/src/**/*.d.ts",
-    "../../packages/design-system/jest.setup.ts"
+    "../../packages/web-components/src/**/*",
+    "../../packages/web-components/src/**/*.d.ts",
+    "../../packages/web-components/jest.setup.ts"
   ],
   "exclude": ["node_modules"],
   "references": [
     {
-      "path": "../../packages/design-system"
+      "path": "../../packages/web-components"
     }
   ]
 }

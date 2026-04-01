@@ -1,5 +1,5 @@
 {
-  "jest.jestCommandLine": "pnpm exec jest --config packages/design-system/jest.config.cjs",
+  "jest.jestCommandLine": "pnpm exec jest --config packages/web-components/jest.config.cjs",
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit",
     "source.organizeImports": "explicit"

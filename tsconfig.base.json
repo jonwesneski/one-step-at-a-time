@@ -18,9 +18,9 @@
     "target": "es2022",
     "jsx": "react-jsx",
     "esModuleInterop": true,
-    "customConditions": ["rest-in-time"],
+    "customConditions": ["one-step-at-a-time"],
     "paths": {
-      "@rest-in-time/design-system": ["./packages/design-system/src/index.ts"]
+      "@one-step-at-a-time/web-components": ["./packages/web-components/src/index.ts"]
     }
   }
 }

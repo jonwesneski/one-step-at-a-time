@@ -1,12 +1,12 @@
 {
-  "name": "@rest-in-time/design-system",
+  "name": "@one-step-at-a-time/web-components",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
     ".": {
-      "rest-in-time": "./src/index.ts",
+      "one-step-at-a-time": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`@rest-in-time/design-system` is a Web Components library for rendering music notation in the browser. All musical elements are custom HTML elements built with TypeScript and SVG. There are no framework dependencies — it runs natively in any browser or framework (React types are declared for JSX compatibility).
+`@one-step-at-a-time/web-components` is a Web Components library for rendering music notation in the browser. All musical elements are custom HTML elements built with TypeScript and SVG. There are no framework dependencies — it runs natively in any browser or framework (React types are declared for JSX compatibility).
 
 ## Custom Element Hierarchy
 
@@ -155,10 +155,10 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 
 ## Build & Test
 
-- Package name: `@rest-in-time/design-system`
+- Package name: `@one-step-at-a-time/web-components`
 - Module type: ESM (`"type": "module"`)
 - Test runner: Jest via Nx (`@nx/jest`)
-- Run tests: `npx nx test design-system`
+- Run tests: `npx nx test web-components`
 
 ## Conventions
 
