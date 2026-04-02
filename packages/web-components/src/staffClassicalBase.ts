@@ -36,11 +36,9 @@ import { PitchDragHandler } from './utils/pitchDragHandler';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
-  // todo: now that i have timeInts, do i need parentTime
-  #timeInts: [BeatsInMeasure, BeatTypeInMeasure] | null = null;
-  #parentTime: string;
-  #parentMode: Mode | null;
-  #parentKeySig: LetterNote | null;
+  #effectiveTimeInts: [BeatsInMeasure, BeatTypeInMeasure];
+  #effectiveMode: Mode;
+  #effectiveKeySig: LetterNote;
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
@@ -53,28 +51,26 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     super();
     this.#mutationObservers = [];
 
-    const measure = this.closest('music-measure');
-    const composition = this.closest('music-composition');
-    this.#parentTime =
-      measure?.getAttribute('time') ??
-      composition?.getAttribute('time') ??
-      '4/4';
-    this.#parentMode =
-      measure?.getAttribute('mode') ??
-      composition?.getAttribute('mode') ??
-      'major';
-    this.#parentKeySig =
-      measure?.getAttribute('keySig') ??
-      composition?.getAttribute('keySig') ??
-      'C';
-    const timeTime = this.getAttribute('time');
-    // todo: remove if-condition; that way I just call once
-    if (timeTime) {
-      this.#timeInts = this.#convertTotimeInts(timeTime);
-    }
+    this.#effectiveTimeInts = this.#convertTotimeInts(
+      this.#resolveInheritedValue('time', '4/4')
+    );
+    this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
+    this.#effectiveKeySig = this.#resolveInheritedValue(
+      'keySig',
+      'C'
+    ) as LetterNote;
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#beamsContainer = document.createElementNS(SVG_NS, 'svg');
+  }
+
+  #resolveInheritedValue(attributeName: string, defaultValue: string): string {
+    return (
+      this.getAttribute(attributeName) ??
+      this.closest('music-measure')?.getAttribute(attributeName) ??
+      this.closest('music-composition')?.getAttribute(attributeName) ??
+      defaultValue
+    );
   }
 
   #convertTotimeInts(time: string): [BeatsInMeasure, BeatTypeInMeasure] {
@@ -128,7 +124,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   get keySig(): LetterNote {
-    return (this.getAttribute('keySig') as LetterNote) ?? this.#parentKeySig;
+    return this.#effectiveKeySig;
   }
 
   set keySig(value: string) {
@@ -136,19 +132,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   get mode(): Mode {
-    return this.getAttribute('mode') ?? this.#parentMode;
+    return this.#effectiveMode;
   }
 
   set mode(value: string) {
     this.setAttribute('mode', value);
   }
 
-  get thisTime(): string | null {
-    return this.getAttribute('time');
-  }
-
   get time(): string {
-    return this.getAttribute('time') ?? this.#parentTime;
+    return `${this.#effectiveTimeInts[0]}/${this.#effectiveTimeInts[1]}`;
   }
 
   abstract get yCoordinates(): YCoordinates;
@@ -309,18 +301,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return null;
     }
 
-    const outerSvg = chordShadow.querySelector('svg');
-    if (!outerSvg) {
+    const chordSvg = chordShadow.querySelector('.chord');
+    if (!chordSvg) {
       return null;
     }
 
-    // todo: see if i can search by class name '.note' instead
-    const noteSvgs = Array.from(outerSvg.children).filter(
-      (c) => c.tagName === 'svg' || c.tagName === 'SVG'
-    );
+    const noteSvgs = Array.from(chordShadow.querySelectorAll('.chord > .note'));
 
     let current: Element | null = svgTarget;
-    while (current && current !== outerSvg) {
+    while (current && current !== chordSvg) {
       const idx = noteSvgs.indexOf(current);
       if (idx !== -1) return idx;
       current = current.parentElement;
@@ -407,12 +396,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measure = this.closest('music-measure');
     const measureNumberStr: string | null = measure?.getAttribute('number');
     const firstMeasureOrNoCompositionTime =
-      measureNumberStr === '1' || !measure
-        ? this.#convertTotimeInts(this.time)
-        : null;
+      measureNumberStr === '1' || !measure ? this.#effectiveTimeInts : null;
     const timeChangeInMeasure =
-      !firstMeasureOrNoCompositionTime && measure && this.#timeInts
-        ? this.#timeInts
+      !firstMeasureOrNoCompositionTime && measure && this.getAttribute('time')
+        ? this.#effectiveTimeInts
         : null;
 
     if (firstMeasureOrNoCompositionTime || timeChangeInMeasure) {
@@ -439,7 +426,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     oldValue: string | null,
     newValue: string | null
   ): void {
-    if (oldValue === newValue) return;
+    if (oldValue === newValue) {
+      return;
+    }
 
     if (name === 'editable') {
       if (this.editable) {
@@ -453,6 +442,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#enableDrag();
       }
     } else {
+      if (name === 'time') {
+        this.#effectiveTimeInts = this.#convertTotimeInts(
+          this.#resolveInheritedValue('time', '4/4')
+        );
+      } else if (name === 'mode') {
+        this.#effectiveMode = this.#resolveInheritedValue(
+          'mode',
+          'major'
+        ) as Mode;
+      } else if (name === 'keySig') {
+        this.#effectiveKeySig = this.#resolveInheritedValue(
+          'keySig',
+          'C'
+        ) as LetterNote;
+      }
       // For keySig, mode, time — trigger full re-render
       super.attributeChangedCallback(name, oldValue, newValue);
     }
@@ -465,26 +469,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       .filter(
         (e) => e.nodeName === 'MUSIC-NOTE' || e.nodeName === 'MUSIC-CHORD'
       ) as NoteOrChordElementType[];
-    // TODO: Handle added/removed here; which is different than the mutation observer
-    //  - maybe add random key generated in music-note class, update observers to me hash of key: observer)
 
     this.#renderNotes(assignedElements);
 
-    assignedElements.forEach((node) => {
-      // Handle when each node has been mutated here
-      // TODO: // only create the observer if it is new
-      const observer = new MutationObserver((/*mutations*/) => {
-        // for (const _mutation of mutations) {
-        // }
-      });
-      observer.observe(node, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        characterData: true,
-      });
-      this.#mutationObservers.push(observer);
-    });
+    /*
+     * todo: I may not need this, but I am keeping an example for now.
+     * This would mainly be if I need to be aware of changes to attributes
+     * on notes/chords and do something about it. I would also need to handle
+     * these observers better in the case of a note/chord being removed but the
+     * observer is still around (dead/disconnected); I will update to a map somehow.
+     */
+    // assignedElements.forEach((node) => {
+    //   // only create the observer if it is new
+    //   const observer = new MutationObserver(() => {});
+    //   observer.observe(node, {
+    //     childList: true,
+    //     subtree: true,
+    //     attributes: true,
+    //     characterData: true,
+    //   });
+    //   this.#mutationObservers.push(observer);
+    // });
   }
 
   #renderNotes(elements: NoteOrChordElementType[]) {
@@ -494,7 +499,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Clear previously rendered beams
     this.#beamsContainer.innerHTML = '';
 
-    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
@@ -556,7 +561,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
-    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
     const beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
     const stemDirections = this.#determineStemDirections(
       elements,
@@ -744,7 +749,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#beamsContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
     this.#beamsContainer.setAttribute('height', '100');
 
-    const [beatsInMeasure, beatType] = this.#convertTotimeInts(this.time);
+    const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
     const measureDuration = beatsInMeasure / beatType;
 
     const minNoteWidth = 20; // px — minimum space per note to prevent notehead overlap
