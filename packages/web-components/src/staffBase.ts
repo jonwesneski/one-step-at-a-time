@@ -100,8 +100,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     const slot = wrapper.querySelector('slot');
     if (slot && this.isConnected) {
-      //todo: I am doing this twice (here and render()) and it is also adding 2 new handlers
-      // for each attribute change
       slot.addEventListener('slotchange', this.#slotChangeHandler);
       this.onConnectedCallback();
       slot.dispatchEvent(new Event('slotchange'));
@@ -120,23 +118,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   connectedCallback(): void {
-    this.render();
-
     this.#buildStaffLines();
     this.#buildTranscribe();
-    this.onConnectedCallback();
-
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
-    const wrapper = this.shadowRoot.querySelector('.staff-wrapper')!;
-    wrapper.appendChild(this.staffContainer);
-    wrapper.appendChild(this.transcribeContainer);
-
-    // Also listen for `slotchange` events from the slot to detect when nodes
-    // are assigned/removed from slots. This is the proper API for slotted
-    // content changes.
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- gets added in render
-    const slot = this.shadowRoot.querySelector('slot')!;
-    slot.addEventListener('slotchange', this.#slotChangeHandler);
+    this.render();
 
     this.staffResizeObserver.observe(this.staffContainer);
   }
