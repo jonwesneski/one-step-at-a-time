@@ -52,7 +52,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #mutationObservers: MutationObserver[];
-  #effectiveTimeInts: [BeatsInMeasure, BeatTypeInMeasure];
+  #effectiveTimeSig: [BeatsInMeasure, BeatTypeInMeasure];
   #effectiveMode: Mode;
   #effectiveKeySig: LetterNote;
   #describeContainer: SVGGElement;
@@ -67,7 +67,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     super();
     this.#mutationObservers = [];
 
-    this.#effectiveTimeInts = this.#convertTotimeInts(
+    this.#effectiveTimeSig = this.#convertTotimeInts(
       this.#resolveInheritedValue('time', '4/4')
     );
     this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
@@ -152,7 +152,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   get time(): string {
-    return `${this.#effectiveTimeInts[0]}/${this.#effectiveTimeInts[1]}`;
+    return `${this.#effectiveTimeSig[0]}/${this.#effectiveTimeSig[1]}`;
   }
 
   abstract get yCoordinates(): YCoordinates;
@@ -408,10 +408,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measure = this.closest('music-measure');
     const measureNumberStr: string | null = measure?.getAttribute('number');
     const firstMeasureOrNoCompositionTime =
-      measureNumberStr === '1' || !measure ? this.#effectiveTimeInts : null;
+      measureNumberStr === '1' || !measure ? this.#effectiveTimeSig : null;
     const timeChangeInMeasure =
       !firstMeasureOrNoCompositionTime && measure && this.getAttribute('time')
-        ? this.#effectiveTimeInts
+        ? this.#effectiveTimeSig
         : null;
 
     if (firstMeasureOrNoCompositionTime || timeChangeInMeasure) {
@@ -458,7 +458,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     } else {
       if (name === 'time') {
-        this.#effectiveTimeInts = this.#convertTotimeInts(
+        this.#effectiveTimeSig = this.#convertTotimeInts(
           this.#resolveInheritedValue('time', '4/4')
         );
       } else if (name === 'mode') {
@@ -514,7 +514,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Clear previously rendered beams
     this.#beamsContainer.innerHTML = '';
 
-    const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
+    const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
@@ -576,7 +576,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
-    const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
+    const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
     const beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
     const stemDirections = this.#determineStemDirections(
       elements,
@@ -765,7 +765,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       `${STAFF_TRANSCRIPTION_HEIGHT}`
     );
 
-    const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
+    const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
     const measureDuration = beatsInMeasure / beatType;
 
     const proportionalWidth =
