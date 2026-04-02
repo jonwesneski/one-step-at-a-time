@@ -25,21 +25,22 @@ import {
   type NoteYPosition,
 } from './utils';
 import {
+  durationToFactor,
+  durationToFlagCountMap,
+  factorToDuration,
+  SVG_NS,
+} from './utils/consts';
+import {
   CLEF_X_OFFSET,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
   MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
+  STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
-import {
-  durationToFactor,
-  durationToFlagCountMap,
-  factorToDuration,
-  SVG_NS,
-} from './utils/consts';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
 
@@ -590,9 +591,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
         if (element.nodeName === 'MUSIC-NOTE') {
           return {
-            // todo: anywhere where I am doing an `STAFF_Y_PADDING + noteYCoord`,
-            //  will revisit to figure out how to handle better. Basically need
-            // account for margin-top (currently 28px); not sure why it is only 8 though.
             y:
               STAFF_Y_PADDING +
               this.noteToYCoordinate((element as NoteElementType).value) -
@@ -756,9 +754,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Configure beams container to cover the notes area
     this.#beamsContainer.setAttribute('x', `${describeEndX}`);
     this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
-    // todo: handle height instead of using literal
-    this.#beamsContainer.setAttribute('viewBox', `0 0 ${remainingWidth} 100`);
-    this.#beamsContainer.setAttribute('height', '100');
+    this.#beamsContainer.setAttribute('viewBox', `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`);
+    this.#beamsContainer.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
 
     const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
     const measureDuration = beatsInMeasure / beatType;

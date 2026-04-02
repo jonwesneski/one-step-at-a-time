@@ -63,6 +63,18 @@ export const STAFF_BOTTOM_MARGIN = STAFF_LINE_SPACING * 3;
 export const STAFF_WRAPPER_MIN_HEIGHT =
   STAFF_LINE_START + STAFF_HEIGHT + STAFF_BOTTOM_MARGIN;
 
+/**
+ * Fixed pixel height of the SVG rendering area shared by the transcribe
+ * container, beams container, and chord SVGs. All three must agree on this
+ * value so that notes, beams, and chords render at consistent vertical positions.
+ *
+ * Intentionally a separate constant from STAFF_WRAPPER_MIN_HEIGHT (≈98px) —
+ * the wrapper is an HTML layout constraint while this is an SVG coordinate budget.
+ * The two are close in value by design but can drift independently if layout
+ * or dimension requirements change.
+ */
+export const STAFF_TRANSCRIPTION_HEIGHT = 100;
+
 // ─── Note positioning ─────────────────────────────────────────────────────────
 
 /**
