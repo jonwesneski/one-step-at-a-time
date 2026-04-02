@@ -20,7 +20,9 @@
     "esModuleInterop": true,
     "customConditions": ["one-step-at-a-time"],
     "paths": {
-      "@one-step-at-a-time/web-components": ["./packages/web-components/src/index.ts"]
+      "@one-step-at-a-time/web-components": [
+        "./packages/web-components/src/index.ts"
+      ]
     }
   }
 }

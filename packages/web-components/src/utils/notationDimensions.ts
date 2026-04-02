@@ -38,7 +38,8 @@ export const CLASSICAL_STAFF_LINE_COUNT = 5;
  * line (4 spaces for a 5-line staff).
  * = STAFF_LINE_SPACING × (CLASSICAL_STAFF_LINE_COUNT − 1)
  */
-export const STAFF_HEIGHT = STAFF_LINE_SPACING * (CLASSICAL_STAFF_LINE_COUNT - 1);
+export const STAFF_HEIGHT =
+  STAFF_LINE_SPACING * (CLASSICAL_STAFF_LINE_COUNT - 1);
 
 /**
  * Top margin (px) above the staff container inside the staff wrapper.
@@ -137,7 +138,8 @@ export const MIN_BEAM_STEM_LENGTH_PX = STAFF_LINE_SPACING * 2.5;
  * Maximum amount (px) a beamed stem may be shortened before hitting the minimum.
  * = BASE_STEM_LENGTH_PX − MIN_BEAM_STEM_LENGTH_PX
  */
-export const MAX_STEM_SHORTENING_PX = BASE_STEM_LENGTH_PX - MIN_BEAM_STEM_LENGTH_PX;
+export const MAX_STEM_SHORTENING_PX =
+  BASE_STEM_LENGTH_PX - MIN_BEAM_STEM_LENGTH_PX;
 
 /**
  * Extra pixels the stem tip extends inside the beam polygon to prevent

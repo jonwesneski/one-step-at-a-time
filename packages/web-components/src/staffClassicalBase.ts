@@ -416,7 +416,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- will not be null
         ...(firstMeasureOrNoCompositionTime ?? timeChangeInMeasure)!
       );
-      timeSigSvg.setAttribute('transform', `translate(${xOffset}, ${TIME_SIG_Y_TRANSLATE})`);
+      timeSigSvg.setAttribute(
+        'transform',
+        `translate(${xOffset}, ${TIME_SIG_Y_TRANSLATE})`
+      );
       parentSvg.appendChild(timeSigSvg);
     }
   }

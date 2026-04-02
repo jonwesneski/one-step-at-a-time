@@ -145,6 +145,20 @@ function expectedNoteTop(
 function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
   document.body.innerHTML = `<music-staff-vocal voice="${voice}" keySig="${keySig}" mode="${mode}" time="4/4"></music-staff-vocal>`;
   return document.body.querySelector('music-staff-vocal')!;
+  /**
+   * After change: https://github.com/jonwesneski/one-step-at-a-time/pull/21
+   * I am getting a weird issue where attributeChangedCallback doesn't
+   * fire sometimes when calling setAttribute. It may just be a
+   * js-dom-jest issue or it may be with the code. But keeping this
+   * here in case I want to reproduce and investigate further
+   */
+  // const el = document.createElement('music-staff-vocal') as any;
+  // el.setAttribute('voice', voice);
+  // el.setAttribute('keySig', 'C');
+  // el.setAttribute('mode', 'major');
+  // el.setAttribute('time', '4/4');
+  // document.body.appendChild(el);
+  // return el;
 }
 
 function renderNote(staff: Element, value: string): HTMLElement {

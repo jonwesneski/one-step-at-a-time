@@ -88,7 +88,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       </div>
     `;
 
-    // eslint-disbale-next-line @typescript-eslint/no-non-null-assertion -- won't be null
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- won't be null
     const wrapper = this.shadowRoot!.querySelector('.staff-wrapper');
     if (!wrapper) {
       return;

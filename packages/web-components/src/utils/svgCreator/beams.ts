@@ -166,12 +166,10 @@ import {
 } from '../../types/theory';
 import { durationToFactor, durationToFlagCountMap, SVG_NS } from '../consts';
 import {
-  BASE_STEM_LENGTH_PX,
   BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
   FRACTIONAL_BEAM_WIDTH_PX,
   MAX_STEM_SHORTENING_PX,
-  MIN_BEAM_STEM_LENGTH_PX,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
 import {
@@ -180,7 +178,6 @@ import {
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
 } from './note';
-
 
 /** Y-position data for a single beamed note, passed to BeamsBuilder.buildRenderer(). */
 export type NoteYPosition = {
