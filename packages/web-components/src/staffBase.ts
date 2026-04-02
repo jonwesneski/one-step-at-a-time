@@ -100,6 +100,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     const slot = wrapper.querySelector('slot');
     if (slot && this.isConnected) {
+      //todo: I am doing this twice (here and render()) and it is also adding 2 new handlers
+      // for each attribute change
       slot.addEventListener('slotchange', this.#slotChangeHandler);
       this.onConnectedCallback();
       slot.dispatchEvent(new Event('slotchange'));

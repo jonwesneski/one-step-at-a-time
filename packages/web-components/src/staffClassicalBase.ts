@@ -66,7 +66,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
     this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
     this.#effectiveKeySig = this.#resolveInheritedValue(
-      'keySig',
+      'keysig',
       'C'
     ) as LetterNote;
 
@@ -107,7 +107,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   static get observedAttributes(): string[] {
-    return ['keySig', 'mode', 'time', 'editable', 'managed'];
+    return ['keysig', 'mode', 'time', 'editable', 'managed'];
   }
 
   get editable(): boolean {
@@ -138,7 +138,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   set keySig(value: string) {
-    this.setAttribute('keySig', value);
+    this.setAttribute('keysig', value);
   }
 
   get mode(): Mode {
@@ -464,9 +464,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           'mode',
           'major'
         ) as Mode;
-      } else if (name === 'keySig') {
+      } else if (name === 'keysig') {
         this.#effectiveKeySig = this.#resolveInheritedValue(
-          'keySig',
+          'keysig',
           'C'
         ) as LetterNote;
       }
@@ -754,8 +754,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Configure beams container to cover the notes area
     this.#beamsContainer.setAttribute('x', `${describeEndX}`);
     this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
-    this.#beamsContainer.setAttribute('viewBox', `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`);
-    this.#beamsContainer.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
+    this.#beamsContainer.setAttribute(
+      'viewBox',
+      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#beamsContainer.setAttribute(
+      'height',
+      `${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
 
     const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
     const measureDuration = beatsInMeasure / beatType;

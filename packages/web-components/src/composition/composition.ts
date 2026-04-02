@@ -1,7 +1,7 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['keySig', 'mode', 'time'];
+      return ['keysig', 'mode', 'time'];
     }
     #observer: MutationObserver | null;
     #measureCount: number;
@@ -14,11 +14,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get keySig(): string {
-      return this.getAttribute('keySig') || 'C';
+      return this.getAttribute('keysig') || 'C';
     }
 
     set keySig(value: string) {
-      this.setAttribute('keySig', value);
+      this.setAttribute('keysig', value);
     }
 
     get mode(): string {
