@@ -214,10 +214,6 @@ export const createNoteSvg = ({
   return [svg, yHeadOffset];
 };
 
-// Padding added to staff Y coordinate when positioning notes.
-// Accounts for the margin between the top of the transcribe container and the first staff line.
-export const STAFF_Y_PADDING = 8;
-
 // Compute the Y offset from the top of the note SVG to the notehead center.
 // Deterministic from rendering params — used by both createNoteSvg (return value)
 // and the staff (for positioning notes before their SVG renders).

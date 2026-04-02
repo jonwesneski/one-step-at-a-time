@@ -22,9 +22,18 @@ import {
   createTimeSignatureSvg,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
-  STAFF_Y_PADDING,
   type NoteYPosition,
 } from './utils';
+import {
+  CLEF_X_OFFSET,
+  KEY_SIG_FLAT_WIDTH,
+  KEY_SIG_FLAT_Y_OFFSET,
+  KEY_SIG_SHARP_WIDTH,
+  MIDDLE_STAFF_Y,
+  MIN_NOTE_WIDTH,
+  STAFF_Y_PADDING,
+  TIME_SIG_Y_TRANSLATE,
+} from './utils/notationDimensions';
 import {
   durationToFactor,
   durationToFlagCountMap,
@@ -351,7 +360,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#describeContainer.innerHTML = clefSvgStr;
     this.transcribeContainer.appendChild(this.#describeContainer);
 
-    const xOffsetOfClef = 14;
+    const xOffsetOfClef = CLEF_X_OFFSET;
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
       this.#describeContainer,
       xOffsetOfClef
@@ -376,8 +385,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     g.setAttribute('y', '-15');
     if (coordinates.length) {
       const createSvgFunc = useSharps ? createSharpSvg : createFlatSvg;
-      const Width = useSharps ? 10 : 8;
-      const yOffset = useSharps ? 0 : -18;
+      const Width = useSharps ? KEY_SIG_SHARP_WIDTH : KEY_SIG_FLAT_WIDTH;
+      const yOffset = useSharps ? 0 : KEY_SIG_FLAT_Y_OFFSET;
       for (const y of coordinates) {
         const svg = createSvgFunc();
         svg.setAttribute('transform', `translate(${xOffset}, ${y + yOffset})`);
@@ -407,7 +416,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- will not be null
         ...(firstMeasureOrNoCompositionTime ?? timeChangeInMeasure)!
       );
-      timeSigSvg.setAttribute('transform', `translate(${xOffset}, 30)`);
+      timeSigSvg.setAttribute('transform', `translate(${xOffset}, ${TIME_SIG_Y_TRANSLATE})`);
       parentSvg.appendChild(timeSigSvg);
     }
   }
@@ -653,7 +662,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     elements: NoteOrChordElementType[],
     beamsBuilder: BeamsBuilder
   ): boolean[] {
-    const MIDDLE_STAFF_Y = 50;
     const stemDirections = new Array<boolean>(elements.length).fill(true);
     const processed = new Set<number>();
 
@@ -752,16 +760,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const [beatsInMeasure, beatType] = this.#effectiveTimeInts;
     const measureDuration = beatsInMeasure / beatType;
 
-    const minNoteWidth = 20; // px — minimum space per note to prevent notehead overlap
     const proportionalWidth =
-      remainingWidth - this.#currentElements.length * minNoteWidth;
+      remainingWidth - this.#currentElements.length * MIN_NOTE_WIDTH;
 
     let beatOffset = 0;
     for (let i = 0; i < this.#currentElements.length; i++) {
       const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
       const xOffsetInNotesSpace =
-        i * minNoteWidth + (beatOffset / measureDuration) * proportionalWidth;
+        i * MIN_NOTE_WIDTH + (beatOffset / measureDuration) * proportionalWidth;
 
       this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
 

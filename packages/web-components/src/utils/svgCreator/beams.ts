@@ -166,27 +166,21 @@ import {
 } from '../../types/theory';
 import { durationToFactor, durationToFlagCountMap, SVG_NS } from '../consts';
 import {
+  BASE_STEM_LENGTH_PX,
+  BEAM_GAP_PX,
+  BEAM_THICKNESS_PX,
+  FRACTIONAL_BEAM_WIDTH_PX,
+  MAX_STEM_SHORTENING_PX,
+  MIN_BEAM_STEM_LENGTH_PX,
+  STEM_OVERLAP_PX,
+} from '../notationDimensions';
+import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
 } from './note';
 
-// ─── Beam rendering constants ─────────────────────────────────────────────────
-const BEAM_THICKNESS_PX = 8;
-const BEAM_GAP_PX = 4;
-// Fractional beams (also called partial or stub beams) connect a single faster
-// note to its nearest neighbor when it cannot span a full beam run.
-const FRACTIONAL_BEAM_WIDTH_PX = 6;
-// Default stem length derived from note scale (600-unit space × 32/600 px/unit).
-const BASE_STEM_LENGTH_PX = 32;
-// Minimum beamed stem: 2.5 staff spaces × 10 px/space.
-const MIN_BEAM_STEM_LENGTH_PX = 25;
-// Maximum amount a stem may be shortened before hitting the minimum length.
-const MAX_STEM_SHORTENING_PX = BASE_STEM_LENGTH_PX - MIN_BEAM_STEM_LENGTH_PX; // 7 px
-// Extra pixels the stem tip extends inside the beam polygon to prevent sub-pixel gaps.
-const STEM_OVERLAP_PX = 2;
-// ─────────────────────────────────────────────────────────────────────────────
 
 /** Y-position data for a single beamed note, passed to BeamsBuilder.buildRenderer(). */
 export type NoteYPosition = {

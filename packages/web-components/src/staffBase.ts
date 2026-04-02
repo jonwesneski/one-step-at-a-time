@@ -1,4 +1,10 @@
 import { SVG_NS } from './utils';
+import {
+  STAFF_BOTTOM_MARGIN,
+  STAFF_LINE_SPACING,
+  STAFF_LINE_START,
+  STAFF_WRAPPER_MIN_HEIGHT,
+} from './utils/notationDimensions';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
@@ -13,8 +19,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
   protected readonly staffResizeObserver: ResizeObserver;
   #lastStaffWidth: number;
-  static #staffLineStart = 28;
-  static #staffLineSpacing = 10;
 
   protected readonly transcribeContainer: SVGSVGElement;
   #slotChangeHandler = (event: Event) => this.onHandleSlotChange(event);
@@ -51,7 +55,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
         .staff-wrapper {
           position: relative;
-          min-height: 100px;
+          min-height: ${STAFF_WRAPPER_MIN_HEIGHT}px;
         }
 
         .staff-container {
@@ -64,8 +68,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           border-top: 1px solid currentColor;
           border-right: 1px solid currentColor;
           border-bottom: 1px solid currentColor;
-          margin-top: ${StaffElementBase.#staffLineStart}px;
-          margin-bottom: 30px;
+          margin-top: ${STAFF_LINE_START}px;
+          margin-bottom: ${STAFF_BOTTOM_MARGIN}px;
           pointer-events: none;
         }
 
@@ -102,7 +106,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   get #staffHeight() {
-    return (this.staffLineCount - 1) * StaffElementBase.#staffLineSpacing;
+    return (this.staffLineCount - 1) * STAFF_LINE_SPACING;
   }
 
   protected abstract get staffLineCount(): number;
@@ -137,13 +141,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #buildStaffLines(): void {
     this.staffContainer.classList.add('staff-container');
 
-    let yOffset = StaffElementBase.#staffLineSpacing;
+    let yOffset = STAFF_LINE_SPACING;
     Array.from({ length: this.staffLineCount - 1 }).forEach(() => {
       const line = document.createElement('div');
       line.classList.add('staff-line');
       line.style.top = `${yOffset}px`;
       this.staffContainer.appendChild(line);
-      yOffset += StaffElementBase.#staffLineSpacing;
+      yOffset += STAFF_LINE_SPACING;
     });
   }
 
