@@ -1,8 +1,9 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['number', 'key', 'mode', 'time'];
+      return ['number', 'keysig', 'mode', 'time'];
     }
+
     #staffConnectorObserver: ResizeObserver;
 
     constructor() {
@@ -13,7 +14,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (composition) {
         this.time = composition.getAttribute('time') ?? '4/4';
         this.mode = composition.getAttribute('mode') ?? 'major';
-        this.keySig = composition.getAttribute('keySig') ?? 'C';
+        this.keySig = composition.getAttribute('keysig') ?? 'C';
       }
 
       this.#staffConnectorObserver = new ResizeObserver(
@@ -33,11 +34,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get keySig(): string {
-      return this.getAttribute('keySig') ?? 'C';
+      return this.getAttribute('keysig') ?? 'C';
     }
 
     set keySig(value: string) {
-      this.setAttribute('keySig', value);
+      this.setAttribute('keysig', value);
     }
 
     get mode(): string {

@@ -1,6 +1,7 @@
 import { ChordNote, IChordElement, NoteElementType } from '../types/elements';
 import { Chord, DurationType } from '../types/theory';
 import { createChordSvg } from '../utils';
+import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
@@ -151,10 +152,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           'svg'
         );
         svg.setAttribute('width', '32');
-        svg.setAttribute('height', '100');
+        svg.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
         svg.setAttribute('overflow', 'visible');
         svg.appendChild(chordSvg);
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
         this.shadowRoot!.appendChild(svg);
 
         svg.addEventListener('click', (e) => {
@@ -199,7 +200,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         // todo: still need to properly set y/top coordinates of notes
         // Standalone mode: slot-based rendering
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
         this.shadowRoot!.innerHTML = `
           <style>
             :host { display: inline-block; }

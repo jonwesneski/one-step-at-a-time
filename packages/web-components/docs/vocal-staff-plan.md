@@ -140,7 +140,7 @@ class StaffVocalElement extends StaffClassicalElementBase
 **Attributes:**
 
 - `voice` — `'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass'` (default: `'soprano'`)
-- Inherits: `keySig`, `mode`, `time`, `editable`, `managed`
+- Inherits: `keysig`, `mode`, `time`, `editable`, `managed`
 
 **Static data** (all `static #private`):
 

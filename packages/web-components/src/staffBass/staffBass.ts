@@ -1,37 +1,32 @@
 import { StaffClassicalElementBase } from '../staffClassicalBase';
-import { YCoordinates } from '../types/elements';
+import type { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
 import { LetterOctave, Octave } from '../types/theory';
 import { createBassClefSvg } from '../utils/svgCreator/clefs';
-import { generateYCoordinates } from '../utils/theoryHelpers';
+import {
+  generateKeySignatureYCoordinates,
+  generateYCoordinates,
+} from '../utils/theoryHelpers';
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = createBassClefSvg();
     static #yCoordinates = generateYCoordinates('E4', 'E2');
     static #sharps: LetterOctave[] = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
-    static #majorSharpYCoordinates = {
-      G: StaffBassElement.#sharps
-        .filter((_, i) => i < 1)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      D: StaffBassElement.#sharps
-        .filter((_, i) => i < 2)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      A: StaffBassElement.#sharps
-        .filter((_, i) => i < 3)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      E: StaffBassElement.#sharps
-        .filter((_, i) => i < 4)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      B: StaffBassElement.#sharps
-        .filter((_, i) => i < 5)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      ['F#']: StaffBassElement.#sharps
-        .filter((_, i) => i < 6)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      ['C#']: StaffBassElement.#sharps
-        .filter((_, i) => i < 7)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-    };
-    static #minorSharpYCoordinates = {
+    static #majorSharpYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        {
+          G: 1,
+          D: 2,
+          A: 3,
+          E: 4,
+          B: 5,
+          'F#': 6,
+          'C#': 7,
+        },
+        StaffBassElement.#sharps,
+        StaffBassElement.#yCoordinates
+      );
+    static #minorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffBassElement.#majorSharpYCoordinates.G,
       B: StaffBassElement.#majorSharpYCoordinates.D,
       ['F#']: StaffBassElement.#majorSharpYCoordinates.A,
@@ -41,30 +36,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffBassElement.#majorSharpYCoordinates['C#'],
     };
     static #flats: LetterOctave[] = ['B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2'];
-    static #majorFlatYCoordinates = {
-      F: StaffBassElement.#flats
-        .filter((_, i) => i < 1)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      Bb: StaffBassElement.#flats
-        .filter((_, i) => i < 2)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      Eb: StaffBassElement.#flats
-        .filter((_, i) => i < 3)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      Ab: StaffBassElement.#flats
-        .filter((_, i) => i < 4)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      Db: StaffBassElement.#flats
-        .filter((_, i) => i < 5)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      Gb: StaffBassElement.#flats
-        .filter((_, i) => i < 6)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-      Cb: StaffBassElement.#flats
-        .filter((_, i) => i < 7)
-        .map((note) => StaffBassElement.#yCoordinates[note]),
-    };
-    static #minorFlatYCoordinates = {
+    static #majorFlatYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
+        StaffBassElement.#flats,
+        StaffBassElement.#yCoordinates
+      );
+    static #minorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffBassElement.#majorFlatYCoordinates.F,
       G: StaffBassElement.#majorFlatYCoordinates.Bb,
       C: StaffBassElement.#majorFlatYCoordinates.Eb,
@@ -87,8 +65,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
-      // todo: remove 'as never' and then address typing error
-      const _key = this.keySig as never;
+      const _key = this.keySig;
 
       const answer: { useSharps: boolean; coordinates: number[] } = {
         useSharps: false,

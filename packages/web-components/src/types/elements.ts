@@ -28,6 +28,10 @@ export type NoteOrChordElementType = NoteElementType | ChordElementType;
 
 export type YCoordinates = Partial<Record<LetterOctave, number>>;
 
+export type KeySignatureYCoordinates = Partial<{
+  [key in LetterNote]: number[];
+}>;
+
 export type LyricSyllablePosition = {
   text: string;
   x: number;

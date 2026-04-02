@@ -1,5 +1,6 @@
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
+  KeySignatureYCoordinates,
   LyricSyllablePosition,
   LyricsElementType,
   YCoordinates,
@@ -10,7 +11,10 @@ import {
   createTreble8ClefSvg,
   createTrebleClefSvg,
 } from '../utils/svgCreator/clefs';
-import { generateYCoordinates } from '../utils/theoryHelpers';
+import {
+  generateKeySignatureYCoordinates,
+  generateYCoordinates,
+} from '../utils/theoryHelpers';
 import { MusicLyricsElement } from './lyrics';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -45,97 +49,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'F4',
     ];
 
-    static #trebleMajorSharpYCoordinates: { [key: string]: number[] } = {
-      G: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 1)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      D: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 2)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      A: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 3)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      E: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 4)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      B: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 5)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      ['F#']: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 6)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      ['C#']: StaffVocalElement.#trebleSharps
-        .filter((_, i) => i < 7)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-    };
+    static #trebleMajorSharpYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7 },
+        StaffVocalElement.#trebleSharps,
+        StaffVocalElement.#sopranoYCoordinates
+      );
 
-    static #trebleMajorFlatYCoordinates: { [key: string]: number[] } = {
-      F: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 1)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Bb: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 2)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Eb: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 3)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Ab: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 4)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Db: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 5)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Gb: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 6)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Cb: StaffVocalElement.#trebleFlats
-        .filter((_, i) => i < 7)
-        .map(
-          (note) =>
-            StaffVocalElement.#sopranoYCoordinates[note as LetterOctave] ?? 0
-        ),
-    };
+    static #trebleMajorFlatYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
+        StaffVocalElement.#trebleFlats,
+        StaffVocalElement.#sopranoYCoordinates
+      );
 
-    static #trebleMinorSharpYCoordinates: { [key: string]: number[] } = {
+    static #trebleMinorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffVocalElement.#trebleMajorSharpYCoordinates.G,
       B: StaffVocalElement.#trebleMajorSharpYCoordinates.D,
       ['F#']: StaffVocalElement.#trebleMajorSharpYCoordinates.A,
@@ -145,7 +73,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffVocalElement.#trebleMajorSharpYCoordinates['C#'],
     };
 
-    static #trebleMinorFlatYCoordinates: { [key: string]: number[] } = {
+    static #trebleMinorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffVocalElement.#trebleMajorFlatYCoordinates.F,
       G: StaffVocalElement.#trebleMajorFlatYCoordinates.Bb,
       C: StaffVocalElement.#trebleMajorFlatYCoordinates.Eb,
@@ -174,97 +102,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'F3',
     ];
 
-    static #tenorMajorSharpYCoordinates: { [key: string]: number[] } = {
-      G: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 1)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      D: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 2)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      A: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 3)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      E: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 4)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      B: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 5)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      ['F#']: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 6)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      ['C#']: StaffVocalElement.#tenorSharps
-        .filter((_, i) => i < 7)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-    };
+    static #tenorMajorSharpYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7 },
+        StaffVocalElement.#tenorSharps,
+        StaffVocalElement.#tenorYCoordinates
+      );
 
-    static #tenorMajorFlatYCoordinates: { [key: string]: number[] } = {
-      F: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 1)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Bb: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 2)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Eb: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 3)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Ab: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 4)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Db: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 5)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Gb: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 6)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Cb: StaffVocalElement.#tenorFlats
-        .filter((_, i) => i < 7)
-        .map(
-          (note) =>
-            StaffVocalElement.#tenorYCoordinates[note as LetterOctave] ?? 0
-        ),
-    };
+    static #tenorMajorFlatYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
+        StaffVocalElement.#tenorFlats,
+        StaffVocalElement.#tenorYCoordinates
+      );
 
-    static #tenorMinorSharpYCoordinates: { [key: string]: number[] } = {
+    static #tenorMinorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffVocalElement.#tenorMajorSharpYCoordinates.G,
       B: StaffVocalElement.#tenorMajorSharpYCoordinates.D,
       ['F#']: StaffVocalElement.#tenorMajorSharpYCoordinates.A,
@@ -274,7 +126,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffVocalElement.#tenorMajorSharpYCoordinates['C#'],
     };
 
-    static #tenorMinorFlatYCoordinates: { [key: string]: number[] } = {
+    static #tenorMinorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffVocalElement.#tenorMajorFlatYCoordinates.F,
       G: StaffVocalElement.#tenorMajorFlatYCoordinates.Bb,
       C: StaffVocalElement.#tenorMajorFlatYCoordinates.Eb,
@@ -304,97 +156,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'F2',
     ];
 
-    static #bassMajorSharpYCoordinates: { [key: string]: number[] } = {
-      G: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 1)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      D: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 2)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      A: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 3)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      E: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 4)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      B: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 5)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      ['F#']: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 6)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      ['C#']: StaffVocalElement.#bassSharps
-        .filter((_, i) => i < 7)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-    };
+    static #bassMajorSharpYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7 },
+        StaffVocalElement.#bassSharps,
+        StaffVocalElement.#baritoneYCoordinates
+      );
 
-    static #bassMajorFlatYCoordinates: { [key: string]: number[] } = {
-      F: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 1)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Bb: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 2)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Eb: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 3)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Ab: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 4)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Db: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 5)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Gb: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 6)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-      Cb: StaffVocalElement.#bassFlats
-        .filter((_, i) => i < 7)
-        .map(
-          (note) =>
-            StaffVocalElement.#baritoneYCoordinates[note as LetterOctave] ?? 0
-        ),
-    };
+    static #bassMajorFlatYCoordinates: KeySignatureYCoordinates =
+      generateKeySignatureYCoordinates(
+        { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
+        StaffVocalElement.#bassFlats,
+        StaffVocalElement.#baritoneYCoordinates
+      );
 
-    static #bassMinorSharpYCoordinates: { [key: string]: number[] } = {
+    static #bassMinorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffVocalElement.#bassMajorSharpYCoordinates.G,
       B: StaffVocalElement.#bassMajorSharpYCoordinates.D,
       ['F#']: StaffVocalElement.#bassMajorSharpYCoordinates.A,
@@ -404,7 +180,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffVocalElement.#bassMajorSharpYCoordinates['C#'],
     };
 
-    static #bassMinorFlatYCoordinates: { [key: string]: number[] } = {
+    static #bassMinorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffVocalElement.#bassMajorFlatYCoordinates.F,
       G: StaffVocalElement.#bassMajorFlatYCoordinates.Bb,
       C: StaffVocalElement.#bassMajorFlatYCoordinates.Eb,

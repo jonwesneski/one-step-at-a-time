@@ -10,7 +10,7 @@ const swcJestConfig = JSON.parse(
 swcJestConfig.swcrc = false;
 
 module.exports = {
-  displayName: '@myorg/ui-web-components-js',
+  displayName: '@one-step-at-a-time/web-components',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',
   setupFiles: ['<rootDir>/jest.setup.ts'],
