@@ -1,5 +1,6 @@
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
+  KeySignatureYCoordinates,
   LyricSyllablePosition,
   LyricsElementType,
   YCoordinates,
@@ -45,7 +46,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'F4',
     ];
 
-    static #trebleMajorSharpYCoordinates: { [key: string]: number[] } = {
+    static #trebleMajorSharpYCoordinates: KeySignatureYCoordinates = {
       G: StaffVocalElement.#trebleSharps
         .filter((_, i) => i < 1)
         .map(
@@ -90,7 +91,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ),
     };
 
-    static #trebleMajorFlatYCoordinates: { [key: string]: number[] } = {
+    static #trebleMajorFlatYCoordinates: KeySignatureYCoordinates = {
       F: StaffVocalElement.#trebleFlats
         .filter((_, i) => i < 1)
         .map(
@@ -135,7 +136,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ),
     };
 
-    static #trebleMinorSharpYCoordinates: { [key: string]: number[] } = {
+    static #trebleMinorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffVocalElement.#trebleMajorSharpYCoordinates.G,
       B: StaffVocalElement.#trebleMajorSharpYCoordinates.D,
       ['F#']: StaffVocalElement.#trebleMajorSharpYCoordinates.A,
@@ -145,7 +146,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffVocalElement.#trebleMajorSharpYCoordinates['C#'],
     };
 
-    static #trebleMinorFlatYCoordinates: { [key: string]: number[] } = {
+    static #trebleMinorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffVocalElement.#trebleMajorFlatYCoordinates.F,
       G: StaffVocalElement.#trebleMajorFlatYCoordinates.Bb,
       C: StaffVocalElement.#trebleMajorFlatYCoordinates.Eb,
@@ -174,7 +175,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'F3',
     ];
 
-    static #tenorMajorSharpYCoordinates: { [key: string]: number[] } = {
+    static #tenorMajorSharpYCoordinates: KeySignatureYCoordinates = {
       G: StaffVocalElement.#tenorSharps
         .filter((_, i) => i < 1)
         .map(
@@ -219,7 +220,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ),
     };
 
-    static #tenorMajorFlatYCoordinates: { [key: string]: number[] } = {
+    static #tenorMajorFlatYCoordinates: KeySignatureYCoordinates = {
       F: StaffVocalElement.#tenorFlats
         .filter((_, i) => i < 1)
         .map(
@@ -264,7 +265,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ),
     };
 
-    static #tenorMinorSharpYCoordinates: { [key: string]: number[] } = {
+    static #tenorMinorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffVocalElement.#tenorMajorSharpYCoordinates.G,
       B: StaffVocalElement.#tenorMajorSharpYCoordinates.D,
       ['F#']: StaffVocalElement.#tenorMajorSharpYCoordinates.A,
@@ -274,7 +275,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffVocalElement.#tenorMajorSharpYCoordinates['C#'],
     };
 
-    static #tenorMinorFlatYCoordinates: { [key: string]: number[] } = {
+    static #tenorMinorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffVocalElement.#tenorMajorFlatYCoordinates.F,
       G: StaffVocalElement.#tenorMajorFlatYCoordinates.Bb,
       C: StaffVocalElement.#tenorMajorFlatYCoordinates.Eb,
@@ -304,7 +305,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'F2',
     ];
 
-    static #bassMajorSharpYCoordinates: { [key: string]: number[] } = {
+    static #bassMajorSharpYCoordinates: KeySignatureYCoordinates = {
       G: StaffVocalElement.#bassSharps
         .filter((_, i) => i < 1)
         .map(
@@ -349,7 +350,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ),
     };
 
-    static #bassMajorFlatYCoordinates: { [key: string]: number[] } = {
+    static #bassMajorFlatYCoordinates: KeySignatureYCoordinates = {
       F: StaffVocalElement.#bassFlats
         .filter((_, i) => i < 1)
         .map(
@@ -394,7 +395,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ),
     };
 
-    static #bassMinorSharpYCoordinates: { [key: string]: number[] } = {
+    static #bassMinorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffVocalElement.#bassMajorSharpYCoordinates.G,
       B: StaffVocalElement.#bassMajorSharpYCoordinates.D,
       ['F#']: StaffVocalElement.#bassMajorSharpYCoordinates.A,
@@ -404,7 +405,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffVocalElement.#bassMajorSharpYCoordinates['C#'],
     };
 
-    static #bassMinorFlatYCoordinates: { [key: string]: number[] } = {
+    static #bassMinorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffVocalElement.#bassMajorFlatYCoordinates.F,
       G: StaffVocalElement.#bassMajorFlatYCoordinates.Bb,
       C: StaffVocalElement.#bassMajorFlatYCoordinates.Eb,

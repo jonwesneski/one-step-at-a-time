@@ -1,37 +1,45 @@
 import { StaffClassicalElementBase } from '../staffClassicalBase';
-import { YCoordinates } from '../types/elements';
+import type { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
 import { LetterOctave, Octave } from '../types/theory';
 import { createTrebleClefSvg } from '../utils/svgCreator/clefs';
 import { generateYCoordinates } from '../utils/theoryHelpers';
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffTrebleElement extends StaffClassicalElementBase {
     static #trebleClefSvg = createTrebleClefSvg();
     static #yCoordinates = generateYCoordinates('C6', 'C4');
     static #sharps: LetterOctave[] = ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'];
-    static #majorSharpYCoordinates = {
+    static #majorSharpYCoordinates: KeySignatureYCoordinates = {
       G: StaffTrebleElement.#sharps
         .filter((_, i) => i < 1)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       D: StaffTrebleElement.#sharps
         .filter((_, i) => i < 2)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       A: StaffTrebleElement.#sharps
         .filter((_, i) => i < 3)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       E: StaffTrebleElement.#sharps
         .filter((_, i) => i < 4)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       B: StaffTrebleElement.#sharps
         .filter((_, i) => i < 5)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       ['F#']: StaffTrebleElement.#sharps
         .filter((_, i) => i < 6)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       ['C#']: StaffTrebleElement.#sharps
         .filter((_, i) => i < 7)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
     };
-    static #minorSharpYCoordinates = {
+    static #minorSharpYCoordinates: KeySignatureYCoordinates = {
       E: StaffTrebleElement.#majorSharpYCoordinates.G,
       B: StaffTrebleElement.#majorSharpYCoordinates.D,
       ['F#']: StaffTrebleElement.#majorSharpYCoordinates.A,
@@ -41,30 +49,37 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['A#']: StaffTrebleElement.#majorSharpYCoordinates['C#'],
     };
     static #flats: LetterOctave[] = ['B4', 'E5', 'A4', 'D5', 'G4', 'C5', 'F4'];
-    static #majorFlatYCoordinates = {
+    static #majorFlatYCoordinates: KeySignatureYCoordinates = {
       F: StaffTrebleElement.#flats
         .filter((_, i) => i < 1)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       Bb: StaffTrebleElement.#flats
         .filter((_, i) => i < 2)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       Eb: StaffTrebleElement.#flats
         .filter((_, i) => i < 3)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       Ab: StaffTrebleElement.#flats
         .filter((_, i) => i < 4)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       Db: StaffTrebleElement.#flats
         .filter((_, i) => i < 5)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       Gb: StaffTrebleElement.#flats
         .filter((_, i) => i < 6)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
       Cb: StaffTrebleElement.#flats
         .filter((_, i) => i < 7)
-        .map((note) => StaffTrebleElement.#yCoordinates[note]),
+        .map((note) => StaffTrebleElement.#yCoordinates[note])
+        .filter((y): y is number => y !== undefined),
     };
-    static #minorFlatYCoordinates = {
+    static #minorFlatYCoordinates: KeySignatureYCoordinates = {
       D: StaffTrebleElement.#majorFlatYCoordinates.F,
       G: StaffTrebleElement.#majorFlatYCoordinates.Bb,
       C: StaffTrebleElement.#majorFlatYCoordinates.Eb,
@@ -83,8 +98,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
-      // todo: remove 'as never' and then address typing error
-      const _key = this.keySig as never;
+      const _key = this.keySig;
       const answer: { useSharps: boolean; coordinates: number[] } = {
         useSharps: false,
         coordinates: [],

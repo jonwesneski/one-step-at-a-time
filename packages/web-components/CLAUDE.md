@@ -167,5 +167,5 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 - Use `SVG_NS = 'http://www.w3.org/2000/svg'` with `createElementNS()` for all SVG creation
 - CSS custom properties: `--flex-staff-basis`, `--flex-staff-minw` for layout overrides
 - `currentColor` used in SVG so staff color inherits from CSS
-- run `npx nx format:write` after file edits and new files
-- use full words when defining variables, functions, and classes; no abbrevations or uncommon acronyms
+- **Always run `npx nx format:write` after every batch of file edits or new files** — do not skip this step
+- Use full words when defining variables, functions, and classes; no abbreviations or uncommon acronyms

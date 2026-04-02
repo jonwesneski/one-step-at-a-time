@@ -19,6 +19,7 @@ export type LetterNote =
   | 'A#'
   | 'Bb'
   | 'B'
+  | 'Cb'
   | 'C'
   | 'C#'
   | 'D'
