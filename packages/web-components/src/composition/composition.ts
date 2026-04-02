@@ -1,8 +1,11 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
     static get observedAttributes(): string[] {
+      // All attributes need to be all lower case because jsdom lowers then
+      // in it's life-cycle
       return ['keysig', 'mode', 'time'];
     }
+
     #observer: MutationObserver | null;
     #measureCount: number;
 

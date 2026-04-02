@@ -1,8 +1,9 @@
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['number', 'key', 'mode', 'time'];
+      return ['number', 'keysig', 'mode', 'time'];
     }
+
     #staffConnectorObserver: ResizeObserver;
 
     constructor() {

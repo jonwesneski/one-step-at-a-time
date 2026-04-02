@@ -45,6 +45,12 @@ import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
+  static get observedAttributes(): string[] {
+    // All attributes need to be all lower case because jsdom lowers then
+    // in it's life-cycle
+    return ['keysig', 'mode', 'time', 'editable', 'managed'];
+  }
+
   #mutationObservers: MutationObserver[];
   #effectiveTimeInts: [BeatsInMeasure, BeatTypeInMeasure];
   #effectiveMode: Mode;
@@ -104,10 +110,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         cursor: grab;
       }
     `;
-  }
-
-  static get observedAttributes(): string[] {
-    return ['keysig', 'mode', 'time', 'editable', 'managed'];
   }
 
   get editable(): boolean {

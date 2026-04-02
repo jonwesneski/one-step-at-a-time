@@ -143,7 +143,7 @@ function expectedNoteTop(
 }
 
 function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
-  document.body.innerHTML = `<music-staff-vocal voice="${voice}" keySig="${keySig}" mode="${mode}" time="4/4"></music-staff-vocal>`;
+  document.body.innerHTML = `<music-staff-vocal voice="${voice}" keysig="${keySig}" mode="${mode}" time="4/4"></music-staff-vocal>`;
   return document.body.querySelector('music-staff-vocal')!;
   /**
    * After change: https://github.com/jonwesneski/one-step-at-a-time/pull/21
@@ -154,7 +154,7 @@ function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
    */
   // const el = document.createElement('music-staff-vocal') as any;
   // el.setAttribute('voice', voice);
-  // el.setAttribute('keySig', 'C');
+  // el.setAttribute('keysig', 'C');
   // el.setAttribute('mode', 'major');
   // el.setAttribute('time', '4/4');
   // document.body.appendChild(el);
@@ -179,7 +179,7 @@ describe('music-staff-vocal', () => {
   it('renders shadow root with provided attributes', () => {
     const el = document.createElement('music-staff-vocal') as any;
     el.setAttribute('voice', 'soprano');
-    el.setAttribute('keySig', 'C');
+    el.setAttribute('keysig', 'C');
     el.setAttribute('mode', 'major');
     el.setAttribute('time', '4/4');
     document.body.appendChild(el);
@@ -441,7 +441,7 @@ describe('music-staff-vocal voice switching', () => {
 describe('music-staff-vocal key signature positioning', () => {
   it('returns correct key signature coordinates for soprano C major', () => {
     const staff = makeStaff('soprano') as any;
-    staff.setAttribute('keySig', 'C');
+    staff.setAttribute('keysig', 'C');
     staff.setAttribute('mode', 'major');
     const keyCoords = staff.getKeyYCoordinates();
     expect(keyCoords.coordinates.length).toBe(0); // C major has no accidentals

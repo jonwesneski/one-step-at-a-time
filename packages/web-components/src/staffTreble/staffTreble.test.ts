@@ -47,7 +47,7 @@ function expectedNoteTop(value: string): string {
 
 function makeStaff(): Element {
   const el = document.createElement('music-staff-treble') as any;
-  el.setAttribute('keySig', 'C');
+  el.setAttribute('keysig', 'C');
   el.setAttribute('mode', 'major');
   el.setAttribute('time', '4/4');
   document.body.appendChild(el);
@@ -71,7 +71,7 @@ describe('music-staff-treble', () => {
 
   it('renders shadow root with provided key signature attributes', () => {
     const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('keySig', 'C');
+    el.setAttribute('keysig', 'C');
     el.setAttribute('mode', 'major');
     el.setAttribute('time', '4/4');
     document.body.appendChild(el);
