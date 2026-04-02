@@ -1,4 +1,4 @@
-import { YCoordinates } from '../types/elements';
+import { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
 import { Chord, LetterNote, LetterOctave } from '../types/theory';
 import {
   ChordSemitoneMap,
@@ -153,4 +153,29 @@ export const generateYCoordinates = (
   }
 
   return result;
+};
+
+export const generateKeySignatureYCoordinates = (
+  keyCountMap: Partial<{ [key in LetterNote]: number }>,
+  accidentals: LetterOctave[],
+  yCoordinates: YCoordinates
+): KeySignatureYCoordinates => {
+  const keySignatureYCoordinates: KeySignatureYCoordinates = {};
+  for (const key in keyCountMap) {
+    keySignatureYCoordinates[key as LetterNote] = [];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- it's okay
+    for (let i = 0; i < keyCountMap[key as LetterNote]!; i++) {
+      const yCoordinate = yCoordinates[accidentals[i]];
+      if (yCoordinate) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- it's okay
+        keySignatureYCoordinates[key as LetterNote]!.push(yCoordinate);
+      } else {
+        throw new Error(
+          `Y coordinate not found for accidental: ${accidentals[i]}`
+        );
+      }
+    }
+  }
+
+  return keySignatureYCoordinates;
 };
