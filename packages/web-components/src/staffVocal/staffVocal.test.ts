@@ -142,14 +142,9 @@ function expectedNoteTop(
   return `${STAFF_Y_PADDING + staffY - yHeadOffset}px`;
 }
 
-function makeStaff(voice = 'soprano'): Element {
-  const el = document.createElement('music-staff-vocal') as any;
-  el.setAttribute('voice', voice);
-  el.setAttribute('keySig', 'C');
-  el.setAttribute('mode', 'major');
-  el.setAttribute('time', '4/4');
-  document.body.appendChild(el);
-  return el;
+function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
+  document.body.innerHTML = `<music-staff-vocal voice="${voice}" keySig="${keySig}" mode="${mode}" time="4/4"></music-staff-vocal>`;
+  return document.body.querySelector('music-staff-vocal')!;
 }
 
 function renderNote(staff: Element, value: string): HTMLElement {
@@ -439,9 +434,7 @@ describe('music-staff-vocal key signature positioning', () => {
   });
 
   it('returns correct key signature coordinates for soprano G major (1 sharp)', () => {
-    const staff = makeStaff('soprano') as any;
-    staff.setAttribute('keySig', 'G');
-    staff.setAttribute('mode', 'major');
+    const staff = makeStaff('soprano', 'G') as any;
     const keyCoords = staff.getKeyYCoordinates();
     expect(keyCoords.useSharps).toBe(true);
     expect(keyCoords.coordinates.length).toBe(1); // F#
@@ -449,25 +442,19 @@ describe('music-staff-vocal key signature positioning', () => {
 
   it('returns correct key signature coordinates for tenor C major', () => {
     const staff = makeStaff('tenor') as any;
-    staff.setAttribute('keySig', 'C');
-    staff.setAttribute('mode', 'major');
     const keyCoords = staff.getKeyYCoordinates();
     expect(keyCoords.coordinates.length).toBe(0);
   });
 
   it('returns correct key signature coordinates for tenor G major (1 sharp)', () => {
-    const staff = makeStaff('tenor') as any;
-    staff.setAttribute('keySig', 'G');
-    staff.setAttribute('mode', 'major');
+    const staff = makeStaff('tenor', 'G') as any;
     const keyCoords = staff.getKeyYCoordinates();
     expect(keyCoords.useSharps).toBe(true);
     expect(keyCoords.coordinates.length).toBe(1);
   });
 
   it('returns correct key signature coordinates for baritone F major (1 flat)', () => {
-    const staff = makeStaff('baritone') as any;
-    staff.setAttribute('keySig', 'F');
-    staff.setAttribute('mode', 'major');
+    const staff = makeStaff('baritone', 'F') as any;
     const keyCoords = staff.getKeyYCoordinates();
     expect(keyCoords.useSharps).toBe(false);
     expect(keyCoords.coordinates.length).toBe(1); // Bb
