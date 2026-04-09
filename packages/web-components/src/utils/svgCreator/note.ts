@@ -105,66 +105,67 @@ export const createNoteSvg = ({
 
   // Flag(s)
   if (!noStem && !noFlags && flagCount > 0) {
-    // todo need to calculate flags with stemup or not; assuming stem up for now
+    // todo need to calculate flags with stemdown
     const xFlagStart = stemX;
     const flag = document.createElementNS(SVG_NS, 'g');
     flag.classList.add('flag');
-    const name = 'partial-flag';
-    const partialFlag = document.createElementNS(SVG_NS, 'g');
-    partialFlag.classList.add(name);
-    partialFlag.id = name;
-    const yPartialFlagLongStart = NOTE_Y_STEM_START + 45;
-    const partialFlagLong = document.createElementNS(SVG_NS, 'path');
-    const xPartialFlagLongEnd = xFlagStart + 165;
-    const yPartialFlagLongEnd = yPartialFlagLongStart + 285;
-    partialFlagLong.setAttribute(
-      'd',
-      `M${xFlagStart},${yPartialFlagLongStart} C${xFlagStart + 90},${
-        yPartialFlagLongStart + 60
-      } ${xFlagStart + 255},${
-        yPartialFlagLongStart + 143
-      } ${xPartialFlagLongEnd},${yPartialFlagLongEnd}`
-    );
-    partialFlagLong.setAttribute('fill', 'none');
-    partialFlagLong.setAttribute('stroke', 'currentColor');
-    partialFlagLong.setAttribute('stroke-width', '45');
-    partialFlag.appendChild(partialFlagLong);
 
-    const yPartialFlagTopStart = NOTE_Y_STEM_START + 30;
-    const partialFlagTop = document.createElementNS(SVG_NS, 'path');
-    partialFlagTop.setAttribute(
+    // Each flag is a thin curved stroke — a fishhook shape. Starts at the stem
+    // tip, arcs right and down, then curls back left to a point. Stacked flags
+    // are spaced FLAG_Y_SPACING units apart down the stem.
+    const flagName = 'single-flag';
+    const singleFlag = document.createElementNS(SVG_NS, 'path');
+    singleFlag.classList.add(flagName);
+    singleFlag.id = flagName;
+    const yFlagTop = NOTE_Y_STEM_START;
+    // Filled closed tapered shape: wide at the base (stem attachment), narrows
+    // toward the bottom. Outer curve sweeps right/down; inner curve returns to
+    // a narrow point near the base. No tail — tail is appended separately so
+    // <use> copies don't show one.
+    /**
+     * M - Start is the bottom line of the flag
+     * Q - The bottom line
+     * C - Top line
+     */
+    const yFlagStart = yFlagTop + 100;
+    singleFlag.setAttribute(
       'd',
-      `M${xFlagStart},${yPartialFlagTopStart} C${xFlagStart + 15},${
-        yPartialFlagTopStart + 30
-      } ${xFlagStart + 53},${yPartialFlagTopStart + 53} ${xFlagStart + 120},${
-        yPartialFlagTopStart + 105
-      }`
+      `M${xFlagStart},${yFlagStart}
+       Q${xFlagStart + 160},${yFlagStart + 40}
+         ${xFlagStart + 140},${yFlagStart + 260}
+       C${xFlagStart + 160},${yFlagStart + -60}
+         ${xFlagStart + 20},${yFlagTop + 100}
+         ${xFlagStart},${yFlagTop}
+       Z`
     );
-    partialFlagTop.setAttribute('fill', 'none');
-    partialFlagTop.setAttribute('stroke', 'currentColor');
-    partialFlagTop.setAttribute('stroke-width', '38');
-    partialFlag.appendChild(partialFlagTop);
-    flag.appendChild(partialFlag);
 
-    let yPartialFlagTailStart = yPartialFlagLongEnd;
-    for (let i = 0; i < flagCount - 1; i++) {
+    singleFlag.setAttribute('fill', 'currentColor');
+    singleFlag.setAttribute('stroke', 'currentColor');
+    singleFlag.setAttribute('stroke-width', '5');
+    flag.appendChild(singleFlag);
+
+    for (let i = 1; i < flagCount; i++) {
       const flagCopy = document.createElementNS(SVG_NS, 'use');
-      const y = FLAG_Y_SPACING * (i + 1);
-      yPartialFlagTailStart = yPartialFlagLongEnd + y;
-      flagCopy.setAttribute('href', `#${name}`);
-      flagCopy.setAttribute('y', y.toString());
+      flagCopy.setAttribute('href', `#${flagName}`);
+      flagCopy.setAttribute('y', (FLAG_Y_SPACING * i).toString());
       flag.appendChild(flagCopy);
     }
 
-    const partialFlagTail = document.createElementNS(SVG_NS, 'line');
-    partialFlagTail.setAttribute('x1', (xPartialFlagLongEnd + 8).toString());
-    partialFlagTail.setAttribute('y1', (yPartialFlagTailStart - 8).toString());
-    partialFlagTail.setAttribute('x2', (xPartialFlagLongEnd - 60).toString());
-    partialFlagTail.setAttribute('y2', (yPartialFlagTailStart + 75).toString());
-    partialFlagTail.setAttribute('fill', 'none');
-    partialFlagTail.setAttribute('stroke', 'currentColor');
-    partialFlagTail.setAttribute('stroke-width', '42');
-    flag.appendChild(partialFlagTail);
+    // Tippy-tail: only on the bottom-most flag, appended once after the loop.
+    // const yLastFlagBase = yFlagTop + FLAG_Y_SPACING * (flagCount - 1);
+    // const tail = document.createElementNS(SVG_NS, 'path');
+    // tail.setAttribute(
+    //   'd',
+    //   `M${xFlagStart + 60},${yLastFlagBase + 200}
+    //    C${xFlagStart + 40},${yLastFlagBase + 220}
+    //      ${xFlagStart + 10},${yLastFlagBase + 230}
+    //      ${xFlagStart + 30},${yLastFlagBase + 260}`
+    // );
+    // tail.setAttribute('fill', 'none');
+    // tail.setAttribute('stroke', 'currentColor');
+    // tail.setAttribute('stroke-width', '22');
+    // tail.setAttribute('stroke-linecap', 'round');
+    // flag.appendChild(tail);
 
     g.appendChild(flag);
   }

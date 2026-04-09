@@ -25,7 +25,9 @@
       "@one-step-at-a-time/web-components": [
         "../../packages/web-components/src/index.ts"
       ],
-      "@one-step-at-a-time/web-components/*": ["../../packages/web-components/src/*"]
+      "@one-step-at-a-time/web-components/*": [
+        "../../packages/web-components/src/*"
+      ]
     }
   },
   "include": [

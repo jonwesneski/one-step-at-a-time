@@ -24,6 +24,14 @@ export default function StandAlone() {
           <music-note></music-note>
         </music-chord>
       </Card>
+      <Card title="Staff Chord">
+        <music-staff-treble>
+          <music-chord duration="eighth">
+            <music-note value="A"></music-note>
+            <music-note value="E"></music-note>
+          </music-chord>
+        </music-staff-treble>
+      </Card>
     </main>
   );
 }
