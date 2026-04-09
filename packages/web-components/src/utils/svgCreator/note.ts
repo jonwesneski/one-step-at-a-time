@@ -117,7 +117,8 @@ export const createNoteSvg = ({
     const singleFlag = document.createElementNS(SVG_NS, 'path');
     singleFlag.classList.add(flagName);
     singleFlag.id = flagName;
-    const yFlagTop = NOTE_Y_STEM_START;
+    const stemExtensionInternal = stemExtension / NOTE_SCALE;
+    const yFlagTop = NOTE_Y_STEM_START - stemExtensionInternal;
     // Filled closed tapered shape: wide at the base (stem attachment), narrows
     // toward the bottom. Outer curve sweeps right/down; inner curve returns to
     // a narrow point near the base. No tail — tail is appended separately so
@@ -151,7 +152,8 @@ export const createNoteSvg = ({
       flag.appendChild(flagCopy);
     }
 
-    // Tippy-tail: only on the bottom-most flag, appended once after the loop.
+    // todo: I may come back to this
+    // // Tippy-tail: only on the bottom-most flag, appended once after the loop.
     // const yLastFlagBase = yFlagTop + FLAG_Y_SPACING * (flagCount - 1);
     // const tail = document.createElementNS(SVG_NS, 'path');
     // tail.setAttribute(
