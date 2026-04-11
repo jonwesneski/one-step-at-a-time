@@ -15,7 +15,7 @@ import {
   generateKeySignatureYCoordinates,
   generateYCoordinates,
 } from '../utils/theoryHelpers';
-import { MusicLyricsElement } from './lyrics';
+import type { MusicLyricsElement } from './lyrics';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_BASELINE_OFFSET = -25; // px below staff to first verse
