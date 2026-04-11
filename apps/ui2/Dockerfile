@@ -25,12 +25,12 @@ COPY apps/ui2/ ./apps/ui2/
 
 # Build the app
 WORKDIR /app/apps/ui2
-RUN pnpm run build
+RUN pnpm run build && echo "=== Build output ===" && ls -la /app/apps/ui2/ && echo "=== Root output ===" && ls -la /app/
 
 # Runtime stage
 FROM node:22-alpine AS runtime
 
-WORKDIR /app
+WORKDIR /app/apps/ui2
 
 # Copy only the build output
 COPY --from=builder /app/apps/ui2/.output ./.output
