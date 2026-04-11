@@ -17,6 +17,9 @@ COPY packages/web-components/package.json ./packages/web-components/
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
+# Stub out apps/ui so the root tsconfig.json reference doesn't cause warnings
+RUN mkdir -p apps/ui && echo '{"files":[]}' > apps/ui/tsconfig.json
+
 # Copy source for web-components dependency
 COPY packages/web-components/ ./packages/web-components/
 
@@ -25,7 +28,7 @@ COPY apps/ui2/ ./apps/ui2/
 
 # Build the app
 WORKDIR /app/apps/ui2
-RUN pnpm run build
+RUN pnpm run build && echo "=== dist tree ===" && find /app/apps/ui2/dist -type f
 
 # Runtime stage
 FROM nginx:alpine AS runtime
