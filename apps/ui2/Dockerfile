@@ -18,7 +18,7 @@ COPY packages/web-components/package.json ./packages/web-components/
 RUN pnpm install --frozen-lockfile
 
 # Stub out apps/ui so the root tsconfig.json reference doesn't cause warnings
-RUN mkdir -p apps/ui && echo '{"files":[]}' > apps/ui/tsconfig.json
+# RUN mkdir -p apps/ui && echo '{"files":[]}' > apps/ui/tsconfig.json
 
 # Copy source for web-components dependency
 COPY packages/web-components/ ./packages/web-components/
@@ -28,7 +28,7 @@ COPY apps/ui2/ ./apps/ui2/
 
 # Build the app
 WORKDIR /app/apps/ui2
-RUN pnpm run build && echo "=== dist tree ===" && find /app/apps/ui2/dist -type f
+RUN pnpm run build
 
 # Runtime stage
 FROM nginx:alpine AS runtime
@@ -37,7 +37,7 @@ FROM nginx:alpine AS runtime
 COPY apps/ui2/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy static build output, replacing nginx's default welcome page
-COPY --from=builder /app/apps/ui2/dist /usr/share/nginx/html
+COPY --from=builder /app/apps/ui2/dist/client /usr/share/nginx/html
 
 EXPOSE 3000
 
