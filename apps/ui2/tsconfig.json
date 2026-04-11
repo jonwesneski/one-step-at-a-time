@@ -26,5 +26,10 @@
     "vite.config.ts",
     "../../packages/web-components/src/**/*.ts",
     "../../packages/web-components/src/**/*.tsx"
+  ],
+  "exclude": [
+    "../../packages/web-components/src/**/*.test.ts",
+    "../../packages/web-components/src/**/*.spec.ts",
+    "../../packages/web-components/src/**/*.stories.ts"
   ]
 }
