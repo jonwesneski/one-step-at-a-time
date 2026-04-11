@@ -25,16 +25,17 @@ COPY apps/ui2/ ./apps/ui2/
 
 # Build the app
 WORKDIR /app/apps/ui2
-RUN pnpm run build && echo "=== Build output ===" && ls -la /app/apps/ui2/ && echo "=== Root output ===" && ls -la /app/
+RUN pnpm run build
 
 # Runtime stage
-FROM node:22-alpine AS runtime
+FROM nginx:alpine AS runtime
 
-WORKDIR /app/apps/ui2
+# Copy static build output to nginx html directory
+COPY --from=builder /app/apps/ui2/dist /usr/share/nginx/html
 
-# Copy only the build output
-COPY --from=builder /app/apps/ui2/.output ./.output
+# SPA fallback: route all requests to index.html
+RUN printf 'server {\n  listen 3000;\n  root /usr/share/nginx/html;\n  index index.html;\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 
-CMD ["node", ".output/server/index.mjs"]
+CMD ["nginx", "-g", "daemon off;"]
