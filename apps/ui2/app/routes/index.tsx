@@ -3,6 +3,9 @@ import { ClientOnly } from '../components/ClientOnly';
 import { CompositionInput } from '../components/compositionForm';
 
 export const Route = createFileRoute('/')({
+  head: () => ({
+    meta: [{ title: 'New | One Step at a Time' }],
+  }),
   component: Home,
 });
 
