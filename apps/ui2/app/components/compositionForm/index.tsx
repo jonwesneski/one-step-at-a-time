@@ -1,1 +1,1 @@
-export { CompositionEditor } from './CompositionEditor';
+export { CompositionInput } from './CompositionInput';
