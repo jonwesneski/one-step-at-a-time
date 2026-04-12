@@ -51,7 +51,7 @@ export function StaffInput({
   );
 
   return (
-    <>
+    <div className="relative">
       {staff.type === 'treble' ? (
         <music-staff-treble
           className={staffClass}
@@ -73,11 +73,13 @@ export function StaffInput({
         </music-staff-bass>
       )}
       {isSelected && (
-        <NoteChordInput
-          onAdd={(entry) => onAddEntry(measureId, staffId, entry)}
-          remainingBeats={remainingBeats}
-        />
+        <div className="absolute top-full left-1/2 -translate-x-1/2 z-20 mt-1 w-72 shadow-lg">
+          <NoteChordInput
+            onAdd={(entry) => onAddEntry(measureId, staffId, entry)}
+            remainingBeats={remainingBeats}
+          />
+        </div>
       )}
-    </>
+    </div>
   );
 }

@@ -38,7 +38,7 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
 
   return (
     <div
-      className="border border-zinc-200 rounded bg-white shadow-sm mt-2"
+      className="border border-zinc-200 rounded bg-white"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex border-b border-zinc-200">
