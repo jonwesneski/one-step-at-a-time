@@ -35,7 +35,7 @@ export function StaffInput({
   const remainingBeats = 1 - usedBeats;
 
   const staffClass = `cursor-pointer rounded transition-shadow ${
-    isSelected ? 'ring-2 ring-blue-600' : ''
+    isSelected ? 'rainbow-selected' : ''
   }`;
 
   const entryNodes = entries.map((entry, i) =>

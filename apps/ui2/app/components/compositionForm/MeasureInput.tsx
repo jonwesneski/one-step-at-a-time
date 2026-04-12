@@ -18,7 +18,11 @@ type Props = {
     staffId: string,
     e: React.MouseEvent
   ) => void;
-  onAddEntry: (measureId: string, staffId: string, entry: DraftMusicEntry) => void;
+  onAddEntry: (
+    measureId: string,
+    staffId: string,
+    entry: DraftMusicEntry
+  ) => void;
   onAddStaff: (measureId: string, staffType: StaffType) => void;
 };
 
@@ -37,8 +41,8 @@ export function MeasureInput({
   return (
     <music-measure
       className={`cursor-pointer rounded transition-shadow ${
-        isMeasureSelected ? 'rainbow-selected pb-10' : ''
-      }`}
+        isMeasureSelected && !selection.staffId ? 'rainbow-selected pb-10' : ''
+      } ${isMeasureSelected ? 'pb-10' : ''}`}
       onClick={() => onSelectMeasure(measureId)}
     >
       {measure.staffIds.length === 0 && (
