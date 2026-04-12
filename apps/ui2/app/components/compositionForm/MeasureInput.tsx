@@ -50,7 +50,7 @@ export function MeasureInput({
     >
       {measure.staves.length === 0 && (
         <div className="text-zinc-400 text-sm px-3 py-4 select-none">
-          Select this measure and use the dropdown to add a staff
+          Tap or click here and use the dropdown to add a staff
         </div>
       )}
       {measure.staves.map((staff: Staff, index: number) => {
