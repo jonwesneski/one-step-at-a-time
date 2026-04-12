@@ -3,10 +3,10 @@ import type { DurationType, Note } from '@one-step-at-a-time/web-components';
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Button, Select } from '../../design-system';
-import type { CompositionFormValues, MusicEntry } from './types';
+import type { CompositionFormValues, DraftMusicEntry } from './types';
 import { DURATION_OPTIONS, NOTE_OPTIONS } from './types';
 
-type Props = { onAdd: (entry: MusicEntry) => void; remainingBeats: number };
+type Props = { onAdd: (entry: DraftMusicEntry) => void; remainingBeats: number };
 
 export function NoteChordInput({ onAdd, remainingBeats }: Props) {
   const { setValue, watch } = useFormContext<CompositionFormValues>();

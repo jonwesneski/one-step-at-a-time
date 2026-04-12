@@ -7,27 +7,34 @@ import type {
 
 export type StaffType = 'treble' | 'bass';
 
-export type NoteEntry = { type: 'note'; value: Note; duration: DurationType };
-export type ChordEntry = {
-  type: 'chord';
-  notes: Note[];
-  duration: DurationType;
-};
+export type NoteEntry = { id: string; type: 'note'; value: Note; duration: DurationType };
+export type ChordEntry = { id: string; type: 'chord'; notes: Note[]; duration: DurationType };
 export type MusicEntry = NoteEntry | ChordEntry;
+// Entry shape before an id is assigned (used when constructing entries in NoteChordInput)
+export type DraftMusicEntry = Omit<NoteEntry, 'id'> | Omit<ChordEntry, 'id'>;
 
-export type Staff = { id: string; type: StaffType; entries: MusicEntry[] };
-export type Measure = { id: string; staves: Staff[] };
+// Flat normalized nodes
+export type NormalizedMeasure = { id: string; staffIds: string[] };
+export type NormalizedStaff = { id: string; type: StaffType; entryIds: string[] };
+
+// The undoable structural slice
+export type CompositionStructure = {
+  measureOrder: string[];
+  measuresById: Record<string, NormalizedMeasure>;
+  stavesById: Record<string, NormalizedStaff>;
+  entriesById: Record<string, MusicEntry>;
+};
 
 export type Selection = { measureId: string | null; staffId: string | null };
 
+// Root form shape (BasicInfo fields + structure)
 export type CompositionFormValues = {
   title: string;
   keySig: LetterNote;
   timeSig: string;
   mode: Mode;
   tab: 'note' | 'chord';
-  measures: Measure[];
-};
+} & CompositionStructure;
 
 export const NOTE_OPTIONS: Note[] = [
   'A',
