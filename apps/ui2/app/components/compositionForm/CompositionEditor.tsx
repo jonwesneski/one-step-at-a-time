@@ -2,6 +2,7 @@ import '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { Fragment, useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
+import { Button } from '../../design-system';
 import { BasicInfoInput } from './BasicInfoInput';
 import { NoteChordInput } from './NoteChordInput';
 import type {
@@ -94,9 +95,6 @@ export function CompositionEditor() {
     e.stopPropagation();
     setSelection({ measureId, staffId });
   }
-
-  const btnPrimary =
-    'px-3 py-1.5 text-sm rounded border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer';
 
   return (
     <FormProvider {...methods}>
@@ -204,12 +202,9 @@ export function CompositionEditor() {
               </music-measure>
             );
           })}
-          <button
-            className={`${btnPrimary} place-self-center ml-2`}
-            onClick={addMeasure}
-          >
+          <Button className="place-self-center ml-2" onClick={addMeasure}>
             Add Measure
-          </button>
+          </Button>
         </music-composition>
       </div>
     </FormProvider>

@@ -2,17 +2,11 @@ import { durationToFactor } from '@one-step-at-a-time/web-components';
 import type { DurationType, Note } from '@one-step-at-a-time/web-components';
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
+import { Button, Select } from '../../design-system';
 import type { CompositionFormValues, MusicEntry } from './types';
 import { DURATION_OPTIONS, NOTE_OPTIONS } from './types';
 
 type Props = { onAdd: (entry: MusicEntry) => void; remainingBeats: number };
-
-const selectClass =
-  'text-sm border border-zinc-300 rounded bg-white px-2 py-1 cursor-pointer';
-const btnPrimary =
-  'px-3 py-1.5 text-sm rounded border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
-const btnSecondary =
-  'px-3 py-1.5 text-sm rounded border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 cursor-pointer';
 
 export function NoteChordInput({ onAdd, remainingBeats }: Props) {
   const { setValue, watch } = useFormContext<CompositionFormValues>();
@@ -75,8 +69,7 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
       <div className="p-3 flex flex-col gap-2">
         {activeTab === 'note' && (
           <>
-            <select
-              className={selectClass}
+            <Select
               value={noteValue}
               onChange={(e) => setNoteValue(e.target.value as Note)}
             >
@@ -85,9 +78,8 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
                   {n}
                 </option>
               ))}
-            </select>
-            <select
-              className={selectClass}
+            </Select>
+            <Select
               value={noteDuration}
               onChange={(e) => setNoteDuration(e.target.value as DurationType)}
             >
@@ -96,24 +88,22 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
                   {d}
                 </option>
               ))}
-            </select>
-            <button
+            </Select>
+            <Button
               type="button"
-              className={btnPrimary}
               disabled={!canAddNote}
               onClick={handleNoteAdd}
             >
               Add
-            </button>
+            </Button>
           </>
         )}
 
         {activeTab === 'chord' && (
           <>
             {chordNotes.map((note, i) => (
-              <select
+              <Select
                 key={i}
-                className={selectClass}
                 value={note.value}
                 onChange={(e) =>
                   setChordNotes((prev) =>
@@ -128,17 +118,16 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
                     {n}
                   </option>
                 ))}
-              </select>
+              </Select>
             ))}
-            <button
+            <Button
               type="button"
-              className={btnSecondary}
+              variant="secondary"
               onClick={() => setChordNotes((prev) => [...prev, { value: 'C' }])}
             >
               + Add Note
-            </button>
-            <select
-              className={selectClass}
+            </Button>
+            <Select
               value={chordDuration}
               onChange={(e) => setChordDuration(e.target.value as DurationType)}
             >
@@ -147,15 +136,14 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
                   {d}
                 </option>
               ))}
-            </select>
-            <button
+            </Select>
+            <Button
               type="button"
-              className={btnPrimary}
               disabled={!canAddChord}
               onClick={handleChordAdd}
             >
               Add
-            </button>
+            </Button>
           </>
         )}
       </div>
