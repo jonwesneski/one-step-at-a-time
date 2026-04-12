@@ -25,7 +25,7 @@ describe('music-composition', () => {
 });
 
 describe('music-composition attribute propagation', () => {
-  function makeTree(staffTag: string = 'music-staff-treble'): {
+  function makeTree(staffTag = 'music-staff-treble'): {
     composition: any;
     measure: any;
     staff: any;

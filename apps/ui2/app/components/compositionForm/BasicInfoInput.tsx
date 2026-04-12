@@ -3,11 +3,31 @@ import { useFormContext } from 'react-hook-form';
 import type { CompositionFormValues } from './types';
 
 const KEY_SIGNATURE_OPTIONS: LetterNote[] = [
-  'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F',
+  'C',
+  'G',
+  'D',
+  'A',
+  'E',
+  'B',
+  'F#',
+  'Db',
+  'Ab',
+  'Eb',
+  'Bb',
+  'F',
 ];
 
 const TIME_SIGNATURE_OPTIONS = [
-  '4/4', '3/4', '2/4', '2/2', '6/8', '9/8', '12/8', '3/8', '5/4', '7/4',
+  '4/4',
+  '3/4',
+  '2/4',
+  '2/2',
+  '6/8',
+  '9/8',
+  '12/8',
+  '3/8',
+  '5/4',
+  '7/4',
 ];
 
 const MODE_OPTIONS: Mode[] = ['major', 'minor'];

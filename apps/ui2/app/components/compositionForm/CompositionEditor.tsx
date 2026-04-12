@@ -6,7 +6,6 @@ import { BasicInfoInput } from './BasicInfoInput';
 import { NoteChordInput } from './NoteChordInput';
 import type {
   CompositionFormValues,
-  Measure,
   MusicEntry,
   Selection,
   Staff,
@@ -14,12 +13,9 @@ import type {
 } from './types';
 
 export function CompositionEditor() {
-  const [measures, setMeasures] = useState<Measure[]>([
-    { id: crypto.randomUUID(), staves: [] },
-  ]);
   const [selection, setSelection] = useState<Selection>({
     measureId: null,
-    staffType: null,
+    staffId: null,
   });
 
   const methods = useForm<CompositionFormValues>({
@@ -29,51 +25,56 @@ export function CompositionEditor() {
       timeSig: '4/4',
       mode: 'major',
       tab: 'note',
-      noteValue: 'C',
-      noteDuration: 'quarter',
-      chordNotes: [{ value: 'C' }, { value: 'E' }],
-      chordDuration: 'quarter',
+      measures: [{ id: crypto.randomUUID(), staves: [] }],
     },
   });
 
   const keySig = methods.watch('keySig');
   const timeSig = methods.watch('timeSig');
   const mode = methods.watch('mode');
+  const measures = methods.watch('measures');
 
   function addMeasure() {
     const newId = crypto.randomUUID();
-    setMeasures((prev) => {
-      const lastMeasure = prev[prev.length - 1];
-      const staves = lastMeasure.staves.map((s) => ({ ...s, entries: [] }));
-      return [...prev, { id: newId, staves }];
-    });
-    setSelection({ measureId: newId, staffType: null });
+    const prev = methods.getValues('measures');
+    const lastMeasure = prev[prev.length - 1];
+    const staves = lastMeasure.staves.map((s) => ({
+      ...s,
+      id: crypto.randomUUID(),
+      entries: [],
+    }));
+    methods.setValue('measures', [...prev, { id: newId, staves }]);
+    setSelection({ measureId: newId, staffId: null });
   }
 
   function addStaff(measureId: string, staffType: StaffType) {
-    setMeasures((prev) =>
+    const prev = methods.getValues('measures');
+    methods.setValue(
+      'measures',
       prev.map((m) =>
         m.id === measureId
-          ? { ...m, staves: [...m.staves, { type: staffType, entries: [] }] }
+          ? {
+              ...m,
+              staves: [
+                ...m.staves,
+                { id: crypto.randomUUID(), type: staffType, entries: [] },
+              ],
+            }
           : m
       )
     );
   }
 
-  function addEntry(
-    measureId: string,
-    staffType: StaffType,
-    entry: MusicEntry
-  ) {
-    setMeasures((prev) =>
+  function addEntry(measureId: string, staffId: string, entry: MusicEntry) {
+    const prev = methods.getValues('measures');
+    methods.setValue(
+      'measures',
       prev.map((m) =>
         m.id === measureId
           ? {
               ...m,
               staves: m.staves.map((s) =>
-                s.type === staffType
-                  ? { ...s, entries: [...s.entries, entry] }
-                  : s
+                s.id === staffId ? { ...s, entries: [...s.entries, entry] } : s
               ),
             }
           : m
@@ -82,16 +83,16 @@ export function CompositionEditor() {
   }
 
   function selectMeasure(id: string) {
-    setSelection({ measureId: id, staffType: null });
+    setSelection({ measureId: id, staffId: null });
   }
 
   function selectStaff(
     measureId: string,
-    staffType: StaffType,
+    staffId: string,
     e: React.MouseEvent
   ) {
     e.stopPropagation();
-    setSelection({ measureId, staffType });
+    setSelection({ measureId, staffId });
   }
 
   const btnPrimary =
@@ -111,8 +112,8 @@ export function CompositionEditor() {
               <music-measure
                 key={measure.id}
                 className={`cursor-pointer rounded transition-shadow ${
-                  isMeasureSelected ? 'rainbow-selected' : ''
-                } ${isMeasureSelected ? 'pb-10' : ''}`}
+                  isMeasureSelected ? 'rainbow-selected pb-10' : ''
+                }`}
                 onClick={() => selectMeasure(measure.id)}
               >
                 {measure.staves.length === 0 && (
@@ -124,8 +125,7 @@ export function CompositionEditor() {
                   const isMeasureSelectedForStaff =
                     selection.measureId === measure.id;
                   const isStaffSelected =
-                    isMeasureSelectedForStaff &&
-                    selection.staffType === staff.type;
+                    isMeasureSelectedForStaff && selection.staffId === staff.id;
                   const usedBeats = staff.entries.reduce(
                     (sum, entry) => sum + durationToFactor[entry.duration],
                     0
@@ -158,9 +158,7 @@ export function CompositionEditor() {
                           className={staffClass}
                           keySig={keySig}
                           time={timeSig}
-                          onClick={(e) =>
-                            selectStaff(measure.id, staff.type, e)
-                          }
+                          onClick={(e) => selectStaff(measure.id, staff.id, e)}
                         >
                           {entryNodes}
                         </music-staff-treble>
@@ -170,9 +168,7 @@ export function CompositionEditor() {
                           keySig={keySig}
                           mode={mode}
                           time={timeSig}
-                          onClick={(e) =>
-                            selectStaff(measure.id, staff.type, e)
-                          }
+                          onClick={(e) => selectStaff(measure.id, staff.id, e)}
                         >
                           {entryNodes}
                         </music-staff-bass>
@@ -180,7 +176,7 @@ export function CompositionEditor() {
                       {isStaffSelected && (
                         <NoteChordInput
                           onAdd={(entry) =>
-                            addEntry(measure.id, staff.type, entry)
+                            addEntry(measure.id, staff.id, entry)
                           }
                           remainingBeats={remainingBeats}
                         />
