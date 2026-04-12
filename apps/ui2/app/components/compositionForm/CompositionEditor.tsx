@@ -1,7 +1,7 @@
 import '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { Fragment, useState } from 'react';
-import { FormProvider, useForm } from 'react-hook-form';
+import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { Button } from '../../design-system';
 import { BasicInfoInput } from './BasicInfoInput';
 import { NoteChordInput } from './NoteChordInput';
@@ -30,10 +30,10 @@ export function CompositionEditor() {
     },
   });
 
-  const keySig = methods.watch('keySig');
-  const timeSig = methods.watch('timeSig');
-  const mode = methods.watch('mode');
-  const measures = methods.watch('measures');
+  const keySig = useWatch({ control: methods.control, name: 'keySig' });
+  const timeSig = useWatch({ control: methods.control, name: 'timeSig' });
+  const mode = useWatch({ control: methods.control, name: 'mode' });
+  const measures = useWatch({ control: methods.control, name: 'measures' });
 
   function addMeasure() {
     const newId = crypto.randomUUID();
