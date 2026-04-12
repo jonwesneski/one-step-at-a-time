@@ -8,6 +8,6 @@ import './staffVocal';
 
 import './note';
 
-export type { DurationType, LetterOctave, Note } from './types/theory';
+export type { DurationType, LetterNote, LetterOctave, Mode, Note } from './types/theory';
 export type { PitchChangeDetail } from './utils/pitchDragHandler';
 export { durationToFactor } from './utils/consts';

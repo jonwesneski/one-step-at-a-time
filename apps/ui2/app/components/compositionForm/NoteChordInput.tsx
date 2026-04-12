@@ -1,6 +1,6 @@
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { useFieldArray, useFormContext } from 'react-hook-form';
-import type { MusicEntry, NoteFormValues } from './types';
+import type { CompositionFormValues, MusicEntry } from './types';
 import { DURATION_OPTIONS, NOTE_OPTIONS } from './types';
 
 type Props = { onAdd: (entry: MusicEntry) => void; remainingBeats: number };
@@ -14,7 +14,7 @@ const btnSecondary =
 
 export function NoteChordInput({ onAdd, remainingBeats }: Props) {
   const { register, handleSubmit, setValue, watch, control } =
-    useFormContext<NoteFormValues>();
+    useFormContext<CompositionFormValues>();
 
   const { fields, append } = useFieldArray({ control, name: 'chordNotes' });
 
@@ -25,11 +25,11 @@ export function NoteChordInput({ onAdd, remainingBeats }: Props) {
   const canAddNote = durationToFactor[noteDuration] <= remainingBeats;
   const canAddChord = durationToFactor[chordDuration] <= remainingBeats;
 
-  function handleNoteAdd(data: NoteFormValues) {
+  function handleNoteAdd(data: CompositionFormValues) {
     onAdd({ type: 'note', value: data.noteValue, duration: data.noteDuration });
   }
 
-  function handleChordAdd(data: NoteFormValues) {
+  function handleChordAdd(data: CompositionFormValues) {
     onAdd({
       type: 'chord',
       notes: data.chordNotes.map((n) => n.value),

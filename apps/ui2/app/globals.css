@@ -1,1 +1,47 @@
 @import 'tailwindcss';
+
+@property --rainbow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes rainbow-spin {
+  to { --rainbow-angle: 360deg; }
+}
+
+.rainbow-selected {
+  position: relative;
+  isolation: isolate;
+}
+
+.rainbow-selected::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 0.5rem;
+  padding: 5px;
+  background: conic-gradient(
+    from var(--rainbow-angle),
+    hsl(240, 100%, 65%),
+    hsl(120, 100%, 45%),
+    hsl(280, 100%, 60%),
+    hsl(55,  100%, 55%),
+    hsl(140, 100%, 40%),
+    hsl(330, 100%, 65%),
+    hsl(25,  100%, 55%),
+    hsl(0,   100%, 60%),
+    hsl(240, 100%, 65%)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  filter: blur(5px);
+  z-index: -1;
+  animation: rainbow-spin 8s linear infinite;
+}

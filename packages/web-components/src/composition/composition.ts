@@ -17,7 +17,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get keySig(): string {
-      return this.getAttribute('keysig') || 'C';
+      return this.getAttribute('keysig') ?? 'C';
     }
 
     set keySig(value: string) {
@@ -25,7 +25,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get mode(): string {
-      return this.getAttribute('mode') || 'major';
+      return this.getAttribute('mode') ?? 'major';
     }
 
     set mode(value: string) {
@@ -33,7 +33,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get time(): string {
-      return this.getAttribute('time') || '4/4';
+      return this.getAttribute('time') ?? '4/4';
     }
 
     set time(value: string) {
@@ -50,8 +50,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue !== newValue) {
-        this.render();
+      if (oldValue === newValue) {
+        return;
+      }
+      this.render();
+      if (name === 'keysig' || name === 'mode' || name === 'time') {
+        Array.from(this.querySelectorAll('*'))
+          .filter((el) => el.nodeName.startsWith('MUSIC-STAFF-'))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          .forEach((staff) => (staff as any).refreshInheritedAttrs?.());
       }
     }
 

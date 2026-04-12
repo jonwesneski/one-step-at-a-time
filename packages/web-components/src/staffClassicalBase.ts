@@ -155,6 +155,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return `${this.#effectiveTimeSig[0]}/${this.#effectiveTimeSig[1]}`;
   }
 
+  set time(value: string) {
+    this.setAttribute('time', value);
+  }
+
   abstract get yCoordinates(): YCoordinates;
 
   abstract get octaves(): Octave[];
@@ -167,6 +171,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected abstract get clefSvg(): string;
 
   protected onConnectedCallback() {
+    // Re-resolve inherited attrs now that ancestors are reachable via closest()
+    this.#effectiveTimeSig = this.#convertTotimeInts(
+      this.#resolveInheritedValue('time', '4/4')
+    );
+    this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
+    this.#effectiveKeySig = this.#resolveInheritedValue(
+      'keysig',
+      'C'
+    ) as LetterNote;
+
     this.#buildDescribe(this.clefSvg);
     if (this.editable) {
       this.#enableDrag();
@@ -380,6 +394,34 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.transcribeContainer.appendChild(this.#beamsContainer);
   }
 
+  #refreshDescribe() {
+    if (!this.isConnected) return;
+    this.#describeContainer.innerHTML = this.clefSvg;
+    const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
+      this.#describeContainer,
+      CLEF_X_OFFSET
+    );
+    this.#appendTimeSignatureSvgIfNecessary(
+      this.#describeContainer,
+      xOffsetOfKeySignature + 5
+    );
+    if (this.#currentElements.length > 0) {
+      this.#spaceElements();
+    }
+  }
+
+  refreshInheritedAttrs() {
+    this.#effectiveTimeSig = this.#convertTotimeInts(
+      this.#resolveInheritedValue('time', '4/4')
+    );
+    this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
+    this.#effectiveKeySig = this.#resolveInheritedValue(
+      'keysig',
+      'C'
+    ) as LetterNote;
+    this.#refreshDescribe();
+  }
+
   #appendKeySignatureSvg(svg: SVGElement, xOffset: number) {
     const { useSharps, coordinates } = this.getKeyYCoordinates();
     const g = document.createElementNS(SVG_NS, 'svg');
@@ -472,8 +514,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           'C'
         ) as LetterNote;
       }
-      // For keySig, mode, time — trigger full re-render
-      super.attributeChangedCallback(name, oldValue, newValue);
+      this.#refreshDescribe();
     }
   }
 
