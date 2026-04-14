@@ -35,5 +35,11 @@ export function useUndoRedo<T>(getValue: () => T, setValue: (v: T) => void) {
     setFuture((f) => f.slice(1));
   }, [future, getValue, setValue]);
 
-  return { record, undo, redo, canUndo: past.length > 0, canRedo: future.length > 0 };
+  return {
+    record,
+    undo,
+    redo,
+    canUndo: past.length > 0,
+    canRedo: future.length > 0,
+  };
 }

@@ -38,7 +38,10 @@ export function CompositionInput() {
   const keySig = useWatch({ control: methods.control, name: 'keySig' });
   const timeSig = useWatch({ control: methods.control, name: 'timeSig' });
   const mode = useWatch({ control: methods.control, name: 'mode' });
-  const measureOrder = useWatch({ control: methods.control, name: 'measureOrder' });
+  const measureOrder = useWatch({
+    control: methods.control,
+    name: 'measureOrder',
+  });
 
   const getStructure = useCallback(
     (): CompositionStructure => ({
@@ -84,10 +87,14 @@ export function CompositionInput() {
   function addMeasure() {
     const s = getStructure();
     const newId = crypto.randomUUID();
-    const lastMeasure = s.measuresById[s.measureOrder[s.measureOrder.length - 1]];
+    const lastMeasure =
+      s.measuresById[s.measureOrder[s.measureOrder.length - 1]];
     const newStaffEntries = lastMeasure.staffIds.map((sid) => {
       const newSid = crypto.randomUUID();
-      return { newSid, staff: { ...s.stavesById[sid], id: newSid, entryIds: [] } };
+      return {
+        newSid,
+        staff: { ...s.stavesById[sid], id: newSid, entryIds: [] },
+      };
     });
     record({
       ...s,
@@ -123,7 +130,11 @@ export function CompositionInput() {
     });
   }
 
-  function addEntry(measureId: string, staffId: string, entry: DraftMusicEntry) {
+  function addEntry(
+    measureId: string,
+    staffId: string,
+    entry: DraftMusicEntry
+  ) {
     const s = getStructure();
     const newEid = crypto.randomUUID();
     record({

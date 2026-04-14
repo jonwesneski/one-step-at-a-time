@@ -6,7 +6,10 @@ import { Button, Select } from '../../design-system';
 import type { CompositionFormValues, DraftMusicEntry } from './types';
 import { DURATION_OPTIONS, NOTE_OPTIONS } from './types';
 
-type Props = { onAdd: (entry: DraftMusicEntry) => void; remainingBeats: number };
+type Props = {
+  onAdd: (entry: DraftMusicEntry) => void;
+  remainingBeats: number;
+};
 
 export function NoteChordInput({ onAdd, remainingBeats }: Props) {
   const { setValue, watch } = useFormContext<CompositionFormValues>();

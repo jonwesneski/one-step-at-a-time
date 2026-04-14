@@ -7,15 +7,29 @@ import type {
 
 export type StaffType = 'treble' | 'bass';
 
-export type NoteEntry = { id: string; type: 'note'; value: Note; duration: DurationType };
-export type ChordEntry = { id: string; type: 'chord'; notes: Note[]; duration: DurationType };
+export type NoteEntry = {
+  id: string;
+  type: 'note';
+  value: Note;
+  duration: DurationType;
+};
+export type ChordEntry = {
+  id: string;
+  type: 'chord';
+  notes: Note[];
+  duration: DurationType;
+};
 export type MusicEntry = NoteEntry | ChordEntry;
 // Entry shape before an id is assigned (used when constructing entries in NoteChordInput)
 export type DraftMusicEntry = Omit<NoteEntry, 'id'> | Omit<ChordEntry, 'id'>;
 
 // Flat normalized nodes
 export type NormalizedMeasure = { id: string; staffIds: string[] };
-export type NormalizedStaff = { id: string; type: StaffType; entryIds: string[] };
+export type NormalizedStaff = {
+  id: string;
+  type: StaffType;
+  entryIds: string[];
+};
 
 // The undoable structural slice
 export type CompositionStructure = {

@@ -8,8 +8,16 @@ type Props = {
   staffId: string;
   measureId: string;
   isSelected: boolean;
-  onSelectStaff: (measureId: string, staffId: string, e: React.MouseEvent) => void;
-  onAddEntry: (measureId: string, staffId: string, entry: DraftMusicEntry) => void;
+  onSelectStaff: (
+    measureId: string,
+    staffId: string,
+    e: React.MouseEvent
+  ) => void;
+  onAddEntry: (
+    measureId: string,
+    staffId: string,
+    entry: DraftMusicEntry
+  ) => void;
 };
 
 export function StaffInput({
