@@ -1,17 +1,17 @@
-import { durationToFactor } from '@one-step-at-a-time/web-components';
 import type { DurationType, Note } from '@one-step-at-a-time/web-components';
+import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Button, Select } from '../../design-system';
 import type { CompositionFormValues, DraftMusicEntry } from './types';
 import { DURATION_OPTIONS, NOTE_OPTIONS } from './types';
 
-type Props = {
+interface NoteChordInputProps {
   onAdd: (entry: DraftMusicEntry) => void;
   remainingBeats: number;
-};
+}
 
-export function NoteChordInput({ onAdd, remainingBeats }: Props) {
+export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
   const { setValue, watch } = useFormContext<CompositionFormValues>();
 
   const activeTab = watch('tab');

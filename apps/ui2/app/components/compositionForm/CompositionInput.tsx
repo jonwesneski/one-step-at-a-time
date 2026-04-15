@@ -71,11 +71,12 @@ export function CompositionInput() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && !e.shiftKey && e.key === 'z') {
+      const key = e.key.toLowerCase();
+      if (mod && !e.shiftKey && key === 'z') {
         e.preventDefault();
         undo();
       }
-      if (mod && ((e.shiftKey && e.key === 'z') || e.key === 'y')) {
+      if (mod && ((e.shiftKey && key === 'z') || key === 'y')) {
         e.preventDefault();
         redo();
       }
@@ -89,6 +90,7 @@ export function CompositionInput() {
     const newId = crypto.randomUUID();
     const lastMeasure =
       s.measuresById[s.measureOrder[s.measureOrder.length - 1]];
+    // Copying the staff structure from the last measure
     const newStaffEntries = lastMeasure.staffIds.map((sid) => {
       const newSid = crypto.randomUUID();
       return {

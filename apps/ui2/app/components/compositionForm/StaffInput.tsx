@@ -4,7 +4,7 @@ import { useFormContext } from 'react-hook-form';
 import { NoteChordInput } from './NoteChordInput';
 import type { CompositionFormValues, DraftMusicEntry } from './types';
 
-type Props = {
+interface StaffInputProps {
   staffId: string;
   measureId: string;
   isSelected: boolean;
@@ -18,7 +18,7 @@ type Props = {
     staffId: string,
     entry: DraftMusicEntry
   ) => void;
-};
+}
 
 export function StaffInput({
   staffId,
@@ -26,7 +26,7 @@ export function StaffInput({
   isSelected,
   onSelectStaff,
   onAddEntry,
-}: Props) {
+}: StaffInputProps) {
   const { watch } = useFormContext<CompositionFormValues>();
   const staff = watch(`stavesById.${staffId}`);
   const entriesById = watch('entriesById');

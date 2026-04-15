@@ -8,7 +8,7 @@ import type {
   StaffType,
 } from './types';
 
-type Props = {
+interface MeasureInputProps {
   measureId: string;
   isMeasureSelected: boolean;
   selection: Selection;
@@ -24,7 +24,7 @@ type Props = {
     entry: DraftMusicEntry
   ) => void;
   onAddStaff: (measureId: string, staffType: StaffType) => void;
-};
+}
 
 export function MeasureInput({
   measureId,
@@ -34,7 +34,7 @@ export function MeasureInput({
   onSelectStaff,
   onAddEntry,
   onAddStaff,
-}: Props) {
+}: MeasureInputProps) {
   const { watch } = useFormContext<CompositionFormValues>();
   const measure = watch(`measuresById.${measureId}`);
 

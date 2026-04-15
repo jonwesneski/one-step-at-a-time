@@ -1,37 +1,10 @@
-import type { LetterNote, Mode } from '@one-step-at-a-time/web-components';
 import { useFormContext } from 'react-hook-form';
 import { Select, TextInput } from '../../design-system';
-import type { CompositionFormValues } from './types';
-
-const KEY_SIGNATURE_OPTIONS: LetterNote[] = [
-  'C',
-  'G',
-  'D',
-  'A',
-  'E',
-  'B',
-  'F#',
-  'Db',
-  'Ab',
-  'Eb',
-  'Bb',
-  'F',
-];
-
-const TIME_SIGNATURE_OPTIONS = [
-  '4/4',
-  '3/4',
-  '2/4',
-  '2/2',
-  '6/8',
-  '9/8',
-  '12/8',
-  '3/8',
-  '5/4',
-  '7/4',
-];
-
-const MODE_OPTIONS: Mode[] = ['major', 'minor'];
+import {
+  KEY_SIGNATURE_OPTIONS,
+  MODE_OPTIONS,
+  type CompositionFormValues,
+} from './types';
 
 const labelClass = 'text-xs font-medium text-zinc-500 mb-0.5';
 
@@ -59,7 +32,7 @@ export function BasicInfoInput() {
       <div className="flex flex-col">
         <label className={labelClass}>Time</label>
         <Select className="w-full" {...register('timeSig')}>
-          {TIME_SIGNATURE_OPTIONS.map((time) => (
+          {KEY_SIGNATURE_OPTIONS.map((time) => (
             <option key={time} value={time}>
               {time}
             </option>

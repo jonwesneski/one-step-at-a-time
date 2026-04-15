@@ -4,7 +4,6 @@ export function useUndoRedo<T>(getValue: () => T, setValue: (v: T) => void) {
   const [past, setPast] = useState<T[]>([]);
   const [future, setFuture] = useState<T[]>([]);
 
-  // Call instead of setValue directly — snapshots current state first
   const record = useCallback(
     (newValue: T) => {
       // Capture snapshot synchronously before setValue mutates the external store.
@@ -20,7 +19,9 @@ export function useUndoRedo<T>(getValue: () => T, setValue: (v: T) => void) {
   );
 
   const undo = useCallback(() => {
-    if (past.length === 0) return;
+    if (past.length === 0) {
+      return;
+    }
     const current = getValue();
     setFuture((f) => [current, ...f]);
     setValue(past[past.length - 1]);
@@ -28,7 +29,9 @@ export function useUndoRedo<T>(getValue: () => T, setValue: (v: T) => void) {
   }, [past, getValue, setValue]);
 
   const redo = useCallback(() => {
-    if (future.length === 0) return;
+    if (future.length === 0) {
+      return;
+    }
     const current = getValue();
     setPast((p) => [...p, current]);
     setValue(future[0]);
