@@ -42,6 +42,12 @@ export function CompositionInput() {
     control: methods.control,
     name: 'measureOrder',
   });
+  const measuresById = useWatch({
+    control: methods.control,
+    name: 'measuresById',
+  });
+  const lastMeasureStaffCount =
+    measuresById[measureOrder[measureOrder.length - 1]]?.staffIds.length ?? 0;
 
   const getStructure = useCallback(
     (): CompositionStructure => ({
@@ -172,9 +178,9 @@ export function CompositionInput() {
     <CompositionFormSessionProvider>
       <FormProvider {...methods}>
         <div className="flex flex-col gap-4">
-          <header className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
+          <div className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
             <BasicInfoInput />
-          </header>
+          </div>
 
           <div className="flex gap-2">
             <Button onClick={undo} disabled={!canUndo}>
@@ -198,7 +204,11 @@ export function CompositionInput() {
                 onAddStaff={addStaff}
               />
             ))}
-            <Button className="place-self-center ml-2" onClick={addMeasure}>
+            <Button
+              className="place-self-center ml-2"
+              disabled={lastMeasureStaffCount === 0}
+              onClick={addMeasure}
+            >
               Add Measure
             </Button>
           </music-composition>
