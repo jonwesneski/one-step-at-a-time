@@ -4,6 +4,7 @@ import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { Button } from '../../design-system';
 import { useUndoRedo } from '../../hooks/useUndoRedo';
 import { BasicInfoInput } from './BasicInfoInput';
+import { CompositionFormSessionProvider } from './CompositionFormSessionContext';
 import { MeasureInput } from './MeasureInput';
 import type {
   CompositionFormValues,
@@ -27,7 +28,6 @@ export function CompositionInput() {
       keySig: 'C',
       timeSig: '4/4',
       mode: 'major',
-      tab: 'note',
       measureOrder: [firstMeasureId],
       measuresById: { [firstMeasureId]: { id: firstMeasureId, staffIds: [] } },
       stavesById: {},
@@ -169,39 +169,41 @@ export function CompositionInput() {
   }
 
   return (
-    <FormProvider {...methods}>
-      <div className="flex flex-col gap-4">
-        <header className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
-          <BasicInfoInput />
-        </header>
+    <CompositionFormSessionProvider>
+      <FormProvider {...methods}>
+        <div className="flex flex-col gap-4">
+          <header className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
+            <BasicInfoInput />
+          </header>
 
-        <div className="flex gap-2">
-          <Button onClick={undo} disabled={!canUndo}>
-            Undo
-          </Button>
-          <Button onClick={redo} disabled={!canRedo}>
-            Redo
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={undo} disabled={!canUndo}>
+              Undo
+            </Button>
+            <Button onClick={redo} disabled={!canRedo}>
+              Redo
+            </Button>
+          </div>
+
+          <music-composition keySig={keySig} mode={mode} time={timeSig}>
+            {measureOrder.map((measureId) => (
+              <MeasureInput
+                key={measureId}
+                measureId={measureId}
+                isMeasureSelected={selection.measureId === measureId}
+                selection={selection}
+                onSelectMeasure={selectMeasure}
+                onSelectStaff={selectStaff}
+                onAddEntry={addEntry}
+                onAddStaff={addStaff}
+              />
+            ))}
+            <Button className="place-self-center ml-2" onClick={addMeasure}>
+              Add Measure
+            </Button>
+          </music-composition>
         </div>
-
-        <music-composition keySig={keySig} mode={mode} time={timeSig}>
-          {measureOrder.map((measureId) => (
-            <MeasureInput
-              key={measureId}
-              measureId={measureId}
-              isMeasureSelected={selection.measureId === measureId}
-              selection={selection}
-              onSelectMeasure={selectMeasure}
-              onSelectStaff={selectStaff}
-              onAddEntry={addEntry}
-              onAddStaff={addStaff}
-            />
-          ))}
-          <Button className="place-self-center ml-2" onClick={addMeasure}>
-            Add Measure
-          </Button>
-        </music-composition>
-      </div>
-    </FormProvider>
+      </FormProvider>
+    </CompositionFormSessionProvider>
   );
 }

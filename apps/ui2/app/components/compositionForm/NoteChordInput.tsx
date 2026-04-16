@@ -1,9 +1,9 @@
 import type { DurationType, Note } from '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { useState } from 'react';
-import { useFormContext } from 'react-hook-form';
 import { Button, Select } from '../../design-system';
-import type { CompositionFormValues, DraftMusicEntry } from './types';
+import { useCompositionFormSession } from './CompositionFormSessionContext';
+import type { DraftMusicEntry } from './types';
 import { DURATION_OPTIONS, NOTE_OPTIONS } from './types';
 
 interface NoteChordInputProps {
@@ -12,9 +12,9 @@ interface NoteChordInputProps {
 }
 
 export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
-  const { setValue, watch } = useFormContext<CompositionFormValues>();
+  const { session, setSession } = useCompositionFormSession();
 
-  const activeTab = watch('tab');
+  const activeTab = session.tab;
 
   const [noteValue, setNoteValue] = useState<Note>('C');
   const [noteDuration, setNoteDuration] = useState<DurationType>('quarter');
@@ -52,7 +52,7 @@ export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
               ? 'border-b-2 border-blue-600 text-blue-600 font-medium'
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
-          onClick={() => setValue('tab', 'note')}
+          onClick={() => setSession({ tab: 'note' })}
         >
           Note
         </button>
@@ -63,7 +63,7 @@ export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
               ? 'border-b-2 border-blue-600 text-blue-600 font-medium'
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
-          onClick={() => setValue('tab', 'chord')}
+          onClick={() => setSession({ tab: 'chord' })}
         >
           Chord
         </button>

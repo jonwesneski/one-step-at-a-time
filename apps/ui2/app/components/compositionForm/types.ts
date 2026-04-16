@@ -47,7 +47,6 @@ export type CompositionFormValues = {
   keySig: LetterNote;
   timeSig: string;
   mode: Mode;
-  tab: 'note' | 'chord';
 } & CompositionStructure;
 
 export const KEY_SIGNATURE_OPTIONS: LetterNote[] = [
