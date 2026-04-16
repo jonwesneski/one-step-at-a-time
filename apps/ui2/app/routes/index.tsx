@@ -11,10 +11,8 @@ export const Route = createFileRoute('/')({
 
 function Home() {
   return (
-    <main className="min-h-screen bg-zinc-50 font-sans p-6">
-      <ClientOnly>
-        <CompositionInput />
-      </ClientOnly>
-    </main>
+    <ClientOnly>
+      <CompositionInput />
+    </ClientOnly>
   );
 }
