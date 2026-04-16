@@ -8,80 +8,80 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as StandaloneRouteImport } from './routes/standalone'
-import { Route as SampleRouteImport } from './routes/sample'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as rootRouteImport } from './routes/__root';
+import { Route as StandaloneRouteImport } from './routes/standalone';
+import { Route as SampleRouteImport } from './routes/sample';
+import { Route as IndexRouteImport } from './routes/index';
 
 const StandaloneRoute = StandaloneRouteImport.update({
   id: '/standalone',
   path: '/standalone',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const SampleRoute = SampleRouteImport.update({
   id: '/sample',
   path: '/sample',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/sample': typeof SampleRoute
-  '/standalone': typeof StandaloneRoute
+  '/': typeof IndexRoute;
+  '/sample': typeof SampleRoute;
+  '/standalone': typeof StandaloneRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/sample': typeof SampleRoute
-  '/standalone': typeof StandaloneRoute
+  '/': typeof IndexRoute;
+  '/sample': typeof SampleRoute;
+  '/standalone': typeof StandaloneRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/sample': typeof SampleRoute
-  '/standalone': typeof StandaloneRoute
+  __root__: typeof rootRouteImport;
+  '/': typeof IndexRoute;
+  '/sample': typeof SampleRoute;
+  '/standalone': typeof StandaloneRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sample' | '/standalone'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sample' | '/standalone'
-  id: '__root__' | '/' | '/sample' | '/standalone'
-  fileRoutesById: FileRoutesById
+  fileRoutesByFullPath: FileRoutesByFullPath;
+  fullPaths: '/' | '/sample' | '/standalone';
+  fileRoutesByTo: FileRoutesByTo;
+  to: '/' | '/sample' | '/standalone';
+  id: '__root__' | '/' | '/sample' | '/standalone';
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  SampleRoute: typeof SampleRoute
-  StandaloneRoute: typeof StandaloneRoute
+  IndexRoute: typeof IndexRoute;
+  SampleRoute: typeof SampleRoute;
+  StandaloneRoute: typeof StandaloneRoute;
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/standalone': {
-      id: '/standalone'
-      path: '/standalone'
-      fullPath: '/standalone'
-      preLoaderRoute: typeof StandaloneRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/standalone';
+      path: '/standalone';
+      fullPath: '/standalone';
+      preLoaderRoute: typeof StandaloneRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/sample': {
-      id: '/sample'
-      path: '/sample'
-      fullPath: '/sample'
-      preLoaderRoute: typeof SampleRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/sample';
+      path: '/sample';
+      fullPath: '/sample';
+      preLoaderRoute: typeof SampleRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/';
+      path: '/';
+      fullPath: '/';
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
@@ -89,16 +89,16 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SampleRoute: SampleRoute,
   StandaloneRoute: StandaloneRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { getRouter } from './router.tsx';
+import type { createStart } from '@tanstack/react-start';
 declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }
