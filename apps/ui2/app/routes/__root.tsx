@@ -34,14 +34,14 @@ function Root() {
         <HeadContent />
       </head>
       <body className="min-h-screen flex flex-col bg-zinc-50 font-sans">
-        <header className="flex gap-4 border-b border-zinc-200 bg-white px-6 py-4">
+        <header className="flex items-center gap-4 border-b border-zinc-200 bg-white px-6 py-4">
           <nav>
             <Link to="/">
-              <span className="flex items-center justify-center h-10 w-10 rounded-full border border-zinc-900">
+              <span className="flex items-center justify-center h-7 w-7 rounded-full border border-zinc-900">
                 <img
                   src="/logo.svg"
                   alt="One Step at a Time"
-                  className="h-7 w-7"
+                  className="h-5 w-5"
                 />
               </span>
             </Link>
