@@ -5,6 +5,7 @@ type WebComponentProps = {
   key?: React.Key;
   ref?: React.Ref<HTMLElement>;
   children?: React.ReactNode;
+  className?: string;
 };
 
 declare module 'react' {
@@ -35,6 +36,7 @@ declare module 'react' {
         keySig?: LetterNote;
         mode?: string;
         time?: string;
+        onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-bass': WebComponentProps & {
         keySig?: LetterNote;
@@ -42,12 +44,14 @@ declare module 'react' {
         time?: string;
         editable?: boolean;
         managed?: boolean;
+        onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-treble': WebComponentProps & {
         keySig?: LetterNote;
         time?: string;
         editable?: boolean;
         managed?: boolean;
+        onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-guitar-tab': WebComponentProps & {
         time?: string;

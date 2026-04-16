@@ -1,0 +1,29 @@
+{
+  "name": "@one-step-at-a-time/ui2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "@one-step-at-a-time/web-components": "workspace:*",
+    "@tanstack/react-router": "1.168.13",
+    "@tanstack/react-start": "1.167.20",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^5.0.0"
+  }
+}

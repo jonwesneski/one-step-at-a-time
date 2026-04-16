@@ -48,7 +48,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prettier/Format Check
-        run: npx nx format:check  --base="remotes/origin/main"
+        run: pnpm exec nx format:check  --base="remotes/origin/main"
 
       - name: Lint, Build, Typecheck, Test
-        run: npx nx run-many -t lint build typecheck test
+        run: pnpm exec nx run-many -t lint build typecheck test

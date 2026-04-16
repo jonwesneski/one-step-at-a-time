@@ -8,6 +8,9 @@
     },
     {
       "path": "./apps/ui"
+    },
+    {
+      "path": "./apps/ui2"
     }
   ],
   "ts-node": {

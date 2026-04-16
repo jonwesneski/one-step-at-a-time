@@ -6,7 +6,15 @@
 
 import { ILyricsElement, LyricSyllablePosition } from '../types/elements';
 
-export class MusicLyricsElement extends HTMLElement implements ILyricsElement {
+const SSRSafeHTMLElement: typeof HTMLElement =
+  typeof HTMLElement !== 'undefined'
+    ? HTMLElement
+    : (class {} as unknown as typeof HTMLElement);
+
+export class MusicLyricsElement
+  extends SSRSafeHTMLElement
+  implements ILyricsElement
+{
   #syllablePositions: LyricSyllablePosition[] = [];
   #lyricContainer: SVGSVGElement | null = null;
 
