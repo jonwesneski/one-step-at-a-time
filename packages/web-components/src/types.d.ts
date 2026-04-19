@@ -26,11 +26,24 @@ declare module 'react' {
       'music-note': WebComponentProps & {
         value?: Note;
         duration?: DurationType;
+        tie?: 'start' | 'end';
+        slur?: 'start' | 'end';
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
         // Custom events (note-click, note-pointerdown, note-pointerup) require
         // useRef + addEventListener in React — they are not auto-wired by prop name.
+      };
+      'music-guitar-note': WebComponentProps & {
+        fret?: number | 'x';
+        string?: number;
+        duration?: DurationType;
+        tie?: 'start' | 'end';
+        slur?: 'start' | 'end';
+        'hammer-on'?: 'start' | 'end';
+        'pull-off'?: 'start' | 'end';
+        slide?: 'start' | 'end';
+        bend?: string;
       };
       'music-measure': WebComponentProps & {
         keySig?: LetterNote;

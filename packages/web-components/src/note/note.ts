@@ -1,11 +1,16 @@
-import { INoteElement } from '../types/elements';
+import { ConnectorRole, INoteElement } from '../types/elements';
 import { DurationType, Note } from '../types/theory';
 import { createNoteSvg } from '../utils';
+
+const parseConnectorRole = (value: string | null): ConnectorRole | null => {
+  if (value === 'start' || value === 'end') return value;
+  return null;
+};
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement implements INoteElement {
     static get observedAttributes(): string[] {
-      return ['duration', 'value'];
+      return ['duration', 'value', 'tie', 'slur'];
     }
 
     #stemUp = true;
@@ -69,6 +74,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    get tie(): ConnectorRole | null {
+      return parseConnectorRole(this.getAttribute('tie'));
+    }
+    set tie(value: ConnectorRole | null) {
+      if (value === null) this.removeAttribute('tie');
+      else this.setAttribute('tie', value);
+    }
+
+    get slur(): ConnectorRole | null {
+      return parseConnectorRole(this.getAttribute('slur'));
+    }
+    set slur(value: ConnectorRole | null) {
+      if (value === null) this.removeAttribute('slur');
+      else this.setAttribute('slur', value);
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -95,13 +116,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     attributeChangedCallback(
-      _name: string,
+      name: string,
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue !== newValue && this.isConnected) {
-        this.render();
+      if (oldValue === newValue || !this.isConnected) return;
+
+      if (name === 'tie' || name === 'slur') {
+        this.dispatchEvent(
+          new CustomEvent('connector-attribute-change', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
       }
+
+      this.render();
     }
 
     private render(): void {
