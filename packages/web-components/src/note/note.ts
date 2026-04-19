@@ -78,16 +78,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return parseConnectorRole(this.getAttribute('tie'));
     }
     set tie(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('tie');
-      else this.setAttribute('tie', value);
+      if (value === null) {
+        this.removeAttribute('tie');
+      } else {
+        this.setAttribute('tie', value);
+      }
     }
 
     get slur(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('slur'));
     }
     set slur(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('slur');
-      else this.setAttribute('slur', value);
+      if (value === null) {
+        this.removeAttribute('slur');
+      } else {
+        this.setAttribute('slur', value);
+      }
     }
 
     batchUpdate(fn: () => void): void {

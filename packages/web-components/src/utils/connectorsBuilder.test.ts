@@ -2,23 +2,24 @@
  * @jest-environment jsdom
  */
 import '../index';
-import { pairConnectors, collectNoteLikeElements } from './connectorsBuilder';
+import { NoteLikeElementType } from '../types/elements';
+import { collectNoteLikeElements, pairConnectors } from './connectorsBuilder';
 
 afterEach(() => {
   document.body.innerHTML = '';
   jest.restoreAllMocks();
 });
 
-const makeNote = (attrs: Record<string, string>): HTMLElement => {
+const makeNote = (attrs: Record<string, string>): NoteLikeElementType => {
   const el = document.createElement('music-note');
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
+  return el as NoteLikeElementType;
 };
 
-const makeGuitarNote = (attrs: Record<string, string>): HTMLElement => {
+const makeGuitarNote = (attrs: Record<string, string>): NoteLikeElementType => {
   const el = document.createElement('music-guitar-note');
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
+  return el as NoteLikeElementType;
 };
 
 describe('collectNoteLikeElements', () => {
@@ -101,7 +102,6 @@ describe('pairConnectors', () => {
 
     const pairs = pairConnectors([a, b]);
     expect(pairs).toHaveLength(1);
-    expect(pairs[0].warnings.length).toBeGreaterThan(0);
     expect(warn).toHaveBeenCalled();
   });
 

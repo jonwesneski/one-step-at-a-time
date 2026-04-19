@@ -139,7 +139,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #scheduleRedrawConnectors() {
-      if (this.#redrawScheduled) return;
+      if (this.#redrawScheduled) {
+        return;
+      }
+
       this.#redrawScheduled = true;
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
@@ -154,15 +157,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
         '.composition-wrapper'
       );
-      if (!overlay || !wrapper) return;
+      if (!overlay || !wrapper) {
+        return;
+      }
 
-      while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+      // Remove previously drawn connector curves before redrawing;
+      // replaceChildren is not used for broader browser compatibility.
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
 
       const notes = collectNoteLikeElements(this);
-      if (notes.length === 0) return;
+      if (notes.length === 0) {
+        return;
+      }
 
       const pairs = pairConnectors(notes);
-      if (pairs.length === 0) return;
+      if (pairs.length === 0) {
+        return;
+      }
 
       const rootRect = wrapper.getBoundingClientRect();
       const svgs = buildConnectorSvgs(pairs, {

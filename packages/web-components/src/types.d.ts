@@ -1,5 +1,12 @@
 import 'react';
-import type { Chord, DurationType, LetterNote, Note } from './types/theory';
+import { ConnectorRole } from './types/elements';
+import type {
+  Chord,
+  DurationType,
+  LetterNote,
+  Mode,
+  Note,
+} from './types/theory';
 
 type WebComponentProps = {
   key?: React.Key;
@@ -26,8 +33,8 @@ declare module 'react' {
       'music-note': WebComponentProps & {
         value?: Note;
         duration?: DurationType;
-        tie?: 'start' | 'end';
-        slur?: 'start' | 'end';
+        tie?: ConnectorRole;
+        slur?: ConnectorRole;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
@@ -38,22 +45,21 @@ declare module 'react' {
         fret?: number | 'x';
         string?: number;
         duration?: DurationType;
-        tie?: 'start' | 'end';
-        slur?: 'start' | 'end';
-        'hammer-on'?: 'start' | 'end';
-        'pull-off'?: 'start' | 'end';
-        slide?: 'start' | 'end';
-        bend?: string;
+        tie?: ConnectorRole;
+        slur?: ConnectorRole;
+        'hammer-on'?: ConnectorRole;
+        'pull-off'?: ConnectorRole;
+        slide?: ConnectorRole;
       };
       'music-measure': WebComponentProps & {
         keySig?: LetterNote;
-        mode?: string;
+        mode?: Mode;
         time?: string;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-bass': WebComponentProps & {
         keySig?: LetterNote;
-        mode?: string;
+        mode?: Mode;
         time?: string;
         editable?: boolean;
         managed?: boolean;
@@ -61,6 +67,7 @@ declare module 'react' {
       };
       'music-staff-treble': WebComponentProps & {
         keySig?: LetterNote;
+        mode?: Mode;
         time?: string;
         editable?: boolean;
         managed?: boolean;
@@ -73,7 +80,7 @@ declare module 'react' {
       'music-staff-vocal': WebComponentProps & {
         voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
         keySig?: LetterNote;
-        mode?: string;
+        mode?: Mode;
         time?: string;
         editable?: boolean;
         managed?: boolean;

@@ -36,7 +36,7 @@ export interface IGuitarNoteElement {
   hammerOn: ConnectorRole | null;
   pullOff: ConnectorRole | null;
   slide: ConnectorRole | null;
-  bend: string | null;
+  //bend: SOMETHING | null;
 }
 
 export type NoteElementType = HTMLElement & INoteElement;

@@ -15,13 +15,19 @@ const CONNECTOR_ATTRS = [
 ] as const;
 
 const parseConnectorRole = (value: string | null): ConnectorRole | null => {
-  if (value === 'start' || value === 'end') return value;
+  if (value === 'start' || value === 'end') {
+    return value;
+  }
   return null;
 };
 
 const parseFret = (value: string | null): GuitarFret => {
-  if (value === null) return 0;
-  if (value === 'x' || value === 'X') return 'x';
+  if (value === null) {
+    return 0;
+  }
+  if (value === 'x' || value === 'X') {
+    return 'x';
+  }
   const parsed = parseInt(value, 10);
   return Number.isNaN(parsed) ? 0 : parsed;
 };
@@ -74,49 +80,67 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return parseConnectorRole(this.getAttribute('tie'));
     }
     set tie(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('tie');
-      else this.setAttribute('tie', value);
+      if (value === null) {
+        this.removeAttribute('tie');
+      } else {
+        this.setAttribute('tie', value);
+      }
     }
 
     get slur(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('slur'));
     }
     set slur(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('slur');
-      else this.setAttribute('slur', value);
+      if (value === null) {
+        this.removeAttribute('slur');
+      } else {
+        this.setAttribute('slur', value);
+      }
     }
 
     get hammerOn(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('hammer-on'));
     }
     set hammerOn(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('hammer-on');
-      else this.setAttribute('hammer-on', value);
+      if (value === null) {
+        this.removeAttribute('hammer-on');
+      } else {
+        this.setAttribute('hammer-on', value);
+      }
     }
 
     get pullOff(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('pull-off'));
     }
     set pullOff(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('pull-off');
-      else this.setAttribute('pull-off', value);
+      if (value === null) {
+        this.removeAttribute('pull-off');
+      } else {
+        this.setAttribute('pull-off', value);
+      }
     }
 
     get slide(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('slide'));
     }
     set slide(value: ConnectorRole | null) {
-      if (value === null) this.removeAttribute('slide');
-      else this.setAttribute('slide', value);
+      if (value === null) {
+        this.removeAttribute('slide');
+      } else {
+        this.setAttribute('slide', value);
+      }
     }
 
-    get bend(): string | null {
-      return this.getAttribute('bend');
-    }
-    set bend(value: string | null) {
-      if (value === null) this.removeAttribute('bend');
-      else this.setAttribute('bend', value);
-    }
+    // get bend(): string | null {
+    //   return this.getAttribute('bend');
+    // }
+    // set bend(value: string | null) {
+    //   if (value === null) {
+    //     this.removeAttribute('bend');
+    //   } else {
+    //     this.setAttribute('bend', value);
+    //   }
+    // }
 
     connectedCallback(): void {
       this.render();
@@ -127,7 +151,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue || !this.isConnected) return;
+      if (oldValue === newValue || !this.isConnected) {
+        return;
+      }
 
       if (CONNECTOR_ATTRS.includes(name as (typeof CONNECTOR_ATTRS)[number])) {
         this.dispatchEvent(
