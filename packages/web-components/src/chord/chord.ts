@@ -1,4 +1,9 @@
-import { ChordNote, IChordElement, NoteElementType } from '../types/elements';
+import {
+  ChordNote,
+  ConnectorRole,
+  IChordElement,
+  NoteElementType,
+} from '../types/elements';
 import { Chord, DurationType } from '../types/theory';
 import { createChordSvg } from '../utils';
 import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
@@ -6,7 +11,7 @@ import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
-      return ['currentCount', 'duration'];
+      return ['currentCount', 'duration', 'tie', 'slur'];
     }
 
     #stemUp = true;
@@ -92,6 +97,36 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    get tie(): ConnectorRole | null {
+      const raw = this.getAttribute('tie');
+      if (raw === 'start' || raw === 'end') {
+        return raw;
+      }
+      return null;
+    }
+    set tie(value: ConnectorRole | null) {
+      if (value === null) {
+        this.removeAttribute('tie');
+      } else {
+        this.setAttribute('tie', value);
+      }
+    }
+
+    get slur(): ConnectorRole | null {
+      const raw = this.getAttribute('slur');
+      if (raw === 'start' || raw === 'end') {
+        return raw;
+      }
+      return null;
+    }
+    set slur(value: ConnectorRole | null) {
+      if (value === null) {
+        this.removeAttribute('slur');
+      } else {
+        this.setAttribute('slur', value);
+      }
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -118,13 +153,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     attributeChangedCallback(
-      _name: string,
+      name: string,
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue !== newValue && this.isConnected) {
-        this.render();
+      if (oldValue === newValue || !this.isConnected) {
+        return;
       }
+
+      if (name === 'tie' || name === 'slur') {
+        this.dispatchEvent(
+          new CustomEvent('connector-attribute-change', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      this.render();
     }
 
     private render(): void {

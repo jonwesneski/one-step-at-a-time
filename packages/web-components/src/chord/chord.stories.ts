@@ -28,23 +28,3 @@ export const Default: Story = {
     </music-chord>
   `,
 };
-
-export const MinorChord: Story = {
-  render: () => html`
-    <music-chord duration="quarter">
-      <music-note value="A" duration="quarter"></music-note>
-      <music-note value="C" duration="quarter"></music-note>
-      <music-note value="E" duration="quarter"></music-note>
-    </music-chord>
-  `,
-};
-
-export const WholeDuration: Story = {
-  render: () => html`
-    <music-chord duration="whole">
-      <music-note value="F" duration="whole"></music-note>
-      <music-note value="A" duration="whole"></music-note>
-      <music-note value="C" duration="whole"></music-note>
-    </music-chord>
-  `,
-};

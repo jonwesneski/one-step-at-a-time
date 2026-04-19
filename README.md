@@ -1,4 +1,4 @@
-# music-notation
+# One Step at a Time
 
 Music notation creator.
 app names: one at a time, rest in time, walk in time, walk in the park
@@ -136,6 +136,12 @@ Or directly with tsc:
 ```bash
 cd packages/web-components
 pnpm exec tsc --build tsconfig.lib.json --watch
+```
+
+sometimes using storybook is good enough for development
+
+```
+npx nx storybook web-components
 ```
 
 ## Hot reload limitation with Web Components

@@ -1,5 +1,9 @@
-import { ConnectorRole, NoteLikeElementType } from '../types/elements';
-import { createCurveSvg, CurveBulge, CurveSplit } from './svgCreator';
+import {
+  ChordElementType,
+  ConnectorRole,
+  NoteLikeElementType,
+} from '../types/elements';
+import { createCurveSvg, CurveBulge } from './svgCreator';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -36,7 +40,10 @@ export type ConnectorPair = {
 export const collectNoteLikeElements = (
   root: ParentNode
 ): NoteLikeElementType[] => {
-  const selector = 'music-note, music-guitar-note';
+  const chordChildSelectors = Object.values(CONNECTOR_ATTRS)
+    .map((attr) => `music-chord music-note[${attr}]`)
+    .join(', ');
+  const selector = `music-note:not(music-chord music-note), music-guitar-note, music-chord, ${chordChildSelectors}`;
   return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
 };
 
@@ -169,15 +176,77 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
   return ref.getBoundingClientRect().top - rootRect.top;
 };
 
-const computeAnchor = (
+const TIE_NOTEHEAD_OFFSET_PX = 5;
+const SLUR_NOTEHEAD_OFFSET_PX = 9;
+
+const computeAnchorAtSpecificY = (
   note: NoteLikeElementType,
   rootRect: DOMRect,
-  bulge: CurveBulge
+  bulge: CurveBulge,
+  staffY: number,
+  noteheadOffsetPx: number
 ): Anchor => {
   const rect = note.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2 - rootRect.left;
-  const y =
-    bulge === 'above' ? rect.top - rootRect.top : rect.bottom - rootRect.top;
+  const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+  return {
+    x: centerX,
+    y: rect.top - rootRect.top + staffY + edgeOffset,
+    rowTop: getRowTop(note, rootRect),
+  };
+};
+
+const computeAnchor = (
+  note: NoteLikeElementType,
+  rootRect: DOMRect,
+  bulge: CurveBulge,
+  noteheadOffsetPx: number
+): Anchor => {
+  // Notes inside a chord have no layout box — anchor via parent chord geometry.
+  if (
+    note.tagName.toLowerCase() === 'music-note' &&
+    note.parentElement?.tagName.toLowerCase() === 'music-chord'
+  ) {
+    const chord = note.parentElement as unknown as ChordElementType;
+    const chordRect = chord.getBoundingClientRect();
+    const chordNotes = Array.from(chord.querySelectorAll('music-note'));
+    const noteIndex = chordNotes.indexOf(note as unknown as Element);
+    const yCoords = chord.staffYCoordinates;
+
+    if (yCoords && noteIndex >= 0 && noteIndex < yCoords.length) {
+      const edgeOffset =
+        bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+      return {
+        x: chordRect.left + chordRect.width / 2 - rootRect.left,
+        y: chordRect.top - rootRect.top + yCoords[noteIndex] + edgeOffset,
+        rowTop: getRowTop(chord as unknown as NoteLikeElementType, rootRect),
+      };
+    }
+  }
+
+  const rect = note.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2 - rootRect.left;
+
+  let y: number;
+  if (note.tagName.toLowerCase() === 'music-chord') {
+    const yCoords = (note as unknown as ChordElementType).staffYCoordinates;
+    if (yCoords && yCoords.length > 0) {
+      const noteheadY =
+        bulge === 'above' ? Math.min(...yCoords) : Math.max(...yCoords);
+      const edgeOffset =
+        bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+      y = rect.top - rootRect.top + noteheadY + edgeOffset;
+    } else {
+      y =
+        bulge === 'above'
+          ? rect.top - rootRect.top
+          : rect.bottom - rootRect.top;
+    }
+  } else {
+    y =
+      bulge === 'above' ? rect.top - rootRect.top : rect.bottom - rootRect.top;
+  }
+
   return {
     x: centerX,
     y,
@@ -196,9 +265,38 @@ const pickBulge = (note: NoteLikeElementType): CurveBulge => {
     return 'above';
   }
 
-  // Read the note's runtime stemUp state if available; fall back to above.
-  const stemUp = (note as unknown as { stemUp?: boolean }).stemUp;
+  // For notes inside a chord, stemUp is set on the chord element, not the note.
+  const sourceElement =
+    note.tagName.toLowerCase() === 'music-note' &&
+    note.parentElement?.tagName.toLowerCase() === 'music-chord'
+      ? note.parentElement
+      : note;
+
+  const stemUp = (sourceElement as unknown as { stemUp?: boolean }).stemUp;
   return stemUp === false ? 'above' : 'below';
+};
+
+// For chord ties: each note's tie curves outward from the chord's vertical midpoint
+// (top notes curve above, bottom notes curve below). This is position-based, not
+// stem-based — standard engraving practice per Gould's "Behind Bars".
+const pickChordNoteBulge = (
+  chord: NoteLikeElementType,
+  yCoords: readonly number[],
+  index: number
+): CurveBulge => {
+  if (yCoords.length <= 1) {
+    return pickBulge(chord);
+  }
+  const minY = Math.min(...yCoords);
+  const maxY = Math.max(...yCoords);
+  const midY = (minY + maxY) / 2;
+  if (yCoords[index] < midY) {
+    return 'above';
+  }
+  if (yCoords[index] > midY) {
+    return 'below';
+  }
+  return pickBulge(chord);
 };
 
 export type ConnectorsBuildOptions = {
@@ -219,8 +317,82 @@ export const buildConnectorSvgs = (
     const style = pair.kind === 'slide' ? 'straight' : 'smooth';
     const label = CONNECTOR_LABELS[pair.kind];
 
-    const startAnchor = computeAnchor(pair.start, rootRect, bulge);
-    const endAnchor = computeAnchor(pair.end, rootRect, bulge);
+    const isChordTie =
+      pair.kind === 'tie' &&
+      pair.start.tagName.toLowerCase() === 'music-chord' &&
+      pair.end.tagName.toLowerCase() === 'music-chord';
+
+    if (isChordTie) {
+      const startCoords =
+        (pair.start as unknown as ChordElementType).staffYCoordinates ?? [];
+      const endCoords =
+        (pair.end as unknown as ChordElementType).staffYCoordinates ?? [];
+      const count = Math.min(startCoords.length, endCoords.length);
+
+      for (let i = 0; i < count; i++) {
+        const noteBulge = pickChordNoteBulge(pair.start, startCoords, i);
+        const startAnchor = computeAnchorAtSpecificY(
+          pair.start,
+          rootRect,
+          noteBulge,
+          startCoords[i],
+          TIE_NOTEHEAD_OFFSET_PX
+        );
+        const endAnchor = computeAnchorAtSpecificY(
+          pair.end,
+          rootRect,
+          noteBulge,
+          endCoords[i],
+          TIE_NOTEHEAD_OFFSET_PX
+        );
+
+        if (sameRow(startAnchor, endAnchor)) {
+          elements.push(
+            createCurveSvg({
+              from: { x: startAnchor.x, y: startAnchor.y },
+              to: { x: endAnchor.x, y: endAnchor.y },
+              bulge: noteBulge,
+              style,
+            })
+          );
+        } else {
+          elements.push(
+            createCurveSvg({
+              from: { x: startAnchor.x, y: startAnchor.y },
+              to: { x: rowRight, y: startAnchor.y },
+              bulge: noteBulge,
+              style,
+              split: 'open-right',
+            })
+          );
+          elements.push(
+            createCurveSvg({
+              from: { x: rowLeft, y: endAnchor.y },
+              to: { x: endAnchor.x, y: endAnchor.y },
+              bulge: noteBulge,
+              style,
+              split: 'open-left',
+            })
+          );
+        }
+      }
+      continue;
+    }
+
+    const noteheadOffsetPx =
+      pair.kind === 'slur' ? SLUR_NOTEHEAD_OFFSET_PX : TIE_NOTEHEAD_OFFSET_PX;
+    const startAnchor = computeAnchor(
+      pair.start,
+      rootRect,
+      bulge,
+      noteheadOffsetPx
+    );
+    const endAnchor = computeAnchor(
+      pair.end,
+      rootRect,
+      bulge,
+      noteheadOffsetPx
+    );
 
     if (sameRow(startAnchor, endAnchor)) {
       elements.push(
@@ -236,9 +408,6 @@ export const buildConnectorSvgs = (
     }
 
     // Cross-row: split at start-row right edge and end-row left edge.
-    const openRight: CurveSplit = 'open-right';
-    const openLeft: CurveSplit = 'open-left';
-
     elements.push(
       createCurveSvg({
         from: { x: startAnchor.x, y: startAnchor.y },
@@ -246,7 +415,7 @@ export const buildConnectorSvgs = (
         bulge,
         label,
         style,
-        split: openRight,
+        split: 'open-right',
       })
     );
     elements.push(
@@ -255,7 +424,7 @@ export const buildConnectorSvgs = (
         to: { x: endAnchor.x, y: endAnchor.y },
         bulge,
         style,
-        split: openLeft,
+        split: 'open-left',
       })
     );
   }

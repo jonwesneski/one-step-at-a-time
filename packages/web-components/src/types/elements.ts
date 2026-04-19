@@ -23,6 +23,8 @@ export interface IChordElement {
   stemExtension: number;
   noFlags: boolean;
   staffYCoordinates: number[] | null;
+  tie: ConnectorRole | null;
+  slur: ConnectorRole | null;
   batchUpdate(fn: () => void): void;
 }
 
@@ -43,7 +45,10 @@ export type NoteElementType = HTMLElement & INoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
-export type NoteLikeElementType = NoteElementType | GuitarNoteElementType;
+export type NoteLikeElementType =
+  | NoteElementType
+  | GuitarNoteElementType
+  | ChordElementType;
 
 export type YCoordinates = Partial<Record<LetterOctave, number>>;
 

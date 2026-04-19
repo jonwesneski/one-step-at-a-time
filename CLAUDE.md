@@ -1,7 +1,7 @@
 ## Monorepo Structure
 
 ```
-music-notation/
+one-step-at-a-time/
 ├── packages/
 │   └── web-components/
 │       └── src/               # All source code

@@ -305,8 +305,8 @@ export const WithCrossRowTie: Story = {
   `,
 };
 
-export const GMajorScale: Story = {
-  args: { keySig: 'G', mode: 'major', time: '4/4' },
+export const ChordWithPartialTie: Story = {
+  args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
     <music-composition
       keySig=${args.keySig}
@@ -319,22 +319,86 @@ export const GMajorScale: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="G" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="B" duration="quarter"></music-note>
-          <music-note value="C" duration="quarter"></music-note>
+          <music-chord duration="half">
+            <music-note value="G5" duration="half" tie="start"></music-note>
+            <music-note value="E5" duration="half"></music-note>
+            <music-note value="C5" duration="half"></music-note>
+          </music-chord>
+          <music-chord duration="half">
+            <music-note value="G5" duration="half" tie="end"></music-note>
+            <music-note value="E5" duration="half"></music-note>
+            <music-note value="C5" duration="half"></music-note>
+          </music-chord>
         </music-staff-treble>
       </music-measure>
+    </music-composition>
+  `,
+};
+
+export const ChordWithTie: Story = {
+  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-composition
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
       <music-measure>
         <music-staff-treble
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="D" duration="quarter"></music-note>
-          <music-note value="E" duration="quarter"></music-note>
-          <music-note value="F#" duration="quarter"></music-note>
-          <music-note value="G" duration="quarter"></music-note>
+          <music-chord duration="half" tie="start">
+            <music-note value="C5" duration="half"></music-note>
+            <music-note value="E5" duration="half"></music-note>
+            <music-note value="G5" duration="half"></music-note>
+          </music-chord>
+          <music-chord duration="half" tie="end">
+            <music-note value="C5" duration="half"></music-note>
+            <music-note value="E5" duration="half"></music-note>
+            <music-note value="G5" duration="half"></music-note>
+          </music-chord>
+        </music-staff-treble>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const ChordWithSlur: Story = {
+  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-composition
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-measure>
+        <music-staff-treble
+          keySig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-chord duration="quarter" slur="start">
+            <music-note value="C5" duration="quarter"></music-note>
+            <music-note value="E5" duration="quarter"></music-note>
+            <music-note value="G5" duration="quarter"></music-note>
+          </music-chord>
+          <music-chord duration="quarter">
+            <music-note value="D5" duration="quarter"></music-note>
+            <music-note value="F5" duration="quarter"></music-note>
+            <music-note value="A5" duration="quarter"></music-note>
+          </music-chord>
+          <music-chord duration="quarter">
+            <music-note value="E5" duration="quarter"></music-note>
+            <music-note value="G5" duration="quarter"></music-note>
+            <music-note value="B5" duration="quarter"></music-note>
+          </music-chord>
+          <music-chord duration="quarter" slur="end">
+            <music-note value="F5" duration="quarter"></music-note>
+            <music-note value="A5" duration="quarter"></music-note>
+            <music-note value="C6" duration="quarter"></music-note>
+          </music-chord>
         </music-staff-treble>
       </music-measure>
     </music-composition>
