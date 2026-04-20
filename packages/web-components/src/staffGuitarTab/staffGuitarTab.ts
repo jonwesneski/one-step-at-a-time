@@ -76,10 +76,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onHandleSlotChange(event: Event): void {
       const slot = event.target as HTMLSlotElement;
-      const assignedElements = slot.assignedElements({ flatten: true }).filter(
-        (e) => e.nodeName === 'MUSIC-GUITAR-NOTE' //||
-        //e.nodeName === 'MUSIC-GUITAR-CHORD'
-      ) as GuitarNoteElementType[];
+      const assignedElements = slot
+        .assignedElements({ flatten: true })
+        .filter(
+          (e) =>
+            e.nodeName === 'MUSIC-GUITAR-NOTE' ||
+            e.nodeName === 'MUSIC-GUITAR-CHORD'
+        ) as GuitarNoteElementType[];
 
       this.#renderNotes(assignedElements);
     }

@@ -189,7 +189,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {
       const firstStaff = this.querySelector(
-        'music-staff-treble, music-staff-bass, music-staff-guitar-tab'
+        'music-staff-treble, music-staff-bass, music-staff-vocal, music-staff-guitar-tab'
       ) as HTMLElement | null;
       if (!firstStaff?.shadowRoot) {
         return 0;
