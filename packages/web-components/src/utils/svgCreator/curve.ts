@@ -3,7 +3,6 @@ import { SVG_NS } from '../consts';
 
 export type CurveBulge = 'above' | 'below';
 export type CurveStyle = 'smooth' | 'straight';
-export type CurveSplit = 'open-right' | 'open-left' | null;
 
 export type CurveProps = {
   from: { x: number; y: number };
@@ -11,11 +10,9 @@ export type CurveProps = {
   bulge: CurveBulge;
   label?: string;
   style?: CurveStyle;
-  split?: CurveSplit;
 };
 
 const DEFAULT_BULGE_HEIGHT = STAFF_LINE_SPACING * 0.9;
-const OPEN_EDGE_LENGTH = STAFF_LINE_SPACING * 1.5;
 const STROKE_WIDTH = 1.4;
 const LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
 
@@ -25,15 +22,16 @@ export const createCurveSvg = ({
   bulge,
   label,
   style = 'smooth',
-  split = null,
 }: CurveProps): SVGGElement => {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('connector');
 
-  const startX = split === 'open-left' ? to.x - OPEN_EDGE_LENGTH : from.x;
-  const startY = split === 'open-left' ? to.y : from.y;
-  const endX = split === 'open-right' ? from.x + OPEN_EDGE_LENGTH : to.x;
-  const endY = split === 'open-right' ? from.y : to.y;
+  // Callers pass the full span including row edges for cross-row splits,
+  // so from/to are used directly.
+  const startX = from.x;
+  const startY = from.y;
+  const endX = to.x;
+  const endY = to.y;
 
   const path = document.createElementNS(SVG_NS, 'path');
   const bulgeSign = bulge === 'above' ? -1 : 1;

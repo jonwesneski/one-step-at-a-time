@@ -4,7 +4,6 @@ export {
   createCurveSvg,
   type CurveBulge,
   type CurveProps,
-  type CurveSplit,
   type CurveStyle,
 } from './curve';
 export { createFlatSvg } from './flat';

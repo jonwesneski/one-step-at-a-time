@@ -178,12 +178,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       const rootRect = wrapper.getBoundingClientRect();
+      const rowLeft = this.#computeNotesAreaLeft(rootRect);
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
-        rowLeft: 0,
+        rowLeft,
         rowRight: rootRect.width,
       });
       for (const svg of svgs) overlay.appendChild(svg);
+    }
+
+    #computeNotesAreaLeft(rootRect: DOMRect): number {
+      const firstStaff = this.querySelector(
+        'music-staff-treble, music-staff-bass, music-staff-guitar-tab'
+      ) as HTMLElement | null;
+      if (!firstStaff?.shadowRoot) {
+        return 0;
+      }
+      const describeContainer = firstStaff.shadowRoot.querySelector(
+        '.describe-container'
+      );
+      if (!describeContainer) {
+        return 0;
+      }
+      return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
     #manageMeasureCount() {

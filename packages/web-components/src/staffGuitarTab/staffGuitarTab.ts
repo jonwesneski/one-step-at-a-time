@@ -1,4 +1,5 @@
 import { StaffElementBase } from '../staffBase';
+import { GuitarNoteElementType } from '../types/elements';
 import { SVG_NS } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -13,6 +14,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       </svg>
     `;
     #describeContainer: SVGGElement;
+    // todo: haven't tested yet
+    #yCoordinates: Record<string, number> = {
+      1: 50,
+      2: 40,
+      3: 30,
+      4: 20,
+      5: 10,
+      6: 0,
+    };
 
     constructor() {
       super();
@@ -64,7 +74,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     protected override onDisconnectedCallback(): void {}
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
-    protected override onHandleSlotChange(event: Event): void {}
+    protected override onHandleSlotChange(event: Event): void {
+      const slot = event.target as HTMLSlotElement;
+      const assignedElements = slot.assignedElements({ flatten: true }).filter(
+        (e) => e.nodeName === 'MUSIC-GUITAR-NOTE' //||
+        //e.nodeName === 'MUSIC-GUITAR-CHORD'
+      ) as GuitarNoteElementType[];
+
+      this.#renderNotes(assignedElements);
+    }
+
+    #renderNotes(assignedElements: GuitarNoteElementType[]) {
+      this.#spaceElements(assignedElements);
+    }
+    #spaceElements(assignedElements: GuitarNoteElementType[]) {
+      for (let i = 0; i < assignedElements.length; i++) {
+        assignedElements[i].style.left = `${15}px`;
+        const string = assignedElements[i].string;
+        assignedElements[i].style.top = `${this.#yCoordinates[string]}px`;
+      }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onStaffResize(): void {}

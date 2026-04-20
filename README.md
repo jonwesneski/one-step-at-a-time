@@ -140,7 +140,7 @@ pnpm exec tsc --build tsconfig.lib.json --watch
 
 sometimes using storybook is good enough for development
 
-```
+```bash
 npx nx storybook web-components
 ```
 

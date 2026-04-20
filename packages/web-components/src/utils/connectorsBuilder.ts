@@ -362,7 +362,6 @@ export const buildConnectorSvgs = (
               to: { x: rowRight, y: startAnchor.y },
               bulge: noteBulge,
               style,
-              split: 'open-right',
             })
           );
           elements.push(
@@ -371,7 +370,6 @@ export const buildConnectorSvgs = (
               to: { x: endAnchor.x, y: endAnchor.y },
               bulge: noteBulge,
               style,
-              split: 'open-left',
             })
           );
         }
@@ -415,7 +413,6 @@ export const buildConnectorSvgs = (
         bulge,
         label,
         style,
-        split: 'open-right',
       })
     );
     elements.push(
@@ -424,7 +421,6 @@ export const buildConnectorSvgs = (
         to: { x: endAnchor.x, y: endAnchor.y },
         bulge,
         style,
-        split: 'open-left',
       })
     );
   }

@@ -65,27 +65,25 @@ describe('createCurveSvg', () => {
     expect(text!.textContent).toBe('H');
   });
 
-  it('shortens left side for open-left split', () => {
+  it('uses full from/to span for open-left split', () => {
     const group = createCurveSvg({
       from: { x: 0, y: 100 },
       to: { x: 500, y: 100 },
       bulge: 'above',
-      split: 'open-left',
-    });
-    const d = group.querySelector('path')!.getAttribute('d') ?? '';
-    expect(d.startsWith('M 0 100')).toBe(false);
-    expect(d).toMatch(/500 100$/);
-  });
-
-  it('shortens right side for open-right split', () => {
-    const group = createCurveSvg({
-      from: { x: 0, y: 100 },
-      to: { x: 500, y: 100 },
-      bulge: 'above',
-      split: 'open-right',
     });
     const d = group.querySelector('path')!.getAttribute('d') ?? '';
     expect(d.startsWith('M 0 100')).toBe(true);
-    expect(d.endsWith('500 100')).toBe(false);
+    expect(d).toMatch(/500 100$/);
+  });
+
+  it('uses full from/to span for open-right split', () => {
+    const group = createCurveSvg({
+      from: { x: 0, y: 100 },
+      to: { x: 500, y: 100 },
+      bulge: 'above',
+    });
+    const d = group.querySelector('path')!.getAttribute('d') ?? '';
+    expect(d.startsWith('M 0 100')).toBe(true);
+    expect(d).toMatch(/500 100$/);
   });
 });
