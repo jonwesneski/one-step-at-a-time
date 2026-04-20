@@ -1,5 +1,5 @@
-import { STAFF_LINE_SPACING } from '../notationDimensions';
 import { SVG_NS } from '../consts';
+import { STAFF_LINE_SPACING } from '../notationDimensions';
 
 export type CurveBulge = 'above' | 'below';
 export type CurveStyle = 'smooth' | 'straight';
@@ -10,9 +10,11 @@ export type CurveProps = {
   bulge: CurveBulge;
   label?: string;
   style?: CurveStyle;
+  nestingLevel?: number;
 };
 
 const DEFAULT_BULGE_HEIGHT = STAFF_LINE_SPACING * 0.9;
+export const BULGE_STEP_PX = STAFF_LINE_SPACING * 1.1;
 const STROKE_WIDTH = 1.4;
 const LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
 
@@ -22,6 +24,7 @@ export const createCurveSvg = ({
   bulge,
   label,
   style = 'smooth',
+  nestingLevel = 0,
 }: CurveProps): SVGGElement => {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('connector');
@@ -35,8 +38,10 @@ export const createCurveSvg = ({
 
   const path = document.createElementNS(SVG_NS, 'path');
   const bulgeSign = bulge === 'above' ? -1 : 1;
+  const effectiveBulgeHeight =
+    DEFAULT_BULGE_HEIGHT + nestingLevel * BULGE_STEP_PX;
   const midX = (startX + endX) / 2;
-  const midY = (startY + endY) / 2 + bulgeSign * DEFAULT_BULGE_HEIGHT;
+  const midY = (startY + endY) / 2 + bulgeSign * effectiveBulgeHeight;
 
   if (style === 'straight') {
     path.setAttribute('d', `M ${startX} ${startY} L ${endX} ${endY}`);

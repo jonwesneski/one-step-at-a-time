@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { createCurveSvg } from './curve';
+import { BULGE_STEP_PX, createCurveSvg } from './curve';
 
 describe('createCurveSvg', () => {
   it('renders a quadratic bezier path for smooth curves', () => {
@@ -85,5 +85,33 @@ describe('createCurveSvg', () => {
     const d = group.querySelector('path')!.getAttribute('d') ?? '';
     expect(d.startsWith('M 0 100')).toBe(true);
     expect(d).toMatch(/500 100$/);
+  });
+
+  it('pushes the control point further out per nestingLevel', () => {
+    const baseGroup = createCurveSvg({
+      from: { x: 0, y: 100 },
+      to: { x: 100, y: 100 },
+      bulge: 'above',
+    });
+    const nestedGroup = createCurveSvg({
+      from: { x: 0, y: 100 },
+      to: { x: 100, y: 100 },
+      bulge: 'above',
+      nestingLevel: 2,
+    });
+    const baseCy = Number(
+      baseGroup
+        .querySelector('path')!
+        .getAttribute('d')!
+        .match(/Q (\S+) (\S+)/)![2]
+    );
+    const nestedCy = Number(
+      nestedGroup
+        .querySelector('path')!
+        .getAttribute('d')!
+        .match(/Q (\S+) (\S+)/)![2]
+    );
+    // 'above' → control point y < endpoint y; nestedCy should be further above (smaller).
+    expect(baseCy - nestedCy).toBeCloseTo(2 * BULGE_STEP_PX, 5);
   });
 });

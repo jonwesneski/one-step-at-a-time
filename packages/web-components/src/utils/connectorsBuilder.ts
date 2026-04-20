@@ -29,12 +29,16 @@ type ConnectorEndpoint = {
   note: NoteLikeElementType;
   id: string | null;
   forId: string | null;
+  startIndex: number;
 };
+
+type IndexedPair = ConnectorPair & { startIndex: number; endIndex: number };
 
 export type ConnectorPair = {
   kind: ConnectorKind;
   start: NoteLikeElementType;
   end: NoteLikeElementType;
+  nestingLevel: number;
 };
 
 export const collectNoteLikeElements = (
@@ -78,7 +82,7 @@ const validateTiePitch = (
 export const pairConnectors = (
   notes: readonly NoteLikeElementType[]
 ): ConnectorPair[] => {
-  const pairs: ConnectorPair[] = [];
+  const indexedPairs: IndexedPair[] = [];
   const stacks: Record<ConnectorKind, ConnectorEndpoint[]> = {
     tie: [],
     slur: [],
@@ -89,7 +93,7 @@ export const pairConnectors = (
 
   const kinds = Object.keys(stacks) as ConnectorKind[];
 
-  for (const note of notes) {
+  notes.forEach((note, noteIndex) => {
     for (const kind of kinds) {
       const role = readRole(note, CONNECTOR_ATTRS[kind]);
       if (role === null) {
@@ -103,6 +107,7 @@ export const pairConnectors = (
           note,
           id: note.getAttribute('id'),
           forId: null,
+          startIndex: noteIndex,
         });
         continue;
       }
@@ -140,13 +145,16 @@ export const pairConnectors = (
         console.warn(`[connectorsBuilder] ${warning}`);
       }
 
-      pairs.push({
+      indexedPairs.push({
         kind,
         start: startEntry.note,
         end: note,
+        nestingLevel: 0,
+        startIndex: startEntry.startIndex,
+        endIndex: noteIndex,
       });
     }
-  }
+  });
 
   for (const kind of kinds) {
     for (const leftover of stacks[kind]) {
@@ -157,7 +165,18 @@ export const pairConnectors = (
     }
   }
 
-  return pairs;
+  return indexedPairs.map((pair) => ({
+    kind: pair.kind,
+    start: pair.start,
+    end: pair.end,
+    nestingLevel: indexedPairs.filter(
+      (other) =>
+        other !== pair &&
+        other.kind === pair.kind &&
+        other.startIndex > pair.startIndex &&
+        other.endIndex < pair.endIndex
+    ).length,
+  }));
 };
 
 type Anchor = {
@@ -353,6 +372,7 @@ export const buildConnectorSvgs = (
               to: { x: endAnchor.x, y: endAnchor.y },
               bulge: noteBulge,
               style,
+              nestingLevel: pair.nestingLevel,
             })
           );
         } else {
@@ -362,6 +382,7 @@ export const buildConnectorSvgs = (
               to: { x: rowRight, y: startAnchor.y },
               bulge: noteBulge,
               style,
+              nestingLevel: pair.nestingLevel,
             })
           );
           elements.push(
@@ -370,6 +391,7 @@ export const buildConnectorSvgs = (
               to: { x: endAnchor.x, y: endAnchor.y },
               bulge: noteBulge,
               style,
+              nestingLevel: pair.nestingLevel,
             })
           );
         }
@@ -400,6 +422,7 @@ export const buildConnectorSvgs = (
           bulge,
           label,
           style,
+          nestingLevel: pair.nestingLevel,
         })
       );
       continue;
@@ -413,6 +436,7 @@ export const buildConnectorSvgs = (
         bulge,
         label,
         style,
+        nestingLevel: pair.nestingLevel,
       })
     );
     elements.push(
@@ -421,6 +445,7 @@ export const buildConnectorSvgs = (
         to: { x: endAnchor.x, y: endAnchor.y },
         bulge,
         style,
+        nestingLevel: pair.nestingLevel,
       })
     );
   }
