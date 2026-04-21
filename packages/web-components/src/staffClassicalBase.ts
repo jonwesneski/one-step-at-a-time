@@ -614,6 +614,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const svgGroup of this.#beamRenderer.svgGroups) {
       this.#beamsContainer.appendChild(svgGroup);
     }
+
+    this.dispatchEvent(
+      new CustomEvent('staff-notes-positioned', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
@@ -849,6 +856,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   onStaffResize() {
     if (this.#currentElements.length > 0) {
       this.#spaceElements();
+      this.dispatchEvent(
+        new CustomEvent('staff-notes-positioned', {
+          bubbles: true,
+          composed: true,
+        })
+      );
     }
   }
 }

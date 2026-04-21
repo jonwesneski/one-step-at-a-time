@@ -6,9 +6,9 @@ import {
   noteSemitoneMap,
   semitoneNoteMap,
 } from './consts';
+import { STAFF_LINE_SPACING } from './notationDimensions';
 
-// Half of staffLineSpacing (10), one semitone step = 5px
-const Y_COORDINATE_INCREMENT = 5;
+const Y_COORDINATE_INCREMENT = STAFF_LINE_SPACING / 2;
 
 export const getChordNotes = (chord: Chord) => {
   const isSlash = chord[1] === '/';

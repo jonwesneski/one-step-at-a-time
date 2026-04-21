@@ -1,7 +1,7 @@
 ## Monorepo Structure
 
 ```
-music-notation/
+one-step-at-a-time/
 ├── packages/
 │   └── web-components/
 │       └── src/               # All source code
@@ -36,6 +36,10 @@ music-notation/
 - When working in individual projects, use the `nx_project_details` mcp tool to analyze and understand the specific project structure and dependencies
 - For questions around nx configuration, best practices or if you're unsure, use the `nx_docs` tool to get relevant, up-to-date docs. Always use this instead of assuming things about nx configuration
 - If the user needs help with an Nx configuration or project graph error, use the `nx_workspace` tool to get any errors
+
+# Code Style
+
+- Always use curly braces around conditional branches (`if`, `else`, `else if`), even for single-line bodies
 
 # CI Error Guidelines
 

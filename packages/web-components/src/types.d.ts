@@ -1,5 +1,12 @@
 import 'react';
-import type { Chord, DurationType, LetterNote, Note } from './types/theory';
+import { ConnectorRole } from './types/elements';
+import type {
+  Chord,
+  DurationType,
+  LetterNote,
+  Mode,
+  Note,
+} from './types/theory';
 
 type WebComponentProps = {
   key?: React.Key;
@@ -26,21 +33,33 @@ declare module 'react' {
       'music-note': WebComponentProps & {
         value?: Note;
         duration?: DurationType;
+        tie?: ConnectorRole;
+        slur?: ConnectorRole;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
         // Custom events (note-click, note-pointerdown, note-pointerup) require
         // useRef + addEventListener in React — they are not auto-wired by prop name.
       };
+      'music-guitar-note': WebComponentProps & {
+        fret?: number | 'x';
+        string?: number;
+        duration?: DurationType;
+        tie?: ConnectorRole;
+        slur?: ConnectorRole;
+        'hammer-on'?: ConnectorRole;
+        'pull-off'?: ConnectorRole;
+        slide?: ConnectorRole;
+      };
       'music-measure': WebComponentProps & {
         keySig?: LetterNote;
-        mode?: string;
+        mode?: Mode;
         time?: string;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-bass': WebComponentProps & {
         keySig?: LetterNote;
-        mode?: string;
+        mode?: Mode;
         time?: string;
         editable?: boolean;
         managed?: boolean;
@@ -48,6 +67,7 @@ declare module 'react' {
       };
       'music-staff-treble': WebComponentProps & {
         keySig?: LetterNote;
+        mode?: Mode;
         time?: string;
         editable?: boolean;
         managed?: boolean;
@@ -60,7 +80,7 @@ declare module 'react' {
       'music-staff-vocal': WebComponentProps & {
         voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
         keySig?: LetterNote;
-        mode?: string;
+        mode?: Mode;
         time?: string;
         editable?: boolean;
         managed?: boolean;

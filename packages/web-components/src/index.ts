@@ -7,6 +7,7 @@ import './staffTreble'; // order of import matters for some reason, otherwise <n
 import './staffVocal';
 
 import './note';
+import './guitarNote';
 
 export type {
   DurationType,

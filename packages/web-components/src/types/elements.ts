@@ -1,5 +1,7 @@
 import { Chord, DurationType, LetterNote, LetterOctave, Note } from './theory';
 
+export type ConnectorRole = 'start' | 'end';
+
 export interface INoteElement {
   duration: DurationType;
   value: Note;
@@ -7,6 +9,8 @@ export interface INoteElement {
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
+  tie: ConnectorRole | null;
+  slur: ConnectorRole | null;
   batchUpdate(fn: () => void): void;
 }
 
@@ -19,12 +23,32 @@ export interface IChordElement {
   stemExtension: number;
   noFlags: boolean;
   staffYCoordinates: number[] | null;
+  tie: ConnectorRole | null;
+  slur: ConnectorRole | null;
   batchUpdate(fn: () => void): void;
+}
+
+export type GuitarFret = number | 'x';
+export interface IGuitarNoteElement {
+  fret: GuitarFret;
+  string: number;
+  duration: DurationType;
+  tie: ConnectorRole | null;
+  slur: ConnectorRole | null;
+  hammerOn: ConnectorRole | null;
+  pullOff: ConnectorRole | null;
+  slide: ConnectorRole | null;
+  //bend: SOMETHING | null;
 }
 
 export type NoteElementType = HTMLElement & INoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
+export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
+export type NoteLikeElementType =
+  | NoteElementType
+  | GuitarNoteElementType
+  | ChordElementType;
 
 export type YCoordinates = Partial<Record<LetterOctave, number>>;
 

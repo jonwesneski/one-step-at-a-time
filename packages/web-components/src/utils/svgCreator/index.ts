@@ -1,5 +1,11 @@
 export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
+export {
+  createCurveSvg,
+  type CurveBulge,
+  type CurveProps,
+  type CurveStyle,
+} from './curve';
 export { createFlatSvg } from './flat';
 export {
   computeYHeadOffset,

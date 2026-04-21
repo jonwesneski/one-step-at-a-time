@@ -1,3 +1,9 @@
+import {
+  buildConnectorSvgs,
+  collectNoteLikeElements,
+  pairConnectors,
+} from '../utils/connectorsBuilder';
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
     static get observedAttributes(): string[] {
@@ -8,11 +14,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #observer: MutationObserver | null;
     #measureCount: number;
+    #resizeObserver: ResizeObserver | null;
+    #redrawScheduled: boolean;
+    #boundRedraw: () => void;
 
     constructor() {
       super();
       this.#observer = null;
       this.#measureCount = 0;
+      this.#resizeObserver = null;
+      this.#redrawScheduled = false;
+      this.#boundRedraw = () => this.#scheduleRedrawConnectors();
       this.attachShadow({ mode: 'open' });
     }
 
@@ -43,6 +55,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     connectedCallback(): void {
       this.render();
       this.#manageMeasureCount();
+      this.#observeForRedraws();
+    }
+
+    disconnectedCallback(): void {
+      this.#observer?.disconnect();
+      this.#observer = null;
+      this.#resizeObserver?.disconnect();
+      this.#resizeObserver = null;
+      this.removeEventListener('staff-notes-positioned', this.#boundRedraw);
+      this.removeEventListener('connector-attribute-change', this.#boundRedraw);
     }
 
     attributeChangedCallback(
@@ -66,12 +88,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
         <style>
+          .composition-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+          }
+
           .composition-grid {
             position: relative;
             display: flex;
             flex-wrap: wrap;
             width: 100%;
-            max-width: 900px;
             padding-right: 10px;
           }
 
@@ -80,11 +107,100 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             min-width: 100px;
             box-sizing: border-box;
           }
+
+          .connectors-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
-        <div class="composition-grid">
-          <slot></slot>
+        <div class="composition-wrapper">
+          <div class="composition-grid">
+            <slot></slot>
+          </div>
+          <svg class="connectors-overlay"></svg>
         </div>
       `;
+    }
+
+    #observeForRedraws() {
+      this.#resizeObserver = new ResizeObserver(this.#boundRedraw);
+      this.#resizeObserver.observe(this);
+
+      const slot = this.shadowRoot?.querySelector('slot');
+      slot?.addEventListener('slotchange', this.#boundRedraw);
+
+      this.addEventListener('staff-notes-positioned', this.#boundRedraw);
+      this.addEventListener('connector-attribute-change', this.#boundRedraw);
+    }
+
+    #scheduleRedrawConnectors() {
+      if (this.#redrawScheduled) {
+        return;
+      }
+
+      this.#redrawScheduled = true;
+      requestAnimationFrame(() => {
+        this.#redrawScheduled = false;
+        this.#redrawConnectors();
+      });
+    }
+
+    #redrawConnectors() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.connectors-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
+
+      // Remove previously drawn connector curves before redrawing;
+      // replaceChildren is not used for broader browser compatibility.
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const notes = collectNoteLikeElements(this);
+      if (notes.length === 0) {
+        return;
+      }
+
+      const pairs = pairConnectors(notes);
+      if (pairs.length === 0) {
+        return;
+      }
+
+      const rootRect = wrapper.getBoundingClientRect();
+      const rowLeft = this.#computeNotesAreaLeft(rootRect);
+      const svgs = buildConnectorSvgs(pairs, {
+        rootRect,
+        rowLeft,
+        rowRight: rootRect.width,
+      });
+      for (const svg of svgs) overlay.appendChild(svg);
+    }
+
+    #computeNotesAreaLeft(rootRect: DOMRect): number {
+      const firstStaff = this.querySelector(
+        'music-staff-treble, music-staff-bass, music-staff-vocal, music-staff-guitar-tab'
+      ) as HTMLElement | null;
+      if (!firstStaff?.shadowRoot) {
+        return 0;
+      }
+      const describeContainer = firstStaff.shadowRoot.querySelector(
+        '.describe-container'
+      );
+      if (!describeContainer) {
+        return 0;
+      }
+      return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
     #manageMeasureCount() {
