@@ -1,6 +1,7 @@
-import { ConnectorRole, INoteElement } from '../types/elements';
-import { DurationType, Note } from '../types/theory';
-import { createNoteSvg } from '../utils';
+import { ConnectorRole, INoteElement } from '@/src/types/elements';
+import { DurationType, Note } from '@/src/types/theory';
+import { createNoteSvg } from '@/src/utils';
+import { MUSIC_NOTE, NOTE_EVENTS } from '@/src/utils/consts';
 
 const parseConnectorRole = (value: string | null): ConnectorRole | null => {
   if (value === 'start' || value === 'end') return value;
@@ -130,7 +131,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       if (name === 'tie' || name === 'slur') {
         this.dispatchEvent(
-          new CustomEvent('connector-attribute-change', {
+          new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })
@@ -160,7 +161,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       noteSvg.addEventListener('click', (e) => {
         this.dispatchEvent(
-          new CustomEvent('note-click', {
+          new CustomEvent(NOTE_EVENTS.CLICK, {
             bubbles: true,
             composed: true,
             detail: {
@@ -173,7 +174,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
       noteSvg.addEventListener('pointerdown', (e) => {
         this.dispatchEvent(
-          new CustomEvent('note-pointerdown', {
+          new CustomEvent(NOTE_EVENTS.POINTERDOWN, {
             bubbles: true,
             composed: true,
             detail: {
@@ -186,7 +187,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
       noteSvg.addEventListener('pointerup', (e) => {
         this.dispatchEvent(
-          new CustomEvent('note-pointerup', {
+          new CustomEvent(NOTE_EVENTS.POINTERUP, {
             bubbles: true,
             composed: true,
             detail: {
@@ -200,7 +201,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  if (!customElements.get('music-note')) {
-    customElements.define('music-note', NoteElement);
+  if (!customElements.get(MUSIC_NOTE)) {
+    customElements.define(MUSIC_NOTE, NoteElement);
   }
 }

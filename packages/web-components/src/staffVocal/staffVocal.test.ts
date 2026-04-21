@@ -1,11 +1,11 @@
 /**
  * @jest-environment jsdom
  */
-import '../index';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
-} from '../utils/svgCreator/note';
+} from '@/src/utils/svgCreator/note';
+import '../index';
 
 afterEach(() => {
   document.body.innerHTML = '';

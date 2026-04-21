@@ -15,7 +15,10 @@
     "module": "esnext",
     "target": "es2022",
     "jsx": "react-jsx",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@/src/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js"],
   "references": [],

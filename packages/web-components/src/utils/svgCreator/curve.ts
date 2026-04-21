@@ -1,5 +1,5 @@
-import { SVG_NS } from '../consts';
-import { STAFF_LINE_SPACING } from '../notationDimensions';
+import { SVG_NS } from '@/src/utils/consts';
+import { STAFF_LINE_SPACING } from '@/src/utils/notationDimensions';
 
 export type CurveBulge = 'above' | 'below';
 export type CurveStyle = 'smooth' | 'straight';

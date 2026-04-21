@@ -25,11 +25,19 @@ import {
   type NoteYPosition,
 } from './utils';
 import {
+  MUSIC_CHORD_NODE,
+  MUSIC_COMPOSITION,
+  MUSIC_MEASURE,
+  MUSIC_NOTE,
+  MUSIC_NOTE_NODE,
+  STAFF_EVENTS,
+  SVG_NS,
+} from './utils/consts';
+import {
   durationToFactor,
   durationToFlagCountMap,
   factorToDuration,
-  SVG_NS,
-} from './utils/consts';
+} from './utils/theoryConsts';
 import {
   CLEF_X_OFFSET,
   KEY_SIG_FLAT_WIDTH,
@@ -83,8 +91,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #resolveInheritedValue(attributeName: string, defaultValue: string): string {
     return (
       this.getAttribute(attributeName) ??
-      this.closest('music-measure')?.getAttribute(attributeName) ??
-      this.closest('music-composition')?.getAttribute(attributeName) ??
+      this.closest(MUSIC_MEASURE)?.getAttribute(attributeName) ??
+      this.closest(MUSIC_COMPOSITION)?.getAttribute(attributeName) ??
       defaultValue
     );
   }
@@ -293,7 +301,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const host: Element = rootNode.host;
         const idx = elements.indexOf(host as HTMLElement);
         if (idx !== -1) {
-          if (host.nodeName === 'MUSIC-CHORD') {
+          if (host.nodeName === MUSIC_CHORD_NODE) {
             const chordNoteIndex = this.#findChordNoteIndex(
               svgTarget,
               host as HTMLElement
@@ -357,13 +365,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
 
-    if (element.nodeName === 'MUSIC-CHORD' && chordNoteIndex !== null) {
-      const noteElements = element.querySelectorAll('music-note');
+    if (element.nodeName === MUSIC_CHORD_NODE && chordNoteIndex !== null) {
+      const noteElements = element.querySelectorAll(MUSIC_NOTE);
       const noteEl = noteElements[chordNoteIndex] as HTMLElement | undefined;
       if (noteEl) {
         noteEl.setAttribute('value', newNote);
       }
-    } else if (element.nodeName === 'MUSIC-NOTE') {
+    } else if (element.nodeName === MUSIC_NOTE_NODE) {
       element.setAttribute('value', newNote);
     }
 
@@ -447,7 +455,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #appendTimeSignatureSvgIfNecessary(parentSvg: SVGElement, xOffset: number) {
-    const measure = this.closest('music-measure');
+    const measure = this.closest(MUSIC_MEASURE);
     const measureNumberStr: string | null = measure?.getAttribute('number');
     const firstMeasureOrNoCompositionTime =
       measureNumberStr === '1' || !measure ? this.#effectiveTimeSig : null;
@@ -523,7 +531,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const assignedElements = slot
       .assignedElements({ flatten: true })
       .filter(
-        (e) => e.nodeName === 'MUSIC-NOTE' || e.nodeName === 'MUSIC-CHORD'
+        (e) => e.nodeName === MUSIC_NOTE_NODE || e.nodeName === MUSIC_CHORD_NODE
       ) as NoteOrChordElementType[];
 
     this.#renderNotes(assignedElements);
@@ -585,7 +593,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const isBeamed = beamsBuilder.isBeamed(i);
       const extension = this.#beamRenderer.stemExtension(i);
 
-      if (element.nodeName === 'MUSIC-NOTE') {
+      if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
@@ -616,7 +624,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     this.dispatchEvent(
-      new CustomEvent('staff-notes-positioned', {
+      new CustomEvent(STAFF_EVENTS.NOTES_POSITIONED, {
         bubbles: true,
         composed: true,
       })
@@ -639,7 +647,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           ? NOTE_Y_HEAD_OFFSET_STEM_UP
           : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
 
-        if (element.nodeName === 'MUSIC-NOTE') {
+        if (element.nodeName === MUSIC_NOTE_NODE) {
           return {
             y:
               STAFF_Y_PADDING +
@@ -717,7 +725,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const processed = new Set<number>();
 
     const getStaffYs = (el: NoteOrChordElementType): number[] => {
-      if (el.nodeName === 'MUSIC-NOTE') {
+      if (el.nodeName === MUSIC_NOTE_NODE) {
         return [this.noteToYCoordinate((el as NoteElementType).value)];
       }
       return (el as ChordElementType).notes.map((n) =>
@@ -832,7 +840,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const xInWrapper = describeEndX + xOffsetInNotesSpace;
       element.style.left = `${xInWrapper}px`;
 
-      if (element.nodeName === 'MUSIC-NOTE') {
+      if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteEl = element as NoteElementType;
         const yHeadOffset = computeYHeadOffset(
           noteEl.stemUp,
@@ -857,7 +865,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     if (this.#currentElements.length > 0) {
       this.#spaceElements();
       this.dispatchEvent(
-        new CustomEvent('staff-notes-positioned', {
+        new CustomEvent(STAFF_EVENTS.NOTES_POSITIONED, {
           bubbles: true,
           composed: true,
         })

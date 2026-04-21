@@ -3,10 +3,16 @@ import {
   ConnectorRole,
   IChordElement,
   NoteElementType,
-} from '../types/elements';
-import { Chord, DurationType } from '../types/theory';
-import { createChordSvg } from '../utils';
-import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
+} from '@/src/types/elements';
+import { Chord, DurationType } from '@/src/types/theory';
+import { createChordSvg } from '@/src/utils';
+import {
+  CHORD_EVENTS,
+  MUSIC_CHORD,
+  MUSIC_NOTE,
+  NOTE_EVENTS,
+} from '@/src/utils/consts';
+import { STAFF_TRANSCRIPTION_HEIGHT } from '@/src/utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
@@ -45,7 +51,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     get notes(): ChordNote[] {
       const noteElements: NodeListOf<NoteElementType> =
-        this.querySelectorAll('music-note');
+        this.querySelectorAll(MUSIC_NOTE);
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node, i) => {
@@ -163,7 +169,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       if (name === 'tie' || name === 'slur') {
         this.dispatchEvent(
-          new CustomEvent('connector-attribute-change', {
+          new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })
@@ -207,7 +213,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
         svg.addEventListener('click', (e) => {
           this.dispatchEvent(
-            new CustomEvent('chord-click', {
+            new CustomEvent(CHORD_EVENTS.CLICK, {
               bubbles: true,
               composed: true,
               detail: {
@@ -220,7 +226,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         });
         svg.addEventListener('pointerdown', (e) => {
           this.dispatchEvent(
-            new CustomEvent('chord-pointerdown', {
+            new CustomEvent(CHORD_EVENTS.POINTERDOWN, {
               bubbles: true,
               composed: true,
               detail: {
@@ -233,7 +239,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         });
         svg.addEventListener('pointerup', (e) => {
           this.dispatchEvent(
-            new CustomEvent('chord-pointerup', {
+            new CustomEvent(CHORD_EVENTS.POINTERUP, {
               bubbles: true,
               composed: true,
               detail: {
@@ -260,7 +266,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  if (!customElements.get('music-chord')) {
-    customElements.define('music-chord', ChordElement);
+  if (!customElements.get(MUSIC_CHORD)) {
+    customElements.define(MUSIC_CHORD, ChordElement);
   }
 }

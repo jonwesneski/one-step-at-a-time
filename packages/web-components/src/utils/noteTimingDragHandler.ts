@@ -1,3 +1,5 @@
+import { NOTE_EVENTS } from './consts';
+
 type DragState = {
   sourceIndex: number;
   sourceElement: HTMLElement;
@@ -109,7 +111,7 @@ export class NoteTimingDragHandler {
     }
 
     // Dispatch cancelable event
-    const dragStartEvent = new CustomEvent('note-drag-start', {
+    const dragStartEvent = new CustomEvent(NOTE_EVENTS.DRAG_START, {
       bubbles: true,
       composed: true,
       cancelable: true,
@@ -190,7 +192,7 @@ export class NoteTimingDragHandler {
       }
 
       this.#hostElement.dispatchEvent(
-        new CustomEvent('note-reorder', {
+        new CustomEvent(NOTE_EVENTS.REORDER, {
           bubbles: true,
           composed: true,
           detail: {
@@ -202,7 +204,7 @@ export class NoteTimingDragHandler {
     }
 
     this.#hostElement.dispatchEvent(
-      new CustomEvent('note-drag-end', {
+      new CustomEvent(NOTE_EVENTS.DRAG_END, {
         bubbles: true,
         composed: true,
         detail: { fromIndex: sourceIndex, toIndex: currentDropIndex },

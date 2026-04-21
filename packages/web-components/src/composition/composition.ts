@@ -2,7 +2,16 @@ import {
   buildConnectorSvgs,
   collectNoteLikeElements,
   pairConnectors,
-} from '../utils/connectorsBuilder';
+} from '@/src/utils/connectorsBuilder';
+import {
+  MUSIC_COMPOSITION,
+  MUSIC_MEASURE,
+  MUSIC_MEASURE_NODE,
+  MUSIC_STAFF_BASS,
+  MUSIC_STAFF_GUITAR_TAB,
+  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF_VOCAL,
+} from '@/src/utils/consts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
@@ -102,7 +111,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             padding-right: 10px;
           }
 
-          music-measure {
+          ${MUSIC_MEASURE} {
             flex: 1 1 100px;
             min-width: 100px;
             box-sizing: border-box;
@@ -189,7 +198,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {
       const firstStaff = this.querySelector(
-        'music-staff-treble, music-staff-bass, music-staff-vocal, music-staff-guitar-tab'
+        `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}, ${MUSIC_STAFF_GUITAR_TAB}`
       ) as HTMLElement | null;
       if (!firstStaff?.shadowRoot) {
         return 0;
@@ -206,7 +215,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #manageMeasureCount() {
       // Existing measures
       Array.from(this.children).forEach((node) => {
-        if (node.nodeName === 'MUSIC-MEASURE') {
+        if (node.nodeName === MUSIC_MEASURE_NODE) {
           this.#setMeasure(node as HTMLElement);
         }
       });
@@ -215,7 +224,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#observer = new MutationObserver((mutations) => {
         for (const m of mutations) {
           for (const node of m.addedNodes) {
-            if (node.nodeName === 'MUSIC-MEASURE') {
+            if (node.nodeName === MUSIC_MEASURE_NODE) {
               this.#setMeasure(node as HTMLElement);
             }
           }
@@ -245,7 +254,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // }
   }
 
-  if (!customElements.get('music-composition')) {
-    customElements.define('music-composition', CompositionElement);
+  if (!customElements.get(MUSIC_COMPOSITION)) {
+    customElements.define(MUSIC_COMPOSITION, CompositionElement);
   }
 }

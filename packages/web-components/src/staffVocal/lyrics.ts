@@ -4,7 +4,7 @@
  * Maybe I'll think about supporting lyrics as a standalone in the future.
  */
 
-import { ILyricsElement, LyricSyllablePosition } from '../types/elements';
+import { ILyricsElement, LyricSyllablePosition } from '@/src/types/elements';
 
 const SSRSafeHTMLElement: typeof HTMLElement =
   typeof HTMLElement !== 'undefined'

@@ -1,11 +1,19 @@
-import { StaffElementBase } from '../staffBase';
-import { GuitarNoteElementType } from '../types/elements';
-import { durationToFactor, SVG_NS } from '../utils';
+import { StaffElementBase } from '@/src/staffBase';
+import { GuitarNoteElementType } from '@/src/types/elements';
+import {
+  MUSIC_GUITAR_CHORD_NODE,
+  MUSIC_GUITAR_NOTE,
+  MUSIC_GUITAR_NOTE_NODE,
+  MUSIC_STAFF_GUITAR_TAB,
+  STAFF_EVENTS,
+  SVG_NS,
+} from '@/src/utils/consts';
 import {
   MIN_NOTE_WIDTH,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
-} from '../utils/notationDimensions';
+} from '@/src/utils/notationDimensions';
+import { durationToFactor } from '@/src/utils/theoryConsts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends StaffElementBase {
@@ -40,7 +48,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     protected override get additionalStyles(): string {
       return `
-        ::slotted(music-guitar-note) {
+        ::slotted(${MUSIC_GUITAR_NOTE}) {
           position: absolute;
         }
       `;
@@ -54,10 +62,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#describeContainer.setAttribute('class', 'describe-container');
       this.#describeContainer.innerHTML = StaffGuitarTabElement.#tabSvg;
       this.transcribeContainer.appendChild(this.#describeContainer);
-
-      const gNotes = document.createElementNS(SVG_NS, 'g');
-      gNotes.setAttribute('class', 'notes-container');
-      this.transcribeContainer.appendChild(gNotes);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
@@ -69,8 +73,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         .assignedElements({ flatten: true })
         .filter(
           (e) =>
-            e.nodeName === 'MUSIC-GUITAR-NOTE' ||
-            e.nodeName === 'MUSIC-GUITAR-CHORD'
+            e.nodeName === MUSIC_GUITAR_NOTE_NODE ||
+            e.nodeName === MUSIC_GUITAR_CHORD_NODE
         ) as GuitarNoteElementType[];
 
       this.#renderNotes(assignedElements);
@@ -80,7 +84,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#currentElements = assignedElements;
       this.#spaceElements(assignedElements);
       this.dispatchEvent(
-        new CustomEvent('staff-notes-positioned', {
+        new CustomEvent(STAFF_EVENTS.NOTES_POSITIONED, {
           bubbles: true,
           composed: true,
         })
@@ -112,7 +116,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (this.#currentElements.length > 0) {
         this.#spaceElements(this.#currentElements);
         this.dispatchEvent(
-          new CustomEvent('staff-notes-positioned', {
+          new CustomEvent(STAFF_EVENTS.NOTES_POSITIONED, {
             bubbles: true,
             composed: true,
           })
@@ -121,9 +125,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  if (!customElements.get('music-staff-guitar-tab')) {
+  if (!customElements.get(MUSIC_STAFF_GUITAR_TAB)) {
     customElements.define(
-      'music-staff-guitar-tab',
+      MUSIC_STAFF_GUITAR_TAB,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Base-Element has runtime typing
       StaffGuitarTabElement as any
     );

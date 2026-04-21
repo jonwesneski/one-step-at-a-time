@@ -2,7 +2,7 @@ import {
   ChordElementType,
   ConnectorRole,
   NoteLikeElementType,
-} from '../types/elements';
+} from '@/src/types/elements';
 import { createCurveSvg, CurveBulge } from './svgCreator';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';

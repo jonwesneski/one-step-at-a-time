@@ -1,4 +1,4 @@
-import { SVG_NS } from '../consts';
+import { SVG_NS } from '@/src/utils/consts';
 
 export const createFlatSvg = () => {
   const sharpSvg = document.createElementNS(SVG_NS, 'svg');

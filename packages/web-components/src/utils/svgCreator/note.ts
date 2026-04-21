@@ -1,7 +1,8 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
-import { DurationType } from '../../types/theory';
-import { durationToFlagCountMap, SVG_NS } from '../consts';
+import { DurationType } from '@/src/types/theory';
+import { SVG_NS } from '@/src/utils/consts';
+import { durationToFlagCountMap } from '@/src/utils/theoryConsts';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
 export const NOTE_SVG_WIDTH = 32;

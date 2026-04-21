@@ -1,11 +1,14 @@
-import { StaffClassicalElementBase } from '../staffClassicalBase';
-import type { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
-import { LetterOctave, Octave } from '../types/theory';
-import { createTrebleClefSvg } from '../utils/svgCreator/clefs';
+import { StaffClassicalElementBase } from '@/src/staffClassicalBase';
+import type {
+  KeySignatureYCoordinates,
+  YCoordinates,
+} from '@/src/types/elements';
+import { LetterOctave, Octave } from '@/src/types/theory';
+import { createTrebleClefSvg } from '@/src/utils/svgCreator/clefs';
 import {
   generateKeySignatureYCoordinates,
   generateYCoordinates,
-} from '../utils/theoryHelpers';
+} from '@/src/utils/theoryHelpers';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffTrebleElement extends StaffClassicalElementBase {

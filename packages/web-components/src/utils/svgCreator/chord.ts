@@ -1,4 +1,4 @@
-import { SVG_NS } from '../consts';
+import { SVG_NS } from '@/src/utils/consts';
 import { createNoteSvg, type NoteProps } from './note';
 
 type ChordProps = NoteProps & {
