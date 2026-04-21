@@ -1,6 +1,11 @@
 import { StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
-import { SVG_NS } from '../utils';
+import { durationToFactor, SVG_NS } from '../utils';
+import {
+  MIN_NOTE_WIDTH,
+  STAFF_LINE_SPACING,
+  STAFF_LINE_START,
+} from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends StaffElementBase {
@@ -14,31 +19,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       </svg>
     `;
     #describeContainer: SVGGElement;
-    // todo: haven't tested yet
-    #yCoordinates: Record<string, number> = {
-      1: 50,
-      2: 40,
-      3: 30,
-      4: 20,
-      5: 10,
-      6: 0,
+    #currentElements: GuitarNoteElementType[] = [];
+    #yCoordinates: Record<number, number> = {
+      6: STAFF_LINE_START,
+      5: STAFF_LINE_START + STAFF_LINE_SPACING,
+      4: STAFF_LINE_START + STAFF_LINE_SPACING * 2,
+      3: STAFF_LINE_START + STAFF_LINE_SPACING * 3,
+      2: STAFF_LINE_START + STAFF_LINE_SPACING * 4,
+      1: STAFF_LINE_START + STAFF_LINE_SPACING * 5,
     };
 
     constructor() {
       super();
-      // this.#mutationObservers = [];
-
-      // const measure = this.closest('music-measure');
-      // const composition = this.closest('music-composition');
-      // this.#parentTime =
-      //   measure?.getAttribute('time') ??
-      //   composition?.getAttribute('time') ??
-      //   '4/4';
-      // const timeTime = this.getAttribute('time');
-      // if (timeTime) {
-      //   this.#timeInts = this.#convertTotimeInts(timeTime);
-      // }
-
       this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     }
 
@@ -46,17 +38,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return 6;
     }
 
-    static get observedAttributes(): string[] {
-      return [];
+    protected override get additionalStyles(): string {
+      return `
+        ::slotted(music-guitar-note) {
+          position: absolute;
+        }
+      `;
     }
 
-    // TODO: figure out y-coordinates for guitar tab notation
-    public getYCoordinate(note: string): number {
-      if (!note) {
-        return 0;
-      }
-
-      return 0;
+    static get observedAttributes(): string[] {
+      return [];
     }
 
     protected onConnectedCallback() {
@@ -64,7 +55,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#describeContainer.innerHTML = StaffGuitarTabElement.#tabSvg;
       this.transcribeContainer.appendChild(this.#describeContainer);
 
-      // Notes are added here at runtime
       const gNotes = document.createElementNS(SVG_NS, 'g');
       gNotes.setAttribute('class', 'notes-container');
       this.transcribeContainer.appendChild(gNotes);
@@ -73,7 +63,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onDisconnectedCallback(): void {}
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
     protected override onHandleSlotChange(event: Event): void {
       const slot = event.target as HTMLSlotElement;
       const assignedElements = slot
@@ -88,18 +77,48 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #renderNotes(assignedElements: GuitarNoteElementType[]) {
+      this.#currentElements = assignedElements;
       this.#spaceElements(assignedElements);
+      this.dispatchEvent(
+        new CustomEvent('staff-notes-positioned', {
+          bubbles: true,
+          composed: true,
+        })
+      );
     }
+
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
+      const transcribeRect = this.transcribeContainer.getBoundingClientRect();
+      const describeRect = this.#describeContainer.getBoundingClientRect();
+      const describeEndX = Math.round(describeRect.right - transcribeRect.left);
+      const remainingWidth = transcribeRect.width - describeEndX;
+      const proportionalWidth =
+        remainingWidth - assignedElements.length * MIN_NOTE_WIDTH;
+
+      let beatOffset = 0;
       for (let i = 0; i < assignedElements.length; i++) {
-        assignedElements[i].style.left = `${15}px`;
-        const string = assignedElements[i].string;
-        assignedElements[i].style.top = `${this.#yCoordinates[string]}px`;
+        const element = assignedElements[i];
+        const xOffsetInNotesSpace =
+          i * MIN_NOTE_WIDTH + beatOffset * proportionalWidth;
+        element.style.left = `${describeEndX + xOffsetInNotesSpace}px`;
+        element.style.top = `${
+          this.#yCoordinates[element.string] ?? STAFF_LINE_START
+        }px`;
+        beatOffset += durationToFactor[element.duration];
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
-    protected override onStaffResize(): void {}
+    protected override onStaffResize(): void {
+      if (this.#currentElements.length > 0) {
+        this.#spaceElements(this.#currentElements);
+        this.dispatchEvent(
+          new CustomEvent('staff-notes-positioned', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
+    }
   }
 
   if (!customElements.get('music-staff-guitar-tab')) {

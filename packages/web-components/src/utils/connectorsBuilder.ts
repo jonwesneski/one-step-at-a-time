@@ -246,6 +246,17 @@ const computeAnchor = (
   const rect = note.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2 - rootRect.left;
 
+  // Guitar notes render their fret text at the top of the element box;
+  // apply the notehead offset directly from rect.top so the curve clears the number.
+  if (note.tagName.toLowerCase() === 'music-guitar-note') {
+    const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+    return {
+      x: centerX,
+      y: rect.top - rootRect.top + edgeOffset,
+      rowTop: getRowTop(note, rootRect),
+    };
+  }
+
   let y: number;
   if (note.tagName.toLowerCase() === 'music-chord') {
     const yCoords = (note as unknown as ChordElementType).staffYCoordinates;
