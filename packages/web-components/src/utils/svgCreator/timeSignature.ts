@@ -1,5 +1,5 @@
-import type { BeatsInMeasure, BeatTypeInMeasure } from '@/src/types/theory';
-import { SVG_NS } from '@/src/utils/consts';
+import type { BeatsInMeasure, BeatTypeInMeasure } from '../../types/theory';
+import { SVG_NS } from '../consts';
 
 export const createTimeSignatureSvg = (
   numerator: BeatsInMeasure,

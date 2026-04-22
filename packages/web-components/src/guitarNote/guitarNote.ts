@@ -2,9 +2,9 @@ import {
   ConnectorRole,
   GuitarFret,
   IGuitarNoteElement,
-} from '@/src/types/elements';
-import { DurationType } from '@/src/types/theory';
-import { MUSIC_GUITAR_NOTE, NOTE_EVENTS, SVG_NS } from '@/src/utils/consts';
+} from '../types/elements';
+import { DurationType } from '../types/theory';
+import { MUSIC_GUITAR_NOTE, NOTE_EVENTS, SVG_NS } from '../utils/consts';
 
 const CONNECTOR_ATTRS = [
   'tie',

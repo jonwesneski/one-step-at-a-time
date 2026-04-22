@@ -1,20 +1,20 @@
-import { StaffClassicalElementBase } from '@/src/staffClassicalBase';
+import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
   KeySignatureYCoordinates,
   LyricSyllablePosition,
   LyricsElementType,
   YCoordinates,
-} from '@/src/types/elements';
-import { LetterOctave, Octave, VoiceType } from '@/src/types/theory';
+} from '../types/elements';
+import { LetterOctave, Octave, VoiceType } from '../types/theory';
 import {
   createBassClefSvg,
   createTreble8ClefSvg,
   createTrebleClefSvg,
-} from '@/src/utils/svgCreator/clefs';
+} from '../utils/svgCreator/clefs';
 import {
   generateKeySignatureYCoordinates,
   generateYCoordinates,
-} from '@/src/utils/theoryHelpers';
+} from '../utils/theoryHelpers';
 import type { MusicLyricsElement } from './lyrics';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {

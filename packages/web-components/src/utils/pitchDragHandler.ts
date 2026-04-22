@@ -1,5 +1,5 @@
-import { YCoordinates } from '@/src/types/elements';
-import { LetterOctave } from '@/src/types/theory';
+import { YCoordinates } from '../types/elements';
+import { LetterOctave } from '../types/theory';
 import { NOTE_EVENTS } from './consts';
 
 type PitchDragState = {

@@ -158,24 +158,24 @@ Beams in music notation – concise reference
 
 */
 
-import { NoteOrChordElementType } from '@/src/types/elements';
+import { NoteOrChordElementType } from '../../types/elements';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
-} from '@/src/types/theory';
-import { SVG_NS } from '@/src/utils/consts';
+} from '../../types/theory';
+import { SVG_NS } from '../consts';
 import {
   BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
   FRACTIONAL_BEAM_WIDTH_PX,
   MAX_STEM_SHORTENING_PX,
   STEM_OVERLAP_PX,
-} from '@/src/utils/notationDimensions';
+} from '../notationDimensions';
 import {
   durationToFactor,
   durationToFlagCountMap,
-} from '@/src/utils/theoryConsts';
+} from '../theoryConsts';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,

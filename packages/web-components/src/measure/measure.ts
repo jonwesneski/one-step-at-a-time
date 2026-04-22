@@ -1,4 +1,4 @@
-import { MUSIC_COMPOSITION } from '@/src/utils';
+import { MUSIC_COMPOSITION } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {

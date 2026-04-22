@@ -1,4 +1,4 @@
-import { DurationType, LetterNote } from '@/src/types/theory';
+import { DurationType, LetterNote } from '../types/theory';
 
 export const durationToFlagCountMap = new Map<DurationType, number>([
   ['eighth', 1],

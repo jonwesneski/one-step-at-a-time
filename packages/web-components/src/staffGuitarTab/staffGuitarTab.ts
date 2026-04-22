@@ -1,5 +1,5 @@
-import { StaffElementBase } from '@/src/staffBase';
-import { GuitarNoteElementType } from '@/src/types/elements';
+import { StaffElementBase } from '../staffBase';
+import { GuitarNoteElementType } from '../types/elements';
 import {
   MUSIC_GUITAR_CHORD_NODE,
   MUSIC_GUITAR_NOTE,
@@ -7,13 +7,13 @@ import {
   MUSIC_STAFF_GUITAR_TAB,
   STAFF_EVENTS,
   SVG_NS,
-} from '@/src/utils/consts';
+} from '../utils/consts';
 import {
   MIN_NOTE_WIDTH,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
-} from '@/src/utils/notationDimensions';
-import { durationToFactor } from '@/src/utils/theoryConsts';
+} from '../utils/notationDimensions';
+import { durationToFactor } from '../utils/theoryConsts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends StaffElementBase {

@@ -3,16 +3,16 @@ import {
   ConnectorRole,
   IChordElement,
   NoteElementType,
-} from '@/src/types/elements';
-import { Chord, DurationType } from '@/src/types/theory';
-import { createChordSvg } from '@/src/utils';
+} from '../types/elements';
+import { Chord, DurationType } from '../types/theory';
+import { createChordSvg } from '../utils';
 import {
   CHORD_EVENTS,
   MUSIC_CHORD,
   MUSIC_NOTE,
   NOTE_EVENTS,
-} from '@/src/utils/consts';
-import { STAFF_TRANSCRIPTION_HEIGHT } from '@/src/utils/notationDimensions';
+} from '../utils/consts';
+import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {

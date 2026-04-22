@@ -4,7 +4,7 @@
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
-} from '@/src/utils/svgCreator/note';
+} from '../utils/svgCreator/note';
 import '../index';
 
 afterEach(() => {

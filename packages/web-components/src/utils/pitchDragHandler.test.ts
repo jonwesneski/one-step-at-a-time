@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { YCoordinates } from '@/src/types/elements';
+import { YCoordinates } from '../types/elements';
 import { PitchDragHandler } from './pitchDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.

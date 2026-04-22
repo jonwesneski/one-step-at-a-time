@@ -1,7 +1,7 @@
-import { ConnectorRole, INoteElement } from '@/src/types/elements';
-import { DurationType, Note } from '@/src/types/theory';
-import { createNoteSvg } from '@/src/utils';
-import { MUSIC_NOTE, NOTE_EVENTS } from '@/src/utils/consts';
+import { ConnectorRole, INoteElement } from '../types/elements';
+import { DurationType, Note } from '../types/theory';
+import { createNoteSvg } from '../utils';
+import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
 
 const parseConnectorRole = (value: string | null): ConnectorRole | null => {
   if (value === 'start' || value === 'end') return value;

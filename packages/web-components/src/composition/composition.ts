@@ -2,7 +2,7 @@ import {
   buildConnectorSvgs,
   collectNoteLikeElements,
   pairConnectors,
-} from '@/src/utils/connectorsBuilder';
+} from '../utils/connectorsBuilder';
 import {
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -11,7 +11,7 @@ import {
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_TREBLE,
   MUSIC_STAFF_VOCAL,
-} from '@/src/utils/consts';
+} from '../utils/consts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
