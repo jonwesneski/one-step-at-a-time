@@ -5,7 +5,10 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@/src/*": ["./src/*"]
+    }
   },
   "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts"],
   "include": [

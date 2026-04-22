@@ -4,7 +4,7 @@ import {
   IGuitarNoteElement,
 } from '../types/elements';
 import { DurationType } from '../types/theory';
-import { SVG_NS } from '../utils/consts';
+import { MUSIC_GUITAR_NOTE, NOTE_EVENTS, SVG_NS } from '../utils/consts';
 
 const CONNECTOR_ATTRS = [
   'tie',
@@ -157,7 +157,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       if (CONNECTOR_ATTRS.includes(name as (typeof CONNECTOR_ATTRS)[number])) {
         this.dispatchEvent(
-          new CustomEvent('connector-attribute-change', {
+          new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })
@@ -199,7 +199,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  if (!customElements.get('music-guitar-note')) {
-    customElements.define('music-guitar-note', GuitarNoteElement);
+  if (!customElements.get(MUSIC_GUITAR_NOTE)) {
+    customElements.define(MUSIC_GUITAR_NOTE, GuitarNoteElement);
   }
 }

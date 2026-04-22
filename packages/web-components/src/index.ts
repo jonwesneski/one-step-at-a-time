@@ -17,4 +17,4 @@ export type {
   Note,
 } from './types/theory';
 export type { PitchChangeDetail } from './utils/pitchDragHandler';
-export { durationToFactor } from './utils/consts';
+export { durationToFactor } from './utils/theoryConsts';

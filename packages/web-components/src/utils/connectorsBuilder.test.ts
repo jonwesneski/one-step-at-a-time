@@ -1,7 +1,8 @@
 /**
  * @jest-environment jsdom
  */
-import '../index';
+import '@/src/index';
+
 import { NoteLikeElementType } from '../types/elements';
 import { collectNoteLikeElements, pairConnectors } from './connectorsBuilder';
 

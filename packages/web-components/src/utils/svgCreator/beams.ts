@@ -164,7 +164,7 @@ import {
   BeatTypeInMeasure,
   DurationType,
 } from '../../types/theory';
-import { durationToFactor, durationToFlagCountMap, SVG_NS } from '../consts';
+import { SVG_NS } from '../consts';
 import {
   BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
@@ -172,6 +172,7 @@ import {
   MAX_STEM_SHORTENING_PX,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
+import { durationToFactor, durationToFlagCountMap } from '../theoryConsts';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,

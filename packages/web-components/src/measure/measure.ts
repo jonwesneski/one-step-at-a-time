@@ -1,3 +1,5 @@
+import { MUSIC_COMPOSITION } from '../utils';
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {
     static get observedAttributes(): string[] {
@@ -10,7 +12,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       super();
 
       this.attachShadow({ mode: 'open' });
-      const composition = this.closest('music-composition');
+      const composition = this.closest(MUSIC_COMPOSITION);
       if (composition) {
         this.time = composition.getAttribute('time') ?? '4/4';
         this.mode = composition.getAttribute('mode') ?? 'major';

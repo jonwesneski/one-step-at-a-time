@@ -1,5 +1,6 @@
 import { YCoordinates } from '../types/elements';
 import { LetterOctave } from '../types/theory';
+import { NOTE_EVENTS } from './consts';
 
 type PitchDragState = {
   element: HTMLElement;
@@ -104,7 +105,7 @@ export class PitchDragHandler {
     }
 
     // Cancelable event
-    const dragStartEvent = new CustomEvent('note-pitch-drag-start', {
+    const dragStartEvent = new CustomEvent(NOTE_EVENTS.PITCH_DRAG_START, {
       bubbles: true,
       composed: true,
       cancelable: true,
@@ -217,7 +218,7 @@ export class PitchDragHandler {
 
     if (originalNote !== currentNote) {
       this.#hostElement.dispatchEvent(
-        new CustomEvent('note-pitch-change', {
+        new CustomEvent(NOTE_EVENTS.PITCH_CHANGE, {
           bubbles: true,
           composed: true,
           detail: {

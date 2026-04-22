@@ -1,12 +1,12 @@
 import { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
 import { Chord, LetterNote, LetterOctave } from '../types/theory';
+import { STAFF_LINE_SPACING } from './notationDimensions';
 import {
   ChordSemitoneMap,
   ChordSemitoneMapAliases,
   noteSemitoneMap,
   semitoneNoteMap,
-} from './consts';
-import { STAFF_LINE_SPACING } from './notationDimensions';
+} from './theoryConsts';
 
 const Y_COORDINATE_INCREMENT = STAFF_LINE_SPACING / 2;
 
