@@ -172,10 +172,7 @@ import {
   MAX_STEM_SHORTENING_PX,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
-import {
-  durationToFactor,
-  durationToFlagCountMap,
-} from '../theoryConsts';
+import { durationToFactor, durationToFlagCountMap } from '../theoryConsts';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,

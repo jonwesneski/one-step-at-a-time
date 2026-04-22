@@ -1,8 +1,5 @@
 import { StaffClassicalElementBase } from '../staffClassicalBase';
-import type {
-  KeySignatureYCoordinates,
-  YCoordinates,
-} from '../types/elements';
+import type { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
 import { LetterOctave, Octave } from '../types/theory';
 import { createBassClefSvg } from '../utils/svgCreator/clefs';
 import {
