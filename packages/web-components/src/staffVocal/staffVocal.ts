@@ -3,9 +3,16 @@ import {
   KeySignatureYCoordinates,
   LyricSyllablePosition,
   LyricsElementType,
+  NoteOrChordElementType,
   YCoordinates,
 } from '../types/elements';
 import { LetterOctave, Octave, VoiceType } from '../types/theory';
+import { calculateStaffVocalBusynessScore } from '../utils/busynessScore';
+import {
+  MUSIC_CHORD_NODE,
+  MUSIC_NOTE_NODE,
+  STAFF_EVENTS,
+} from '../utils/consts';
 import {
   createBassClefSvg,
   createTreble8ClefSvg,
@@ -22,6 +29,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_VERSE_SPACING = 15; // px between verse lines
 
   class StaffVocalElement extends StaffClassicalElementBase {
+    #lastElements: NoteOrChordElementType[] = [];
+
     static #sopranoYCoordinates = generateYCoordinates('C6', 'C4');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
     static #altoYCoordinates = generateYCoordinates('A5', 'F3');
@@ -310,6 +319,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return answer;
     }
 
+    protected override onHandleSlotChange(event: Event): void {
+      const slot = event.target as HTMLSlotElement;
+      this.#lastElements = slot
+        .assignedElements({ flatten: true })
+        .filter(
+          (e) =>
+            e.nodeName === MUSIC_NOTE_NODE || e.nodeName === MUSIC_CHORD_NODE
+        ) as NoteOrChordElementType[];
+      super.onHandleSlotChange(event);
+    }
+
     override onStaffResize(): void {
       super.onStaffResize();
       this.#positionLyricsIfPresent();
@@ -382,6 +402,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // Trigger lyrics elements to re-render
       for (const lyricEl of lyricsElements) {
         lyricEl.updatePositions();
+      }
+
+      // Re-score with lyrics included — overwrites the lyrics-unaware score from super
+      let totalLyricChars = 0;
+      for (const lyricEl of lyricsElements) {
+        const syllables = this.#parseLyricsText(lyricEl.textContent ?? '');
+        for (const syllable of syllables) {
+          totalLyricChars += syllable.text.length;
+        }
+      }
+      if (this.#lastElements.length > 0) {
+        const score = calculateStaffVocalBusynessScore(
+          this.#lastElements,
+          totalLyricChars
+        );
+        this.dispatchEvent(
+          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+            bubbles: true,
+            composed: false,
+            detail: { score },
+          })
+        );
       }
     }
 

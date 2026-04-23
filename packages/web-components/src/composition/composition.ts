@@ -112,7 +112,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           ${MUSIC_MEASURE} {
-            flex: 1 1 100px;
             min-width: 100px;
             box-sizing: border-box;
           }

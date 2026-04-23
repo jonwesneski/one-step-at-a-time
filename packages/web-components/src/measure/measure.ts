@@ -1,4 +1,9 @@
-import { MUSIC_COMPOSITION } from '../utils';
+import { scoreToFlexBasis, scoreToFlexGrow } from '../utils/busynessScore';
+import {
+  EMPTY_MEASURE_FLEX_BASIS_PX,
+  MIN_FLEX_GROW,
+} from '../utils/notationDimensions';
+import { MUSIC_COMPOSITION, STAFF_EVENTS } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {
@@ -7,6 +12,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #staffConnectorObserver: ResizeObserver;
+    #staffScores = new Map<EventTarget, number>();
+    #onStaffBusynessScore = (event: Event): void => {
+      const customEvent = event as CustomEvent<{ score: number }>;
+      if (customEvent.target) {
+        this.#staffScores.set(customEvent.target, customEvent.detail.score);
+      }
+      const maxScore = Math.max(...this.#staffScores.values());
+      const flexGrow = scoreToFlexGrow(maxScore);
+      const flexBasis = scoreToFlexBasis(maxScore);
+      this.style.flex = `${flexGrow} 1 ${flexBasis}px`;
+    };
 
     constructor() {
       super();
@@ -63,14 +79,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.render();
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- won't be null
       this.#staffConnectorObserver.observe(this.parentElement!);
-      // const slot = this.shadowRoot?.querySelector('slot');
-      // if (slot) {
-      //   slot.addEventListener('slotchange', this.#somebindedHandlerTbd);
-      // }
+      this.addEventListener(
+        STAFF_EVENTS.BUSYNESS_SCORE,
+        this.#onStaffBusynessScore
+      );
     }
 
     disconnectedCallback(): void {
       this.#staffConnectorObserver.disconnect();
+      this.removeEventListener(
+        STAFF_EVENTS.BUSYNESS_SCORE,
+        this.#onStaffBusynessScore
+      );
+      this.#staffScores.clear();
     }
 
     attributeChangedCallback(
@@ -89,7 +110,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         <style>
           :host {
             display: block;
-            flex: 1 1 280px;
+            flex: ${MIN_FLEX_GROW} 1 ${EMPTY_MEASURE_FLEX_BASIS_PX}px;
             min-width: 100px;
             box-sizing: border-box;
             position: relative;

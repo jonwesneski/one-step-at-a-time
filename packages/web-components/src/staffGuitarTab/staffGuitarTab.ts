@@ -1,5 +1,6 @@
 import { StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
+import { calculateGuitarTabBusynessScore } from '../utils/busynessScore';
 import {
   MUSIC_GUITAR_CHORD_NODE,
   MUSIC_GUITAR_NOTE,
@@ -89,6 +90,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           composed: true,
         })
       );
+      if (assignedElements.length > 0) {
+        const score = calculateGuitarTabBusynessScore(assignedElements);
+        this.dispatchEvent(
+          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+            bubbles: true,
+            composed: false,
+            detail: { score },
+          })
+        );
+      }
     }
 
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
@@ -119,6 +130,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           new CustomEvent(STAFF_EVENTS.NOTES_POSITIONED, {
             bubbles: true,
             composed: true,
+          })
+        );
+        const score = calculateGuitarTabBusynessScore(this.#currentElements);
+        this.dispatchEvent(
+          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+            bubbles: true,
+            composed: false,
+            detail: { score },
           })
         );
       }

@@ -28,6 +28,35 @@ export default function StandAlone() {
           </music-chord>
         </music-staff-treble>
       </Card>
+      <Card title="5 in a row">
+        <music-composition>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="E" duration="whole"></music-note>
+            </music-staff-treble>
+          </music-measure>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="E" duration="whole"></music-note>
+            </music-staff-treble>
+          </music-measure>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="E" duration="whole"></music-note>
+            </music-staff-treble>
+          </music-measure>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="E" duration="whole"></music-note>
+            </music-staff-treble>
+          </music-measure>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="E" duration="whole"></music-note>
+            </music-staff-treble>
+          </music-measure>
+        </music-composition>
+      </Card>
     </main>
   );
 }

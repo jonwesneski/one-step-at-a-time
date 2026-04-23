@@ -25,6 +25,7 @@ import {
   type NoteYPosition,
 } from './utils';
 import {
+  COMMON_ATTRIBUTES,
   MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -33,11 +34,6 @@ import {
   STAFF_EVENTS,
   SVG_NS,
 } from './utils/consts';
-import {
-  durationToFactor,
-  durationToFlagCountMap,
-  factorToDuration,
-} from './utils/theoryConsts';
 import {
   CLEF_X_OFFSET,
   KEY_SIG_FLAT_WIDTH,
@@ -49,14 +45,26 @@ import {
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
+import { calculateStaffBusynessScore } from './utils/busynessScore';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
+import {
+  durationToFactor,
+  durationToFlagCountMap,
+  factorToDuration,
+} from './utils/theoryConsts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
     // in it's life-cycle
-    return ['keysig', 'mode', 'time', 'editable', 'managed'];
+    return [
+      COMMON_ATTRIBUTES.KEY_SIG,
+      COMMON_ATTRIBUTES.MODE,
+      COMMON_ATTRIBUTES.TIME_SIG,
+      'editable',
+      'managed',
+    ];
   }
 
   #mutationObservers: MutationObserver[];
@@ -629,6 +637,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         composed: true,
       })
     );
+
+    if (elements.length > 0) {
+      const score = calculateStaffBusynessScore(elements);
+      this.dispatchEvent(
+        new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+          bubbles: true,
+          composed: false,
+          detail: { score },
+        })
+      );
+    }
   }
 
   #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
