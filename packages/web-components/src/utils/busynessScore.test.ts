@@ -10,8 +10,12 @@ import {
   NoteOrChordElementType,
 } from '../types/elements';
 import { MIN_FLEX_GROW, SCORED_MIN_FLEX_GROW } from './notationDimensions';
+import { DurationType, LetterOctave } from '../types/theory';
 
-function makeNote(duration: string, value = 'C4'): NoteOrChordElementType {
+function makeNote(
+  duration: DurationType,
+  value: LetterOctave = 'C4'
+): NoteOrChordElementType {
   return {
     nodeName: 'MUSIC-NOTE',
     duration,
@@ -20,8 +24,8 @@ function makeNote(duration: string, value = 'C4'): NoteOrChordElementType {
 }
 
 function makeChord(
-  duration: string,
-  noteValues: string[]
+  duration: DurationType,
+  noteValues: LetterOctave[]
 ): NoteOrChordElementType {
   return {
     nodeName: 'MUSIC-CHORD',
@@ -30,7 +34,7 @@ function makeChord(
   } as unknown as NoteOrChordElementType;
 }
 
-function makeGuitarNote(duration: string): GuitarNoteElementType {
+function makeGuitarNote(duration: DurationType): GuitarNoteElementType {
   return {
     duration,
     string: 1,

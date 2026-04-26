@@ -6,6 +6,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
 import '../index';
+import type { LetterOctave } from '../types/theory';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -36,7 +37,7 @@ const STAFF_Y_PADDING = 8;
 
 // Expected `style.top` value on the positioned <music-note> element.
 // Stem direction mirrors StaffClassicalElementBase#determineStemDirections.
-function expectedNoteTop(value: string): string {
+function expectedNoteTop(value: LetterOctave): string {
   const staffY = TREBLE_STAFF_Y[value];
   const stemUp = staffY > MIDDLE_STAFF_Y;
   const yHeadOffset = stemUp
@@ -54,7 +55,7 @@ function makeStaff(): Element {
   return el;
 }
 
-function renderNote(staff: Element, value: string): HTMLElement {
+function renderNote(staff: Element, value: LetterOctave): HTMLElement {
   const note = document.createElement('music-note') as any;
   note.setAttribute('duration', 'quarter');
   note.setAttribute('value', value);
