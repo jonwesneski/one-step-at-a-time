@@ -28,6 +28,19 @@ export default function StandAlone() {
           </music-chord>
         </music-staff-treble>
       </Card>
+      <Card title="3 in a row">
+        <music-composition>
+          <music-measure>
+            <music-staff-treble></music-staff-treble>
+          </music-measure>
+          <music-measure>
+            <music-staff-treble></music-staff-treble>
+          </music-measure>
+          <music-measure>
+            <music-staff-treble></music-staff-treble>
+          </music-measure>
+        </music-composition>
+      </Card>
       <Card title="5 in a row">
         <music-composition>
           <music-measure>

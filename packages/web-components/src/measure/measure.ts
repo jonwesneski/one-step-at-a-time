@@ -1,8 +1,5 @@
 import { scoreToFlexBasis, scoreToFlexGrow } from '../utils/busynessScore';
-import {
-  EMPTY_MEASURE_FLEX_BASIS_PX,
-  MIN_FLEX_GROW,
-} from '../utils/notationDimensions';
+import { EMPTY_MEASURE_FLEX_BASIS_PX } from '../utils/notationDimensions';
 import { MUSIC_COMPOSITION, STAFF_EVENTS } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -110,7 +107,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         <style>
           :host {
             display: block;
-            flex: ${MIN_FLEX_GROW} 1 ${EMPTY_MEASURE_FLEX_BASIS_PX}px;
+            flex: 1 1 ${EMPTY_MEASURE_FLEX_BASIS_PX}px;
             min-width: 100px;
             box-sizing: border-box;
             position: relative;
