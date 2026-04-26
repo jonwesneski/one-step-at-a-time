@@ -227,8 +227,7 @@ export const COMPOSITION_MAX_WIDTH_PX = 900;
 /**
  * flex-basis for an empty measure: composition width / 3 empty measures per row.
  */
-export const EMPTY_MEASURE_FLEX_BASIS_PX =
-  COMPOSITION_MAX_WIDTH_PX / 3;
+export const EMPTY_MEASURE_FLEX_BASIS_PX = COMPOSITION_MAX_WIDTH_PX / 3;
 
 /**
  * flex-basis floor for a score-1 (whole note) measure: composition width / 5 per row.
