@@ -197,3 +197,40 @@ export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -1.8;
  * = 3 × STAFF_LINE_SPACING
  */
 export const TIME_SIG_Y_TRANSLATE = STAFF_LINE_SPACING * 3;
+
+// ─── Measure layout ───────────────────────────────────────────────────────────
+
+/**
+ * Maximum number of measures that can appear side-by-side in one row when all
+ * measures have the highest busyness score (score 5 → flex-grow 1.0).
+ */
+export const MAX_MEASURES_PER_ROW = 5;
+
+/**
+ * flex-grow for an empty measure (no staves have reported a score yet).
+ * At 1/3, three empty measures occupy roughly one full row width.
+ */
+export const MIN_FLEX_GROW = 1 / 3;
+
+/**
+ * flex-grow floor for a scored measure (busyness score 1 — e.g. a single whole note).
+ * At 1/5, five score-1 measures occupy one full row width.
+ */
+export const SCORED_MIN_FLEX_GROW = 1 / MAX_MEASURES_PER_ROW;
+
+/**
+ * Maximum composition width in pixels. Used to derive flex-basis values so that
+ * the correct number of measures wrap per row.
+ */
+export const COMPOSITION_MAX_WIDTH_PX = 900;
+
+/**
+ * flex-basis for an empty measure: composition width / 3 empty measures per row.
+ */
+export const EMPTY_MEASURE_FLEX_BASIS_PX = COMPOSITION_MAX_WIDTH_PX / 3;
+
+/**
+ * flex-basis floor for a score-1 (whole note) measure: composition width / 5 per row.
+ */
+export const SCORED_MIN_FLEX_BASIS_PX =
+  COMPOSITION_MAX_WIDTH_PX / MAX_MEASURES_PER_ROW;

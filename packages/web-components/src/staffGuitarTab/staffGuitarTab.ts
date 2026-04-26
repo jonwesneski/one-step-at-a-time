@@ -1,5 +1,6 @@
 import { StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
+import { calculateGuitarTabBusynessScore } from '../utils/busynessScore';
 import {
   MUSIC_GUITAR_CHORD_NODE,
   MUSIC_GUITAR_NOTE,
@@ -27,7 +28,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       </svg>
     `;
     #describeContainer: SVGGElement;
+    #showClef = true;
     #currentElements: GuitarNoteElementType[] = [];
+
+    get showClef(): boolean {
+      return this.#showClef;
+    }
+
+    set showClef(value: boolean) {
+      if (this.#showClef === value) {
+        return;
+      }
+      this.#showClef = value;
+      this.#refreshDescribe();
+    }
     #yCoordinates: Record<number, number> = {
       6: STAFF_LINE_START,
       5: STAFF_LINE_START + STAFF_LINE_SPACING,
@@ -60,8 +74,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     protected onConnectedCallback() {
       this.#describeContainer.setAttribute('class', 'describe-container');
-      this.#describeContainer.innerHTML = StaffGuitarTabElement.#tabSvg;
+      this.#describeContainer.innerHTML = this.#showClef
+        ? StaffGuitarTabElement.#tabSvg
+        : '';
       this.transcribeContainer.appendChild(this.#describeContainer);
+    }
+
+    #refreshDescribe() {
+      this.#describeContainer.innerHTML = this.#showClef
+        ? StaffGuitarTabElement.#tabSvg
+        : '';
     }
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later
@@ -89,6 +111,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           composed: true,
         })
       );
+      if (assignedElements.length > 0) {
+        const score = calculateGuitarTabBusynessScore(assignedElements);
+        this.dispatchEvent(
+          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+            bubbles: true,
+            composed: false,
+            detail: { score },
+          })
+        );
+      }
     }
 
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
@@ -119,6 +151,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           new CustomEvent(STAFF_EVENTS.NOTES_POSITIONED, {
             bubbles: true,
             composed: true,
+          })
+        );
+        const score = calculateGuitarTabBusynessScore(this.#currentElements);
+        this.dispatchEvent(
+          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+            bubbles: true,
+            composed: false,
+            detail: { score },
           })
         );
       }

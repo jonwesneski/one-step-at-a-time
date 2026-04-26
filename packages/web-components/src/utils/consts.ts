@@ -45,4 +45,11 @@ export const CHORD_EVENTS = {
 
 export const STAFF_EVENTS = {
   NOTES_POSITIONED: 'staff-notes-positioned',
+  BUSYNESS_SCORE: 'staff-busyness-score',
+} as const;
+
+export const COMMON_ATTRIBUTES = {
+  KEY_SIG: 'keysig',
+  MODE: 'mode',
+  TIME_SIG: 'time',
 } as const;

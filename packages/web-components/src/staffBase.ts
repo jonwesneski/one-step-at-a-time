@@ -49,7 +49,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       <style>
       :host {
           flex: var(--flex-staff-basis, 1 1 280px);
-          min-width: var(--flex-staff-minw, 280px);
+          min-width: var(--flex-staff-minw, 0);
           box-sizing: border-box;
           display: block;
         }

@@ -4,6 +4,7 @@
 
 import '../../index';
 import { NOTE_SCALE } from './note';
+import { DurationType, LetterOctave } from '../../types/theory';
 
 const NOTE_STEM_X_OFFSET_PX = 365 * NOTE_SCALE;
 
@@ -11,14 +12,17 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function makeNote(value: string, duration: string): HTMLElement {
+function makeNote(value: LetterOctave, duration: DurationType): HTMLElement {
   const note = document.createElement('music-note') as any;
   note.setAttribute('value', value);
   note.setAttribute('duration', duration);
   return note;
 }
 
-function makeChord(duration: string, noteValues: string[]): HTMLElement {
+function makeChord(
+  duration: DurationType,
+  noteValues: LetterOctave[]
+): HTMLElement {
   const chord = document.createElement('music-chord') as any;
   chord.setAttribute('duration', duration);
   for (const value of noteValues) {

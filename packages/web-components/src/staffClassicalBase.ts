@@ -25,6 +25,7 @@ import {
   type NoteYPosition,
 } from './utils';
 import {
+  COMMON_ATTRIBUTES,
   MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -33,11 +34,6 @@ import {
   STAFF_EVENTS,
   SVG_NS,
 } from './utils/consts';
-import {
-  durationToFactor,
-  durationToFlagCountMap,
-  factorToDuration,
-} from './utils/theoryConsts';
 import {
   CLEF_X_OFFSET,
   KEY_SIG_FLAT_WIDTH,
@@ -49,14 +45,26 @@ import {
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
+import { calculateStaffBusynessScore } from './utils/busynessScore';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
+import {
+  durationToFactor,
+  durationToFlagCountMap,
+  factorToDuration,
+} from './utils/theoryConsts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
     // in it's life-cycle
-    return ['keysig', 'mode', 'time', 'editable', 'managed'];
+    return [
+      COMMON_ATTRIBUTES.KEY_SIG,
+      COMMON_ATTRIBUTES.MODE,
+      COMMON_ATTRIBUTES.TIME_SIG,
+      'editable',
+      'managed',
+    ];
   }
 
   #mutationObservers: MutationObserver[];
@@ -70,6 +78,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
+  #showClef = true;
+
+  get showClef(): boolean {
+    return this.#showClef;
+  }
+
+  set showClef(value: boolean) {
+    if (this.#showClef === value) {
+      return;
+    }
+    this.#showClef = value;
+    this.#refreshDescribe();
+  }
 
   constructor() {
     super();
@@ -382,7 +403,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Describe is: clef, key signature, time signature, and beams overlay
   #buildDescribe(clefSvgStr: string) {
     this.#describeContainer.classList.add('describe-container');
-    this.#describeContainer.innerHTML = clefSvgStr;
+    this.#describeContainer.innerHTML = this.#showClef ? clefSvgStr : '';
     this.transcribeContainer.appendChild(this.#describeContainer);
 
     const xOffsetOfClef = CLEF_X_OFFSET;
@@ -404,7 +425,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #refreshDescribe() {
     if (!this.isConnected) return;
-    this.#describeContainer.innerHTML = this.clefSvg;
+    this.#describeContainer.innerHTML = this.#showClef ? this.clefSvg : '';
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
       this.#describeContainer,
       CLEF_X_OFFSET
@@ -629,6 +650,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         composed: true,
       })
     );
+
+    if (elements.length > 0) {
+      const score = calculateStaffBusynessScore(elements);
+      this.dispatchEvent(
+        new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+          bubbles: true,
+          composed: false,
+          detail: { score },
+        })
+      );
+    }
   }
 
   #buildBeamsRenderer(elements: NoteOrChordElementType[]) {

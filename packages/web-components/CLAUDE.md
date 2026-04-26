@@ -4,19 +4,29 @@
 
 `@one-step-at-a-time/web-components` is a Web Components library for rendering music notation in the browser. All musical elements are custom HTML elements built with TypeScript and SVG. There are no framework dependencies — it runs natively in any browser or framework (React types are declared for JSX compatibility).
 
+## Composable and Standalone Elements
+
+Elements are designed to be used **in isolation or composed together**. You do not need the full hierarchy to use any given element:
+
+- `<music-note>` and `<music-chord>` can be used standalone, outside any staff, measure, or composition
+- `<music-staff-treble>`, `<music-staff-bass>`, `<music-staff-guitar-tab>`, and `<music-staff-vocal>` can be used without a `<music-measure>` or `<music-composition>`
+- `<music-measure>` can be used without a `<music-composition>`
+
+Some features may be unavailable or degraded when elements are used outside their normal parent context (for example, attribute inheritance from parent elements won't apply, and layout-driven sizing from busyness scores requires a `<music-measure>` parent). The goal is to keep that list of exceptions small.
+
 ## Custom Element Hierarchy
 
 ```
 <music-composition>          — composition.ts
-  └─ <music-measure>         — measure.ts
-      ├─ <music-staff-treble>   — staffTreble.ts
-      ├─ <music-staff-bass>     — staffBass.ts
-          ├─ <music-note>        — note.ts
-          └─ <music-chord>       — chord.ts
-              └─ <music-note>    (children)
-      └─ <music-staff-guitar-tab>  — staffGuitarTab.ts
-      └─ <music-staff-vocal>  — staffVocal.ts
-          └─ <music-lyrics>    — lyrics.ts
+  └─ <music-measure>         — measure/measure.ts
+      ├─ <music-staff-treble>   — staffTreble/staffTreble.ts
+      ├─ <music-staff-bass>     — staffBass/staffBass.ts
+      │   ├─ <music-note>        — note/note.ts
+      │   └─ <music-chord>       — chord/chord.ts
+      │       └─ <music-note>    (children)
+      ├─ <music-staff-guitar-tab>  — staffGuitarTab/staffGuitarTab.ts
+      └─ <music-staff-vocal>  — staffVocal/staffVocal.ts
+          └─ <music-lyrics>    — staffVocal/lyrics.ts
 ```
 
 Attributes flow **down**: Composition → Measure → Staff → Note. Each level can override parent settings.
@@ -32,11 +42,28 @@ All components use shadow DOM (`attachShadow({ mode: 'open' })`). Style encapsul
 - Y-coordinates are looked up from static maps keyed by note name + octave (e.g., `'C4'`, `'G5'`)
 - Each staff subclass defines its own `noteYCoordinateMap` for its clef range
 - X-spacing is derived from `durationToFactor`: whole=1.0, half=0.5, quarter=0.25, etc.
-- SVG rendering lives entirely in `utils/svgCreator/`
+- SVG rendering lives entirely in `utils/svgCreator/` (a directory, not a single file)
 
 ### Semitone System
 
 Notes are mapped to semitones 0–11 (A=0, Bb=1, B=2, C=3, …, Ab=11). Chord formulas are stored as semitone interval arrays from root (e.g., major = `[4, 7]`). This enables enharmonic equivalents and chord note computation.
+
+### Busyness Score
+
+Each staff calculates a **busyness score** — a numeric measure of how many notes (and their relative durations) are in the staff. The score is dispatched upward via a `STAFF_EVENTS.BUSYNESS_SCORE` custom event. `<music-measure>` listens for these events from its child staves and maps the score to CSS `flex` properties (`flex: <score> 1 <basis>`), so busier measures naturally take up more horizontal space in a composition layout. The score calculation logic lives in `utils/busynessScore.ts`.
+
+### Responsive Layout
+
+`<music-composition>` uses CSS flexbox with `flex-wrap: wrap`, so measures reflow into rows automatically as the container width changes. All layout-sensitive rendering reacts to this via a `ResizeObserver` on the composition element, which schedules a redraw via `#scheduleRedraw()` (debounced to one `requestAnimationFrame`).
+
+On each redraw cycle the following happen in order:
+
+1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-spaces notes proportionally to the new container width and re-emits `STAFF_EVENTS.NOTES_POSITIONED`.
+2. **Beams** — redrawn as part of `#renderNotes()` / `onStaffResize()` inside each staff.
+3. **Connectors** — `#redrawConnectors()` in `composition.ts` redraws the vertical bar lines that group staves in a measure, running inside the first `requestAnimationFrame`.
+4. **Clef visibility** — `#updateClefVisibility()` in `composition.ts` runs in a **second nested `requestAnimationFrame`** (after connectors) so that measure `getBoundingClientRect()` positions are fully settled before row boundaries are detected. It compares each measure's `top` value to the previous one (tolerance 5 px) to determine which measure is first in its row, then sets `showClef` (a JS property, not an HTML attribute) on each child staff accordingly. Staves default to `showClef = true`, so standalone staves always show the clef.
+
+**Invariant to maintain**: any change that affects which measure is "first in a row" (resize, dynamic measure insertion/removal) must eventually trigger `#scheduleRedraw()` so `#updateClefVisibility()` re-runs.
 
 ## Important Types (`types/theory.ts`)
 
@@ -69,12 +96,13 @@ type LetterNote =
   | 'G#'
   | 'Ab';
 type Mode = 'major' | 'minor';
-type BeatsInMeasure = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+type BeatsInMeasure = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 9 | 12;
+type VoiceType = 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
 ```
 
 `Chord` is a discriminated union of `NormalChord` and slash chords.
 
-## Key Utility Maps (`utils/consts.ts`)
+## Key Utility Maps (`utils/theoryConsts.ts`)
 
 | Map                       | Purpose                                               |
 | ------------------------- | ----------------------------------------------------- |
@@ -85,14 +113,17 @@ type BeatsInMeasure = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 | `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`) |
 | `durationToFactor`        | Duration → relative x-spacing factor                  |
 
+`utils/consts.ts` holds custom element tag name constants and event name constants (e.g., `STAFF_EVENTS`).
+
 ## Staff Class Hierarchy
 
 ```
 StaffElementBase              (staffBase.ts)         — shadow DOM, staff lines, resize observer, template method lifecycle
 ├── StaffClassicalElementBase (staffClassicalBase.ts) — key sig, time sig, note Y-coords, beam/note rendering
-│   ├── StaffTrebleElement    (staffTreble.ts)        — treble clef, Y-coord map, key sig Y-coords
-│   └── StaffBassElement      (staffBass.ts)          — bass clef, Y-coord map, key sig Y-coords
-└── StaffGuitarTabElement     (staffGuitarTab.ts)     — 6-line tab staff, no music theory
+│   ├── StaffTrebleElement    (staffTreble/staffTreble.ts)   — treble clef, Y-coord map, key sig Y-coords
+│   ├── StaffBassElement      (staffBass/staffBass.ts)       — bass clef, Y-coord map, key sig Y-coords
+│   └── StaffVocalElement     (staffVocal/staffVocal.ts)     — vocal clef, 6 voice types, lyrics integration
+└── StaffGuitarTabElement     (staffGuitarTab/staffGuitarTab.ts) — 6-line tab staff, no music theory
 ```
 
 `StaffElementBase` — abstract base that owns the shadow DOM, staff line construction, `staffContainer` (div), `transcribeContainer` (SVG), and `staffResizeObserver`. All three are `protected readonly` so subclasses can access them. Implements `connectedCallback` (builds staff lines, appends containers, wires `slotchange`, starts resize observer) and `disconnectedCallback`. Uses a template method pattern — subclasses implement:
@@ -118,6 +149,7 @@ Rendering flow (classical staves):
 4. `slotchange` fires → `onHandleSlotChange()` → `#renderNotes()` converts notes/chords to SVG
 5. Notes spaced by duration factor
 6. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
+7. Staff dispatches a `STAFF_EVENTS.BUSYNESS_SCORE` event after each render
 
 ## Drag Handlers (`utils/`)
 
@@ -149,9 +181,10 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 
 ## Known Incomplete Areas
 
-- **`staffGuitarTab.ts`**: 6-line tab staff with TAB clef SVG exists, but `onHandleSlotChange`, `onStaffResize`, and `onDisconnectedCallback` are all empty stubs — note rendering is not yet implemented
+- **`staffGuitarTab.ts`**: `onDisconnectedCallback` is still an empty stub
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
 - **Accidentals during pitch drag**: Pitch drag snaps to natural staff positions only; accidental changes (sharp/flat) need a separate mechanism
+- **Standalone degraded features**: Some capabilities (busyness-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation
 
 ## Build & Test
 
@@ -169,3 +202,4 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 - `currentColor` used in SVG so staff color inherits from CSS
 - **Always run `npx nx format:write` after every batch of file edits or new files** — do not skip this step
 - Use full words when defining variables, functions, and classes; no abbreviations or uncommon acronyms
+- In test files, always use strong types from `types/theory.ts` and `types/elements.ts` instead of primitives — e.g. `DurationType` instead of `string` for durations, `LetterOctave` instead of `string` for note+octave values like `'C4'`
