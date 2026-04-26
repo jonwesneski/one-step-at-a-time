@@ -28,7 +28,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       </svg>
     `;
     #describeContainer: SVGGElement;
+    #showClef = true;
     #currentElements: GuitarNoteElementType[] = [];
+
+    get showClef(): boolean {
+      return this.#showClef;
+    }
+
+    set showClef(value: boolean) {
+      if (this.#showClef === value) {
+        return;
+      }
+      this.#showClef = value;
+      this.#refreshDescribe();
+    }
     #yCoordinates: Record<number, number> = {
       6: STAFF_LINE_START,
       5: STAFF_LINE_START + STAFF_LINE_SPACING,
@@ -61,8 +74,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     protected onConnectedCallback() {
       this.#describeContainer.setAttribute('class', 'describe-container');
-      this.#describeContainer.innerHTML = StaffGuitarTabElement.#tabSvg;
+      this.#describeContainer.innerHTML = this.#showClef
+        ? StaffGuitarTabElement.#tabSvg
+        : '';
       this.transcribeContainer.appendChild(this.#describeContainer);
+    }
+
+    #refreshDescribe() {
+      this.#describeContainer.innerHTML = this.#showClef
+        ? StaffGuitarTabElement.#tabSvg
+        : '';
     }
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- will handle later

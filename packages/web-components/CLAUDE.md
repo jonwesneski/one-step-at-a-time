@@ -52,6 +52,19 @@ Notes are mapped to semitones 0–11 (A=0, Bb=1, B=2, C=3, …, Ab=11). Chord fo
 
 Each staff calculates a **busyness score** — a numeric measure of how many notes (and their relative durations) are in the staff. The score is dispatched upward via a `STAFF_EVENTS.BUSYNESS_SCORE` custom event. `<music-measure>` listens for these events from its child staves and maps the score to CSS `flex` properties (`flex: <score> 1 <basis>`), so busier measures naturally take up more horizontal space in a composition layout. The score calculation logic lives in `utils/busynessScore.ts`.
 
+### Responsive Layout
+
+`<music-composition>` uses CSS flexbox with `flex-wrap: wrap`, so measures reflow into rows automatically as the container width changes. All layout-sensitive rendering reacts to this via a `ResizeObserver` on the composition element, which schedules a redraw via `#scheduleRedraw()` (debounced to one `requestAnimationFrame`).
+
+On each redraw cycle the following happen in order:
+
+1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-spaces notes proportionally to the new container width and re-emits `STAFF_EVENTS.NOTES_POSITIONED`.
+2. **Beams** — redrawn as part of `#renderNotes()` / `onStaffResize()` inside each staff.
+3. **Connectors** — `#redrawConnectors()` in `composition.ts` redraws the vertical bar lines that group staves in a measure, running inside the first `requestAnimationFrame`.
+4. **Clef visibility** — `#updateClefVisibility()` in `composition.ts` runs in a **second nested `requestAnimationFrame`** (after connectors) so that measure `getBoundingClientRect()` positions are fully settled before row boundaries are detected. It compares each measure's `top` value to the previous one (tolerance 5 px) to determine which measure is first in its row, then sets `showClef` (a JS property, not an HTML attribute) on each child staff accordingly. Staves default to `showClef = true`, so standalone staves always show the clef.
+
+**Invariant to maintain**: any change that affects which measure is "first in a row" (resize, dynamic measure insertion/removal) must eventually trigger `#scheduleRedraw()` so `#updateClefVisibility()` re-runs.
+
 ## Important Types (`types/theory.ts`)
 
 ```ts

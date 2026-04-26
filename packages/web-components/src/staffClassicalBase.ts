@@ -78,6 +78,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
+  #showClef = true;
+
+  get showClef(): boolean {
+    return this.#showClef;
+  }
+
+  set showClef(value: boolean) {
+    if (this.#showClef === value) {
+      return;
+    }
+    this.#showClef = value;
+    this.#refreshDescribe();
+  }
 
   constructor() {
     super();
@@ -390,7 +403,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Describe is: clef, key signature, time signature, and beams overlay
   #buildDescribe(clefSvgStr: string) {
     this.#describeContainer.classList.add('describe-container');
-    this.#describeContainer.innerHTML = clefSvgStr;
+    this.#describeContainer.innerHTML = this.#showClef ? clefSvgStr : '';
     this.transcribeContainer.appendChild(this.#describeContainer);
 
     const xOffsetOfClef = CLEF_X_OFFSET;
@@ -412,7 +425,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #refreshDescribe() {
     if (!this.isConnected) return;
-    this.#describeContainer.innerHTML = this.clefSvg;
+    this.#describeContainer.innerHTML = this.#showClef ? this.clefSvg : '';
     const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
       this.#describeContainer,
       CLEF_X_OFFSET

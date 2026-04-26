@@ -33,7 +33,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#measureCount = 0;
       this.#resizeObserver = null;
       this.#redrawScheduled = false;
-      this.#boundRedraw = () => this.#scheduleRedrawConnectors();
+      this.#boundRedraw = () => this.#scheduleRedraw();
       this.attachShadow({ mode: 'open' });
     }
 
@@ -146,7 +146,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener('connector-attribute-change', this.#boundRedraw);
     }
 
-    #scheduleRedrawConnectors() {
+    #scheduleRedraw() {
       if (this.#redrawScheduled) {
         return;
       }
@@ -155,6 +155,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#redrawConnectors();
+        requestAnimationFrame(() => this.#updateClefVisibility());
       });
     }
 
@@ -209,6 +210,27 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return 0;
       }
       return describeContainer.getBoundingClientRect().right - rootRect.left;
+    }
+
+    #updateClefVisibility() {
+      const measures = Array.from(
+        this.querySelectorAll('music-measure')
+      ) as HTMLElement[];
+      let previousTop: number | null = null;
+
+      for (const measure of measures) {
+        const top = measure.getBoundingClientRect().top;
+        const isFirstInRow =
+          previousTop === null || Math.abs(top - previousTop) > 5;
+        previousTop = top;
+
+        Array.from(measure.children)
+          .filter((el) => el.nodeName.startsWith('MUSIC-STAFF-'))
+          .forEach((staff) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed, same pattern as refreshInheritedAttrs
+            (staff as any).showClef = isFirstInRow;
+          });
+      }
     }
 
     #manageMeasureCount() {

@@ -39,6 +39,10 @@ export default function StandAlone() {
           <music-measure>
             <music-staff-treble></music-staff-treble>
           </music-measure>
+          {/** 4th shows on next row */}
+          <music-measure>
+            <music-staff-treble></music-staff-treble>
+          </music-measure>
         </music-composition>
       </Card>
       <Card title="5 in a row">
@@ -63,6 +67,12 @@ export default function StandAlone() {
               <music-note value="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="E" duration="whole"></music-note>
+            </music-staff-treble>
+          </music-measure>
+          {/** 6th shows on next row */}
           <music-measure>
             <music-staff-treble>
               <music-note value="E" duration="whole"></music-note>
