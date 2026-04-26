@@ -193,8 +193,8 @@ These alter the rhythmic length of a note.
 
 |          | Name                | Notation                | Description                      |
 | -------- | ------------------- | ----------------------- | -------------------------------- |
-| &#x2610; | Slur                | Curved line over notes  | Play notes legato (connected)    |
-| &#x2610; | Tie                 | Curved line, same pitch | Extends note duration            |
+| &#x2611; | Slur                | Curved line over notes  | Play notes legato (connected)    |
+| &#x2611; | Tie                 | Curved line, same pitch | Extends note duration            |
 | &#x2610; | Phrase Mark         | Long curved line        | Groups a musical phrase visually |
 | &#x2610; | Hairpin Crescendo   | `<` hairpin             | Get louder over a span of notes  |
 | &#x2610; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes  |

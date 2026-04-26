@@ -31,6 +31,7 @@ import {
   MUSIC_MEASURE,
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
+  NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
 } from './utils/consts';
@@ -79,6 +80,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
   #showClef = true;
+  #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
 
   get showClef(): boolean {
     return this.#showClef;
@@ -214,6 +216,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     if (this.editable) {
       this.#enableDrag();
     }
+    this.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      this.#boundDrawConnectors
+    );
   }
 
   #enableDrag() {
@@ -500,6 +506,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected override onDisconnectedCallback(): void {
     this.#disableDrag();
+    this.removeEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      this.#boundDrawConnectors
+    );
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
@@ -650,6 +660,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         composed: true,
       })
     );
+
+    this.drawConnectorsWhenStandalone();
 
     if (elements.length > 0) {
       const score = calculateStaffBusynessScore(elements);
@@ -902,6 +914,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           composed: true,
         })
       );
+      this.drawConnectorsWhenStandalone();
     }
   }
 }
