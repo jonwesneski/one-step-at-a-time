@@ -4,6 +4,7 @@ import {
   pairConnectors,
 } from '../utils/connectorsBuilder';
 import {
+  COMMON_ATTRIBUTES,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_MEASURE_NODE,
@@ -18,7 +19,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     static get observedAttributes(): string[] {
       // All attributes need to be all lower case because jsdom lowers then
       // in it's life-cycle
-      return ['keysig', 'mode', 'time'];
+      return [
+        COMMON_ATTRIBUTES.KEY_SIG,
+        COMMON_ATTRIBUTES.MODE,
+        COMMON_ATTRIBUTES.TIME_SIG,
+      ];
     }
 
     #observer: MutationObserver | null;
@@ -38,27 +43,27 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get keySig(): string {
-      return this.getAttribute('keysig') ?? 'C';
+      return this.getAttribute(COMMON_ATTRIBUTES.KEY_SIG) ?? 'C';
     }
 
     set keySig(value: string) {
-      this.setAttribute('keysig', value);
+      this.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, value);
     }
 
     get mode(): string {
-      return this.getAttribute('mode') ?? 'major';
+      return this.getAttribute(COMMON_ATTRIBUTES.MODE) ?? 'major';
     }
 
     set mode(value: string) {
-      this.setAttribute('mode', value);
+      this.setAttribute(COMMON_ATTRIBUTES.MODE, value);
     }
 
     get time(): string {
-      return this.getAttribute('time') ?? '4/4';
+      return this.getAttribute(COMMON_ATTRIBUTES.TIME_SIG) ?? '4/4';
     }
 
     set time(value: string) {
-      this.setAttribute('time', value);
+      this.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, value);
     }
 
     connectedCallback(): void {
@@ -259,7 +264,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #setMeasure(measure: HTMLElement) {
       if (this.#measureCount === 0) {
-        measure.setAttribute('time', this.time);
+        measure.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, this.time);
       }
       measure.setAttribute('number', (++this.#measureCount).toString());
     }

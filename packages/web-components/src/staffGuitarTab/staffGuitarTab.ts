@@ -111,6 +111,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           composed: true,
         })
       );
+      this.drawConnectorsWhenStandalone();
       if (assignedElements.length > 0) {
         const score = calculateGuitarTabBusynessScore(assignedElements);
         this.dispatchEvent(
@@ -153,6 +154,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             composed: true,
           })
         );
+        this.drawConnectorsWhenStandalone();
         const score = calculateGuitarTabBusynessScore(this.#currentElements);
         this.dispatchEvent(
           new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {

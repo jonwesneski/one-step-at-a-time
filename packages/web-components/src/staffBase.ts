@@ -1,5 +1,11 @@
 import { SVG_NS } from './utils';
 import {
+  buildConnectorSvgs,
+  collectNoteLikeElements,
+  pairConnectors,
+} from './utils/connectorsBuilder';
+import { MUSIC_COMPOSITION } from './utils/consts';
+import {
   STAFF_BOTTOM_MARGIN,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -22,6 +28,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   #lastStaffWidth: number;
 
   protected readonly transcribeContainer: SVGSVGElement;
+  #standaloneConnectorsOverlay: SVGSVGElement;
   #slotChangeHandler = (event: Event) => this.onHandleSlotChange(event);
 
   constructor() {
@@ -30,6 +37,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     this.staffContainer = document.createElement('div');
     this.transcribeContainer = document.createElementNS(SVG_NS, 'svg');
+    this.#standaloneConnectorsOverlay = document.createElementNS(SVG_NS, 'svg');
 
     this.#lastStaffWidth = 0;
     this.staffResizeObserver = new ResizeObserver((entries) => {
@@ -98,6 +106,12 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     wrapper.appendChild(this.staffContainer);
     wrapper.appendChild(this.transcribeContainer);
 
+    this.#standaloneConnectorsOverlay.setAttribute(
+      'style',
+      'position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; color: currentColor;'
+    );
+    wrapper.appendChild(this.#standaloneConnectorsOverlay);
+
     const slot = wrapper.querySelector('slot');
     if (slot && this.isConnected) {
       slot.addEventListener('slotchange', this.#slotChangeHandler);
@@ -150,6 +164,38 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected abstract onConnectedCallback(): void;
 
   protected abstract onHandleSlotChange(event: Event): void;
+
+  protected drawConnectorsWhenStandalone(): void {
+    if (this.closest(MUSIC_COMPOSITION)) {
+      return;
+    }
+
+    while (this.#standaloneConnectorsOverlay.firstChild) {
+      this.#standaloneConnectorsOverlay.removeChild(
+        this.#standaloneConnectorsOverlay.firstChild
+      );
+    }
+
+    const notes = collectNoteLikeElements(this as unknown as ParentNode);
+    if (notes.length === 0) {
+      return;
+    }
+
+    const pairs = pairConnectors(notes);
+    if (pairs.length === 0) {
+      return;
+    }
+
+    const rootRect = (this as unknown as HTMLElement).getBoundingClientRect();
+    const svgs = buildConnectorSvgs(pairs, {
+      rootRect,
+      rowLeft: 0,
+      rowRight: rootRect.width,
+    });
+    for (const svg of svgs) {
+      this.#standaloneConnectorsOverlay.appendChild(svg);
+    }
+  }
 
   disconnectedCallback(): void {
     this.staffResizeObserver.disconnect();
