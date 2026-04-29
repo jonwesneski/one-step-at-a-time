@@ -24,6 +24,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   type NoteYPosition,
 } from './utils';
+import { calculateStaffBusynessScore } from './utils/busynessScore';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD_NODE,
@@ -46,7 +47,6 @@ import {
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
-import { calculateStaffBusynessScore } from './utils/busynessScore';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
 import {
@@ -99,11 +99,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#mutationObservers = [];
 
     this.#effectiveTimeSig = this.#convertTotimeInts(
-      this.#resolveInheritedValue('time', '4/4')
+      this.#resolveInheritedValue(COMMON_ATTRIBUTES.TIME_SIG, '4/4')
     );
-    this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
+    this.#effectiveMode = this.#resolveInheritedValue(
+      COMMON_ATTRIBUTES.MODE,
+      'major'
+    ) as Mode;
     this.#effectiveKeySig = this.#resolveInheritedValue(
-      'keysig',
+      COMMON_ATTRIBUTES.KEY_SIG,
       'C'
     ) as LetterNote;
 
@@ -171,7 +174,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   set keySig(value: string) {
-    this.setAttribute('keysig', value);
+    this.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, value);
   }
 
   get mode(): Mode {
@@ -179,7 +182,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   set mode(value: string) {
-    this.setAttribute('mode', value);
+    this.setAttribute(COMMON_ATTRIBUTES.MODE, value);
   }
 
   get time(): string {
@@ -187,7 +190,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   set time(value: string) {
-    this.setAttribute('time', value);
+    this.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, value);
   }
 
   abstract get yCoordinates(): YCoordinates;

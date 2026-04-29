@@ -20,11 +20,29 @@ export default function StandAlone() {
           <music-note></music-note>
         </music-chord>
       </Card>
-      <Card title="Staff Chord">
+      <Card title="Staff Chords">
+        <music-staff-treble>
+          <music-chord>
+            <music-note></music-note>
+            <music-note></music-note>
+          </music-chord>
+        </music-staff-treble>
+      </Card>
+      <Card title="Staff Tie">
         <music-staff-treble>
           <music-note value="A" tie="start"></music-note>
           <music-note value="A" tie="end"></music-note>
         </music-staff-treble>
+      </Card>
+      <Card title="Composition Tie">
+        <music-composition>
+          <music-measure>
+            <music-staff-treble>
+              <music-note value="A" tie="start"></music-note>
+              <music-note value="A" tie="end"></music-note>
+            </music-staff-treble>
+          </music-measure>
+        </music-composition>
       </Card>
       <Card title="3 in a row">
         <music-composition>

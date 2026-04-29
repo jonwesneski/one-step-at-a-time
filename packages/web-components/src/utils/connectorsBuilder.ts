@@ -1,9 +1,11 @@
 import {
   ChordElementType,
   ConnectorRole,
+  NoteElementType,
   NoteLikeElementType,
 } from '../types/elements';
 import { createCurveSvg, CurveBulge } from './svgCreator';
+import { computeYHeadOffset } from './svgCreator/note';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -273,8 +275,14 @@ const computeAnchor = (
           : rect.bottom - rootRect.top;
     }
   } else {
-    y =
-      bulge === 'above' ? rect.top - rootRect.top : rect.bottom - rootRect.top;
+    const noteEl = note as unknown as NoteElementType;
+    const noteheadY = computeYHeadOffset(
+      noteEl.stemUp,
+      noteEl.duration,
+      noteEl.noFlags
+    );
+    const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+    y = rect.top - rootRect.top + noteheadY + edgeOffset;
   }
 
   return {
