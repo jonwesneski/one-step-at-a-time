@@ -10,10 +10,14 @@
 
 # testing
 **/coverage
+**/test-results
 
 # next.js
 **/.next/
 **/out/
+
+# tanstack start
+**/.tanstack
 
 # production
 **/build
