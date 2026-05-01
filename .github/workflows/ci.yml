@@ -55,5 +55,6 @@ jobs:
 
       - name: Browser Tests
         run: |
-          pnpm exec playwright install --with-deps
+          # suppressing stdout with: > /dev/null 
+          pnpm exec playwright install --with-deps > /dev/null
           pnpm exec nx run web-components:browser-test
