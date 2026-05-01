@@ -52,3 +52,9 @@ jobs:
 
       - name: Lint, Build, Typecheck, Test
         run: pnpm exec nx run-many -t lint build typecheck test
+
+      - name: Browser Tests
+        run: |
+          # suppressing stdout with: > /dev/null 
+          pnpm exec playwright install --with-deps > /dev/null
+          pnpm exec nx run web-components:browser-test
