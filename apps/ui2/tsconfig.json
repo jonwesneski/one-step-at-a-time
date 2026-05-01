@@ -28,6 +28,7 @@
     "../../packages/web-components/src/**/*.tsx"
   ],
   "exclude": [
+    "../../packages/web-components/src/**/*.browser-test.ts",
     "../../packages/web-components/src/**/*.test.ts",
     "../../packages/web-components/src/**/*.spec.ts",
     "../../packages/web-components/src/**/*.stories.ts"
