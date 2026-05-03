@@ -81,9 +81,7 @@ test.describe('music-measure busyness score layout', () => {
     expect(flex.basis).toBeCloseTo(180, 1);
   });
 
-  test('half note → score 1 → flex grow 0.2, basis 180px', async ({
-    page,
-  }) => {
+  test('half note → score 1 → flex grow 0.2, basis 180px', async ({ page }) => {
     const duration: DurationType = 'half';
     await buildMeasureWithNotes(page, duration, ONE_NOTE);
     await waitForRedrawCycle(page);
