@@ -45,7 +45,8 @@ jobs:
       #       ${{ runner.os }}-pnpm-store-
 
       - name: Install Deps
-        run: pnpm install --frozen-lockfile
+        # suppressing stdout with: > /dev/null
+        run: pnpm install --frozen-lockfile > /dev/null
 
       - name: Prettier/Format Check
         run: pnpm exec nx format:check  --base="remotes/origin/main"
