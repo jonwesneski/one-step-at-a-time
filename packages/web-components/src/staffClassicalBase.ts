@@ -24,7 +24,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   type NoteYPosition,
 } from './utils';
-import { calculateStaffBusynessScore } from './utils/busynessScore';
+import { calculateStaffMinWidth } from './utils/staffWidth';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD_NODE,
@@ -79,8 +79,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
+  #describeEndX = 0;
   #showClef = true;
   #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
+
+  protected get describeEndX(): number {
+    return this.#describeEndX;
+  }
 
   get showClef(): boolean {
     return this.#showClef;
@@ -667,12 +672,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.drawConnectorsWhenStandalone();
 
     if (elements.length > 0) {
-      const score = calculateStaffBusynessScore(elements);
+      const minWidth = calculateStaffMinWidth(
+        this.#describeEndX,
+        elements.length
+      );
       this.dispatchEvent(
-        new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+        new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
           bubbles: true,
           composed: false,
-          detail: { score },
+          detail: { minWidth },
         })
       );
     }
@@ -853,11 +861,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #spaceElements() {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     const describeRect = this.#describeContainer.getBoundingClientRect();
-    const describeEndX = Math.round(describeRect.right - transcribeRect.left);
-    const remainingWidth = transcribeRect.width - describeEndX;
+    this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
+    const remainingWidth = transcribeRect.width - this.#describeEndX;
 
     // Configure beams container to cover the notes area
-    this.#beamsContainer.setAttribute('x', `${describeEndX}`);
+    this.#beamsContainer.setAttribute('x', `${this.#describeEndX}`);
     this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
     this.#beamsContainer.setAttribute(
       'viewBox',
@@ -884,7 +892,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
 
       // Position the light DOM element via inline styles
-      const xInWrapper = describeEndX + xOffsetInNotesSpace;
+      const xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
       element.style.left = `${xInWrapper}px`;
 
       if (element.nodeName === MUSIC_NOTE_NODE) {

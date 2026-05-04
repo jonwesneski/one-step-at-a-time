@@ -12,7 +12,7 @@ Elements are designed to be used **in isolation or composed together**. You do n
 - `<music-staff-treble>`, `<music-staff-bass>`, `<music-staff-guitar-tab>`, and `<music-staff-vocal>` can be used without a `<music-measure>` or `<music-composition>`
 - `<music-measure>` can be used without a `<music-composition>`
 
-Some features may be unavailable or degraded when elements are used outside their normal parent context (for example, attribute inheritance from parent elements won't apply, and layout-driven sizing from busyness scores requires a `<music-measure>` parent). The goal is to keep that list of exceptions small.
+Some features may be unavailable or degraded when elements are used outside their normal parent context (for example, attribute inheritance from parent elements won't apply, and layout-driven sizing from minimum-width events requires a `<music-measure>` parent). The goal is to keep that list of exceptions small.
 
 ## Custom Element Hierarchy
 
@@ -48,9 +48,16 @@ All components use shadow DOM (`attachShadow({ mode: 'open' })`). Style encapsul
 
 Notes are mapped to semitones 0–11 (A=0, Bb=1, B=2, C=3, …, Ab=11). Chord formulas are stored as semitone interval arrays from root (e.g., major = `[4, 7]`). This enables enharmonic equivalents and chord note computation.
 
-### Busyness Score
+### Measure Minimum Width
 
-Each staff calculates a **busyness score** — a numeric measure of how many notes (and their relative durations) are in the staff. The score is dispatched upward via a `STAFF_EVENTS.BUSYNESS_SCORE` custom event. `<music-measure>` listens for these events from its child staves and maps the score to CSS `flex` properties (`flex: <score> 1 <basis>`), so busier measures naturally take up more horizontal space in a composition layout. The score calculation logic lives in `utils/busynessScore.ts`.
+Each staff calculates a `minWidth` — the minimum pixel width required to render its notes without overlap. Formulas:
+
+- **Classical/guitar tab**: `describeEndX + noteCount × MIN_NOTE_WIDTH`
+- **Vocal**: `describeEndX + max(noteCount × MIN_NOTE_WIDTH, lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)`
+
+where `describeEndX` is the x-offset where the clef/key-signature/time-signature area ends (stored as `#describeEndX` and updated every time `#spaceElements()` runs).
+
+The `minWidth` is dispatched upward via a `STAFF_EVENTS.STAFF_MIN_WIDTH` custom event with `detail: { minWidth: number }`. `<music-measure>` listens for these events, takes the maximum `minWidth` across all child staves, and sets `this.style.flex = "${flexGrow} 1 ${maxMinWidth}px"`. Using `minWidth` directly as the flex-basis guarantees the measure is always wide enough for notes not to bleed into adjacent measures. The calculation logic lives in `utils/staffWidth.ts`.
 
 ### Responsive Layout
 
@@ -60,10 +67,16 @@ On each redraw cycle the following happen in order:
 
 1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-spaces notes proportionally to the new container width and re-emits `STAFF_EVENTS.NOTES_POSITIONED`.
 2. **Beams** — redrawn as part of `#renderNotes()` / `onStaffResize()` inside each staff.
-3. **Connectors** — `#redrawConnectors()` in `composition.ts` redraws the vertical bar lines that group staves in a measure, running inside the first `requestAnimationFrame`.
-4. **Clef visibility** — `#updateClefVisibility()` in `composition.ts` runs in a **second nested `requestAnimationFrame`** (after connectors) so that measure `getBoundingClientRect()` positions are fully settled before row boundaries are detected. It compares each measure's `top` value to the previous one (tolerance 5 px) to determine which measure is first in its row, then sets `showClef` (a JS property, not an HTML attribute) on each child staff accordingly. Staves default to `showClef = true`, so standalone staves always show the clef.
+3. **Connectors** — `#redrawConnectors()` in `composition.ts` redraws the vertical bar lines that group staves in a measure.
+4. **Clef visibility** — `#updateClefVisibility()` in `composition.ts` runs in the **same `requestAnimationFrame`** as connectors, immediately after. It snapshots all measure `getBoundingClientRect().top` values in one pass (before any DOM writes), then compares each to the previous to determine which measure is first in its row (tolerance 5 px), and sets `showClef` (a JS property, not an HTML attribute) on each child staff accordingly. Connectors are absolutely-positioned SVG and do not affect document flow, so no layout settling is needed between the two operations. Staves default to `showClef = true`, so standalone staves always show the clef.
+
+**Why `:host { display: block; width: 100% }` on `<music-composition>` matters**: `display: block` alone is not sufficient when the element is placed inside a flex or grid container (e.g. `justify-content: center`). Without an explicit `width`, the element sizes to its max-content as a flex item. For a `flex-wrap: wrap` flex container, browsers compute max-content as the width of the widest single child — so the composition becomes only as wide as its widest measure, causing all other measures to wrap to separate rows. `width: 100%` ensures the composition fills the full parent width in all layout contexts (block, flex, grid), so the `ResizeObserver` fires reliably and measures can share rows as intended. The `.composition-wrapper` inside the shadow DOM has `margin: 0 auto` to center its 900px-capped content when the host is wider than 900px.
 
 **Invariant to maintain**: any change that affects which measure is "first in a row" (resize, dynamic measure insertion/removal) must eventually trigger `#scheduleRedraw()` so `#updateClefVisibility()` re-runs.
+
+#### Responsive Layout Rules
+
+- When adding or changing this code, make sure the `*.browser-test.ts` files still pass. And add new ones when adding new logic
 
 ## Important Types (`types/theory.ts`)
 
@@ -149,7 +162,7 @@ Rendering flow (classical staves):
 4. `slotchange` fires → `onHandleSlotChange()` → `#renderNotes()` converts notes/chords to SVG
 5. Notes spaced by duration factor
 6. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
-7. Staff dispatches a `STAFF_EVENTS.BUSYNESS_SCORE` event after each render
+7. Staff dispatches a `STAFF_EVENTS.STAFF_MIN_WIDTH` event after each render with `detail: { minWidth }` — the minimum pixel width needed for the measure to render without note overlap
 
 ## Drag Handlers (`utils/`)
 
@@ -184,7 +197,7 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 - **`staffGuitarTab.ts`**: `onDisconnectedCallback` is still an empty stub
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
 - **Accidentals during pitch drag**: Pitch drag snaps to natural staff positions only; accidental changes (sharp/flat) need a separate mechanism
-- **Standalone degraded features**: Some capabilities (busyness-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation
+- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation
 
 ## Build & Test
 
@@ -202,4 +215,4 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 - `currentColor` used in SVG so staff color inherits from CSS
 - **Always run `npx nx format:write` after every batch of file edits or new files** — do not skip this step
 - Use full words when defining variables, functions, and classes; no abbreviations or uncommon acronyms
-- In test files, always use strong types from `types/theory.ts` and `types/elements.ts` instead of primitives — e.g. `DurationType` instead of `string` for durations, `LetterOctave` instead of `string` for note+octave values like `'C4'`
+- In test files (both `*.browser-test.ts` and `*.test.ts`), always use strong types from `types/theory.ts` and `types/elements.ts` instead of primitives — e.g. `DurationType` instead of `string` for durations, `LetterOctave` instead of `string` for note+octave values like `'C4'`

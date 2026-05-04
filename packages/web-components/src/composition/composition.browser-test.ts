@@ -335,6 +335,195 @@ test.describe('music-composition responsive layout', () => {
     }
   });
 
+  test('clef visibility — 3-per-row → 2-per-row puts clef on correct measures (regression)', async ({
+    page,
+  }) => {
+    // 4 empty measures at 900px → flex-basis 300px each → rows [M1,M2,M3] and [M4]
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '900px';
+      const composition = document.createElement('music-composition');
+      for (let i = 0; i < 4; i++) {
+        const measure = document.createElement('music-measure');
+        const staff = document.createElement('music-staff-treble');
+        measure.appendChild(staff);
+        composition.appendChild(measure);
+      }
+      host.appendChild(composition);
+    });
+    await waitForRedrawCycle(page);
+
+    const readShowClefsPerMeasure = () =>
+      page.evaluate(() => {
+        const measures = Array.from(
+          document.querySelectorAll('music-measure')
+        ) as HTMLElement[];
+        return measures.map((measure) => {
+          const staff = Array.from(measure.children).find((el) =>
+            el.nodeName.startsWith('MUSIC-STAFF-')
+          );
+          return staff
+            ? (staff as unknown as { showClef: boolean }).showClef
+            : false;
+        });
+      });
+
+    const initial = await readShowClefsPerMeasure();
+    expect(initial).toEqual([true, false, false, true]);
+
+    // Resize to 600px → 2 × 300px = 600px fits two measures → rows [M1,M2] and [M3,M4]
+    await resizeHost(page, 600);
+
+    const after = await readShowClefsPerMeasure();
+    expect(after).toEqual([true, false, true, false]);
+  });
+
+  test('all measures share the same row when composition is inside a flex justify-center container (regression for 1-measure-per-row bug)', async ({
+    page,
+  }) => {
+    // Replicates MusicScore.tsx: 3 measures (treble+bass, treble+bass+vocal-with-lyrics,
+    // treble+bass) inside a flex justify-center parent with no explicit width on the
+    // composition. Before :host { width: 100% }, the composition sized to the max-content
+    // of its widest measure (~389px), causing each measure to wrap to its own row.
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '1200px';
+      host.style.display = 'flex';
+      host.style.justifyContent = 'center';
+
+      const composition = document.createElement('music-composition');
+      composition.setAttribute('keysig', 'D');
+      composition.setAttribute('mode', 'major');
+      composition.setAttribute('time', '4/4');
+
+      // Measure 1: treble (4 quarter notes) + bass (1 note)
+      const m1 = document.createElement('music-measure');
+      const m1Treble = document.createElement('music-staff-treble');
+      for (const v of ['C4', 'D4', 'E4', 'F4']) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', v);
+        note.setAttribute('duration', 'quarter');
+        m1Treble.appendChild(note);
+      }
+      const m1Bass = document.createElement('music-staff-bass');
+      const m1BassNote = document.createElement('music-note');
+      m1BassNote.setAttribute('value', 'A');
+      m1BassNote.setAttribute('duration', 'quarter');
+      m1Bass.appendChild(m1BassNote);
+      m1.appendChild(m1Treble);
+      m1.appendChild(m1Bass);
+
+      // Measure 2: treble (2 notes) + bass (2 notes) + vocal with 2 lyric verses
+      const m2 = document.createElement('music-measure');
+      const m2Treble = document.createElement('music-staff-treble');
+      for (const v of ['A', 'D']) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', v);
+        note.setAttribute('duration', 'eighth');
+        m2Treble.appendChild(note);
+      }
+      const m2Bass = document.createElement('music-staff-bass');
+      for (const v of ['A', 'A']) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', v);
+        note.setAttribute('duration', 'quarter');
+        m2Bass.appendChild(note);
+      }
+      const m2Vocal = document.createElement('music-staff-vocal');
+      m2Vocal.setAttribute('voice', 'soprano');
+      const vocalValues = ['C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'A5'];
+      const vocalDurations = [
+        'eighth',
+        'eighth',
+        'eighth',
+        'eighth',
+        'eighth',
+        'eighth',
+        'quarter',
+      ];
+      for (let i = 0; i < vocalValues.length; i++) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', vocalValues[i]);
+        note.setAttribute('duration', vocalDurations[i]);
+        m2Vocal.appendChild(note);
+      }
+      const lyrics1 = document.createElement('music-lyrics');
+      lyrics1.setAttribute('verse', '1');
+      lyrics1.textContent = 'Hap-py birth-day to_ you you_';
+      const lyrics2 = document.createElement('music-lyrics');
+      lyrics2.setAttribute('verse', '2');
+      lyrics2.textContent = 'Hap-py birth-day dear_ friend friend_';
+      m2Vocal.appendChild(lyrics1);
+      m2Vocal.appendChild(lyrics2);
+      m2.appendChild(m2Treble);
+      m2.appendChild(m2Bass);
+      m2.appendChild(m2Vocal);
+
+      // Measure 3: treble (4 quarter notes) + bass (1 note)
+      const m3 = document.createElement('music-measure');
+      const m3Treble = document.createElement('music-staff-treble');
+      for (const v of ['A', 'A', 'A', 'A']) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', v);
+        note.setAttribute('duration', 'quarter');
+        m3Treble.appendChild(note);
+      }
+      const m3Bass = document.createElement('music-staff-bass');
+      const m3BassNote = document.createElement('music-note');
+      m3BassNote.setAttribute('value', 'A');
+      m3BassNote.setAttribute('duration', 'quarter');
+      m3Bass.appendChild(m3BassNote);
+      m3.appendChild(m3Treble);
+      m3.appendChild(m3Bass);
+
+      composition.appendChild(m1);
+      composition.appendChild(m2);
+      composition.appendChild(m3);
+      host.appendChild(composition);
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const measureTops = await page.evaluate(() => {
+      const measures = Array.from(
+        document.querySelectorAll('music-measure')
+      ) as HTMLElement[];
+      return measures.map((m) => Math.round(m.getBoundingClientRect().top));
+    });
+
+    expect(measureTops).toHaveLength(3);
+    // Total minWidth across all measures (≈ 769px) is less than the 900px composition
+    // grid, so all three should land on the same row.
+    const [top0, top1, top2] = measureTops;
+    expect(Math.abs(top1 - top0)).toBeLessThanOrEqual(5);
+    expect(Math.abs(top2 - top0)).toBeLessThanOrEqual(5);
+
+    // Shrink the host so measures must reflow to multiple rows.
+    // At 500px the combined flex-basis of any two adjacent measures (≥ 579px)
+    // exceeds the container, so each measure wraps to its own row.
+    await resizeHost(page, 500);
+    await waitForRedrawCycle(page);
+
+    const topsAfterShrink = await page.evaluate(() => {
+      const measures = Array.from(
+        document.querySelectorAll('music-measure')
+      ) as HTMLElement[];
+      return measures.map((m) => Math.round(m.getBoundingClientRect().top));
+    });
+
+    expect(topsAfterShrink).toHaveLength(3);
+    // The last measure must have wrapped below the first measure.
+    expect(topsAfterShrink[2]).toBeGreaterThan(topsAfterShrink[0] + 5);
+  });
+
   test('#scheduleRedraw debounces a burst of resizes into one redraw', async ({
     page,
   }) => {

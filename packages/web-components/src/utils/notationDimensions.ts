@@ -234,3 +234,10 @@ export const EMPTY_MEASURE_FLEX_BASIS_PX = COMPOSITION_MAX_WIDTH_PX / 3;
  */
 export const SCORED_MIN_FLEX_BASIS_PX =
   COMPOSITION_MAX_WIDTH_PX / MAX_MEASURES_PER_ROW;
+
+/**
+ * Approximate pixel width per lyric character in vocal staves.
+ * Used by calculateStaffVocalMinWidth to ensure the measure is wide enough
+ * to display lyric syllables without overlap.
+ */
+export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
