@@ -102,10 +102,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
         <style>
+          :host {
+            display: block;
+            width: 100%;
+          }
+
           .composition-wrapper {
             position: relative;
             width: 100%;
             max-width: 900px;
+            margin: 0 auto;
           }
 
           .composition-grid {
@@ -113,7 +119,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             display: flex;
             flex-wrap: wrap;
             width: 100%;
-            padding-right: 10px;
           }
 
           ${MUSIC_MEASURE} {
@@ -160,7 +165,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#redrawConnectors();
-        requestAnimationFrame(() => this.#updateClefVisibility());
+        this.#updateClefVisibility();
       });
     }
 
@@ -221,15 +226,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const measures = Array.from(
         this.querySelectorAll('music-measure')
       ) as HTMLElement[];
-      let previousTop: number | null = null;
 
-      for (const measure of measures) {
-        const top = measure.getBoundingClientRect().top;
+      // Snapshot all top values before any mutations.
+      // Reading layout after a showClef write triggers a reflow, which shifts
+      // subsequent measures — causing later reads to see wrong row positions.
+      const tops = measures.map((m) => m.getBoundingClientRect().top);
+
+      let previousTop: number | null = null;
+      for (let i = 0; i < measures.length; i++) {
+        const top = tops[i];
         const isFirstInRow =
           previousTop === null || Math.abs(top - previousTop) > 5;
         previousTop = top;
 
-        Array.from(measure.children)
+        Array.from(measures[i].children)
           .filter((el) => el.nodeName.startsWith('MUSIC-STAFF-'))
           .forEach((staff) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed, same pattern as refreshInheritedAttrs

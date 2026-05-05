@@ -80,6 +80,9 @@ nx run-many -t test
 
 # Test a specific project
 nx run @one-step-at-a-time/web-components:test
+
+# responsive testing tests
+npx nx run web-components:browser-test
 ```
 
 OR

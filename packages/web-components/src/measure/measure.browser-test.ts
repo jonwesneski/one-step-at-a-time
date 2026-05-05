@@ -1,0 +1,277 @@
+import { expect, type Page, test } from '@playwright/test';
+import { waitForRedrawCycle } from '../../test-fixtures/helpers';
+import type { DurationType, LetterOctave } from '../types/theory';
+
+const MIN_NOTE_WIDTH = 20;
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('./');
+});
+
+interface FlexValues {
+  grow: number;
+  shrink: number;
+  basis: number;
+}
+
+function parseFlex(flexValue: string): FlexValues {
+  const parts = flexValue.split(' ');
+  return {
+    grow: parseFloat(parts[0]),
+    shrink: parseFloat(parts[1]),
+    basis: parseFloat(parts[2]),
+  };
+}
+
+async function readMeasureFlex(page: Page): Promise<FlexValues> {
+  const flexString = await page.evaluate(() => {
+    const measure = document.querySelector(
+      'music-measure'
+    ) as HTMLElement | null;
+    if (measure === null) {
+      throw new Error('music-measure not found');
+    }
+    return measure.style.flex;
+  });
+  return parseFlex(flexString);
+}
+
+async function readDescribeEndX(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const staff = document.querySelector('music-staff-treble') as any;
+    if (staff === null) {
+      throw new Error('music-staff-treble not found');
+    }
+    return staff.describeEndX as number;
+  });
+}
+
+async function buildMeasureWithNotes(
+  page: Page,
+  duration: DurationType,
+  noteValues: LetterOctave[]
+): Promise<void> {
+  await page.evaluate(
+    ({ duration, noteValues }) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '900px';
+      const composition = document.createElement('music-composition');
+      const measure = document.createElement('music-measure');
+      const staff = document.createElement('music-staff-treble');
+      for (const value of noteValues) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', value);
+        note.setAttribute('duration', duration);
+        staff.appendChild(note);
+      }
+      measure.appendChild(staff);
+      composition.appendChild(measure);
+      host.appendChild(composition);
+    },
+    { duration, noteValues }
+  );
+}
+
+const ONE_NOTE: LetterOctave[] = ['C4'];
+const FOUR_NOTES: LetterOctave[] = ['C4', 'D4', 'E4', 'F4'];
+const EIGHT_NOTES: LetterOctave[] = [
+  'C4',
+  'D4',
+  'E4',
+  'F4',
+  'G4',
+  'A4',
+  'B4',
+  'C5',
+];
+const ELEVEN_NOTES: LetterOctave[] = [
+  'C4',
+  'D4',
+  'E4',
+  'F4',
+  'G4',
+  'A4',
+  'B4',
+  'C5',
+  'D5',
+  'E5',
+  'F5',
+];
+const FIFTEEN_NOTES: LetterOctave[] = [
+  'C4',
+  'D4',
+  'E4',
+  'F4',
+  'G4',
+  'A4',
+  'B4',
+  'C5',
+  'D5',
+  'E5',
+  'F5',
+  'G5',
+  'A5',
+  'B5',
+  'C6',
+];
+// 16 × MIN_NOTE_WIDTH (20) = 320px, guaranteeing minWidth > 300 regardless of describeEndX
+const SIXTEEN_NOTES: LetterOctave[] = [
+  'C4',
+  'D4',
+  'E4',
+  'F4',
+  'G4',
+  'A4',
+  'B4',
+  'C5',
+  'D5',
+  'E5',
+  'F5',
+  'G5',
+  'A5',
+  'B5',
+  'C6',
+  'D6',
+];
+
+test.describe('music-measure min-width layout', () => {
+  test('single whole note — basis equals describeEndX + MIN_NOTE_WIDTH, grow clamped to minimum', async ({
+    page,
+  }) => {
+    await buildMeasureWithNotes(page, 'whole', ONE_NOTE);
+    await waitForRedrawCycle(page);
+
+    const flex = await readMeasureFlex(page);
+    const describeEndX = await readDescribeEndX(page);
+
+    expect(flex.basis).toBeCloseTo(describeEndX + MIN_NOTE_WIDTH, 1);
+    expect(flex.grow).toBeCloseTo(0.2, 5);
+  });
+
+  test('basis scales linearly with note count — delta = noteCount × MIN_NOTE_WIDTH', async ({
+    page,
+  }) => {
+    await buildMeasureWithNotes(page, 'quarter', ONE_NOTE);
+    await waitForRedrawCycle(page);
+    const flex1 = await readMeasureFlex(page);
+
+    await buildMeasureWithNotes(page, 'quarter', EIGHT_NOTES);
+    await waitForRedrawCycle(page);
+    const flex8 = await readMeasureFlex(page);
+
+    expect(flex8.basis - flex1.basis).toBeCloseTo(7 * MIN_NOTE_WIDTH, 1);
+  });
+
+  test('16 hundredtwentyeighth notes — basis exceeds old 300px cap (regression)', async ({
+    page,
+  }) => {
+    await buildMeasureWithNotes(page, 'hundredtwentyeighth', SIXTEEN_NOTES);
+    await waitForRedrawCycle(page);
+
+    const flex = await readMeasureFlex(page);
+    const describeEndX = await readDescribeEndX(page);
+
+    // 16 × 20 = 320px of notes alone, so minWidth > 300 regardless of describeEndX
+    expect(flex.basis).toBeGreaterThan(300);
+    expect(flex.basis).toBeCloseTo(describeEndX + 16 * MIN_NOTE_WIDTH, 1);
+  });
+
+  test('notes do not bleed — proportionalWidth is non-negative for 15 hundredtwentyeighth notes', async ({
+    page,
+  }) => {
+    await buildMeasureWithNotes(page, 'hundredtwentyeighth', FIFTEEN_NOTES);
+    await waitForRedrawCycle(page);
+
+    const { staffWidth, describeEndX } = await page.evaluate(() => {
+      const staff = document.querySelector('music-staff-treble') as any;
+      if (staff === null) {
+        throw new Error('staff not found');
+      }
+      return {
+        staffWidth: (staff as Element).getBoundingClientRect().width,
+        describeEndX: staff.describeEndX as number,
+      };
+    });
+
+    const proportionalWidth = staffWidth - describeEndX - 15 * MIN_NOTE_WIDTH;
+    expect(proportionalWidth).toBeGreaterThanOrEqual(0);
+  });
+
+  test('two staves — measure uses the larger minWidth', async ({ page }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '900px';
+      const composition = document.createElement('music-composition');
+      const measure = document.createElement('music-measure');
+
+      const slowStaff = document.createElement('music-staff-treble');
+      const wholeNote = document.createElement('music-note');
+      wholeNote.setAttribute('value', 'C4' satisfies LetterOctave);
+      wholeNote.setAttribute('duration', 'whole' satisfies DurationType);
+      slowStaff.appendChild(wholeNote);
+
+      const fastStaff = document.createElement('music-staff-treble');
+      for (const value of [
+        'C4',
+        'D4',
+        'E4',
+        'F4',
+        'G4',
+        'A4',
+        'B4',
+        'C5',
+      ] as LetterOctave[]) {
+        const note = document.createElement('music-note');
+        note.setAttribute('value', value);
+        note.setAttribute('duration', 'eighth' satisfies DurationType);
+        fastStaff.appendChild(note);
+      }
+
+      measure.appendChild(slowStaff);
+      measure.appendChild(fastStaff);
+      composition.appendChild(measure);
+      host.appendChild(composition);
+    });
+    await waitForRedrawCycle(page);
+
+    const flex = await readMeasureFlex(page);
+    const describeEndX = await readDescribeEndX(page);
+
+    const minWidthFor1Note = describeEndX + 1 * MIN_NOTE_WIDTH;
+    const minWidthFor8Notes = describeEndX + 8 * MIN_NOTE_WIDTH;
+
+    expect(flex.basis).toBeCloseTo(minWidthFor8Notes, 1);
+    expect(flex.basis).toBeGreaterThan(minWidthFor1Note);
+  });
+
+  test('flex-grow increases monotonically as note count grows', async ({
+    page,
+  }) => {
+    const noteCounts: LetterOctave[][] = [
+      ONE_NOTE,
+      FOUR_NOTES,
+      ELEVEN_NOTES,
+      FIFTEEN_NOTES,
+    ];
+
+    const grows: number[] = [];
+    for (const noteValues of noteCounts) {
+      await buildMeasureWithNotes(page, 'quarter', noteValues);
+      await waitForRedrawCycle(page);
+      const flex = await readMeasureFlex(page);
+      grows.push(flex.grow);
+    }
+
+    for (let i = 1; i < grows.length; i++) {
+      expect(grows[i]).toBeGreaterThanOrEqual(grows[i - 1]);
+    }
+  });
+});

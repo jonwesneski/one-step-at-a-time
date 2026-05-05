@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/browser-test",
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "tsBuildInfoFile": "./out-tsc/browser-test/tsconfig.browser-test.tsbuildinfo",
+    "types": ["node"],
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "target": "es2022",
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*.browser-test.ts",
+    "test-fixtures/**/*.ts",
+    "playwright.config.ts",
+    "vite.config.ts"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    }
+  ]
+}

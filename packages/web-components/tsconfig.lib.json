@@ -24,9 +24,13 @@
     "jest.setup.ts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
+    "src/**/*.browser-test.ts",
     "src/**/*.spec.js",
     "src/**/*.test.js",
     "**/*.stories.ts",
-    "**/*.stories.js"
+    "**/*.stories.js",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "test-fixtures/**/*"
   ]
 }

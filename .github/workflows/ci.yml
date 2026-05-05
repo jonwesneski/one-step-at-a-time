@@ -45,10 +45,17 @@ jobs:
       #       ${{ runner.os }}-pnpm-store-
 
       - name: Install Deps
-        run: pnpm install --frozen-lockfile
+        # suppressing stdout with: > /dev/null
+        run: pnpm install --frozen-lockfile > /dev/null
 
       - name: Prettier/Format Check
         run: pnpm exec nx format:check  --base="remotes/origin/main"
 
       - name: Lint, Build, Typecheck, Test
         run: pnpm exec nx run-many -t lint build typecheck test
+
+      - name: Browser Tests
+        run: |
+          # suppressing stdout with: > /dev/null 
+          pnpm exec playwright install --with-deps > /dev/null
+          pnpm exec nx run web-components:browser-test

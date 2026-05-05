@@ -1,4 +1,4 @@
-import { scoreToFlexBasis, scoreToFlexGrow } from '../utils/busynessScore';
+import { minWidthToFlexGrow } from '../utils/staffWidth';
 import { EMPTY_MEASURE_FLEX_BASIS_PX } from '../utils/notationDimensions';
 import { MUSIC_COMPOSITION, STAFF_EVENTS } from '../utils';
 
@@ -9,16 +9,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #staffConnectorObserver: ResizeObserver;
-    #staffScores = new Map<EventTarget, number>();
-    #onStaffBusynessScore = (event: Event): void => {
-      const customEvent = event as CustomEvent<{ score: number }>;
+    #staffMinWidths = new Map<EventTarget, number>();
+    #onStaffMinWidth = (event: Event): void => {
+      const customEvent = event as CustomEvent<{ minWidth: number }>;
       if (customEvent.target) {
-        this.#staffScores.set(customEvent.target, customEvent.detail.score);
+        this.#staffMinWidths.set(
+          customEvent.target,
+          customEvent.detail.minWidth
+        );
       }
-      const maxScore = Math.max(...this.#staffScores.values());
-      const flexGrow = scoreToFlexGrow(maxScore);
-      const flexBasis = scoreToFlexBasis(maxScore);
-      this.style.flex = `${flexGrow} 1 ${flexBasis}px`;
+      const maxMinWidth = Math.max(...this.#staffMinWidths.values());
+      const flexGrow = minWidthToFlexGrow(maxMinWidth);
+      this.style.flex = `${flexGrow} 1 ${maxMinWidth}px`;
     };
 
     constructor() {
@@ -77,18 +79,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- won't be null
       this.#staffConnectorObserver.observe(this.parentElement!);
       this.addEventListener(
-        STAFF_EVENTS.BUSYNESS_SCORE,
-        this.#onStaffBusynessScore
+        STAFF_EVENTS.STAFF_MIN_WIDTH,
+        this.#onStaffMinWidth
       );
     }
 
     disconnectedCallback(): void {
       this.#staffConnectorObserver.disconnect();
       this.removeEventListener(
-        STAFF_EVENTS.BUSYNESS_SCORE,
-        this.#onStaffBusynessScore
+        STAFF_EVENTS.STAFF_MIN_WIDTH,
+        this.#onStaffMinWidth
       );
-      this.#staffScores.clear();
+      this.#staffMinWidths.clear();
     }
 
     attributeChangedCallback(

@@ -1,6 +1,6 @@
 import { StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
-import { calculateGuitarTabBusynessScore } from '../utils/busynessScore';
+import { calculateGuitarTabMinWidth } from '../utils/staffWidth';
 import {
   MUSIC_GUITAR_CHORD_NODE,
   MUSIC_GUITAR_NOTE,
@@ -28,6 +28,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       </svg>
     `;
     #describeContainer: SVGGElement;
+    #describeEndX = 0;
     #showClef = true;
     #currentElements: GuitarNoteElementType[] = [];
 
@@ -113,12 +114,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.drawConnectorsWhenStandalone();
       if (assignedElements.length > 0) {
-        const score = calculateGuitarTabBusynessScore(assignedElements);
+        const minWidth = calculateGuitarTabMinWidth(
+          this.#describeEndX,
+          assignedElements.length
+        );
         this.dispatchEvent(
-          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+          new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
             bubbles: true,
             composed: false,
-            detail: { score },
+            detail: { minWidth },
           })
         );
       }
@@ -127,8 +131,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
       const transcribeRect = this.transcribeContainer.getBoundingClientRect();
       const describeRect = this.#describeContainer.getBoundingClientRect();
-      const describeEndX = Math.round(describeRect.right - transcribeRect.left);
-      const remainingWidth = transcribeRect.width - describeEndX;
+      this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
+      const remainingWidth = transcribeRect.width - this.#describeEndX;
       const proportionalWidth =
         remainingWidth - assignedElements.length * MIN_NOTE_WIDTH;
 
@@ -137,7 +141,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const element = assignedElements[i];
         const xOffsetInNotesSpace =
           i * MIN_NOTE_WIDTH + beatOffset * proportionalWidth;
-        element.style.left = `${describeEndX + xOffsetInNotesSpace}px`;
+        element.style.left = `${this.#describeEndX + xOffsetInNotesSpace}px`;
         element.style.top = `${
           this.#yCoordinates[element.string] ?? STAFF_LINE_START
         }px`;
@@ -155,12 +159,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           })
         );
         this.drawConnectorsWhenStandalone();
-        const score = calculateGuitarTabBusynessScore(this.#currentElements);
+        const minWidth = calculateGuitarTabMinWidth(
+          this.#describeEndX,
+          this.#currentElements.length
+        );
         this.dispatchEvent(
-          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+          new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
             bubbles: true,
             composed: false,
-            detail: { score },
+            detail: { minWidth },
           })
         );
       }

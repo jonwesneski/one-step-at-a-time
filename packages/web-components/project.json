@@ -1,0 +1,28 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "@one-step-at-a-time/web-components",
+  "sourceRoot": "packages/web-components/src",
+  "projectType": "library",
+  "targets": {
+    "browser-test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "{projectRoot}/playwright.config.ts",
+        "{projectRoot}/vite.config.ts",
+        "{projectRoot}/test-fixtures/**/*"
+      ],
+      "outputs": [
+        "{projectRoot}/playwright-report",
+        "{projectRoot}/test-results"
+      ],
+      "options": {
+        "command": "playwright test",
+        "cwd": "packages/web-components"
+      },
+      "dependsOn": ["typecheck"]
+    }
+  }
+}

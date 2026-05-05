@@ -7,7 +7,7 @@ import {
   YCoordinates,
 } from '../types/elements';
 import { LetterOctave, Octave, VoiceType } from '../types/theory';
-import { calculateStaffVocalBusynessScore } from '../utils/busynessScore';
+import { calculateStaffVocalMinWidth } from '../utils/staffWidth';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,
@@ -404,24 +404,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         lyricEl.updatePositions();
       }
 
-      // Re-score with lyrics included — overwrites the lyrics-unaware score from super
-      let totalLyricChars = 0;
+      // Re-score with lyrics included — overwrites the lyrics-unaware score from super.
+      // Use the widest single verse (max), not the sum of all verses, because verses
+      // render as stacked rows under the notes and only the widest verse drives horizontal space.
+      let maxLyricChars = 0;
       for (const lyricEl of lyricsElements) {
+        let verseChars = 0;
         const syllables = this.#parseLyricsText(lyricEl.textContent ?? '');
         for (const syllable of syllables) {
-          totalLyricChars += syllable.text.length;
+          verseChars += syllable.text.length;
         }
+        maxLyricChars = Math.max(maxLyricChars, verseChars);
       }
       if (this.#lastElements.length > 0) {
-        const score = calculateStaffVocalBusynessScore(
-          this.#lastElements,
-          totalLyricChars
+        const minWidth = calculateStaffVocalMinWidth(
+          this.describeEndX,
+          this.#lastElements.length,
+          maxLyricChars
         );
         this.dispatchEvent(
-          new CustomEvent(STAFF_EVENTS.BUSYNESS_SCORE, {
+          new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
             bubbles: true,
             composed: false,
-            detail: { score },
+            detail: { minWidth },
           })
         );
       }

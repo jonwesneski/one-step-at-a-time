@@ -45,7 +45,7 @@ export const CHORD_EVENTS = {
 
 export const STAFF_EVENTS = {
   NOTES_POSITIONED: 'staff-notes-positioned',
-  BUSYNESS_SCORE: 'staff-busyness-score',
+  STAFF_MIN_WIDTH: 'staff-min-width',
 } as const;
 
 export const COMMON_ATTRIBUTES = {
