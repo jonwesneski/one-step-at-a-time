@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import { waitForRedrawCycle } from '../../test-fixtures/helpers';
-import type { DurationType, LetterOctave } from '../types/theory';
+import type { DurationType } from '../types/theory';
+import type { LetterOctave } from '../types/elements';
 
 const MIN_NOTE_WIDTH = 20;
 
@@ -64,7 +65,8 @@ async function buildMeasureWithNotes(
       const staff = document.createElement('music-staff-treble');
       for (const value of noteValues) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', value);
+        note.setAttribute('note', value[0]);
+        note.setAttribute('octave', value[1]);
         note.setAttribute('duration', duration);
         staff.appendChild(note);
       }
@@ -214,7 +216,8 @@ test.describe('music-measure min-width layout', () => {
 
       const slowStaff = document.createElement('music-staff-treble');
       const wholeNote = document.createElement('music-note');
-      wholeNote.setAttribute('value', 'C4' satisfies LetterOctave);
+      wholeNote.setAttribute('note', ('C4' satisfies LetterOctave)[0]);
+      wholeNote.setAttribute('octave', ('C4' satisfies LetterOctave)[1]);
       wholeNote.setAttribute('duration', 'whole' satisfies DurationType);
       slowStaff.appendChild(wholeNote);
 
@@ -230,7 +233,8 @@ test.describe('music-measure min-width layout', () => {
         'C5',
       ] as LetterOctave[]) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', value);
+        note.setAttribute('note', value[0]);
+        note.setAttribute('octave', value[1]);
         note.setAttribute('duration', 'eighth' satisfies DurationType);
         fastStaff.appendChild(note);
       }

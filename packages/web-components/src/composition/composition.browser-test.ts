@@ -24,18 +24,18 @@ test.describe('music-composition responsive layout', () => {
       const measure = document.createElement('music-measure');
       const treble = document.createElement('music-staff-treble');
       const noteA = document.createElement('music-note');
-      noteA.setAttribute('value', 'C4');
+      noteA.setAttribute('note', 'C4');
       noteA.setAttribute('duration', 'quarter');
       noteA.setAttribute('tie', 'start');
       const noteB = document.createElement('music-note');
-      noteB.setAttribute('value', 'C4');
+      noteB.setAttribute('note', 'C4');
       noteB.setAttribute('duration', 'quarter');
       noteB.setAttribute('tie', 'end');
       const noteC = document.createElement('music-note');
-      noteC.setAttribute('value', 'D4');
+      noteC.setAttribute('note', 'D4');
       noteC.setAttribute('duration', 'quarter');
       const noteD = document.createElement('music-note');
-      noteD.setAttribute('value', 'E4');
+      noteD.setAttribute('note', 'E4');
       noteD.setAttribute('duration', 'quarter');
       treble.appendChild(noteA);
       treble.appendChild(noteB);
@@ -143,11 +143,11 @@ test.describe('music-composition responsive layout', () => {
       const measure = document.createElement('music-measure');
       const treble = document.createElement('music-staff-treble');
       const a = document.createElement('music-note');
-      a.setAttribute('value', 'C4');
+      a.setAttribute('note', 'C4');
       a.setAttribute('duration', 'quarter');
       a.setAttribute('tie', 'start');
       const b = document.createElement('music-note');
-      b.setAttribute('value', 'C4');
+      b.setAttribute('note', 'C4');
       b.setAttribute('duration', 'quarter');
       b.setAttribute('tie', 'end');
       treble.appendChild(a);
@@ -180,11 +180,11 @@ test.describe('music-composition responsive layout', () => {
         throw new Error('staff missing');
       }
       const c = document.createElement('music-note');
-      c.setAttribute('value', 'D4');
+      c.setAttribute('note', 'D4');
       c.setAttribute('duration', 'quarter');
       c.setAttribute('tie', 'start');
       const d = document.createElement('music-note');
-      d.setAttribute('value', 'D4');
+      d.setAttribute('note', 'D4');
       d.setAttribute('duration', 'quarter');
       d.setAttribute('tie', 'end');
       treble.appendChild(c);
@@ -409,13 +409,13 @@ test.describe('music-composition responsive layout', () => {
       const m1Treble = document.createElement('music-staff-treble');
       for (const v of ['C4', 'D4', 'E4', 'F4']) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', v);
+        note.setAttribute('note', v);
         note.setAttribute('duration', 'quarter');
         m1Treble.appendChild(note);
       }
       const m1Bass = document.createElement('music-staff-bass');
       const m1BassNote = document.createElement('music-note');
-      m1BassNote.setAttribute('value', 'A');
+      m1BassNote.setAttribute('note', 'A');
       m1BassNote.setAttribute('duration', 'quarter');
       m1Bass.appendChild(m1BassNote);
       m1.appendChild(m1Treble);
@@ -426,14 +426,14 @@ test.describe('music-composition responsive layout', () => {
       const m2Treble = document.createElement('music-staff-treble');
       for (const v of ['A', 'D']) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', v);
+        note.setAttribute('note', v);
         note.setAttribute('duration', 'eighth');
         m2Treble.appendChild(note);
       }
       const m2Bass = document.createElement('music-staff-bass');
       for (const v of ['A', 'A']) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', v);
+        note.setAttribute('note', v);
         note.setAttribute('duration', 'quarter');
         m2Bass.appendChild(note);
       }
@@ -451,7 +451,7 @@ test.describe('music-composition responsive layout', () => {
       ];
       for (let i = 0; i < vocalValues.length; i++) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', vocalValues[i]);
+        note.setAttribute('note', vocalValues[i]);
         note.setAttribute('duration', vocalDurations[i]);
         m2Vocal.appendChild(note);
       }
@@ -472,13 +472,13 @@ test.describe('music-composition responsive layout', () => {
       const m3Treble = document.createElement('music-staff-treble');
       for (const v of ['A', 'A', 'A', 'A']) {
         const note = document.createElement('music-note');
-        note.setAttribute('value', v);
+        note.setAttribute('note', v);
         note.setAttribute('duration', 'quarter');
         m3Treble.appendChild(note);
       }
       const m3Bass = document.createElement('music-staff-bass');
       const m3BassNote = document.createElement('music-note');
-      m3BassNote.setAttribute('value', 'A');
+      m3BassNote.setAttribute('note', 'A');
       m3BassNote.setAttribute('duration', 'quarter');
       m3Bass.appendChild(m3BassNote);
       m3.appendChild(m3Treble);
@@ -538,11 +538,11 @@ test.describe('music-composition responsive layout', () => {
       const measure = document.createElement('music-measure');
       const treble = document.createElement('music-staff-treble');
       const a = document.createElement('music-note');
-      a.setAttribute('value', 'C4');
+      a.setAttribute('note', 'C4');
       a.setAttribute('duration', 'quarter');
       a.setAttribute('tie', 'start');
       const b = document.createElement('music-note');
-      b.setAttribute('value', 'C4');
+      b.setAttribute('note', 'C4');
       b.setAttribute('duration', 'quarter');
       b.setAttribute('tie', 'end');
       treble.appendChild(a);

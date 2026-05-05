@@ -4,7 +4,8 @@
 
 import '../../index';
 import { NOTE_SCALE } from './note';
-import { DurationType, LetterOctave } from '../../types/theory';
+import { DurationType } from '../../types/theory';
+import { LetterOctave } from '../../types/elements';
 
 const NOTE_STEM_X_OFFSET_PX = 365 * NOTE_SCALE;
 
@@ -14,7 +15,8 @@ afterEach(() => {
 
 function makeNote(value: LetterOctave, duration: DurationType): HTMLElement {
   const note = document.createElement('music-note') as any;
-  note.setAttribute('value', value);
+  note.setAttribute('note', value[0]);
+  note.setAttribute('octave', value[1]);
   note.setAttribute('duration', duration);
   return note;
 }

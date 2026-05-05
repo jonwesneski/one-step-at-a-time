@@ -19,7 +19,7 @@ describe('staffClassicalBase', () => {
     const notes = Array.from({ length: 5 }, () => {
       const note = document.createElement('music-note') as any;
       note.setAttribute('duration', 'quarter');
-      note.setAttribute('value', 'C4');
+      note.setAttribute('note', 'C4');
       return note;
     });
 
@@ -45,13 +45,13 @@ describe('staffClassicalBase', () => {
       ...Array.from({ length: 3 }, () => {
         const note = document.createElement('music-note') as any;
         note.setAttribute('duration', 'quarter');
-        note.setAttribute('value', 'C4');
+        note.setAttribute('note', 'C4');
         return note;
       }),
       (() => {
         const note = document.createElement('music-note') as any;
         note.setAttribute('duration', 'half');
-        note.setAttribute('value', 'C4');
+        note.setAttribute('note', 'C4');
         return note;
       })(),
     ];

@@ -40,13 +40,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('duration', value);
     }
 
-    get value(): Chord | null {
-      return this.getAttribute('value') as Chord | null;
+    get chord(): Chord | null {
+      return this.getAttribute('chord') as Chord | null;
     }
 
-    set value(val: Chord | null) {
-      if (val === null) this.removeAttribute('value');
-      else this.setAttribute('value', val);
+    set chord(val: Chord | null) {
+      if (val === null) this.removeAttribute('chord');
+      else this.setAttribute('chord', val);
     }
 
     get notes(): ChordNote[] {
@@ -55,12 +55,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node, i) => {
-          if (node.value === 'rest') {
+          if (node.note === 'rest') {
             console.error(
               `Rests are not allowed in chords; note at index ${i} is a rest`
             );
           } else {
-            notes.push({ value: node.value, duration: node.duration });
+            notes.push({
+              value: node.note,
+              octave: node.octave,
+              duration: node.duration,
+            });
           }
         });
       } else {

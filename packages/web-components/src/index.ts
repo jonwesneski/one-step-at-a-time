@@ -9,12 +9,7 @@ import './staffVocal';
 import './note';
 import './guitarNote';
 
-export type {
-  DurationType,
-  LetterNote,
-  LetterOctave,
-  Mode,
-  Note,
-} from './types/theory';
+export type { DurationType, LetterNote, Mode, Note } from './types/theory';
+export type { LetterOctave } from './types/elements';
 export type { PitchChangeDetail } from './utils/pitchDragHandler';
 export { durationToFactor } from './utils/theoryConsts';

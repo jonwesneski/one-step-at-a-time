@@ -1,6 +1,7 @@
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
+  LetterOctave,
   NoteElementType,
   NoteOrChordElementType,
   YCoordinates,
@@ -9,8 +10,8 @@ import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
+  Letter,
   LetterNote,
-  LetterOctave,
   Mode,
   Octave,
 } from './types/theory';
@@ -400,14 +401,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
 
+    const letter = newNote[0] as Letter;
+    const octave = parseInt(newNote[1], 10) as Octave;
+
     if (element.nodeName === MUSIC_CHORD_NODE && chordNoteIndex !== null) {
       const noteElements = element.querySelectorAll(MUSIC_NOTE);
       const noteEl = noteElements[chordNoteIndex] as HTMLElement | undefined;
       if (noteEl) {
-        noteEl.setAttribute('value', newNote);
+        noteEl.setAttribute('note', letter);
+        noteEl.setAttribute('octave', String(octave));
       }
     } else if (element.nodeName === MUSIC_NOTE_NODE) {
-      element.setAttribute('value', newNote);
+      element.setAttribute('note', letter);
+      element.setAttribute('octave', String(octave));
     }
 
     // Re-render this element in place (recalculate Y position, stem direction, beams)
@@ -642,7 +648,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       } else {
         const chordElement = element as ChordElementType;
         const staffYCoordinates = chordElement.notes.map((note) =>
-          this.noteToYCoordinate(note.value)
+          this.noteToYCoordinate(note.value, note.octave ?? undefined)
         );
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
@@ -703,10 +709,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
 
         if (element.nodeName === MUSIC_NOTE_NODE) {
+          const noteElement = element as NoteElementType;
           return {
             y:
               STAFF_Y_PADDING +
-              this.noteToYCoordinate((element as NoteElementType).value) -
+              this.noteToYCoordinate(
+                noteElement.note,
+                noteElement.octave ?? undefined
+              ) -
               yHeadOffset,
             stemUp,
           };
@@ -715,7 +725,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // Chord — beam Y is anchored to the extremal (stem-owning) notehead.
         const chordElement = element as ChordElementType;
         const staffYCoordinates = chordElement.notes.map((note) =>
-          this.noteToYCoordinate(note.value)
+          this.noteToYCoordinate(note.value, note.octave ?? undefined)
         );
         const extremalStaffY = stemUp
           ? Math.max(...staffYCoordinates)
@@ -781,10 +791,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const getStaffYs = (el: NoteOrChordElementType): number[] => {
       if (el.nodeName === MUSIC_NOTE_NODE) {
-        return [this.noteToYCoordinate((el as NoteElementType).value)];
+        const noteElement = el as NoteElementType;
+        return [
+          this.noteToYCoordinate(
+            noteElement.note,
+            noteElement.octave ?? undefined
+          ),
+        ];
       }
       return (el as ChordElementType).notes.map((n) =>
-        this.noteToYCoordinate(n.value)
+        this.noteToYCoordinate(n.value, n.octave ?? undefined)
       );
     };
 
@@ -823,24 +839,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return stemDirections;
   }
 
-  // Return the y-coordinate for a given note name (e.g., 'A', 'C2', 'Bb3')
+  // Return the y-coordinate for a given note and octave.
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
-  public noteToYCoordinate(note: string): number {
+  public noteToYCoordinate(
+    note: LetterNote | Letter | 'rest',
+    octave?: Octave
+  ): number {
     if (!note) {
       return 0;
     }
 
-    // Extract letter (A-G) and optional octave digit, discarding accidentals.
-    const match = note.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
-    if (!match) {
-      return 0;
-    }
+    // Strip accidentals: take the first character (always the letter A-G).
+    const letter = note[0].toUpperCase();
 
-    const letter = match[1].toUpperCase();
-    const octave = match[2];
-
-    if (octave) {
+    if (octave !== undefined) {
       const yCoordinate =
         this.yCoordinates[`${letter}${octave}` as LetterOctave];
       if (yCoordinate !== undefined) {
@@ -903,7 +916,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteEl.noFlags
         );
         const noteY =
-          STAFF_Y_PADDING + this.noteToYCoordinate(noteEl.value) - yHeadOffset;
+          STAFF_Y_PADDING +
+          this.noteToYCoordinate(noteEl.note, noteEl.octave ?? undefined) -
+          yHeadOffset;
         element.style.top = `${noteY}px`;
       } else {
         // Chord y-positioning is handled internally by the chord's own SVG rendering

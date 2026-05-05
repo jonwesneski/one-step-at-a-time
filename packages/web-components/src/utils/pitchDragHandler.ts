@@ -1,5 +1,4 @@
-import { YCoordinates } from '../types/elements';
-import { LetterOctave } from '../types/theory';
+import { LetterOctave, YCoordinates } from '../types/elements';
 import { NOTE_EVENTS } from './consts';
 
 type PitchDragState = {
@@ -279,9 +278,12 @@ export class PitchDragHandler {
       const noteElements = element.querySelectorAll('music-note');
       noteElements.forEach((noteEl, i) => {
         if (i !== chordNoteIndex) {
-          const val = noteEl.getAttribute('value');
+          const val = noteEl.getAttribute('note');
           if (val) {
-            const resolved = this.#noteValueToLetterOctave(val);
+            const resolved = this.#resolveLetterOctave(
+              val,
+              noteEl.getAttribute('octave')
+            );
             if (resolved) {
               occupiedNotes.add(resolved);
             }
@@ -321,24 +323,30 @@ export class PitchDragHandler {
       const noteElements = element.querySelectorAll('music-note');
       const noteEl = noteElements[chordNoteIndex];
       if (!noteEl) return null;
-      return this.#noteValueToLetterOctave(noteEl.getAttribute('value') ?? '');
+      return this.#resolveLetterOctave(
+        noteEl.getAttribute('note') ?? '',
+        noteEl.getAttribute('octave')
+      );
     }
 
-    return this.#noteValueToLetterOctave(element.getAttribute('value') ?? '');
+    return this.#resolveLetterOctave(
+      element.getAttribute('note') ?? '',
+      element.getAttribute('octave')
+    );
   }
 
   /**
-   * Convert a note value string (e.g. "D", "F#", "C4") to a LetterOctave
+   * Resolve a note value string and octave attribute to a LetterOctave
    * by looking it up in the yCoordinates map.
    */
-  #noteValueToLetterOctave(value: string): LetterOctave | null {
+  #resolveLetterOctave(
+    value: string,
+    octave: string | null
+  ): LetterOctave | null {
     if (!value) return null;
 
-    const match = value.trim().match(/^([A-Ga-g])[#bx]*(\d?)$/);
-    if (!match) return null;
-
-    const letter = match[1].toUpperCase();
-    const octave = match[2];
+    const letter = value.trim()[0]?.toUpperCase();
+    if (!letter || !/^[A-G]$/.test(letter)) return null;
 
     if (octave) {
       const key = `${letter}${octave}` as LetterOctave;

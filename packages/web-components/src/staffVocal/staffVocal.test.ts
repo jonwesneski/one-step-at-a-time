@@ -6,7 +6,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
 import '../index';
-import type { LetterOctave } from '../types/theory';
+import type { LetterOctave } from '../types/elements';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -165,7 +165,8 @@ function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
 function renderNote(staff: Element, value: LetterOctave): HTMLElement {
   const note = document.createElement('music-note') as any;
   note.setAttribute('duration', 'quarter');
-  note.setAttribute('value', value);
+  note.setAttribute('note', value[0]);
+  note.setAttribute('octave', value[1]);
   const slot = (staff as any).shadowRoot.querySelector('slot');
   slot.assignedElements = () => [note];
   slot.dispatchEvent(new Event('slotchange'));
@@ -391,7 +392,7 @@ describe('music-staff-vocal voice switching', () => {
     const staff = makeStaff('soprano') as any;
     // Add a note within soprano range
     const note = document.createElement('music-note') as any;
-    note.setAttribute('value', 'A5');
+    note.setAttribute('note', 'A5');
     note.setAttribute('duration', 'quarter');
     staff.appendChild(note);
 
