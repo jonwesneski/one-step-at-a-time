@@ -38,9 +38,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return (this.getAttribute('note') as Note) ?? 'C';
     }
 
-    set note(val: Note | null) {
-      if (val === null) this.removeAttribute('note');
-      else this.setAttribute('note', val);
+    set note(value: Note | null) {
+      if (value === null) this.removeAttribute('note');
+      else this.setAttribute('note', value);
     }
 
     get octave(): Octave | null {

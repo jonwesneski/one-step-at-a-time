@@ -44,9 +44,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return this.getAttribute('chord') as Chord | null;
     }
 
-    set chord(val: Chord | null) {
-      if (val === null) this.removeAttribute('chord');
-      else this.setAttribute('chord', val);
+    set chord(value: Chord | null) {
+      if (value === null) this.removeAttribute('chord');
+      else this.setAttribute('chord', value);
     }
 
     get notes(): ChordNote[] {
