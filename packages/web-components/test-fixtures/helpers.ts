@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import type { DurationType, LetterOctave } from '../src/types/theory';
+import { LetterOctave } from '../src/types/elements';
+import type { DurationType } from '../src/types/theory';
 
 export type StaffType =
   | 'music-staff-treble'
