@@ -31,6 +31,82 @@ Some features may be unavailable or degraded when elements are used outside thei
 
 Attributes flow **down**: Composition → Measure → Staff → Note. Each level can override parent settings.
 
+## Folder Structure
+
+```
+one-step-at-a-time/
+├── packages/
+│   └── web-components/
+│       └── src/               # All source code
+│           ├── index.ts       # Entry point (import order matters)
+│           ├── types.d.ts     # React JSX declarations for custom elements
+│           ├── staffBase.ts          # Minimal abstract base (shadow DOM + lifecycle)
+│           ├── staffClassicalBase.ts # Thin orchestrator — wires rules + SVG + spacing
+│           ├── composition/
+│           ├── measure/
+│           ├── note/
+│           ├── chord/
+│           ├── guitarNote/
+│           ├── staffTreble/
+│           ├── staffBass/
+│           ├── staffGuitarTab/   # Incomplete — Y-coords not yet mapped
+│           ├── staffVocal/
+│           ├── rules/            # Music theory / domain computation (pure functions)
+│           │   ├── accidentalRules.ts
+│           │   └── beamRules.ts
+│           ├── types/
+│           │   ├── theory.ts  # Core music theory types
+│           │   └── elements.ts
+│           └── utils/
+│               ├── consts.ts             # Custom element tag/event name constants
+│               ├── notationDimensions.ts # Pixel sizing and spacing constants
+│               ├── theoryConsts.ts       # Duration/semitone lookup maps
+│               ├── theoryHelpers.ts      # Chord/note computation
+│               ├── staffWidth.ts         # Measure min-width calculation
+│               ├── connectorsBuilder.ts  # Bar-line connector SVG
+│               ├── noteTimingDragHandler.ts
+│               ├── pitchDragHandler.ts
+│               ├── index.ts
+│               └── svgCreator/           # One file per rendered symbol/feature
+│                   ├── index.ts
+│                   ├── note.ts
+│                   ├── chord.ts
+│                   ├── beams.ts
+│                   ├── clefs.ts
+│                   ├── timeSignature.ts
+│                   ├── sharp.ts
+│                   ├── flat.ts
+│                   ├── natural.ts
+│                   ├── doubleSharp.ts
+│                   ├── doubleFlat.ts
+│                   └── curve.ts
+├── jest.config.js   # Nx-based Jest config
+└── tsconfig.base.json
+```
+
+## Code Organization Pattern
+
+Each notation feature follows a three-layer pattern. `staffClassicalBase.ts` is a thin orchestrator — it wires these layers together but contains no domain logic itself.
+
+| Layer         | Location                            | Purpose                                                   |
+| ------------- | ----------------------------------- | --------------------------------------------------------- |
+| Domain rules  | `src/rules/<feature>Rules.ts`       | Pure functions — music theory computation, no DOM/SVG     |
+| SVG rendering | `src/utils/svgCreator/<feature>.ts` | Builds SVG elements from computed data                    |
+| Orchestration | `staffClassicalBase.ts`             | Calls rules + SVG, sets element properties, positions DOM |
+
+**Existing examples:**
+
+- Accidentals: rules in `rules/accidentalRules.ts` (key sig lookup, per-note resolution, per-measure orchestration), SVG in `svgCreator/sharp.ts`, `flat.ts`, `natural.ts`, `doubleSharp.ts`, `doubleFlat.ts`
+- Beams: rules in `rules/beamRules.ts` (stem directions, beam Y positions), SVG in `svgCreator/beams.ts`
+
+**When adding a new feature** (e.g. ledger lines, ornaments, dynamics):
+
+1. Low-level music theory logic → `src/rules/<feature>Rules.ts`
+2. SVG drawing → `src/utils/svgCreator/<feature>.ts`
+3. Wire-up only in `staffClassicalBase.ts` — call the rule functions and pass results to SVG creators
+
+Rule functions take explicit parameters (keySig, timeSig, a `noteToYCoordinate` callback, etc.) instead of `this`, making them independently testable.
+
 ## Key Architecture Concepts
 
 ### Shadow DOM
@@ -147,7 +223,7 @@ StaffElementBase              (staffBase.ts)         — shadow DOM, staff lines
 - `onStaffResize()` — called when staff container width changes
 - `onDisconnectedCallback()` — cleanup (e.g. disconnect mutation observers)
 
-`StaffClassicalElementBase` — implements classical notation logic on top of `StaffElementBase`: key/time signature rendering, note Y-coordinate lookup, note/chord SVG rendering with beams, resize-aware note spacing. Abstract methods subclasses must implement:
+`StaffClassicalElementBase` — thin orchestrator on top of `StaffElementBase`. Wires together the rules layer (`rules/accidentalRules.ts`, `rules/beamRules.ts`) and the SVG layer (`utils/svgCreator/`) to produce rendered staves. Owns key/time signature rendering, note Y-coordinate lookup, and resize-aware note spacing. Abstract methods subclasses must implement:
 
 - `get yCoordinates(): YCoordinates` — map of note+octave string to pixel Y
 - `get octaves(): Octave[]` — octave search order when no octave is specified

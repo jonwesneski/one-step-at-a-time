@@ -4,7 +4,7 @@ import {
   IChordElement,
   NoteElementType,
 } from '../types/elements';
-import { Chord, DurationType } from '../types/theory';
+import { AccidentalType, Chord, DurationType } from '../types/theory';
 import { createChordSvg } from '../utils';
 import {
   CHORD_EVENTS,
@@ -24,6 +24,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #staffYCoordinates: number[] | null = null;
+    #noteAccidentals: (AccidentalType | null | undefined)[] = [];
     #batchDepth = 0;
     #renderPending = false;
 
@@ -104,6 +105,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set staffYCoordinates(v: number[] | null) {
       this.#staffYCoordinates = v;
+      this.#scheduleRender();
+    }
+
+    get noteAccidentals(): (AccidentalType | null | undefined)[] {
+      return this.#noteAccidentals;
+    }
+    set noteAccidentals(v: (AccidentalType | null | undefined)[]) {
+      this.#noteAccidentals = v;
       this.#scheduleRender();
     }
 
@@ -193,6 +202,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
+          noteAccidentals: this.#noteAccidentals,
         });
         chordSvg.setAttribute('overflow', 'visible');
 

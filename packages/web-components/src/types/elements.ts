@@ -1,4 +1,5 @@
 import {
+  AccidentalType,
   Chord,
   DurationType,
   Letter,
@@ -21,6 +22,10 @@ export interface INoteElement {
   noStem: boolean;
   tie: ConnectorRole | null;
   slur: ConnectorRole | null;
+  // undefined = auto-detect from note attribute (standalone)
+  // AccidentalType = show this symbol (set by staff)
+  // null = suppress (key sig or in-measure state covers it)
+  showAccidental: AccidentalType | null | undefined;
   batchUpdate(fn: () => void): void;
 }
 
@@ -37,6 +42,7 @@ export interface IChordElement {
   stemExtension: number;
   noFlags: boolean;
   staffYCoordinates: number[] | null;
+  noteAccidentals: (AccidentalType | null | undefined)[];
   tie: ConnectorRole | null;
   slur: ConnectorRole | null;
   batchUpdate(fn: () => void): void;

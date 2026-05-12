@@ -13,24 +13,45 @@ export type Octave = 2 | 3 | 4 | 5 | 6;
 export type Sharp = '#';
 export type Flat = 'b';
 
+export type AccidentalType =
+  | 'sharp'
+  | 'flat'
+  | 'natural'
+  | 'double-sharp'
+  | 'double-flat';
+
 export type LetterNote =
   | 'A'
   | 'A#'
+  | 'Abb'
+  | 'A##'
   | 'Bb'
+  | 'Bbb'
   | 'B'
+  | 'B##'
   | 'Cb'
+  | 'Cbb'
   | 'C'
   | 'C#'
+  | 'C##'
   | 'D'
   | 'Db'
+  | 'Dbb'
   | 'D#'
+  | 'D##'
   | 'Eb'
+  | 'Ebb'
   | 'E'
+  | 'E##'
   | 'F'
+  | 'Fbb'
   | 'F#'
+  | 'F##'
   | 'Gb'
+  | 'Gbb'
   | 'G'
   | 'G#'
+  | 'G##'
   | 'Ab';
 
 export type Note = 'rest' | LetterNote;

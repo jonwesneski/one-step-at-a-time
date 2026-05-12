@@ -52,4 +52,6 @@ export const COMMON_ATTRIBUTES = {
   KEY_SIG: 'keysig',
   MODE: 'mode',
   TIME_SIG: 'time',
+  //todo
+  //TEMPO: tempo,
 } as const;

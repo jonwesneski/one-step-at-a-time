@@ -1,7 +1,12 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
-import { DurationType } from '../../types/theory';
+import { AccidentalType, DurationType } from '../../types/theory';
 import { SVG_NS } from '../consts';
+import { createDoubleFlatSvg } from './doubleFlat';
+import { createDoubleSharpSvg } from './doubleSharp';
+import { createFlatSvg } from './flat';
+import { createNaturalSvg } from './natural';
+import { createSharpSvg } from './sharp';
 import { durationToFlagCountMap } from '../theoryConsts';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -34,6 +39,22 @@ export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
 
+export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
+  sharp: 10,
+  flat: 10,
+  natural: 10,
+  'double-sharp': 10,
+  'double-flat': 18,
+};
+
+export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
+  sharp: 30,
+  flat: 25,
+  natural: 30,
+  'double-sharp': 10,
+  'double-flat': 25,
+};
+
 export type NoteProps = {
   duration: DurationType;
   noFlags?: boolean;
@@ -41,6 +62,7 @@ export type NoteProps = {
   stemUp?: boolean;
   stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
+  accidental?: AccidentalType;
 };
 export const createNoteSvg = ({
   duration,
@@ -49,6 +71,7 @@ export const createNoteSvg = ({
   stemUp = true,
   stemExtension = 0,
   qualifiedElementName = 'svg',
+  accidental,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -213,6 +236,32 @@ export const createNoteSvg = ({
   g.appendChild(head);
 
   svg.appendChild(g);
+
+  if (accidental && qualifiedElementName === 'svg') {
+    const symbolWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental];
+    const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[accidental];
+    const yHeadCenter = stemUp
+      ? NOTE_Y_HEAD_OFFSET_STEM_UP
+      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+
+    let symbolSvg: SVGElement;
+    if (accidental === 'sharp') {
+      symbolSvg = createSharpSvg();
+    } else if (accidental === 'flat') {
+      symbolSvg = createFlatSvg();
+    } else if (accidental === 'natural') {
+      symbolSvg = createNaturalSvg();
+    } else if (accidental === 'double-sharp') {
+      symbolSvg = createDoubleSharpSvg();
+    } else {
+      symbolSvg = createDoubleFlatSvg();
+    }
+
+    symbolSvg.setAttribute('x', `${-(symbolWidth + 2)}`);
+    symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(symbolSvg);
+  }
 
   const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);
   return [svg, yHeadOffset];

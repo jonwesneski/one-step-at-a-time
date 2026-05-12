@@ -1,5 +1,5 @@
 import { ConnectorRole, INoteElement } from '../types/elements';
-import { DurationType, Note, Octave } from '../types/theory';
+import { AccidentalType, DurationType, Note, Octave } from '../types/theory';
 import { createNoteSvg } from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
 
@@ -18,6 +18,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #noStem = false;
+    #showAccidental: AccidentalType | null | undefined = undefined;
     #batchDepth = 0;
     #renderPending = false;
 
@@ -98,6 +99,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get showAccidental(): AccidentalType | null | undefined {
+      return this.#showAccidental;
+    }
+    set showAccidental(value: AccidentalType | null | undefined) {
+      this.#showAccidental = value;
+      this.#scheduleRender();
+    }
+
     get slur(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('slur'));
     }
@@ -155,12 +164,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
+      let accidental: AccidentalType | undefined;
+      if (this.#showAccidental === undefined) {
+        const suffix = this.note.slice(1);
+        if (suffix === '##') {
+          accidental = 'double-sharp';
+        } else if (suffix === 'bb') {
+          accidental = 'double-flat';
+        } else if (suffix === '#') {
+          accidental = 'sharp';
+        } else if (suffix === 'b') {
+          accidental = 'flat';
+        }
+      } else if (this.#showAccidental !== null) {
+        accidental = this.#showAccidental;
+      }
+
       const [noteSvg] = createNoteSvg({
         duration: this.duration,
         stemUp: this.#stemUp,
         stemExtension: this.#stemExtension,
         noFlags: this.#noFlags,
         noStem: this.#noStem,
+        accidental,
       });
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `

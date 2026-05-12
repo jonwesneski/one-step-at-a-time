@@ -15,15 +15,15 @@ import {
   Mode,
   Octave,
 } from './types/theory';
+import { computeNoteAccidentals } from './rules/accidentalRules';
+import { buildBeamsRenderer } from './rules/beamRules';
 import {
   BeamsBuilder,
   computeYHeadOffset,
   createFlatSvg,
   createSharpSvg,
   createTimeSignatureSvg,
-  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
-  NOTE_Y_HEAD_OFFSET_STEM_UP,
-  type NoteYPosition,
+  totalChordAccidentalWidth,
 } from './utils';
 import { calculateStaffMinWidth } from './utils/staffWidth';
 import {
@@ -42,7 +42,6 @@ import {
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
-  MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
@@ -50,11 +49,7 @@ import {
 } from './utils/notationDimensions';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
-import {
-  durationToFactor,
-  durationToFlagCountMap,
-  factorToDuration,
-} from './utils/theoryConsts';
+import { durationToFactor, factorToDuration } from './utils/theoryConsts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -455,7 +450,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       xOffsetOfKeySignature + 5
     );
     if (this.#currentElements.length > 0) {
-      this.#spaceElements();
+      this.#renderNotes(this.#currentElements);
     }
   }
 
@@ -612,9 +607,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
-    const { beamsBuilder, beamRenderer, stemDirections } =
-      this.#buildBeamsRenderer(elements);
+    const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
+      elements,
+      this.#effectiveTimeSig,
+      (note, octave) => this.noteToYCoordinate(note, octave)
+    );
     this.#beamRenderer = beamRenderer;
+
+    const { noteShowAccidentals, chordNoteAccidentals } =
+      computeNoteAccidentals(
+        elements,
+        this.#effectiveKeySig,
+        this.#effectiveMode
+      );
 
     // Set rendering properties on each element (triggers their self-render via rAF)
     let beatOffset = 0;
@@ -644,17 +649,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.stemUp = stemUp;
           noteElement.stemExtension = extension;
           noteElement.noFlags = isBeamed;
+          noteElement.showAccidental = noteShowAccidentals.get(noteElement);
         });
       } else {
         const chordElement = element as ChordElementType;
         const staffYCoordinates = chordElement.notes.map((note) =>
           this.noteToYCoordinate(note.value, note.octave ?? undefined)
         );
+        const accidentals = chordNoteAccidentals.get(chordElement) ?? [];
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
           chordElement.stemExtension = extension;
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
+          chordElement.noteAccidentals = accidentals;
         });
       }
 
@@ -690,153 +698,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         })
       );
     }
-  }
-
-  #buildBeamsRenderer(elements: NoteOrChordElementType[]) {
-    const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
-    const beamsBuilder = new BeamsBuilder(elements, [beatsInMeasure, beatType]);
-    const stemDirections = this.#determineStemDirections(
-      elements,
-      beamsBuilder
-    );
-
-    const noteYPositions: (NoteYPosition | null)[] = elements.map(
-      (element, i) => {
-        if (!beamsBuilder.isBeamed(i)) return null;
-        const stemUp = stemDirections[i];
-        const yHeadOffset = stemUp
-          ? NOTE_Y_HEAD_OFFSET_STEM_UP
-          : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-
-        if (element.nodeName === MUSIC_NOTE_NODE) {
-          const noteElement = element as NoteElementType;
-          return {
-            y:
-              STAFF_Y_PADDING +
-              this.noteToYCoordinate(
-                noteElement.note,
-                noteElement.octave ?? undefined
-              ) -
-              yHeadOffset,
-            stemUp,
-          };
-        }
-
-        // Chord — beam Y is anchored to the extremal (stem-owning) notehead.
-        const chordElement = element as ChordElementType;
-        const staffYCoordinates = chordElement.notes.map((note) =>
-          this.noteToYCoordinate(note.value, note.octave ?? undefined)
-        );
-        const extremalStaffY = stemUp
-          ? Math.max(...staffYCoordinates)
-          : Math.min(...staffYCoordinates);
-
-        // The beam must also clear every non-extremal notehead.
-        // The clearance must cover ALL beam layers at this chord's position
-        // (primary + secondary + any further layers), plus a comfortable visual
-        // gap between the innermost beam's inner edge and the notehead top.
-        //
-        // Derivation (stem-up, per-beam layer × beamCount):
-        //   notehead v-radius  : 3.2 px  (HEAD_WIDTH × 0.75 × NOTE_SCALE)
-        //   total beam height  : beamCount × 8 + (beamCount-1) × 4  = 12·n − 4
-        //   visual gap         : 8 px  (~one staff space, prevents anti-alias touch)
-        //   ─────────────────────────────────────────────────────────────────────
-        //   total              : 3.2 + 12·n − 4 + 8  =  7.2 + 12·n
-        //
-        // Examples:
-        //   eighth (n=1): 19.2 px   sixteenth (n=2): 31.2 px
-        //   32nd   (n=3): 43.2 px   64th      (n=4): 55.2 px
-        // notehead_v_radius = HEAD_WIDTH(80) * 0.75 * NOTE_SCALE(32/600) ≈ 3.2 px
-        const beamCount =
-          durationToFlagCountMap.get(chordElement.duration as DurationType) ??
-          1;
-        const NOTEHEAD_BEAM_CLEAR = 7.2 + beamCount * 12;
-        const nonExtStaffYs = staffYCoordinates.filter(
-          (y) => y !== extremalStaffY
-        );
-
-        let chordClearanceY: number | undefined;
-        if (nonExtStaffYs.length > 0) {
-          chordClearanceY = stemUp
-            ? Math.min(...nonExtStaffYs) - NOTEHEAD_BEAM_CLEAR
-            : Math.max(...nonExtStaffYs) + NOTEHEAD_BEAM_CLEAR;
-        }
-
-        return {
-          y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
-          stemUp,
-          chordClearanceY,
-        };
-      }
-    );
-
-    return {
-      beamsBuilder,
-      beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
-      stemDirections,
-    };
-  }
-
-  // Rules (per standard music notation):
-  //   - Notes below the middle staff line → stem up.
-  //   - Notes on or above the middle staff line → stem down.
-  //   - Beam groups: the note farthest from the middle line determines direction for the whole group.
-  //   - Chords: the note farthest from the middle line determines direction.
-  #determineStemDirections(
-    elements: NoteOrChordElementType[],
-    beamsBuilder: BeamsBuilder
-  ): boolean[] {
-    const stemDirections = new Array<boolean>(elements.length).fill(true);
-    const processed = new Set<number>();
-
-    const getStaffYs = (el: NoteOrChordElementType): number[] => {
-      if (el.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = el as NoteElementType;
-        return [
-          this.noteToYCoordinate(
-            noteElement.note,
-            noteElement.octave ?? undefined
-          ),
-        ];
-      }
-      return (el as ChordElementType).notes.map((n) =>
-        this.noteToYCoordinate(n.value, n.octave ?? undefined)
-      );
-    };
-
-    // Among the given Y values, find the one farthest from the middle line
-    // and return the stem direction it implies.
-    const stemUpForYs = (ys: number[]): boolean => {
-      let maxDist = -1;
-      let stemUp = true;
-      for (const y of ys) {
-        const dist = Math.abs(y - MIDDLE_STAFF_Y);
-        if (dist > maxDist) {
-          maxDist = dist;
-          stemUp = y > MIDDLE_STAFF_Y; // below middle (larger Y) → stem up
-        }
-      }
-      return stemUp;
-    };
-
-    for (let i = 0; i < elements.length; i++) {
-      if (processed.has(i)) continue;
-      const groupIndices = beamsBuilder.beamGroupFor(i);
-      if (groupIndices) {
-        // All notes in a beam group share one direction: use the extremal note across the group.
-        const allYs = groupIndices.flatMap((idx) => getStaffYs(elements[idx]));
-        const stemUp = stemUpForYs(allYs);
-        for (const idx of groupIndices) {
-          stemDirections[idx] = stemUp;
-          processed.add(idx);
-        }
-      } else {
-        stemDirections[i] = stemUpForYs(getStaffYs(elements[i]));
-        processed.add(i);
-      }
-    }
-
-    return stemDirections;
   }
 
   // Return the y-coordinate for a given note and octave.
@@ -905,7 +766,28 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
 
       // Position the light DOM element via inline styles
-      const xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
+      let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
+
+      // Barline constraint: shift chord right so accidentals don't cross into the describe area
+      if (element.nodeName === MUSIC_CHORD_NODE) {
+        const chordEl = element as ChordElementType;
+        if (
+          chordEl.staffYCoordinates &&
+          chordEl.noteAccidentals.some((a) => a != null)
+        ) {
+          const totalWidth = totalChordAccidentalWidth(
+            chordEl.noteAccidentals,
+            chordEl.staffYCoordinates
+          );
+          if (totalWidth > 0) {
+            xInWrapper = Math.max(
+              xInWrapper,
+              this.#describeEndX + 2 + totalWidth
+            );
+          }
+        }
+      }
+
       element.style.left = `${xInWrapper}px`;
 
       if (element.nodeName === MUSIC_NOTE_NODE) {

@@ -6,7 +6,7 @@ const meta: Meta = {
   title: 'Components/MusicNote',
   tags: ['autodocs'],
   render: (args) => html`
-    <music-note duration=${args.duration} value=${args.value}></music-note>
+    <music-note duration=${args.duration} note=${args.note}></music-note>
   `,
   argTypes: {
     duration: {
@@ -22,7 +22,7 @@ const meta: Meta = {
         'hundredtwentyeighth',
       ],
     },
-    value: {
+    note: {
       control: 'select',
       options: [
         'A',
@@ -48,7 +48,7 @@ const meta: Meta = {
   },
   args: {
     duration: 'quarter',
-    value: 'C',
+    note: 'C',
   },
 };
 export default meta;
@@ -56,25 +56,25 @@ export default meta;
 type Story = StoryObj;
 
 export const Quarter: Story = {
-  args: { duration: 'quarter', value: 'C' },
+  args: { duration: 'quarter', note: 'C' },
 };
 
 export const Whole: Story = {
-  args: { duration: 'whole', value: 'G' },
+  args: { duration: 'whole', note: 'G' },
 };
 
 export const Half: Story = {
-  args: { duration: 'half', value: 'E' },
+  args: { duration: 'half', note: 'E' },
 };
 
 export const Eighth: Story = {
-  args: { duration: 'eighth', value: 'A' },
+  args: { duration: 'eighth', note: 'A' },
 };
 
 export const Sixteenth: Story = {
-  args: { duration: 'sixteenth', value: 'D' },
+  args: { duration: 'sixteenth', note: 'D' },
 };
 
 export const Rest: Story = {
-  args: { duration: 'quarter', value: 'rest' },
+  args: { duration: 'quarter', note: 'rest' },
 };
