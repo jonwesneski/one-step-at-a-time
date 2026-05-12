@@ -118,10 +118,26 @@ export const WithGuitarTab: Story = {
         <music-note note="E" duration="quarter"></music-note>
       </music-staff-treble>
       <music-staff-guitar-tab>
-        <music-guitar-note fret="0" string="1" duration="quarter"></music-guitar-note>
-        <music-guitar-note fret="3" string="2" duration="quarter"></music-guitar-note>
-        <music-guitar-note fret="2" string="3" duration="quarter"></music-guitar-note>
-        <music-guitar-note fret="0" string="4" duration="quarter"></music-guitar-note>
+        <music-guitar-note
+          fret="0"
+          string="1"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="3"
+          string="2"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="2"
+          string="3"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="0"
+          string="4"
+          duration="quarter"
+        ></music-guitar-note>
       </music-staff-guitar-tab>
     </music-measure>
   `,
