@@ -17,8 +17,8 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   type NoteYPosition,
 } from '../utils';
+import { MUSIC_NOTE_NODE } from '../utils/consts';
 import { MIDDLE_STAFF_Y, STAFF_Y_PADDING } from '../utils/notationDimensions';
-import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import { durationToFlagCountMap } from '../utils/theoryConsts';
 
 export function determineStemDirections(
