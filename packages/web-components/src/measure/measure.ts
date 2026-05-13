@@ -1,6 +1,6 @@
-import { minWidthToFlexGrow } from '../utils/staffWidth';
-import { EMPTY_MEASURE_FLEX_BASIS_PX } from '../utils/notationDimensions';
+import { minWidthToFlexGrow } from '../rules/staffWidth';
 import { MUSIC_COMPOSITION, STAFF_EVENTS } from '../utils';
+import { EMPTY_MEASURE_FLEX_BASIS_PX } from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {

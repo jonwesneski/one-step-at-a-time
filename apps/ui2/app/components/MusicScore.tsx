@@ -98,6 +98,7 @@ export default function MusicScore() {
         <music-staff-bass>
           <music-note value="A" duration="quarter"></music-note>
         </music-staff-bass>
+        <music-staff-vocal></music-staff-vocal>
       </music-measure>
       <music-measure>
         <music-staff-treble>
@@ -133,7 +134,7 @@ export default function MusicScore() {
         <music-staff-bass>
           <music-note value="A" duration="quarter"></music-note>
         </music-staff-bass>
-        <music-staff-guitar-tab></music-staff-guitar-tab>
+        <music-staff-vocal></music-staff-vocal>
       </music-measure>
     </music-composition>
   );

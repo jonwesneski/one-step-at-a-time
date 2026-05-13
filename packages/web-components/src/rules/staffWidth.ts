@@ -3,7 +3,7 @@ import {
   COMPOSITION_MAX_WIDTH_PX,
   MIN_NOTE_WIDTH,
   SCORED_MIN_FLEX_GROW,
-} from './notationDimensions';
+} from '../utils/notationDimensions';
 
 /**
  * Calculates the minimum pixel width for a classical staff measure (no lyrics).

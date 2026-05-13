@@ -255,12 +255,13 @@ test.describe('music-composition responsive layout', () => {
           if (staff === null) {
             throw new Error('staff missing');
           }
-          const showClef = (staff as unknown as { showClef: boolean }).showClef;
+          const showDescribe = (staff as unknown as { showDescribe: boolean })
+            .showDescribe;
           const existingRow = rows.find((r) => Math.abs(r.top - top) <= 5);
           if (existingRow === undefined) {
-            rows.push({ top, staves: [showClef] });
+            rows.push({ top, staves: [showDescribe] });
           } else {
-            existingRow.staves.push(showClef);
+            existingRow.staves.push(showDescribe);
           }
         }
         return rows.map((r) => r.staves);
@@ -316,12 +317,13 @@ test.describe('music-composition responsive layout', () => {
         if (staff === null) {
           throw new Error('staff missing');
         }
-        const showClef = (staff as unknown as { showClef: boolean }).showClef;
+        const showDescribe = (staff as unknown as { showDescribe: boolean })
+          .showDescribe;
         const existingRow = grouped.find((r) => Math.abs(r.top - top) <= 5);
         if (existingRow === undefined) {
-          grouped.push({ top, staves: [showClef] });
+          grouped.push({ top, staves: [showDescribe] });
         } else {
-          existingRow.staves.push(showClef);
+          existingRow.staves.push(showDescribe);
         }
       }
       return grouped.map((r) => r.staves);
@@ -367,7 +369,7 @@ test.describe('music-composition responsive layout', () => {
             el.nodeName.startsWith('MUSIC-STAFF-')
           );
           return staff
-            ? (staff as unknown as { showClef: boolean }).showClef
+            ? (staff as unknown as { showDescribe: boolean }).showDescribe
             : false;
         });
       });
@@ -380,6 +382,107 @@ test.describe('music-composition responsive layout', () => {
 
     const after = await readShowClefsPerMeasure();
     expect(after).toEqual([true, false, true, false]);
+  });
+
+  test('key signature and clef visibility — only first staff in each row shows both, across resizes', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '1600px';
+      const composition = document.createElement('music-composition');
+      composition.setAttribute('keysig', 'D');
+      composition.setAttribute('mode', 'major');
+      for (let i = 0; i < 6; i++) {
+        const measure = document.createElement('music-measure');
+        const staff = document.createElement('music-staff-treble');
+        for (let j = 0; j < 4; j++) {
+          const note = document.createElement('music-note');
+          note.setAttribute('note', 'D4');
+          note.setAttribute('duration', 'quarter');
+          staff.appendChild(note);
+        }
+        measure.appendChild(staff);
+        composition.appendChild(measure);
+      }
+      host.appendChild(composition);
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const groupByRow = async () =>
+      page.evaluate(() => {
+        const composition = document.querySelector('music-composition');
+        if (composition === null) {
+          throw new Error('composition missing');
+        }
+        const measures = Array.from(
+          composition.querySelectorAll('music-measure')
+        ) as HTMLElement[];
+        const rows: {
+          top: number;
+          staves: boolean[];
+          keySigVisible: boolean[];
+        }[] = [];
+        for (const measure of measures) {
+          const top = measure.getBoundingClientRect().top;
+          const staff = measure.querySelector('music-staff-treble');
+          if (staff === null) {
+            throw new Error('staff missing');
+          }
+          const showDescribe = (staff as unknown as { showDescribe: boolean })
+            .showDescribe;
+          const keySigEl = staff.shadowRoot?.querySelector('.key-signature');
+          const keySigHasContent =
+            keySigEl !== null &&
+            keySigEl !== undefined &&
+            keySigEl.childElementCount > 0;
+          const existingRow = rows.find((r) => Math.abs(r.top - top) <= 5);
+          if (existingRow === undefined) {
+            rows.push({
+              top,
+              staves: [showDescribe],
+              keySigVisible: [keySigHasContent],
+            });
+          } else {
+            existingRow.staves.push(showDescribe);
+            existingRow.keySigVisible.push(keySigHasContent);
+          }
+        }
+        return rows.map((r) => ({
+          staves: r.staves,
+          keySigVisible: r.keySigVisible,
+        }));
+      });
+
+    const wideRows = await groupByRow();
+    expect(wideRows.length).toBeGreaterThanOrEqual(1);
+    for (const row of wideRows) {
+      expect(row.staves[0]).toBe(true);
+      expect(row.keySigVisible[0]).toBe(true);
+      for (let i = 1; i < row.staves.length; i++) {
+        expect(row.staves[i]).toBe(false);
+        expect(row.keySigVisible[i]).toBe(false);
+      }
+    }
+
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+
+    const narrowRows = await groupByRow();
+    expect(narrowRows.length).toBeGreaterThanOrEqual(2);
+    for (const row of narrowRows) {
+      expect(row.staves[0]).toBe(true);
+      expect(row.keySigVisible[0]).toBe(true);
+      for (let i = 1; i < row.staves.length; i++) {
+        expect(row.staves[i]).toBe(false);
+        expect(row.keySigVisible[i]).toBe(false);
+      }
+    }
   });
 
   test('all measures share the same row when composition is inside a flex justify-center container (regression for 1-measure-per-row bug)', async ({

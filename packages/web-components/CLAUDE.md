@@ -54,6 +54,7 @@ one-step-at-a-time/
 │           ├── rules/            # Music theory / domain computation (pure functions)
 │           │   ├── accidentalRules.ts
 │           │   └── beamRules.ts
+│           │   ├── staffWidth.ts         # Measure min-width calculation
 │           ├── types/
 │           │   ├── theory.ts  # Core music theory types
 │           │   └── elements.ts
@@ -62,7 +63,6 @@ one-step-at-a-time/
 │               ├── notationDimensions.ts # Pixel sizing and spacing constants
 │               ├── theoryConsts.ts       # Duration/semitone lookup maps
 │               ├── theoryHelpers.ts      # Chord/note computation
-│               ├── staffWidth.ts         # Measure min-width calculation
 │               ├── connectorsBuilder.ts  # Bar-line connector SVG
 │               ├── noteTimingDragHandler.ts
 │               ├── pitchDragHandler.ts
@@ -133,7 +133,7 @@ Each staff calculates a `minWidth` — the minimum pixel width required to rende
 
 where `describeEndX` is the x-offset where the clef/key-signature/time-signature area ends (stored as `#describeEndX` and updated every time `#spaceElements()` runs).
 
-The `minWidth` is dispatched upward via a `STAFF_EVENTS.STAFF_MIN_WIDTH` custom event with `detail: { minWidth: number }`. `<music-measure>` listens for these events, takes the maximum `minWidth` across all child staves, and sets `this.style.flex = "${flexGrow} 1 ${maxMinWidth}px"`. Using `minWidth` directly as the flex-basis guarantees the measure is always wide enough for notes not to bleed into adjacent measures. The calculation logic lives in `utils/staffWidth.ts`.
+The `minWidth` is dispatched upward via a `STAFF_EVENTS.STAFF_MIN_WIDTH` custom event with `detail: { minWidth: number }`. `<music-measure>` listens for these events, takes the maximum `minWidth` across all child staves, and sets `this.style.flex = "${flexGrow} 1 ${maxMinWidth}px"`. Using `minWidth` directly as the flex-basis guarantees the measure is always wide enough for notes not to bleed into adjacent measures. The calculation logic lives in `rules/staffWidth.ts`.
 
 ### Responsive Layout
 

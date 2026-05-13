@@ -1,3 +1,19 @@
+/**
+ * # Scope explicitly excluded (follow-up work)
+
+- **Cautionary accidentals** (brackets/parentheses around reminders)
+- **Octave-specific tracking** (book: each octave needs its own accidental; implementation tracks by letter only)
+- **Cross-stave accidental tracking** (multi-stave instruments like piano)
+- **Multi-voice accidental sharing** (one accidental applies to all parts on a stave — not repeated per voice in same bar)
+- **Clef-change re-confirmation** (accidental holds only in the clef it was written)
+- **Key-change natural rendering** (naturals that cancel the old key signature before displaying the new one)
+- **Tie-over-barline** (tied note doesn't need accidental re-stated; untied does)
+- **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
+- **Down-stem accidental displacement** (move accidental closer to stem than a displaced notehead when room allows)
+- **Grace note accidentals**
+- **Ornament accidentals** (confirm/cancel altered pitches for trills, turns, etc.)
+- **Microtones** (quarter-tones, arrows)
+ */
 import {
   ChordElementType,
   NoteElementType,

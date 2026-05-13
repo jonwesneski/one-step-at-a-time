@@ -1,3 +1,4 @@
+import { calculateStaffVocalMinWidth } from '../rules/staffWidth';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
   KeySignatureYCoordinates,
@@ -8,7 +9,6 @@ import {
   YCoordinates,
 } from '../types/elements';
 import { Octave, VoiceType } from '../types/theory';
-import { calculateStaffVocalMinWidth } from '../utils/staffWidth';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,

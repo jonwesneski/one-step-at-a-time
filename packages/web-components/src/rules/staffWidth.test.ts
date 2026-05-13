@@ -1,15 +1,15 @@
 import {
+  AVG_LYRIC_CHAR_WIDTH_PX,
+  COMPOSITION_MAX_WIDTH_PX,
+  MIN_NOTE_WIDTH,
+  SCORED_MIN_FLEX_GROW,
+} from '../utils/notationDimensions';
+import {
   calculateGuitarTabMinWidth,
   calculateStaffMinWidth,
   calculateStaffVocalMinWidth,
   minWidthToFlexGrow,
 } from './staffWidth';
-import {
-  AVG_LYRIC_CHAR_WIDTH_PX,
-  COMPOSITION_MAX_WIDTH_PX,
-  MIN_NOTE_WIDTH,
-  SCORED_MIN_FLEX_GROW,
-} from './notationDimensions';
 
 const TYPICAL_DESCRIBE_END_X = 90;
 

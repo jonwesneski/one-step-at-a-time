@@ -1,3 +1,6 @@
+import { computeNoteAccidentals } from './rules/accidentalRules';
+import { buildBeamsRenderer } from './rules/beamRules';
+import { calculateStaffMinWidth } from './rules/staffWidth';
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
@@ -15,8 +18,6 @@ import {
   Mode,
   Octave,
 } from './types/theory';
-import { computeNoteAccidentals } from './rules/accidentalRules';
-import { buildBeamsRenderer } from './rules/beamRules';
 import {
   BeamsBuilder,
   computeYHeadOffset,
@@ -25,7 +26,6 @@ import {
   createTimeSignatureSvg,
   totalChordAccidentalWidth,
 } from './utils';
-import { calculateStaffMinWidth } from './utils/staffWidth';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD_NODE,
@@ -76,22 +76,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
   #describeEndX = 0;
-  #showClef = true;
+  #showDescribe = true;
   #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
 
   protected get describeEndX(): number {
     return this.#describeEndX;
   }
 
-  get showClef(): boolean {
-    return this.#showClef;
+  get showDescribe(): boolean {
+    return this.#showDescribe;
   }
 
-  set showClef(value: boolean) {
-    if (this.#showClef === value) {
+  set showDescribe(value: boolean) {
+    if (this.#showDescribe === value) {
       return;
     }
-    this.#showClef = value;
+    this.#showDescribe = value;
     this.#refreshDescribe();
   }
 
@@ -418,14 +418,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Describe is: clef, key signature, time signature, and beams overlay
   #buildDescribe(clefSvgStr: string) {
     this.#describeContainer.classList.add('describe-container');
-    this.#describeContainer.innerHTML = this.#showClef ? clefSvgStr : '';
+    this.#describeContainer.innerHTML = this.#showDescribe ? clefSvgStr : '';
     this.transcribeContainer.appendChild(this.#describeContainer);
 
     const xOffsetOfClef = CLEF_X_OFFSET;
-    const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
-      this.#describeContainer,
-      xOffsetOfClef
-    );
+    const xOffsetOfKeySignature = this.#showDescribe
+      ? this.#appendKeySignatureSvg(this.#describeContainer, xOffsetOfClef)
+      : xOffsetOfClef;
 
     this.#appendTimeSignatureSvgIfNecessary(
       this.#describeContainer,
@@ -440,11 +439,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #refreshDescribe() {
     if (!this.isConnected) return;
-    this.#describeContainer.innerHTML = this.#showClef ? this.clefSvg : '';
-    const xOffsetOfKeySignature = this.#appendKeySignatureSvg(
-      this.#describeContainer,
-      CLEF_X_OFFSET
-    );
+    this.#describeContainer.innerHTML = this.#showDescribe ? this.clefSvg : '';
+    const xOffsetOfKeySignature = this.#showDescribe
+      ? this.#appendKeySignatureSvg(this.#describeContainer, CLEF_X_OFFSET)
+      : CLEF_X_OFFSET;
     this.#appendTimeSignatureSvgIfNecessary(
       this.#describeContainer,
       xOffsetOfKeySignature + 5
