@@ -47,6 +47,8 @@ export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
   'double-flat': 18,
 };
 
+export const ACCIDENTAL_NOTE_GAP = -7;
+
 export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
   sharp: 30,
   flat: 25,
@@ -257,7 +259,7 @@ export const createNoteSvg = ({
       symbolSvg = createDoubleFlatSvg();
     }
 
-    symbolSvg.setAttribute('x', `${-(symbolWidth + 2)}`);
+    symbolSvg.setAttribute('x', `${-(symbolWidth + ACCIDENTAL_NOTE_GAP)}`);
     symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(symbolSvg);

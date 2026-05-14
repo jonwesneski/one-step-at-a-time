@@ -27,8 +27,8 @@ export default function StandAlone() {
       <Card title="Staff Chord">
         <music-staff-treble>
           <music-chord duration="eighth">
-            <music-note value="A"></music-note>
-            <music-note value="E"></music-note>
+            <music-note note="A"></music-note>
+            <music-note note="E"></music-note>
           </music-chord>
         </music-staff-treble>
       </Card>

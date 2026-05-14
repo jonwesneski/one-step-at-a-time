@@ -241,3 +241,10 @@ export const SCORED_MIN_FLEX_BASIS_PX =
  * to display lyric syllables without overlap.
  */
 export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Minimum pixel gap between the left edge of the staff's notes area and the
+ * first notehead. Guards against accidentals bleeding into the left barline
+ * in non-first measures where describeEndX ≈ 0.
+ */
+export const NOTES_AREA_LEFT_MARGIN = 2;

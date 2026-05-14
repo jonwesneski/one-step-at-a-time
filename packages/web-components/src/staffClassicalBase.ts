@@ -43,11 +43,15 @@ import {
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
   MIN_NOTE_WIDTH,
+  NOTES_AREA_LEFT_MARGIN,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
-import { ACCIDENTAL_SYMBOL_WIDTH } from './utils/svgCreator/note';
+import {
+  ACCIDENTAL_NOTE_GAP,
+  ACCIDENTAL_SYMBOL_WIDTH,
+} from './utils/svgCreator/note';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
 import { durationToFactor, factorToDuration } from './utils/theoryConsts';
@@ -690,7 +694,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (firstElement.nodeName === MUSIC_NOTE_NODE) {
         const accidental = (firstElement as NoteElementType).showAccidental;
         if (accidental) {
-          firstNoteAccidentalWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental] + 2;
+          firstNoteAccidentalWidth =
+            ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
         }
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
         const chordEl = firstElement as ChordElementType;
@@ -790,10 +795,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const noteEl = element as NoteElementType;
         const accidental = noteEl.showAccidental;
         if (accidental) {
-          const accidentalWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental] + 2;
+          const accidentalWidth =
+            ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
           xInWrapper = Math.max(
             xInWrapper,
-            this.#describeEndX + accidentalWidth
+            this.#describeEndX + NOTES_AREA_LEFT_MARGIN + accidentalWidth
           );
         }
       }
@@ -810,7 +816,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           if (totalWidth > 0) {
             xInWrapper = Math.max(
               xInWrapper,
-              this.#describeEndX + 2 + totalWidth
+              this.#describeEndX + NOTES_AREA_LEFT_MARGIN + totalWidth
             );
           }
         }
