@@ -4,7 +4,7 @@ export const createNaturalSvg = () => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 100 300');
   svg.setAttribute('width', '10px');
-  svg.setAttribute('height', '30px');
+  svg.setAttribute('height', '25px');
 
   // Left vertical line — extends from top of symbol down past the bottom crossbar
   const leftVertical = document.createElementNS(SVG_NS, 'line');
@@ -29,7 +29,7 @@ export const createNaturalSvg = () => {
   // Top crossbar — connects top of right vertical to left vertical (angled slightly)
   const topCrossbar = document.createElementNS(SVG_NS, 'line');
   topCrossbar.setAttribute('stroke', 'currentColor');
-  topCrossbar.setAttribute('stroke-width', '60');
+  topCrossbar.setAttribute('stroke-width', '40');
   topCrossbar.setAttribute('x1', '20');
   topCrossbar.setAttribute('y1', '120');
   topCrossbar.setAttribute('x2', '80');
@@ -39,7 +39,7 @@ export const createNaturalSvg = () => {
   // Bottom crossbar — connects left vertical to bottom of right vertical (angled slightly)
   const bottomCrossbar = document.createElementNS(SVG_NS, 'line');
   bottomCrossbar.setAttribute('stroke', 'currentColor');
-  bottomCrossbar.setAttribute('stroke-width', '60');
+  bottomCrossbar.setAttribute('stroke-width', '40');
   bottomCrossbar.setAttribute('x1', '20');
   bottomCrossbar.setAttribute('y1', '220');
   bottomCrossbar.setAttribute('x2', '80');
