@@ -1,4 +1,7 @@
-import { computeNoteAccidentals } from './rules/accidentalRules';
+import {
+  computeInterNoteSpacing,
+  computeNoteAccidentals,
+} from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { StaffElementBase } from './staffBase';
@@ -48,12 +51,13 @@ import {
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
+import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
+import { PitchDragHandler } from './utils/pitchDragHandler';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
-import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
-import { PitchDragHandler } from './utils/pitchDragHandler';
 import { durationToFactor, factorToDuration } from './utils/theoryConsts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
@@ -781,6 +785,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       remainingWidth - this.#currentElements.length * MIN_NOTE_WIDTH;
 
     let beatOffset = 0;
+    let previousRightEdge = this.#describeEndX;
     for (let i = 0; i < this.#currentElements.length; i++) {
       const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
@@ -790,46 +795,47 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
 
-      // Barline constraint: shift note/chord right so accidentals don't cross into the describe area
+      // Compute this element's total accidental footprint (leftward width)
+      let accidentalWidth = 0;
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteEl = element as NoteElementType;
-        const accidental = noteEl.showAccidental;
-        if (accidental) {
-          const accidentalWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
-          xInWrapper = Math.max(
-            xInWrapper,
-            this.#describeEndX + NOTES_AREA_LEFT_MARGIN + accidentalWidth
-          );
+        if (noteEl.showAccidental) {
+          accidentalWidth =
+            ACCIDENTAL_SYMBOL_WIDTH[noteEl.showAccidental] +
+            ACCIDENTAL_NOTE_GAP;
         }
-      }
-      if (element.nodeName === MUSIC_CHORD_NODE) {
+      } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordEl = element as ChordElementType;
         if (
           chordEl.staffYCoordinates &&
           chordEl.noteAccidentals.some((a) => a != null)
         ) {
-          const totalWidth = totalChordAccidentalWidth(
+          accidentalWidth = totalChordAccidentalWidth(
             chordEl.noteAccidentals,
             chordEl.staffYCoordinates
           );
-          if (totalWidth > 0) {
-            xInWrapper = Math.max(
-              xInWrapper,
-              this.#describeEndX + NOTES_AREA_LEFT_MARGIN + totalWidth
-            );
-          }
         }
       }
-      // TODO: accidentals on notes/chords after the first can still overlap the
-      // previous element's notehead. Fixing this requires comparing each element's
-      // accidental left-edge against the previous element's right-edge and nudging
-      // accordingly — a follow-up inter-note spacing pass.
+
+      // Barline constraint: accidental must not cross into the describe area
+      if (accidentalWidth > 0) {
+        xInWrapper = Math.max(
+          xInWrapper,
+          this.#describeEndX + NOTES_AREA_LEFT_MARGIN + accidentalWidth
+        );
+      }
+
+      xInWrapper = computeInterNoteSpacing(
+        xInWrapper,
+        accidentalWidth,
+        previousRightEdge
+      );
 
       // Notify beam renderer of final position after any accidental shift, so beam
       // endpoints stay in sync with the DOM positions of the chord elements.
       this.#beamRenderer?.setX(i, xInWrapper - this.#describeEndX);
       element.style.left = `${xInWrapper}px`;
+      previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
 
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteEl = element as NoteElementType;

@@ -1,4 +1,5 @@
 import {
+  computeInterNoteSpacing,
   getKeySignatureAccidentals,
   parseAccidentalSuffix,
   resolveAccidental,
@@ -121,5 +122,31 @@ describe('resolveAccidental', () => {
 
   it('contemporary: double-flat to flat shows flat, no natural needed', () => {
     expect(resolveAccidental('flat', 'double-flat')).toBe('flat');
+  });
+});
+
+describe('computeInterNoteSpacing', () => {
+  it('returns xPosition unchanged when accidentalWidth is zero', () => {
+    expect(computeInterNoteSpacing(100, 0, 80)).toBe(100);
+  });
+
+  it('returns xPosition unchanged when accidental clears previous right edge', () => {
+    // xPosition=100, accidentalWidth=10 → accidental left-edge=90, previousRightEdge=80 → no overlap
+    expect(computeInterNoteSpacing(100, 10, 80)).toBe(100);
+  });
+
+  it('nudges xPosition right when accidental would overlap previous notehead', () => {
+    // xPosition=100, accidentalWidth=10, previousRightEdge=95 → overlap by 5
+    // nudged to 95 + 10 = 105
+    expect(computeInterNoteSpacing(100, 10, 95)).toBe(105);
+  });
+
+  it('handles double-flat width (18px)', () => {
+    // xPosition=100, accidentalWidth=18, previousRightEdge=110 → nudge to 128
+    expect(computeInterNoteSpacing(100, 18, 110)).toBe(128);
+  });
+
+  it('returns xPosition unchanged when negative accidentalWidth is passed', () => {
+    expect(computeInterNoteSpacing(100, -1, 80)).toBe(100);
   });
 });

@@ -126,6 +126,22 @@ export function resolveAccidental(
   return 'natural'; // note is natural but something else is in effect
 }
 
+// ─── Inter-note spacing ────────────────────────────────────────────────────────
+
+// Returns the nudged xPosition so the accidental clears the previous element's
+// right edge. Per Behind Bars (Gould): place accidentals as close to the note
+// as possible — nudge only as much as needed to avoid collision.
+export function computeInterNoteSpacing(
+  xPosition: number,
+  accidentalWidth: number,
+  previousRightEdge: number
+): number {
+  if (accidentalWidth <= 0) {
+    return xPosition;
+  }
+  return Math.max(xPosition, previousRightEdge + accidentalWidth);
+}
+
 // ─── Per-measure orchestration ─────────────────────────────────────────────────
 
 export function computeNoteAccidentals(
