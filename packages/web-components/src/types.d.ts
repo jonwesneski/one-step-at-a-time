@@ -32,7 +32,7 @@ declare module 'react' {
         time?: string;
       };
       'music-note': WebComponentProps & {
-        value?: Note;
+        note?: Note;
         duration?: DurationType;
         octave?: Octave;
         tie?: ConnectorRole;

@@ -8,16 +8,19 @@ import {
 /**
  * Calculates the minimum pixel width for a classical staff measure (no lyrics).
  *
- * minWidth = describeEndX + noteCount × MIN_NOTE_WIDTH
+ * minWidth = describeEndX + firstNoteAccidentalWidth + noteCount × MIN_NOTE_WIDTH
  *
+ * firstNoteAccidentalWidth ensures the measure is wide enough when the first
+ * note is shifted right to clear its accidental from the describe area.
  * This guarantees that proportionalWidth in #spaceElements() is never negative,
  * preventing noteheads from bleeding into adjacent measures.
  */
 export function calculateStaffMinWidth(
   describeEndX: number,
-  noteCount: number
+  noteCount: number,
+  firstNoteAccidentalWidth = 0
 ): number {
-  return describeEndX + noteCount * MIN_NOTE_WIDTH;
+  return describeEndX + firstNoteAccidentalWidth + noteCount * MIN_NOTE_WIDTH;
 }
 
 /**
@@ -30,11 +33,16 @@ export function calculateStaffMinWidth(
 export function calculateStaffVocalMinWidth(
   describeEndX: number,
   noteCount: number,
-  lyricCharCount: number
+  lyricCharCount: number,
+  firstNoteAccidentalWidth = 0
 ): number {
   const noteMinWidth = noteCount * MIN_NOTE_WIDTH;
   const lyricMinWidth = lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
-  return describeEndX + Math.max(noteMinWidth, lyricMinWidth);
+  return (
+    describeEndX +
+    firstNoteAccidentalWidth +
+    Math.max(noteMinWidth, lyricMinWidth)
+  );
 }
 
 /**

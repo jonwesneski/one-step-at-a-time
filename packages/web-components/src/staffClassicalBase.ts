@@ -47,6 +47,7 @@ import {
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
 } from './utils/notationDimensions';
+import { ACCIDENTAL_SYMBOL_WIDTH } from './utils/svgCreator/note';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
 import { durationToFactor, factorToDuration } from './utils/theoryConsts';
@@ -684,9 +685,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.drawConnectorsWhenStandalone();
 
     if (elements.length > 0) {
+      const firstElement = elements[0];
+      let firstNoteAccidentalWidth = 0;
+      if (firstElement.nodeName === MUSIC_NOTE_NODE) {
+        const accidental = (firstElement as NoteElementType).showAccidental;
+        if (accidental) {
+          firstNoteAccidentalWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental] + 2;
+        }
+      } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
+        const chordEl = firstElement as ChordElementType;
+        if (
+          chordEl.staffYCoordinates &&
+          chordEl.noteAccidentals.some((a) => a != null)
+        ) {
+          firstNoteAccidentalWidth = totalChordAccidentalWidth(
+            chordEl.noteAccidentals,
+            chordEl.staffYCoordinates
+          );
+        }
+      }
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
-        elements.length
+        elements.length,
+        firstNoteAccidentalWidth
       );
       this.dispatchEvent(
         new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
@@ -761,12 +782,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const xOffsetInNotesSpace =
         i * MIN_NOTE_WIDTH + (beatOffset / measureDuration) * proportionalWidth;
 
-      this.#beamRenderer?.setX(i, xOffsetInNotesSpace);
-
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
 
-      // Barline constraint: shift chord right so accidentals don't cross into the describe area
+      // Barline constraint: shift note/chord right so accidentals don't cross into the describe area
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteEl = element as NoteElementType;
+        const accidental = noteEl.showAccidental;
+        if (accidental) {
+          const accidentalWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental] + 2;
+          xInWrapper = Math.max(
+            xInWrapper,
+            this.#describeEndX + accidentalWidth
+          );
+        }
+      }
       if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordEl = element as ChordElementType;
         if (
@@ -785,7 +815,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           }
         }
       }
+      // TODO: accidentals on notes/chords after the first can still overlap the
+      // previous element's notehead. Fixing this requires comparing each element's
+      // accidental left-edge against the previous element's right-edge and nudging
+      // accordingly — a follow-up inter-note spacing pass.
 
+      // Notify beam renderer of final position after any accidental shift, so beam
+      // endpoints stay in sync with the DOM positions of the chord elements.
+      this.#beamRenderer?.setX(i, xInWrapper - this.#describeEndX);
       element.style.left = `${xInWrapper}px`;
 
       if (element.nodeName === MUSIC_NOTE_NODE) {
