@@ -26,7 +26,7 @@ const makeGuitarNote = (attrs: Record<string, string>): NoteLikeElementType => {
 describe('collectNoteLikeElements', () => {
   it('finds <music-note> and <music-guitar-note> descendants', () => {
     const root = document.createElement('div');
-    root.appendChild(makeNote({ note: 'C4' }));
+    root.appendChild(makeNote({ note: 'C', octave: '4' }));
     root.appendChild(makeGuitarNote({ fret: '5', string: '3' }));
     document.body.appendChild(root);
 
@@ -39,8 +39,8 @@ describe('collectNoteLikeElements', () => {
 
 describe('pairConnectors', () => {
   it('pairs adjacent ties', () => {
-    const a = makeNote({ note: 'C4', tie: 'start' });
-    const b = makeNote({ note: 'C4', tie: 'end' });
+    const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
+    const b = makeNote({ note: 'C', octave: '4', tie: 'end' });
     const pairs = pairConnectors([a, b]);
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('tie');
@@ -98,8 +98,8 @@ describe('pairConnectors', () => {
     const warn = jest
       .spyOn(console, 'warn')
       .mockImplementation(() => undefined);
-    const a = makeNote({ note: 'C4', tie: 'start' });
-    const b = makeNote({ note: 'D4', tie: 'end' });
+    const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
+    const b = makeNote({ note: 'D', octave: '4', tie: 'end' });
 
     const pairs = pairConnectors([a, b]);
     expect(pairs).toHaveLength(1);

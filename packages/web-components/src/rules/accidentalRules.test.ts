@@ -11,8 +11,7 @@ import {
   resolveAccidental,
   suffixToType,
 } from './accidentalRules';
-import { ChordElementType, NoteElementType } from '../types/elements';
-import { DurationType } from '../types/theory';
+import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
 
 describe('parseAccidentalSuffix', () => {
   it('returns empty string for natural notes', () => {
@@ -159,49 +158,10 @@ describe('computeInterNoteSpacing', () => {
   });
 });
 
-// note format: letter+accidental+octave, e.g. 'F#4', 'C4', 'Bb3'
-const makeNote = (
-  noteWithOctave: string,
-  duration: DurationType = 'quarter',
-  tie?: 'start' | 'end'
-): NoteElementType => {
-  const el = document.createElement('music-note');
-  const octave = noteWithOctave.slice(-1);
-  const noteName = noteWithOctave.slice(0, -1);
-  el.setAttribute('note', noteName);
-  el.setAttribute('octave', octave);
-  el.setAttribute('duration', duration);
-  if (tie) {
-    el.setAttribute('tie', tie);
-  }
-  return el as unknown as NoteElementType;
-};
-
-const makeChord = (
-  notesWithOctave: string[],
-  duration: DurationType = 'quarter',
-  tie?: 'start' | 'end'
-): ChordElementType => {
-  const el = document.createElement('music-chord');
-  el.setAttribute('duration', duration);
-  if (tie) {
-    el.setAttribute('tie', tie);
-  }
-  for (const noteWithOctave of notesWithOctave) {
-    const noteEl = document.createElement('music-note');
-    const octave = noteWithOctave.slice(-1);
-    const noteName = noteWithOctave.slice(0, -1);
-    noteEl.setAttribute('note', noteName);
-    noteEl.setAttribute('octave', octave);
-    el.appendChild(noteEl);
-  }
-  return el as unknown as ChordElementType;
-};
-
 describe('computeNoteAccidentals — tie-over-barline suppression', () => {
   it('suppresses accidental on a note with tie="end"', () => {
     // F# in G major would normally be suppressed by key sig — use C major so F# requires explicit accidental
-    const tiedEnd = makeNote('F#4', 'quarter', 'end');
+    const tiedEnd = makeNote({ note: 'F#', octave: 4, duration: 'quarter', tie: 'end' });
     const { noteShowAccidentals } = computeNoteAccidentals(
       [tiedEnd],
       'C',
@@ -211,8 +171,8 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
   });
 
   it('note after a tied-end is evaluated normally against key signature', () => {
-    const tiedEnd = makeNote('F#4', 'quarter', 'end');
-    const next = makeNote('F#4', 'quarter');
+    const tiedEnd = makeNote({ note: 'F#', octave: 4, duration: 'quarter', tie: 'end' });
+    const next = makeNote({ note: 'F#', octave: 4, duration: 'quarter' });
     const { noteShowAccidentals } = computeNoteAccidentals(
       [tiedEnd, next],
       'C',
@@ -224,7 +184,11 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
   });
 
   it('suppresses all note accidentals on a chord with tie="end"', () => {
-    const tiedChord = makeChord(['F4', 'A4', 'C#5'], 'quarter', 'end');
+    const tiedChord = makeChord({
+      notes: [{ note: 'F', octave: 4 }, { note: 'A', octave: 4 }, { note: 'C#', octave: 5 }],
+      duration: 'quarter',
+      tie: 'end',
+    });
     const { chordNoteAccidentals } = computeNoteAccidentals(
       [tiedChord],
       'C',
@@ -236,7 +200,7 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
   });
 
   it('normal note without tie still shows accidental', () => {
-    const note = makeNote('F#4', 'quarter');
+    const note = makeNote({ note: 'F#', octave: 4, duration: 'quarter' });
     const { noteShowAccidentals } = computeNoteAccidentals(
       [note],
       'C',
