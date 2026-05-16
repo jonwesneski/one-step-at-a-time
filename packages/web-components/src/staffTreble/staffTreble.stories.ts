@@ -130,3 +130,20 @@ export const ThreeQuarterTime: Story = {
     </music-staff-treble>
   `,
 };
+
+export const WithAccidentals: Story = {
+  args: { keySig: 'C', mode: 'major', time: '5/4' },
+  render: (args) => html`
+    <music-staff-treble
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-note note="F#" octave="4" duration="quarter"></music-note>
+      <music-note note="Bb" octave="4" duration="quarter"></music-note>
+      <music-note note="B" octave="4" duration="quarter"></music-note>
+      <music-note note="C##" octave="5" duration="quarter"></music-note>
+      <music-note note="Bbb" octave="4" duration="quarter"></music-note>
+    </music-staff-treble>
+  `,
+};

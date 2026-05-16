@@ -7,7 +7,6 @@
 - **Multi-voice accidental sharing** (one accidental applies to all parts on a stave — not repeated per voice in same bar)
 - **Clef-change re-confirmation** (accidental holds only in the clef it was written)
 - **Key-change natural rendering** (naturals that cancel the old key signature before displaying the new one)
-- **Tie-over-barline** (tied note doesn't need accidental re-stated; untied does)
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
 - **Down-stem accidental displacement** (move accidental closer to stem than a displaced notehead when room allows)
 - **Grace note accidentals**
@@ -170,6 +169,10 @@ export function computeNoteAccidentals(
       if (noteElement.note === 'rest') {
         continue;
       }
+      if (noteElement.tie === 'end') {
+        noteShowAccidentals.set(noteElement, null);
+        continue;
+      }
       const letter = noteElement.note[0].toUpperCase();
       const suffix = parseAccidentalSuffix(noteElement.note);
       const noteAccidental = suffixToType(suffix);
@@ -180,6 +183,13 @@ export function computeNoteAccidentals(
       inMeasureState.set(letter, noteAccidental);
     } else {
       const chordElement = element as ChordElementType;
+      if (chordElement.tie === 'end') {
+        chordNoteAccidentals.set(
+          chordElement,
+          chordElement.notes.map(() => null)
+        );
+        continue;
+      }
       const accidentals: (AccidentalType | null | undefined)[] = [];
       for (const chordNote of chordElement.notes) {
         const letter = chordNote.value[0].toUpperCase();

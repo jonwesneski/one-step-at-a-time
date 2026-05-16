@@ -1,10 +1,18 @@
+/**
+ * @jest-environment jsdom
+ */
+import '@/src/index';
+
 import {
   computeInterNoteSpacing,
+  computeNoteAccidentals,
   getKeySignatureAccidentals,
   parseAccidentalSuffix,
   resolveAccidental,
   suffixToType,
 } from './accidentalRules';
+import { ChordElementType, NoteElementType } from '../types/elements';
+import { DurationType } from '../types/theory';
 
 describe('parseAccidentalSuffix', () => {
   it('returns empty string for natural notes', () => {
@@ -148,5 +156,92 @@ describe('computeInterNoteSpacing', () => {
 
   it('returns xPosition unchanged when negative accidentalWidth is passed', () => {
     expect(computeInterNoteSpacing(100, -1, 80)).toBe(100);
+  });
+});
+
+// note format: letter+accidental+octave, e.g. 'F#4', 'C4', 'Bb3'
+const makeNote = (
+  noteWithOctave: string,
+  duration: DurationType = 'quarter',
+  tie?: 'start' | 'end'
+): NoteElementType => {
+  const el = document.createElement('music-note');
+  const octave = noteWithOctave.slice(-1);
+  const noteName = noteWithOctave.slice(0, -1);
+  el.setAttribute('note', noteName);
+  el.setAttribute('octave', octave);
+  el.setAttribute('duration', duration);
+  if (tie) {
+    el.setAttribute('tie', tie);
+  }
+  return el as unknown as NoteElementType;
+};
+
+const makeChord = (
+  notesWithOctave: string[],
+  duration: DurationType = 'quarter',
+  tie?: 'start' | 'end'
+): ChordElementType => {
+  const el = document.createElement('music-chord');
+  el.setAttribute('duration', duration);
+  if (tie) {
+    el.setAttribute('tie', tie);
+  }
+  for (const noteWithOctave of notesWithOctave) {
+    const noteEl = document.createElement('music-note');
+    const octave = noteWithOctave.slice(-1);
+    const noteName = noteWithOctave.slice(0, -1);
+    noteEl.setAttribute('note', noteName);
+    noteEl.setAttribute('octave', octave);
+    el.appendChild(noteEl);
+  }
+  return el as unknown as ChordElementType;
+};
+
+describe('computeNoteAccidentals — tie-over-barline suppression', () => {
+  it('suppresses accidental on a note with tie="end"', () => {
+    // F# in G major would normally be suppressed by key sig — use C major so F# requires explicit accidental
+    const tiedEnd = makeNote('F#4', 'quarter', 'end');
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [tiedEnd],
+      'C',
+      'major'
+    );
+    expect(noteShowAccidentals.get(tiedEnd)).toBeNull();
+  });
+
+  it('note after a tied-end is evaluated normally against key signature', () => {
+    const tiedEnd = makeNote('F#4', 'quarter', 'end');
+    const next = makeNote('F#4', 'quarter');
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [tiedEnd, next],
+      'C',
+      'major'
+    );
+    // tiedEnd is suppressed; next still needs the sharp since inMeasureState was not updated by tiedEnd
+    expect(noteShowAccidentals.get(tiedEnd)).toBeNull();
+    expect(noteShowAccidentals.get(next)).toBe('sharp');
+  });
+
+  it('suppresses all note accidentals on a chord with tie="end"', () => {
+    const tiedChord = makeChord(['F4', 'A4', 'C#5'], 'quarter', 'end');
+    const { chordNoteAccidentals } = computeNoteAccidentals(
+      [tiedChord],
+      'C',
+      'major'
+    );
+    const accidentals = chordNoteAccidentals.get(tiedChord);
+    expect(accidentals).toBeDefined();
+    expect(accidentals?.every((a) => a === null)).toBe(true);
+  });
+
+  it('normal note without tie still shows accidental', () => {
+    const note = makeNote('F#4', 'quarter');
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [note],
+      'C',
+      'major'
+    );
+    expect(noteShowAccidentals.get(note)).toBe('sharp');
   });
 });
