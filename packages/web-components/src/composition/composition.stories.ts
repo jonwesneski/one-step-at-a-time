@@ -17,10 +17,10 @@ const meta: Meta = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C" duration="quarter"></music-note>
-          <music-note value="E" duration="quarter"></music-note>
-          <music-note value="G" duration="quarter"></music-note>
-          <music-note value="C" duration="quarter"></music-note>
+          <music-note note="C" duration="quarter"></music-note>
+          <music-note note="E" duration="quarter"></music-note>
+          <music-note note="G" duration="quarter"></music-note>
+          <music-note note="C" duration="quarter"></music-note>
         </music-staff-treble>
       </music-measure>
       <music-measure>
@@ -29,10 +29,10 @@ const meta: Meta = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="D" duration="quarter"></music-note>
-          <music-note value="F" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="D" duration="quarter"></music-note>
+          <music-note note="D" duration="quarter"></music-note>
+          <music-note note="F" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="D" duration="quarter"></music-note>
         </music-staff-treble>
       </music-measure>
     </music-composition>
@@ -88,10 +88,10 @@ export const SingleMeasure: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C" duration="quarter"></music-note>
-          <music-note value="E" duration="quarter"></music-note>
-          <music-note value="G" duration="quarter"></music-note>
-          <music-note value="C" duration="quarter"></music-note>
+          <music-note note="C" duration="quarter"></music-note>
+          <music-note note="E" duration="quarter"></music-note>
+          <music-note note="G" duration="quarter"></music-note>
+          <music-note note="C" duration="quarter"></music-note>
         </music-staff-treble>
       </music-measure>
     </music-composition>
@@ -116,18 +116,18 @@ export const TrebleAndBass: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="G" duration="quarter"></music-note>
-          <music-note value="B" duration="quarter"></music-note>
-          <music-note value="D" duration="quarter"></music-note>
-          <music-note value="G" duration="quarter"></music-note>
+          <music-note note="G" duration="quarter"></music-note>
+          <music-note note="B" duration="quarter"></music-note>
+          <music-note note="D" duration="quarter"></music-note>
+          <music-note note="G" duration="quarter"></music-note>
         </music-staff-treble>
         <music-staff-bass
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="G" duration="half"></music-note>
-          <music-note value="D" duration="half"></music-note>
+          <music-note note="G" duration="half"></music-note>
+          <music-note note="D" duration="half"></music-note>
         </music-staff-bass>
       </music-measure>
       <music-measure>
@@ -136,18 +136,18 @@ export const TrebleAndBass: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="C" duration="quarter"></music-note>
-          <music-note value="E" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="C" duration="quarter"></music-note>
+          <music-note note="E" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
         </music-staff-treble>
         <music-staff-bass
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="A" duration="half"></music-note>
-          <music-note value="E" duration="half"></music-note>
+          <music-note note="A" duration="half"></music-note>
+          <music-note note="E" duration="half"></music-note>
         </music-staff-bass>
       </music-measure>
     </music-composition>
@@ -168,10 +168,30 @@ export const WithTies: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C5" duration="quarter" tie="start"></music-note>
-          <music-note value="C5" duration="quarter" tie="end"></music-note>
-          <music-note value="E5" duration="quarter" tie="start"></music-note>
-          <music-note value="E5" duration="quarter" tie="end"></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="quarter"
+            tie="start"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="quarter"
+            tie="end"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="quarter"
+            tie="start"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="quarter"
+            tie="end"
+          ></music-note>
         </music-staff-treble>
       </music-measure>
     </music-composition>
@@ -192,14 +212,34 @@ export const WithSlurs: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C5" duration="eighth" slur="start"></music-note>
-          <music-note value="D5" duration="eighth"></music-note>
-          <music-note value="E5" duration="eighth"></music-note>
-          <music-note value="F5" duration="eighth" slur="end"></music-note>
-          <music-note value="G5" duration="eighth" slur="start"></music-note>
-          <music-note value="A5" duration="eighth"></music-note>
-          <music-note value="B5" duration="eighth"></music-note>
-          <music-note value="C6" duration="eighth" slur="end"></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            slur="start"
+          ></music-note>
+          <music-note note="D" octave="5" duration="eighth"></music-note>
+          <music-note note="E" octave="5" duration="eighth"></music-note>
+          <music-note
+            note="F"
+            octave="5"
+            duration="eighth"
+            slur="end"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="5"
+            duration="eighth"
+            slur="start"
+          ></music-note>
+          <music-note note="A" octave="5" duration="eighth"></music-note>
+          <music-note note="B" octave="5" duration="eighth"></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="eighth"
+            slur="end"
+          ></music-note>
         </music-staff-treble>
       </music-measure>
     </music-composition>
@@ -220,14 +260,34 @@ export const WithNestedSlurs: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C5" duration="eighth" slur="start"></music-note>
-          <music-note value="D5" duration="eighth" slur="start"></music-note>
-          <music-note value="E5" duration="eighth"></music-note>
-          <music-note value="F5" duration="eighth" slur="end"></music-note>
-          <music-note value="G5" duration="eighth"></music-note>
-          <music-note value="A5" duration="eighth"></music-note>
-          <music-note value="B5" duration="eighth"></music-note>
-          <music-note value="C6" duration="eighth" slur="end"></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            slur="start"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="eighth"
+            slur="start"
+          ></music-note>
+          <music-note note="E" octave="5" duration="eighth"></music-note>
+          <music-note
+            note="F"
+            octave="5"
+            duration="eighth"
+            slur="end"
+          ></music-note>
+          <music-note note="G" octave="5" duration="eighth"></music-note>
+          <music-note note="A" octave="5" duration="eighth"></music-note>
+          <music-note note="B" octave="5" duration="eighth"></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="eighth"
+            slur="end"
+          ></music-note>
         </music-staff-treble>
       </music-measure>
     </music-composition>
@@ -248,10 +308,15 @@ export const WithCrossMeasureTie: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C5" duration="quarter"></music-note>
-          <music-note value="E5" duration="quarter"></music-note>
-          <music-note value="G5" duration="quarter"></music-note>
-          <music-note value="C5" duration="quarter" tie="start"></music-note>
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+          <music-note note="G" octave="5" duration="quarter"></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="quarter"
+            tie="start"
+          ></music-note>
         </music-staff-treble>
       </music-measure>
       <music-measure>
@@ -260,9 +325,14 @@ export const WithCrossMeasureTie: Story = {
           mode=${args.mode}
           time=${args.time}
         >
-          <music-note value="C5" duration="half" tie="end"></music-note>
-          <music-note value="E5" duration="quarter"></music-note>
-          <music-note value="G5" duration="quarter"></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="half"
+            tie="end"
+          ></music-note>
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+          <music-note note="G" octave="5" duration="quarter"></music-note>
         </music-staff-treble>
       </music-measure>
     </music-composition>
@@ -284,10 +354,15 @@ export const WithCrossRowTie: Story = {
             mode=${args.mode}
             time=${args.time}
           >
-            <music-note value="C5" duration="quarter"></music-note>
-            <music-note value="E5" duration="quarter"></music-note>
-            <music-note value="G5" duration="quarter"></music-note>
-            <music-note value="C5" duration="quarter" tie="start"></music-note>
+            <music-note note="C" octave="5" duration="quarter"></music-note>
+            <music-note note="E" octave="5" duration="quarter"></music-note>
+            <music-note note="G" octave="5" duration="quarter"></music-note>
+            <music-note
+              note="C"
+              octave="5"
+              duration="quarter"
+              tie="start"
+            ></music-note>
           </music-staff-treble>
         </music-measure>
         <music-measure>
@@ -296,8 +371,13 @@ export const WithCrossRowTie: Story = {
             mode=${args.mode}
             time=${args.time}
           >
-            <music-note value="C5" duration="half" tie="end"></music-note>
-            <music-note value="E5" duration="half"></music-note>
+            <music-note
+              note="C"
+              octave="5"
+              duration="half"
+              tie="end"
+            ></music-note>
+            <music-note note="E" octave="5" duration="half"></music-note>
           </music-staff-treble>
         </music-measure>
       </music-composition>
@@ -320,14 +400,24 @@ export const ChordWithPartialTie: Story = {
           time=${args.time}
         >
           <music-chord duration="half">
-            <music-note value="G5" duration="half" tie="start"></music-note>
-            <music-note value="E5" duration="half"></music-note>
-            <music-note value="C5" duration="half"></music-note>
+            <music-note
+              note="G"
+              octave="5"
+              duration="half"
+              tie="start"
+            ></music-note>
+            <music-note note="E" octave="5" duration="half"></music-note>
+            <music-note note="C" octave="5" duration="half"></music-note>
           </music-chord>
           <music-chord duration="half">
-            <music-note value="G5" duration="half" tie="end"></music-note>
-            <music-note value="E5" duration="half"></music-note>
-            <music-note value="C5" duration="half"></music-note>
+            <music-note
+              note="G"
+              octave="5"
+              duration="half"
+              tie="end"
+            ></music-note>
+            <music-note note="E" octave="5" duration="half"></music-note>
+            <music-note note="C" octave="5" duration="half"></music-note>
           </music-chord>
         </music-staff-treble>
       </music-measure>
@@ -350,14 +440,14 @@ export const ChordWithTie: Story = {
           time=${args.time}
         >
           <music-chord duration="half" tie="start">
-            <music-note value="C5" duration="half"></music-note>
-            <music-note value="E5" duration="half"></music-note>
-            <music-note value="G5" duration="half"></music-note>
+            <music-note note="C" octave="5" duration="half"></music-note>
+            <music-note note="E" octave="5" duration="half"></music-note>
+            <music-note note="G" octave="5" duration="half"></music-note>
           </music-chord>
           <music-chord duration="half" tie="end">
-            <music-note value="C5" duration="half"></music-note>
-            <music-note value="E5" duration="half"></music-note>
-            <music-note value="G5" duration="half"></music-note>
+            <music-note note="C" octave="5" duration="half"></music-note>
+            <music-note note="E" octave="5" duration="half"></music-note>
+            <music-note note="G" octave="5" duration="half"></music-note>
           </music-chord>
         </music-staff-treble>
       </music-measure>
@@ -380,24 +470,24 @@ export const ChordWithSlur: Story = {
           time=${args.time}
         >
           <music-chord duration="quarter" slur="start">
-            <music-note value="C5" duration="quarter"></music-note>
-            <music-note value="E5" duration="quarter"></music-note>
-            <music-note value="G5" duration="quarter"></music-note>
+            <music-note note="C" octave="5" duration="quarter"></music-note>
+            <music-note note="E" octave="5" duration="quarter"></music-note>
+            <music-note note="G" octave="5" duration="quarter"></music-note>
           </music-chord>
           <music-chord duration="quarter">
-            <music-note value="D5" duration="quarter"></music-note>
-            <music-note value="F5" duration="quarter"></music-note>
-            <music-note value="A5" duration="quarter"></music-note>
+            <music-note note="D" octave="5" duration="quarter"></music-note>
+            <music-note note="F" octave="5" duration="quarter"></music-note>
+            <music-note note="A" octave="5" duration="quarter"></music-note>
           </music-chord>
           <music-chord duration="quarter">
-            <music-note value="E5" duration="quarter"></music-note>
-            <music-note value="G5" duration="quarter"></music-note>
-            <music-note value="B5" duration="quarter"></music-note>
+            <music-note note="E" octave="5" duration="quarter"></music-note>
+            <music-note note="G" octave="5" duration="quarter"></music-note>
+            <music-note note="B" octave="5" duration="quarter"></music-note>
           </music-chord>
           <music-chord duration="quarter" slur="end">
-            <music-note value="F5" duration="quarter"></music-note>
-            <music-note value="A5" duration="quarter"></music-note>
-            <music-note value="C6" duration="quarter"></music-note>
+            <music-note note="F" octave="5" duration="quarter"></music-note>
+            <music-note note="A" octave="5" duration="quarter"></music-note>
+            <music-note note="C" octave="6" duration="quarter"></music-note>
           </music-chord>
         </music-staff-treble>
       </music-measure>

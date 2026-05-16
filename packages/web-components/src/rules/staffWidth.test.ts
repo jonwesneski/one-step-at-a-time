@@ -1,15 +1,15 @@
 import {
+  AVG_LYRIC_CHAR_WIDTH_PX,
+  COMPOSITION_MAX_WIDTH_PX,
+  MIN_NOTE_WIDTH,
+  SCORED_MIN_FLEX_GROW,
+} from '../utils/notationDimensions';
+import {
   calculateGuitarTabMinWidth,
   calculateStaffMinWidth,
   calculateStaffVocalMinWidth,
   minWidthToFlexGrow,
 } from './staffWidth';
-import {
-  AVG_LYRIC_CHAR_WIDTH_PX,
-  COMPOSITION_MAX_WIDTH_PX,
-  MIN_NOTE_WIDTH,
-  SCORED_MIN_FLEX_GROW,
-} from './notationDimensions';
 
 const TYPICAL_DESCRIBE_END_X = 90;
 
@@ -42,6 +42,23 @@ describe('calculateStaffMinWidth', () => {
     const smallDescribe = calculateStaffMinWidth(50, 4);
     const largeDescribe = calculateStaffMinWidth(120, 4);
     expect(largeDescribe - smallDescribe).toBe(70);
+  });
+
+  it('adds firstNoteAccidentalWidth when provided', () => {
+    const accidentalWidth = 12;
+    const withAccidental = calculateStaffMinWidth(
+      TYPICAL_DESCRIBE_END_X,
+      4,
+      accidentalWidth
+    );
+    const withoutAccidental = calculateStaffMinWidth(TYPICAL_DESCRIBE_END_X, 4);
+    expect(withAccidental - withoutAccidental).toBe(accidentalWidth);
+  });
+
+  it('returns same result with zero firstNoteAccidentalWidth as without it', () => {
+    expect(calculateStaffMinWidth(TYPICAL_DESCRIBE_END_X, 4, 0)).toBe(
+      calculateStaffMinWidth(TYPICAL_DESCRIBE_END_X, 4)
+    );
   });
 });
 
@@ -76,6 +93,22 @@ describe('calculateStaffVocalMinWidth', () => {
     expect(result).toBe(
       TYPICAL_DESCRIBE_END_X + Math.max(noteWidth, lyricWidth)
     );
+  });
+
+  it('adds firstNoteAccidentalWidth on top of note/lyric-driven width', () => {
+    const accidentalWidth = 12;
+    const withAccidental = calculateStaffVocalMinWidth(
+      TYPICAL_DESCRIBE_END_X,
+      4,
+      5,
+      accidentalWidth
+    );
+    const withoutAccidental = calculateStaffVocalMinWidth(
+      TYPICAL_DESCRIBE_END_X,
+      4,
+      5
+    );
+    expect(withAccidental - withoutAccidental).toBe(accidentalWidth);
   });
 });
 

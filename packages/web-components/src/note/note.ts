@@ -1,5 +1,5 @@
 import { ConnectorRole, INoteElement } from '../types/elements';
-import { DurationType, Note } from '../types/theory';
+import { AccidentalType, DurationType, Note, Octave } from '../types/theory';
 import { createNoteSvg } from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
 
@@ -11,13 +11,14 @@ const parseConnectorRole = (value: string | null): ConnectorRole | null => {
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement implements INoteElement {
     static get observedAttributes(): string[] {
-      return ['duration', 'value', 'tie', 'slur'];
+      return ['duration', 'note', 'octave', 'tie', 'slur'];
     }
 
     #stemUp = true;
     #stemExtension = 0;
     #noFlags = false;
     #noStem = false;
+    #showAccidental: AccidentalType | null | undefined = undefined;
     #batchDepth = 0;
     #renderPending = false;
 
@@ -34,13 +35,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('duration', value);
     }
 
-    get value(): Note {
-      return (this.getAttribute('value') as Note) ?? 'C';
+    get note(): Note {
+      return (this.getAttribute('note') as Note) ?? 'C';
     }
 
-    set value(val: Note | null) {
-      if (val === null) this.removeAttribute('value');
-      else this.setAttribute('value', val);
+    set note(value: Note | null) {
+      if (value === null) this.removeAttribute('note');
+      else this.setAttribute('note', value);
+    }
+
+    get octave(): Octave | null {
+      return (this.getAttribute('octave') as unknown as Octave) ?? null;
+    }
+
+    set octave(val: Octave | null) {
+      if (val === null) {
+        this.removeAttribute('octave');
+      } else {
+        this.setAttribute('octave', String(val));
+      }
     }
 
     get stemUp(): boolean {
@@ -84,6 +97,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('tie', value);
       }
+    }
+
+    get showAccidental(): AccidentalType | null | undefined {
+      return this.#showAccidental;
+    }
+    set showAccidental(value: AccidentalType | null | undefined) {
+      this.#showAccidental = value;
+      this.#scheduleRender();
     }
 
     get slur(): ConnectorRole | null {
@@ -143,12 +164,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
+      let accidental: AccidentalType | undefined;
+      if (this.#showAccidental === undefined) {
+        const suffix = this.note.slice(1);
+        if (suffix === '##') {
+          accidental = 'double-sharp';
+        } else if (suffix === 'bb') {
+          accidental = 'double-flat';
+        } else if (suffix === '#') {
+          accidental = 'sharp';
+        } else if (suffix === 'b') {
+          accidental = 'flat';
+        }
+      } else if (this.#showAccidental !== null) {
+        accidental = this.#showAccidental;
+      }
+
       const [noteSvg] = createNoteSvg({
         duration: this.duration,
         stemUp: this.#stemUp,
         stemExtension: this.#stemExtension,
         noFlags: this.#noFlags,
         noStem: this.#noStem,
+        accidental,
       });
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.innerHTML = `
@@ -165,7 +203,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             bubbles: true,
             composed: true,
             detail: {
-              value: this.value,
+              value: this.note,
               duration: this.duration,
               originalEvent: e,
             },
@@ -178,7 +216,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             bubbles: true,
             composed: true,
             detail: {
-              value: this.value,
+              value: this.note,
               duration: this.duration,
               originalEvent: e,
             },
@@ -191,7 +229,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             bubbles: true,
             composed: true,
             detail: {
-              value: this.value,
+              value: this.note,
               duration: this.duration,
               originalEvent: e,
             },

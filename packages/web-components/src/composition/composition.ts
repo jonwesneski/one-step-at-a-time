@@ -165,7 +165,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#redrawConnectors();
-        this.#updateClefVisibility();
+        this.#updateDescribeVisibility();
       });
     }
 
@@ -222,13 +222,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
-    #updateClefVisibility() {
+    #updateDescribeVisibility() {
       const measures = Array.from(
         this.querySelectorAll('music-measure')
       ) as HTMLElement[];
 
       // Snapshot all top values before any mutations.
-      // Reading layout after a showClef write triggers a reflow, which shifts
+      // Reading layout after a showDescribe write triggers a reflow, which shifts
       // subsequent measures — causing later reads to see wrong row positions.
       const tops = measures.map((m) => m.getBoundingClientRect().top);
 
@@ -243,7 +243,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           .filter((el) => el.nodeName.startsWith('MUSIC-STAFF-'))
           .forEach((staff) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed, same pattern as refreshInheritedAttrs
-            (staff as any).showClef = isFirstInRow;
+            (staff as any).showDescribe = isFirstInRow;
           });
       }
     }

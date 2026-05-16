@@ -1,13 +1,14 @@
+import { calculateStaffVocalMinWidth } from '../rules/staffWidth';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
   KeySignatureYCoordinates,
+  LetterOctave,
   LyricSyllablePosition,
   LyricsElementType,
   NoteOrChordElementType,
   YCoordinates,
 } from '../types/elements';
-import { LetterOctave, Octave, VoiceType } from '../types/theory';
-import { calculateStaffVocalMinWidth } from '../utils/staffWidth';
+import { Octave, VoiceType } from '../types/theory';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,

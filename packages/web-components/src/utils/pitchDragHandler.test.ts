@@ -48,7 +48,7 @@ const yCoordinates: YCoordinates = {
 
 function makeNoteElement(value = 'D', duration = 'quarter'): HTMLElement {
   const el = document.createElement('music-note');
-  el.setAttribute('value', value);
+  el.setAttribute('note', value);
   el.setAttribute('duration', duration);
   // Stub shadow DOM with an SVG containing head elements
   const shadow = el.attachShadow({ mode: 'open' });
@@ -81,7 +81,7 @@ function makeChordElement(notes: string[], duration = 'eighth'): HTMLElement {
 
   for (const n of notes) {
     const noteEl = document.createElement('music-note');
-    noteEl.setAttribute('value', n);
+    noteEl.setAttribute('note', n);
     el.appendChild(noteEl);
   }
 

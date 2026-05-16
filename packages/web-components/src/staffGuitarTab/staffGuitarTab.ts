@@ -1,6 +1,6 @@
+import { calculateGuitarTabMinWidth } from '../rules/staffWidth';
 import { StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
-import { calculateGuitarTabMinWidth } from '../utils/staffWidth';
 import {
   MUSIC_GUITAR_CHORD_NODE,
   MUSIC_GUITAR_NOTE,
@@ -29,18 +29,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     `;
     #describeContainer: SVGGElement;
     #describeEndX = 0;
-    #showClef = true;
+    #showDescribe = true;
     #currentElements: GuitarNoteElementType[] = [];
 
-    get showClef(): boolean {
-      return this.#showClef;
+    get showDescribe(): boolean {
+      return this.#showDescribe;
     }
 
-    set showClef(value: boolean) {
-      if (this.#showClef === value) {
+    set showDescribe(value: boolean) {
+      if (this.#showDescribe === value) {
         return;
       }
-      this.#showClef = value;
+      this.#showDescribe = value;
       this.#refreshDescribe();
     }
     #yCoordinates: Record<number, number> = {
@@ -75,14 +75,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     protected onConnectedCallback() {
       this.#describeContainer.setAttribute('class', 'describe-container');
-      this.#describeContainer.innerHTML = this.#showClef
+      this.#describeContainer.innerHTML = this.#showDescribe
         ? StaffGuitarTabElement.#tabSvg
         : '';
       this.transcribeContainer.appendChild(this.#describeContainer);
     }
 
     #refreshDescribe() {
-      this.#describeContainer.innerHTML = this.#showClef
+      this.#describeContainer.innerHTML = this.#showDescribe
         ? StaffGuitarTabElement.#tabSvg
         : '';
     }

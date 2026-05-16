@@ -83,40 +83,41 @@ export default function MusicScore() {
             item.type === 'chord' ? (
               <music-chord key={item.id} duration={item.duration}>
                 {item.notes.map((n, j) => (
-                  <music-note key={j} value={n}></music-note>
+                  <music-note key={j} note={n}></music-note>
                 ))}
               </music-chord>
             ) : (
               <music-note
                 key={item.id}
-                value={item.value}
+                note={item.value}
                 duration={item.duration}
               ></music-note>
             )
           )}
         </music-staff-treble>
         <music-staff-bass>
-          <music-note value="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
         </music-staff-bass>
+        <music-staff-vocal></music-staff-vocal>
       </music-measure>
       <music-measure>
         <music-staff-treble>
-          <music-note value="A" duration="thirtysecond"></music-note>
-          <music-note value="D" duration="eighth"></music-note>
+          <music-note note="A" duration="thirtysecond"></music-note>
+          <music-note note="D" duration="eighth"></music-note>
         </music-staff-treble>
         <music-staff-bass>
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
         </music-staff-bass>
 
         <music-staff-vocal voice="soprano">
-          <music-note value={'C5' as Note} duration="eighth"></music-note>
-          <music-note value={'D5' as Note} duration="eighth"></music-note>
-          <music-note value={'E5' as Note} duration="eighth"></music-note>
-          <music-note value={'F5' as Note} duration="eighth"></music-note>
-          <music-note value={'G5' as Note} duration="eighth"></music-note>
-          <music-note value={'A5' as Note} duration="eighth"></music-note>
-          <music-note value={'A5' as Note} duration="quarter"></music-note>
+          <music-note note={'C5' as Note} duration="eighth"></music-note>
+          <music-note note={'D5' as Note} duration="eighth"></music-note>
+          <music-note note={'E5' as Note} duration="eighth"></music-note>
+          <music-note note={'F5' as Note} duration="eighth"></music-note>
+          <music-note note={'G5' as Note} duration="eighth"></music-note>
+          <music-note note={'A5' as Note} duration="eighth"></music-note>
+          <music-note note={'A5' as Note} duration="quarter"></music-note>
           <music-lyrics verse="1">Hap-py birth-day to_ you you_</music-lyrics>
           <music-lyrics verse="2">
             Hap-py birth-day dear_ friend friend_
@@ -125,15 +126,15 @@ export default function MusicScore() {
       </music-measure>
       <music-measure>
         <music-staff-treble>
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
-          <music-note value="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
         </music-staff-treble>
         <music-staff-bass>
-          <music-note value="A" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
         </music-staff-bass>
-        <music-staff-guitar-tab></music-staff-guitar-tab>
+        <music-staff-vocal></music-staff-vocal>
       </music-measure>
     </music-composition>
   );

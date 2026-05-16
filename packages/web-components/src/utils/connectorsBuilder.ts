@@ -73,8 +73,8 @@ const validateTiePitch = (
   ) {
     return undefined;
   }
-  const startValue = start.getAttribute('value');
-  const endValue = end.getAttribute('value');
+  const startValue = start.getAttribute('note');
+  const endValue = end.getAttribute('note');
   if (startValue && endValue && startValue !== endValue) {
     return `tie: start note "${startValue}" and end note "${endValue}" have different pitches`;
   }

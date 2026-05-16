@@ -48,11 +48,11 @@ export function StaffInput({
 
   const entryNodes = entries.map((entry, i) =>
     entry.type === 'note' ? (
-      <music-note key={i} value={entry.value} duration={entry.duration} />
+      <music-note key={i} note={entry.value} duration={entry.duration} />
     ) : (
       <music-chord key={i} duration={entry.duration}>
         {entry.notes.map((n, j) => (
-          <music-note key={j} value={n} />
+          <music-note key={j} note={n} />
         ))}
       </music-chord>
     )

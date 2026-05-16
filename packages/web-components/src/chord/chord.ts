@@ -4,7 +4,7 @@ import {
   IChordElement,
   NoteElementType,
 } from '../types/elements';
-import { Chord, DurationType } from '../types/theory';
+import { AccidentalType, Chord, DurationType } from '../types/theory';
 import { createChordSvg } from '../utils';
 import {
   CHORD_EVENTS,
@@ -24,6 +24,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #staffYCoordinates: number[] | null = null;
+    #noteAccidentals: (AccidentalType | null | undefined)[] = [];
     #batchDepth = 0;
     #renderPending = false;
 
@@ -40,13 +41,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('duration', value);
     }
 
-    get value(): Chord | null {
-      return this.getAttribute('value') as Chord | null;
+    get chord(): Chord | null {
+      return this.getAttribute('chord') as Chord | null;
     }
 
-    set value(val: Chord | null) {
-      if (val === null) this.removeAttribute('value');
-      else this.setAttribute('value', val);
+    set chord(value: Chord | null) {
+      if (value === null) this.removeAttribute('chord');
+      else this.setAttribute('chord', value);
     }
 
     get notes(): ChordNote[] {
@@ -55,12 +56,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node, i) => {
-          if (node.value === 'rest') {
+          if (node.note === 'rest') {
             console.error(
               `Rests are not allowed in chords; note at index ${i} is a rest`
             );
           } else {
-            notes.push({ value: node.value, duration: node.duration });
+            notes.push({
+              value: node.note,
+              octave: node.octave,
+              duration: node.duration,
+            });
           }
         });
       } else {
@@ -100,6 +105,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set staffYCoordinates(v: number[] | null) {
       this.#staffYCoordinates = v;
+      this.#scheduleRender();
+    }
+
+    get noteAccidentals(): (AccidentalType | null | undefined)[] {
+      return this.#noteAccidentals;
+    }
+    set noteAccidentals(v: (AccidentalType | null | undefined)[]) {
+      this.#noteAccidentals = v;
       this.#scheduleRender();
     }
 
@@ -189,6 +202,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
+          noteAccidentals: this.#noteAccidentals,
         });
         chordSvg.setAttribute('overflow', 'visible');
 

@@ -17,10 +17,10 @@ const meta: Meta = {
         mode=${args.mode}
         time=${args.time}
       >
-        <music-note value="C" duration="quarter"></music-note>
-        <music-note value="E" duration="quarter"></music-note>
-        <music-note value="G" duration="quarter"></music-note>
-        <music-note value="C" duration="quarter"></music-note>
+        <music-note note="C" duration="quarter"></music-note>
+        <music-note note="E" duration="quarter"></music-note>
+        <music-note note="G" duration="quarter"></music-note>
+        <music-note note="C" duration="quarter"></music-note>
       </music-staff-treble>
     </music-measure>
   `,
@@ -81,18 +81,18 @@ export const TrebleAndBass: Story = {
         mode=${args.mode}
         time=${args.time}
       >
-        <music-note value="C" duration="quarter"></music-note>
-        <music-note value="E" duration="quarter"></music-note>
-        <music-note value="G" duration="quarter"></music-note>
-        <music-note value="C" duration="quarter"></music-note>
+        <music-note note="C" duration="quarter"></music-note>
+        <music-note note="E" duration="quarter"></music-note>
+        <music-note note="G" duration="quarter"></music-note>
+        <music-note note="C" duration="quarter"></music-note>
       </music-staff-treble>
       <music-staff-bass
         keySig=${args.keySig}
         mode=${args.mode}
         time=${args.time}
       >
-        <music-note value="C" duration="half"></music-note>
-        <music-note value="G" duration="half"></music-note>
+        <music-note note="C" duration="half"></music-note>
+        <music-note note="G" duration="half"></music-note>
       </music-staff-bass>
     </music-measure>
   `,
@@ -112,16 +112,32 @@ export const WithGuitarTab: Story = {
         mode=${args.mode}
         time=${args.time}
       >
-        <music-note value="E" duration="quarter"></music-note>
-        <music-note value="G" duration="quarter"></music-note>
-        <music-note value="B" duration="quarter"></music-note>
-        <music-note value="E" duration="quarter"></music-note>
+        <music-note note="E" duration="quarter"></music-note>
+        <music-note note="G" duration="quarter"></music-note>
+        <music-note note="B" duration="quarter"></music-note>
+        <music-note note="E" duration="quarter"></music-note>
       </music-staff-treble>
       <music-staff-guitar-tab>
-        <music-note value="E" duration="quarter"></music-note>
-        <music-note value="G" duration="quarter"></music-note>
-        <music-note value="B" duration="quarter"></music-note>
-        <music-note value="E" duration="quarter"></music-note>
+        <music-guitar-note
+          fret="0"
+          string="1"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="3"
+          string="2"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="2"
+          string="3"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="0"
+          string="4"
+          duration="quarter"
+        ></music-guitar-note>
       </music-staff-guitar-tab>
     </music-measure>
   `,

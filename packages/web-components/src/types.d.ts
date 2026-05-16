@@ -6,6 +6,7 @@ import type {
   LetterNote,
   Mode,
   Note,
+  Octave,
 } from './types/theory';
 
 type WebComponentProps = {
@@ -31,8 +32,9 @@ declare module 'react' {
         time?: string;
       };
       'music-note': WebComponentProps & {
-        value?: Note;
+        note?: Note;
         duration?: DurationType;
+        octave?: Octave;
         tie?: ConnectorRole;
         slur?: ConnectorRole;
         onClick?: (e: MouseEvent) => void;

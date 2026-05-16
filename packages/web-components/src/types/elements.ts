@@ -1,28 +1,48 @@
-import { Chord, DurationType, LetterNote, LetterOctave, Note } from './theory';
+import {
+  AccidentalType,
+  Chord,
+  DurationType,
+  Letter,
+  LetterNote,
+  Note,
+  Octave,
+} from './theory';
+
+export type LetterOctave = `${Letter}${Octave}`;
 
 export type ConnectorRole = 'start' | 'end';
 
 export interface INoteElement {
   duration: DurationType;
-  value: Note;
+  note: Note;
+  octave: Octave | null;
   stemUp: boolean;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
   tie: ConnectorRole | null;
   slur: ConnectorRole | null;
+  // undefined = auto-detect from note attribute (standalone)
+  // AccidentalType = show this symbol (set by staff)
+  // null = suppress (key sig or in-measure state covers it)
+  showAccidental: AccidentalType | null | undefined;
   batchUpdate(fn: () => void): void;
 }
 
-export type ChordNote = { value: LetterNote; duration: DurationType };
+export type ChordNote = {
+  value: LetterNote;
+  octave: Octave | null;
+  duration: DurationType;
+};
 export interface IChordElement {
   duration: DurationType;
-  value: Chord | null;
+  chord: Chord | null;
   readonly notes: ChordNote[];
   stemUp: boolean;
   stemExtension: number;
   noFlags: boolean;
   staffYCoordinates: number[] | null;
+  noteAccidentals: (AccidentalType | null | undefined)[];
   tie: ConnectorRole | null;
   slur: ConnectorRole | null;
   batchUpdate(fn: () => void): void;

@@ -11,10 +11,10 @@ const meta: Meta = {
       mode=${args.mode}
       time=${args.time}
     >
-      <music-note value="C" duration="quarter"></music-note>
-      <music-note value="E" duration="quarter"></music-note>
-      <music-note value="C5" duration="quarter"></music-note>
-      <music-note value="E5" duration="quarter"></music-note>
+      <music-note note="C" duration="quarter"></music-note>
+      <music-note note="E" duration="quarter"></music-note>
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+      <music-note note="E" octave="5" duration="quarter"></music-note>
     </music-staff-treble>
   `,
   argTypes: {
@@ -84,14 +84,14 @@ export const WithEighthNotes: Story = {
       mode=${args.mode}
       time=${args.time}
     >
-      <music-note value="C" duration="eighth"></music-note>
-      <music-note value="D" duration="eighth"></music-note>
-      <music-note value="E" duration="eighth"></music-note>
-      <music-note value="F" duration="eighth"></music-note>
-      <music-note value="G" duration="eighth"></music-note>
-      <music-note value="A" duration="eighth"></music-note>
-      <music-note value="B" duration="eighth"></music-note>
-      <music-note value="C" duration="eighth"></music-note>
+      <music-note note="C" duration="eighth"></music-note>
+      <music-note note="D" duration="eighth"></music-note>
+      <music-note note="E" duration="eighth"></music-note>
+      <music-note note="F" duration="eighth"></music-note>
+      <music-note note="G" duration="eighth"></music-note>
+      <music-note note="A" duration="eighth"></music-note>
+      <music-note note="B" duration="eighth"></music-note>
+      <music-note note="C" duration="eighth"></music-note>
     </music-staff-treble>
   `,
 };
@@ -105,13 +105,13 @@ export const WithChords: Story = {
       time=${args.time}
     >
       <music-chord duration="quarter">
-        <music-note value="C" duration="quarter"></music-note>
-        <music-note value="E" duration="quarter"></music-note>
-        <music-note value="G" duration="quarter"></music-note>
+        <music-note note="C" duration="quarter"></music-note>
+        <music-note note="E" duration="quarter"></music-note>
+        <music-note note="G" duration="quarter"></music-note>
       </music-chord>
-      <music-note value="E" duration="quarter"></music-note>
-      <music-note value="F" duration="quarter"></music-note>
-      <music-note value="G" duration="quarter"></music-note>
+      <music-note note="E" duration="quarter"></music-note>
+      <music-note note="F" duration="quarter"></music-note>
+      <music-note note="G" duration="quarter"></music-note>
     </music-staff-treble>
   `,
 };
@@ -124,9 +124,26 @@ export const ThreeQuarterTime: Story = {
       mode=${args.mode}
       time=${args.time}
     >
-      <music-note value="G" duration="quarter"></music-note>
-      <music-note value="E" duration="quarter"></music-note>
-      <music-note value="C" duration="quarter"></music-note>
+      <music-note note="G" duration="quarter"></music-note>
+      <music-note note="E" duration="quarter"></music-note>
+      <music-note note="C" duration="quarter"></music-note>
+    </music-staff-treble>
+  `,
+};
+
+export const WithAccidentals: Story = {
+  args: { keySig: 'C', mode: 'major', time: '5/4' },
+  render: (args) => html`
+    <music-staff-treble
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-note note="F#" octave="4" duration="quarter"></music-note>
+      <music-note note="Bb" octave="4" duration="quarter"></music-note>
+      <music-note note="B" octave="4" duration="quarter"></music-note>
+      <music-note note="C##" octave="5" duration="quarter"></music-note>
+      <music-note note="Bbb" octave="4" duration="quarter"></music-note>
     </music-staff-treble>
   `,
 };

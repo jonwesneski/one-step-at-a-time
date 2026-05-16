@@ -30,16 +30,16 @@ export default function StandAlone() {
       </Card>
       <Card title="Staff Tie">
         <music-staff-treble>
-          <music-note value="A" tie="start"></music-note>
-          <music-note value="A" tie="end"></music-note>
+          <music-note note="A" tie="start"></music-note>
+          <music-note note="A" tie="end"></music-note>
         </music-staff-treble>
       </Card>
       <Card title="Composition Tie">
         <music-composition>
           <music-measure>
             <music-staff-treble>
-              <music-note value="A" tie="start"></music-note>
-              <music-note value="A" tie="end"></music-note>
+              <music-note note="A" tie="start"></music-note>
+              <music-note note="A" tie="end"></music-note>
             </music-staff-treble>
           </music-measure>
         </music-composition>
@@ -65,33 +65,33 @@ export default function StandAlone() {
         <music-composition>
           <music-measure>
             <music-staff-treble>
-              <music-note value="E" duration="whole"></music-note>
+              <music-note note="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
           <music-measure>
             <music-staff-treble>
-              <music-note value="E" duration="whole"></music-note>
+              <music-note note="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
           <music-measure>
             <music-staff-treble>
-              <music-note value="E" duration="whole"></music-note>
+              <music-note note="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
           <music-measure>
             <music-staff-treble>
-              <music-note value="E" duration="whole"></music-note>
+              <music-note note="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
           <music-measure>
             <music-staff-treble>
-              <music-note value="E" duration="whole"></music-note>
+              <music-note note="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
           {/** 6th shows on next row */}
           <music-measure>
             <music-staff-treble>
-              <music-note value="E" duration="whole"></music-note>
+              <music-note note="E" duration="whole"></music-note>
             </music-staff-treble>
           </music-measure>
         </music-composition>

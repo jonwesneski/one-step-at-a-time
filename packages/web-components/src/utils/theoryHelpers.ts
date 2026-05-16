@@ -1,5 +1,9 @@
-import { KeySignatureYCoordinates, YCoordinates } from '../types/elements';
-import { Chord, LetterNote, LetterOctave } from '../types/theory';
+import {
+  KeySignatureYCoordinates,
+  LetterOctave,
+  YCoordinates,
+} from '../types/elements';
+import { Chord, LetterNote } from '../types/theory';
 import { STAFF_LINE_SPACING } from './notationDimensions';
 import {
   ChordSemitoneMap,

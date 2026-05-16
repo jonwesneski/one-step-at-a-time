@@ -1,30 +1,16 @@
 ## Monorepo Structure
 
+Nx-managed monorepo with two apps and one shared library.
+
 ```
 one-step-at-a-time/
+├── apps/
+│   ├── ui/              # Next.js app (React 19, Tailwind) — primary UI consuming web-components
+│   └── ui2/             # Vite + TanStack Router app — alternative SSR architecture
 ├── packages/
-│   └── web-components/
-│       └── src/               # All source code
-│           ├── index.ts       # Entry point (import order matters)
-│           ├── types.d.ts     # React JSX declarations for custom elements
-│           ├── composition.ts
-│           ├── measure.ts
-│           ├── staffBase.ts          # Minimal abstract base (shadow DOM + lifecycle)
-│           ├── staffClassicalBase.ts # Classical notation logic (key sig, notes, beams)
-│           ├── staffTreble.ts
-│           ├── staffBass.ts
-│           ├── staffGuitarTab.ts     # Incomplete — Y-coords not yet mapped
-│           ├── note.ts
-│           ├── chord.ts
-│           ├── types/
-│           │   ├── theory.ts  # Core music theory types
-│           │   └── elements.ts
-│           └── utils/
-│               ├── consts.ts        # Lookup maps and constants
-│               ├── theoryHelpers.ts # Chord/note computation
-│               ├── svgCreator.ts    # All SVG rendering
-│               └── index.ts
-├── jest.config.js   # Nx-based Jest config
+│   └── web-components/  # Framework-agnostic Web Components library for SVG music notation
+├── tools/               # debugging/experimental utilities
+├── jest.config.js
 └── tsconfig.base.json
 ```
 

@@ -7,10 +7,10 @@ const meta: Meta = {
   tags: ['autodocs'],
   render: (args) => html`
     <music-staff-bass keySig=${args.keySig} mode=${args.mode} time=${args.time}>
-      <music-note value="C" duration="quarter"></music-note>
-      <music-note value="E" duration="quarter"></music-note>
-      <music-note value="G" duration="quarter"></music-note>
-      <music-note value="C" duration="quarter"></music-note>
+      <music-note note="C" duration="quarter"></music-note>
+      <music-note note="E" duration="quarter"></music-note>
+      <music-note note="G" duration="quarter"></music-note>
+      <music-note note="C" duration="quarter"></music-note>
     </music-staff-bass>
   `,
   argTypes: {
@@ -72,14 +72,14 @@ export const WithEighthNotes: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
     <music-staff-bass keySig=${args.keySig} mode=${args.mode} time=${args.time}>
-      <music-note value="C" duration="eighth"></music-note>
-      <music-note value="D" duration="eighth"></music-note>
-      <music-note value="E" duration="eighth"></music-note>
-      <music-note value="F" duration="eighth"></music-note>
-      <music-note value="G" duration="eighth"></music-note>
-      <music-note value="A" duration="eighth"></music-note>
-      <music-note value="B" duration="eighth"></music-note>
-      <music-note value="C" duration="eighth"></music-note>
+      <music-note note="C" duration="eighth"></music-note>
+      <music-note note="D" duration="eighth"></music-note>
+      <music-note note="E" duration="eighth"></music-note>
+      <music-note note="F" duration="eighth"></music-note>
+      <music-note note="G" duration="eighth"></music-note>
+      <music-note note="A" duration="eighth"></music-note>
+      <music-note note="B" duration="eighth"></music-note>
+      <music-note note="C" duration="eighth"></music-note>
     </music-staff-bass>
   `,
 };

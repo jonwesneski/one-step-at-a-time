@@ -22,9 +22,9 @@ type Story = StoryObj;
 export const Default: Story = {
   render: (args) => html`
     <music-chord duration=${args.duration}>
-      <music-note value="C" duration=${args.duration}></music-note>
-      <music-note value="E" duration=${args.duration}></music-note>
-      <music-note value="G" duration=${args.duration}></music-note>
+      <music-note note="C" duration=${args.duration}></music-note>
+      <music-note note="E" duration=${args.duration}></music-note>
+      <music-note note="G" duration=${args.duration}></music-note>
     </music-chord>
   `,
 };
