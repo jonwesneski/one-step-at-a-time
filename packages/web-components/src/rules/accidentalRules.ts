@@ -25,29 +25,6 @@ import { MUSIC_NOTE_NODE } from '../utils/consts';
 
 type AccidentalSuffix = '' | '#' | 'b' | '##' | 'bb';
 
-export function parseAccidentalSuffix(noteName: string): AccidentalSuffix {
-  const suffix = noteName.slice(1);
-  if (suffix === '##' || suffix === 'bb' || suffix === '#' || suffix === 'b') {
-    return suffix as AccidentalSuffix;
-  }
-  return '';
-}
-
-export function suffixToType(suffix: AccidentalSuffix): AccidentalType | null {
-  switch (suffix) {
-    case '##':
-      return 'double-sharp';
-    case 'bb':
-      return 'double-flat';
-    case '#':
-      return 'sharp';
-    case 'b':
-      return 'flat';
-    default:
-      return null;
-  }
-}
-
 // ─── Key signature ─────────────────────────────────────────────────────────────
 
 const SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'] as const;
@@ -88,42 +65,6 @@ const MINOR_TO_RELATIVE_MAJOR: Partial<Record<string, string>> = {
   Eb: 'Gb',
   Ab: 'Cb',
 };
-
-// Key signature accidentals are always single sharp or flat — never double accidentals.
-export function getKeySignatureAccidentals(
-  keySig: LetterNote | string,
-  mode: Mode
-): Map<string, 'sharp' | 'flat'> {
-  const key =
-    mode === 'minor' ? MINOR_TO_RELATIVE_MAJOR[keySig] ?? 'C' : keySig;
-  const count = MAJOR_ACCIDENTAL_COUNT[key] ?? 0;
-  const result = new Map<string, 'sharp' | 'flat'>();
-  if (count > 0) {
-    SHARP_ORDER.slice(0, count).forEach((letter) =>
-      result.set(letter, 'sharp')
-    );
-  } else if (count < 0) {
-    FLAT_ORDER.slice(0, -count).forEach((letter) => result.set(letter, 'flat'));
-  }
-  return result;
-}
-
-// ─── Accidental resolution ─────────────────────────────────────────────────────
-
-// Given the note's actual accidental and the currently-in-effect state for that
-// letter (from key sig + in-measure tracking), return what symbol to render.
-export function resolveAccidental(
-  noteAccidental: AccidentalType | null,
-  effectiveState: AccidentalType | null
-): AccidentalType | null {
-  if (noteAccidental === effectiveState) {
-    return null; // already in effect — suppress
-  }
-  if (noteAccidental !== null) {
-    return noteAccidental; // show the required accidental
-  }
-  return 'natural'; // note is natural but something else is in effect
-}
 
 // ─── Inter-note spacing ────────────────────────────────────────────────────────
 
@@ -205,4 +146,63 @@ export function computeNoteAccidentals(
   }
 
   return { noteShowAccidentals, chordNoteAccidentals };
+}
+
+// Key signature accidentals are always single sharp or flat — never double accidentals.
+export function getKeySignatureAccidentals(
+  keySig: LetterNote,
+  mode: Mode
+): Map<string, 'sharp' | 'flat'> {
+  const key =
+    mode === 'minor' ? MINOR_TO_RELATIVE_MAJOR[keySig] ?? 'C' : keySig;
+  const count = MAJOR_ACCIDENTAL_COUNT[key] ?? 0;
+  const result = new Map<string, 'sharp' | 'flat'>();
+  if (count > 0) {
+    SHARP_ORDER.slice(0, count).forEach((letter) =>
+      result.set(letter, 'sharp')
+    );
+  } else if (count < 0) {
+    FLAT_ORDER.slice(0, -count).forEach((letter) => result.set(letter, 'flat'));
+  }
+  return result;
+}
+
+export function parseAccidentalSuffix(noteName: LetterNote): AccidentalSuffix {
+  const suffix = noteName.slice(1);
+  if (suffix === '##' || suffix === 'bb' || suffix === '#' || suffix === 'b') {
+    return suffix as AccidentalSuffix;
+  }
+  return '';
+}
+
+export function suffixToType(suffix: AccidentalSuffix): AccidentalType | null {
+  switch (suffix) {
+    case '##':
+      return 'double-sharp';
+    case 'bb':
+      return 'double-flat';
+    case '#':
+      return 'sharp';
+    case 'b':
+      return 'flat';
+    default:
+      return null;
+  }
+}
+
+// ─── Accidental resolution ─────────────────────────────────────────────────────
+
+// Given the note's actual accidental and the currently-in-effect state for that
+// letter (from key sig + in-measure tracking), return what symbol to render.
+export function resolveAccidental(
+  noteAccidental: AccidentalType | null,
+  effectiveState: AccidentalType | null
+): AccidentalType | null {
+  if (noteAccidental === effectiveState) {
+    return null; // already in effect — suppress
+  }
+  if (noteAccidental !== null) {
+    return noteAccidental; // show the required accidental
+  }
+  return 'natural'; // note is natural but something else is in effect
 }
