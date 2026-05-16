@@ -82,7 +82,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'D', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       expect(staff.shadowRoot.querySelectorAll('.beam-group')).toHaveLength(1);
@@ -95,7 +98,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'quarter' }), makeNote({ note: 'E', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'quarter' }),
+        makeNote({ note: 'E', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       expect(staff.shadowRoot.querySelectorAll('.beam-group')).toHaveLength(0);
@@ -156,7 +162,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'E', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'E', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const beamGroup = staff.shadowRoot.querySelector('.beam-group');
@@ -170,7 +179,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'E', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'E', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const primary = staff.shadowRoot.querySelector('.beam-group .beam');
@@ -227,7 +239,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'D', octave: 4, duration: 'sixteenth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'sixteenth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const beams = staff.shadowRoot.querySelectorAll('.beam-group .beam');
@@ -272,7 +287,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'D', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const primaryBeam = staff.shadowRoot.querySelector('.beam-group .beam');
@@ -301,7 +319,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 5, duration: 'eighth' }), makeNote({ note: 'D', octave: 5, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 5, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 5, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const primaryBeam = staff.shadowRoot.querySelector('.beam-group .beam');
@@ -332,7 +353,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'A', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'A', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const points = parsePoints(
@@ -348,7 +372,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'A', octave: 4, duration: 'eighth' }), makeNote({ note: 'C', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'A', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const points = parsePoints(
@@ -364,7 +391,10 @@ describe('beams', () => {
       staff.setAttribute('time', '4/4');
       document.body.appendChild(staff);
 
-      const notes = [makeNote({ note: 'C', octave: 4, duration: 'eighth' }), makeNote({ note: 'C', octave: 4, duration: 'eighth' })];
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+      ];
       triggerSlotChange(staff, notes);
 
       const pts = parsePoints(
@@ -383,8 +413,20 @@ describe('beams', () => {
       document.body.appendChild(staff);
 
       const chords = [
-        makeChord({ duration: 'eighth', notes: [{ note: 'C', octave: 4 }, { note: 'E', octave: 4 }] }),
-        makeChord({ duration: 'eighth', notes: [{ note: 'B', octave: 4 }, { note: 'D', octave: 4 }] }),
+        makeChord({
+          duration: 'eighth',
+          notes: [
+            { note: 'C', octave: 4 },
+            { note: 'E', octave: 4 },
+          ],
+        }),
+        makeChord({
+          duration: 'eighth',
+          notes: [
+            { note: 'B', octave: 4 },
+            { note: 'D', octave: 4 },
+          ],
+        }),
       ];
       triggerSlotChange(staff, chords);
 
@@ -409,8 +451,20 @@ describe('beams', () => {
       document.body.appendChild(staff);
 
       const chords = [
-        makeChord({ duration: 'eighth', notes: [{ note: 'C', octave: 4 }, { note: 'E', octave: 4 }] }),
-        makeChord({ duration: 'eighth', notes: [{ note: 'B', octave: 4 }, { note: 'D', octave: 4 }] }),
+        makeChord({
+          duration: 'eighth',
+          notes: [
+            { note: 'C', octave: 4 },
+            { note: 'E', octave: 4 },
+          ],
+        }),
+        makeChord({
+          duration: 'eighth',
+          notes: [
+            { note: 'B', octave: 4 },
+            { note: 'D', octave: 4 },
+          ],
+        }),
       ];
       triggerSlotChange(staff, chords);
 
@@ -443,8 +497,20 @@ describe('beams', () => {
       document.body.appendChild(staff);
 
       const chords = [
-        makeChord({ duration: 'eighth', notes: [{ note: 'G', octave: 4 }, { note: 'B', octave: 4 }] }),
-        makeChord({ duration: 'sixteenth', notes: [{ note: 'B', octave: 4 }, { note: 'D', octave: 4 }] }),
+        makeChord({
+          duration: 'eighth',
+          notes: [
+            { note: 'G', octave: 4 },
+            { note: 'B', octave: 4 },
+          ],
+        }),
+        makeChord({
+          duration: 'sixteenth',
+          notes: [
+            { note: 'B', octave: 4 },
+            { note: 'D', octave: 4 },
+          ],
+        }),
       ];
       triggerSlotChange(staff, chords);
 

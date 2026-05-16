@@ -161,7 +161,12 @@ describe('computeInterNoteSpacing', () => {
 describe('computeNoteAccidentals — tie-over-barline suppression', () => {
   it('suppresses accidental on a note with tie="end"', () => {
     // F# in G major would normally be suppressed by key sig — use C major so F# requires explicit accidental
-    const tiedEnd = makeNote({ note: 'F#', octave: 4, duration: 'quarter', tie: 'end' });
+    const tiedEnd = makeNote({
+      note: 'F#',
+      octave: 4,
+      duration: 'quarter',
+      tie: 'end',
+    });
     const { noteShowAccidentals } = computeNoteAccidentals(
       [tiedEnd],
       'C',
@@ -171,7 +176,12 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
   });
 
   it('note after a tied-end is evaluated normally against key signature', () => {
-    const tiedEnd = makeNote({ note: 'F#', octave: 4, duration: 'quarter', tie: 'end' });
+    const tiedEnd = makeNote({
+      note: 'F#',
+      octave: 4,
+      duration: 'quarter',
+      tie: 'end',
+    });
     const next = makeNote({ note: 'F#', octave: 4, duration: 'quarter' });
     const { noteShowAccidentals } = computeNoteAccidentals(
       [tiedEnd, next],
@@ -185,7 +195,11 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
 
   it('suppresses all note accidentals on a chord with tie="end"', () => {
     const tiedChord = makeChord({
-      notes: [{ note: 'F', octave: 4 }, { note: 'A', octave: 4 }, { note: 'C#', octave: 5 }],
+      notes: [
+        { note: 'F', octave: 4 },
+        { note: 'A', octave: 4 },
+        { note: 'C#', octave: 5 },
+      ],
       duration: 'quarter',
       tie: 'end',
     });
