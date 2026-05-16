@@ -27,8 +27,8 @@ describe('Theory Helpers', () => {
       expect(getChordNotes('C')).toEqual(['C', 'E', 'G']);
     });
 
-    it('sharp root', () => {
-      expect(getChordNotes('A#')).toEqual(['A#', 'D', 'F']);
+    it('double-sharp root', () => {
+      expect(getChordNotes('A#')).toEqual(['A#', 'C##', 'E#']);
     });
 
     it('flat root', () => {
@@ -43,13 +43,44 @@ describe('Theory Helpers', () => {
       expect(getChordNotes('G+')).toEqual(['G', 'B', 'D#']);
     });
 
-    it.skip('deal with Fb', () => {
-      // expect(getChordNotes('Gb7#9')).toEqual(['Gb', 'Bb', 'Db', 'E', 'A']);
-      /**
-       * TODO: figure out how to deal with stuff like this
-       * The Gb minor scale and its notes are:
-      Gb - Ab - Bbb - Cb - Db - Ebb - Fb - Gb */
+    it('deal with Fb', () => {
       expect(getChordNotes('Gb7#9')).toEqual(['Gb', 'Bb', 'Db', 'Fb', 'A']);
+    });
+
+    // Level 4: double-sharp-biased roots
+    it('D# major', () => {
+      expect(getChordNotes('D#')).toEqual(['D#', 'F##', 'A#']);
+    });
+
+    // Level 3: sharp-biased roots
+    it('F# major 7', () => {
+      expect(getChordNotes('F#maj7')).toEqual(['F#', 'A#', 'C#', 'E#']);
+    });
+
+    it('C# major 7', () => {
+      expect(getChordNotes('C#maj7')).toEqual(['C#', 'E#', 'G#', 'B#']);
+    });
+
+    it('G# major', () => {
+      expect(getChordNotes('G#')).toEqual(['G#', 'B#', 'D#']);
+    });
+
+    // Level 1: flat-biased — latent Cbsus4 bug fix
+    it('Gb sus4', () => {
+      expect(getChordNotes('Gbsus4')).toEqual(['Gb', 'Cb', 'Db']);
+    });
+
+    // Level 0: double-flat-biased roots
+    it('Cb major', () => {
+      expect(getChordNotes('Cb')).toEqual(['Cb', 'Eb', 'Gb']);
+    });
+
+    it('Cb7', () => {
+      expect(getChordNotes('Cb7')).toEqual(['Cb', 'Eb', 'Gb', 'Bbb']);
+    });
+
+    it('Cb minor', () => {
+      expect(getChordNotes('Cbmin')).toEqual(['Cb', 'Ebb', 'Gb']);
     });
   });
 });
