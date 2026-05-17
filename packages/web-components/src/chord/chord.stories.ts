@@ -10,6 +10,24 @@ const meta: Meta = {
       control: 'select',
       options: ['whole', 'half', 'quarter', 'eighth', 'sixteenth'],
     },
+    chord: {
+      control: 'select',
+      options: [
+        'Cmaj',
+        'Dmaj',
+        'Emaj',
+        'Fmaj',
+        'Gmaj',
+        'Amaj',
+        'Bmaj',
+        'Cmin',
+        'Dmin',
+        'Emin',
+        'Amin',
+        'C7',
+        'Cmaj7',
+      ],
+    },
   },
   args: {
     duration: 'quarter',
@@ -26,5 +44,17 @@ export const Default: Story = {
       <music-note note="E" duration=${args.duration}></music-note>
       <music-note note="G" duration=${args.duration}></music-note>
     </music-chord>
+  `,
+};
+
+export const ChordFromAttribute: Story = {
+  args: {
+    chord: 'Cmaj',
+    duration: 'quarter',
+  },
+  render: (args) => html`
+    <music-staff-treble>
+      <music-chord chord=${args.chord} duration=${args.duration}></music-chord>
+    </music-staff-treble>
   `,
 };

@@ -1,12 +1,15 @@
 import {
   computeInterNoteSpacing,
   computeNoteAccidentals,
+  totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
+import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
+  ChordNote,
   LetterOctave,
   NoteElementType,
   NoteOrChordElementType,
@@ -27,7 +30,6 @@ import {
   createFlatSvg,
   createSharpSvg,
   createTimeSignatureSvg,
-  totalChordAccidentalWidth,
 } from './utils';
 import {
   COMMON_ATTRIBUTES,
@@ -58,7 +60,6 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
-import { durationToFactor, factorToDuration } from './utils/theoryConsts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -614,10 +615,32 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
+    const noteStaffYCoords = new Map<NoteElementType, number>();
+    const chordStaffYCoords = new Map<ChordElementType, number[]>();
+    for (const element of elements) {
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteElement = element as NoteElementType;
+        noteStaffYCoords.set(
+          noteElement,
+          this.noteToYCoordinate(
+            noteElement.note,
+            noteElement.octave ?? undefined
+          )
+        );
+      } else if (element.nodeName === MUSIC_CHORD_NODE) {
+        const chordElement = element as ChordElementType;
+        chordStaffYCoords.set(
+          chordElement,
+          this.#resolveChordStaffYCoordinates(chordElement.notes)
+        );
+      }
+    }
+
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.#effectiveTimeSig,
-      (note, octave) => this.noteToYCoordinate(note, octave)
+      noteStaffYCoords,
+      chordStaffYCoords
     );
     this.#beamRenderer = beamRenderer;
 
@@ -660,9 +683,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         });
       } else {
         const chordElement = element as ChordElementType;
-        const staffYCoordinates = chordElement.notes.map((note) =>
-          this.noteToYCoordinate(note.value, note.octave ?? undefined)
-        );
+        const staffYCoordinates = chordStaffYCoords.get(chordElement) ?? [];
         const accidentals = chordNoteAccidentals.get(chordElement) ?? [];
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
@@ -726,6 +747,38 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         })
       );
     }
+  }
+
+  #resolveChordStaffYCoordinates(notes: ChordNote[]): number[] {
+    const result: number[] = [];
+    let previousY = Infinity;
+
+    for (const note of notes) {
+      if (note.octave !== null) {
+        const y = this.noteToYCoordinate(note.value, note.octave ?? undefined);
+        result.push(y);
+        previousY = y;
+      } else {
+        // For notes without an explicit octave, find the largest Y (lowest pitch)
+        // that is still strictly below the previous note's Y, ensuring ascending
+        // pitch (root-position close voicing).
+        const candidates: number[] = [];
+        for (const octave of this.octaves) {
+          const y = this.noteToYCoordinate(note.value, octave);
+          if (y > 0 && y < previousY) {
+            candidates.push(y);
+          }
+        }
+        const resolved =
+          candidates.length > 0
+            ? Math.max(...candidates)
+            : this.noteToYCoordinate(note.value, undefined);
+        result.push(resolved);
+        previousY = resolved;
+      }
+    }
+
+    return result;
   }
 
   // Return the y-coordinate for a given note and octave.

@@ -1,5 +1,5 @@
 export { BeamsBuilder, type NoteYPosition } from './beams';
-export { createChordSvg, totalChordAccidentalWidth } from './chord';
+export { createChordSvg } from './chord';
 export {
   createCurveSvg,
   type CurveBulge,

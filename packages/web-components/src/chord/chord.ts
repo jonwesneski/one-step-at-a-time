@@ -1,10 +1,12 @@
+import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
   ChordNote,
   ConnectorRole,
   IChordElement,
+  LetterOctave,
   NoteElementType,
 } from '../types/elements';
-import { AccidentalType, Chord, DurationType } from '../types/theory';
+import { AccidentalType, Chord, DurationType, Octave } from '../types/theory';
 import { createChordSvg } from '../utils';
 import {
   CHORD_EVENTS,
@@ -12,13 +14,19 @@ import {
   MUSIC_NOTE,
   NOTE_EVENTS,
 } from '../utils/consts';
-import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
+import {
+  MIDDLE_STAFF_Y,
+  STAFF_TRANSCRIPTION_HEIGHT,
+} from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
       return ['currentCount', 'duration', 'tie', 'slur'];
     }
+
+    static readonly #standaloneYCoordinates = generateYCoordinates('C6', 'C4');
+    static readonly #standaloneOctaves: Octave[] = [4, 5, 6];
 
     #stemUp = true;
     #stemExtension = 0;
@@ -27,6 +35,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #noteAccidentals: (AccidentalType | null | undefined)[] = [];
     #batchDepth = 0;
     #renderPending = false;
+    #childObserver: MutationObserver | null = null;
 
     constructor() {
       super();
@@ -46,8 +55,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     set chord(value: Chord | null) {
-      if (value === null) this.removeAttribute('chord');
-      else this.setAttribute('chord', value);
+      if (value === null) {
+        this.removeAttribute('chord');
+      } else {
+        this.setAttribute('chord', value);
+      }
     }
 
     get notes(): ChordNote[] {
@@ -68,10 +80,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             });
           }
         });
-      } else {
-        // todo build out notes from value: Chord
-        // like if Amaj then notes will be: A, C, E
-        // need chord formulas built out first
+      } else if (this.chord) {
+        const letterNotes = getChordNotes(this.chord);
+        letterNotes.forEach((value) => {
+          notes.push({ value, octave: null, duration: this.duration });
+        });
       }
       return notes;
     }
@@ -169,6 +182,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     connectedCallback(): void {
       this.render();
+      this.#childObserver = new MutationObserver(() => {
+        this.#scheduleRender();
+      });
+      this.#childObserver.observe(this, { childList: true });
+    }
+
+    disconnectedCallback(): void {
+      this.#childObserver?.disconnect();
+      this.#childObserver = null;
     }
 
     attributeChangedCallback(
@@ -265,18 +287,92 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           );
         });
       } else {
-        // todo: still need to properly set y/top coordinates of notes
-        // Standalone mode: slot-based rendering
+        // Standalone mode: use built-in coordinate system to render a proper chord SVG.
+        const notes = this.notes;
+
+        if (notes.length === 0) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
+          this.shadowRoot!.innerHTML = `<style>:host { display: inline-block; }</style>`;
+          return;
+        }
+
+        const standaloneYCoordinates = this.#resolveStandaloneYCoordinates();
+        const stemUp = Math.max(...standaloneYCoordinates) > MIDDLE_STAFF_Y;
+        const noteAccidentals = this.#resolveStandaloneNoteAccidentals();
+
+        const [chordSvg] = createChordSvg({
+          duration: this.duration,
+          staffYCoordinates: standaloneYCoordinates,
+          stemUp,
+          noteAccidentals,
+          noFlags: false,
+          stemExtension: 0,
+          qualifiedElementName: 'g',
+        });
+        chordSvg.setAttribute('overflow', 'visible');
+
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
         this.shadowRoot!.innerHTML = `
           <style>
-            :host { display: inline-block; }
+            :host { display: inline-block; overflow: visible; }
+            svg { overflow: visible; }
           </style>
-          <div style="position: relative; display: flex; flex-direction: column;">
-            <slot></slot>
-          </div>
         `;
+        const svg = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'svg'
+        );
+        svg.setAttribute('width', '32');
+        svg.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
+        svg.setAttribute('overflow', 'visible');
+        svg.appendChild(chordSvg);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
+        this.shadowRoot!.appendChild(svg);
       }
+    }
+
+    #resolveStandaloneYCoordinates(): number[] {
+      const result: number[] = [];
+      let previousY = Infinity;
+      const yCoordinates = ChordElement.#standaloneYCoordinates;
+      const octaves = ChordElement.#standaloneOctaves;
+
+      for (const note of this.notes) {
+        const letter = note.value[0].toUpperCase();
+        if (note.octave !== null) {
+          const y =
+            yCoordinates[`${letter}${note.octave}` as LetterOctave] ?? 0;
+          result.push(y);
+          previousY = y;
+        } else {
+          const candidates: number[] = [];
+          for (const octave of octaves) {
+            const y = yCoordinates[`${letter}${octave}` as LetterOctave];
+            if (y !== undefined && y > 0 && y < previousY) {
+              candidates.push(y);
+            }
+          }
+          const resolved =
+            candidates.length > 0
+              ? Math.max(...candidates)
+              : yCoordinates[`${letter}${octaves[0]}` as LetterOctave] ?? 0;
+          result.push(resolved);
+          previousY = resolved;
+        }
+      }
+
+      return result;
+    }
+
+    #resolveStandaloneNoteAccidentals(): (AccidentalType | null | undefined)[] {
+      return this.notes.map((note) => {
+        if (note.value.includes('#')) {
+          return 'sharp';
+        } else if (note.value.length > 1 && note.value[1] === 'b') {
+          return 'flat';
+        }
+        return null;
+      });
     }
   }
 

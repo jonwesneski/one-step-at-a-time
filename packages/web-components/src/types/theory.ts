@@ -28,6 +28,7 @@ export type LetterNote =
   | 'Bb'
   | 'Bbb'
   | 'B'
+  | 'B#'
   | 'B##'
   | 'Cb'
   | 'Cbb'
@@ -42,8 +43,10 @@ export type LetterNote =
   | 'Eb'
   | 'Ebb'
   | 'E'
+  | 'E#'
   | 'E##'
   | 'F'
+  | 'Fb'
   | 'Fbb'
   | 'F#'
   | 'F##'
@@ -65,15 +68,19 @@ type MinorType =
   | 'min(maj7)'
   | 'min9'
   | 'min11';
-type MajorType = '' | 'maj' | '6' | 'maj7' | 'maj9' | 'maj7#11';
+type MajorType = '' | 'maj' | '6' | 'maj7' | 'maj9' | 'add9' | 'maj7#11';
 
+type PowerType = '5';
 type DominantType = '7' | '7sus4' | '7b5' | '9' | '7#9' | '11' | '13';
+type SuspendedType = 'sus2' | 'sus4';
 type AugmentedType = 'aug' | '+' | '7#5';
 type DimineshedType = 'dim' | 'dim7';
-type ChordType =
+export type ChordType =
   | MinorType
   | MajorType
+  | PowerType
   | DominantType
+  | SuspendedType
   | AugmentedType
   | DimineshedType;
 

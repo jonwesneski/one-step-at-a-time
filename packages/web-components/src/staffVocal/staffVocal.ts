@@ -1,4 +1,8 @@
 import { calculateStaffVocalMinWidth } from '../rules/staffWidth';
+import {
+  generateKeySignatureYCoordinates,
+  generateYCoordinates,
+} from '../rules/theoryHelpers';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
   KeySignatureYCoordinates,
@@ -19,10 +23,6 @@ import {
   createTreble8ClefSvg,
   createTrebleClefSvg,
 } from '../utils/svgCreator/clefs';
-import {
-  generateKeySignatureYCoordinates,
-  generateYCoordinates,
-} from '../utils/theoryHelpers';
 import type { MusicLyricsElement } from './lyrics';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
