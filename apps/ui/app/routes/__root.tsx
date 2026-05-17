@@ -1,10 +1,10 @@
 import {
   HeadContent,
-  Link,
   Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router';
+import { NavBar } from '../components/NavBar';
 import appCss from '../globals.css?url';
 
 export const Route = createRootRoute({
@@ -35,17 +35,7 @@ function Root() {
       </head>
       <body className="min-h-screen flex flex-col bg-zinc-50 font-sans">
         <header className="flex items-center gap-4 border-b border-zinc-200 bg-white px-6 py-4">
-          <nav>
-            <Link to="/">
-              <span className="flex items-center justify-center h-7 w-7 rounded-full border border-zinc-900">
-                <img
-                  src="/logo.svg"
-                  alt="One Step at a Time"
-                  className="h-5 w-5"
-                />
-              </span>
-            </Link>
-          </nav>
+          <NavBar />
           <input
             type="text"
             placeholder="Search..."
