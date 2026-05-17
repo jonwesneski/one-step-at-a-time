@@ -615,10 +615,32 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
     const measureDuration = beatsInMeasure / beatType;
 
+    const noteStaffYCoords = new Map<NoteElementType, number>();
+    const chordStaffYCoords = new Map<ChordElementType, number[]>();
+    for (const element of elements) {
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteElement = element as NoteElementType;
+        noteStaffYCoords.set(
+          noteElement,
+          this.noteToYCoordinate(
+            noteElement.note,
+            noteElement.octave ?? undefined
+          )
+        );
+      } else if (element.nodeName === MUSIC_CHORD_NODE) {
+        const chordElement = element as ChordElementType;
+        chordStaffYCoords.set(
+          chordElement,
+          this.#resolveChordStaffYCoordinates(chordElement.notes)
+        );
+      }
+    }
+
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.#effectiveTimeSig,
-      (note, octave) => this.noteToYCoordinate(note, octave)
+      noteStaffYCoords,
+      chordStaffYCoords
     );
     this.#beamRenderer = beamRenderer;
 
@@ -661,9 +683,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         });
       } else {
         const chordElement = element as ChordElementType;
-        const staffYCoordinates = this.#resolveChordStaffYCoordinates(
-          chordElement.notes
-        );
+        const staffYCoordinates = chordStaffYCoords.get(chordElement) ?? [];
         const accidentals = chordNoteAccidentals.get(chordElement) ?? [];
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;

@@ -3,6 +3,8 @@
  */
 
 import '../../index';
+import { ChordElementType } from '../../types/elements';
+import { DurationType } from '../../types/theory';
 import { NOTE_SCALE } from './note';
 import { makeNote, makeChord } from '../../test-fixtures/unitHelpers';
 
@@ -528,6 +530,96 @@ describe('beams', () => {
       const B4_TOP = 50 - 3.2;
       expect(innerEdgeY(primaryBeam, stemX)).toBeLessThan(B4_TOP);
       expect(innerEdgeY(secondaryBeam, stemX)).toBeLessThan(B4_TOP);
+    });
+  });
+
+  describe('beamed chords with octave-ambiguous notes use close-voicing resolution', () => {
+    // Regression test: chords with notes that lack an explicit octave must use
+    // close-voicing resolution (same as chord rendering) when computing beam Y
+    // and stem direction. Without the fix, the simple octave-search order
+    // returned the wrong octave (e.g. E4 instead of E5), causing the wrong
+    // stem direction and a beam that floated in the middle of the stems.
+    function makeAmbiguousChord(duration: DurationType): ChordElementType {
+      const chord = document.createElement('music-chord');
+      chord.setAttribute('duration', duration);
+      // Notes without octave attribute — resolved by close-voicing logic
+      const noteA = document.createElement('music-note');
+      noteA.setAttribute('note', 'A');
+      const noteE = document.createElement('music-note');
+      noteE.setAttribute('note', 'E');
+      chord.appendChild(noteA);
+      chord.appendChild(noteE);
+      return chord as unknown as ChordElementType;
+    }
+
+    it('stem tips of both chords sit inside the beam polygon', () => {
+      const staff = document.createElement('music-staff-treble') as any;
+      staff.setAttribute('keysig', 'C');
+      staff.setAttribute('mode', 'major');
+      staff.setAttribute('time', '4/4');
+      document.body.appendChild(staff);
+
+      const chords = [
+        makeAmbiguousChord('eighth'),
+        makeAmbiguousChord('eighth'),
+      ];
+      triggerSlotChange(staff, chords);
+
+      const primaryBeam = staff.shadowRoot.querySelector('.beam-group .beam');
+      expect(primaryBeam).not.toBeNull();
+
+      // Close-voicing resolves ['A','E'] to A4 (staffY=55) and E5 (staffY=35).
+      // E5 is above the middle staff line (B4, staffY=50), so stems go DOWN and
+      // the beam must be below all noteheads.
+      const NOTE_STEM_X_OFFSET_STEM_DOWN_PX = 247 * NOTE_SCALE;
+      for (const chord of chords) {
+        const chordX = getNoteX(chord);
+        const stemX = chordX + NOTE_STEM_X_OFFSET_STEM_DOWN_PX;
+        const stem = getChordStem(chord);
+        expect(stem).not.toBeNull();
+
+        // Stem tip (y2 for stem-down) must sit within the beam polygon.
+        const extremalNoteSvg = stem!.closest('svg') as SVGElement;
+        const stemNoteY = parseFloat(extremalNoteSvg?.getAttribute('y') ?? '0');
+        const tipY =
+          stemNoteY + parseFloat(stem!.getAttribute('y2')!) * NOTE_SCALE;
+        const outer = outerEdgeY(primaryBeam!, stemX);
+        const inner = innerEdgeY(primaryBeam!, stemX);
+        expect(tipY).toBeGreaterThanOrEqual(Math.min(outer, inner) - 1);
+        expect(tipY).toBeLessThanOrEqual(Math.max(outer, inner) + 1);
+      }
+    });
+
+    it('beam outer edge is below both chord noteheads for stem-down', () => {
+      const staff = document.createElement('music-staff-treble') as any;
+      staff.setAttribute('keysig', 'C');
+      staff.setAttribute('mode', 'major');
+      staff.setAttribute('time', '4/4');
+      document.body.appendChild(staff);
+
+      const chords = [
+        makeAmbiguousChord('eighth'),
+        makeAmbiguousChord('eighth'),
+      ];
+      triggerSlotChange(staff, chords);
+
+      const primaryBeam = staff.shadowRoot.querySelector('.beam-group .beam');
+      expect(primaryBeam).not.toBeNull();
+
+      // A4 (staffY=55) notehead center is at approximately staffY - 2 = 53.
+      // E5 (staffY=35) notehead center is at approximately staffY - 2 = 33.
+      // Both noteheads must be above (smaller Y than) the beam outer edge.
+      const NOTE_STEM_X_OFFSET_STEM_DOWN_PX = 247 * NOTE_SCALE;
+      const A4_NOTEHEAD_Y = 53;
+      const E5_NOTEHEAD_Y = 33;
+
+      for (const chord of chords) {
+        const chordX = getNoteX(chord);
+        const stemX = chordX + NOTE_STEM_X_OFFSET_STEM_DOWN_PX;
+        const outer = outerEdgeY(primaryBeam!, stemX);
+        expect(outer).toBeGreaterThan(A4_NOTEHEAD_Y);
+        expect(outer).toBeGreaterThan(E5_NOTEHEAD_Y);
+      }
     });
   });
 

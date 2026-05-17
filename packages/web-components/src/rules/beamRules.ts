@@ -7,9 +7,6 @@ import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
-  Letter,
-  LetterNote,
-  Octave,
 } from '../types/theory';
 import {
   BeamsBuilder,
@@ -27,10 +24,8 @@ export { determineStemDirections };
 export function buildBeamsRenderer(
   elements: NoteOrChordElementType[],
   timeSig: [BeatsInMeasure, BeatTypeInMeasure],
-  noteToYCoordinate: (
-    note: LetterNote | Letter | 'rest',
-    octave?: Octave
-  ) => number
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -40,7 +35,8 @@ export function buildBeamsRenderer(
   const stemDirections = determineStemDirections(
     elements,
     beamsBuilder,
-    noteToYCoordinate
+    noteStaffYCoords,
+    chordStaffYCoords
   );
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
@@ -58,19 +54,14 @@ export function buildBeamsRenderer(
         return {
           y:
             STAFF_Y_PADDING +
-            noteToYCoordinate(
-              noteElement.note,
-              noteElement.octave ?? undefined
-            ) -
+            (noteStaffYCoords.get(noteElement) ?? 0) -
             yHeadOffset,
           stemUp,
         };
       }
 
       const chordElement = element as ChordElementType;
-      const staffYCoordinates = chordElement.notes.map((note) =>
-        noteToYCoordinate(note.value, note.octave ?? undefined)
-      );
+      const staffYCoordinates = chordStaffYCoords.get(chordElement) ?? [];
       const extremalStaffY = stemUp
         ? Math.max(...staffYCoordinates)
         : Math.min(...staffYCoordinates);
