@@ -1,3 +1,4 @@
+import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
   ChordNote,
   ConnectorRole,
@@ -17,7 +18,6 @@ import {
   MIDDLE_STAFF_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
 } from '../utils/notationDimensions';
-import { generateYCoordinates, getChordNotes } from '../utils/theoryHelpers';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {

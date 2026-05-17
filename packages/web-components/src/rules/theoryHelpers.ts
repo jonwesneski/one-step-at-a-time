@@ -4,7 +4,7 @@ import {
   YCoordinates,
 } from '../types/elements';
 import { Chord, ChordType, LetterNote } from '../types/theory';
-import { STAFF_LINE_SPACING } from './notationDimensions';
+import { STAFF_LINE_SPACING } from '../utils/notationDimensions';
 import {
   ChordSemitoneMap,
   ChordSemitoneMapAliases,

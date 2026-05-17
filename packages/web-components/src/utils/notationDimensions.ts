@@ -258,11 +258,11 @@ import { AccidentalType } from '../types/theory';
  * Used for collision detection and column layout when stacking accidentals on chords.
  */
 export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
-  sharp: 10,
+  'double-flat': 18,
   flat: 10,
   natural: 10,
+  sharp: 10,
   'double-sharp': 10,
-  'double-flat': 18,
 };
 
 /**
@@ -275,9 +275,9 @@ export const ACCIDENTAL_NOTE_GAP = -7;
  * Used to compute vertical clearance when stacking accidentals on chords.
  */
 export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
-  sharp: 30,
-  flat: 25,
-  natural: 30,
   'double-sharp': 10,
+  sharp: 30,
+  natural: 30,
+  flat: 25,
   'double-flat': 25,
 };

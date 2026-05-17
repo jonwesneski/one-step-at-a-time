@@ -1,9 +1,8 @@
-import { AccidentalType } from '../../types/theory';
 import {
   computeChordAccidentalPlacements,
   type AccidentalPlacementInput,
-  totalChordAccidentalWidth,
 } from '../../rules/accidentalRules';
+import { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_SYMBOL_HEIGHT,
@@ -20,8 +19,6 @@ type ChordProps = NoteProps & {
   staffYCoordinates: number[];
   noteAccidentals?: (AccidentalType | null | undefined)[];
 };
-
-export { totalChordAccidentalWidth };
 
 export const createChordSvg = ({
   duration,

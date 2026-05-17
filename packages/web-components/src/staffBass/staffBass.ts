@@ -1,3 +1,7 @@
+import {
+  generateKeySignatureYCoordinates,
+  generateYCoordinates,
+} from '../rules/theoryHelpers';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import type {
   KeySignatureYCoordinates,
@@ -6,10 +10,6 @@ import type {
 } from '../types/elements';
 import { Octave } from '../types/theory';
 import { createBassClefSvg } from '../utils/svgCreator/clefs';
-import {
-  generateKeySignatureYCoordinates,
-  generateYCoordinates,
-} from '../utils/theoryHelpers';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffBassElement extends StaffClassicalElementBase {

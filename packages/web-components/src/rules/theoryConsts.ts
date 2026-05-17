@@ -53,7 +53,7 @@ export const ChordSemitoneMap: Record<ChordType, number[]> = {
   '5': [7],
   sus2: [2, 7],
   sus4: [5, 7],
-  '': [4, 7],
+  '': [4, 7], // alias for maj
   maj: [4, 7],
   '6': [4, 7, 9],
   maj7: [4, 7, 11],
@@ -76,7 +76,7 @@ export const ChordSemitoneMap: Record<ChordType, number[]> = {
   '11': [4, 7, 10, 14, 17],
   '13': [4, 7, 10, 14, 21], // End Dominants
   aug: [4, 8],
-  '+': [4, 8],
+  '+': [4, 8], // alias for aug
   '7#5': [4, 8, 10],
   dim: [3, 6],
   dim7: [3, 6, 8],

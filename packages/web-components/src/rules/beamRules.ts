@@ -16,10 +16,8 @@ import {
 } from '../utils';
 import { MUSIC_NOTE_NODE } from '../utils/consts';
 import { STAFF_Y_PADDING } from '../utils/notationDimensions';
-import { durationToFlagCountMap } from '../utils/theoryConsts';
 import { determineStemDirections } from './stemRules';
-
-export { determineStemDirections };
+import { durationToFlagCountMap } from './theoryConsts';
 
 export function buildBeamsRenderer(
   elements: NoteOrChordElementType[],

@@ -1,9 +1,11 @@
 import {
   computeInterNoteSpacing,
   computeNoteAccidentals,
+  totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
+import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
@@ -28,7 +30,6 @@ import {
   createFlatSvg,
   createSharpSvg,
   createTimeSignatureSvg,
-  totalChordAccidentalWidth,
 } from './utils';
 import {
   COMMON_ATTRIBUTES,
@@ -59,7 +60,6 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
-import { durationToFactor, factorToDuration } from './utils/theoryConsts';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {

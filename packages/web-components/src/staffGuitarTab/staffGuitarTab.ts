@@ -1,4 +1,5 @@
 import { calculateGuitarTabMinWidth } from '../rules/staffWidth';
+import { durationToFactor } from '../rules/theoryConsts';
 import { StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
 import {
@@ -14,7 +15,6 @@ import {
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
 } from '../utils/notationDimensions';
-import { durationToFactor } from '../utils/theoryConsts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffGuitarTabElement extends StaffElementBase {
