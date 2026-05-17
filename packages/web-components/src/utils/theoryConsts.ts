@@ -1,4 +1,4 @@
-import { DurationType, LetterNote } from '../types/theory';
+import { ChordType, DurationType, LetterNote } from '../types/theory';
 
 export const durationToFlagCountMap = new Map<DurationType, number>([
   ['eighth', 1],
@@ -34,25 +34,26 @@ noteSemitoneMap.set('Cb', 2);
 // Each entry: [double-flat, flat, natural, sharp, double-sharp]
 // Indices 0→4 run from flattest to sharpest enharmonic spelling.
 export const semitoneNoteMap: Map<number, LetterNote[]> = new Map();
-semitoneNoteMap.set(0,  ['Bbb', 'A',  'A',   'A',  'G##']);
-semitoneNoteMap.set(1,  ['Bb',  'Bb', 'A#',  'A#', 'A#' ]);
-semitoneNoteMap.set(2,  ['Cb',  'Cb', 'B',   'B',  'A##']);
-semitoneNoteMap.set(3,  ['Dbb', 'C',  'C',   'B#', 'B#' ]);
-semitoneNoteMap.set(4,  ['Db',  'Db', 'C#',  'C#', 'B##']);
-semitoneNoteMap.set(5,  ['Ebb', 'D',  'D',   'D',  'C##']);
-semitoneNoteMap.set(6,  ['Eb',  'Eb', 'D#',  'D#', 'D#' ]);
-semitoneNoteMap.set(7,  ['Fb',  'Fb', 'E',   'E',  'D##']);
-semitoneNoteMap.set(8,  ['Gbb', 'F',  'F',   'E#', 'E#' ]);
-semitoneNoteMap.set(9,  ['Gb',  'Gb', 'F#',  'F#', 'E##']);
-semitoneNoteMap.set(10, ['Abb', 'G',  'G',   'G',  'F##']);
-semitoneNoteMap.set(11, ['Ab',  'Ab', 'G#',  'G#', 'G#' ]);
+semitoneNoteMap.set(0, ['Bbb', 'A', 'A', 'A', 'G##']);
+semitoneNoteMap.set(1, ['Bb', 'Bb', 'A#', 'A#', 'A#']);
+semitoneNoteMap.set(2, ['Cb', 'Cb', 'B', 'B', 'A##']);
+semitoneNoteMap.set(3, ['Dbb', 'C', 'C', 'B#', 'B#']);
+semitoneNoteMap.set(4, ['Db', 'Db', 'C#', 'C#', 'B##']);
+semitoneNoteMap.set(5, ['Ebb', 'D', 'D', 'D', 'C##']);
+semitoneNoteMap.set(6, ['Eb', 'Eb', 'D#', 'D#', 'D#']);
+semitoneNoteMap.set(7, ['Fb', 'Fb', 'E', 'E', 'D##']);
+semitoneNoteMap.set(8, ['Gbb', 'F', 'F', 'E#', 'E#']);
+semitoneNoteMap.set(9, ['Gb', 'Gb', 'F#', 'F#', 'E##']);
+semitoneNoteMap.set(10, ['Abb', 'G', 'G', 'G', 'F##']);
+semitoneNoteMap.set(11, ['Ab', 'Ab', 'G#', 'G#', 'G#']);
 
 // 1 b2 2 b3 3 4 b5 5 b6 6 b7 7
 // Semitones from root
-export const ChordSemitoneMap: Record<string, number[]> = {
+export const ChordSemitoneMap: Record<ChordType, number[]> = {
   '5': [7],
   sus2: [2, 7],
   sus4: [5, 7],
+  '': [4, 7],
   maj: [4, 7],
   '6': [4, 7, 9],
   maj7: [4, 7, 11],
@@ -75,6 +76,7 @@ export const ChordSemitoneMap: Record<string, number[]> = {
   '11': [4, 7, 10, 14, 17],
   '13': [4, 7, 10, 14, 21], // End Dominants
   aug: [4, 8],
+  '+': [4, 8],
   '7#5': [4, 8, 10],
   dim: [3, 6],
   dim7: [3, 6, 8],

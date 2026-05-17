@@ -7,6 +7,7 @@ import { calculateStaffMinWidth } from './rules/staffWidth';
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
+  ChordNote,
   LetterOctave,
   NoteElementType,
   NoteOrChordElementType,
@@ -660,8 +661,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         });
       } else {
         const chordElement = element as ChordElementType;
-        const staffYCoordinates = chordElement.notes.map((note) =>
-          this.noteToYCoordinate(note.value, note.octave ?? undefined)
+        const staffYCoordinates = this.#resolveChordStaffYCoordinates(
+          chordElement.notes
         );
         const accidentals = chordNoteAccidentals.get(chordElement) ?? [];
         chordElement.batchUpdate(() => {
@@ -726,6 +727,38 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         })
       );
     }
+  }
+
+  #resolveChordStaffYCoordinates(notes: ChordNote[]): number[] {
+    const result: number[] = [];
+    let previousY = Infinity;
+
+    for (const note of notes) {
+      if (note.octave !== null) {
+        const y = this.noteToYCoordinate(note.value, note.octave ?? undefined);
+        result.push(y);
+        previousY = y;
+      } else {
+        // For notes without an explicit octave, find the largest Y (lowest pitch)
+        // that is still strictly below the previous note's Y, ensuring ascending
+        // pitch (root-position close voicing).
+        const candidates: number[] = [];
+        for (const octave of this.octaves) {
+          const y = this.noteToYCoordinate(note.value, octave);
+          if (y > 0 && y < previousY) {
+            candidates.push(y);
+          }
+        }
+        const resolved =
+          candidates.length > 0
+            ? Math.max(...candidates)
+            : this.noteToYCoordinate(note.value, undefined);
+        result.push(resolved);
+        previousY = resolved;
+      }
+    }
+
+    return result;
   }
 
   // Return the y-coordinate for a given note and octave.

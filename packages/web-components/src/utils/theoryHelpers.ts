@@ -3,7 +3,7 @@ import {
   LetterOctave,
   YCoordinates,
 } from '../types/elements';
-import { Chord, LetterNote } from '../types/theory';
+import { Chord, ChordType, LetterNote } from '../types/theory';
 import { STAFF_LINE_SPACING } from './notationDimensions';
 import {
   ChordSemitoneMap,
@@ -22,7 +22,7 @@ export const getChordNotes = (chord: Chord) => {
     root += chord[startIndex];
     startIndex += 1;
   }
-  const chordSignature = chord.slice(startIndex, chord.length);
+  const chordSignature = chord.slice(startIndex, chord.length) as ChordType;
   const semitones =
     ChordSemitoneMap[chordSignature] ??
     ChordSemitoneMap[ChordSemitoneMapAliases[chordSignature]];
@@ -31,11 +31,25 @@ export const getChordNotes = (chord: Chord) => {
 
 // Indices 0→4 mirror semitoneNoteMap: double-flat, flat, natural, sharp, double-sharp.
 const enharmonicIndex: Partial<Record<LetterNote, 0 | 1 | 2 | 3 | 4>> = {
-  Cb: 0, Fb: 0,
-  Bb: 1, Eb: 1, Ab: 1, Db: 1, Gb: 1,
-  C: 2, D: 2, E: 2, F: 2, G: 2, A: 2, B: 2,
-  'F#': 3, 'C#': 3, 'G#': 3,
-  'D#': 4, 'A#': 4,
+  Cb: 0,
+  Fb: 0,
+  Bb: 1,
+  Eb: 1,
+  Ab: 1,
+  Db: 1,
+  Gb: 1,
+  C: 2,
+  D: 2,
+  E: 2,
+  F: 2,
+  G: 2,
+  A: 2,
+  B: 2,
+  'F#': 3,
+  'C#': 3,
+  'G#': 3,
+  'D#': 4,
+  'A#': 4,
 };
 export const getNotes = (root: LetterNote, semitones: number[]) => {
   const notes: LetterNote[] = [root];
@@ -46,7 +60,9 @@ export const getNotes = (root: LetterNote, semitones: number[]) => {
       const position = (rootPosition + s) % 12;
       const possibleNotes = semitoneNoteMap.get(position);
       if (possibleNotes) {
-        notes.push(possibleNotes[choiceIndex] ?? possibleNotes[2] ?? possibleNotes[0]);
+        notes.push(
+          possibleNotes[choiceIndex] ?? possibleNotes[2] ?? possibleNotes[0]
+        );
       } else {
         throw new Error('possible note not found');
       }

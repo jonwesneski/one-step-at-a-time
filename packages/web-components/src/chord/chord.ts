@@ -13,6 +13,7 @@ import {
   NOTE_EVENTS,
 } from '../utils/consts';
 import { STAFF_TRANSCRIPTION_HEIGHT } from '../utils/notationDimensions';
+import { getChordNotes } from '../utils/theoryHelpers';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
@@ -46,8 +47,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     set chord(value: Chord | null) {
-      if (value === null) this.removeAttribute('chord');
-      else this.setAttribute('chord', value);
+      if (value === null) {
+        this.removeAttribute('chord');
+      } else {
+        this.setAttribute('chord', value);
+      }
     }
 
     get notes(): ChordNote[] {
@@ -68,10 +72,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             });
           }
         });
-      } else {
-        // todo build out notes from value: Chord
-        // like if Amaj then notes will be: A, C, E
-        // need chord formulas built out first
+      } else if (this.chord) {
+        const letterNotes = getChordNotes(this.chord);
+        letterNotes.forEach((value) => {
+          notes.push({ value, octave: null, duration: this.duration });
+        });
       }
       return notes;
     }

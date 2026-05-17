@@ -248,3 +248,36 @@ export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
  * in non-first measures where describeEndX ≈ 0.
  */
 export const NOTES_AREA_LEFT_MARGIN = 2;
+
+// ─── Accidental symbol dimensions ────────────────────────────────────────────
+
+import { AccidentalType } from '../types/theory';
+
+/**
+ * Rendered pixel width of each accidental symbol type.
+ * Used for collision detection and column layout when stacking accidentals on chords.
+ */
+export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
+  sharp: 10,
+  flat: 10,
+  natural: 10,
+  'double-sharp': 10,
+  'double-flat': 18,
+};
+
+/**
+ * Gap (px) between an accidental symbol and its notehead (negative = overlap).
+ */
+export const ACCIDENTAL_NOTE_GAP = -7;
+
+/**
+ * Rendered pixel height of each accidental symbol type.
+ * Used to compute vertical clearance when stacking accidentals on chords.
+ */
+export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
+  sharp: 30,
+  flat: 25,
+  natural: 30,
+  'double-sharp': 10,
+  'double-flat': 25,
+};
