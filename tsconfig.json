@@ -6,11 +6,8 @@
     {
       "path": "./packages/web-components"
     },
-    {
+{
       "path": "./apps/ui"
-    },
-    {
-      "path": "./apps/ui2"
     }
   ],
   "ts-node": {
