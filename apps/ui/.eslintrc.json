@@ -1,13 +1,19 @@
 {
   "root": true,
-  "extends": ["next/core-web-vitals", "next/typescript"],
-  "ignorePatterns": [
-    ".next/",
-    "out/",
-    "build/",
-    "next-env.d.ts",
-    "src/types/next-generated-modules.d.ts",
-    "src/types/routes.d.ts",
-    "src/types/validator.ts"
-  ]
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint", "react", "react-hooks"],
+  "extends": [
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended"
+  ],
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off"
+  },
+  "ignorePatterns": [".output/", "node_modules/"]
 }

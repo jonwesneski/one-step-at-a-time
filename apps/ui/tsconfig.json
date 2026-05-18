@@ -1,25 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
+    "target": "ES2020",
     "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "typeRoots": ["./types", "../../node_modules/@types"],
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "composite": false,
+    "declarationMap": false,
+    "types": ["vite/client"],
     "paths": {
       "@/*": ["./*"],
       "@one-step-at-a-time/web-components": [
@@ -30,22 +20,17 @@
       ]
     }
   },
+  "references": [{ "path": "../../packages/web-components" }],
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.d.ts",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    "../../packages/web-components/src/**/*",
-    "../../packages/web-components/src/**/*.d.ts",
-    "../../packages/web-components/jest.setup.ts"
+    "app/**/*",
+    "vite.config.ts",
+    "../../packages/web-components/src/**/*.ts",
+    "../../packages/web-components/src/**/*.tsx"
   ],
-  "exclude": ["node_modules"],
-  "references": [
-    {
-      "path": "../../packages/web-components"
-    }
+  "exclude": [
+    "../../packages/web-components/src/**/*.browser-test.ts",
+    "../../packages/web-components/src/**/*.test.ts",
+    "../../packages/web-components/src/**/*.spec.ts",
+    "../../packages/web-components/src/**/*.stories.ts"
   ]
 }

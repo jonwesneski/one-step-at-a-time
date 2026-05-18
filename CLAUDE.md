@@ -5,8 +5,7 @@ Nx-managed monorepo with two apps and one shared library.
 ```
 one-step-at-a-time/
 ├── apps/
-│   ├── ui/              # Next.js app (React 19, Tailwind) — primary UI consuming web-components
-│   └── ui2/             # Vite + TanStack Router app — alternative SSR architecture
+│   └── ui/              # Vite + TanStack Router app — primary UI consuming web-components
 ├── packages/
 │   └── web-components/  # Framework-agnostic Web Components library for SVG music notation
 ├── tools/               # debugging/experimental utilities
