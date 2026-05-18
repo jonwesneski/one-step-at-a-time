@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { MouseEventHandler, useEffect, useRef, useState } from 'react';
 
 export function NavBar() {
   const [open, setOpen] = useState(false);
@@ -34,30 +34,38 @@ export function NavBar() {
           }
         >
           <div className="bg-white border border-zinc-200 rounded-tl-2xl rounded-tr-md rounded-br-md rounded-bl-md shadow-sm">
-            <Link
-              to="/"
-              onClick={() => setOpen(false)}
-              className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
+            <NavLink to="/" onClick={() => setOpen(false)}>
               Home
-            </Link>
-            <Link
-              to="/sample"
-              onClick={() => setOpen(false)}
-              className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
+            </NavLink>
+            <NavLink to="/sample" onClick={() => setOpen(false)}>
               Sample
-            </Link>
-            <Link
-              to="/standalone"
-              onClick={() => setOpen(false)}
-              className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
+            </NavLink>
+            <NavLink to="/standalone" onClick={() => setOpen(false)}>
               Standalone
-            </Link>
+            </NavLink>
           </div>
         </div>
       </div>
     </nav>
+  );
+}
+
+function NavLink({
+  to,
+  onClick,
+  children,
+}: {
+  to: string;
+  onClick: MouseEventHandler<HTMLAnchorElement> | undefined;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
+    >
+      {children}
+    </Link>
   );
 }
