@@ -6,7 +6,7 @@
     {
       "path": "./packages/web-components"
     },
-{
+    {
       "path": "./apps/ui"
     }
   ],
