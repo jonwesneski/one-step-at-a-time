@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { useEffect, useRef, useState } from 'react';
 
 export function NavBar() {
   const [open, setOpen] = useState(false);
@@ -16,42 +16,45 @@ export function NavBar() {
   }, []);
 
   return (
-    <nav ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)}>
+    <nav ref={ref} className="relative z-0">
+      <button onClick={() => setOpen((o) => !o)} className="relative z-10">
         <span className="flex items-center justify-center h-7 w-7 rounded-full border border-zinc-900">
           <img src="/logo.svg" alt="One Step at a Time" className="h-5 w-5" />
         </span>
       </button>
-      <div className="absolute top-full left-0 mt-2">
+      <div className="absolute top-0 left-0 z-1">
         <div
-          className={`overflow-hidden transition-[width] duration-200 ${open ? 'w-36' : 'w-0'}`}
+          className={`overflow-hidden transition-[width,max-height] duration-200 ${
+            open ? 'w-36 max-h-40' : 'w-0 max-h-7'
+          }`}
+          style={
+            open
+              ? { transitionDelay: '0ms, 200ms' }
+              : { transitionDelay: '0ms, 0ms' }
+          }
         >
-          <div
-            className={`overflow-hidden transition-[max-height] duration-200 delay-200 ${open ? 'max-h-40' : 'max-h-0'}`}
-          >
-            <div className="bg-white border border-zinc-200 rounded-md shadow-sm py-1">
-              <Link
-                to="/"
-                onClick={() => setOpen(false)}
-                className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-              >
-                Home
-              </Link>
-              <Link
-                to="/sample"
-                onClick={() => setOpen(false)}
-                className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-              >
-                Sample
-              </Link>
-              <Link
-                to="/standalone"
-                onClick={() => setOpen(false)}
-                className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-              >
-                Standalone
-              </Link>
-            </div>
+          <div className="bg-white border border-zinc-200 rounded-tl-2xl rounded-tr-md rounded-br-md rounded-bl-md shadow-sm">
+            <Link
+              to="/"
+              onClick={() => setOpen(false)}
+              className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
+            >
+              Home
+            </Link>
+            <Link
+              to="/sample"
+              onClick={() => setOpen(false)}
+              className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
+            >
+              Sample
+            </Link>
+            <Link
+              to="/standalone"
+              onClick={() => setOpen(false)}
+              className="h-7 flex items-center pl-8 text-sm text-zinc-700 hover:bg-zinc-100"
+            >
+              Standalone
+            </Link>
           </div>
         </div>
       </div>

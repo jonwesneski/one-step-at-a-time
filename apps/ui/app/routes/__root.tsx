@@ -34,7 +34,7 @@ function Root() {
         <HeadContent />
       </head>
       <body className="min-h-screen flex flex-col bg-zinc-50 font-sans">
-        <header className="flex items-center gap-4 border-b border-zinc-200 bg-white px-6 py-4">
+        <header className="flex items-center gap-4 border-b border-zinc-200 bg-white px-6 py-4 z-10">
           <NavBar />
           <input
             type="text"
