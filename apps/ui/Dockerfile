@@ -10,8 +10,8 @@ WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY tsconfig.base.json tsconfig.json ./
 
-# Copy package.json files for all workspace packages needed by ui2
-COPY apps/ui2/package.json ./apps/ui2/
+# Copy package.json files for all workspace packages needed by ui
+COPY apps/ui/package.json ./apps/ui/
 COPY packages/web-components/package.json ./packages/web-components/
 
 # Install all dependencies
@@ -23,21 +23,21 @@ RUN pnpm install --frozen-lockfile
 # Copy source for web-components dependency
 COPY packages/web-components/ ./packages/web-components/
 
-# Copy ui2 source
-COPY apps/ui2/ ./apps/ui2/
+# Copy ui source
+COPY apps/ui/ ./apps/ui/
 
 # Build the app
-WORKDIR /app/apps/ui2
+WORKDIR /app/apps/ui
 RUN pnpm run build
 
 # Runtime stage
 FROM nginx:alpine AS runtime
 
 # Replace default nginx config with our SPA config
-COPY apps/ui2/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/ui/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy static build output, replacing nginx's default welcome page
-COPY --from=builder /app/apps/ui2/dist/client /usr/share/nginx/html
+COPY --from=builder /app/apps/ui/dist/client /usr/share/nginx/html
 
 EXPOSE 3000
 
