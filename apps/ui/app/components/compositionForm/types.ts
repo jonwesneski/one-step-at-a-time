@@ -2,26 +2,27 @@ import type {
   DurationType,
   LetterNote,
   Mode,
-  Note,
 } from '@one-step-at-a-time/web-components';
 
 export type StaffType = 'treble' | 'bass';
 
-export type NoteEntry = {
+export type LetterNoteEntry = {
   id: string;
   type: 'note';
-  value: Note;
+  value: LetterNote;
   duration: DurationType;
 };
 export type ChordEntry = {
   id: string;
   type: 'chord';
-  notes: Note[];
+  notes: LetterNote[];
   duration: DurationType;
 };
-export type MusicEntry = NoteEntry | ChordEntry;
-// Entry shape before an id is assigned (used when constructing entries in NoteChordInput)
-export type DraftMusicEntry = Omit<NoteEntry, 'id'> | Omit<ChordEntry, 'id'>;
+export type MusicEntry = LetterNoteEntry | ChordEntry;
+// Entry shape before an id is assigned (used when constructing entries in LetterNoteChordInput)
+export type DraftMusicEntry =
+  | Omit<LetterNoteEntry, 'id'>
+  | Omit<ChordEntry, 'id'>;
 
 // Flat normalized nodes
 export type NormalizedMeasure = { id: string; staffIds: string[] };
@@ -79,7 +80,7 @@ export const TIME_SIGNATURE_OPTIONS = [
 
 export const MODE_OPTIONS: Mode[] = ['major', 'minor'];
 
-export const NOTE_OPTIONS: Note[] = [
+export const NOTE_OPTIONS: LetterNote[] = [
   'A',
   'A#',
   'Bb',
@@ -97,7 +98,6 @@ export const NOTE_OPTIONS: Note[] = [
   'G',
   'G#',
   'Ab',
-  'rest',
 ];
 
 export const DURATION_OPTIONS: DurationType[] = [

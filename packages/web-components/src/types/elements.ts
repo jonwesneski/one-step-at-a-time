@@ -4,7 +4,6 @@ import {
   DurationType,
   Letter,
   LetterNote,
-  Note,
   Octave,
 } from './theory';
 
@@ -14,7 +13,7 @@ export type ConnectorRole = 'start' | 'end';
 
 export interface INoteElement {
   duration: DurationType;
-  note: Note;
+  note: LetterNote;
   octave: Octave | null;
   stemUp: boolean;
   stemExtension: number;

@@ -67,18 +67,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.querySelectorAll(MUSIC_NOTE);
       const notes: ChordNote[] = [];
       if (noteElements.length) {
-        noteElements.forEach((node, i) => {
-          if (node.note === 'rest') {
-            console.error(
-              `Rests are not allowed in chords; note at index ${i} is a rest`
-            );
-          } else {
-            notes.push({
-              value: node.note,
-              octave: node.octave,
-              duration: node.duration,
-            });
-          }
+        noteElements.forEach((node) => {
+          notes.push({
+            value: node.note,
+            octave: node.octave,
+            duration: node.duration,
+          });
         });
       } else if (this.chord) {
         const letterNotes = getChordNotes(this.chord);

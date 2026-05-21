@@ -13,7 +13,6 @@ import {
   LetterOctave,
   NoteChordOrRestElementType,
   NoteElementType,
-  RestElementType,
   YCoordinates,
 } from './types/elements';
 import {
