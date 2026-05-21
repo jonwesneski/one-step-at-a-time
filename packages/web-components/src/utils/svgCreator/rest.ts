@@ -87,53 +87,51 @@ function createRect(y: number): SVGRectElement {
   return rect;
 }
 
-// Quarter rest: classic zigzag curved stroke.
-// Occupies the full staff height (top stave-space to bottom stave-space).
-// Rendered as a filled path approximating the standard crotchet rest glyph.
 function createQuarterRestPath(): SVGPathElement {
   const path = document.createElementNS(SVG_NS, 'path');
-  const x = X_CENTER;
   const top = Y_CENTER - SPACE * 2;
   const bottom = Y_CENTER + SPACE * 2;
-  const sw = 30; // stroke width in coord units
+  const S = (bottom - top) / 296;
+  const sx = X_CENTER + 42.3 * S;
+  const sy = top + 75 * S;
 
-  // The quarter rest is a descending zigzag with a flag-hook at the bottom.
-  // Points (approximate standard engraving):
-  //   Start near top-right, sweep left-down, curve right-down, end with a hook bottom-left.
   path.setAttribute(
     'd',
-    `M${x + 60},${top}
-     C${x + 120},${top + SPACE * 0.6}
-       ${x - 60},${top + SPACE * 0.9}
-       ${x + 80},${top + SPACE * 1.4}
-     C${x + 160},${top + SPACE * 1.8}
-       ${x - 80},${top + SPACE * 2.3}
-       ${x + 40},${top + SPACE * 2.8}
-     C${x + 80},${top + SPACE * 3.2}
-       ${x - 40},${top + SPACE * 3.5}
-       ${x - 20},${bottom}
-     C${x - 80},${bottom - SPACE * 0.3}
-       ${x - 100},${bottom - SPACE * 0.6}
-       ${x - 60},${bottom - SPACE * 1.0}
-     C${x - 20},${bottom - SPACE * 1.3}
-       ${x + 20},${bottom - SPACE * 1.5}
-       ${x - 10},${bottom - SPACE * 1.9}
-     L${x - 10 - sw},${bottom - SPACE * 1.9}
-     C${x + 20 - sw},${bottom - SPACE * 1.5}
-       ${x - 20 - sw},${bottom - SPACE * 1.3}
-       ${x - 60 - sw},${bottom - SPACE * 1.0}
-     C${x - 100 - sw},${bottom - SPACE * 0.6}
-       ${x - 80 - sw},${bottom - SPACE * 0.3}
-       ${x - 20 - sw},${bottom}
-     C${x - 40 - sw},${bottom - SPACE * 3.5}
-       ${x + 80 - sw},${bottom - SPACE * 3.2}
-       ${x + 40 - sw},${bottom - SPACE * 2.8}
-     C${x - 80 - sw},${bottom - SPACE * 2.3}
-       ${x + 160 - sw},${bottom - SPACE * 1.8}
-       ${x + 80 - sw},${top + SPACE * 1.4}
-     C${x - 60 - sw},${top + SPACE * 0.9}
-       ${x + 120 - sw},${top + SPACE * 0.6}
-       ${x + 60 - sw},${top}
+    `M${sx},${sy}
+     C${sx + 0 * S},${sy + 18.812 * S}
+       ${sx - 37.624 * S},${sy + 47.03 * S}
+       ${sx - 37.624 * S},${sy + 84.655 * S}
+     C${sx - 37.624 * S},${sy + 98.764 * S}
+       ${sx - 9.406 * S},${sy + 141.091 * S}
+       ${sx + 9.406 * S},${sy + 164.607 * S}
+     C${sx + 0 * S},${sy + 159.904 * S}
+       ${sx - 9.406 * S},${sy + 155.201 * S}
+       ${sx - 23.515 * S},${sy + 155.201 * S}
+     C${sx - 51.733 * S},${sy + 155.201 * S}
+       ${sx - 61.139 * S},${sy + 178.716 * S}
+       ${sx - 61.139 * S},${sy + 192.825 * S}
+     C${sx - 61.139 * S},${sy + 202.231 * S}
+       ${sx - 51.733 * S},${sy + 211.637 * S}
+       ${sx - 47.03 * S},${sy + 221.043 * S}
+     C${sx - 75.248 * S},${sy + 202.231 * S}
+       ${sx - 94.06 * S},${sy + 183.419 * S}
+       ${sx - 94.06 * S},${sy + 164.607 * S}
+     C${sx - 94.06 * S},${sy + 117.577 * S}
+       ${sx - 61.938 * S},${sy + 134.037 * S}
+       ${sx - 38.423 * S},${sy + 124.631 * S}
+     C${sx - 61.938 * S},${sy + 101.116 * S}
+       ${sx - 84.654 * S},${sy + 65.843 * S}
+       ${sx - 84.654 * S},${sy + 51.734 * S}
+     C${sx - 84.654 * S},${sy + 42.328 * S}
+       ${sx - 56.436 * S},${sy + 9.407 * S}
+       ${sx - 47.03 * S},${sy - 14.108 * S}
+     L${sx - 47.03 * S},${sy - 28.217 * S}
+     C${sx - 47.03 * S},${sy - 42.326 * S}
+       ${sx - 56.436 * S},${sy - 61.138 * S}
+       ${sx - 61.139 * S},${sy - 75.247 * S}
+     C${sx - 42.327 * S},${sy - 51.732 * S}
+       ${sx + 0 * S},${sy - 9.404 * S}
+       ${sx + 0 * S},${sy + 0.002 * S}
      Z`
   );
   path.setAttribute('fill', 'currentColor');
