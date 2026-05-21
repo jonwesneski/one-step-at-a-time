@@ -36,6 +36,47 @@ const WHOLE_REST_Y = Math.round(Y_CENTER - SPACE / 2);
 // The centre line is at Y_CENTER. The rectangle sits above it, so its bottom edge is at the line.
 const HALF_REST_Y = Math.round(Y_CENTER - REST_RECT_HEIGHT);
 
+export type RestProps = {
+  duration: DurationType;
+};
+export const createRestSvg = ({
+  duration,
+}: RestProps): [SVGSVGElement, number] => {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('xmlns', SVG_NS);
+  svg.classList.add('rest');
+  svg.dataset.duration = duration;
+  svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
+  svg.setAttribute('height', `${NOTE_SVG_HEIGHT}`);
+  svg.setAttribute('overflow', 'visible');
+
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.setAttribute('transform', `scale(${NOTE_SCALE})`);
+
+  if (duration === 'whole') {
+    g.appendChild(createRect(WHOLE_REST_Y));
+  } else if (duration === 'half') {
+    g.appendChild(createRect(HALF_REST_Y));
+  } else if (duration === 'quarter') {
+    g.appendChild(createQuarterRestPath());
+  } else if (duration === 'eighth') {
+    g.appendChild(createHookedRestGroup(1));
+  } else if (duration === 'sixteenth') {
+    g.appendChild(createHookedRestGroup(2));
+  } else if (duration === 'thirtysecond') {
+    g.appendChild(createHookedRestGroup(3));
+  } else if (duration === 'sixtyfourth') {
+    g.appendChild(createHookedRestGroup(4));
+  } else {
+    // hundredtwentyeighth
+    g.appendChild(createHookedRestGroup(5));
+  }
+
+  svg.appendChild(g);
+
+  return [svg, REST_Y_SVG_CENTER];
+};
+
 function createRect(y: number): SVGRectElement {
   const rect = document.createElementNS(SVG_NS, 'rect');
   rect.setAttribute('x', String(Math.round(X_CENTER - REST_RECT_WIDTH / 2)));
@@ -142,45 +183,3 @@ function createHookedRestGroup(hookCount: number): SVGGElement {
   }
   return group;
 }
-
-export type RestProps = {
-  duration: DurationType;
-};
-
-export const createRestSvg = ({
-  duration,
-}: RestProps): [SVGSVGElement, number] => {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('xmlns', SVG_NS);
-  svg.classList.add('rest');
-  svg.dataset.duration = duration;
-  svg.setAttribute('width', `${NOTE_SVG_WIDTH}`);
-  svg.setAttribute('height', `${NOTE_SVG_HEIGHT}`);
-  svg.setAttribute('overflow', 'visible');
-
-  const g = document.createElementNS(SVG_NS, 'g');
-  g.setAttribute('transform', `scale(${NOTE_SCALE})`);
-
-  if (duration === 'whole') {
-    g.appendChild(createRect(WHOLE_REST_Y));
-  } else if (duration === 'half') {
-    g.appendChild(createRect(HALF_REST_Y));
-  } else if (duration === 'quarter') {
-    g.appendChild(createQuarterRestPath());
-  } else if (duration === 'eighth') {
-    g.appendChild(createHookedRestGroup(1));
-  } else if (duration === 'sixteenth') {
-    g.appendChild(createHookedRestGroup(2));
-  } else if (duration === 'thirtysecond') {
-    g.appendChild(createHookedRestGroup(3));
-  } else if (duration === 'sixtyfourth') {
-    g.appendChild(createHookedRestGroup(4));
-  } else {
-    // hundredtwentyeighth
-    g.appendChild(createHookedRestGroup(5));
-  }
-
-  svg.appendChild(g);
-
-  return [svg, REST_Y_SVG_CENTER];
-};
