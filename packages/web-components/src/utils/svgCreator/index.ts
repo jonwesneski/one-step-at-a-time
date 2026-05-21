@@ -16,5 +16,6 @@ export {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from './note';
+export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
 export { createSharpSvg } from './sharp';
 export { createTimeSignatureSvg } from './timeSignature';

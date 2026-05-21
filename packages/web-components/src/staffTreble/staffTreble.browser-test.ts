@@ -350,3 +350,146 @@ test.describe('music-staff-treble responsive layout', () => {
     expect(narrow.count).toBe(0);
   });
 });
+
+test.describe('music-staff-treble rests', () => {
+  test('rest elements position left-to-right among pitched notes', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '800px';
+      const staff = document.createElement('music-staff-treble');
+      const noteA = document.createElement('music-note');
+      noteA.setAttribute('note', 'C4');
+      noteA.setAttribute('duration', 'quarter');
+      const rest = document.createElement('music-rest');
+      rest.setAttribute('duration', 'quarter');
+      const noteB = document.createElement('music-note');
+      noteB.setAttribute('note', 'E4');
+      noteB.setAttribute('duration', 'quarter');
+      staff.appendChild(noteA);
+      staff.appendChild(rest);
+      staff.appendChild(noteB);
+      host.appendChild(staff);
+    });
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const lefts = await page.evaluate(() => {
+      const notes = Array.from(
+        document.querySelectorAll('music-note, music-rest')
+      );
+      return notes.map((n) => n.getBoundingClientRect().left);
+    });
+    expect(lefts.length).toBe(3);
+    for (let i = 1; i < lefts.length; i++) {
+      expect(lefts[i]).toBeGreaterThan(lefts[i - 1]);
+    }
+  });
+
+  test('rest element renders a rest SVG in the shadow DOM', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '800px';
+      const staff = document.createElement('music-staff-treble');
+      const rest = document.createElement('music-rest');
+      rest.setAttribute('duration', 'whole');
+      staff.appendChild(rest);
+      host.appendChild(staff);
+    });
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const hasRestSvg = await page.evaluate(() => {
+      const restEl = document.querySelector('music-rest');
+      if (restEl === null || restEl.shadowRoot === null) {
+        return false;
+      }
+      return restEl.shadowRoot.querySelector('svg.rest') !== null;
+    });
+    expect(hasRestSvg).toBe(true);
+  });
+
+  test('eighth rest alongside eighth notes produces no beams for the rest', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '800px';
+      const staff = document.createElement('music-staff-treble');
+      const noteA = document.createElement('music-note');
+      noteA.setAttribute('note', 'C4');
+      noteA.setAttribute('duration', 'eighth');
+      const noteB = document.createElement('music-note');
+      noteB.setAttribute('note', 'D4');
+      noteB.setAttribute('duration', 'eighth');
+      const rest = document.createElement('music-rest');
+      rest.setAttribute('duration', 'eighth');
+      const noteC = document.createElement('music-note');
+      noteC.setAttribute('note', 'E4');
+      noteC.setAttribute('duration', 'eighth');
+      staff.appendChild(noteA);
+      staff.appendChild(noteB);
+      staff.appendChild(rest);
+      staff.appendChild(noteC);
+      host.appendChild(staff);
+    });
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const beams = await readBeamShapes(page);
+    // The rest breaks the beam run — each pair of eighths before/after the rest
+    // may form their own beam, but the rest itself must not be beamed.
+    // We simply verify that no beam spans across all 4 elements (width < full staff).
+    const staffWidth = await page.evaluate(() => {
+      const staff = document.querySelector('music-staff-treble');
+      return staff?.getBoundingClientRect().width ?? 0;
+    });
+    if (beams.firstBBox !== null) {
+      expect(beams.firstBBox.width).toBeLessThan(staffWidth * 0.8);
+    }
+  });
+
+  test('standalone treble staff with rest children renders without error', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '600px';
+      const staff = document.createElement('music-staff-treble');
+      const rest = document.createElement('music-rest');
+      rest.setAttribute('duration', 'half');
+      staff.appendChild(rest);
+      host.appendChild(staff);
+    });
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const staffExists = await page.evaluate(
+      () => document.querySelector('music-staff-treble') !== null
+    );
+    expect(staffExists).toBe(true);
+  });
+});

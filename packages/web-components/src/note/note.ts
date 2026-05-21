@@ -164,6 +164,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
+      this.shadowRoot!.innerHTML = `
+        <style>
+          :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
+        </style>
+      `;
+
       let accidental: AccidentalType | undefined;
       if (this.#showAccidental === undefined) {
         const suffix = this.note.slice(1);
@@ -188,12 +195,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         noStem: this.#noStem,
         accidental,
       });
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
-      this.shadowRoot!.innerHTML = `
-        <style>
-          :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
-        </style>
-      `;
+
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.appendChild(noteSvg);
 

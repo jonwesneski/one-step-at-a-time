@@ -15,8 +15,8 @@
  */
 import {
   ChordElementType,
+  NoteChordOrRestElementType,
   NoteElementType,
-  NoteOrChordElementType,
 } from '../types/elements';
 import { AccidentalType, LetterNote, Mode } from '../types/theory';
 import { MUSIC_NOTE_NODE } from '../utils/consts';
@@ -89,7 +89,7 @@ export function computeInterNoteSpacing(
 // ─── Per-measure orchestration ─────────────────────────────────────────────────
 
 export function computeNoteAccidentals(
-  elements: NoteOrChordElementType[],
+  elements: NoteChordOrRestElementType[],
   keySig: LetterNote,
   mode: Mode
 ): {
@@ -111,9 +111,6 @@ export function computeNoteAccidentals(
   for (const element of elements) {
     if (element.nodeName === MUSIC_NOTE_NODE) {
       const noteElement = element as NoteElementType;
-      if (noteElement.note === 'rest') {
-        continue;
-      }
       if (noteElement.tie === 'end') {
         noteShowAccidentals.set(noteElement, null);
         continue;

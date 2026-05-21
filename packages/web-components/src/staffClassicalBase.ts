@@ -11,8 +11,9 @@ import {
   ChordElementType,
   ChordNote,
   LetterOctave,
+  NoteChordOrRestElementType,
   NoteElementType,
-  NoteOrChordElementType,
+  RestElementType,
   YCoordinates,
 } from './types/elements';
 import {
@@ -38,6 +39,7 @@ import {
   MUSIC_MEASURE,
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
+  MUSIC_REST_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -47,6 +49,7 @@ import {
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
+  MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
   STAFF_TRANSCRIPTION_HEIGHT,
@@ -60,6 +63,7 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
+import { REST_Y_SVG_CENTER } from './utils/svgCreator/rest';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -81,7 +85,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
-  #currentElements: NoteOrChordElementType[] = [];
+  #currentElements: NoteChordOrRestElementType[] = [];
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
@@ -579,8 +583,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const assignedElements = slot
       .assignedElements({ flatten: true })
       .filter(
-        (e) => e.nodeName === MUSIC_NOTE_NODE || e.nodeName === MUSIC_CHORD_NODE
-      ) as NoteOrChordElementType[];
+        (e) =>
+          e.nodeName === MUSIC_NOTE_NODE ||
+          e.nodeName === MUSIC_CHORD_NODE ||
+          e.nodeName === MUSIC_REST_NODE
+      ) as NoteChordOrRestElementType[];
 
     this.#renderNotes(assignedElements);
 
@@ -604,7 +611,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // });
   }
 
-  #renderNotes(elements: NoteOrChordElementType[]) {
+  #renderNotes(elements: NoteChordOrRestElementType[]) {
     // Cancel any in-progress drag before clearing rendered content
     this.#noteTimingDragHandler?.cancelDrag();
 
@@ -651,7 +658,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#effectiveMode
       );
 
-    // Set rendering properties on each element (triggers their self-render via rAF)
+    // Set rendering properties on each element
+    // (triggers their self-render via requestAnimationFrame)
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -673,7 +681,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const isBeamed = beamsBuilder.isBeamed(i);
       const extension = this.#beamRenderer.stemExtension(i);
 
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        // no stem, beam, or accidental properties — rest renders itself
+      } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
@@ -890,7 +900,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       element.style.left = `${xInWrapper}px`;
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
 
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        element.style.top = `${
+          STAFF_Y_PADDING + MIDDLE_STAFF_Y - REST_Y_SVG_CENTER
+        }px`;
+      } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteEl = element as NoteElementType;
         const yHeadOffset = computeYHeadOffset(
           noteEl.stemUp,

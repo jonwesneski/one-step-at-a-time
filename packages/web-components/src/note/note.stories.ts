@@ -42,7 +42,6 @@ const meta: Meta = {
         'G',
         'G#',
         'Ab',
-        'rest',
       ],
     },
   },
@@ -73,8 +72,4 @@ export const Eighth: Story = {
 
 export const Sixteenth: Story = {
   args: { duration: 'sixteenth', note: 'D' },
-};
-
-export const Rest: Story = {
-  args: { duration: 'quarter', note: 'rest' },
 };

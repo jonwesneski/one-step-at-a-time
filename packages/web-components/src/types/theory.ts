@@ -57,7 +57,7 @@ export type LetterNote =
   | 'G##'
   | 'Ab';
 
-export type Note = 'rest' | LetterNote;
+export type Note = LetterNote;
 
 type MinorType =
   | 'min'

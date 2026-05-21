@@ -1,14 +1,14 @@
 import {
   ChordElementType,
+  NoteChordOrRestElementType,
   NoteElementType,
-  NoteOrChordElementType,
 } from '../types/elements';
 import { BeamsBuilder } from '../utils';
-import { MUSIC_NOTE_NODE } from '../utils/consts';
+import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import { MIDDLE_STAFF_Y } from '../utils/notationDimensions';
 
 export function determineStemDirections(
-  elements: NoteOrChordElementType[],
+  elements: NoteChordOrRestElementType[],
   beamsBuilder: BeamsBuilder,
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
@@ -42,7 +42,7 @@ export function determineStemDirections(
 }
 
 const getStaffYs = (
-  element: NoteOrChordElementType,
+  element: NoteChordOrRestElementType,
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
 ): number[] => {
@@ -50,8 +50,11 @@ const getStaffYs = (
     const noteElement = element as NoteElementType;
     return [noteStaffYCoords.get(noteElement) ?? 0];
   }
-  const chordElement = element as ChordElementType;
-  return chordStaffYCoords.get(chordElement) ?? [];
+  if (element.nodeName === MUSIC_CHORD_NODE) {
+    const chordElement = element as ChordElementType;
+    return chordStaffYCoords.get(chordElement) ?? [];
+  }
+  return [];
 };
 
 const stemUpForYs = (ys: number[]): boolean => {

@@ -61,10 +61,19 @@ export interface IGuitarNoteElement {
   //bend: SOMETHING | null;
 }
 
+export interface IRestElement {
+  duration: DurationType;
+}
+
 export type NoteElementType = HTMLElement & INoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
+export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
+export type NoteChordOrRestElementType =
+  | NoteElementType
+  | ChordElementType
+  | RestElementType;
 export type NoteLikeElementType =
   | NoteElementType
   | GuitarNoteElementType
