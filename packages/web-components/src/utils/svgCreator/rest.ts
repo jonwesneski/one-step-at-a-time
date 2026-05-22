@@ -59,17 +59,8 @@ export const createRestSvg = ({
     g.appendChild(createRect(HALF_REST_Y));
   } else if (duration === 'quarter') {
     g.appendChild(createQuarterRestPath());
-  } else if (duration === 'eighth') {
-    g.appendChild(createHookedRestGroup(1));
-  } else if (duration === 'sixteenth') {
-    g.appendChild(createHookedRestGroup(2));
-  } else if (duration === 'thirtysecond') {
-    g.appendChild(createHookedRestGroup(3));
-  } else if (duration === 'sixtyfourth') {
-    g.appendChild(createHookedRestGroup(4));
   } else {
-    // hundredtwentyeighth
-    g.appendChild(createHookedRestGroup(5));
+    g.appendChild(createHookedRest(duration));
   }
 
   svg.appendChild(g);
@@ -138,46 +129,83 @@ function createQuarterRestPath(): SVGPathElement {
   return path;
 }
 
-// Eighth rest: single hook — an exclamation-mark-style curved stroke.
-// Top of stem sits above the centre line; the hook curves right at the bottom.
-function createEighthHookPath(yOffset: number): SVGPathElement {
-  const path = document.createElementNS(SVG_NS, 'path');
-  const x = X_CENTER;
-  const stemTop = Y_CENTER - SPACE * 0.8 + yOffset;
-  const hookBase = stemTop + SPACE * 1.0;
-  const sw = 28;
+const STEM_ANGLE_X = 60;
+const STEM_STROKE_WIDTH = 40;
+const HOOK_SPACING = SPACE * 0.85;
 
-  // Filled closed shape: vertical stem with a circular flag hook at the bottom
-  path.setAttribute(
-    'd',
-    `M${x},${stemTop}
-     L${x},${hookBase}
-     C${x + SPACE * 0.6},${hookBase + SPACE * 0.2}
-       ${x + SPACE * 0.8},${hookBase + SPACE * 0.8}
-       ${x + SPACE * 0.3},${hookBase + SPACE * 1.1}
-     C${x - SPACE * 0.1},${hookBase + SPACE * 1.3}
-       ${x - SPACE * 0.3},${hookBase + SPACE * 1.0}
-       ${x - SPACE * 0.1},${hookBase + SPACE * 0.7}
-     L${x - SPACE * 0.1},${hookBase}
-     L${x - sw},${hookBase}
-     L${x - sw},${stemTop}
-     Z`
-  );
-  path.setAttribute('fill', 'currentColor');
-  return path;
-}
+const hookCountMap: Partial<Record<DurationType, number>> = {
+  eighth: 1,
+  sixteenth: 2,
+  thirtysecond: 3,
+  sixtyfourth: 4,
+  hundredtwentyeighth: 5,
+};
 
-// For sixteenth and shorter rests: stack additional hooks below the first,
-// each spaced one staff space apart.
-function createHookedRestGroup(hookCount: number): SVGGElement {
+function createHookedRest(duration: DurationType): SVGGElement {
+  const hookCount = hookCountMap[duration] ?? 1;
   const group = document.createElementNS(SVG_NS, 'g');
 
-  // Shift the whole symbol up so extra hooks don't push it below the staff
-  const totalShift = ((hookCount - 1) * SPACE) / 2;
+  // Stem: angled line, top-right to bottom-left, grows longer with more hooks
+  const stemTopX = X_CENTER + 40;
+  const stemTopY = Y_CENTER - SPACE * 0.5 - (hookCount - 1) * SPACE * 0.5;
+  const stemBotX = stemTopX - STEM_ANGLE_X;
+  const stemBotY = Y_CENTER + SPACE * 1.0 + (hookCount - 1) * SPACE * 0.65;
 
-  for (let i = 0; i < hookCount; i++) {
-    const hook = createEighthHookPath(i * SPACE - totalShift);
-    group.appendChild(hook);
+  const stem = document.createElementNS(SVG_NS, 'line');
+  stem.setAttribute('x1', stemTopX.toString());
+  stem.setAttribute('y1', stemTopY.toString());
+  stem.setAttribute('x2', stemBotX.toString());
+  stem.setAttribute('y2', stemBotY.toString());
+  stem.setAttribute('stroke', 'currentColor');
+  stem.setAttribute('stroke-width', STEM_STROKE_WIDTH.toString());
+  stem.setAttribute('stroke-linecap', 'round');
+  group.appendChild(stem);
+
+  // Hook: large ball on the left end of a curved arm extending from the stem.
+  // Additional hooks for shorter durations are stacked below via <use>.
+  const hookId = 'rest-hook';
+  const hx = stemTopX - 10;
+  const hy = stemTopY + SPACE * 0.05;
+
+  const ballCx = hx - SPACE * 1;
+  const ballR = SPACE * 0.25;
+  const armEndY = hy + SPACE * 0.5;
+  const ballCy = armEndY - ballR * 0.7;
+
+  const hookGroup = document.createElementNS(SVG_NS, 'g');
+  hookGroup.setAttribute('id', hookId);
+
+  const ball = document.createElementNS(SVG_NS, 'circle');
+  ball.setAttribute('cx', ballCx.toString());
+  ball.setAttribute('cy', ballCy.toString());
+  ball.setAttribute('r', ballR.toString());
+  ball.setAttribute('fill', 'currentColor');
+  hookGroup.appendChild(ball);
+
+  // Arm curves from stem attachment leftward to just above ball center.
+  // Slight upward arc on the control points creates the concave notch at the top.
+  const arm = document.createElementNS(SVG_NS, 'path');
+  arm.setAttribute(
+    'd',
+    `M${hx},${hy + SPACE * 0.05}
+     C${hx - SPACE * 0.3},${hy + SPACE * 0.55}
+       ${hx - SPACE * 0.9},${hy + SPACE * 0.55}
+       ${ballCx},${armEndY}`
+  );
+  arm.setAttribute('stroke', 'currentColor');
+  arm.setAttribute('stroke-width', (SPACE * 0.15).toString());
+  arm.setAttribute('stroke-linecap', 'round');
+  arm.setAttribute('fill', 'none');
+  hookGroup.appendChild(arm);
+
+  group.appendChild(hookGroup);
+
+  for (let i = 1; i < hookCount; i++) {
+    const hookCopy = document.createElementNS(SVG_NS, 'use');
+    hookCopy.setAttribute('href', `#${hookId}`);
+    hookCopy.setAttribute('y', (HOOK_SPACING * i).toString());
+    group.appendChild(hookCopy);
   }
+
   return group;
 }
