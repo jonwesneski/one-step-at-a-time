@@ -19,7 +19,7 @@ import {
   NoteElementType,
 } from '../types/elements';
 import { AccidentalType, LetterNote, Mode } from '../types/theory';
-import { MUSIC_NOTE_NODE } from '../utils/consts';
+import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
@@ -123,7 +123,7 @@ export function computeNoteAccidentals(
       const showAccidental = resolveAccidental(noteAccidental, effectiveState);
       noteShowAccidentals.set(noteElement, showAccidental);
       inMeasureState.set(letter, noteAccidental);
-    } else {
+    } else if (element.nodeName === MUSIC_CHORD_NODE) {
       const chordElement = element as ChordElementType;
       if (chordElement.tie === 'end') {
         chordNoteAccidentals.set(

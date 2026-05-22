@@ -149,7 +149,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected override get additionalStyles(): string {
     return `
       ::slotted(music-note),
-      ::slotted(music-chord) {
+      ::slotted(music-chord),
+      ::slotted(music-rest) {
         position: absolute;
       }
 
