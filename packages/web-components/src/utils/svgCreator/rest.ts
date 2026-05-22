@@ -132,6 +132,8 @@ function createQuarterRestPath(): SVGPathElement {
 const STEM_ANGLE_X = 60;
 const STEM_STROKE_WIDTH = 40;
 const HOOK_SPACING = SPACE * 0.85;
+const ARM_LENGTH_BASE = 1.0;
+const ARM_LENGTH_STEP = 0.1;
 
 const hookCountMap: Partial<Record<DurationType, number>> = {
   eighth: 1,
@@ -140,6 +142,42 @@ const hookCountMap: Partial<Record<DurationType, number>> = {
   sixtyfourth: 4,
   hundredtwentyeighth: 5,
 };
+
+function createSingleHook(
+  hx: number,
+  hy: number,
+  armLength: number
+): SVGGElement {
+  const ballCx = hx - SPACE * armLength;
+  const ballR = SPACE * 0.25;
+  const armEndY = hy + SPACE * 0.5;
+  const ballCy = armEndY - ballR * 0.7;
+
+  const hookGroup = document.createElementNS(SVG_NS, 'g');
+
+  const ball = document.createElementNS(SVG_NS, 'circle');
+  ball.setAttribute('cx', ballCx.toString());
+  ball.setAttribute('cy', ballCy.toString());
+  ball.setAttribute('r', ballR.toString());
+  ball.setAttribute('fill', 'currentColor');
+  hookGroup.appendChild(ball);
+
+  const arm = document.createElementNS(SVG_NS, 'path');
+  arm.setAttribute(
+    'd',
+    `M${hx},${hy + SPACE * 0.05}
+     C${hx - SPACE * 0.3},${hy + SPACE * 0.55}
+       ${hx - SPACE * armLength * 0.9},${hy + SPACE * 0.55}
+       ${ballCx},${armEndY}`
+  );
+  arm.setAttribute('stroke', 'currentColor');
+  arm.setAttribute('stroke-width', (SPACE * 0.15).toString());
+  arm.setAttribute('stroke-linecap', 'round');
+  arm.setAttribute('fill', 'none');
+  hookGroup.appendChild(arm);
+
+  return hookGroup;
+}
 
 function createHookedRest(duration: DurationType): SVGGElement {
   const hookCount = hookCountMap[duration] ?? 1;
@@ -161,50 +199,16 @@ function createHookedRest(duration: DurationType): SVGGElement {
   stem.setAttribute('stroke-linecap', 'round');
   group.appendChild(stem);
 
-  // Hook: large ball on the left end of a curved arm extending from the stem.
-  // Additional hooks for shorter durations are stacked below via <use>.
-  const hookId = 'rest-hook';
-  const hx = stemTopX - 10;
-  const hy = stemTopY + SPACE * 0.05;
+  const baseHy = stemTopY + SPACE * 0.05;
+  const stemTotalDY = stemBotY - stemTopY;
+  const stemTotalDX = stemBotX - stemTopX;
 
-  const ballCx = hx - SPACE * 1;
-  const ballR = SPACE * 0.25;
-  const armEndY = hy + SPACE * 0.5;
-  const ballCy = armEndY - ballR * 0.7;
-
-  const hookGroup = document.createElementNS(SVG_NS, 'g');
-  hookGroup.setAttribute('id', hookId);
-
-  const ball = document.createElementNS(SVG_NS, 'circle');
-  ball.setAttribute('cx', ballCx.toString());
-  ball.setAttribute('cy', ballCy.toString());
-  ball.setAttribute('r', ballR.toString());
-  ball.setAttribute('fill', 'currentColor');
-  hookGroup.appendChild(ball);
-
-  // Arm curves from stem attachment leftward to just above ball center.
-  // Slight upward arc on the control points creates the concave notch at the top.
-  const arm = document.createElementNS(SVG_NS, 'path');
-  arm.setAttribute(
-    'd',
-    `M${hx},${hy + SPACE * 0.05}
-     C${hx - SPACE * 0.3},${hy + SPACE * 0.55}
-       ${hx - SPACE * 0.9},${hy + SPACE * 0.55}
-       ${ballCx},${armEndY}`
-  );
-  arm.setAttribute('stroke', 'currentColor');
-  arm.setAttribute('stroke-width', (SPACE * 0.15).toString());
-  arm.setAttribute('stroke-linecap', 'round');
-  arm.setAttribute('fill', 'none');
-  hookGroup.appendChild(arm);
-
-  group.appendChild(hookGroup);
-
-  for (let i = 1; i < hookCount; i++) {
-    const hookCopy = document.createElementNS(SVG_NS, 'use');
-    hookCopy.setAttribute('href', `#${hookId}`);
-    hookCopy.setAttribute('y', (HOOK_SPACING * i).toString());
-    group.appendChild(hookCopy);
+  for (let i = 0; i < hookCount; i++) {
+    const hookY = baseHy + HOOK_SPACING * i;
+    const t = (hookY - stemTopY) / stemTotalDY;
+    const hookHx = stemTopX + stemTotalDX * t - 10;
+    const armLength = ARM_LENGTH_BASE + ARM_LENGTH_STEP * i;
+    group.appendChild(createSingleHook(hookHx, hookY, armLength));
   }
 
   return group;
