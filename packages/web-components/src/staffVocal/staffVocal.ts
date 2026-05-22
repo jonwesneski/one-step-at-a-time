@@ -9,13 +9,14 @@ import {
   LetterOctave,
   LyricSyllablePosition,
   LyricsElementType,
-  NoteOrChordElementType,
+  NoteChordOrRestElementType,
   YCoordinates,
 } from '../types/elements';
 import { Octave, VoiceType } from '../types/theory';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,
+  MUSIC_REST_NODE,
   STAFF_EVENTS,
 } from '../utils/consts';
 import {
@@ -30,7 +31,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_VERSE_SPACING = 15; // px between verse lines
 
   class StaffVocalElement extends StaffClassicalElementBase {
-    #lastElements: NoteOrChordElementType[] = [];
+    #slottedElements: NoteChordOrRestElementType[] = [];
 
     static #sopranoYCoordinates = generateYCoordinates('C6', 'C4');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
@@ -322,12 +323,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     protected override onHandleSlotChange(event: Event): void {
       const slot = event.target as HTMLSlotElement;
-      this.#lastElements = slot
+      this.#slottedElements = slot
         .assignedElements({ flatten: true })
         .filter(
           (e) =>
-            e.nodeName === MUSIC_NOTE_NODE || e.nodeName === MUSIC_CHORD_NODE
-        ) as NoteOrChordElementType[];
+            e.nodeName === MUSIC_NOTE_NODE ||
+            e.nodeName === MUSIC_CHORD_NODE ||
+            e.nodeName === MUSIC_REST_NODE
+        ) as NoteChordOrRestElementType[];
       super.onHandleSlotChange(event);
     }
 
@@ -417,10 +420,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         maxLyricChars = Math.max(maxLyricChars, verseChars);
       }
-      if (this.#lastElements.length > 0) {
+      if (this.#slottedElements.length > 0) {
         const minWidth = calculateStaffVocalMinWidth(
           this.describeEndX,
-          this.#lastElements.length,
+          this.#slottedElements.length,
           maxLyricChars
         );
         this.dispatchEvent(
