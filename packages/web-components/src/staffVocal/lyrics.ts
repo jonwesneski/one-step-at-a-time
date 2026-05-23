@@ -5,6 +5,7 @@
  */
 
 import { ILyricsElement, LyricSyllablePosition } from '../types/elements';
+import { SVG_NS } from '../utils';
 
 const SSRSafeHTMLElement: typeof HTMLElement =
   typeof HTMLElement !== 'undefined'
@@ -103,10 +104,7 @@ export class MusicLyricsElement
       const syllable = this.#syllablePositions[i];
 
       // Render syllable text
-      const text = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'text'
-      );
+      const text = document.createElementNS(SVG_NS, 'text');
       text.setAttribute('x', syllable.x.toString());
       text.setAttribute('y', syllable.y.toString());
       text.setAttribute('text-anchor', 'middle');
@@ -119,10 +117,7 @@ export class MusicLyricsElement
       if (syllable.isHyphenated && i < this.#syllablePositions.length - 1) {
         const nextSyllable = this.#syllablePositions[i + 1];
         const hyphenX = (syllable.x + nextSyllable.x) / 2;
-        const hyphen = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'text'
-        );
+        const hyphen = document.createElementNS(SVG_NS, 'text');
         hyphen.setAttribute('x', hyphenX.toString());
         hyphen.setAttribute('y', syllable.y.toString());
         hyphen.setAttribute('text-anchor', 'middle');
@@ -135,10 +130,7 @@ export class MusicLyricsElement
       // Render extender line if melisma
       if (syllable.isMelisma && i < this.#syllablePositions.length - 1) {
         const nextSyllable = this.#syllablePositions[i + 1];
-        const line = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'line'
-        );
+        const line = document.createElementNS(SVG_NS, 'line');
         line.setAttribute('x1', (syllable.x + 8).toString());
         line.setAttribute('y1', (syllable.y + 6).toString());
         line.setAttribute('x2', (nextSyllable.x - 8).toString());

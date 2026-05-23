@@ -4,6 +4,7 @@ import {
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import { StaffElementBase } from './staffBase';
@@ -48,7 +49,6 @@ import {
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
-  MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
   STAFF_TRANSCRIPTION_HEIGHT,
@@ -62,7 +62,6 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
-import { REST_Y_SVG_CENTER } from './utils/svgCreator/rest';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -893,9 +892,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
 
       if (element.nodeName === MUSIC_REST_NODE) {
-        element.style.top = `${
-          STAFF_Y_PADDING + MIDDLE_STAFF_Y - REST_Y_SVG_CENTER
-        }px`;
+        element.style.top = `${restToYCoordinate(element.duration)}px`;
       } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteEl = element as NoteElementType;
         const yHeadOffset = computeYHeadOffset(

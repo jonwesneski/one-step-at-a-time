@@ -3,6 +3,7 @@
  */
 
 import { YCoordinates } from '../types/elements';
+import { SVG_NS } from './consts';
 import { PitchDragHandler } from './pitchDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.
@@ -52,17 +53,11 @@ function makeNoteElement(value = 'D', duration = 'quarter'): HTMLElement {
   el.setAttribute('duration', duration);
   // Stub shadow DOM with an SVG containing head elements
   const shadow = el.attachShadow({ mode: 'open' });
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  const headHitZone = document.createElementNS(
-    'http://www.w3.org/2000/svg',
-    'ellipse'
-  );
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  const g = document.createElementNS(SVG_NS, 'g');
+  const headHitZone = document.createElementNS(SVG_NS, 'ellipse');
   headHitZone.classList.add('head-hit-zone');
-  const head = document.createElementNS(
-    'http://www.w3.org/2000/svg',
-    'ellipse'
-  );
+  const head = document.createElementNS(SVG_NS, 'ellipse');
   head.classList.add('head');
   g.appendChild(headHitZone);
   g.appendChild(head);
@@ -87,23 +82,14 @@ function makeChordElement(notes: string[], duration = 'eighth'): HTMLElement {
 
   // Stub shadow DOM
   const shadow = el.attachShadow({ mode: 'open' });
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const svg = document.createElementNS(SVG_NS, 'svg');
   // Create per-note SVGs inside the chord SVG
   for (let i = 0; i < notes.length; i++) {
-    const noteSvg = document.createElementNS(
-      'http://www.w3.org/2000/svg',
-      'svg'
-    );
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    const headHitZone = document.createElementNS(
-      'http://www.w3.org/2000/svg',
-      'ellipse'
-    );
+    const noteSvg = document.createElementNS(SVG_NS, 'svg');
+    const g = document.createElementNS(SVG_NS, 'g');
+    const headHitZone = document.createElementNS(SVG_NS, 'ellipse');
     headHitZone.classList.add('head-hit-zone');
-    const head = document.createElementNS(
-      'http://www.w3.org/2000/svg',
-      'ellipse'
-    );
+    const head = document.createElementNS(SVG_NS, 'ellipse');
     head.classList.add('head');
     g.appendChild(headHitZone);
     g.appendChild(head);
@@ -182,39 +168,27 @@ afterEach(() => {
 describe('PitchDragHandler', () => {
   describe('isNoteheadTarget', () => {
     it('returns true for .head element', () => {
-      const el = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'ellipse'
-      );
+      const el = document.createElementNS(SVG_NS, 'ellipse');
       el.classList.add('head');
       expect(PitchDragHandler.isNoteheadTarget(el)).toBe(true);
     });
 
     it('returns true for .head-hit-zone element', () => {
-      const el = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'ellipse'
-      );
+      const el = document.createElementNS(SVG_NS, 'ellipse');
       el.classList.add('head-hit-zone');
       expect(PitchDragHandler.isNoteheadTarget(el)).toBe(true);
     });
 
     it('returns false for a stem element', () => {
-      const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      const el = document.createElementNS(SVG_NS, 'line');
       el.classList.add('stem');
       expect(PitchDragHandler.isNoteheadTarget(el)).toBe(false);
     });
 
     it('returns true for child of .head element', () => {
-      const parent = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'g'
-      );
+      const parent = document.createElementNS(SVG_NS, 'g');
       parent.classList.add('head');
-      const child = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'circle'
-      );
+      const child = document.createElementNS(SVG_NS, 'circle');
       parent.appendChild(child);
       expect(PitchDragHandler.isNoteheadTarget(child)).toBe(true);
     });

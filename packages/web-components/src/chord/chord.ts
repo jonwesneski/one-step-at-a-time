@@ -13,6 +13,7 @@ import {
   MUSIC_CHORD,
   MUSIC_NOTE,
   NOTE_EVENTS,
+  SVG_NS,
 } from '../utils/consts';
 import {
   MIDDLE_STAFF_Y,
@@ -230,10 +231,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             svg { overflow: visible; }
           </style>
         `;
-        const svg = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'svg'
-        );
+        const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('width', '32');
         svg.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
         svg.setAttribute('overflow', 'visible');
@@ -312,10 +310,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             svg { overflow: visible; }
           </style>
         `;
-        const svg = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'svg'
-        );
+        const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('width', '32');
         svg.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
         svg.setAttribute('overflow', 'visible');

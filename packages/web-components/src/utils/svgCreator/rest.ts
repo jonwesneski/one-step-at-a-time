@@ -135,13 +135,30 @@ const HOOK_SPACING = SPACE * 0.85;
 const ARM_LENGTH_BASE = 1.0;
 const ARM_LENGTH_STEP = 0.1;
 
-const hookCountMap: Partial<Record<DurationType, number>> = {
+type HookDurationType = Exclude<DurationType, 'whole' | 'half' | 'quarter'>;
+const hookCountMap: Record<HookDurationType, number> = {
   eighth: 1,
   sixteenth: 2,
   thirtysecond: 3,
   sixtyfourth: 4,
   hundredtwentyeighth: 5,
 };
+
+// Returns the pixel offset of the rest's visual centre from the SVG geometric centre
+// (REST_Y_SVG_CENTER = 30px). Positive = visual centre is below geometric centre.
+export function getRestVisualCenterOffset(duration: DurationType): number {
+  if (duration === 'whole' || duration === 'half') {
+    return -(SPACE * NOTE_SCALE) / 4;
+  }
+  if (duration === 'quarter') {
+    return 0;
+  }
+  const hookCount = hookCountMap[duration];
+  const stemTopY = Y_CENTER - SPACE * 0.5 - (hookCount - 1) * SPACE * 0.5;
+  const stemBotY = Y_CENTER + SPACE * 1.0 + (hookCount - 1) * SPACE * 0.65;
+  const midpointPx = ((stemTopY + stemBotY) / 2) * NOTE_SCALE;
+  return midpointPx - REST_Y_SVG_CENTER;
+}
 
 function createSingleHook(
   hx: number,
@@ -179,8 +196,8 @@ function createSingleHook(
   return hookGroup;
 }
 
-function createHookedRest(duration: DurationType): SVGGElement {
-  const hookCount = hookCountMap[duration] ?? 1;
+function createHookedRest(duration: HookDurationType): SVGGElement {
+  const hookCount = hookCountMap[duration];
   const group = document.createElementNS(SVG_NS, 'g');
 
   // Stem: angled line, top-right to bottom-left, grows longer with more hooks
