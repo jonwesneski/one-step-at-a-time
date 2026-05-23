@@ -1,12 +1,6 @@
 import 'react';
 import { ConnectorRole } from './types/elements';
-import type {
-  Chord,
-  DurationType,
-  LetterNote,
-  Mode,
-  Octave,
-} from './types/theory';
+import type { Chord, DurationType, Mode, Note, Octave } from './types/theory';
 
 type WebComponentProps = {
   key?: React.Key;
@@ -26,12 +20,12 @@ declare module 'react' {
         onPointerUp?: (e: PointerEvent) => void;
       };
       'music-composition': WebComponentProps & {
-        keySig?: LetterNote;
+        keySig?: Note;
         mode?: string;
         time?: string;
       };
       'music-note': WebComponentProps & {
-        note?: LetterNote;
+        note?: Note;
         duration?: DurationType;
         octave?: Octave;
         tie?: ConnectorRole;
@@ -53,13 +47,13 @@ declare module 'react' {
         slide?: ConnectorRole;
       };
       'music-measure': WebComponentProps & {
-        keySig?: LetterNote;
+        keySig?: Note;
         mode?: Mode;
         time?: string;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-bass': WebComponentProps & {
-        keySig?: LetterNote;
+        keySig?: Note;
         mode?: Mode;
         time?: string;
         editable?: boolean;
@@ -67,7 +61,7 @@ declare module 'react' {
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-treble': WebComponentProps & {
-        keySig?: LetterNote;
+        keySig?: Note;
         mode?: Mode;
         time?: string;
         editable?: boolean;
@@ -80,7 +74,7 @@ declare module 'react' {
       };
       'music-staff-vocal': WebComponentProps & {
         voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
-        keySig?: LetterNote;
+        keySig?: Note;
         mode?: Mode;
         time?: string;
         editable?: boolean;

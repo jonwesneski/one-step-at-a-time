@@ -1,7 +1,4 @@
-import type {
-  DurationType,
-  LetterNote,
-} from '@one-step-at-a-time/web-components';
+import type { DurationType, Note } from '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { useState } from 'react';
 import { Button, Select } from '../../design-system';
@@ -19,9 +16,9 @@ export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
 
   const activeTab = session.tab;
 
-  const [noteValue, setNoteValue] = useState<LetterNote>('C');
+  const [noteValue, setNoteValue] = useState<Note>('C');
   const [noteDuration, setNoteDuration] = useState<DurationType>('quarter');
-  const [chordNotes, setChordNotes] = useState<Array<{ value: LetterNote }>>([
+  const [chordNotes, setChordNotes] = useState<Array<{ value: Note }>>([
     { value: 'C' },
     { value: 'E' },
   ]);
@@ -77,7 +74,7 @@ export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
           <>
             <Select
               value={noteValue}
-              onChange={(e) => setNoteValue(e.target.value as LetterNote)}
+              onChange={(e) => setNoteValue(e.target.value as Note)}
             >
               {NOTE_OPTIONS.map((n) => (
                 <option key={n} value={n}>
@@ -114,7 +111,7 @@ export function NoteChordInput({ onAdd, remainingBeats }: NoteChordInputProps) {
                 onChange={(e) =>
                   setChordNotes((prev) =>
                     prev.map((n, idx) =>
-                      idx === i ? { value: e.target.value as LetterNote } : n
+                      idx === i ? { value: e.target.value as Note } : n
                     )
                   )
                 }

@@ -1,36 +1,36 @@
 import '@one-step-at-a-time/web-components';
 import type {
   DurationType,
-  LetterNote,
+  Note,
   PitchChangeDetail,
 } from '@one-step-at-a-time/web-components';
 import { useEffect, useRef, useState } from 'react';
 
-type LetterNoteItem = {
+type NoteItem = {
   id: string;
   type: 'note';
-  value: LetterNote;
+  value: Note;
   duration: DurationType;
 };
 type ChordItem = {
   id: string;
   type: 'chord';
   duration: DurationType;
-  notes: LetterNote[];
+  notes: Note[];
 };
-type StaffItem = LetterNoteItem | ChordItem;
+type StaffItem = NoteItem | ChordItem;
 
-const initialLetterNotes: StaffItem[] = [
+const initialNotes: StaffItem[] = [
   { id: 'c1', type: 'chord', duration: 'eighth', notes: ['A', 'E'] },
   { id: 'c2', type: 'chord', duration: 'eighth', notes: ['A', 'E'] },
   { id: 'n1', type: 'note', value: 'D', duration: 'quarter' },
-  { id: 'n2', type: 'note', value: 'F#' as LetterNote, duration: 'quarter' },
+  { id: 'n2', type: 'note', value: 'F#' as Note, duration: 'quarter' },
   { id: 'n3', type: 'note', value: 'B', duration: 'quarter' },
 ];
 
 export default function MusicScore() {
   const staffRef = useRef<HTMLElement>(null);
-  const [items, setItems] = useState<StaffItem[]>(initialLetterNotes);
+  const [items, setItems] = useState<StaffItem[]>(initialNotes);
 
   useEffect(() => {
     const staff = staffRef.current;
@@ -50,16 +50,16 @@ export default function MusicScore() {
     const onPitchChange = (e: Event) => {
       const { elementIndex, chordNoteIndex, toNote } = (e as CustomEvent)
         .detail as PitchChangeDetail;
-      // todo: fixing typings on web components. I want note and chord type to support LetterNote and Octave
-      const newValue = toNote as LetterNote;
+      // todo: fixing typings on web components. I want note and chord type to support Note and Octave
+      const newValue = toNote as Note;
 
       setItems((prev) => {
         const next = [...prev];
         const item = next[elementIndex];
         if (item.type === 'chord' && chordNoteIndex !== null) {
-          const updatedLetterNotes = [...item.notes];
-          updatedLetterNotes[chordNoteIndex] = newValue;
-          next[elementIndex] = { ...item, notes: updatedLetterNotes };
+          const updatedNotes = [...item.notes];
+          updatedNotes[chordNoteIndex] = newValue;
+          next[elementIndex] = { ...item, notes: updatedNotes };
         } else if (item.type === 'note') {
           next[elementIndex] = { ...item, value: newValue };
         }
@@ -111,13 +111,13 @@ export default function MusicScore() {
         </music-staff-bass>
 
         <music-staff-vocal voice="soprano">
-          <music-note note={'C5' as LetterNote} duration="eighth"></music-note>
-          <music-note note={'D5' as LetterNote} duration="eighth"></music-note>
-          <music-note note={'E5' as LetterNote} duration="eighth"></music-note>
-          <music-note note={'F5' as LetterNote} duration="eighth"></music-note>
-          <music-note note={'G5' as LetterNote} duration="eighth"></music-note>
-          <music-note note={'A5' as LetterNote} duration="eighth"></music-note>
-          <music-note note={'A5' as LetterNote} duration="quarter"></music-note>
+          <music-note note={'C5' as Note} duration="eighth"></music-note>
+          <music-note note={'D5' as Note} duration="eighth"></music-note>
+          <music-note note={'E5' as Note} duration="eighth"></music-note>
+          <music-note note={'F5' as Note} duration="eighth"></music-note>
+          <music-note note={'G5' as Note} duration="eighth"></music-note>
+          <music-note note={'A5' as Note} duration="eighth"></music-note>
+          <music-note note={'A5' as Note} duration="quarter"></music-note>
           <music-lyrics verse="1">Hap-py birth-day to_ you you_</music-lyrics>
           <music-lyrics verse="2">
             Hap-py birth-day dear_ friend friend_

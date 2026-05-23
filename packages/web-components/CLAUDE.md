@@ -166,7 +166,7 @@ type DurationType =
   | 'thirtysecond'
   | 'sixtyfourth'
   | 'hundredtwentyeighth';
-type LetterNote =
+type Note =
   | 'A'
   | 'A#'
   | 'Bb'

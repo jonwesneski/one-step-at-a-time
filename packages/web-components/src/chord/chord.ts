@@ -75,8 +75,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           });
         });
       } else if (this.chord) {
-        const letterNotes = getChordNotes(this.chord);
-        letterNotes.forEach((value) => {
+        const chordNotes = getChordNotes(this.chord);
+        chordNotes.forEach((value) => {
           notes.push({ value, octave: null, duration: this.duration });
         });
       }

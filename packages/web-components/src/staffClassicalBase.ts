@@ -20,8 +20,8 @@ import {
   BeatTypeInMeasure,
   DurationType,
   Letter,
-  LetterNote,
   Mode,
+  Note,
   Octave,
 } from './types/theory';
 import {
@@ -80,7 +80,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
   #effectiveTimeSig: [BeatsInMeasure, BeatTypeInMeasure];
   #effectiveMode: Mode;
-  #effectiveKeySig: LetterNote;
+  #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
@@ -122,7 +122,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#effectiveKeySig = this.#resolveInheritedValue(
       COMMON_ATTRIBUTES.KEY_SIG,
       'C'
-    ) as LetterNote;
+    ) as Note;
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#beamsContainer = document.createElementNS(SVG_NS, 'svg');
@@ -184,7 +184,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     else this.removeAttribute('managed');
   }
 
-  get keySig(): LetterNote {
+  get keySig(): Note {
     return this.#effectiveKeySig;
   }
 
@@ -225,10 +225,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#resolveInheritedValue('time', '4/4')
     );
     this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
-    this.#effectiveKeySig = this.#resolveInheritedValue(
-      'keysig',
-      'C'
-    ) as LetterNote;
+    this.#effectiveKeySig = this.#resolveInheritedValue('keysig', 'C') as Note;
 
     this.#buildDescribe(this.clefSvg);
     if (this.editable) {
@@ -471,10 +468,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#resolveInheritedValue('time', '4/4')
     );
     this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
-    this.#effectiveKeySig = this.#resolveInheritedValue(
-      'keysig',
-      'C'
-    ) as LetterNote;
+    this.#effectiveKeySig = this.#resolveInheritedValue('keysig', 'C') as Note;
     this.#refreshDescribe();
   }
 
@@ -572,7 +566,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#effectiveKeySig = this.#resolveInheritedValue(
           'keysig',
           'C'
-        ) as LetterNote;
+        ) as Note;
       }
       this.#refreshDescribe();
     }
@@ -794,10 +788,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Return the y-coordinate for a given note and octave.
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
-  public noteToYCoordinate(
-    note: LetterNote | Letter | 'rest',
-    octave?: Octave
-  ): number {
+  public noteToYCoordinate(note: Note, octave?: Octave): number {
     if (!note) {
       return 0;
     }

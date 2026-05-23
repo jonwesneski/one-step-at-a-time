@@ -1,28 +1,26 @@
 import type {
   DurationType,
-  LetterNote,
   Mode,
+  Note,
 } from '@one-step-at-a-time/web-components';
 
 export type StaffType = 'treble' | 'bass';
 
-export type LetterNoteEntry = {
+export type NoteEntry = {
   id: string;
   type: 'note';
-  value: LetterNote;
+  value: Note;
   duration: DurationType;
 };
 export type ChordEntry = {
   id: string;
   type: 'chord';
-  notes: LetterNote[];
+  notes: Note[];
   duration: DurationType;
 };
-export type MusicEntry = LetterNoteEntry | ChordEntry;
-// Entry shape before an id is assigned (used when constructing entries in LetterNoteChordInput)
-export type DraftMusicEntry =
-  | Omit<LetterNoteEntry, 'id'>
-  | Omit<ChordEntry, 'id'>;
+export type MusicEntry = NoteEntry | ChordEntry;
+// Entry shape before an id is assigned (used when constructing entries in NoteChordInput)
+export type DraftMusicEntry = Omit<NoteEntry, 'id'> | Omit<ChordEntry, 'id'>;
 
 // Flat normalized nodes
 export type NormalizedMeasure = { id: string; staffIds: string[] };
@@ -45,12 +43,12 @@ export type Selection = { measureId: string | null; staffId: string | null };
 // Root form shape (BasicInfo fields + structure)
 export type CompositionFormValues = {
   title: string;
-  keySig: LetterNote;
+  keySig: Note;
   timeSig: string;
   mode: Mode;
 } & CompositionStructure;
 
-export const KEY_SIGNATURE_OPTIONS: LetterNote[] = [
+export const KEY_SIGNATURE_OPTIONS: Note[] = [
   'C',
   'G',
   'D',
@@ -80,7 +78,7 @@ export const TIME_SIGNATURE_OPTIONS = [
 
 export const MODE_OPTIONS: Mode[] = ['major', 'minor'];
 
-export const NOTE_OPTIONS: LetterNote[] = [
+export const NOTE_OPTIONS: Note[] = [
   'A',
   'A#',
   'Bb',

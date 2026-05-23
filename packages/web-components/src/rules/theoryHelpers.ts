@@ -3,7 +3,7 @@ import {
   LetterOctave,
   YCoordinates,
 } from '../types/elements';
-import { Chord, ChordType, LetterNote } from '../types/theory';
+import { Chord, ChordType, Note } from '../types/theory';
 import { STAFF_LINE_SPACING } from '../utils/notationDimensions';
 import {
   ChordSemitoneMap,
@@ -26,11 +26,11 @@ export const getChordNotes = (chord: Chord) => {
   const semitones =
     ChordSemitoneMap[chordSignature] ??
     ChordSemitoneMap[ChordSemitoneMapAliases[chordSignature]];
-  return getNotes(root as LetterNote, semitones);
+  return getNotes(root as Note, semitones);
 };
 
 // Indices 0→4 mirror semitoneNoteMap: double-flat, flat, natural, sharp, double-sharp.
-const enharmonicIndex: Partial<Record<LetterNote, 0 | 1 | 2 | 3 | 4>> = {
+const enharmonicIndex: Partial<Record<Note, 0 | 1 | 2 | 3 | 4>> = {
   Cb: 0,
   Fb: 0,
   Bb: 1,
@@ -51,8 +51,8 @@ const enharmonicIndex: Partial<Record<LetterNote, 0 | 1 | 2 | 3 | 4>> = {
   'D#': 4,
   'A#': 4,
 };
-export const getNotes = (root: LetterNote, semitones: number[]) => {
-  const notes: LetterNote[] = [root];
+export const getNotes = (root: Note, semitones: number[]) => {
+  const notes: Note[] = [root];
   const choiceIndex = enharmonicIndex[root] ?? 2;
   const rootPosition = noteSemitoneMap.get(root);
   if (rootPosition !== undefined) {
@@ -164,19 +164,19 @@ export const generateYCoordinates = (
 };
 
 export const generateKeySignatureYCoordinates = (
-  keyCountMap: Partial<{ [key in LetterNote]: number }>,
+  keyCountMap: Partial<{ [key in Note]: number }>,
   accidentals: LetterOctave[],
   yCoordinates: YCoordinates
 ): KeySignatureYCoordinates => {
   const keySignatureYCoordinates: KeySignatureYCoordinates = {};
   for (const key in keyCountMap) {
-    keySignatureYCoordinates[key as LetterNote] = [];
+    keySignatureYCoordinates[key as Note] = [];
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- it's okay
-    for (let i = 0; i < keyCountMap[key as LetterNote]!; i++) {
+    for (let i = 0; i < keyCountMap[key as Note]!; i++) {
       const yCoordinate = yCoordinates[accidentals[i]];
       if (yCoordinate) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- it's okay
-        keySignatureYCoordinates[key as LetterNote]!.push(yCoordinate);
+        keySignatureYCoordinates[key as Note]!.push(yCoordinate);
       } else {
         throw new Error(
           `Y coordinate not found for accidental: ${accidentals[i]}`

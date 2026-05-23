@@ -1,10 +1,5 @@
 import { ConnectorRole, INoteElement } from '../types/elements';
-import {
-  AccidentalType,
-  DurationType,
-  LetterNote,
-  Octave,
-} from '../types/theory';
+import { AccidentalType, DurationType, Note, Octave } from '../types/theory';
 import { createNoteSvg } from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
 
@@ -40,11 +35,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('duration', value);
     }
 
-    get note(): LetterNote {
-      return (this.getAttribute('note') as LetterNote) ?? 'C';
+    get note(): Note {
+      return (this.getAttribute('note') as Note) ?? 'C';
     }
 
-    set note(value: LetterNote | null) {
+    set note(value: Note | null) {
       if (value === null) this.removeAttribute('note');
       else this.setAttribute('note', value);
     }

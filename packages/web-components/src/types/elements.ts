@@ -3,7 +3,7 @@ import {
   Chord,
   DurationType,
   Letter,
-  LetterNote,
+  Note,
   Octave,
 } from './theory';
 
@@ -13,7 +13,7 @@ export type ConnectorRole = 'start' | 'end';
 
 export interface INoteElement {
   duration: DurationType;
-  note: LetterNote;
+  note: Note;
   octave: Octave | null;
   stemUp: boolean;
   stemExtension: number;
@@ -29,7 +29,7 @@ export interface INoteElement {
 }
 
 export type ChordNote = {
-  value: LetterNote;
+  value: Note;
   octave: Octave | null;
   duration: DurationType;
 };
@@ -81,7 +81,7 @@ export type NoteLikeElementType =
 export type YCoordinates = Partial<Record<LetterOctave, number>>;
 
 export type KeySignatureYCoordinates = Partial<{
-  [key in LetterNote]: number[];
+  [key in Note]: number[];
 }>;
 
 export type LyricSyllablePosition = {

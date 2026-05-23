@@ -18,7 +18,7 @@ import {
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
-import { AccidentalType, LetterNote, Mode } from '../types/theory';
+import { AccidentalType, Mode, Note } from '../types/theory';
 import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import {
   ACCIDENTAL_SYMBOL_HEIGHT,
@@ -90,7 +90,7 @@ export function computeInterNoteSpacing(
 
 export function computeNoteAccidentals(
   elements: NoteChordOrRestElementType[],
-  keySig: LetterNote,
+  keySig: Note,
   mode: Mode
 ): {
   noteShowAccidentals: Map<NoteElementType, AccidentalType | null>;
@@ -151,7 +151,7 @@ export function computeNoteAccidentals(
 
 // Key signature accidentals are always single sharp or flat — never double accidentals.
 export function getKeySignatureAccidentals(
-  keySig: LetterNote,
+  keySig: Note,
   mode: Mode
 ): Map<string, 'sharp' | 'flat'> {
   const key =
@@ -168,7 +168,7 @@ export function getKeySignatureAccidentals(
   return result;
 }
 
-export function parseAccidentalSuffix(noteName: LetterNote): AccidentalSuffix {
+export function parseAccidentalSuffix(noteName: Note): AccidentalSuffix {
   const suffix = noteName.slice(1);
   if (suffix === '##' || suffix === 'bb' || suffix === '#' || suffix === 'b') {
     return suffix as AccidentalSuffix;
