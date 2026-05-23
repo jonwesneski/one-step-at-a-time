@@ -11,6 +11,6 @@ import './note';
 import './rest';
 
 export { durationToFactor } from './rules/theoryConsts';
-export type { LetterOctave } from './types/elements';
+export type { NoteLetterOctave as LetterOctave } from './types/elements';
 export type { DurationType, Mode, Note } from './types/theory';
 export type { PitchChangeDetail } from './utils/pitchDragHandler';

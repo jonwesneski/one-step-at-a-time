@@ -10,18 +10,18 @@ import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
   ChordNote,
-  LetterOctave,
   NoteChordOrRestElementType,
   NoteElementType,
+  NoteLetterOctave,
   YCoordinates,
 } from './types/elements';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
-  Letter,
   Mode,
   Note,
+  NoteLetter,
   Octave,
 } from './types/theory';
 import {
@@ -399,7 +399,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
    */
   #onPitchLivePreview(
     elementIndex: number,
-    newNote: LetterOctave,
+    newNote: NoteLetterOctave,
     chordNoteIndex: number | null
   ) {
     const element = this.#currentElements[elementIndex];
@@ -407,7 +407,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
 
-    const letter = newNote[0] as Letter;
+    const letter = newNote[0] as NoteLetter;
     const octave = parseInt(newNote[1], 10) as Octave;
 
     if (element.nodeName === MUSIC_CHORD_NODE && chordNoteIndex !== null) {
@@ -798,13 +798,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (octave !== undefined) {
       const yCoordinate =
-        this.yCoordinates[`${letter}${octave}` as LetterOctave];
+        this.yCoordinates[`${letter}${octave}` as NoteLetterOctave];
       if (yCoordinate !== undefined) {
         return yCoordinate;
       }
     } else {
       for (const n of this.octaves) {
-        const yCoordinate = this.yCoordinates[`${letter}${n}` as LetterOctave];
+        const yCoordinate =
+          this.yCoordinates[`${letter}${n}` as NoteLetterOctave];
         if (yCoordinate !== undefined) {
           return yCoordinate;
         }

@@ -2,12 +2,12 @@ import {
   AccidentalType,
   Chord,
   DurationType,
-  Letter,
   Note,
+  NoteLetter,
   Octave,
 } from './theory';
 
-export type LetterOctave = `${Letter}${Octave}`;
+export type NoteLetterOctave = `${NoteLetter}${Octave}`;
 
 export type ConnectorRole = 'start' | 'end';
 
@@ -78,7 +78,7 @@ export type NoteLikeElementType =
   | GuitarNoteElementType
   | ChordElementType;
 
-export type YCoordinates = Partial<Record<LetterOctave, number>>;
+export type YCoordinates = Partial<Record<NoteLetterOctave, number>>;
 
 export type KeySignatureYCoordinates = Partial<{
   [key in Note]: number[];

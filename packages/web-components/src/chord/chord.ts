@@ -3,8 +3,8 @@ import {
   ChordNote,
   ConnectorRole,
   IChordElement,
-  LetterOctave,
   NoteElementType,
+  NoteLetterOctave,
 } from '../types/elements';
 import { AccidentalType, Chord, DurationType, Octave } from '../types/theory';
 import { createChordSvg } from '../utils';
@@ -335,13 +335,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const letter = note.value[0].toUpperCase();
         if (note.octave !== null) {
           const y =
-            yCoordinates[`${letter}${note.octave}` as LetterOctave] ?? 0;
+            yCoordinates[`${letter}${note.octave}` as NoteLetterOctave] ?? 0;
           result.push(y);
           previousY = y;
         } else {
           const candidates: number[] = [];
           for (const octave of octaves) {
-            const y = yCoordinates[`${letter}${octave}` as LetterOctave];
+            const y = yCoordinates[`${letter}${octave}` as NoteLetterOctave];
             if (y !== undefined && y > 0 && y < previousY) {
               candidates.push(y);
             }
@@ -349,7 +349,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const resolved =
             candidates.length > 0
               ? Math.max(...candidates)
-              : yCoordinates[`${letter}${octaves[0]}` as LetterOctave] ?? 0;
+              : yCoordinates[`${letter}${octaves[0]}` as NoteLetterOctave] ?? 0;
           result.push(resolved);
           previousY = resolved;
         }

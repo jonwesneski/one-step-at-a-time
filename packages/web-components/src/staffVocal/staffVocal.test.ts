@@ -1,12 +1,12 @@
 /**
  * @jest-environment jsdom
  */
+import '../index';
+import type { NoteLetterOctave } from '../types/elements';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
-import '../index';
-import type { LetterOctave } from '../types/elements';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -129,7 +129,7 @@ const STAFF_Y_PADDING = 8;
 
 // Expected `style.top` value on a positioned <music-note> element
 function expectedNoteTop(
-  value: LetterOctave,
+  value: NoteLetterOctave,
   staffYMap: Record<string, number>
 ): string {
   const staffY = staffYMap[value];
@@ -162,7 +162,7 @@ function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
   // return el;
 }
 
-function renderNote(staff: Element, value: LetterOctave): HTMLElement {
+function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {
   const note = document.createElement('music-note') as any;
   note.setAttribute('duration', 'quarter');
   note.setAttribute('note', value[0]);

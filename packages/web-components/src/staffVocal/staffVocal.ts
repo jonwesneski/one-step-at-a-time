@@ -6,10 +6,10 @@ import {
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
   KeySignatureYCoordinates,
-  LetterOctave,
   LyricSyllablePosition,
   LyricsElementType,
   NoteChordOrRestElementType,
+  NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
 import { Octave, VoiceType } from '../types/theory';
@@ -41,7 +41,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     static #bassYCoordinates = generateYCoordinates('E4', 'E2');
 
     // soprano, mezzo, alto (treble-based)
-    static #trebleSharps: LetterOctave[] = [
+    static #trebleSharps: NoteLetterOctave[] = [
       'F5',
       'C5',
       'G5',
@@ -50,7 +50,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'E5',
       'B4',
     ];
-    static #trebleFlats: LetterOctave[] = [
+    static #trebleFlats: NoteLetterOctave[] = [
       'B4',
       'E5',
       'A4',
@@ -94,7 +94,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Ab: StaffVocalElement.#trebleMajorFlatYCoordinates.Cb,
     };
 
-    static #tenorSharps: LetterOctave[] = [
+    static #tenorSharps: NoteLetterOctave[] = [
       'F4',
       'C4',
       'G4',
@@ -103,7 +103,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'E4',
       'B3',
     ];
-    static #tenorFlats: LetterOctave[] = [
+    static #tenorFlats: NoteLetterOctave[] = [
       'B3',
       'E4',
       'A3',
@@ -148,7 +148,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     };
 
     // baritone, bass (bass-based)
-    static #bassSharps: LetterOctave[] = [
+    static #bassSharps: NoteLetterOctave[] = [
       'F3',
       'C3',
       'G3',
@@ -157,7 +157,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'E3',
       'B2',
     ];
-    static #bassFlats: LetterOctave[] = [
+    static #bassFlats: NoteLetterOctave[] = [
       'B2',
       'E3',
       'A2',

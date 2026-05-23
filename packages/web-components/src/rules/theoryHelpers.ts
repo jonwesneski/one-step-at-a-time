@@ -1,6 +1,6 @@
 import {
   KeySignatureYCoordinates,
-  LetterOctave,
+  NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
 import { Chord, ChordType, Note } from '../types/theory';
@@ -109,13 +109,13 @@ export const getNotes = (root: Note, semitones: number[]) => {
  * ]
  */
 export const generateYCoordinates = (
-  highestNote: LetterOctave,
-  lowestNote: LetterOctave,
+  highestNote: NoteLetterOctave,
+  lowestNote: NoteLetterOctave,
   startingY = 10
 ): YCoordinates => {
   // Parse note to extract letter and octave
   const parseNote = (
-    note: LetterOctave
+    note: NoteLetterOctave
   ): { letter: string; octave: number } => {
     // Strip accidentals if present, keep only the letter and octave
     const match = note.match(/^([A-G])#?b?(\d)$/);
@@ -155,7 +155,7 @@ export const generateYCoordinates = (
   let currentY = startingY;
 
   for (const { note, octave } of sequence) {
-    const noteStr = `${note}${octave}` as LetterOctave;
+    const noteStr = `${note}${octave}` as NoteLetterOctave;
     result[noteStr] = currentY;
     currentY += Y_COORDINATE_INCREMENT;
   }
@@ -165,7 +165,7 @@ export const generateYCoordinates = (
 
 export const generateKeySignatureYCoordinates = (
   keyCountMap: Partial<{ [key in Note]: number }>,
-  accidentals: LetterOctave[],
+  accidentals: NoteLetterOctave[],
   yCoordinates: YCoordinates
 ): KeySignatureYCoordinates => {
   const keySignatureYCoordinates: KeySignatureYCoordinates = {};
