@@ -142,7 +142,7 @@ function createQuarterRestPath(): SVGPathElement {
 
 const STEM_ANGLE_X = 60;
 const STEM_STROKE_WIDTH = 40;
-const HOOK_SPACING = SPACE * 0.85;
+const HOOK_SPACING = SPACE;
 const ARM_LENGTH_BASE = 1.0;
 const ARM_LENGTH_STEP = 0.1;
 
