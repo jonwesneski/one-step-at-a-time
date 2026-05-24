@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { DurationType } from '../types/theory';
+import { DURATIONS } from '../utils';
 import './index';
 
 afterEach(() => {
@@ -25,18 +25,7 @@ describe('music-rest', () => {
   });
 
   it('sets the correct data-duration for all durations', () => {
-    const durations: DurationType[] = [
-      'whole',
-      'half',
-      'quarter',
-      'eighth',
-      'sixteenth',
-      'thirtysecond',
-      'sixtyfourth',
-      'hundredtwentyeighth',
-    ];
-
-    for (const duration of durations) {
+    for (const duration of DURATIONS) {
       const el = document.createElement('music-rest') as any;
       el.setAttribute('duration', duration);
       document.body.appendChild(el);

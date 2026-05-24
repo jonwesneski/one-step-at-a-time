@@ -1,75 +1,77 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
+import { DURATIONS, NOTES, OCTAVES } from '../utils';
 
 const meta: Meta = {
   title: 'Components/MusicNote',
   tags: ['autodocs'],
-  render: (args) => html`
-    <music-note duration=${args.duration} note=${args.note}></music-note>
-  `,
-  argTypes: {
-    duration: {
-      control: 'select',
-      options: [
-        'whole',
-        'half',
-        'quarter',
-        'eighth',
-        'sixteenth',
-        'thirtysecond',
-        'sixtyfourth',
-        'hundredtwentyeighth',
-      ],
-    },
-    note: {
-      control: 'select',
-      options: [
-        'A',
-        'A#',
-        'Bb',
-        'B',
-        'C',
-        'C#',
-        'Db',
-        'D',
-        'D#',
-        'Eb',
-        'E',
-        'F',
-        'F#',
-        'Gb',
-        'G',
-        'G#',
-        'Ab',
-      ],
-    },
-  },
-  args: {
-    duration: 'quarter',
-    note: 'C',
-  },
 };
 export default meta;
 
 type Story = StoryObj;
 
-export const Quarter: Story = {
-  args: { duration: 'quarter', note: 'C' },
+export const Standalone: Story = {
+  args: {
+    duration: 'quarter',
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+  },
+  render: (args) => html`<music-note duration=${args.duration}></music-note>`,
 };
 
-export const Whole: Story = {
-  args: { duration: 'whole', note: 'G' },
-};
-
-export const Half: Story = {
-  args: { duration: 'half', note: 'E' },
-};
-
-export const Eighth: Story = {
-  args: { duration: 'eighth', note: 'A' },
-};
-
-export const Sixteenth: Story = {
-  args: { duration: 'sixteenth', note: 'D' },
+export const InStaff: Story = {
+  args: {
+    duration1: 'quarter',
+    note1: 'C',
+    octave1: 4,
+    duration2: 'eighth',
+    note2: 'E',
+    octave2: 4,
+    duration3: 'half',
+    note3: 'G',
+    octave3: 4,
+    duration4: 'quarter',
+    note4: 'A',
+    octave4: 4,
+  },
+  argTypes: {
+    duration1: { control: 'select', options: DURATIONS },
+    note1: { control: 'select', options: NOTES },
+    octave1: { control: 'select', options: OCTAVES },
+    duration2: { control: 'select', options: DURATIONS },
+    note2: { control: 'select', options: NOTES },
+    octave2: { control: 'select', options: OCTAVES },
+    duration3: { control: 'select', options: DURATIONS },
+    note3: { control: 'select', options: NOTES },
+    octave3: { control: 'select', options: OCTAVES },
+    duration4: { control: 'select', options: DURATIONS },
+    note4: { control: 'select', options: NOTES },
+    octave4: { control: 'select', options: OCTAVES },
+  },
+  render: (args) => html`
+    <music-staff-treble time="4/4">
+      <music-note
+        duration=${args.duration1}
+        note=${args.note1}
+        octave=${args.octave1}
+      ></music-note>
+      <music-note
+        duration=${args.duration2}
+        note=${args.note2}
+        octave=${args.octave2}
+      ></music-note>
+      <music-note
+        duration=${args.duration3}
+        note=${args.note3}
+        octave=${args.octave3}
+      ></music-note>
+      <music-note
+        duration=${args.duration4}
+        note=${args.note4}
+        octave=${args.octave4}
+      ></music-note>
+    </music-staff-treble>
+  `,
 };

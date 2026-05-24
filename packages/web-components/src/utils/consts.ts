@@ -1,3 +1,5 @@
+import { DurationType, Note, Octave } from '../types/theory';
+
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const MUSIC_NOTE = 'music-note';
@@ -57,3 +59,36 @@ export const COMMON_ATTRIBUTES = {
   //todo
   //TEMPO: tempo,
 } as const;
+
+export const DURATIONS: DurationType[] = [
+  'whole',
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtysecond',
+  'sixtyfourth',
+  'hundredtwentyeighth',
+];
+
+export const NOTES: Note[] = [
+  'A',
+  'A#',
+  'Bb',
+  'B',
+  'C',
+  'C#',
+  'Db',
+  'D',
+  'D#',
+  'Eb',
+  'E',
+  'F',
+  'F#',
+  'Gb',
+  'G',
+  'G#',
+  'Ab',
+];
+
+export const OCTAVES: Octave[] = [2, 3, 4, 5, 6];

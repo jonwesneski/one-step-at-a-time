@@ -1,17 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-
-const durationOptions = [
-  'whole',
-  'half',
-  'quarter',
-  'eighth',
-  'sixteenth',
-  'thirtysecond',
-  'sixtyfourth',
-  'hundredtwentyeighth',
-];
+import { DURATIONS } from '../utils';
 
 const meta: Meta = {
   title: 'Components/MusicRest',
@@ -28,7 +18,7 @@ export const Standalone: Story = {
   argTypes: {
     duration: {
       control: 'select',
-      options: durationOptions,
+      options: DURATIONS,
     },
   },
   render: (args) => html`<music-rest duration=${args.duration}></music-rest>`,
@@ -42,10 +32,10 @@ export const InStaff: Story = {
     duration4: 'sixteenth',
   },
   argTypes: {
-    duration1: { control: 'select', options: durationOptions },
-    duration2: { control: 'select', options: durationOptions },
-    duration3: { control: 'select', options: durationOptions },
-    duration4: { control: 'select', options: durationOptions },
+    duration1: { control: 'select', options: DURATIONS },
+    duration2: { control: 'select', options: DURATIONS },
+    duration3: { control: 'select', options: DURATIONS },
+    duration4: { control: 'select', options: DURATIONS },
   },
   render: (args) => html`
     <music-staff-treble time="4/4">

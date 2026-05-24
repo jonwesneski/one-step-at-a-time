@@ -1,4 +1,5 @@
 import { DurationType } from '../types/theory';
+import { DURATIONS } from '../utils';
 import {
   getFirstBallYPx,
   HALF_RECT_BOTTOM_PX,
@@ -28,19 +29,8 @@ function computeTopY(duration: DurationType): number {
   return ballTarget - getFirstBallYPx(hookCount);
 }
 
-const durations: DurationType[] = [
-  'whole',
-  'half',
-  'quarter',
-  'eighth',
-  'sixteenth',
-  'thirtysecond',
-  'sixtyfourth',
-  'hundredtwentyeighth',
-];
-
 const restTopMap: Record<DurationType, number> = Object.fromEntries(
-  durations.map((d) => [d, computeTopY(d)])
+  DURATIONS.map((d) => [d, computeTopY(d)])
 ) as Record<DurationType, number>;
 
 export function restToYCoordinate(duration: DurationType): number {
