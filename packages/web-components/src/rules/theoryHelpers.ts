@@ -51,6 +51,7 @@ const enharmonicIndex: Partial<Record<Note, 0 | 1 | 2 | 3 | 4>> = {
   'D#': 4,
   'A#': 4,
 };
+// Just exporting for testing; do not use
 export const getNotes = (root: Note, semitones: number[]) => {
   const notes: Note[] = [root];
   const choiceIndex = enharmonicIndex[root] ?? 2;

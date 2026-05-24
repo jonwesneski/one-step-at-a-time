@@ -1,19 +1,20 @@
 /**
  * @jest-environment jsdom
  */
+import { MUSIC_NOTE } from '../utils/consts';
 import './index';
 
 afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('music-note', () => {
+describe(MUSIC_NOTE, () => {
   it('registers as a custom element', () => {
-    expect(customElements.get('music-note')).toBeDefined();
+    expect(customElements.get(MUSIC_NOTE)).toBeDefined();
   });
 
   it('renders with default duration and note', () => {
-    const el = document.createElement('music-note') as any;
+    const el = document.createElement(MUSIC_NOTE) as any;
     document.body.appendChild(el);
 
     expect(el.duration).toBe('quarter');

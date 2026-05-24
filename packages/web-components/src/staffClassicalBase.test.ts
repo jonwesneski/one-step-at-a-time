@@ -4,6 +4,13 @@
 import './index';
 import type { NoteLetterOctave } from './types/elements';
 import { ChordElementType, RestElementType } from './types/elements';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_CHORD,
+  MUSIC_NOTE,
+  MUSIC_REST,
+  MUSIC_STAFF_TREBLE,
+} from './utils/consts';
 import type { DurationType, Note, Octave } from './types/theory';
 import { restToYCoordinate } from './rules/restRules';
 import {
@@ -20,12 +27,12 @@ describe('staffClassicalBase', () => {
   it('logs an error when adding another note on a filled measure', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('time', '4/4');
+    const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
     document.body.appendChild(el);
 
     const notes = Array.from({ length: 5 }, () => {
-      const note = document.createElement('music-note') as any;
+      const note = document.createElement(MUSIC_NOTE) as any;
       note.setAttribute('duration', 'quarter');
       note.setAttribute('note', 'C4');
       return note;
@@ -45,19 +52,19 @@ describe('staffClassicalBase', () => {
   it('logs an error when adding a note that partially exceeds the remaining available space in measure', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('time', '4/4');
+    const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
     document.body.appendChild(el);
 
     const notes = [
       ...Array.from({ length: 3 }, () => {
-        const note = document.createElement('music-note') as any;
+        const note = document.createElement(MUSIC_NOTE) as any;
         note.setAttribute('duration', 'quarter');
         note.setAttribute('note', 'C4');
         return note;
       }),
       (() => {
-        const note = document.createElement('music-note') as any;
+        const note = document.createElement(MUSIC_NOTE) as any;
         note.setAttribute('duration', 'half');
         note.setAttribute('note', 'C4');
         return note;
@@ -76,10 +83,10 @@ describe('staffClassicalBase', () => {
   });
 
   it('assigns ascending pitch Y coordinates to a chord driven by chord attribute', () => {
-    const staff = document.createElement('music-staff-treble') as any;
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
     document.body.appendChild(staff);
 
-    const chord = document.createElement('music-chord') as ChordElementType;
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
     chord.setAttribute('chord', 'Bmaj');
     chord.setAttribute('duration', 'quarter');
     document.body.appendChild(chord);
@@ -129,10 +136,10 @@ function expectedNoteTop(value: NoteLetterOctave): string {
 }
 
 function makeStaff(): Element {
-  const el = document.createElement('music-staff-treble') as any;
-  el.setAttribute('keysig', 'C');
-  el.setAttribute('mode', 'major');
-  el.setAttribute('time', '4/4');
+  const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
+  el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
   document.body.appendChild(el);
   return el;
 }
@@ -142,7 +149,7 @@ function renderNote(
   value: NoteLetterOctave,
   duration: DurationType = 'quarter'
 ): HTMLElement {
-  const note = document.createElement('music-note') as any;
+  const note = document.createElement(MUSIC_NOTE) as any;
   note.setAttribute('duration', duration);
   note.setAttribute('note', value[0] as Note);
   note.setAttribute('octave', value[1] as unknown as Octave);
@@ -154,7 +161,7 @@ function renderNote(
 }
 
 function renderRest(staff: Element, duration: DurationType): RestElementType {
-  const rest = document.createElement('music-rest') as RestElementType;
+  const rest = document.createElement(MUSIC_REST) as RestElementType;
   rest.setAttribute('duration', duration);
   staff.appendChild(rest);
   const slot = (staff as any).shadowRoot.querySelector('slot');
@@ -168,10 +175,10 @@ function renderChordByNotes(
   notes: NoteLetterOctave[],
   duration: DurationType = 'quarter'
 ): ChordElementType {
-  const chord = document.createElement('music-chord') as ChordElementType;
+  const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
   chord.setAttribute('duration', duration);
   for (const value of notes) {
-    const note = document.createElement('music-note') as any;
+    const note = document.createElement(MUSIC_NOTE) as any;
     note.setAttribute('note', value[0] as Note);
     note.setAttribute('octave', value[1] as unknown as Octave);
     chord.appendChild(note);
@@ -188,7 +195,7 @@ function renderChordByAttribute(
   chordAttr: string,
   duration: DurationType = 'quarter'
 ): ChordElementType {
-  const chord = document.createElement('music-chord') as ChordElementType;
+  const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
   chord.setAttribute('chord', chordAttr);
   chord.setAttribute('duration', duration);
   staff.appendChild(chord);
@@ -246,11 +253,11 @@ describe('note integration', () => {
 
   it('keeps noFlags=true on beamed eighth notes after note changes', () => {
     const staff = makeStaff();
-    const note1 = document.createElement('music-note') as any;
+    const note1 = document.createElement(MUSIC_NOTE) as any;
     note1.setAttribute('duration', 'eighth' as DurationType);
     note1.setAttribute('note', 'E' as Note);
     note1.setAttribute('octave', `${4 satisfies Octave}`);
-    const note2 = document.createElement('music-note') as any;
+    const note2 = document.createElement(MUSIC_NOTE) as any;
     note2.setAttribute('duration', 'eighth' as DurationType);
     note2.setAttribute('note', 'G' as Note);
     note2.setAttribute('octave', `${4 satisfies Octave}`);

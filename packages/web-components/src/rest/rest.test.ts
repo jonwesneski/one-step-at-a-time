@@ -2,19 +2,20 @@
  * @jest-environment jsdom
  */
 import { DURATIONS } from '../utils';
+import { MUSIC_REST } from '../utils/consts';
 import './index';
 
 afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('music-rest', () => {
+describe(MUSIC_REST, () => {
   it('registers as a custom element', () => {
-    expect(customElements.get('music-rest')).toBeDefined();
+    expect(customElements.get(MUSIC_REST)).toBeDefined();
   });
 
   it('renders a rest SVG in shadow DOM', () => {
-    const el = document.createElement('music-rest') as any;
+    const el = document.createElement(MUSIC_REST) as any;
     el.setAttribute('duration', 'quarter');
     document.body.appendChild(el);
 
@@ -26,7 +27,7 @@ describe('music-rest', () => {
 
   it('sets the correct data-duration for all durations', () => {
     for (const duration of DURATIONS) {
-      const el = document.createElement('music-rest') as any;
+      const el = document.createElement(MUSIC_REST) as any;
       el.setAttribute('duration', duration);
       document.body.appendChild(el);
 
@@ -39,7 +40,7 @@ describe('music-rest', () => {
   });
 
   it('renders standalone (without a staff parent) with non-empty shadow DOM', () => {
-    const el = document.createElement('music-rest') as any;
+    const el = document.createElement(MUSIC_REST) as any;
     el.setAttribute('duration', 'half');
     document.body.appendChild(el);
 
@@ -48,7 +49,7 @@ describe('music-rest', () => {
   });
 
   it('does not render accidental elements in shadow DOM', () => {
-    const el = document.createElement('music-rest') as any;
+    const el = document.createElement(MUSIC_REST) as any;
     el.setAttribute('duration', 'eighth');
     document.body.appendChild(el);
 
@@ -59,14 +60,14 @@ describe('music-rest', () => {
   });
 
   it('defaults duration to quarter when attribute is absent', () => {
-    const el = document.createElement('music-rest') as any;
+    const el = document.createElement(MUSIC_REST) as any;
     document.body.appendChild(el);
 
     expect(el.duration).toBe('quarter');
   });
 
   it('re-renders when duration attribute changes', () => {
-    const el = document.createElement('music-rest') as any;
+    const el = document.createElement(MUSIC_REST) as any;
     el.setAttribute('duration', 'whole');
     document.body.appendChild(el);
 

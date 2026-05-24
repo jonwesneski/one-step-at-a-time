@@ -5,23 +5,24 @@ import {
   waitForRedrawCycle,
   waitForStaffNotesPositioned,
 } from '../../test-fixtures/helpers';
+import { MUSIC_NOTE, MUSIC_REST, MUSIC_STAFF_TREBLE } from '../utils/consts';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
 });
 
 async function readNoteLefts(page: Page): Promise<number[]> {
-  return page.evaluate(() => {
-    const notes = Array.from(document.querySelectorAll('music-note'));
+  return page.evaluate((noteTag) => {
+    const notes = Array.from(document.querySelectorAll(noteTag));
     return notes.map((n) => n.getBoundingClientRect().left);
-  });
+  }, MUSIC_NOTE);
 }
 
 async function readBeamShapes(
   page: Page
 ): Promise<{ count: number; firstBBox: { x: number; width: number } | null }> {
-  return page.evaluate(() => {
-    const staff = document.querySelector('music-staff-treble');
+  return page.evaluate((staffTag) => {
+    const staff = document.querySelector(staffTag);
     if (staff === null || staff.shadowRoot === null) {
       throw new Error('staff not ready');
     }
@@ -40,14 +41,14 @@ async function readBeamShapes(
       count: beams.length,
       firstBBox: { x: bbox.x, width: bbox.width },
     };
-  });
+  }, MUSIC_STAFF_TREBLE);
 }
 
 async function readStandaloneConnectors(
   page: Page
 ): Promise<{ count: number; firstBBox: { x: number; width: number } | null }> {
-  return page.evaluate(() => {
-    const staff = document.querySelector('music-staff-treble');
+  return page.evaluate((staffTag) => {
+    const staff = document.querySelector(staffTag);
     if (staff === null || staff.shadowRoot === null) {
       throw new Error('staff not ready');
     }
@@ -62,10 +63,10 @@ async function readStandaloneConnectors(
       count: connectors.length,
       firstBBox: { x: bbox.x, width: bbox.width },
     };
-  });
+  }, MUSIC_STAFF_TREBLE);
 }
 
-test.describe('music-staff-treble responsive layout', () => {
+test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
   test('note left-edges remain strictly monotonic across a resize', async ({
     page,
   }) => {
@@ -224,30 +225,33 @@ test.describe('music-staff-treble responsive layout', () => {
     page,
   }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '800px';
-      const staff = document.createElement('music-staff-treble');
-      const noteA = document.createElement('music-note');
-      noteA.setAttribute('note', 'C4');
-      noteA.setAttribute('duration', 'quarter');
-      noteA.setAttribute('tie', 'start');
-      const noteB = document.createElement('music-note');
-      noteB.setAttribute('note', 'C4');
-      noteB.setAttribute('duration', 'quarter');
-      noteB.setAttribute('tie', 'end');
-      const noteC = document.createElement('music-note');
-      noteC.setAttribute('note', 'D4');
-      noteC.setAttribute('duration', 'quarter');
-      staff.appendChild(noteA);
-      staff.appendChild(noteB);
-      staff.appendChild(noteC);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C4');
+        noteA.setAttribute('duration', 'quarter');
+        noteA.setAttribute('tie', 'start');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'C4');
+        noteB.setAttribute('duration', 'quarter');
+        noteB.setAttribute('tie', 'end');
+        const noteC = document.createElement(noteTag);
+        noteC.setAttribute('note', 'D4');
+        noteC.setAttribute('duration', 'quarter');
+        staff.appendChild(noteA);
+        staff.appendChild(noteB);
+        staff.appendChild(noteC);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE }
+    );
     await positionedAtStart;
     await waitForRedrawCycle(page);
 
@@ -278,25 +282,28 @@ test.describe('music-staff-treble responsive layout', () => {
     page,
   }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '800px';
-      const staff = document.createElement('music-staff-treble');
-      const noteA = document.createElement('music-note');
-      noteA.setAttribute('note', 'C4');
-      noteA.setAttribute('duration', 'quarter');
-      noteA.setAttribute('tie', 'start');
-      const noteB = document.createElement('music-note');
-      noteB.setAttribute('note', 'D4');
-      noteB.setAttribute('duration', 'quarter');
-      staff.appendChild(noteA);
-      staff.appendChild(noteB);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C4');
+        noteA.setAttribute('duration', 'quarter');
+        noteA.setAttribute('tie', 'start');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'D4');
+        noteB.setAttribute('duration', 'quarter');
+        staff.appendChild(noteA);
+        staff.appendChild(noteB);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE }
+    );
     await positionedAtStart;
     await waitForRedrawCycle(page);
 
@@ -316,25 +323,28 @@ test.describe('music-staff-treble responsive layout', () => {
     page,
   }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '800px';
-      const staff = document.createElement('music-staff-treble');
-      const noteA = document.createElement('music-note');
-      noteA.setAttribute('note', 'C4');
-      noteA.setAttribute('duration', 'quarter');
-      const noteB = document.createElement('music-note');
-      noteB.setAttribute('note', 'D4');
-      noteB.setAttribute('duration', 'quarter');
-      noteB.setAttribute('tie', 'end');
-      staff.appendChild(noteA);
-      staff.appendChild(noteB);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C4');
+        noteA.setAttribute('duration', 'quarter');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'D4');
+        noteB.setAttribute('duration', 'quarter');
+        noteB.setAttribute('tie', 'end');
+        staff.appendChild(noteA);
+        staff.appendChild(noteB);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE }
+    );
     await positionedAtStart;
     await waitForRedrawCycle(page);
 
@@ -351,41 +361,47 @@ test.describe('music-staff-treble responsive layout', () => {
   });
 });
 
-test.describe('music-staff-treble rests', () => {
+test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
   test('rest elements position left-to-right among pitched notes', async ({
     page,
   }) => {
     const positioned = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '800px';
-      const staff = document.createElement('music-staff-treble');
-      const noteA = document.createElement('music-note');
-      noteA.setAttribute('note', 'C4');
-      noteA.setAttribute('duration', 'quarter');
-      const rest = document.createElement('music-rest');
-      rest.setAttribute('duration', 'quarter');
-      const noteB = document.createElement('music-note');
-      noteB.setAttribute('note', 'E4');
-      noteB.setAttribute('duration', 'quarter');
-      staff.appendChild(noteA);
-      staff.appendChild(rest);
-      staff.appendChild(noteB);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, noteTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C4');
+        noteA.setAttribute('duration', 'quarter');
+        const rest = document.createElement(restTag);
+        rest.setAttribute('duration', 'quarter');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'E4');
+        noteB.setAttribute('duration', 'quarter');
+        staff.appendChild(noteA);
+        staff.appendChild(rest);
+        staff.appendChild(noteB);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
+    );
     await positioned;
     await waitForRedrawCycle(page);
 
-    const lefts = await page.evaluate(() => {
-      const notes = Array.from(
-        document.querySelectorAll('music-note, music-rest')
-      );
-      return notes.map((n) => n.getBoundingClientRect().left);
-    });
+    const lefts = await page.evaluate(
+      ({ noteTag, restTag }) => {
+        const notes = Array.from(
+          document.querySelectorAll(`${noteTag}, ${restTag}`)
+        );
+        return notes.map((n) => n.getBoundingClientRect().left);
+      },
+      { noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
+    );
     expect(lefts.length).toBe(3);
     for (let i = 1; i < lefts.length; i++) {
       expect(lefts[i]).toBeGreaterThan(lefts[i - 1]);
@@ -396,29 +412,32 @@ test.describe('music-staff-treble rests', () => {
     page,
   }) => {
     const positioned = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '800px';
-      const staff = document.createElement('music-staff-treble');
-      const rest = document.createElement('music-rest');
-      rest.setAttribute('duration', 'whole');
-      staff.appendChild(rest);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const rest = document.createElement(restTag);
+        rest.setAttribute('duration', 'whole');
+        staff.appendChild(rest);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, restTag: MUSIC_REST }
+    );
     await positioned;
     await waitForRedrawCycle(page);
 
-    const hasRestSvg = await page.evaluate(() => {
-      const restEl = document.querySelector('music-rest');
+    const hasRestSvg = await page.evaluate((restTag) => {
+      const restEl = document.querySelector(restTag);
       if (restEl === null || restEl.shadowRoot === null) {
         return false;
       }
       return restEl.shadowRoot.querySelector('svg.rest') !== null;
-    });
+    }, MUSIC_REST);
     expect(hasRestSvg).toBe(true);
   });
 
@@ -426,31 +445,34 @@ test.describe('music-staff-treble rests', () => {
     page,
   }) => {
     const positioned = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '800px';
-      const staff = document.createElement('music-staff-treble');
-      const noteA = document.createElement('music-note');
-      noteA.setAttribute('note', 'C4');
-      noteA.setAttribute('duration', 'eighth');
-      const noteB = document.createElement('music-note');
-      noteB.setAttribute('note', 'D4');
-      noteB.setAttribute('duration', 'eighth');
-      const rest = document.createElement('music-rest');
-      rest.setAttribute('duration', 'eighth');
-      const noteC = document.createElement('music-note');
-      noteC.setAttribute('note', 'E4');
-      noteC.setAttribute('duration', 'eighth');
-      staff.appendChild(noteA);
-      staff.appendChild(noteB);
-      staff.appendChild(rest);
-      staff.appendChild(noteC);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, noteTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C4');
+        noteA.setAttribute('duration', 'eighth');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'D4');
+        noteB.setAttribute('duration', 'eighth');
+        const rest = document.createElement(restTag);
+        rest.setAttribute('duration', 'eighth');
+        const noteC = document.createElement(noteTag);
+        noteC.setAttribute('note', 'E4');
+        noteC.setAttribute('duration', 'eighth');
+        staff.appendChild(noteA);
+        staff.appendChild(noteB);
+        staff.appendChild(rest);
+        staff.appendChild(noteC);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
+    );
     await positioned;
     await waitForRedrawCycle(page);
 
@@ -458,10 +480,10 @@ test.describe('music-staff-treble rests', () => {
     // The rest breaks the beam run — each pair of eighths before/after the rest
     // may form their own beam, but the rest itself must not be beamed.
     // We simply verify that no beam spans across all 4 elements (width < full staff).
-    const staffWidth = await page.evaluate(() => {
-      const staff = document.querySelector('music-staff-treble');
+    const staffWidth = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
       return staff?.getBoundingClientRect().width ?? 0;
-    });
+    }, MUSIC_STAFF_TREBLE);
     if (beams.firstBBox !== null) {
       expect(beams.firstBBox.width).toBeLessThan(staffWidth * 0.8);
     }
@@ -471,24 +493,28 @@ test.describe('music-staff-treble rests', () => {
     page,
   }) => {
     const positioned = waitForStaffNotesPositioned(page);
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
-      }
-      host.innerHTML = '';
-      host.style.width = '600px';
-      const staff = document.createElement('music-staff-treble');
-      const rest = document.createElement('music-rest');
-      rest.setAttribute('duration', 'half');
-      staff.appendChild(rest);
-      host.appendChild(staff);
-    });
+    await page.evaluate(
+      ({ staffTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        const rest = document.createElement(restTag);
+        rest.setAttribute('duration', 'half');
+        staff.appendChild(rest);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF_TREBLE, restTag: MUSIC_REST }
+    );
     await positioned;
     await waitForRedrawCycle(page);
 
     const staffExists = await page.evaluate(
-      () => document.querySelector('music-staff-treble') !== null
+      (staffTag) => document.querySelector(staffTag) !== null,
+      MUSIC_STAFF_TREBLE
     );
     expect(staffExists).toBe(true);
   });
