@@ -36,6 +36,17 @@ const WHOLE_REST_Y = Math.round(Y_CENTER - SPACE / 2);
 // The centre line is at Y_CENTER. The rectangle sits above it, so its bottom edge is at the line.
 const HALF_REST_Y = Math.round(Y_CENTER - REST_RECT_HEIGHT);
 
+// SVG-internal pixel positions for key visual features (used by restRules.ts)
+export const WHOLE_RECT_TOP_PX =
+  Math.round(WHOLE_REST_Y * NOTE_SCALE * 100) / 100;
+export const HALF_RECT_BOTTOM_PX =
+  Math.round((HALF_REST_Y + REST_RECT_HEIGHT) * NOTE_SCALE * 100) / 100;
+export const QUARTER_SY_PX = (Y_CENTER - SPACE * 2) * NOTE_SCALE;
+
+export function getFirstBallYPx(hookCount: number): number {
+  return 33.75 - 5 * hookCount;
+}
+
 export type RestProps = {
   duration: DurationType;
 };
@@ -136,29 +147,14 @@ const ARM_LENGTH_BASE = 1.0;
 const ARM_LENGTH_STEP = 0.1;
 
 type HookDurationType = Exclude<DurationType, 'whole' | 'half' | 'quarter'>;
-const hookCountMap: Record<HookDurationType, number> = {
+
+export const hookCountMap: Record<HookDurationType, number> = {
   eighth: 1,
   sixteenth: 2,
   thirtysecond: 3,
   sixtyfourth: 4,
   hundredtwentyeighth: 5,
 };
-
-// Returns the pixel offset of the rest's visual centre from the SVG geometric centre
-// (REST_Y_SVG_CENTER = 30px). Positive = visual centre is below geometric centre.
-export function getRestVisualCenterOffset(duration: DurationType): number {
-  if (duration === 'whole' || duration === 'half') {
-    return -(SPACE * NOTE_SCALE) / 4;
-  }
-  if (duration === 'quarter') {
-    return 0;
-  }
-  const hookCount = hookCountMap[duration];
-  const stemTopY = Y_CENTER - SPACE * 0.5 - (hookCount - 1) * SPACE * 0.5;
-  const stemBotY = Y_CENTER + SPACE * 1.0 + (hookCount - 1) * SPACE * 0.65;
-  const midpointPx = ((stemTopY + stemBotY) / 2) * NOTE_SCALE;
-  return midpointPx - REST_Y_SVG_CENTER;
-}
 
 function createSingleHook(
   hx: number,

@@ -2,61 +2,57 @@ import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
 
+const durationOptions = [
+  'whole',
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtysecond',
+  'sixtyfourth',
+  'hundredtwentyeighth',
+];
+
 const meta: Meta = {
   title: 'Components/MusicRest',
   tags: ['autodocs'],
-  render: (args) => html` <music-rest duration=${args.duration}></music-rest> `,
-  argTypes: {
-    duration: {
-      control: 'select',
-      options: [
-        'whole',
-        'half',
-        'quarter',
-        'eighth',
-        'sixteenth',
-        'thirtysecond',
-        'sixtyfourth',
-        'hundredtwentyeighth',
-      ],
-    },
-  },
-  args: {
-    duration: 'quarter',
-  },
 };
 export default meta;
 
 type Story = StoryObj;
 
-export const Whole: Story = {
-  args: { duration: 'whole' },
+export const Standalone: Story = {
+  args: {
+    duration: 'quarter',
+  },
+  argTypes: {
+    duration: {
+      control: 'select',
+      options: durationOptions,
+    },
+  },
+  render: (args) => html`<music-rest duration=${args.duration}></music-rest>`,
 };
 
-export const Half: Story = {
-  args: { duration: 'half' },
-};
-
-export const Quarter: Story = {
-  args: { duration: 'quarter' },
-};
-
-export const Eighth: Story = {
-  args: { duration: 'eighth' },
-};
-
-export const Sixteenth: Story = {
-  args: { duration: 'sixteenth' },
-};
-
-export const Thirtysecond: Story = {
-  args: { duration: 'thirtysecond' },
-};
-
-export const Sixtyfourth: Story = {
-  args: { duration: 'sixtyfourth' },
-};
-
-export const Hundredtwentyeighth: Story = {
-  args: { duration: 'hundredtwentyeighth' },
+export const InStaff: Story = {
+  args: {
+    duration1: 'quarter',
+    duration2: 'eighth',
+    duration3: 'half',
+    duration4: 'sixteenth',
+  },
+  argTypes: {
+    duration1: { control: 'select', options: durationOptions },
+    duration2: { control: 'select', options: durationOptions },
+    duration3: { control: 'select', options: durationOptions },
+    duration4: { control: 'select', options: durationOptions },
+  },
+  render: (args) => html`
+    <music-staff-treble time="4/4">
+      <music-rest duration=${args.duration1}></music-rest>
+      <music-rest duration=${args.duration2}></music-rest>
+      <music-rest duration=${args.duration3}></music-rest>
+      <music-rest duration=${args.duration4}></music-rest>
+    </music-staff-treble>
+  `,
 };
