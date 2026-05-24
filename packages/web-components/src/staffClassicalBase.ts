@@ -90,6 +90,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #describeEndX = 0;
   #showDescribe = true;
   #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
+  #boundNoteYChange = () => {
+    if (this.#currentElements.length > 0) {
+      this.#renderNotes(this.#currentElements);
+    }
+  };
 
   protected get describeEndX(): number {
     return this.#describeEndX;
@@ -234,6 +239,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
       this.#boundDrawConnectors
     );
+    this.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
   }
 
   #enableDrag() {
@@ -524,6 +530,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
       this.#boundDrawConnectors
     );
+    this.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {

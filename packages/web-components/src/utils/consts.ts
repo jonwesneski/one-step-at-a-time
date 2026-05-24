@@ -31,6 +31,7 @@ export const MUSIC_LYRICS_NODE = MUSIC_LYRICS.toUpperCase();
 
 export const NOTE_EVENTS = {
   CONNECTOR_ATTRIBUTE_CHANGE: 'connector-attribute-change',
+  NOTE_Y_CHANGE: 'note-y-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',

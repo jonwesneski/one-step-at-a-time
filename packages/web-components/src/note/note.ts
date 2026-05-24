@@ -160,6 +160,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'note' || name === 'octave') {
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
       this.render();
     }
 
