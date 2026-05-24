@@ -2,6 +2,7 @@ import type {
   DurationType,
   Mode,
   Note,
+  TimeSignature,
 } from '@one-step-at-a-time/web-components';
 
 export type StaffType = 'treble' | 'bass';
@@ -44,7 +45,7 @@ export type Selection = { measureId: string | null; staffId: string | null };
 export type CompositionFormValues = {
   title: string;
   keySig: Note;
-  timeSig: string;
+  timeSig: TimeSignature;
   mode: Mode;
 } & CompositionStructure;
 
