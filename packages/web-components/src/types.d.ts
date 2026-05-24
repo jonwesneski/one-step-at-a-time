@@ -1,6 +1,13 @@
 import 'react';
 import { ConnectorRole } from './types/elements';
-import type { Chord, DurationType, Mode, Note, Octave } from './types/theory';
+import type {
+  Chord,
+  DurationType,
+  Mode,
+  Note,
+  Octave,
+  TimeSignature,
+} from './types/theory';
 
 type WebComponentProps = {
   key?: React.Key;
@@ -14,19 +21,19 @@ declare module 'react' {
     interface IntrinsicElements {
       'music-composition': WebComponentProps & {
         keySig?: Note;
-        mode?: string;
-        time?: string;
+        mode?: Mode;
+        time?: TimeSignature;
       };
       'music-measure': WebComponentProps & {
         keySig?: Note;
         mode?: Mode;
-        time?: string;
+        time?: TimeSignature;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-bass': WebComponentProps & {
         keySig?: Note;
         mode?: Mode;
-        time?: string;
+        time?: TimeSignature;
         editable?: boolean;
         managed?: boolean;
         onClick?: React.MouseEventHandler<HTMLElement>;
@@ -34,20 +41,20 @@ declare module 'react' {
       'music-staff-treble': WebComponentProps & {
         keySig?: Note;
         mode?: Mode;
-        time?: string;
+        time?: TimeSignature;
         editable?: boolean;
         managed?: boolean;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
       'music-staff-guitar-tab': WebComponentProps & {
-        time?: string;
+        time?: TimeSignature;
         children?: React.ReactNode;
       };
       'music-staff-vocal': WebComponentProps & {
         voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
         keySig?: Note;
         mode?: Mode;
-        time?: string;
+        time?: TimeSignature;
         editable?: boolean;
         managed?: boolean;
       };
