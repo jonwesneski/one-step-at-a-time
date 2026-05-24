@@ -6,16 +6,17 @@ import {
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
   KeySignatureYCoordinates,
-  LetterOctave,
   LyricSyllablePosition,
   LyricsElementType,
-  NoteOrChordElementType,
+  NoteChordOrRestElementType,
+  NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
 import { Octave, VoiceType } from '../types/theory';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,
+  MUSIC_REST_NODE,
   STAFF_EVENTS,
 } from '../utils/consts';
 import {
@@ -30,7 +31,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_VERSE_SPACING = 15; // px between verse lines
 
   class StaffVocalElement extends StaffClassicalElementBase {
-    #lastElements: NoteOrChordElementType[] = [];
+    #slottedElements: NoteChordOrRestElementType[] = [];
 
     static #sopranoYCoordinates = generateYCoordinates('C6', 'C4');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
@@ -40,7 +41,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     static #bassYCoordinates = generateYCoordinates('E4', 'E2');
 
     // soprano, mezzo, alto (treble-based)
-    static #trebleSharps: LetterOctave[] = [
+    static #trebleSharps: NoteLetterOctave[] = [
       'F5',
       'C5',
       'G5',
@@ -49,7 +50,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'E5',
       'B4',
     ];
-    static #trebleFlats: LetterOctave[] = [
+    static #trebleFlats: NoteLetterOctave[] = [
       'B4',
       'E5',
       'A4',
@@ -93,7 +94,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       Ab: StaffVocalElement.#trebleMajorFlatYCoordinates.Cb,
     };
 
-    static #tenorSharps: LetterOctave[] = [
+    static #tenorSharps: NoteLetterOctave[] = [
       'F4',
       'C4',
       'G4',
@@ -102,7 +103,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'E4',
       'B3',
     ];
-    static #tenorFlats: LetterOctave[] = [
+    static #tenorFlats: NoteLetterOctave[] = [
       'B3',
       'E4',
       'A3',
@@ -147,7 +148,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     };
 
     // baritone, bass (bass-based)
-    static #bassSharps: LetterOctave[] = [
+    static #bassSharps: NoteLetterOctave[] = [
       'F3',
       'C3',
       'G3',
@@ -156,7 +157,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       'E3',
       'B2',
     ];
-    static #bassFlats: LetterOctave[] = [
+    static #bassFlats: NoteLetterOctave[] = [
       'B2',
       'E3',
       'A2',
@@ -322,12 +323,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     protected override onHandleSlotChange(event: Event): void {
       const slot = event.target as HTMLSlotElement;
-      this.#lastElements = slot
+      this.#slottedElements = slot
         .assignedElements({ flatten: true })
         .filter(
           (e) =>
-            e.nodeName === MUSIC_NOTE_NODE || e.nodeName === MUSIC_CHORD_NODE
-        ) as NoteOrChordElementType[];
+            e.nodeName === MUSIC_NOTE_NODE ||
+            e.nodeName === MUSIC_CHORD_NODE ||
+            e.nodeName === MUSIC_REST_NODE
+        ) as NoteChordOrRestElementType[];
       super.onHandleSlotChange(event);
     }
 
@@ -417,10 +420,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         maxLyricChars = Math.max(maxLyricChars, verseChars);
       }
-      if (this.#lastElements.length > 0) {
+      if (this.#slottedElements.length > 0) {
         const minWidth = calculateStaffVocalMinWidth(
           this.describeEndX,
-          this.#lastElements.length,
+          this.#slottedElements.length,
           maxLyricChars
         );
         this.dispatchEvent(

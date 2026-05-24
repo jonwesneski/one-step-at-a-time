@@ -1,8 +1,8 @@
 /**
  * @jest-environment jsdom
  */
-import { DurationType, LetterNote } from '../types/theory';
 import '../note/index';
+import { DurationType, Note } from '../types/theory';
 import './index';
 
 afterEach(() => {
@@ -38,9 +38,7 @@ describe('music-chord', () => {
       document.body.appendChild(el);
 
       const notes = el.notes;
-      const values: LetterNote[] = notes.map(
-        (n: { value: LetterNote }) => n.value
-      );
+      const values: Note[] = notes.map((n: { value: Note }) => n.value);
       expect(values).toEqual(['A', 'C#', 'E']);
       notes.forEach((n: { octave: null; duration: DurationType }) => {
         expect(n.octave).toBeNull();
@@ -62,9 +60,7 @@ describe('music-chord', () => {
       el.appendChild(noteC);
       el.appendChild(noteE);
 
-      const values: LetterNote[] = el.notes.map(
-        (n: { value: LetterNote }) => n.value
-      );
+      const values: Note[] = el.notes.map((n: { value: Note }) => n.value);
       expect(values).toEqual(['C', 'E']);
     });
   });

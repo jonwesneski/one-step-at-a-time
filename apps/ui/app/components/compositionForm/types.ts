@@ -1,8 +1,8 @@
 import type {
   DurationType,
-  LetterNote,
   Mode,
   Note,
+  TimeSignature,
 } from '@one-step-at-a-time/web-components';
 
 export type StaffType = 'treble' | 'bass';
@@ -44,12 +44,12 @@ export type Selection = { measureId: string | null; staffId: string | null };
 // Root form shape (BasicInfo fields + structure)
 export type CompositionFormValues = {
   title: string;
-  keySig: LetterNote;
-  timeSig: string;
+  keySig: Note;
+  timeSig: TimeSignature;
   mode: Mode;
 } & CompositionStructure;
 
-export const KEY_SIGNATURE_OPTIONS: LetterNote[] = [
+export const KEY_SIGNATURE_OPTIONS: Note[] = [
   'C',
   'G',
   'D',
@@ -97,7 +97,6 @@ export const NOTE_OPTIONS: Note[] = [
   'G',
   'G#',
   'Ab',
-  'rest',
 ];
 
 export const DURATION_OPTIONS: DurationType[] = [

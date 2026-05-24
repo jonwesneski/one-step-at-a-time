@@ -162,7 +162,8 @@ import {
   durationToFactor,
   durationToFlagCountMap,
 } from '../../rules/theoryConsts';
-import { NoteOrChordElementType } from '../../types/elements';
+import { NoteChordOrRestElementType } from '../../types/elements';
+import { MUSIC_REST_NODE } from '../consts';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
@@ -571,7 +572,7 @@ export class BeamsBuilder {
   #beamedIndices: Set<number>;
 
   constructor(
-    elements: NoteOrChordElementType[],
+    elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure]
   ) {
     const { groups, beamedIndices } = BeamsBuilder.#scan(elements, time);
@@ -594,7 +595,7 @@ export class BeamsBuilder {
   }
 
   static #scan(
-    elements: NoteOrChordElementType[],
+    elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure]
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
     const [beats, beatType] = time;
@@ -647,7 +648,10 @@ export class BeamsBuilder {
 
         const dur = (elements[i].dataset.duration ??
           elements[i].getAttribute('duration')) as DurationType;
-        const flagCount = durationToFlagCountMap.get(dur);
+        const flagCount =
+          elements[i].nodeName === MUSIC_REST_NODE
+            ? undefined
+            : durationToFlagCountMap.get(dur);
 
         if (flagCount !== undefined) {
           // A non-adjacent index means a non-beamable note broke the run.

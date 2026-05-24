@@ -1,4 +1,4 @@
-import { LetterOctave, YCoordinates } from '../types/elements';
+import { NoteLetterOctave, YCoordinates } from '../types/elements';
 import { NOTE_EVENTS } from './consts';
 
 type PitchDragState = {
@@ -6,8 +6,8 @@ type PitchDragState = {
   elementIndex: number;
   /** For chords: the index of the notehead within the chord being dragged. */
   chordNoteIndex: number | null;
-  originalNote: LetterOctave;
-  currentNote: LetterOctave;
+  originalNote: NoteLetterOctave;
+  currentNote: NoteLetterOctave;
   originalY: number;
   startClientY: number;
   tooltip: HTMLDivElement;
@@ -18,8 +18,8 @@ export type PitchChangeDetail = {
   elementIndex: number;
   /** Index of the note within the chord, or null for a single note. */
   chordNoteIndex: number | null;
-  fromNote: LetterOctave;
-  toNote: LetterOctave;
+  fromNote: NoteLetterOctave;
+  toNote: NoteLetterOctave;
 };
 
 /**
@@ -35,12 +35,12 @@ export class PitchDragHandler {
   #hostElement: HTMLElement;
   #yCoordinates: YCoordinates;
   /** Sorted array of [LetterOctave, yCoordinate] by ascending Y (top-to-bottom). */
-  #sortedPositions: [LetterOctave, number][];
+  #sortedPositions: [NoteLetterOctave, number][];
   #dragState: PitchDragState | null = null;
   #onLivePreview:
     | ((
         elementIndex: number,
-        newNote: LetterOctave,
+        newNote: NoteLetterOctave,
         chordNoteIndex: number | null
       ) => void)
     | null = null;
@@ -56,7 +56,7 @@ export class PitchDragHandler {
     yCoordinates: YCoordinates,
     onLivePreview?: (
       elementIndex: number,
-      newNote: LetterOctave,
+      newNote: NoteLetterOctave,
       chordNoteIndex: number | null
     ) => void
   ) {
@@ -68,7 +68,7 @@ export class PitchDragHandler {
     this.#sortedPositions = [];
     for (const [note, y] of Object.entries(yCoordinates)) {
       if (y !== undefined) {
-        this.#sortedPositions.push([note as LetterOctave, y]);
+        this.#sortedPositions.push([note as NoteLetterOctave, y]);
       }
     }
     this.#sortedPositions.sort((a, b) => a[1] - b[1]);
@@ -271,9 +271,9 @@ export class PitchDragHandler {
     targetY: number,
     element: HTMLElement,
     chordNoteIndex: number | null
-  ): [LetterOctave, number] | null {
+  ): [NoteLetterOctave, number] | null {
     // Get occupied positions for chord duplicate prevention
-    const occupiedNotes = new Set<LetterOctave>();
+    const occupiedNotes = new Set<NoteLetterOctave>();
     if (chordNoteIndex !== null && element.nodeName === 'MUSIC-CHORD') {
       const noteElements = element.querySelectorAll('music-note');
       noteElements.forEach((noteEl, i) => {
@@ -292,7 +292,7 @@ export class PitchDragHandler {
       });
     }
 
-    let best: [LetterOctave, number] | null = null;
+    let best: [NoteLetterOctave, number] | null = null;
     let bestDist = Infinity;
 
     for (const [note, y] of this.#sortedPositions) {
@@ -318,7 +318,7 @@ export class PitchDragHandler {
   #resolveNote(
     element: HTMLElement,
     chordNoteIndex: number | null
-  ): LetterOctave | null {
+  ): NoteLetterOctave | null {
     if (element.nodeName === 'MUSIC-CHORD' && chordNoteIndex !== null) {
       const noteElements = element.querySelectorAll('music-note');
       const noteEl = noteElements[chordNoteIndex];
@@ -342,14 +342,14 @@ export class PitchDragHandler {
   #resolveLetterOctave(
     value: string,
     octave: string | null
-  ): LetterOctave | null {
+  ): NoteLetterOctave | null {
     if (!value) return null;
 
     const letter = value.trim()[0]?.toUpperCase();
     if (!letter || !/^[A-G]$/.test(letter)) return null;
 
     if (octave) {
-      const key = `${letter}${octave}` as LetterOctave;
+      const key = `${letter}${octave}` as NoteLetterOctave;
       if (this.#yCoordinates[key] !== undefined) return key;
     } else {
       // Search from lowest octave first (highest Y) to match staff behavior
@@ -363,7 +363,7 @@ export class PitchDragHandler {
     return null;
   }
 
-  #createTooltip(from: LetterOctave, to: LetterOctave): HTMLDivElement {
+  #createTooltip(from: NoteLetterOctave, to: NoteLetterOctave): HTMLDivElement {
     const tooltip = document.createElement('div');
     tooltip.style.cssText = `
       position: fixed;
@@ -384,8 +384,8 @@ export class PitchDragHandler {
 
   #updateTooltip(
     tooltip: HTMLDivElement,
-    from: LetterOctave,
-    to: LetterOctave
+    from: NoteLetterOctave,
+    to: NoteLetterOctave
   ) {
     tooltip.textContent = from === to ? from : `${from} → ${to}`;
   }

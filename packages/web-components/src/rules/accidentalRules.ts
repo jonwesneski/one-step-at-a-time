@@ -15,11 +15,11 @@
  */
 import {
   ChordElementType,
+  NoteChordOrRestElementType,
   NoteElementType,
-  NoteOrChordElementType,
 } from '../types/elements';
-import { AccidentalType, LetterNote, Mode } from '../types/theory';
-import { MUSIC_NOTE_NODE } from '../utils/consts';
+import { AccidentalType, Mode, Note } from '../types/theory';
+import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
@@ -89,8 +89,8 @@ export function computeInterNoteSpacing(
 // ─── Per-measure orchestration ─────────────────────────────────────────────────
 
 export function computeNoteAccidentals(
-  elements: NoteOrChordElementType[],
-  keySig: LetterNote,
+  elements: NoteChordOrRestElementType[],
+  keySig: Note,
   mode: Mode
 ): {
   noteShowAccidentals: Map<NoteElementType, AccidentalType | null>;
@@ -111,9 +111,6 @@ export function computeNoteAccidentals(
   for (const element of elements) {
     if (element.nodeName === MUSIC_NOTE_NODE) {
       const noteElement = element as NoteElementType;
-      if (noteElement.note === 'rest') {
-        continue;
-      }
       if (noteElement.tie === 'end') {
         noteShowAccidentals.set(noteElement, null);
         continue;
@@ -126,7 +123,7 @@ export function computeNoteAccidentals(
       const showAccidental = resolveAccidental(noteAccidental, effectiveState);
       noteShowAccidentals.set(noteElement, showAccidental);
       inMeasureState.set(letter, noteAccidental);
-    } else {
+    } else if (element.nodeName === MUSIC_CHORD_NODE) {
       const chordElement = element as ChordElementType;
       if (chordElement.tie === 'end') {
         chordNoteAccidentals.set(
@@ -154,7 +151,7 @@ export function computeNoteAccidentals(
 
 // Key signature accidentals are always single sharp or flat — never double accidentals.
 export function getKeySignatureAccidentals(
-  keySig: LetterNote,
+  keySig: Note,
   mode: Mode
 ): Map<string, 'sharp' | 'flat'> {
   const key =
@@ -171,7 +168,7 @@ export function getKeySignatureAccidentals(
   return result;
 }
 
-export function parseAccidentalSuffix(noteName: LetterNote): AccidentalSuffix {
+export function parseAccidentalSuffix(noteName: Note): AccidentalSuffix {
   const suffix = noteName.slice(1);
   if (suffix === '##' || suffix === 'bb' || suffix === '#' || suffix === 'b') {
     return suffix as AccidentalSuffix;

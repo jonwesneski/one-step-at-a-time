@@ -2,13 +2,12 @@ import {
   AccidentalType,
   Chord,
   DurationType,
-  Letter,
-  LetterNote,
   Note,
+  NoteLetter,
   Octave,
 } from './theory';
 
-export type LetterOctave = `${Letter}${Octave}`;
+export type NoteLetterOctave = `${NoteLetter}${Octave}`;
 
 export type ConnectorRole = 'start' | 'end';
 
@@ -30,7 +29,7 @@ export interface INoteElement {
 }
 
 export type ChordNote = {
-  value: LetterNote;
+  value: Note;
   octave: Octave | null;
   duration: DurationType;
 };
@@ -61,19 +60,28 @@ export interface IGuitarNoteElement {
   //bend: SOMETHING | null;
 }
 
+export interface IRestElement {
+  duration: DurationType;
+}
+
 export type NoteElementType = HTMLElement & INoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
+export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
+export type NoteChordOrRestElementType =
+  | NoteElementType
+  | ChordElementType
+  | RestElementType;
 export type NoteLikeElementType =
   | NoteElementType
   | GuitarNoteElementType
   | ChordElementType;
 
-export type YCoordinates = Partial<Record<LetterOctave, number>>;
+export type YCoordinates = Partial<Record<NoteLetterOctave, number>>;
 
 export type KeySignatureYCoordinates = Partial<{
-  [key in LetterNote]: number[];
+  [key in Note]: number[];
 }>;
 
 export type LyricSyllablePosition = {

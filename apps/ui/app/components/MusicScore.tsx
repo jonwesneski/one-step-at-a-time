@@ -108,16 +108,17 @@ export default function MusicScore() {
         <music-staff-bass>
           <music-note note="A" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
+          <music-rest duration="eighth"></music-rest>
         </music-staff-bass>
 
         <music-staff-vocal voice="soprano">
-          <music-note note={'C5' as Note} duration="eighth"></music-note>
-          <music-note note={'D5' as Note} duration="eighth"></music-note>
-          <music-note note={'E5' as Note} duration="eighth"></music-note>
-          <music-note note={'F5' as Note} duration="eighth"></music-note>
-          <music-note note={'G5' as Note} duration="eighth"></music-note>
-          <music-note note={'A5' as Note} duration="eighth"></music-note>
-          <music-note note={'A5' as Note} duration="quarter"></music-note>
+          <music-note note={'C'} octave={5} duration="eighth"></music-note>
+          <music-note note={'D'} octave={5} duration="eighth"></music-note>
+          <music-note note={'E'} octave={5} duration="eighth"></music-note>
+          <music-note note={'F'} octave={5} duration="eighth"></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-note note={'A'} octave={5} duration="eighth"></music-note>
+          <music-note note={'A'} octave={5} duration="quarter"></music-note>
           <music-lyrics verse="1">Hap-py birth-day to_ you you_</music-lyrics>
           <music-lyrics verse="2">
             Hap-py birth-day dear_ friend friend_

@@ -124,41 +124,54 @@ export const createNoteSvg = ({
 
   // Flag(s)
   if (!noStem && !noFlags && flagCount > 0) {
-    // todo need to calculate flags with stemdown
     const xFlagStart = stemX;
     const flag = document.createElementNS(SVG_NS, 'g');
     flag.classList.add('flag');
 
-    // Each flag is a thin curved stroke — a fishhook shape. Starts at the stem
-    // tip, arcs right and down, then curls back left to a point. Stacked flags
-    // are spaced FLAG_Y_SPACING units apart down the stem.
     const flagName = 'single-flag';
     const singleFlag = document.createElementNS(SVG_NS, 'path');
     singleFlag.classList.add(flagName);
     singleFlag.id = flagName;
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
-    const yFlagTop = NOTE_Y_STEM_START - stemExtensionInternal;
-    // Filled closed tapered shape: wide at the base (stem attachment), narrows
-    // toward the bottom. Outer curve sweeps right/down; inner curve returns to
-    // a narrow point near the base. No tail — tail is appended separately so
-    // <use> copies don't show one.
-    /**
-     * M - Start is the bottom line of the flag
-     * Q - The bottom line
-     * C - Top line
-     */
-    const yFlagStart = yFlagTop + 100;
-    singleFlag.setAttribute(
-      'd',
-      `M${xFlagStart},${yFlagStart}
-       Q${xFlagStart + 160},${yFlagStart + 40}
-         ${xFlagStart + 140},${yFlagStart + 260}
-       C${xFlagStart + 160},${yFlagStart + -60}
-         ${xFlagStart + 20},${yFlagTop + 100}
-         ${xFlagStart},${yFlagTop}
-       Z`
-    );
 
+    let flagPath: string;
+    let flagYStep: number;
+    if (stemUp) {
+      // Stem tip is at the top; flag sweeps right and downward.
+      // Filled closed tapered shape: wide at the base (stem attachment), narrows
+      // toward the bottom. Outer curve sweeps right/down; inner curve returns to
+      // a narrow point near the base.
+      const yFlagTip = NOTE_Y_STEM_START - stemExtensionInternal;
+      const yFlagBase = yFlagTip + 100;
+      flagPath = `M${xFlagStart},${yFlagBase}
+       Q${xFlagStart + 160},${yFlagBase + 40}
+         ${xFlagStart + 140},${yFlagBase + 260}
+       C${xFlagStart + 160},${yFlagBase + -60}
+         ${xFlagStart + 20},${yFlagTip + 100}
+         ${xFlagStart},${yFlagTip}
+       Z`;
+      // Additional flags stack downward along the stem (toward the head).
+      flagYStep = FLAG_Y_SPACING;
+    } else {
+      // Stem tip is at the bottom; flag sweeps right and upward (mirror of stem-up).
+      const yFlagTip =
+        HEAD_WIDTH +
+        BASE_STEM_LENGTH +
+        flagStemExtension +
+        stemExtensionInternal;
+      const yFlagBase = yFlagTip - 100;
+      flagPath = `M${xFlagStart},${yFlagBase}
+       Q${xFlagStart + 160},${yFlagBase - 40}
+         ${xFlagStart + 140},${yFlagBase - 260}
+       C${xFlagStart + 160},${yFlagBase + 60}
+         ${xFlagStart + 20},${yFlagTip - 100}
+         ${xFlagStart},${yFlagTip}
+       Z`;
+      // Additional flags stack upward along the stem (toward the head).
+      flagYStep = -FLAG_Y_SPACING;
+    }
+
+    singleFlag.setAttribute('d', flagPath);
     singleFlag.setAttribute('fill', 'currentColor');
     singleFlag.setAttribute('stroke', 'currentColor');
     singleFlag.setAttribute('stroke-width', '5');
@@ -167,26 +180,9 @@ export const createNoteSvg = ({
     for (let i = 1; i < flagCount; i++) {
       const flagCopy = document.createElementNS(SVG_NS, 'use');
       flagCopy.setAttribute('href', `#${flagName}`);
-      flagCopy.setAttribute('y', (FLAG_Y_SPACING * i).toString());
+      flagCopy.setAttribute('y', (flagYStep * i).toString());
       flag.appendChild(flagCopy);
     }
-
-    // todo: I may come back to this
-    // // Tippy-tail: only on the bottom-most flag, appended once after the loop.
-    // const yLastFlagBase = yFlagTop + FLAG_Y_SPACING * (flagCount - 1);
-    // const tail = document.createElementNS(SVG_NS, 'path');
-    // tail.setAttribute(
-    //   'd',
-    //   `M${xFlagStart + 60},${yLastFlagBase + 200}
-    //    C${xFlagStart + 40},${yLastFlagBase + 220}
-    //      ${xFlagStart + 10},${yLastFlagBase + 230}
-    //      ${xFlagStart + 30},${yLastFlagBase + 260}`
-    // );
-    // tail.setAttribute('fill', 'none');
-    // tail.setAttribute('stroke', 'currentColor');
-    // tail.setAttribute('stroke-width', '22');
-    // tail.setAttribute('stroke-linecap', 'round');
-    // flag.appendChild(tail);
 
     g.appendChild(flag);
   }

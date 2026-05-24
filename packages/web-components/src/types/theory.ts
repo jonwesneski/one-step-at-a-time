@@ -8,7 +8,7 @@ export type DurationType =
   | 'sixtyfourth'
   | 'hundredtwentyeighth';
 
-export type Letter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
+export type NoteLetter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 export type Octave = 2 | 3 | 4 | 5 | 6;
 export type Sharp = '#';
 export type Flat = 'b';
@@ -20,7 +20,7 @@ export type AccidentalType =
   | 'double-sharp'
   | 'double-flat';
 
-export type LetterNote =
+export type Note =
   | 'A'
   | 'A#'
   | 'Abb'
@@ -57,8 +57,6 @@ export type LetterNote =
   | 'G##'
   | 'Ab';
 
-export type Note = 'rest' | LetterNote;
-
 type MinorType =
   | 'min'
   | 'min(add9)'
@@ -84,20 +82,19 @@ export type ChordType =
   | AugmentedType
   | DimineshedType;
 
-type NormalChord = `${LetterNote}${ChordType}`;
+type NormalChord = `${Note}${ChordType}`;
 
 // Slash chord where the bass note is different from root
-type SlashChord<
-  Bass extends LetterNote,
-  Root extends LetterNote
-> = Bass extends Root ? never : `${Bass}/${Root}${ChordType}`;
+type SlashChord<Bass extends Note, Root extends Note> = Bass extends Root
+  ? never
+  : `${Bass}/${Root}${ChordType}`;
 
 // Helper to generate all slash chords
 type AllSlashChords = {
-  [B in LetterNote]: {
-    [R in LetterNote]: SlashChord<B, R>;
-  }[LetterNote];
-}[LetterNote];
+  [B in Note]: {
+    [R in Note]: SlashChord<B, R>;
+  }[Note];
+}[Note];
 
 export type Chord = NormalChord | AllSlashChords;
 

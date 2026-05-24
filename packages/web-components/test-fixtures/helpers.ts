@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { LetterOctave } from '../src/types/elements';
+import { NoteLetterOctave } from '../src/types/elements';
 import type { DurationType } from '../src/types/theory';
 
 export type StaffType =
@@ -15,7 +15,15 @@ export interface BuildCompositionOptions {
   staffType?: StaffType;
 }
 
-const PITCH_CYCLE: LetterOctave[] = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
+const PITCH_CYCLE: NoteLetterOctave[] = [
+  'C4',
+  'D4',
+  'E4',
+  'F4',
+  'G4',
+  'A4',
+  'B4',
+];
 
 export async function waitForRedrawCycle(page: Page): Promise<void> {
   await page.evaluate(

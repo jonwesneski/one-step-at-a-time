@@ -166,7 +166,7 @@ type DurationType =
   | 'thirtysecond'
   | 'sixtyfourth'
   | 'hundredtwentyeighth';
-type LetterNote =
+type Note =
   | 'A'
   | 'A#'
   | 'Bb'
@@ -286,9 +286,9 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 
 - Use TypeScript `#` private fields for custom element internals
 - Guard all custom element registration with `typeof window !== 'undefined'`
-- Use `SVG_NS = 'http://www.w3.org/2000/svg'` with `createElementNS()` for all SVG creation
+- Use `SVG_NS` in `src/utils/consts.ts` with `createElementNS()` for all SVG creation
 - CSS custom properties: `--flex-staff-basis`, `--flex-staff-minw` for layout overrides
 - `currentColor` used in SVG so staff color inherits from CSS
 - **Always run `npx nx format:write` after every batch of file edits or new files** — do not skip this step
 - Use full words when defining variables, functions, and classes; no abbreviations or uncommon acronyms
-- In test files (both `*.browser-test.ts` and `*.test.ts`), always use strong types from `types/theory.ts` and `types/elements.ts` instead of primitives — e.g. `DurationType` instead of `string` for durations, `LetterOctave` instead of `string` for note+octave values like `'C4'`
+- In test files (both `*.browser-test.ts` and `*.test.ts`), always use strong types from `types/theory.ts` and `types/elements.ts` instead of primitives — e.g. `DurationType` instead of `string` for durations, `Note` instead of `string` for note values like `'C'`

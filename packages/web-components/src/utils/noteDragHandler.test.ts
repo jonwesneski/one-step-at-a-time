@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 
+import { SVG_NS } from './consts';
 import { NoteTimingDragHandler } from './noteTimingDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.
@@ -30,7 +31,7 @@ if (!HTMLElement.prototype.setPointerCapture) {
 function makeNoteElement(left = '0px'): HTMLElement {
   const el = document.createElement('div');
   const shadow = el.attachShadow({ mode: 'open' });
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('width', '32');
   svg.setAttribute('height', '60');
   shadow.appendChild(svg);

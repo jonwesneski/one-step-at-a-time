@@ -3,8 +3,8 @@ import {
   ChordNote,
   ConnectorRole,
   IChordElement,
-  LetterOctave,
   NoteElementType,
+  NoteLetterOctave,
 } from '../types/elements';
 import { AccidentalType, Chord, DurationType, Octave } from '../types/theory';
 import { createChordSvg } from '../utils';
@@ -13,6 +13,7 @@ import {
   MUSIC_CHORD,
   MUSIC_NOTE,
   NOTE_EVENTS,
+  SVG_NS,
 } from '../utils/consts';
 import {
   MIDDLE_STAFF_Y,
@@ -67,22 +68,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.querySelectorAll(MUSIC_NOTE);
       const notes: ChordNote[] = [];
       if (noteElements.length) {
-        noteElements.forEach((node, i) => {
-          if (node.note === 'rest') {
-            console.error(
-              `Rests are not allowed in chords; note at index ${i} is a rest`
-            );
-          } else {
-            notes.push({
-              value: node.note,
-              octave: node.octave,
-              duration: node.duration,
-            });
-          }
+        noteElements.forEach((node) => {
+          notes.push({
+            value: node.note,
+            octave: node.octave,
+            duration: node.duration,
+          });
         });
       } else if (this.chord) {
-        const letterNotes = getChordNotes(this.chord);
-        letterNotes.forEach((value) => {
+        const chordNotes = getChordNotes(this.chord);
+        chordNotes.forEach((value) => {
           notes.push({ value, octave: null, duration: this.duration });
         });
       }
@@ -236,10 +231,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             svg { overflow: visible; }
           </style>
         `;
-        const svg = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'svg'
-        );
+        const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('width', '32');
         svg.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
         svg.setAttribute('overflow', 'visible');
@@ -318,10 +310,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             svg { overflow: visible; }
           </style>
         `;
-        const svg = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'svg'
-        );
+        const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('width', '32');
         svg.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
         svg.setAttribute('overflow', 'visible');
@@ -341,13 +330,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const letter = note.value[0].toUpperCase();
         if (note.octave !== null) {
           const y =
-            yCoordinates[`${letter}${note.octave}` as LetterOctave] ?? 0;
+            yCoordinates[`${letter}${note.octave}` as NoteLetterOctave] ?? 0;
           result.push(y);
           previousY = y;
         } else {
           const candidates: number[] = [];
           for (const octave of octaves) {
-            const y = yCoordinates[`${letter}${octave}` as LetterOctave];
+            const y = yCoordinates[`${letter}${octave}` as NoteLetterOctave];
             if (y !== undefined && y > 0 && y < previousY) {
               candidates.push(y);
             }
@@ -355,7 +344,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const resolved =
             candidates.length > 0
               ? Math.max(...candidates)
-              : yCoordinates[`${letter}${octaves[0]}` as LetterOctave] ?? 0;
+              : yCoordinates[`${letter}${octaves[0]}` as NoteLetterOctave] ?? 0;
           result.push(resolved);
           previousY = resolved;
         }

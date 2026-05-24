@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import { waitForRedrawCycle } from '../../test-fixtures/helpers';
+import type { NoteLetterOctave } from '../types/elements';
 import type { DurationType } from '../types/theory';
-import type { LetterOctave } from '../types/elements';
 
 const MIN_NOTE_WIDTH = 20;
 
@@ -50,7 +50,7 @@ async function readDescribeEndX(page: Page): Promise<number> {
 async function buildMeasureWithNotes(
   page: Page,
   duration: DurationType,
-  noteValues: LetterOctave[]
+  noteValues: NoteLetterOctave[]
 ): Promise<void> {
   await page.evaluate(
     ({ duration, noteValues }) => {
@@ -78,9 +78,9 @@ async function buildMeasureWithNotes(
   );
 }
 
-const ONE_NOTE: LetterOctave[] = ['C4'];
-const FOUR_NOTES: LetterOctave[] = ['C4', 'D4', 'E4', 'F4'];
-const EIGHT_NOTES: LetterOctave[] = [
+const ONE_NOTE: NoteLetterOctave[] = ['C4'];
+const FOUR_NOTES: NoteLetterOctave[] = ['C4', 'D4', 'E4', 'F4'];
+const EIGHT_NOTES: NoteLetterOctave[] = [
   'C4',
   'D4',
   'E4',
@@ -90,7 +90,7 @@ const EIGHT_NOTES: LetterOctave[] = [
   'B4',
   'C5',
 ];
-const ELEVEN_NOTES: LetterOctave[] = [
+const ELEVEN_NOTES: NoteLetterOctave[] = [
   'C4',
   'D4',
   'E4',
@@ -103,7 +103,7 @@ const ELEVEN_NOTES: LetterOctave[] = [
   'E5',
   'F5',
 ];
-const FIFTEEN_NOTES: LetterOctave[] = [
+const FIFTEEN_NOTES: NoteLetterOctave[] = [
   'C4',
   'D4',
   'E4',
@@ -121,7 +121,7 @@ const FIFTEEN_NOTES: LetterOctave[] = [
   'C6',
 ];
 // 16 × MIN_NOTE_WIDTH (20) = 320px, guaranteeing minWidth > 300 regardless of describeEndX
-const SIXTEEN_NOTES: LetterOctave[] = [
+const SIXTEEN_NOTES: NoteLetterOctave[] = [
   'C4',
   'D4',
   'E4',
@@ -216,8 +216,8 @@ test.describe('music-measure min-width layout', () => {
 
       const slowStaff = document.createElement('music-staff-treble');
       const wholeNote = document.createElement('music-note');
-      wholeNote.setAttribute('note', ('C4' satisfies LetterOctave)[0]);
-      wholeNote.setAttribute('octave', ('C4' satisfies LetterOctave)[1]);
+      wholeNote.setAttribute('note', ('C4' satisfies NoteLetterOctave)[0]);
+      wholeNote.setAttribute('octave', ('C4' satisfies NoteLetterOctave)[1]);
       wholeNote.setAttribute('duration', 'whole' satisfies DurationType);
       slowStaff.appendChild(wholeNote);
 
@@ -231,7 +231,7 @@ test.describe('music-measure min-width layout', () => {
         'A4',
         'B4',
         'C5',
-      ] as LetterOctave[]) {
+      ] as NoteLetterOctave[]) {
         const note = document.createElement('music-note');
         note.setAttribute('note', value[0]);
         note.setAttribute('octave', value[1]);
@@ -259,7 +259,7 @@ test.describe('music-measure min-width layout', () => {
   test('flex-grow increases monotonically as note count grows', async ({
     page,
   }) => {
-    const noteCounts: LetterOctave[][] = [
+    const noteCounts: NoteLetterOctave[][] = [
       ONE_NOTE,
       FOUR_NOTES,
       ELEVEN_NOTES,

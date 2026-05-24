@@ -4,24 +4,25 @@ import {
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
   ChordNote,
-  LetterOctave,
+  NoteChordOrRestElementType,
   NoteElementType,
-  NoteOrChordElementType,
+  NoteLetterOctave,
   YCoordinates,
 } from './types/elements';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
-  Letter,
-  LetterNote,
   Mode,
+  Note,
+  NoteLetter,
   Octave,
 } from './types/theory';
 import {
@@ -38,6 +39,7 @@ import {
   MUSIC_MEASURE,
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
+  MUSIC_REST_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -77,17 +79,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #mutationObservers: MutationObserver[];
   #effectiveTimeSig: [BeatsInMeasure, BeatTypeInMeasure];
   #effectiveMode: Mode;
-  #effectiveKeySig: LetterNote;
+  #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
-  #currentElements: NoteOrChordElementType[] = [];
+  #currentElements: NoteChordOrRestElementType[] = [];
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
   #notePitchDragHandler: PitchDragHandler | null = null;
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
   #describeEndX = 0;
   #showDescribe = true;
   #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
+  #boundNoteYChange = () => {
+    if (this.#currentElements.length > 0) {
+      this.#renderNotes(this.#currentElements);
+    }
+  };
 
   protected get describeEndX(): number {
     return this.#describeEndX;
@@ -119,7 +126,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#effectiveKeySig = this.#resolveInheritedValue(
       COMMON_ATTRIBUTES.KEY_SIG,
       'C'
-    ) as LetterNote;
+    ) as Note;
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#beamsContainer = document.createElementNS(SVG_NS, 'svg');
@@ -146,7 +153,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected override get additionalStyles(): string {
     return `
       ::slotted(music-note),
-      ::slotted(music-chord) {
+      ::slotted(music-chord),
+      ::slotted(music-rest) {
         position: absolute;
       }
 
@@ -180,7 +188,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     else this.removeAttribute('managed');
   }
 
-  get keySig(): LetterNote {
+  get keySig(): Note {
     return this.#effectiveKeySig;
   }
 
@@ -221,10 +229,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#resolveInheritedValue('time', '4/4')
     );
     this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
-    this.#effectiveKeySig = this.#resolveInheritedValue(
-      'keysig',
-      'C'
-    ) as LetterNote;
+    this.#effectiveKeySig = this.#resolveInheritedValue('keysig', 'C') as Note;
 
     this.#buildDescribe(this.clefSvg);
     if (this.editable) {
@@ -234,6 +239,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
       this.#boundDrawConnectors
     );
+    this.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
   }
 
   #enableDrag() {
@@ -398,7 +404,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
    */
   #onPitchLivePreview(
     elementIndex: number,
-    newNote: LetterOctave,
+    newNote: NoteLetterOctave,
     chordNoteIndex: number | null
   ) {
     const element = this.#currentElements[elementIndex];
@@ -406,7 +412,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
 
-    const letter = newNote[0] as Letter;
+    const letter = newNote[0] as NoteLetter;
     const octave = parseInt(newNote[1], 10) as Octave;
 
     if (element.nodeName === MUSIC_CHORD_NODE && chordNoteIndex !== null) {
@@ -467,10 +473,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#resolveInheritedValue('time', '4/4')
     );
     this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
-    this.#effectiveKeySig = this.#resolveInheritedValue(
-      'keysig',
-      'C'
-    ) as LetterNote;
+    this.#effectiveKeySig = this.#resolveInheritedValue('keysig', 'C') as Note;
     this.#refreshDescribe();
   }
 
@@ -527,6 +530,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
       this.#boundDrawConnectors
     );
+    this.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
@@ -568,7 +572,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#effectiveKeySig = this.#resolveInheritedValue(
           'keysig',
           'C'
-        ) as LetterNote;
+        ) as Note;
       }
       this.#refreshDescribe();
     }
@@ -579,8 +583,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const assignedElements = slot
       .assignedElements({ flatten: true })
       .filter(
-        (e) => e.nodeName === MUSIC_NOTE_NODE || e.nodeName === MUSIC_CHORD_NODE
-      ) as NoteOrChordElementType[];
+        (e) =>
+          e.nodeName === MUSIC_NOTE_NODE ||
+          e.nodeName === MUSIC_CHORD_NODE ||
+          e.nodeName === MUSIC_REST_NODE
+      ) as NoteChordOrRestElementType[];
 
     this.#renderNotes(assignedElements);
 
@@ -604,7 +611,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // });
   }
 
-  #renderNotes(elements: NoteOrChordElementType[]) {
+  #renderNotes(elements: NoteChordOrRestElementType[]) {
     // Cancel any in-progress drag before clearing rendered content
     this.#noteTimingDragHandler?.cancelDrag();
 
@@ -651,7 +658,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#effectiveMode
       );
 
-    // Set rendering properties on each element (triggers their self-render via rAF)
+    // Set rendering properties on each element
+    // (triggers their self-render via requestAnimationFrame)
     let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -673,7 +681,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const isBeamed = beamsBuilder.isBeamed(i);
       const extension = this.#beamRenderer.stemExtension(i);
 
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        // no stem, beam, or accidental properties — rest renders itself
+      } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
@@ -784,10 +794,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Return the y-coordinate for a given note and octave.
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
-  public noteToYCoordinate(
-    note: LetterNote | Letter | 'rest',
-    octave?: Octave
-  ): number {
+  public noteToYCoordinate(note: Note, octave?: Octave): number {
     if (!note) {
       return 0;
     }
@@ -797,13 +804,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (octave !== undefined) {
       const yCoordinate =
-        this.yCoordinates[`${letter}${octave}` as LetterOctave];
+        this.yCoordinates[`${letter}${octave}` as NoteLetterOctave];
       if (yCoordinate !== undefined) {
         return yCoordinate;
       }
     } else {
       for (const n of this.octaves) {
-        const yCoordinate = this.yCoordinates[`${letter}${n}` as LetterOctave];
+        const yCoordinate =
+          this.yCoordinates[`${letter}${n}` as NoteLetterOctave];
         if (yCoordinate !== undefined) {
           return yCoordinate;
         }
@@ -890,7 +898,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       element.style.left = `${xInWrapper}px`;
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
 
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        element.style.top = `${restToYCoordinate(element.duration)}px`;
+      } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteEl = element as NoteElementType;
         const yHeadOffset = computeYHeadOffset(
           noteEl.stemUp,

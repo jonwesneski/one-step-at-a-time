@@ -1,6 +1,9 @@
+import { DurationType, Note, Octave } from '../types/theory';
+
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const MUSIC_NOTE = 'music-note';
+export const MUSIC_REST = 'music-rest';
 export const MUSIC_CHORD = 'music-chord';
 export const MUSIC_GUITAR_NOTE = 'music-guitar-note';
 export const MUSIC_GUITAR_CHORD = 'music-guitar-chord';
@@ -14,6 +17,7 @@ export const MUSIC_LYRICS = 'music-lyrics';
 
 // Uppercase variants for nodeName comparisons (DOM nodeName is always uppercase)
 export const MUSIC_NOTE_NODE = MUSIC_NOTE.toUpperCase();
+export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
 export const MUSIC_CHORD_NODE = MUSIC_CHORD.toUpperCase();
 export const MUSIC_GUITAR_NOTE_NODE = MUSIC_GUITAR_NOTE.toUpperCase();
 export const MUSIC_GUITAR_CHORD_NODE = MUSIC_GUITAR_CHORD.toUpperCase();
@@ -27,6 +31,7 @@ export const MUSIC_LYRICS_NODE = MUSIC_LYRICS.toUpperCase();
 
 export const NOTE_EVENTS = {
   CONNECTOR_ATTRIBUTE_CHANGE: 'connector-attribute-change',
+  NOTE_Y_CHANGE: 'note-y-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',
@@ -55,3 +60,36 @@ export const COMMON_ATTRIBUTES = {
   //todo
   //TEMPO: tempo,
 } as const;
+
+export const DURATIONS: DurationType[] = [
+  'whole',
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtysecond',
+  'sixtyfourth',
+  'hundredtwentyeighth',
+];
+
+export const NOTES: Note[] = [
+  'A',
+  'A#',
+  'Bb',
+  'B',
+  'C',
+  'C#',
+  'Db',
+  'D',
+  'D#',
+  'Eb',
+  'E',
+  'F',
+  'F#',
+  'Gb',
+  'G',
+  'G#',
+  'Ab',
+];
+
+export const OCTAVES: Octave[] = [2, 3, 4, 5, 6];

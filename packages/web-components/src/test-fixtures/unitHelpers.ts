@@ -1,8 +1,8 @@
-import { DurationType, LetterNote, Octave } from '../types/theory';
 import { ChordElementType, NoteElementType } from '../types/elements';
+import { DurationType, Note, Octave } from '../types/theory';
 
 export interface MakeNoteOptions {
-  note: LetterNote;
+  note: Note;
   octave: Octave;
   duration?: DurationType;
   tie?: 'start' | 'end';
@@ -25,7 +25,7 @@ export const makeNote = ({
 };
 
 export interface MakeChordNoteOptions {
-  note: LetterNote;
+  note: Note;
   octave: Octave;
 }
 

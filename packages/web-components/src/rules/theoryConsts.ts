@@ -1,4 +1,4 @@
-import { ChordType, DurationType, LetterNote } from '../types/theory';
+import { ChordType, DurationType, Note } from '../types/theory';
 
 export const durationToFlagCountMap = new Map<DurationType, number>([
   ['eighth', 1],
@@ -8,7 +8,7 @@ export const durationToFlagCountMap = new Map<DurationType, number>([
   ['hundredtwentyeighth', 5],
 ]);
 
-export const noteSemitoneMap: Map<LetterNote, number> = new Map();
+export const noteSemitoneMap: Map<Note, number> = new Map();
 noteSemitoneMap.set('A', 0);
 noteSemitoneMap.set('A#', 1);
 noteSemitoneMap.set('Bb', 1);
@@ -33,7 +33,7 @@ noteSemitoneMap.set('Cb', 2);
 
 // Each entry: [double-flat, flat, natural, sharp, double-sharp]
 // Indices 0→4 run from flattest to sharpest enharmonic spelling.
-export const semitoneNoteMap: Map<number, LetterNote[]> = new Map();
+export const semitoneNoteMap: Map<number, Note[]> = new Map();
 semitoneNoteMap.set(0, ['Bbb', 'A', 'A', 'A', 'G##']);
 semitoneNoteMap.set(1, ['Bb', 'Bb', 'A#', 'A#', 'A#']);
 semitoneNoteMap.set(2, ['Cb', 'Cb', 'B', 'B', 'A##']);

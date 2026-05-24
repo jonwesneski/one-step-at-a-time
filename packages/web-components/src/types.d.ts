@@ -3,10 +3,10 @@ import { ConnectorRole } from './types/elements';
 import type {
   Chord,
   DurationType,
-  LetterNote,
   Mode,
   Note,
   Octave,
+  TimeSignature,
 } from './types/theory';
 
 type WebComponentProps = {
@@ -19,17 +19,57 @@ type WebComponentProps = {
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
+      'music-composition': WebComponentProps & {
+        keySig?: Note;
+        mode?: Mode;
+        time?: TimeSignature;
+      };
+      'music-measure': WebComponentProps & {
+        keySig?: Note;
+        mode?: Mode;
+        time?: TimeSignature;
+        onClick?: React.MouseEventHandler<HTMLElement>;
+      };
+      'music-staff-bass': WebComponentProps & {
+        keySig?: Note;
+        mode?: Mode;
+        time?: TimeSignature;
+        editable?: boolean;
+        managed?: boolean;
+        onClick?: React.MouseEventHandler<HTMLElement>;
+      };
+      'music-staff-treble': WebComponentProps & {
+        keySig?: Note;
+        mode?: Mode;
+        time?: TimeSignature;
+        editable?: boolean;
+        managed?: boolean;
+        onClick?: React.MouseEventHandler<HTMLElement>;
+      };
+      'music-staff-guitar-tab': WebComponentProps & {
+        time?: TimeSignature;
+        children?: React.ReactNode;
+      };
+      'music-staff-vocal': WebComponentProps & {
+        voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
+        keySig?: Note;
+        mode?: Mode;
+        time?: TimeSignature;
+        editable?: boolean;
+        managed?: boolean;
+      };
+      'music-lyrics': WebComponentProps & {
+        verse?: string;
+      };
+      'music-rest': WebComponentProps & {
+        duration?: DurationType;
+      };
       'music-chord': WebComponentProps & {
         value?: Chord;
         duration?: DurationType;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
-      };
-      'music-composition': WebComponentProps & {
-        keySig?: LetterNote;
-        mode?: string;
-        time?: string;
       };
       'music-note': WebComponentProps & {
         note?: Note;
@@ -52,43 +92,6 @@ declare module 'react' {
         'hammer-on'?: ConnectorRole;
         'pull-off'?: ConnectorRole;
         slide?: ConnectorRole;
-      };
-      'music-measure': WebComponentProps & {
-        keySig?: LetterNote;
-        mode?: Mode;
-        time?: string;
-        onClick?: React.MouseEventHandler<HTMLElement>;
-      };
-      'music-staff-bass': WebComponentProps & {
-        keySig?: LetterNote;
-        mode?: Mode;
-        time?: string;
-        editable?: boolean;
-        managed?: boolean;
-        onClick?: React.MouseEventHandler<HTMLElement>;
-      };
-      'music-staff-treble': WebComponentProps & {
-        keySig?: LetterNote;
-        mode?: Mode;
-        time?: string;
-        editable?: boolean;
-        managed?: boolean;
-        onClick?: React.MouseEventHandler<HTMLElement>;
-      };
-      'music-staff-guitar-tab': WebComponentProps & {
-        time?: string;
-        children?: React.ReactNode;
-      };
-      'music-staff-vocal': WebComponentProps & {
-        voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
-        keySig?: LetterNote;
-        mode?: Mode;
-        time?: string;
-        editable?: boolean;
-        managed?: boolean;
-      };
-      'music-lyrics': WebComponentProps & {
-        verse?: string;
       };
     }
   }

@@ -8,8 +8,8 @@ import './staffVocal';
 
 import './guitarNote';
 import './note';
+import './rest';
 
 export { durationToFactor } from './rules/theoryConsts';
-export type { LetterOctave } from './types/elements';
-export type { DurationType, LetterNote, Mode, Note } from './types/theory';
+export * from './types/theory';
 export type { PitchChangeDetail } from './utils/pitchDragHandler';

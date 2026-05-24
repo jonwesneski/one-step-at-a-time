@@ -5,7 +5,7 @@ import {
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import type {
   KeySignatureYCoordinates,
-  LetterOctave,
+  NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
 import { Octave } from '../types/theory';
@@ -15,7 +15,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = createBassClefSvg();
     static #yCoordinates = generateYCoordinates('E4', 'E2');
-    static #sharps: LetterOctave[] = ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'];
+    static #sharps: NoteLetterOctave[] = [
+      'F3',
+      'C3',
+      'G3',
+      'D3',
+      'A2',
+      'E3',
+      'B2',
+    ];
     static #majorSharpYCoordinates: KeySignatureYCoordinates =
       generateKeySignatureYCoordinates(
         {
@@ -39,7 +47,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ['D#']: StaffBassElement.#majorSharpYCoordinates['F#'],
       ['A#']: StaffBassElement.#majorSharpYCoordinates['C#'],
     };
-    static #flats: LetterOctave[] = ['B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2'];
+    static #flats: NoteLetterOctave[] = [
+      'B2',
+      'E3',
+      'A2',
+      'D3',
+      'G2',
+      'C3',
+      'F2',
+    ];
     static #majorFlatYCoordinates: KeySignatureYCoordinates =
       generateKeySignatureYCoordinates(
         { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
