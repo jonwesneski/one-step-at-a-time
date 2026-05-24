@@ -41,7 +41,7 @@ export const WHOLE_RECT_TOP_PX =
   Math.round(WHOLE_REST_Y * NOTE_SCALE * 100) / 100;
 export const HALF_RECT_BOTTOM_PX =
   Math.round((HALF_REST_Y + REST_RECT_HEIGHT) * NOTE_SCALE * 100) / 100;
-export const QUARTER_SY_PX = (Y_CENTER - SPACE * 2) * NOTE_SCALE;
+export const QUARTER_SY_PX = (Y_CENTER - SPACE * 1.5) * NOTE_SCALE;
 
 export function getFirstBallYPx(hookCount: number): number {
   return 33.75 - 5 * hookCount;
@@ -91,8 +91,8 @@ function createRect(y: number): SVGRectElement {
 
 function createQuarterRestPath(): SVGPathElement {
   const path = document.createElementNS(SVG_NS, 'path');
-  const top = Y_CENTER - SPACE * 2;
-  const bottom = Y_CENTER + SPACE * 2;
+  const top = Y_CENTER - SPACE * 1.5;
+  const bottom = Y_CENTER + SPACE * 1.5;
   const S = (bottom - top) / 296;
   const sx = X_CENTER + 42.3 * S;
   const sy = top + 75 * S;

@@ -9,6 +9,7 @@ import {
 } from '../utils/svgCreator/rest';
 
 // Absolute staff line positions (px from staff-wrapper top), clef-agnostic
+const LINE_1 = 28; // top staff line
 const LINE_2 = 38;
 const LINE_3 = 48; // middle line
 const BETWEEN_LINE1_LINE2 = 33; // midpoint between lines 1 and 2
@@ -22,7 +23,7 @@ function computeTopY(duration: DurationType): number {
     return LINE_3 - HALF_RECT_BOTTOM_PX;
   }
   if (duration === 'quarter') {
-    return LINE_3 - QUARTER_SY_PX;
+    return LINE_1 - QUARTER_SY_PX + 2; // just a tiny bit lower;
   }
   const hookCount = hookCountMap[duration];
   const ballTarget = hookCount <= 2 ? BETWEEN_LINE2_LINE3 : BETWEEN_LINE1_LINE2;
