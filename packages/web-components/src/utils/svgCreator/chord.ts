@@ -8,7 +8,6 @@ import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH,
   STAFF_Y_PADDING,
 } from '../notationDimensions';
 import { createDoubleFlatSvg } from './doubleFlat';
@@ -104,7 +103,6 @@ export const createChordSvg = ({
       svg.setAttribute('overflow', 'visible');
 
       for (const placement of placements) {
-        const symbolWidth = ACCIDENTAL_SYMBOL_WIDTH[placement.accidental];
         const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[placement.accidental];
 
         let symbolSvg: SVGElement;

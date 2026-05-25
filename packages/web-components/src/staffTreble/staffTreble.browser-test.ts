@@ -12,10 +12,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function readNoteLefts(page: Page): Promise<number[]> {
-  return page.evaluate((noteTag) => {
-    const notes = Array.from(document.querySelectorAll(noteTag));
+  return page.evaluate(() => {
+    const notes = Array.from(document.querySelectorAll(MUSIC_NOTE));
     return notes.map((n) => n.getBoundingClientRect().left);
-  }, MUSIC_NOTE);
+  });
 }
 
 async function readBeamShapes(
