@@ -62,6 +62,7 @@ export const COMMON_ATTRIBUTES = {
 } as const;
 
 export const DURATIONS: DurationType[] = [
+  'double-whole',
   'whole',
   'half',
   'quarter',

@@ -1,4 +1,5 @@
 export type DurationType =
+  | 'double-whole'
   | 'whole'
   | 'half'
   | 'quarter'
@@ -108,6 +109,7 @@ export type TimeSignature =
   | '3/2'
   | '3/4'
   | '3/8'
+  | '4/2'
   | '4/4'
   | '5/4'
   | '5/8'

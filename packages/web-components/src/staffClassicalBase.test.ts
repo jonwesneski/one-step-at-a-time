@@ -5,7 +5,13 @@ import './index';
 import { restToYCoordinate } from './rules/restRules';
 import type { NoteLetterOctave } from './types/elements';
 import { ChordElementType, RestElementType } from './types/elements';
-import type { Chord, DurationType, Note, Octave } from './types/theory';
+import type {
+  Chord,
+  DurationType,
+  Note,
+  Octave,
+  TimeSignature,
+} from './types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
@@ -290,6 +296,29 @@ describe('note integration', () => {
     expect(note.style.top).toBe(expectedNoteTop('G4'));
     expect(note.style.left).toBe(initialLeft);
   });
+
+  it('renders a double-whole note in a 4/2 staff without overflow error', () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staff.setAttribute(
+      COMMON_ATTRIBUTES.TIME_SIG,
+      '4/2' satisfies TimeSignature
+    );
+    document.body.appendChild(staff);
+
+    const note = document.createElement(MUSIC_NOTE) as any;
+    note.setAttribute('duration', 'double-whole' satisfies DurationType);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', `${4 satisfies Octave}`);
+
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
 });
 
 describe('chord integration', () => {
@@ -359,5 +388,26 @@ describe('rest integration', () => {
     const staff = makeStaff();
     const rest = renderRest(staff, 'whole');
     expect(rest.style.top).toBe(`${restToYCoordinate('whole')}px`);
+  });
+
+  it('renders a double-whole rest in a 4/2 staff without overflow error', () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staff.setAttribute(
+      COMMON_ATTRIBUTES.TIME_SIG,
+      '4/2' satisfies TimeSignature
+    );
+    document.body.appendChild(staff);
+
+    const rest = document.createElement(MUSIC_REST) as any;
+    rest.setAttribute('duration', 'double-whole' satisfies DurationType);
+
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [rest];
+    slot.dispatchEvent(new Event('slotchange'));
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

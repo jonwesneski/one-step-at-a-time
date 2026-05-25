@@ -16,6 +16,9 @@ const BETWEEN_LINE1_LINE2 = 33; // midpoint between lines 1 and 2
 const BETWEEN_LINE2_LINE3 = 43; // midpoint between lines 2 and 3
 
 function computeTopY(duration: DurationType): number {
+  if (duration === 'double-whole') {
+    return LINE_2 - WHOLE_RECT_TOP_PX;
+  }
   if (duration === 'whole') {
     return LINE_2 - WHOLE_RECT_TOP_PX;
   }

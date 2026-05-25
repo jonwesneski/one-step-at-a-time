@@ -95,7 +95,7 @@ export const createNoteSvg = ({
   const stemX = stemUp
     ? xStart + HEAD_WIDTH - 15
     : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
-  if (!noStem && duration !== 'whole') {
+  if (!noStem && duration !== 'whole' && duration !== 'double-whole') {
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
     // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
     // Stem-down: left side of head, head end at top (y1), tip at bottom (y2).
@@ -193,7 +193,9 @@ export const createNoteSvg = ({
     : (xStart + STEM_WIDTH).toString();
   const headYStartStr = stemUp ? yStemEnd.toString() : HEAD_WIDTH.toString();
   const headFill =
-    duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
+    duration === 'half' || duration === 'whole' || duration === 'double-whole'
+      ? 'none'
+      : 'currentColor';
 
   // Enlarged invisible hit zone behind the notehead for easier targeting.
   // 1.5× the head size; transparent but captures pointer events.
@@ -225,6 +227,32 @@ export const createNoteSvg = ({
   head.setAttribute('fill', headFill);
   head.setAttribute('stroke-width', '30');
   g.appendChild(head);
+
+  if (duration === 'double-whole') {
+    const headCx = stemUp ? xStart - 10 : xStart + STEM_WIDTH;
+    const headCy = stemUp ? yStemEnd : HEAD_WIDTH;
+    const barHalfHeight = HEAD_WIDTH * 0.75 + 20;
+    const barY1 = headCy - barHalfHeight;
+    const barY2 = headCy + barHalfHeight;
+    const barInnerGap = HEAD_WIDTH + 20;
+    const barOuterGap = barInnerGap + STEM_WIDTH + 10;
+
+    for (const xOffset of [
+      barInnerGap,
+      barOuterGap,
+      -barInnerGap,
+      -barOuterGap,
+    ]) {
+      const bar = document.createElementNS(SVG_NS, 'line');
+      bar.setAttribute('x1', (headCx + xOffset).toString());
+      bar.setAttribute('y1', barY1.toString());
+      bar.setAttribute('x2', (headCx + xOffset).toString());
+      bar.setAttribute('y2', barY2.toString());
+      bar.setAttribute('stroke', 'currentColor');
+      bar.setAttribute('stroke-width', STEM_WIDTH.toString());
+      g.appendChild(bar);
+    }
+  }
 
   svg.appendChild(g);
 

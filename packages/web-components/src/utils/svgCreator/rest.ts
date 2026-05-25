@@ -64,7 +64,9 @@ export const createRestSvg = ({
   const g = document.createElementNS(SVG_NS, 'g');
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
-  if (duration === 'whole') {
+  if (duration === 'double-whole') {
+    g.appendChild(createRect(WHOLE_REST_Y, Math.round(SPACE)));
+  } else if (duration === 'whole') {
     g.appendChild(createRect(WHOLE_REST_Y));
   } else if (duration === 'half') {
     g.appendChild(createRect(HALF_REST_Y));
@@ -79,12 +81,12 @@ export const createRestSvg = ({
   return [svg, REST_Y_SVG_CENTER];
 };
 
-function createRect(y: number): SVGRectElement {
+function createRect(y: number, height = REST_RECT_HEIGHT): SVGRectElement {
   const rect = document.createElementNS(SVG_NS, 'rect');
   rect.setAttribute('x', String(Math.round(X_CENTER - REST_RECT_WIDTH / 2)));
   rect.setAttribute('y', String(y));
   rect.setAttribute('width', String(REST_RECT_WIDTH));
-  rect.setAttribute('height', String(REST_RECT_HEIGHT));
+  rect.setAttribute('height', String(height));
   rect.setAttribute('fill', 'currentColor');
   return rect;
 }
@@ -146,7 +148,10 @@ const HOOK_SPACING = SPACE;
 const ARM_LENGTH_BASE = 1.0;
 const ARM_LENGTH_STEP = 0.1;
 
-type HookDurationType = Exclude<DurationType, 'whole' | 'half' | 'quarter'>;
+type HookDurationType = Exclude<
+  DurationType,
+  'double-whole' | 'whole' | 'half' | 'quarter'
+>;
 
 export const hookCountMap: Record<HookDurationType, number> = {
   eighth: 1,
