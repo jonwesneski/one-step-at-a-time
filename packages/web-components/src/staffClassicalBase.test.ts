@@ -2,8 +2,10 @@
  * @jest-environment jsdom
  */
 import './index';
+import { restToYCoordinate } from './rules/restRules';
 import type { NoteLetterOctave } from './types/elements';
 import { ChordElementType, RestElementType } from './types/elements';
+import type { Chord, DurationType, Note, Octave } from './types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
@@ -11,8 +13,6 @@ import {
   MUSIC_REST,
   MUSIC_STAFF_TREBLE,
 } from './utils/consts';
-import type { DurationType, Note, Octave } from './types/theory';
-import { restToYCoordinate } from './rules/restRules';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
@@ -34,7 +34,8 @@ describe('staffClassicalBase', () => {
     const notes = Array.from({ length: 5 }, () => {
       const note = document.createElement(MUSIC_NOTE) as any;
       note.setAttribute('duration', 'quarter');
-      note.setAttribute('note', 'C4');
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', `${4 satisfies Octave}`);
       return note;
     });
 
@@ -60,13 +61,15 @@ describe('staffClassicalBase', () => {
       ...Array.from({ length: 3 }, () => {
         const note = document.createElement(MUSIC_NOTE) as any;
         note.setAttribute('duration', 'quarter');
-        note.setAttribute('note', 'C4');
+        note.setAttribute('note', 'C');
+        note.setAttribute('octave', `${4 satisfies Octave}`);
         return note;
       }),
       (() => {
         const note = document.createElement(MUSIC_NOTE) as any;
         note.setAttribute('duration', 'half');
-        note.setAttribute('note', 'C4');
+        note.setAttribute('note', 'C');
+        note.setAttribute('octave', `${4 satisfies Octave}`);
         return note;
       })(),
     ];
@@ -87,7 +90,7 @@ describe('staffClassicalBase', () => {
     document.body.appendChild(staff);
 
     const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
-    chord.setAttribute('chord', 'Bmaj');
+    chord.setAttribute('chord', 'Bmaj' satisfies Chord);
     chord.setAttribute('duration', 'quarter');
     document.body.appendChild(chord);
 
@@ -146,13 +149,14 @@ function makeStaff(): Element {
 
 function renderNote(
   staff: Element,
-  value: NoteLetterOctave,
+  value: Note,
+  octave: Octave,
   duration: DurationType = 'quarter'
 ): HTMLElement {
   const note = document.createElement(MUSIC_NOTE) as any;
   note.setAttribute('duration', duration);
-  note.setAttribute('note', value[0] as Note);
-  note.setAttribute('octave', value[1] as unknown as Octave);
+  note.setAttribute('note', value);
+  note.setAttribute('octave', `${octave}`);
   staff.appendChild(note);
   const slot = (staff as any).shadowRoot.querySelector('slot');
   slot.assignedElements = () => [note];
@@ -172,15 +176,15 @@ function renderRest(staff: Element, duration: DurationType): RestElementType {
 
 function renderChordByNotes(
   staff: Element,
-  notes: NoteLetterOctave[],
+  notes: { value: Note; octave: Octave }[],
   duration: DurationType = 'quarter'
 ): ChordElementType {
   const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
   chord.setAttribute('duration', duration);
-  for (const value of notes) {
+  for (const { value, octave } of notes) {
     const note = document.createElement(MUSIC_NOTE) as any;
-    note.setAttribute('note', value[0] as Note);
-    note.setAttribute('octave', value[1] as unknown as Octave);
+    note.setAttribute('note', value);
+    note.setAttribute('octave', `${octave}`);
     chord.appendChild(note);
   }
   staff.appendChild(chord);
@@ -208,10 +212,11 @@ function renderChordByAttribute(
 describe('note integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();
-    const note = renderNote(staff, 'E4');
+    const note = renderNote(staff, 'E', 4);
     const initialLeft = note.style.left;
 
-    note.setAttribute('note', 'G' as Note);
+    note.setAttribute('note', 'G' satisfies Note);
+    note.setAttribute('octave', `${4 satisfies Octave}`);
 
     expect(note.style.top).toBe(expectedNoteTop('G4'));
     expect(note.style.left).toBe(initialLeft);
@@ -219,7 +224,7 @@ describe('note integration', () => {
 
   it('repositions Y and preserves X when octave attribute changes', () => {
     const staff = makeStaff();
-    const note = renderNote(staff, 'E4');
+    const note = renderNote(staff, 'E', 4);
     const initialLeft = note.style.left;
 
     note.setAttribute('octave', `${5 satisfies Octave}`);
@@ -231,11 +236,11 @@ describe('note integration', () => {
   it('flips stem direction when note moves across the middle of the staff', () => {
     const staff = makeStaff();
     // C4 (staffY=80 > 50) → stemUp=true
-    const note = renderNote(staff, 'C4') as any;
+    const note = renderNote(staff, 'C', 4) as any;
     expect(note.stemUp).toBe(true);
 
     // C5 (staffY=45 ≤ 50) → stemUp=false
-    note.setAttribute('note', 'C' as Note);
+    note.setAttribute('note', 'C' satisfies Note);
     note.setAttribute('octave', `${5 satisfies Octave}`);
 
     expect(note.stemUp).toBe(false);
@@ -243,10 +248,11 @@ describe('note integration', () => {
 
   it('keeps noFlags=false on a single eighth note after note changes (flag is drawn)', () => {
     const staff = makeStaff();
-    const note = renderNote(staff, 'E4', 'eighth') as any;
+    const note = renderNote(staff, 'E', 4, 'eighth') as any;
     expect(note.noFlags).toBe(false);
 
-    note.setAttribute('note', 'G' as Note);
+    note.setAttribute('note', 'G' satisfies Note);
+    note.setAttribute('octave', `${4 satisfies Octave}`);
 
     expect(note.noFlags).toBe(false);
   });
@@ -254,12 +260,12 @@ describe('note integration', () => {
   it('keeps noFlags=true on beamed eighth notes after note changes', () => {
     const staff = makeStaff();
     const note1 = document.createElement(MUSIC_NOTE) as any;
-    note1.setAttribute('duration', 'eighth' as DurationType);
-    note1.setAttribute('note', 'E' as Note);
+    note1.setAttribute('duration', 'eighth' satisfies DurationType);
+    note1.setAttribute('note', 'E' satisfies Note);
     note1.setAttribute('octave', `${4 satisfies Octave}`);
     const note2 = document.createElement(MUSIC_NOTE) as any;
-    note2.setAttribute('duration', 'eighth' as DurationType);
-    note2.setAttribute('note', 'G' as Note);
+    note2.setAttribute('duration', 'eighth' satisfies DurationType);
+    note2.setAttribute('note', 'G' satisfies Note);
     note2.setAttribute('octave', `${4 satisfies Octave}`);
 
     const slot = (staff as any).shadowRoot.querySelector('slot');
@@ -268,17 +274,18 @@ describe('note integration', () => {
 
     expect(note1.noFlags).toBe(true);
 
-    note1.setAttribute('note', 'A' as Note);
+    note1.setAttribute('note', 'A' satisfies Note);
 
     expect(note1.noFlags).toBe(true);
   });
 
   it('repositions Y correctly for a whole note when note attribute changes', () => {
     const staff = makeStaff();
-    const note = renderNote(staff, 'E4', 'whole');
+    const note = renderNote(staff, 'E', 4, 'whole');
     const initialLeft = note.style.left;
 
-    note.setAttribute('note', 'G' as Note);
+    note.setAttribute('note', 'G' satisfies Note);
+    note.setAttribute('octave', `${4 satisfies Octave}`);
 
     expect(note.style.top).toBe(expectedNoteTop('G4'));
     expect(note.style.left).toBe(initialLeft);
@@ -288,18 +295,28 @@ describe('note integration', () => {
 describe('chord integration', () => {
   it('positions chord at top 0px (Y is handled internally by chord SVG)', () => {
     const staff = makeStaff();
-    const chord = renderChordByNotes(staff, ['E4', 'G4', 'B4']);
+    const chord = renderChordByNotes(staff, [
+      { value: 'E', octave: 4 },
+      { value: 'G', octave: 4 },
+      { value: 'B', octave: 4 },
+    ]);
     expect(chord.style.top).toBe('0px');
   });
 
   it('flips stem direction when all notes move above the middle of the staff', () => {
     const staff = makeStaff();
     // E4(70), G4(60) — both > MIDDLE_STAFF_Y(50) → stemUp=true
-    const chord = renderChordByNotes(staff, ['E4', 'G4']) as any;
+    const chord = renderChordByNotes(staff, [
+      { value: 'E', octave: 4 },
+      { value: 'G', octave: 4 },
+    ]) as any;
     expect(chord.stemUp).toBe(true);
 
     // Re-render with E5(35), G5(25) — both ≤ MIDDLE_STAFF_Y → stemUp=false
-    const updatedChord = renderChordByNotes(staff, ['E5', 'G5']) as any;
+    const updatedChord = renderChordByNotes(staff, [
+      { value: 'E', octave: 5 },
+      { value: 'G', octave: 5 },
+    ]) as any;
     const slot = (staff as any).shadowRoot.querySelector('slot');
     slot.assignedElements = () => [updatedChord];
     slot.dispatchEvent(new Event('slotchange'));
@@ -332,7 +349,7 @@ describe('rest integration', () => {
     const rest = renderRest(staff, 'quarter');
     const initialLeft = rest.style.left;
 
-    rest.setAttribute('duration', 'half' as DurationType);
+    rest.setAttribute('duration', 'half' satisfies DurationType);
 
     expect(rest.style.top).toBe(`${restToYCoordinate('half')}px`);
     expect(rest.style.left).toBe(initialLeft);
