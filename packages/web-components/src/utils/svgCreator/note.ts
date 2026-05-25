@@ -40,6 +40,9 @@ const FLAG_Y_SPACING = 120;
 export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(
   10 + HEAD_WIDTH * NOTE_SCALE
 ); // 14
+// The +10 added in computeYHeadOffset for staff CSS alignment.
+// Actual notehead pixel center = yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION.
+export const NOTE_HEAD_Y_OFFSET_CORRECTION = 10;
 // Pixel distance from top of the note SVG to the stem tip when stem is down.
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;

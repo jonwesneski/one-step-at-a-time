@@ -1,6 +1,10 @@
 import { ConnectorRole, INoteElement } from '../types/elements';
 import { AccidentalType, DurationType, Note, Octave } from '../types/theory';
-import { addLedgerLines, createNoteSvg } from '../utils';
+import {
+  addLedgerLines,
+  createNoteSvg,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
+} from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
 
 const parseConnectorRole = (value: string | null): ConnectorRole | null => {
@@ -220,7 +224,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteSvg,
           [this.#staffY],
           this.#stemUp,
-          yHeadOffset - this.#staffY
+          yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY
         );
       }
 

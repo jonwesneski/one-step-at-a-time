@@ -202,7 +202,11 @@ describe('staff integration', () => {
       const chord = renderChordByNotes(staff, [{ value: 'C', octave: 4 }]);
       const lines = chord.shadowRoot!.querySelectorAll('.ledger-line');
       expect(lines.length).toBe(1);
-      const expectedY = (STAFF_Y_PADDING + TREBLE_STAFF_Y['C4']).toString(); // 88
+      const expectedY = (
+        STAFF_Y_PADDING -
+        10 +
+        TREBLE_STAFF_Y['C4']
+      ).toString(); // 78
       expect(lines[0].getAttribute('y1')).toBe(expectedY);
       expect(lines[0].getAttribute('y2')).toBe(expectedY);
     });

@@ -717,7 +717,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         });
       }
 
-      beatOffset += durationToFactor[duration as DurationType];
+      beatOffset += durationToFactor[duration];
     }
 
     this.#currentElements = elements;
@@ -872,21 +872,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // Compute this element's total accidental footprint (leftward width)
       let accidentalWidth = 0;
       if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteEl = element as NoteElementType;
-        if (noteEl.showAccidental) {
+        const noteElement = element as NoteElementType;
+        if (noteElement.showAccidental) {
           accidentalWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[noteEl.showAccidental] +
+            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
             ACCIDENTAL_NOTE_GAP;
         }
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
-        const chordEl = element as ChordElementType;
+        const chordElement = element as ChordElementType;
         if (
-          chordEl.staffYCoordinates &&
-          chordEl.noteAccidentals.some((a) => a != null)
+          chordElement.staffYCoordinates &&
+          chordElement.noteAccidentals.some((a) => a != null)
         ) {
           accidentalWidth = totalChordAccidentalWidth(
-            chordEl.noteAccidentals,
-            chordEl.staffYCoordinates
+            chordElement.noteAccidentals,
+            chordElement.staffYCoordinates
           );
         }
       }
@@ -914,15 +914,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (element.nodeName === MUSIC_REST_NODE) {
         element.style.top = `${restToYCoordinate(element.duration)}px`;
       } else if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteEl = element as NoteElementType;
+        const noteElement = element as NoteElementType;
         const yHeadOffset = computeYHeadOffset(
-          noteEl.stemUp,
+          noteElement.stemUp,
           duration,
-          noteEl.noFlags
+          noteElement.noFlags
         );
         const noteY =
           STAFF_Y_PADDING +
-          this.noteToYCoordinate(noteEl.note, noteEl.octave ?? undefined) -
+          this.noteToYCoordinate(
+            noteElement.note,
+            noteElement.octave ?? undefined
+          ) -
           yHeadOffset;
         element.style.top = `${noteY}px`;
       } else {
