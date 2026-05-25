@@ -105,6 +105,24 @@ export const STAFF_Y_PADDING = STAFF_LINE_SPACING * 0.8;
 export const MIDDLE_STAFF_Y = 50;
 
 /**
+ * Y-coordinate of the top staff line in the note Y-coordinate map.
+ * Notes with Y < STAFF_TOP_LINE_Y are above the staff and may need ledger lines.
+ */
+export const STAFF_TOP_LINE_Y = 30;
+
+/**
+ * Y-coordinate of the bottom staff line in the note Y-coordinate map.
+ * Notes with Y > STAFF_BOTTOM_LINE_Y are below the staff and may need ledger lines.
+ */
+export const STAFF_BOTTOM_LINE_Y = 70;
+
+/**
+ * Vertical distance (px) between adjacent diatonic steps in the note Y-coordinate map.
+ * One line-to-adjacent-space interval = half of STAFF_LINE_SPACING.
+ */
+export const STAFF_Y_STEP = STAFF_LINE_SPACING / 2; // = 5
+
+/**
  * Minimum horizontal space (px) reserved per note to prevent notehead overlap
  * regardless of available width. Applied before proportional duration spacing.
  * = 2 × STAFF_LINE_SPACING

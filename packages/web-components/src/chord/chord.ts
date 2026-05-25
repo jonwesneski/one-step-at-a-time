@@ -7,7 +7,7 @@ import {
   NoteLetterOctave,
 } from '../types/elements';
 import { AccidentalType, Chord, DurationType, Octave } from '../types/theory';
-import { createChordSvg } from '../utils';
+import { addLedgerLines, createChordSvg } from '../utils';
 import {
   CHORD_EVENTS,
   MUSIC_CHORD,
@@ -18,6 +18,7 @@ import {
 import {
   MIDDLE_STAFF_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
+  STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -222,6 +223,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteAccidentals: this.#noteAccidentals,
         });
         chordSvg.setAttribute('overflow', 'visible');
+        addLedgerLines(
+          chordSvg,
+          this.#staffYCoordinates,
+          this.#stemUp,
+          STAFF_Y_PADDING
+        );
 
         // Wrap in an SVG element for display
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it

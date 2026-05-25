@@ -226,10 +226,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected onConnectedCallback() {
     // Re-resolve inherited attrs now that ancestors are reachable via closest()
     this.#effectiveTimeSig = this.#convertTotimeInts(
-      this.#resolveInheritedValue('time', '4/4')
+      this.#resolveInheritedValue(COMMON_ATTRIBUTES.TIME_SIG, '4/4')
     );
-    this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
-    this.#effectiveKeySig = this.#resolveInheritedValue('keysig', 'C') as Note;
+    this.#effectiveMode = this.#resolveInheritedValue(
+      COMMON_ATTRIBUTES.MODE,
+      'major'
+    ) as Mode;
+    this.#effectiveKeySig = this.#resolveInheritedValue(
+      COMMON_ATTRIBUTES.KEY_SIG,
+      'C'
+    ) as Note;
 
     this.#buildDescribe(this.clefSvg);
     if (this.editable) {
@@ -470,10 +476,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   refreshInheritedAttrs() {
     this.#effectiveTimeSig = this.#convertTotimeInts(
-      this.#resolveInheritedValue('time', '4/4')
+      this.#resolveInheritedValue(COMMON_ATTRIBUTES.TIME_SIG, '4/4')
     );
-    this.#effectiveMode = this.#resolveInheritedValue('mode', 'major') as Mode;
-    this.#effectiveKeySig = this.#resolveInheritedValue('keysig', 'C') as Note;
+    this.#effectiveMode = this.#resolveInheritedValue(
+      COMMON_ATTRIBUTES.MODE,
+      'major'
+    ) as Mode;
+    this.#effectiveKeySig = this.#resolveInheritedValue(
+      COMMON_ATTRIBUTES.KEY_SIG,
+      'C'
+    ) as Note;
     this.#refreshDescribe();
   }
 
@@ -690,6 +702,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.stemExtension = extension;
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental = noteShowAccidentals.get(noteElement);
+          noteElement.staffY = noteStaffYCoords.get(noteElement) ?? null;
         });
       } else {
         const chordElement = element as ChordElementType;

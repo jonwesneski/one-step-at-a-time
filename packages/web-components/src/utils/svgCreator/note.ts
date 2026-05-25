@@ -44,6 +44,13 @@ export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
 
+// Notehead geometry in pixel space — used by ledgerLines.ts and chord.ts
+export const NOTE_HEAD_RADIUS_PX = HEAD_WIDTH * NOTE_SCALE; // ≈ 4.27px
+export const ADJACENT_NOTE_X_DISPLACEMENT_PX = 150 * NOTE_SCALE; // = 8px
+export const NOTE_HEAD_CX_STEM_UP_PX = (COORD_WIDTH / 2 - 10) * NOTE_SCALE; // ≈ 15.47px
+export const NOTE_HEAD_CX_STEM_DOWN_PX =
+  (COORD_WIDTH / 2 + STEM_WIDTH) * NOTE_SCALE; // ≈ 17.17px
+
 export {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
@@ -283,6 +290,7 @@ export const createNoteSvg = ({
   }
 
   const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);
+
   return [svg, yHeadOffset];
 };
 

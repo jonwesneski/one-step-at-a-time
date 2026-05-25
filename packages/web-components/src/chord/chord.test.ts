@@ -136,6 +136,11 @@ function renderChordByAttribute(
   return chord;
 }
 
+// STAFF_LINE_SPACING(10) * 0.8
+const STAFF_Y_PADDING = 8;
+// 150 * (32/600) = 8
+const ADJACENT_NOTE_X_DISPLACEMENT_PX = 8;
+
 describe('staff integration', () => {
   it('positions chord at top 0px (Y is handled internally by chord SVG)', () => {
     const staff = makeStaff();
@@ -178,5 +183,127 @@ describe('staff integration', () => {
     expect(coords![0]).toBe(TREBLE_STAFF_Y['C4']); // 80 — root, lowest pitch
     expect(coords![1]).toBe(TREBLE_STAFF_Y['E4']); // 70
     expect(coords![2]).toBe(TREBLE_STAFF_Y['G4']); // 60 — highest pitch
+  });
+
+  describe('ledger lines', () => {
+    it('renders no ledger lines when all notes are within the staff', () => {
+      const staff = makeStaff();
+      const chord = renderChordByNotes(staff, [
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+        { value: 'B', octave: 4 },
+      ]);
+      const lines = chord.shadowRoot!.querySelectorAll('.ledger-line');
+      expect(lines.length).toBe(0);
+    });
+
+    it('renders one single-width ledger line for C4 alone (below staff)', () => {
+      const staff = makeStaff();
+      const chord = renderChordByNotes(staff, [{ value: 'C', octave: 4 }]);
+      const lines = chord.shadowRoot!.querySelectorAll('.ledger-line');
+      expect(lines.length).toBe(1);
+      const expectedY = (STAFF_Y_PADDING + TREBLE_STAFF_Y['C4']).toString(); // 88
+      expect(lines[0].getAttribute('y1')).toBe(expectedY);
+      expect(lines[0].getAttribute('y2')).toBe(expectedY);
+    });
+
+    it('renders one double-width ledger line for adjacent C4+D4 pair (outermost C4 on a line)', () => {
+      const staff = makeStaff();
+      // C4(80) and D4(75) are adjacent; outermost C4 is on a line → double width
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'D', octave: 4 },
+      ]);
+      const lines = chord.shadowRoot!.querySelectorAll('.ledger-line');
+      expect(lines.length).toBe(1);
+      const x1 = parseFloat(lines[0].getAttribute('x1')!);
+      const x2 = parseFloat(lines[0].getAttribute('x2')!);
+      // Double-width line extends by ADJACENT_NOTE_X_DISPLACEMENT_PX beyond the notehead
+      // so the width should be greater than a single-width line (~4.27+4.27+3+3 = ~14.5px)
+      expect(x2 - x1).toBeGreaterThan(ADJACENT_NOTE_X_DISPLACEMENT_PX + 14);
+    });
+
+    it('renders a narrower single-width ledger line for C4 alone than the double-width C4+D4 line', () => {
+      const staff = makeStaff();
+
+      const singleChord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+      ]);
+      const singleLines =
+        singleChord.shadowRoot!.querySelectorAll('.ledger-line');
+      const singleWidth =
+        parseFloat(singleLines[0].getAttribute('x2')!) -
+        parseFloat(singleLines[0].getAttribute('x1')!);
+
+      const staff2 = makeStaff();
+      const doubleChord = renderChordByNotes(staff2, [
+        { value: 'C', octave: 4 },
+        { value: 'D', octave: 4 },
+      ]);
+      const doubleLines =
+        doubleChord.shadowRoot!.querySelectorAll('.ledger-line');
+      const doubleWidth =
+        parseFloat(doubleLines[0].getAttribute('x2')!) -
+        parseFloat(doubleLines[0].getAttribute('x1')!);
+
+      expect(doubleWidth).toBeGreaterThan(singleWidth);
+    });
+
+    it('renders two ledger lines for C4+B3 (two notes below staff)', () => {
+      // B3 is one step below C4 — if TREBLE_STAFF_Y were extended, B3 ≈ 85
+      // Using just C4 and the adjacent space below: test two ledger-requiring notes
+      // C6(10) needs ledger lines at Y=20 and Y=10 (above staff)
+      const staff = makeStaff();
+      const chord = renderChordByNotes(staff, [{ value: 'C', octave: 6 }]);
+      const lines = chord.shadowRoot!.querySelectorAll('.ledger-line');
+      // C6 at staffY=10 needs ledger at 10 and 20
+      expect(lines.length).toBe(2);
+    });
+  });
+
+  describe('adjacent notehead displacement', () => {
+    it('does not displace notes in a non-adjacent chord', () => {
+      const staff = makeStaff();
+      // E4(70), G4(60), B4(50) — non-adjacent (gaps of 10px)
+      const chord = renderChordByNotes(staff, [
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+        { value: 'B', octave: 4 },
+      ]);
+      const notes = chord.shadowRoot!.querySelectorAll('.note');
+      notes.forEach((note) => {
+        expect(note.getAttribute('x')).toBeNull();
+      });
+    });
+
+    it('displaces one note when two adjacent notes are in the chord (stem-up)', () => {
+      const staff = makeStaff();
+      // C4(80) and D4(75) — adjacent; stem-up (both > MIDDLE_STAFF_Y=50)
+      // D4 (higher pitch, lower Y=75) is displaced +8px
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'D', octave: 4 },
+      ]);
+      const notes = chord.shadowRoot!.querySelectorAll('.note');
+      const xValues = Array.from(notes).map((n) => n.getAttribute('x'));
+      expect(xValues).toContain(ADJACENT_NOTE_X_DISPLACEMENT_PX.toString());
+      // exactly one note is displaced
+      expect(xValues.filter((x) => x !== null).length).toBe(1);
+    });
+
+    it('alternates displacement for three adjacent notes (C4-D4-E4, stem-up)', () => {
+      const staff = makeStaff();
+      // C4(80), D4(75), E4(70) — all adjacent in stem-up order: C4 normal, D4 displaced, E4 normal
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'D', octave: 4 },
+        { value: 'E', octave: 4 },
+      ]);
+      const notes = chord.shadowRoot!.querySelectorAll('.note');
+      const xValues = Array.from(notes).map((n) => n.getAttribute('x'));
+      // Exactly one note (D4) is displaced
+      expect(xValues.filter((x) => x !== null).length).toBe(1);
+      expect(xValues).toContain(ADJACENT_NOTE_X_DISPLACEMENT_PX.toString());
+    });
   });
 });
