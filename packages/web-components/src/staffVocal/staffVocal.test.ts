@@ -4,6 +4,12 @@
 import '../index';
 import type { NoteLetterOctave } from '../types/elements';
 import {
+  COMMON_ATTRIBUTES,
+  MUSIC_LYRICS,
+  MUSIC_NOTE,
+  MUSIC_STAFF_VOCAL,
+} from '../utils/consts';
+import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
@@ -144,8 +150,8 @@ function expectedNoteTop(
 }
 
 function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
-  document.body.innerHTML = `<music-staff-vocal voice="${voice}" keysig="${keySig}" mode="${mode}" time="4/4"></music-staff-vocal>`;
-  return document.body.querySelector('music-staff-vocal')!;
+  document.body.innerHTML = `<${MUSIC_STAFF_VOCAL} voice="${voice}" ${COMMON_ATTRIBUTES.KEY_SIG}="${keySig}" ${COMMON_ATTRIBUTES.MODE}="${mode}" ${COMMON_ATTRIBUTES.TIME_SIG}="4/4"></${MUSIC_STAFF_VOCAL}>`;
+  return document.body.querySelector(MUSIC_STAFF_VOCAL)!;
   /**
    * After change: https://github.com/jonwesneski/one-step-at-a-time/pull/21
    * I am getting a weird issue where attributeChangedCallback doesn't
@@ -163,7 +169,7 @@ function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
 }
 
 function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {
-  const note = document.createElement('music-note') as any;
+  const note = document.createElement(MUSIC_NOTE) as any;
   note.setAttribute('duration', 'quarter');
   note.setAttribute('note', value[0]);
   note.setAttribute('octave', value[1]);
@@ -173,17 +179,17 @@ function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {
   return note;
 }
 
-describe('music-staff-vocal', () => {
+describe(MUSIC_STAFF_VOCAL, () => {
   it('registers as a custom element', () => {
-    expect(customElements.get('music-staff-vocal')).toBeDefined();
+    expect(customElements.get(MUSIC_STAFF_VOCAL)).toBeDefined();
   });
 
   it('renders shadow root with provided attributes', () => {
-    const el = document.createElement('music-staff-vocal') as any;
+    const el = document.createElement(MUSIC_STAFF_VOCAL) as any;
     el.setAttribute('voice', 'soprano');
-    el.setAttribute('keysig', 'C');
-    el.setAttribute('mode', 'major');
-    el.setAttribute('time', '4/4');
+    el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+    el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
     document.body.appendChild(el);
 
     expect(el.voice).toBe('soprano');
@@ -194,13 +200,13 @@ describe('music-staff-vocal', () => {
   });
 
   it('defaults to soprano voice when voice attribute not set', () => {
-    const el = document.createElement('music-staff-vocal') as any;
+    const el = document.createElement(MUSIC_STAFF_VOCAL) as any;
     document.body.appendChild(el);
     expect(el.voice).toBe('soprano');
   });
 });
 
-describe('music-staff-vocal clef selection', () => {
+describe(`${MUSIC_STAFF_VOCAL} clef selection`, () => {
   it('uses treble clef for soprano', () => {
     const staff = makeStaff('soprano');
     const svg = (staff as any).shadowRoot.querySelector('svg');
@@ -246,7 +252,7 @@ describe('music-staff-vocal clef selection', () => {
   });
 });
 
-describe('music-staff-vocal soprano note head alignment', () => {
+describe(`${MUSIC_STAFF_VOCAL} soprano note head alignment`, () => {
   it('places A5 at the correct y position', () => {
     const note = renderNote(makeStaff('soprano'), 'A5');
     expect(note.style.top).toBe(expectedNoteTop('A5', SOPRANO_STAFF_Y));
@@ -268,7 +274,7 @@ describe('music-staff-vocal soprano note head alignment', () => {
   });
 });
 
-describe('music-staff-vocal mezzo note head alignment', () => {
+describe(`${MUSIC_STAFF_VOCAL} mezzo note head alignment`, () => {
   it('places A5 at the correct y position', () => {
     const note = renderNote(makeStaff('mezzo'), 'A5');
     expect(note.style.top).toBe(expectedNoteTop('A5', MEZZO_STAFF_Y));
@@ -280,7 +286,7 @@ describe('music-staff-vocal mezzo note head alignment', () => {
   });
 });
 
-describe('music-staff-vocal alto note head alignment', () => {
+describe(`${MUSIC_STAFF_VOCAL} alto note head alignment`, () => {
   it('places A5 at the correct y position (high end)', () => {
     const note = renderNote(makeStaff('alto'), 'A5');
     expect(note.style.top).toBe(expectedNoteTop('A5', ALTO_STAFF_Y));
@@ -297,7 +303,7 @@ describe('music-staff-vocal alto note head alignment', () => {
   });
 });
 
-describe('music-staff-vocal tenor note head alignment', () => {
+describe(`${MUSIC_STAFF_VOCAL} tenor note head alignment`, () => {
   it('places A4 at the correct y position', () => {
     const note = renderNote(makeStaff('tenor'), 'A4');
     expect(note.style.top).toBe(expectedNoteTop('A4', TENOR_STAFF_Y));
@@ -314,7 +320,7 @@ describe('music-staff-vocal tenor note head alignment', () => {
   });
 });
 
-describe('music-staff-vocal baritone note head alignment', () => {
+describe(`${MUSIC_STAFF_VOCAL} baritone note head alignment`, () => {
   it('places A3 at the correct y position', () => {
     const note = renderNote(makeStaff('baritone'), 'A3');
     expect(note.style.top).toBe(expectedNoteTop('A3', BARITONE_STAFF_Y));
@@ -331,7 +337,7 @@ describe('music-staff-vocal baritone note head alignment', () => {
   });
 });
 
-describe('music-staff-vocal bass note head alignment', () => {
+describe(`${MUSIC_STAFF_VOCAL} bass note head alignment`, () => {
   it('places A3 at the correct y position', () => {
     const note = renderNote(makeStaff('bass'), 'A3');
     expect(note.style.top).toBe(expectedNoteTop('A3', BASS_STAFF_Y));
@@ -348,35 +354,35 @@ describe('music-staff-vocal bass note head alignment', () => {
   });
 });
 
-describe('music-staff-vocal lyrics', () => {
+describe(`${MUSIC_STAFF_VOCAL} lyrics`, () => {
   it('registers lyrics element as a custom element', () => {
-    expect(customElements.get('music-lyrics')).toBeDefined();
+    expect(customElements.get(MUSIC_LYRICS)).toBeDefined();
   });
 
   it('creates music-lyrics element with verse attribute', () => {
-    const lyrics = document.createElement('music-lyrics') as any;
+    const lyrics = document.createElement(MUSIC_LYRICS) as any;
     lyrics.setAttribute('verse', '1');
     lyrics.textContent = 'test';
     expect(lyrics.verse).toBe('1');
   });
 
   it('stores different verse numbers', () => {
-    const lyricsV1 = document.createElement('music-lyrics') as any;
+    const lyricsV1 = document.createElement(MUSIC_LYRICS) as any;
     lyricsV1.setAttribute('verse', '1');
     expect(lyricsV1.verse).toBe('1');
 
-    const lyricsV2 = document.createElement('music-lyrics') as any;
+    const lyricsV2 = document.createElement(MUSIC_LYRICS) as any;
     lyricsV2.setAttribute('verse', '2');
     expect(lyricsV2.verse).toBe('2');
   });
 
   it('defaults to verse 1 when not specified', () => {
-    const lyrics = document.createElement('music-lyrics') as any;
+    const lyrics = document.createElement(MUSIC_LYRICS) as any;
     expect(lyrics.verse).toBe('1');
   });
 
   it('updates positions on demand', () => {
-    const lyrics = document.createElement('music-lyrics') as any;
+    const lyrics = document.createElement(MUSIC_LYRICS) as any;
     lyrics.setAttribute('verse', '1');
     lyrics.dataset.syllables = JSON.stringify([
       { text: 'Hap', x: 10, y: 100, isMelisma: false, isHyphenated: true },
@@ -387,11 +393,11 @@ describe('music-staff-vocal lyrics', () => {
   });
 });
 
-describe('music-staff-vocal voice switching', () => {
+describe(`${MUSIC_STAFF_VOCAL} voice switching`, () => {
   it('re-renders staff when voice attribute changes from soprano to tenor', () => {
     const staff = makeStaff('soprano') as any;
     // Add a note within soprano range
-    const note = document.createElement('music-note') as any;
+    const note = document.createElement(MUSIC_NOTE) as any;
     note.setAttribute('note', 'A5');
     note.setAttribute('duration', 'quarter');
     staff.appendChild(note);
@@ -440,11 +446,11 @@ describe('music-staff-vocal voice switching', () => {
   });
 });
 
-describe('music-staff-vocal key signature positioning', () => {
+describe(`${MUSIC_STAFF_VOCAL} key signature positioning`, () => {
   it('returns correct key signature coordinates for soprano C major', () => {
     const staff = makeStaff('soprano') as any;
-    staff.setAttribute('keysig', 'C');
-    staff.setAttribute('mode', 'major');
+    staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+    staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
     const keyCoords = staff.getKeyYCoordinates();
     expect(keyCoords.coordinates.length).toBe(0); // C major has no accidentals
   });
@@ -477,7 +483,7 @@ describe('music-staff-vocal key signature positioning', () => {
   });
 });
 
-describe('music-staff-vocal octave search order', () => {
+describe(`${MUSIC_STAFF_VOCAL} octave search order`, () => {
   it('soprano defaults to octaves [4, 5, 6]', () => {
     const staff = makeStaff('soprano') as any;
     expect(staff.octaves).toEqual([4, 5, 6]);

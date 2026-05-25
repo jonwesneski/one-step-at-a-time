@@ -7,6 +7,12 @@ import { ChordElementType } from '../../types/elements';
 import { DurationType } from '../../types/theory';
 import { NOTE_SCALE } from './note';
 import { makeNote, makeChord } from '../../test-fixtures/unitHelpers';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_CHORD,
+  MUSIC_NOTE,
+  MUSIC_STAFF_TREBLE,
+} from '../consts';
 
 const NOTE_STEM_X_OFFSET_PX = 365 * NOTE_SCALE;
 
@@ -78,10 +84,10 @@ function getChordStem(chord: HTMLElement): Element | null {
 describe('beams', () => {
   describe('beam groups are created for beamable note sequences', () => {
     it('creates one beam group for two consecutive eighth notes', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -94,10 +100,10 @@ describe('beams', () => {
     });
 
     it('does not create a beam group for a lone beamable note', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -110,10 +116,10 @@ describe('beams', () => {
     });
 
     it('splits 4/4 eighth notes into two groups at the half-measure boundary', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -134,10 +140,10 @@ describe('beams', () => {
     });
 
     it('groups 6/8 eighth notes into two dotted-quarter beats', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '6/8');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '6/8');
       document.body.appendChild(staff);
 
       const notes = [
@@ -158,10 +164,10 @@ describe('beams', () => {
 
   describe('primary beam (eighth notes)', () => {
     it('has exactly one beam polygon for a group of eighth notes', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -175,10 +181,10 @@ describe('beams', () => {
     });
 
     it('primary beam polygon spans the full width of the note group', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -195,10 +201,10 @@ describe('beams', () => {
 
   describe('secondary beam (sixteenth notes)', () => {
     it('adds a secondary beam polygon for a group of sixteenth notes', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -214,10 +220,10 @@ describe('beams', () => {
     });
 
     it('secondary beam is no wider than the primary beam', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -235,10 +241,10 @@ describe('beams', () => {
 
   describe('fractional beams', () => {
     it('adds a fractional when a single sixteenth is adjacent to an eighth', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -255,10 +261,10 @@ describe('beams', () => {
     });
 
     it('adds two fractionals for a sixteenth-eighth-sixteenth pattern', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -283,10 +289,10 @@ describe('beams', () => {
     // style.left directly equals the beamsContainer-relative x coordinate.
 
     it('stem-up notes: stem tips are enclosed by the primary beam', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -315,10 +321,10 @@ describe('beams', () => {
     });
 
     it('stem-down notes: stem tips are enclosed by the primary beam', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -349,10 +355,10 @@ describe('beams', () => {
 
   describe('beam slant follows pitch contour', () => {
     it('beam ascends when the first note is lower than the last', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -368,10 +374,10 @@ describe('beams', () => {
     });
 
     it('beam descends when the first note is higher than the last', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -387,10 +393,10 @@ describe('beams', () => {
     });
 
     it('beam is horizontal when all notes are the same pitch', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const notes = [
@@ -408,10 +414,10 @@ describe('beams', () => {
 
   describe('beam clears chord noteheads', () => {
     it('beam inner edge stays above the non-extremal notehead in a stem-up chord', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const chords = [
@@ -446,10 +452,10 @@ describe('beams', () => {
     });
 
     it('extremal note stems in all chords still reach the beam after clearance shift', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const chords = [
@@ -492,10 +498,10 @@ describe('beams', () => {
     });
 
     it('secondary beam inner edge stays above non-extremal notehead in sixteenth chord', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const chords = [
@@ -540,12 +546,12 @@ describe('beams', () => {
     // returned the wrong octave (e.g. E4 instead of E5), causing the wrong
     // stem direction and a beam that floated in the middle of the stems.
     function makeAmbiguousChord(duration: DurationType): ChordElementType {
-      const chord = document.createElement('music-chord');
+      const chord = document.createElement(MUSIC_CHORD);
       chord.setAttribute('duration', duration);
       // Notes without octave attribute — resolved by close-voicing logic
-      const noteA = document.createElement('music-note');
+      const noteA = document.createElement(MUSIC_NOTE);
       noteA.setAttribute('note', 'A');
-      const noteE = document.createElement('music-note');
+      const noteE = document.createElement(MUSIC_NOTE);
       noteE.setAttribute('note', 'E');
       chord.appendChild(noteA);
       chord.appendChild(noteE);
@@ -553,10 +559,10 @@ describe('beams', () => {
     }
 
     it('stem tips of both chords sit inside the beam polygon', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const chords = [
@@ -591,10 +597,10 @@ describe('beams', () => {
     });
 
     it('beam outer edge is below both chord noteheads for stem-down', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const chords = [
@@ -625,10 +631,10 @@ describe('beams', () => {
 
   describe('minimum stem length is enforced', () => {
     it('no stem is shorter than 25 px when a steep-pitch beam group requires shifting', () => {
-      const staff = document.createElement('music-staff-treble') as any;
-      staff.setAttribute('keysig', 'C');
-      staff.setAttribute('mode', 'major');
-      staff.setAttribute('time', '4/4');
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
       document.body.appendChild(staff);
 
       const steepGapNotes = [

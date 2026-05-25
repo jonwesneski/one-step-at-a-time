@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { SVG_NS } from './consts';
+import { NOTE_EVENTS, SVG_NS } from './consts';
 import { NoteTimingDragHandler } from './noteTimingDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.
@@ -130,7 +130,7 @@ describe('NoteTimingDragHandler', () => {
     it('dispatches note-drag-start on pointerdown on a slotted element', () => {
       const { host, elements } = setup();
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       pointerDown(elements[0]);
 
@@ -144,7 +144,7 @@ describe('NoteTimingDragHandler', () => {
     it('dispatches note-drag-start for the second element', () => {
       const { host, elements } = setup();
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       pointerDown(elements[1], { clientX: 60 });
 
@@ -155,7 +155,7 @@ describe('NoteTimingDragHandler', () => {
     it('does not start drag on right click', () => {
       const { host, elements } = setup();
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       pointerDown(elements[0], { button: 2 });
 
@@ -165,7 +165,7 @@ describe('NoteTimingDragHandler', () => {
     it('does not start drag when only one element exists', () => {
       const { host, elements } = setup({ elementCount: 1 });
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       pointerDown(elements[0]);
 
@@ -174,7 +174,7 @@ describe('NoteTimingDragHandler', () => {
 
     it('can cancel drag via preventDefault on note-drag-start', () => {
       const { host, elements } = setup();
-      host.addEventListener('note-drag-start', (e) =>
+      host.addEventListener(NOTE_EVENTS.DRAG_START, (e) =>
         (e as Event).preventDefault()
       );
 
@@ -187,7 +187,7 @@ describe('NoteTimingDragHandler', () => {
     it('does not start drag for a click outside slotted elements', () => {
       const { host, wrapper } = setup();
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       pointerDown(wrapper);
 
@@ -281,7 +281,7 @@ describe('NoteTimingDragHandler', () => {
     it('does not dispatch note-reorder on Escape', () => {
       const { host, elements } = setup();
       const reorderHandler = jest.fn();
-      host.addEventListener('note-reorder', reorderHandler);
+      host.addEventListener(NOTE_EVENTS.REORDER, reorderHandler);
 
       pointerDown(elements[0]);
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -309,7 +309,7 @@ describe('NoteTimingDragHandler', () => {
     it('dispatches note-drag-end on pointerup even without movement', () => {
       const { host, elements } = setup();
       const dragEndHandler = jest.fn();
-      host.addEventListener('note-drag-end', dragEndHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_END, dragEndHandler);
 
       pointerDown(elements[0]);
       pointerUp(host);
@@ -320,7 +320,7 @@ describe('NoteTimingDragHandler', () => {
     it('includes fromIndex and toIndex in note-drag-end detail', () => {
       const { host, elements } = setup();
       const dragEndHandler = jest.fn();
-      host.addEventListener('note-drag-end', dragEndHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_END, dragEndHandler);
 
       pointerDown(elements[0]);
       pointerUp(host);
@@ -335,7 +335,7 @@ describe('NoteTimingDragHandler', () => {
     it('dispatches note-reorder when drop index differs from source', () => {
       const { host, elements } = setup();
       const reorderHandler = jest.fn();
-      host.addEventListener('note-reorder', reorderHandler);
+      host.addEventListener(NOTE_EVENTS.REORDER, reorderHandler);
 
       // Drag element 0 far to the right (past all elements)
       pointerDown(elements[0], { clientX: 5 });
@@ -351,7 +351,7 @@ describe('NoteTimingDragHandler', () => {
     it('does not dispatch note-reorder when dropped at same position', () => {
       const { host, elements } = setup();
       const reorderHandler = jest.fn();
-      host.addEventListener('note-reorder', reorderHandler);
+      host.addEventListener(NOTE_EVENTS.REORDER, reorderHandler);
 
       // Drag element 0 but stay in place
       pointerDown(elements[0], { clientX: 5 });
@@ -364,7 +364,7 @@ describe('NoteTimingDragHandler', () => {
     it('does not dispatch note-reorder at sourceIndex + 1 (no-op)', () => {
       const { host, elements } = setup();
       const reorderHandler = jest.fn();
-      host.addEventListener('note-reorder', reorderHandler);
+      host.addEventListener(NOTE_EVENTS.REORDER, reorderHandler);
 
       // Drag element 0 just slightly right (into position 1 which is no-op)
       pointerDown(elements[0], { clientX: 5 });
@@ -415,7 +415,7 @@ describe('NoteTimingDragHandler', () => {
     it('still dispatches note-reorder in managed mode', () => {
       const { host, elements } = setup({ managed: true });
       const reorderHandler = jest.fn();
-      host.addEventListener('note-reorder', reorderHandler);
+      host.addEventListener(NOTE_EVENTS.REORDER, reorderHandler);
 
       pointerDown(elements[0], { clientX: 5 });
       pointerMove(host, 200);
@@ -462,7 +462,7 @@ describe('NoteTimingDragHandler', () => {
     it('stops listening for pointerdown after detach', () => {
       const { host, elements, handler } = setup();
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       handler.detach();
 
@@ -506,7 +506,7 @@ describe('NoteTimingDragHandler', () => {
     it('finds target when pointerdown is on a child of a slotted element', () => {
       const { host, elements } = setup();
       const dragStartHandler = jest.fn();
-      host.addEventListener('note-drag-start', dragStartHandler);
+      host.addEventListener(NOTE_EVENTS.DRAG_START, dragStartHandler);
 
       // Add a light DOM child inside elements[1] and click on it.
       // The handler should walk up to find the slotted element.

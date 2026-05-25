@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
+import { MODES } from '../utils';
 
 const meta: Meta = {
   title: 'Components/StaffBass',
@@ -36,7 +37,7 @@ const meta: Meta = {
     },
     mode: {
       control: 'radio',
-      options: ['major', 'minor'],
+      options: MODES,
     },
     time: {
       control: 'text',
@@ -52,23 +53,11 @@ export default meta;
 
 type Story = StoryObj;
 
-export const CMajor: Story = {
+export const Plain: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
 };
 
-export const GMajor: Story = {
-  args: { keySig: 'G', mode: 'major', time: '4/4' },
-};
-
-export const FMajor: Story = {
-  args: { keySig: 'F', mode: 'major', time: '4/4' },
-};
-
-export const DMinor: Story = {
-  args: { keySig: 'D', mode: 'minor', time: '4/4' },
-};
-
-export const WithEighthNotes: Story = {
+export const WithBeamedEighthNotes: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
     <music-staff-bass keySig=${args.keySig} mode=${args.mode} time=${args.time}>
@@ -80,6 +69,23 @@ export const WithEighthNotes: Story = {
       <music-note note="A" duration="eighth"></music-note>
       <music-note note="B" duration="eighth"></music-note>
       <music-note note="C" duration="eighth"></music-note>
+    </music-staff-bass>
+  `,
+};
+
+export const WithAccidentals: Story = {
+  args: { keySig: 'C', mode: 'major', time: '5/4' },
+  render: (args) => html`
+    <music-staff-bass keySig=${args.keySig} mode=${args.mode} time=${args.time}>
+      <music-note note="F#" octave="3" duration="quarter"></music-note>
+      <music-note note="Bb" octave="3" duration="quarter"></music-note>
+      <music-chord duration="quarter">
+        <music-note note="C##" octave="3" duration="quarter"></music-note>
+        <music-note note="Eb" octave="3" duration="quarter"></music-note>
+        <music-note note="G#" octave="3" duration="quarter"></music-note>
+      </music-chord>
+      <music-note note="Dbb" octave="3" duration="quarter"></music-note>
+      <music-note note="B" octave="3" duration="quarter"></music-note>
     </music-staff-bass>
   `,
 };

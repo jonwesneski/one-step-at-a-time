@@ -1,4 +1,4 @@
-import { DurationType, Note, Octave } from '../types/theory';
+import type { DurationType, Mode, Note, Octave, Voice } from '../types/theory';
 
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -62,6 +62,7 @@ export const COMMON_ATTRIBUTES = {
 } as const;
 
 export const DURATIONS: DurationType[] = [
+  'double-whole',
   'whole',
   'half',
   'quarter',
@@ -93,3 +94,14 @@ export const NOTES: Note[] = [
 ];
 
 export const OCTAVES: Octave[] = [2, 3, 4, 5, 6];
+
+export const MODES: Mode[] = ['major', 'minor'];
+
+export const VOICES: Voice[] = [
+  'soprano',
+  'mezzo',
+  'alto',
+  'tenor',
+  'baritone',
+  'bass',
+];

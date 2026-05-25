@@ -3,7 +3,7 @@
  */
 
 import { YCoordinates } from '../types/elements';
-import { SVG_NS } from './consts';
+import { MUSIC_CHORD, MUSIC_NOTE, NOTE_EVENTS, SVG_NS } from './consts';
 import { PitchDragHandler } from './pitchDragHandler';
 
 // jsdom doesn't provide PointerEvent — polyfill it from MouseEvent.
@@ -48,7 +48,7 @@ const yCoordinates: YCoordinates = {
 // --- Helpers ---
 
 function makeNoteElement(value = 'D', duration = 'quarter'): HTMLElement {
-  const el = document.createElement('music-note');
+  const el = document.createElement(MUSIC_NOTE);
   el.setAttribute('note', value);
   el.setAttribute('duration', duration);
   // Stub shadow DOM with an SVG containing head elements
@@ -70,12 +70,12 @@ function makeNoteElement(value = 'D', duration = 'quarter'): HTMLElement {
 }
 
 function makeChordElement(notes: string[], duration = 'eighth'): HTMLElement {
-  const el = document.createElement('music-chord');
+  const el = document.createElement(MUSIC_CHORD);
   el.setAttribute('duration', duration);
   Object.defineProperty(el, 'nodeName', { value: 'MUSIC-CHORD' });
 
   for (const n of notes) {
-    const noteEl = document.createElement('music-note');
+    const noteEl = document.createElement(MUSIC_NOTE);
     noteEl.setAttribute('note', n);
     el.appendChild(noteEl);
   }
@@ -219,7 +219,7 @@ describe('PitchDragHandler', () => {
     it('dispatches cancelable note-pitch-drag-start event', () => {
       const { host, elements, handler } = setup();
       const startHandler = jest.fn();
-      host.addEventListener('note-pitch-drag-start', startHandler);
+      host.addEventListener(NOTE_EVENTS.PITCH_DRAG_START, startHandler);
 
       const e = pointerDown(elements[0]);
       handler.tryStart(e, elements[0], 0, null);
@@ -230,7 +230,7 @@ describe('PitchDragHandler', () => {
 
     it('does not start drag when note-pitch-drag-start is cancelled', () => {
       const { host, elements, handler } = setup();
-      host.addEventListener('note-pitch-drag-start', (e) =>
+      host.addEventListener(NOTE_EVENTS.PITCH_DRAG_START, (e) =>
         (e as Event).preventDefault()
       );
 
@@ -278,7 +278,7 @@ describe('PitchDragHandler', () => {
     it('dispatches note-pitch-change when pitch changed', () => {
       const { host, elements, handler } = setup();
       const changeHandler = jest.fn();
-      host.addEventListener('note-pitch-change', changeHandler);
+      host.addEventListener(NOTE_EVENTS.PITCH_CHANGE, changeHandler);
 
       const e = pointerDown(elements[0], { clientY: 75 }); // D4
       handler.tryStart(e, elements[0], 0, null);
@@ -296,7 +296,7 @@ describe('PitchDragHandler', () => {
     it('does not dispatch note-pitch-change when pitch unchanged', () => {
       const { host, elements, handler } = setup();
       const changeHandler = jest.fn();
-      host.addEventListener('note-pitch-change', changeHandler);
+      host.addEventListener(NOTE_EVENTS.PITCH_CHANGE, changeHandler);
 
       const e = pointerDown(elements[0], { clientY: 75 });
       handler.tryStart(e, elements[0], 0, null);
@@ -415,7 +415,7 @@ describe('PitchDragHandler', () => {
       const chord = makeChordElement(['A', 'E']);
       const { host, handler } = setup({ elements: [chord] });
       const startHandler = jest.fn();
-      host.addEventListener('note-pitch-drag-start', startHandler);
+      host.addEventListener(NOTE_EVENTS.PITCH_DRAG_START, startHandler);
 
       const e = pointerDown(chord, { clientY: 55 }); // A4 = y:55
       const started = handler.tryStart(e, chord, 0, 0);

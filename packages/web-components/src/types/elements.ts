@@ -25,6 +25,8 @@ export interface INoteElement {
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
   showAccidental: AccidentalType | null | undefined;
+  // Set by the staff to enable ledger line rendering. null in standalone mode.
+  staffY: number | null;
   batchUpdate(fn: () => void): void;
 }
 

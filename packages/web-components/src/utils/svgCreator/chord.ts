@@ -2,11 +2,13 @@ import {
   computeChordAccidentalPlacements,
   type AccidentalPlacementInput,
 } from '../../rules/accidentalRules';
+import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH,
+  STAFF_Y_PADDING,
 } from '../notationDimensions';
 import { createDoubleFlatSvg } from './doubleFlat';
 import { createDoubleSharpSvg } from './doubleSharp';
@@ -43,6 +45,11 @@ export const createChordSvg = ({
   const chordSpread =
     Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates);
 
+  const displacements = computeAdjacentDisplacements(staffYCoordinates, stemUp);
+  const displacementMap = new Map(
+    displacements.map((d) => [d.noteIndex, d.xOffset])
+  );
+
   let extremalYOffset = 0;
   for (let i = 0; i < staffYCoordinates.length; i++) {
     const staffYCoordinate = staffYCoordinates[i];
@@ -62,8 +69,18 @@ export const createChordSvg = ({
     if (isExtremal) {
       extremalYOffset = yOffset;
     }
+    const xOffset = displacementMap.get(i) ?? 0;
+    if (xOffset !== 0) {
+      noteSvg.setAttribute('x', xOffset.toString());
+    }
+    if (xOffset < 0) {
+      svg.setAttribute('overflow', 'visible');
+    }
     noteSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    noteSvg.setAttribute('y', (8 + staffYCoordinate - yOffset).toString());
+    noteSvg.setAttribute(
+      'y',
+      (STAFF_Y_PADDING + staffYCoordinate - yOffset).toString()
+    );
     svg.appendChild(noteSvg);
   }
 
@@ -76,7 +93,7 @@ export const createChordSvg = ({
         inputs.push({
           noteIndex: i,
           accidental: acc,
-          yPixel: 8 + staffYCoordinates[i],
+          yPixel: STAFF_Y_PADDING + staffYCoordinates[i],
         });
       }
     }
@@ -86,7 +103,6 @@ export const createChordSvg = ({
       svg.setAttribute('overflow', 'visible');
 
       for (const placement of placements) {
-        const symbolWidth = ACCIDENTAL_SYMBOL_WIDTH[placement.accidental];
         const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[placement.accidental];
 
         let symbolSvg: SVGElement;
@@ -104,7 +120,10 @@ export const createChordSvg = ({
 
         // xOffset is already negative (left of notehead left edge)
         // yPixel is the notehead center in chord SVG space
-        symbolSvg.setAttribute('x', `${placement.xOffset - symbolWidth}`);
+        symbolSvg.setAttribute(
+          'x',
+          `${placement.xOffset - ACCIDENTAL_NOTE_GAP}`
+        );
         symbolSvg.setAttribute('y', `${placement.yPixel - symbolHeight / 2}`);
         svg.appendChild(symbolSvg);
       }

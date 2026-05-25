@@ -4,6 +4,11 @@
 import '../index';
 import type { NoteLetterOctave } from '../types/elements';
 import {
+  COMMON_ATTRIBUTES,
+  MUSIC_NOTE,
+  MUSIC_STAFF_TREBLE,
+} from '../utils/consts';
+import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
@@ -47,16 +52,16 @@ function expectedNoteTop(value: NoteLetterOctave): string {
 }
 
 function makeStaff(): Element {
-  const el = document.createElement('music-staff-treble') as any;
-  el.setAttribute('keysig', 'C');
-  el.setAttribute('mode', 'major');
-  el.setAttribute('time', '4/4');
+  const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
+  el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
   document.body.appendChild(el);
   return el;
 }
 
 function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {
-  const note = document.createElement('music-note') as any;
+  const note = document.createElement(MUSIC_NOTE) as any;
   note.setAttribute('duration', 'quarter');
   note.setAttribute('note', value[0]);
   note.setAttribute('octave', value[1]);
@@ -66,16 +71,16 @@ function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {
   return note;
 }
 
-describe('music-staff-treble', () => {
+describe(MUSIC_STAFF_TREBLE, () => {
   it('registers as a custom element', () => {
-    expect(customElements.get('music-staff-treble')).toBeDefined();
+    expect(customElements.get(MUSIC_STAFF_TREBLE)).toBeDefined();
   });
 
   it('renders shadow root with provided key signature attributes', () => {
-    const el = document.createElement('music-staff-treble') as any;
-    el.setAttribute('keysig', 'C');
-    el.setAttribute('mode', 'major');
-    el.setAttribute('time', '4/4');
+    const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+    el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
     document.body.appendChild(el);
 
     expect(el.keySig).toBe('C');
@@ -85,7 +90,7 @@ describe('music-staff-treble', () => {
   });
 });
 
-describe('music-staff-treble note head alignment', () => {
+describe(`${MUSIC_STAFF_TREBLE} note head alignment`, () => {
   describe('octave 4 — notes within the staff', () => {
     it('places E4 (5th/bottom staff line) at the correct y', () => {
       const note = renderNote(makeStaff(), 'E4');

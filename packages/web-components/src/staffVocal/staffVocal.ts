@@ -12,7 +12,7 @@ import {
   NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
-import { Octave, VoiceType } from '../types/theory';
+import { Octave, Voice } from '../types/theory';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,
@@ -205,11 +205,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return [...super.observedAttributes, 'voice'];
     }
 
-    get voice(): VoiceType {
-      return (this.getAttribute('voice') as VoiceType) ?? 'soprano';
+    get voice(): Voice {
+      return (this.getAttribute('voice') as Voice) ?? 'soprano';
     }
 
-    set voice(value: VoiceType) {
+    set voice(value: Voice) {
       this.setAttribute('voice', value);
     }
 

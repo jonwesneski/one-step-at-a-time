@@ -40,9 +40,19 @@ const FLAG_Y_SPACING = 120;
 export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(
   10 + HEAD_WIDTH * NOTE_SCALE
 ); // 14
+// The +10 added in computeYHeadOffset for staff CSS alignment.
+// Actual notehead pixel center = yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION.
+export const NOTE_HEAD_Y_OFFSET_CORRECTION = 10;
 // Pixel distance from top of the note SVG to the stem tip when stem is down.
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
+
+// Notehead geometry in pixel space — used by ledgerLines.ts and chord.ts
+export const NOTE_HEAD_RADIUS_PX = HEAD_WIDTH * NOTE_SCALE; // ≈ 4.27px
+export const ADJACENT_NOTE_X_DISPLACEMENT_PX = 150 * NOTE_SCALE; // = 8px
+export const NOTE_HEAD_CX_STEM_UP_PX = (COORD_WIDTH / 2 - 10) * NOTE_SCALE; // ≈ 15.47px
+export const NOTE_HEAD_CX_STEM_DOWN_PX =
+  (COORD_WIDTH / 2 + STEM_WIDTH) * NOTE_SCALE; // ≈ 17.17px
 
 export {
   ACCIDENTAL_NOTE_GAP,
@@ -95,7 +105,7 @@ export const createNoteSvg = ({
   const stemX = stemUp
     ? xStart + HEAD_WIDTH - 15
     : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
-  if (!noStem && duration !== 'whole') {
+  if (!noStem && duration !== 'whole' && duration !== 'double-whole') {
     const stemExtensionInternal = stemExtension / NOTE_SCALE;
     // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
     // Stem-down: left side of head, head end at top (y1), tip at bottom (y2).
@@ -193,7 +203,9 @@ export const createNoteSvg = ({
     : (xStart + STEM_WIDTH).toString();
   const headYStartStr = stemUp ? yStemEnd.toString() : HEAD_WIDTH.toString();
   const headFill =
-    duration === 'half' || duration === 'whole' ? 'none' : 'currentColor';
+    duration === 'half' || duration === 'whole' || duration === 'double-whole'
+      ? 'none'
+      : 'currentColor';
 
   // Enlarged invisible hit zone behind the notehead for easier targeting.
   // 1.5× the head size; transparent but captures pointer events.
@@ -226,6 +238,32 @@ export const createNoteSvg = ({
   head.setAttribute('stroke-width', '30');
   g.appendChild(head);
 
+  if (duration === 'double-whole') {
+    const headCx = stemUp ? xStart - 10 : xStart + STEM_WIDTH;
+    const headCy = stemUp ? yStemEnd : HEAD_WIDTH;
+    const barHalfHeight = HEAD_WIDTH * 0.75 + 20;
+    const barY1 = headCy - barHalfHeight;
+    const barY2 = headCy + barHalfHeight;
+    const barInnerGap = HEAD_WIDTH + 20;
+    const barOuterGap = barInnerGap + STEM_WIDTH + 10;
+
+    for (const xOffset of [
+      barInnerGap,
+      barOuterGap,
+      -barInnerGap,
+      -barOuterGap,
+    ]) {
+      const bar = document.createElementNS(SVG_NS, 'line');
+      bar.setAttribute('x1', (headCx + xOffset).toString());
+      bar.setAttribute('y1', barY1.toString());
+      bar.setAttribute('x2', (headCx + xOffset).toString());
+      bar.setAttribute('y2', barY2.toString());
+      bar.setAttribute('stroke', 'currentColor');
+      bar.setAttribute('stroke-width', STEM_WIDTH.toString());
+      g.appendChild(bar);
+    }
+  }
+
   svg.appendChild(g);
 
   if (accidental && qualifiedElementName === 'svg') {
@@ -255,6 +293,7 @@ export const createNoteSvg = ({
   }
 
   const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);
+
   return [svg, yHeadOffset];
 };
 

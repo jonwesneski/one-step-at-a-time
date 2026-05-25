@@ -2,18 +2,25 @@
  * @jest-environment jsdom
  */
 import '../index';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_COMPOSITION,
+  MUSIC_MEASURE,
+  MUSIC_STAFF_BASS,
+  MUSIC_STAFF_TREBLE,
+} from '../utils/consts';
 
 afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('music-composition', () => {
+describe(MUSIC_COMPOSITION, () => {
   it('registers as a custom element', () => {
-    expect(customElements.get('music-composition')).toBeDefined();
+    expect(customElements.get(MUSIC_COMPOSITION)).toBeDefined();
   });
 
   it('renders with default keySig, mode, and time', () => {
-    const el = document.createElement('music-composition') as any;
+    const el = document.createElement(MUSIC_COMPOSITION) as any;
     document.body.appendChild(el);
 
     expect(el.keySig).toBe('C');
@@ -24,16 +31,16 @@ describe('music-composition', () => {
   });
 });
 
-describe('music-composition attribute propagation', () => {
-  function makeTree(staffTag = 'music-staff-treble'): {
+describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
+  function makeTree(staffTag = MUSIC_STAFF_TREBLE): {
     composition: any;
     measure: any;
     staff: any;
   } {
-    const composition = document.createElement('music-composition') as any;
+    const composition = document.createElement(MUSIC_COMPOSITION) as any;
     document.body.appendChild(composition);
 
-    const measure = document.createElement('music-measure') as any;
+    const measure = document.createElement(MUSIC_MEASURE) as any;
     composition.appendChild(measure);
 
     const staff = document.createElement(staffTag) as any;
@@ -43,52 +50,52 @@ describe('music-composition attribute propagation', () => {
   }
 
   it('propagates keysig change to a descendant treble staff', () => {
-    const { composition, staff } = makeTree('music-staff-treble');
+    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
 
     expect(staff.keySig).toBe('C');
 
-    composition.setAttribute('keysig', 'G');
+    composition.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
 
     expect(staff.keySig).toBe('G');
   });
 
   it('propagates mode change to a descendant treble staff', () => {
-    const { composition, staff } = makeTree('music-staff-treble');
+    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
 
     expect(staff.mode).toBe('major');
 
-    composition.setAttribute('mode', 'minor');
+    composition.setAttribute(COMMON_ATTRIBUTES.MODE, 'minor');
 
     expect(staff.mode).toBe('minor');
   });
 
   it('propagates time change to a descendant treble staff', () => {
-    const { composition, staff } = makeTree('music-staff-treble');
+    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
 
     expect(staff.time).toBe('4/4');
 
-    composition.setAttribute('time', '3/4');
+    composition.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '3/4');
 
     expect(staff.time).toBe('3/4');
   });
 
   it('propagates keysig change to a descendant bass staff', () => {
-    const { composition, staff } = makeTree('music-staff-bass');
+    const { composition, staff } = makeTree(MUSIC_STAFF_BASS);
 
     expect(staff.keySig).toBe('C');
 
-    composition.setAttribute('keysig', 'Bb');
+    composition.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'Bb');
 
     expect(staff.keySig).toBe('Bb');
   });
 
   it('respects a staff-level keysig override over the composition value', () => {
-    const { composition, staff } = makeTree('music-staff-treble');
-    staff.setAttribute('keysig', 'D');
+    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
+    staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D');
 
     expect(staff.keySig).toBe('D');
 
-    composition.setAttribute('keysig', 'G');
+    composition.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
 
     expect(staff.keySig).toBe('D');
   });
@@ -96,19 +103,19 @@ describe('music-composition attribute propagation', () => {
   it('respects a measure-level keysig override over the composition value', () => {
     // Set the measure's keysig BEFORE the staff connects so #resolveInheritedValue
     // picks it up during onConnectedCallback.
-    const composition = document.createElement('music-composition') as any;
+    const composition = document.createElement(MUSIC_COMPOSITION) as any;
     document.body.appendChild(composition);
 
-    const measure = document.createElement('music-measure') as any;
-    measure.setAttribute('keysig', 'F');
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    measure.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'F');
     composition.appendChild(measure);
 
-    const staff = document.createElement('music-staff-treble') as any;
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
     measure.appendChild(staff);
 
     expect(staff.keySig).toBe('F');
 
-    composition.setAttribute('keysig', 'G');
+    composition.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
 
     // Measure-level override still wins after composition propagates
     expect(staff.keySig).toBe('F');

@@ -5,6 +5,7 @@ import '@/src/index';
 
 import { NoteLikeElementType } from '../types/elements';
 import { collectNoteLikeElements, pairConnectors } from './connectorsBuilder';
+import { MUSIC_GUITAR_NOTE, MUSIC_NOTE } from './consts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -12,13 +13,13 @@ afterEach(() => {
 });
 
 const makeNote = (attrs: Record<string, string>): NoteLikeElementType => {
-  const el = document.createElement('music-note');
+  const el = document.createElement(MUSIC_NOTE);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el as NoteLikeElementType;
 };
 
 const makeGuitarNote = (attrs: Record<string, string>): NoteLikeElementType => {
-  const el = document.createElement('music-guitar-note');
+  const el = document.createElement(MUSIC_GUITAR_NOTE);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el as NoteLikeElementType;
 };
@@ -32,8 +33,8 @@ describe('collectNoteLikeElements', () => {
 
     const notes = collectNoteLikeElements(root);
     expect(notes).toHaveLength(2);
-    expect(notes[0].tagName.toLowerCase()).toBe('music-note');
-    expect(notes[1].tagName.toLowerCase()).toBe('music-guitar-note');
+    expect(notes[0].tagName.toLowerCase()).toBe(MUSIC_NOTE);
+    expect(notes[1].tagName.toLowerCase()).toBe(MUSIC_GUITAR_NOTE);
   });
 });
 

@@ -112,6 +112,7 @@ export const ChordSemitoneMapAliases: Record<
 };
 
 export const durationToFactor: Record<DurationType, number> = {
+  'double-whole': 2,
   whole: 1,
   half: 0.5,
   quarter: 0.25,

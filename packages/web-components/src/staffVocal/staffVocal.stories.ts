@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
+import { type Voice } from '../index';
+import { MODES, VOICES } from '../utils';
 
-const notesByVoice: Record<string, string[]> = {
+const notesByVoice: Record<Voice, string[]> = {
   soprano: ['C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'A5'],
   mezzo: ['B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'G5'],
   alto: ['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'F5'],
@@ -17,7 +19,7 @@ const meta: Meta = {
   argTypes: {
     voice: {
       control: 'select',
-      options: ['soprano', 'mezzo', 'alto', 'tenor', 'baritone', 'bass'],
+      options: VOICES,
       description: 'Voice type determines the clef and note range',
     },
     keySig: {
@@ -42,7 +44,7 @@ const meta: Meta = {
     },
     mode: {
       control: 'radio',
-      options: ['major', 'minor'],
+      options: MODES,
     },
     time: {
       control: 'text',
@@ -62,7 +64,7 @@ type Story = StoryObj;
 export const VoiceWithLyrics: Story = {
   args: { voice: 'soprano', keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => {
-    const notes = notesByVoice[args.voice] || notesByVoice.soprano;
+    const notes = notesByVoice[args.voice as Voice] || notesByVoice.soprano;
     return html`
       <music-staff-vocal
         voice=${args.voice}

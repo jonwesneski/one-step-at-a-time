@@ -1,6 +1,10 @@
 import { ConnectorRole, INoteElement } from '../types/elements';
 import { AccidentalType, DurationType, Note, Octave } from '../types/theory';
-import { createNoteSvg } from '../utils';
+import {
+  addLedgerLines,
+  createNoteSvg,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
+} from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
 
 const parseConnectorRole = (value: string | null): ConnectorRole | null => {
@@ -19,6 +23,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #noFlags = false;
     #noStem = false;
     #showAccidental: AccidentalType | null | undefined = undefined;
+    #staffY: number | null = null;
     #batchDepth = 0;
     #renderPending = false;
 
@@ -104,6 +109,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set showAccidental(value: AccidentalType | null | undefined) {
       this.#showAccidental = value;
+      this.#scheduleRender();
+    }
+
+    get staffY(): number | null {
+      return this.#staffY;
+    }
+    set staffY(value: number | null) {
+      this.#staffY = value;
       this.#scheduleRender();
     }
 
@@ -197,7 +210,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         accidental = this.#showAccidental;
       }
 
-      const [noteSvg] = createNoteSvg({
+      const [noteSvg, yHeadOffset] = createNoteSvg({
         duration: this.duration,
         stemUp: this.#stemUp,
         stemExtension: this.#stemExtension,
@@ -205,6 +218,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         noStem: this.#noStem,
         accidental,
       });
+
+      if (this.#staffY !== null) {
+        addLedgerLines(
+          noteSvg,
+          [this.#staffY],
+          this.#stemUp,
+          yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY
+        );
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.appendChild(noteSvg);

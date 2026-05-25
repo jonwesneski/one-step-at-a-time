@@ -2,6 +2,12 @@ import { expect, type Page, test } from '@playwright/test';
 import { waitForRedrawCycle } from '../../test-fixtures/helpers';
 import type { NoteLetterOctave } from '../types/elements';
 import type { DurationType } from '../types/theory';
+import {
+  MUSIC_COMPOSITION,
+  MUSIC_MEASURE,
+  MUSIC_NOTE,
+  MUSIC_STAFF_TREBLE,
+} from '../utils/consts';
 
 const MIN_NOTE_WIDTH = 20;
 
@@ -25,26 +31,24 @@ function parseFlex(flexValue: string): FlexValues {
 }
 
 async function readMeasureFlex(page: Page): Promise<FlexValues> {
-  const flexString = await page.evaluate(() => {
-    const measure = document.querySelector(
-      'music-measure'
-    ) as HTMLElement | null;
+  const flexString = await page.evaluate((measureTag) => {
+    const measure = document.querySelector(measureTag) as HTMLElement | null;
     if (measure === null) {
-      throw new Error('music-measure not found');
+      throw new Error(`${measureTag} not found`);
     }
     return measure.style.flex;
-  });
+  }, MUSIC_MEASURE);
   return parseFlex(flexString);
 }
 
 async function readDescribeEndX(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const staff = document.querySelector('music-staff-treble') as any;
+  return page.evaluate((staffTag) => {
+    const staff = document.querySelector(staffTag) as any;
     if (staff === null) {
-      throw new Error('music-staff-treble not found');
+      throw new Error(`${staffTag} not found`);
     }
     return staff.describeEndX as number;
-  });
+  }, MUSIC_STAFF_TREBLE);
 }
 
 async function buildMeasureWithNotes(
@@ -53,18 +57,25 @@ async function buildMeasureWithNotes(
   noteValues: NoteLetterOctave[]
 ): Promise<void> {
   await page.evaluate(
-    ({ duration, noteValues }) => {
+    ({
+      duration,
+      noteValues,
+      compositionTag,
+      measureTag,
+      staffTag,
+      noteTag,
+    }) => {
       const host = document.getElementById('host');
       if (host === null) {
         throw new Error('host missing');
       }
       host.innerHTML = '';
       host.style.width = '900px';
-      const composition = document.createElement('music-composition');
-      const measure = document.createElement('music-measure');
-      const staff = document.createElement('music-staff-treble');
+      const composition = document.createElement(compositionTag);
+      const measure = document.createElement(measureTag);
+      const staff = document.createElement(staffTag);
       for (const value of noteValues) {
-        const note = document.createElement('music-note');
+        const note = document.createElement(noteTag);
         note.setAttribute('note', value[0]);
         note.setAttribute('octave', value[1]);
         note.setAttribute('duration', duration);
@@ -74,7 +85,14 @@ async function buildMeasureWithNotes(
       composition.appendChild(measure);
       host.appendChild(composition);
     },
-    { duration, noteValues }
+    {
+      duration,
+      noteValues,
+      compositionTag: MUSIC_COMPOSITION,
+      measureTag: MUSIC_MEASURE,
+      staffTag: MUSIC_STAFF_TREBLE,
+      noteTag: MUSIC_NOTE,
+    }
   );
 }
 
@@ -140,7 +158,7 @@ const SIXTEEN_NOTES: NoteLetterOctave[] = [
   'D6',
 ];
 
-test.describe('music-measure min-width layout', () => {
+test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
   test('single whole note — basis equals describeEndX + MIN_NOTE_WIDTH, grow clamped to minimum', async ({
     page,
   }) => {
@@ -188,8 +206,8 @@ test.describe('music-measure min-width layout', () => {
     await buildMeasureWithNotes(page, 'hundredtwentyeighth', FIFTEEN_NOTES);
     await waitForRedrawCycle(page);
 
-    const { staffWidth, describeEndX } = await page.evaluate(() => {
-      const staff = document.querySelector('music-staff-treble') as any;
+    const { staffWidth, describeEndX } = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag) as any;
       if (staff === null) {
         throw new Error('staff not found');
       }
@@ -197,53 +215,61 @@ test.describe('music-measure min-width layout', () => {
         staffWidth: (staff as Element).getBoundingClientRect().width,
         describeEndX: staff.describeEndX as number,
       };
-    });
+    }, MUSIC_STAFF_TREBLE);
 
     const proportionalWidth = staffWidth - describeEndX - 15 * MIN_NOTE_WIDTH;
     expect(proportionalWidth).toBeGreaterThanOrEqual(0);
   });
 
   test('two staves — measure uses the larger minWidth', async ({ page }) => {
-    await page.evaluate(() => {
-      const host = document.getElementById('host');
-      if (host === null) {
-        throw new Error('host missing');
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+
+        const slowStaff = document.createElement(staffTag);
+        const wholeNote = document.createElement(noteTag);
+        wholeNote.setAttribute('note', ('C4' satisfies NoteLetterOctave)[0]);
+        wholeNote.setAttribute('octave', ('C4' satisfies NoteLetterOctave)[1]);
+        wholeNote.setAttribute('duration', 'whole' satisfies DurationType);
+        slowStaff.appendChild(wholeNote);
+
+        const fastStaff = document.createElement(staffTag);
+        for (const value of [
+          'C4',
+          'D4',
+          'E4',
+          'F4',
+          'G4',
+          'A4',
+          'B4',
+          'C5',
+        ] as NoteLetterOctave[]) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', value[0]);
+          note.setAttribute('octave', value[1]);
+          note.setAttribute('duration', 'eighth' satisfies DurationType);
+          fastStaff.appendChild(note);
+        }
+
+        measure.appendChild(slowStaff);
+        measure.appendChild(fastStaff);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
       }
-      host.innerHTML = '';
-      host.style.width = '900px';
-      const composition = document.createElement('music-composition');
-      const measure = document.createElement('music-measure');
-
-      const slowStaff = document.createElement('music-staff-treble');
-      const wholeNote = document.createElement('music-note');
-      wholeNote.setAttribute('note', ('C4' satisfies NoteLetterOctave)[0]);
-      wholeNote.setAttribute('octave', ('C4' satisfies NoteLetterOctave)[1]);
-      wholeNote.setAttribute('duration', 'whole' satisfies DurationType);
-      slowStaff.appendChild(wholeNote);
-
-      const fastStaff = document.createElement('music-staff-treble');
-      for (const value of [
-        'C4',
-        'D4',
-        'E4',
-        'F4',
-        'G4',
-        'A4',
-        'B4',
-        'C5',
-      ] as NoteLetterOctave[]) {
-        const note = document.createElement('music-note');
-        note.setAttribute('note', value[0]);
-        note.setAttribute('octave', value[1]);
-        note.setAttribute('duration', 'eighth' satisfies DurationType);
-        fastStaff.appendChild(note);
-      }
-
-      measure.appendChild(slowStaff);
-      measure.appendChild(fastStaff);
-      composition.appendChild(measure);
-      host.appendChild(composition);
-    });
+    );
     await waitForRedrawCycle(page);
 
     const flex = await readMeasureFlex(page);
