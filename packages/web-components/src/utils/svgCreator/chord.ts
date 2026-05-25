@@ -6,6 +6,7 @@ import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
   STAFF_Y_PADDING,
@@ -121,7 +122,10 @@ export const createChordSvg = ({
 
         // xOffset is already negative (left of notehead left edge)
         // yPixel is the notehead center in chord SVG space
-        symbolSvg.setAttribute('x', `${placement.xOffset - symbolWidth}`);
+        symbolSvg.setAttribute(
+          'x',
+          `${placement.xOffset - ACCIDENTAL_NOTE_GAP}`
+        );
         symbolSvg.setAttribute('y', `${placement.yPixel - symbolHeight / 2}`);
         svg.appendChild(symbolSvg);
       }

@@ -21,6 +21,7 @@ import {
 import { AccidentalType, Mode, Note } from '../types/theory';
 import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../utils/notationDimensions';
@@ -338,5 +339,7 @@ export function totalChordAccidentalWidth(
   if (placements.length === 0) {
     return 0;
   }
-  return Math.min(...placements.map((p) => p.xOffset)) * -1;
+  return (
+    Math.min(...placements.map((p) => p.xOffset)) * -1 + ACCIDENTAL_NOTE_GAP
+  );
 }

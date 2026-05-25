@@ -122,7 +122,7 @@ export type TimeSignature =
 
 export type Mode = 'major' | 'minor';
 
-export type VoiceType =
+export type Voice =
   | 'soprano'
   | 'mezzo'
   | 'alto'

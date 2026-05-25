@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
+import { MODES } from '../utils';
 
 const meta: Meta = {
   title: 'Components/StaffTreble',
@@ -40,7 +41,7 @@ const meta: Meta = {
     },
     mode: {
       control: 'radio',
-      options: ['major', 'minor'],
+      options: MODES,
     },
     time: {
       control: 'text',
