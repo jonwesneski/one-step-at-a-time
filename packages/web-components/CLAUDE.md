@@ -282,6 +282,87 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 - Test runner: Jest via Nx (`@nx/jest`)
 - Run tests: `npx nx test web-components`
 
+## Storybook Stories
+
+Story files are colocated with their component using the `<component>.stories.ts` naming convention (e.g. `src/note/note.stories.ts`). The exception is feature-level utilities: `src/utils/svgCreator/beams.stories.ts`.
+
+**Existing story files:**
+`chord`, `composition`, `measure`, `note`, `rest`, `staffBass`, `staffGuitarTab`, `staffTreble`, `staffVocal`, `utils/svgCreator/beams`
+
+**Standard imports:**
+
+```ts
+import type { Meta, StoryObj } from '@storybook/web-components';
+import { html } from 'lit';
+import '../index'; // registers all custom elements
+import { DURATIONS, NOTES, OCTAVES } from '../utils'; // for control option arrays
+```
+
+**Meta shape:** `title: 'Components/...'`, `tags: ['autodocs']`, optional global `render`/`argTypes`/`args`.
+
+**Story naming conventions:** `Standalone`, `InStaff`, key-signature variants (`CMajor`, `GMajor`, …), feature combos (`WithChords`, `WithAccidentals`, `WithTies`, etc.).
+
+**No decorators or play functions** — stories are self-contained `render` functions using Lit `html` tag.
+
+**Always use existing constants and types** — import `DURATIONS`, `NOTES`, `OCTAVES` from `'../utils'` for `options` arrays; use `DurationType`, `Note`, `Octave`, `TimeSignature` from `'../types/theory'` for typed values rather than raw strings.
+
+**Discovery:** `.storybook/main.ts` globs `../src/**/*.@(mdx|stories.@(js|jsx|ts|tsx))`; Vite + `@storybook/web-components-vite`.
+
+---
+
+## Test Organization
+
+Three tiers — choose based on what you're testing:
+
+| Tier             | File suffix                     | Runner                | When to use                                                                                                |
+| ---------------- | ------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Standalone unit  | `*.test.ts` in component folder | Jest + jsdom          | Single-element behavior: registration, default props, shadow DOM structure, attribute handling             |
+| Integration      | `staffClassicalBase.test.ts`    | Jest + jsdom          | Parent-staff ↔ child coordination: slot mechanics, Y-positioning, error handling across hierarchy          |
+| Browser / layout | `*.browser-test.ts`             | Playwright + Chromium | Responsive layout, ResizeObserver, CSS flex sizing, pixel-accurate positioning, multi-measure coordination |
+
+### Standalone unit tests
+
+- `@jest-environment jsdom` directive at the top of every test file
+- Import component's `index.ts`, create element with `document.createElement(TAG_CONST)`, append to `document.body`
+- Access `el.shadowRoot` for shadow DOM assertions; query with `.querySelector()`
+- `afterEach(() => { document.body.innerHTML = ''; })` cleanup in every file
+- Files live next to their component: `src/note/note.test.ts`, `src/rest/rest.test.ts`, etc.
+- **Always use existing constants and types**: tag name constants (`MUSIC_NOTE`, `MUSIC_REST`, etc.) from `utils/consts`; strong types (`DurationType`, `Note`, `Octave`, `TimeSignature`, `Chord`) from `types/theory.ts` and `types/elements.ts` — never raw strings like `'music-note'` or `'quarter'`
+
+### Integration tests
+
+Integration tests for notes, chords, and rests live in their **component's own test file** under a `describe('staff integration', ...)` block:
+
+| File                  | Integration describe block | What to test here                                                                    |
+| --------------------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| `note/note.test.ts`   | `'staff integration'`      | Y-repositioning on note/octave change, stem direction, flag/beam state, double-whole |
+| `chord/chord.test.ts` | `'staff integration'`      | Chord top position, stem direction, staff Y coordinates                              |
+| `rest/rest.test.ts`   | `'staff integration'`      | Rest Y positioning per duration, double-whole overflow                               |
+
+- Pattern: import `'../staffTreble/index'` to register the staff, create staff → set `TIME_SIG` → `slot.assignedElements = () => [...]` → `slot.dispatchEvent(new Event('slotchange'))`
+- Use `jest.spyOn(console, 'error')` to assert overflow/error conditions
+
+`staffClassicalBase.test.ts` retains only **cross-cutting** `StaffClassicalElementBase` behaviour that doesn't belong to a single element type (currently: measure overflow/validation).
+
+**Per-staff test scope** — each staff's own `*.test.ts` file is intentionally narrow:
+
+| File                              | What to test here                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------- |
+| `staffTreble/staffTreble.test.ts` | Treble clef present in shadow DOM; note Y-coordinates match treble `yCoordinates` map |
+| `staffBass/staffBass.test.ts`     | Bass clef present; note Y-coordinates match bass `yCoordinates` map                   |
+| `staffVocal/staffVocal.test.ts`   | Vocal clef / voice-type variants; lyrics rendering and positioning                    |
+
+### Browser tests
+
+- Runner: Playwright (`@playwright/test`), completely separate from Jest
+- Config: `playwright.config.ts` matches `*.browser-test.ts`; starts Vite dev server on port 5179
+- Existing files: `measure/measure.browser-test.ts`, `staffTreble/staffTreble.browser-test.ts`, `composition/composition.browser-test.ts`
+- **Add a browser test when the feature involves**: responsive resizing, CSS `style.flex` values, `getBoundingClientRect()` / `getBBox()` geometry, multi-measure coordination, or `ResizeObserver`-driven layout changes
+- Helpers in `test-fixtures/helpers.ts`: `waitForRedrawCycle`, `waitForStaffNotesPositioned`, `buildStandaloneTrebleStaff`, `buildComposition`, `resizeHost`
+- All DOM interaction via `page.evaluate()` (runs in real browser); all assertions are async
+
+---
+
 ## Conventions
 
 - Use TypeScript `#` private fields for custom element internals
