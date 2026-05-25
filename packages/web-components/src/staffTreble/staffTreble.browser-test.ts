@@ -5,7 +5,12 @@ import {
   waitForRedrawCycle,
   waitForStaffNotesPositioned,
 } from '../../test-fixtures/helpers';
-import { MUSIC_NOTE, MUSIC_REST, MUSIC_STAFF_TREBLE } from '../utils/consts';
+import {
+  MUSIC_NOTE,
+  MUSIC_REST,
+  MUSIC_STAFF_TREBLE,
+  MUSIC_TUPLET,
+} from '../utils/consts';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -517,5 +522,239 @@ test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
       MUSIC_STAFF_TREBLE
     );
     expect(staffExists).toBe(true);
+  });
+});
+
+test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
+  test('triplet renders a numeral "3" in the tuplets container', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const tuplet = document.createElement(tupletTag);
+        tuplet.setAttribute('ratio', '3');
+        for (let i = 0; i < 3; i++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'E4');
+          note.setAttribute('duration', 'eighth');
+          tuplet.appendChild(note);
+        }
+        staff.appendChild(tuplet);
+        host.appendChild(staff);
+      },
+      {
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const numeralText = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        return null;
+      }
+      return (
+        staff.shadowRoot.querySelector('.tuplet-numeral')?.textContent ?? null
+      );
+    }, MUSIC_STAFF_TREBLE);
+    expect(numeralText).toBe('3');
+  });
+
+  test('quintuplet renders numeral "5:4"', async ({ page }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const tuplet = document.createElement(tupletTag);
+        tuplet.setAttribute('ratio', '5:4');
+        for (let i = 0; i < 5; i++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'C5');
+          note.setAttribute('duration', 'sixteenth');
+          tuplet.appendChild(note);
+        }
+        staff.appendChild(tuplet);
+        host.appendChild(staff);
+      },
+      {
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const numeralText = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        return null;
+      }
+      return (
+        staff.shadowRoot.querySelector('.tuplet-numeral')?.textContent ?? null
+      );
+    }, MUSIC_STAFF_TREBLE);
+    expect(numeralText).toBe('5:4');
+  });
+
+  test('tuplet bracket repositions on resize', async ({ page }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const tuplet = document.createElement(tupletTag);
+        tuplet.setAttribute('ratio', '3');
+        for (let i = 0; i < 3; i++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'E4');
+          note.setAttribute('duration', 'quarter');
+          tuplet.appendChild(note);
+        }
+        staff.appendChild(tuplet);
+        host.appendChild(staff);
+      },
+      {
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const wideBBox = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        return null;
+      }
+      const group = staff.shadowRoot.querySelector(
+        '.tuplet-group'
+      ) as SVGGraphicsElement | null;
+      if (group === null) {
+        return null;
+      }
+      const bbox = group.getBBox();
+      return { x: bbox.x, width: bbox.width };
+    }, MUSIC_STAFF_TREBLE);
+    expect(wideBBox).not.toBeNull();
+    if (wideBBox === null) {
+      throw new Error('unreachable');
+    }
+    expect(wideBBox.width).toBeGreaterThan(0);
+
+    const positionedAfter = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 400);
+    await positionedAfter.catch(() => undefined);
+    await waitForRedrawCycle(page);
+
+    const narrowBBox = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        return null;
+      }
+      const group = staff.shadowRoot.querySelector(
+        '.tuplet-group'
+      ) as SVGGraphicsElement | null;
+      if (group === null) {
+        return null;
+      }
+      const bbox = group.getBBox();
+      return { x: bbox.x, width: bbox.width };
+    }, MUSIC_STAFF_TREBLE);
+    expect(narrowBBox).not.toBeNull();
+    if (narrowBBox === null) {
+      throw new Error('unreachable');
+    }
+    expect(narrowBBox.width).toBeLessThan(wideBBox.width);
+  });
+
+  test('nested tuplet renders two .tuplet-group elements at different Y positions', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const outer = document.createElement(tupletTag);
+        outer.setAttribute('ratio', '5:4');
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C5');
+        noteA.setAttribute('duration', 'sixteenth');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'D5');
+        noteB.setAttribute('duration', 'sixteenth');
+        const inner = document.createElement(tupletTag);
+        inner.setAttribute('ratio', '3');
+        for (let i = 0; i < 3; i++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'E5');
+          note.setAttribute('duration', 'thirtysecond');
+          inner.appendChild(note);
+        }
+        const noteC = document.createElement(noteTag);
+        noteC.setAttribute('note', 'F5');
+        noteC.setAttribute('duration', 'sixteenth');
+        const noteD = document.createElement(noteTag);
+        noteD.setAttribute('note', 'G5');
+        noteD.setAttribute('duration', 'sixteenth');
+        outer.appendChild(noteA);
+        outer.appendChild(noteB);
+        outer.appendChild(inner);
+        outer.appendChild(noteC);
+        outer.appendChild(noteD);
+        staff.appendChild(outer);
+        host.appendChild(staff);
+      },
+      {
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const groupYPositions = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        return [];
+      }
+      const groups = Array.from(
+        staff.shadowRoot.querySelectorAll('.tuplet-group')
+      ) as SVGGraphicsElement[];
+      return groups.map((g) => g.getBBox().y);
+    }, MUSIC_STAFF_TREBLE);
+
+    expect(groupYPositions.length).toBe(2);
+    expect(groupYPositions[0]).not.toBe(groupYPositions[1]);
   });
 });

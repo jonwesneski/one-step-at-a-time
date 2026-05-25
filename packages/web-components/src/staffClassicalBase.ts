@@ -6,6 +6,11 @@ import {
 import { buildBeamsRenderer } from './rules/beamRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
+import {
+  buildTupletGroups,
+  computeTupletBracketGeometry,
+  TupletGroup,
+} from './rules/tupletRules';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import { StaffElementBase } from './staffBase';
 import {
@@ -14,6 +19,7 @@ import {
   NoteChordOrRestElementType,
   NoteElementType,
   NoteLetterOctave,
+  TupletElementType,
   YCoordinates,
 } from './types/elements';
 import {
@@ -40,6 +46,7 @@ import {
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
+  MUSIC_TUPLET_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -62,6 +69,42 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
+import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+
+function flattenSlotElements(assigned: Element[]): {
+  flatElements: NoteChordOrRestElementType[];
+  tupletsByIndex: Map<number, TupletElementType>;
+} {
+  const flatElements: NoteChordOrRestElementType[] = [];
+  const tupletsByIndex = new Map<number, TupletElementType>();
+
+  function flatten(
+    el: Element,
+    tupletAncestor: TupletElementType | null
+  ): void {
+    const tag = el.nodeName;
+    if (
+      tag === MUSIC_NOTE_NODE ||
+      tag === MUSIC_CHORD_NODE ||
+      tag === MUSIC_REST_NODE
+    ) {
+      if (tupletAncestor !== null) {
+        tupletsByIndex.set(flatElements.length, tupletAncestor);
+      }
+      flatElements.push(el as NoteChordOrRestElementType);
+    } else if (tag === MUSIC_TUPLET_NODE) {
+      for (const child of el.children) {
+        flatten(child, el as TupletElementType);
+      }
+    }
+  }
+
+  for (const el of assigned) {
+    flatten(el, null);
+  }
+
+  return { flatElements, tupletsByIndex };
+}
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -82,6 +125,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
+  #tupletContainer: SVGSVGElement = document.createElementNS(
+    SVG_NS,
+    'svg'
+  ) as SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteChordOrRestElementType[] = [];
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
@@ -89,6 +136,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
   #describeEndX = 0;
   #showDescribe = true;
+  #tupletGroups: TupletGroup[] = [];
+  #tupletsByIndex: Map<number, TupletElementType> = new Map();
+  #noteXPositions: Map<number, number> = new Map();
+  #stemDirections: boolean[] = [];
+  #beamedIndicesSnapshot: Set<number> = new Set();
+  #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
+  #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
   #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
   #boundNoteYChange = () => {
     if (this.#currentElements.length > 0) {
@@ -457,6 +511,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#beamsContainer.style.overflow = 'visible';
     this.#beamsContainer.style.pointerEvents = 'none';
     this.transcribeContainer.appendChild(this.#beamsContainer);
+
+    this.#tupletContainer.classList.add('tuplets-container');
+    this.#tupletContainer.style.overflow = 'visible';
+    this.#tupletContainer.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(this.#tupletContainer);
   }
 
   #refreshDescribe() {
@@ -592,16 +651,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected onHandleSlotChange(event: Event) {
     const slot = event.target as HTMLSlotElement;
-    const assignedElements = slot
+    const assigned = slot
       .assignedElements({ flatten: true })
       .filter(
         (e) =>
           e.nodeName === MUSIC_NOTE_NODE ||
           e.nodeName === MUSIC_CHORD_NODE ||
-          e.nodeName === MUSIC_REST_NODE
-      ) as NoteChordOrRestElementType[];
+          e.nodeName === MUSIC_REST_NODE ||
+          e.nodeName === MUSIC_TUPLET_NODE
+      );
 
-    this.#renderNotes(assignedElements);
+    const { flatElements, tupletsByIndex } = flattenSlotElements(assigned);
+    this.#tupletsByIndex = tupletsByIndex;
+    this.#renderNotes(flatElements);
 
     /*
      * todo: I may not need this, but I am keeping an example for now.
@@ -627,8 +689,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Cancel any in-progress drag before clearing rendered content
     this.#noteTimingDragHandler?.cancelDrag();
 
-    // Clear previously rendered beams
+    // Clear previously rendered beams and tuplet brackets
     this.#beamsContainer.innerHTML = '';
+    this.#tupletContainer.innerHTML = '';
 
     const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
@@ -662,6 +725,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       chordStaffYCoords
     );
     this.#beamRenderer = beamRenderer;
+
+    // Snapshot data needed by #spaceElements to render tuplet brackets
+    this.#stemDirections = stemDirections;
+    this.#beamedIndicesSnapshot = new Set(
+      elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
+    );
+    this.#noteStaffYCoordsSnapshot = new Map(noteStaffYCoords);
+    this.#chordStaffYCoordsSnapshot = new Map(chordStaffYCoords);
+    this.#tupletGroups = buildTupletGroups(elements, this.#tupletsByIndex);
 
     const { noteShowAccidentals, chordNoteAccidentals } =
       computeNoteAccidentals(
@@ -840,6 +912,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
+    this.#noteXPositions.clear();
+
     // Configure beams container to cover the notes area
     this.#beamsContainer.setAttribute('x', `${this.#describeEndX}`);
     this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
@@ -907,7 +981,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       // Notify beam renderer of final position after any accidental shift, so beam
       // endpoints stay in sync with the DOM positions of the chord elements.
-      this.#beamRenderer?.setX(i, xInWrapper - this.#describeEndX);
+      const xInBeamsContainer = xInWrapper - this.#describeEndX;
+      this.#beamRenderer?.setX(i, xInBeamsContainer);
+      this.#noteXPositions.set(i, xInBeamsContainer);
       element.style.left = `${xInWrapper}px`;
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
 
@@ -936,6 +1012,35 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beatOffset += durationToFactor[duration];
     }
     this.#beamRenderer?.spaceAll();
+
+    // Size the tuplet container to match the notes area (same as beams container)
+    this.#tupletContainer.setAttribute('x', `${this.#describeEndX}`);
+    this.#tupletContainer.setAttribute('width', `${remainingWidth}`);
+    this.#tupletContainer.setAttribute(
+      'viewBox',
+      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#tupletContainer.setAttribute(
+      'height',
+      `${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+
+    // Render tuplet brackets using the x positions collected above
+    this.#tupletContainer.innerHTML = '';
+    for (const group of this.#tupletGroups) {
+      const geometry = computeTupletBracketGeometry(
+        group,
+        this.#currentElements,
+        this.#noteXPositions,
+        this.#stemDirections,
+        this.#beamedIndicesSnapshot,
+        this.#noteStaffYCoordsSnapshot,
+        this.#chordStaffYCoordsSnapshot
+      );
+      if (geometry !== null) {
+        this.#tupletContainer.appendChild(createTupletBracketSvg(geometry));
+      }
+    }
   }
 
   // Respace notes on resize

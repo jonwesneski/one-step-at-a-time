@@ -13,12 +13,14 @@ import {
   COMMON_ATTRIBUTES,
   MUSIC_NOTE,
   MUSIC_STAFF_TREBLE,
+  MUSIC_TUPLET,
 } from '../utils/consts';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
 import './index';
+import '../tuplet/index';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -199,5 +201,60 @@ describe('staff integration', () => {
 
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  it('renders a .tuplets-container svg in the shadow DOM when a tuplet is slotted', () => {
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staff.setAttribute(
+      COMMON_ATTRIBUTES.TIME_SIG,
+      '4/4' satisfies TimeSignature
+    );
+    document.body.appendChild(staff);
+
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.setAttribute('ratio', '3');
+    for (let i = 0; i < 3; i++) {
+      const note = document.createElement(MUSIC_NOTE);
+      note.setAttribute('note', 'E' satisfies Note);
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      note.setAttribute('duration', 'eighth' satisfies DurationType);
+      tuplet.appendChild(note);
+    }
+
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [tuplet];
+    slot.dispatchEvent(new Event('slotchange'));
+
+    const tupletsContainer =
+      staff.shadowRoot.querySelector('.tuplets-container');
+    expect(tupletsContainer).not.toBeNull();
+  });
+
+  it('renders a .tuplet-group inside .tuplets-container for a triplet', () => {
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staff.setAttribute(
+      COMMON_ATTRIBUTES.TIME_SIG,
+      '4/4' satisfies TimeSignature
+    );
+    document.body.appendChild(staff);
+
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.setAttribute('ratio', '3');
+    for (let i = 0; i < 3; i++) {
+      const note = document.createElement(MUSIC_NOTE);
+      note.setAttribute('note', 'E' satisfies Note);
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      note.setAttribute('duration', 'eighth' satisfies DurationType);
+      tuplet.appendChild(note);
+    }
+
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [tuplet];
+    slot.dispatchEvent(new Event('slotchange'));
+
+    const tupletsContainer =
+      staff.shadowRoot.querySelector('.tuplets-container');
+    const tupletGroup = tupletsContainer?.querySelector('.tuplet-group');
+    expect(tupletGroup).not.toBeNull();
   });
 });

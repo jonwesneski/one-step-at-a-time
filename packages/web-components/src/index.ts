@@ -1,5 +1,6 @@
 import './chord';
 import './composition';
+import './tuplet';
 import './measure';
 import './staffBass';
 import './staffGuitarTab';

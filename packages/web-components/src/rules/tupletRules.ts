@@ -1,0 +1,254 @@
+import {
+  ChordElementType,
+  NoteChordOrRestElementType,
+  NoteElementType,
+  TupletElementType,
+} from '../types/elements';
+import { TupletRatio } from '../types/theory';
+import {
+  MUSIC_NOTE_NODE,
+  MUSIC_REST_NODE,
+  MUSIC_TUPLET_NODE,
+} from '../utils/consts';
+import {
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_TOP_LINE_Y,
+  STAFF_Y_PADDING,
+  TUPLET_BRACKET_LEVEL_OFFSET_PX,
+  TUPLET_HOOK_LENGTH_PX,
+  TUPLET_STAFF_CLEARANCE_PX,
+} from '../utils/notationDimensions';
+import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+
+export type ParsedTupletRatio = {
+  actual: number;
+  normal: number;
+  displayString: string;
+};
+
+export type TupletGroup = {
+  /** Flat indices into the flattened elements array (after expanding tuplets). */
+  indices: number[];
+  parsedRatio: ParsedTupletRatio;
+  /** 0 = outermost (no parent tuplet), 1 = nested one level deep, etc. */
+  nestingLevel: number;
+};
+
+export type TupletBracketGeometry = {
+  group: TupletGroup;
+  startX: number;
+  endX: number;
+  baseY: number;
+  stemUp: boolean;
+  angle: number;
+  omitBracket: boolean;
+  numeralX: number;
+  numeralY: number;
+  hookLength: number;
+};
+
+export function defaultNormalCount(actual: number): number {
+  const map: Record<number, number> = {
+    2: 3,
+    3: 2,
+    4: 3,
+    5: 4,
+    6: 4,
+    7: 4,
+    8: 6,
+    9: 8,
+  };
+  return map[actual] ?? Math.ceil((actual * 2) / 3);
+}
+
+export function parseTupletRatio(ratioString: TupletRatio): ParsedTupletRatio {
+  if (ratioString.includes(':')) {
+    const [left, right] = ratioString.split(':');
+    const actual = parseInt(left, 10);
+    const normal = parseInt(right, 10);
+    return { actual, normal, displayString: ratioString };
+  }
+  const actual = parseInt(ratioString, 10);
+  const normal = defaultNormalCount(actual);
+  return { actual, normal, displayString: ratioString };
+}
+
+function computeNestingLevel(el: TupletElementType): number {
+  let level = 0;
+  let ancestor = el.parentElement;
+  while (ancestor !== null) {
+    if (ancestor.nodeName === MUSIC_TUPLET_NODE) {
+      level++;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return level;
+}
+
+export function buildTupletGroups(
+  elements: NoteChordOrRestElementType[],
+  tupletsByIndex: ReadonlyMap<number, TupletElementType>
+): TupletGroup[] {
+  const tupletToIndices = new Map<TupletElementType, number[]>();
+
+  for (let i = 0; i < elements.length; i++) {
+    const tupletEl = tupletsByIndex.get(i);
+    if (tupletEl === undefined) {
+      continue;
+    }
+    if (!tupletToIndices.has(tupletEl)) {
+      tupletToIndices.set(tupletEl, []);
+    }
+    tupletToIndices.get(tupletEl)!.push(i);
+  }
+
+  const groups: TupletGroup[] = [];
+  for (const [tupletEl, indices] of tupletToIndices) {
+    groups.push({
+      indices,
+      parsedRatio: parseTupletRatio(tupletEl.ratio),
+      nestingLevel: computeNestingLevel(tupletEl),
+    });
+  }
+
+  return groups;
+}
+
+function getStaffYForIndex(
+  index: number,
+  elements: NoteChordOrRestElementType[],
+  stemDirections: boolean[],
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+): number | null {
+  const el = elements[index];
+  if (el.nodeName === MUSIC_NOTE_NODE) {
+    return noteStaffYCoords.get(el as NoteElementType) ?? null;
+  }
+  if (el.nodeName !== MUSIC_REST_NODE) {
+    const ys = chordStaffYCoords.get(el as ChordElementType);
+    if (ys && ys.length > 0) {
+      return stemDirections[index] ? Math.max(...ys) : Math.min(...ys);
+    }
+  }
+  return null;
+}
+
+export function computeTupletBracketGeometry(
+  group: TupletGroup,
+  elements: NoteChordOrRestElementType[],
+  noteXPositions: ReadonlyMap<number, number>,
+  stemDirections: boolean[],
+  beamedIndices: ReadonlySet<number>,
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+): TupletBracketGeometry | null {
+  if (group.indices.length < 2) {
+    return null;
+  }
+
+  const firstIndex = group.indices[0];
+  const lastIndex = group.indices[group.indices.length - 1];
+  const firstX = noteXPositions.get(firstIndex);
+  const lastX = noteXPositions.get(lastIndex);
+
+  if (firstX === undefined || lastX === undefined) {
+    return null;
+  }
+
+  // Majority vote for stem direction
+  const upVotes = group.indices.filter(
+    (i) => stemDirections[i] === true
+  ).length;
+  const stemUp = upVotes >= group.indices.length / 2;
+
+  // Omit bracket when all notes are beamed and no rests are present
+  const omitBracket =
+    group.indices.every((i) => beamedIndices.has(i)) &&
+    group.indices.every((i) => elements[i].nodeName !== MUSIC_REST_NODE);
+
+  const startX = firstX - NOTE_SVG_WIDTH / 2;
+  const endX = lastX + NOTE_SVG_WIDTH / 2;
+
+  // Compute bracket angle from slope of outer non-rest pitches
+  const nonRestIndices = group.indices.filter(
+    (i) => elements[i].nodeName !== MUSIC_REST_NODE
+  );
+  let angle = 0;
+  if (nonRestIndices.length >= 2) {
+    const firstNonRest = nonRestIndices[0];
+    const lastNonRest = nonRestIndices[nonRestIndices.length - 1];
+    const firstStaffY = getStaffYForIndex(
+      firstNonRest,
+      elements,
+      stemDirections,
+      noteStaffYCoords,
+      chordStaffYCoords
+    );
+    const lastStaffY = getStaffYForIndex(
+      lastNonRest,
+      elements,
+      stemDirections,
+      noteStaffYCoords,
+      chordStaffYCoords
+    );
+    const firstNoteX = noteXPositions.get(firstNonRest);
+    const lastNoteX = noteXPositions.get(lastNonRest);
+    if (
+      firstStaffY !== null &&
+      lastStaffY !== null &&
+      firstNoteX !== undefined &&
+      lastNoteX !== undefined
+    ) {
+      const run = lastNoteX - firstNoteX;
+      if (run > 0) {
+        const rawAngle = (lastStaffY - firstStaffY) / run;
+        if (Math.abs(rawAngle) < 0.05) {
+          angle = 0;
+        } else {
+          angle = Math.max(-0.15, Math.min(0.15, rawAngle));
+        }
+      }
+    }
+  }
+
+  // Bracket Y: outside the staff, offset per nesting level
+  // Level 0 (outermost) is furthest from staff; higher levels are closer.
+  // Using a fixed max depth of 3 to compute outward offset.
+  const MAX_NESTING_DEPTH = 3;
+  const staffTopInContainer = STAFF_TOP_LINE_Y - STAFF_Y_PADDING;
+  const staffBottomInContainer = STAFF_BOTTOM_LINE_Y + STAFF_Y_PADDING;
+  const levelOffset =
+    (MAX_NESTING_DEPTH - group.nestingLevel) * TUPLET_BRACKET_LEVEL_OFFSET_PX;
+
+  let baseY: number;
+  if (stemUp) {
+    baseY =
+      staffTopInContainer -
+      TUPLET_STAFF_CLEARANCE_PX -
+      TUPLET_HOOK_LENGTH_PX -
+      levelOffset;
+  } else {
+    baseY =
+      staffBottomInContainer +
+      TUPLET_STAFF_CLEARANCE_PX +
+      TUPLET_HOOK_LENGTH_PX +
+      levelOffset;
+  }
+
+  const numeralX = (startX + endX) / 2;
+  const numeralY = baseY + (numeralX - startX) * angle;
+
+  return {
+    group,
+    startX,
+    endX,
+    baseY,
+    stemUp,
+    angle,
+    omitBracket,
+    numeralX,
+    numeralY,
+    hookLength: TUPLET_HOOK_LENGTH_PX,
+  };
+}

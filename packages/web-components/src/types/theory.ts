@@ -129,3 +129,6 @@ export type Voice =
   | 'tenor'
   | 'baritone'
   | 'bass';
+
+/** Tuplet ratio string — just the numerator ("3") or full ratio ("3:2", "5:4"). */
+export type TupletRatio = string;
