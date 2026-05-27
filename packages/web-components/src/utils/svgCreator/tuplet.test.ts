@@ -1,12 +1,13 @@
 /**
  * @jest-environment jsdom
  */
+import '../../note/index';
 import {
   buildTupletGroups,
   computeTupletBracketGeometry,
   TupletBracketGeometry,
-  TupletGroup,
 } from '../../rules/tupletRules';
+import '../../tuplet/index';
 import {
   NoteChordOrRestElementType,
   NoteElementType,
@@ -14,8 +15,6 @@ import {
 } from '../../types/elements';
 import { MUSIC_NOTE, MUSIC_TUPLET } from '../consts';
 import { TUPLET_NUMERAL_GAP_PX } from '../notationDimensions';
-import '../../note/index';
-import '../../tuplet/index';
 import { createTupletBracketSvg } from './tuplet';
 
 afterEach(() => {

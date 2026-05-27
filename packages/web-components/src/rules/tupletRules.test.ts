@@ -8,7 +8,7 @@ import {
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
-import { MUSIC_NOTE, MUSIC_NOTE_NODE, MUSIC_TUPLET } from '../utils/consts';
+import { MUSIC_NOTE, MUSIC_TUPLET } from '../utils/consts';
 import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
