@@ -40,12 +40,11 @@ describe(MUSIC_TUPLET, () => {
     expect(el.ratio).toBe('7');
   });
 
-  it('renders a shadow root containing a slot', () => {
+  it('has no shadow root (pure grouping wrapper, no self-rendering)', () => {
     const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
     document.body.appendChild(el);
 
-    expect(el.shadowRoot).not.toBeNull();
-    expect(el.shadowRoot!.querySelector('slot')).not.toBeNull();
+    expect(el.shadowRoot).toBeNull();
   });
 
   it('flatElements returns empty array when no children', () => {

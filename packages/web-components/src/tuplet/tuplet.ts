@@ -35,8 +35,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     constructor() {
       super();
-      this.attachShadow({ mode: 'open' });
-      this.shadowRoot!.innerHTML = '<slot></slot>';
+      // this.attachShadow({ mode: 'open' });
+      // this.shadowRoot!.innerHTML = '<slot></slot>';
     }
 
     get ratio(): TupletRatio {

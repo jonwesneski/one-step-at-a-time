@@ -9,7 +9,6 @@ import {
   STAFF_BOTTOM_MARGIN,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
-  STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_WRAPPER_MIN_HEIGHT,
 } from './utils/notationDimensions';
 
@@ -65,6 +64,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         .staff-wrapper {
           position: relative;
           min-height: ${STAFF_WRAPPER_MIN_HEIGHT}px;
+          overflow: visible;
         }
 
         .staff-container {
@@ -157,7 +157,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.transcribeContainer.classList.add('transcribe-container');
     this.transcribeContainer.setAttribute(
       'style',
-      `position: absolute; inset: 0; width: 100%; height: ${STAFF_TRANSCRIPTION_HEIGHT}px; pointer-events: none`
+      'position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none'
     );
   }
 

@@ -297,7 +297,7 @@ export const TUPLET_HOOK_LENGTH_PX = STAFF_LINE_SPACING * 0.8;
 export const TUPLET_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 2.5;
 
 /** Vertical offset (px) between nesting levels of tuplet brackets. */
-export const TUPLET_BRACKET_LEVEL_OFFSET_PX = STAFF_LINE_SPACING * 1.5;
+export const TUPLET_BRACKET_LEVEL_OFFSET_PX = STAFF_LINE_SPACING * 0.8;
 
 /** Font size (px) for the tuplet numeral. */
 export const TUPLET_NUMERAL_FONT_SIZE = STAFF_LINE_SPACING * 1.2;

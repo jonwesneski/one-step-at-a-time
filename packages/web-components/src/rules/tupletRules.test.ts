@@ -396,8 +396,9 @@ describe('computeTupletBracketGeometry', () => {
       new Map()
     )!;
 
-    // When stem-up (bracket above), smaller baseY = further from staff
-    expect(outerGeom.baseY).toBeLessThan(innerGeom.baseY);
+    // When stem-up (bracket above), smaller baseY = further from staff.
+    // Level 0 is closest to staff; level 1 (nested) is further out.
+    expect(innerGeom.baseY).toBeLessThan(outerGeom.baseY);
   });
 
   it('angle is 0 when all notes have the same pitch', () => {

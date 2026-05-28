@@ -6,9 +6,11 @@ import {
 import { buildBeamsRenderer } from './rules/beamRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
+import { computeAboveStaffBudget } from './rules/staffHeightRules';
 import {
   buildTupletGroups,
   computeTupletBracketGeometry,
+  parseTupletRatio,
   TupletGroup,
 } from './rules/tupletRules';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
@@ -210,6 +212,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       ::slotted(music-chord),
       ::slotted(music-rest) {
         position: absolute;
+      }
+
+      ::slotted(music-tuplet) {
+        display: contents;
       }
 
       :host([editable]) ::slotted(music-note),
@@ -652,7 +658,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected onHandleSlotChange(event: Event) {
     const slot = event.target as HTMLSlotElement;
     const assigned = slot
-      .assignedElements({ flatten: true })
+      .assignedElements()
       .filter(
         (e) =>
           e.nodeName === MUSIC_NOTE_NODE ||
@@ -722,7 +728,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       elements,
       this.#effectiveTimeSig,
       noteStaffYCoords,
-      chordStaffYCoords
+      chordStaffYCoords,
+      this.#tupletsByIndex
     );
     this.#beamRenderer = beamRenderer;
 
@@ -748,10 +755,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
       const duration = element.duration;
-      if (
-        beatOffset + durationToFactor[duration as DurationType] >
-        measureDuration
-      ) {
+      const tupletForElement = this.#tupletsByIndex.get(i);
+      const durationContribution =
+        tupletForElement !== undefined
+          ? (() => {
+              const { actual, normal } = parseTupletRatio(
+                tupletForElement.ratio
+              );
+              return (
+                durationToFactor[duration as DurationType] * (normal / actual)
+              );
+            })()
+          : durationToFactor[duration as DurationType];
+      if (beatOffset + durationContribution > measureDuration) {
         console.error(
           `no more room for note(s); remaining duration is "${
             factorToDuration.get(measureDuration - beatOffset) ??
@@ -789,7 +805,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         });
       }
 
-      beatOffset += durationToFactor[duration];
+      beatOffset += durationContribution;
     }
 
     this.#currentElements = elements;
@@ -912,6 +928,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
+    // Expand the transcribe container upward to accommodate above-staff elements
+    const aboveStaffBudget = computeAboveStaffBudget(
+      this.#tupletGroups,
+      this.#stemDirections
+    );
+    const containerWidth = Math.round(transcribeRect.width);
+    const totalHeight = STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget;
+    this.transcribeContainer.style.top =
+      aboveStaffBudget > 0 ? `-${aboveStaffBudget}px` : '0px';
+    this.transcribeContainer.style.height = `${totalHeight}px`;
+    this.transcribeContainer.setAttribute(
+      'viewBox',
+      `0 -${aboveStaffBudget} ${containerWidth} ${totalHeight}`
+    );
+
     this.#noteXPositions.clear();
 
     // Configure beams container to cover the notes area
@@ -984,6 +1015,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const xInBeamsContainer = xInWrapper - this.#describeEndX;
       this.#beamRenderer?.setX(i, xInBeamsContainer);
       this.#noteXPositions.set(i, xInBeamsContainer);
+      element.style.position = 'absolute';
       element.style.left = `${xInWrapper}px`;
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
 
@@ -1009,7 +1041,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         element.style.top = '0px';
       }
 
-      beatOffset += durationToFactor[duration];
+      const tupletForElement = this.#tupletsByIndex.get(i);
+      if (tupletForElement !== undefined) {
+        const { actual, normal } = parseTupletRatio(tupletForElement.ratio);
+        beatOffset += durationToFactor[duration] * (normal / actual);
+      } else {
+        beatOffset += durationToFactor[duration];
+      }
     }
     this.#beamRenderer?.spaceAll();
 

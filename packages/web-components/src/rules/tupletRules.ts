@@ -11,14 +11,20 @@ import {
   MUSIC_TUPLET_NODE,
 } from '../utils/consts';
 import {
+  BEAM_THICKNESS_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   TUPLET_BRACKET_LEVEL_OFFSET_PX,
   TUPLET_HOOK_LENGTH_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
 } from '../utils/notationDimensions';
-import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+import {
+  NOTE_SVG_WIDTH,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
+} from '../utils/svgCreator/note';
 
 export type ParsedTupletRatio = {
   actual: number;
@@ -212,14 +218,11 @@ export function computeTupletBracketGeometry(
     }
   }
 
-  // Bracket Y: outside the staff, offset per nesting level
-  // Level 0 (outermost) is furthest from staff; higher levels are closer.
-  // Using a fixed max depth of 3 to compute outward offset.
-  const MAX_NESTING_DEPTH = 3;
+  // Bracket Y: outside the staff, offset per nesting level.
+  // Level 0 = closest to staff; higher levels push further out.
   const staffTopInContainer = STAFF_TOP_LINE_Y - STAFF_Y_PADDING;
   const staffBottomInContainer = STAFF_BOTTOM_LINE_Y + STAFF_Y_PADDING;
-  const levelOffset =
-    (MAX_NESTING_DEPTH - group.nestingLevel) * TUPLET_BRACKET_LEVEL_OFFSET_PX;
+  const levelOffset = group.nestingLevel * TUPLET_BRACKET_LEVEL_OFFSET_PX;
 
   let baseY: number;
   if (stemUp) {
@@ -237,7 +240,52 @@ export function computeTupletBracketGeometry(
   }
 
   const numeralX = (startX + endX) / 2;
-  const numeralY = baseY + (numeralX - startX) * angle;
+
+  let numeralY: number;
+  if (omitBracket) {
+    // Place numeral just outside the beam at the midpoint.
+    // Compute stem-tip Y for the first and last notes, then interpolate at numeralX.
+    const firstNonRest = nonRestIndices[0];
+    const lastNonRest = nonRestIndices[nonRestIndices.length - 1];
+    const firstStaffY = getStaffYForIndex(
+      firstNonRest,
+      elements,
+      stemDirections,
+      noteStaffYCoords,
+      chordStaffYCoords
+    );
+    const lastStaffY = getStaffYForIndex(
+      lastNonRest,
+      elements,
+      stemDirections,
+      noteStaffYCoords,
+      chordStaffYCoords
+    );
+    const firstNoteX = noteXPositions.get(firstNonRest) ?? firstX;
+    const lastNoteX = noteXPositions.get(lastNonRest) ?? lastX;
+    const yHeadOffset = stemUp
+      ? NOTE_Y_HEAD_OFFSET_STEM_UP
+      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const firstBeamY =
+      firstStaffY !== null
+        ? STAFF_Y_PADDING + firstStaffY - yHeadOffset
+        : baseY;
+    const lastBeamY =
+      lastStaffY !== null ? STAFF_Y_PADDING + lastStaffY - yHeadOffset : baseY;
+    const run = lastNoteX - firstNoteX;
+    const beamYAtNumeralX =
+      run > 0
+        ? firstBeamY +
+          ((numeralX - firstNoteX) / run) * (lastBeamY - firstBeamY)
+        : firstBeamY;
+    // Offset numeral by half font size + beam thickness, toward the outside of the beam
+    const numeralOffset = TUPLET_NUMERAL_FONT_SIZE / 2 + BEAM_THICKNESS_PX + 1;
+    numeralY = stemUp
+      ? beamYAtNumeralX - numeralOffset
+      : beamYAtNumeralX + numeralOffset;
+  } else {
+    numeralY = baseY + (numeralX - startX) * angle;
+  }
 
   return {
     group,
