@@ -3,7 +3,7 @@ import { html } from 'lit';
 import '../index';
 
 const meta: Meta = {
-  title: 'Components/MusicMeasure',
+  title: 'Components/Measure',
   tags: ['autodocs'],
   render: (args) => html`
     <music-measure

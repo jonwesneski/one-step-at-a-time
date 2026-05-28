@@ -5,6 +5,7 @@ import {
   Note,
   NoteLetter,
   Octave,
+  TupletRatio,
 } from './theory';
 
 export type NoteLetterOctave = `${NoteLetter}${Octave}`;
@@ -66,10 +67,16 @@ export interface IRestElement {
   duration: DurationType;
 }
 
+export interface ITupletElement {
+  ratio: TupletRatio;
+  readonly flatElements: NoteChordOrRestElementType[];
+}
+
 export type NoteElementType = HTMLElement & INoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
 export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
+export type TupletElementType = HTMLElement & ITupletElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
 export type NoteChordOrRestElementType =
   | NoteElementType

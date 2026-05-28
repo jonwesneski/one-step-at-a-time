@@ -2,6 +2,7 @@ import {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
+  TupletElementType,
 } from '../types/elements';
 import {
   BeatsInMeasure,
@@ -17,19 +18,34 @@ import {
 import { MUSIC_NOTE_NODE } from '../utils/consts';
 import { STAFF_Y_PADDING } from '../utils/notationDimensions';
 import { determineStemDirections } from './staffNoteRules';
-import { durationToFlagCountMap } from './theoryConsts';
+import { durationToFactor, durationToFlagCountMap } from './theoryConsts';
+import { parseTupletRatio } from './tupletRules';
 
 export function buildBeamsRenderer(
   elements: NoteChordOrRestElementType[],
   timeSig: [BeatsInMeasure, BeatTypeInMeasure],
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
-  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
+  tupletsByIndex: ReadonlyMap<number, TupletElementType>
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
   stemDirections: boolean[];
 } {
-  const beamsBuilder = new BeamsBuilder(elements, timeSig);
+  const elementDurationFactors = elements.map((el, i) => {
+    const dur = el.duration as DurationType;
+    const tuplet = tupletsByIndex.get(i);
+    if (tuplet !== undefined) {
+      const { actual, normal } = parseTupletRatio(tuplet.ratio);
+      return durationToFactor[dur] * (normal / actual);
+    }
+    return durationToFactor[dur];
+  });
+  const beamsBuilder = new BeamsBuilder(
+    elements,
+    timeSig,
+    elementDurationFactors
+  );
   const stemDirections = determineStemDirections(
     elements,
     beamsBuilder,

@@ -288,6 +288,26 @@ export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
  */
 export const ACCIDENTAL_NOTE_GAP = -7;
 
+// ─── Tuplets ──────────────────────────────────────────────────────────────────
+
+/** Vertical length (px) of the hook at each end of the tuplet bracket. */
+export const TUPLET_HOOK_LENGTH_PX = STAFF_LINE_SPACING * 0.8;
+
+/** Horizontal gap (px) in the bracket line where the numeral sits. */
+export const TUPLET_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 2.5;
+
+/** Vertical offset (px) between nesting levels of tuplet brackets. */
+export const TUPLET_BRACKET_LEVEL_OFFSET_PX = STAFF_LINE_SPACING * 0.8;
+
+/** Font size (px) for the tuplet numeral. */
+export const TUPLET_NUMERAL_FONT_SIZE = STAFF_LINE_SPACING * 1.2;
+
+/** Stroke width (px) for the tuplet bracket lines. */
+export const TUPLET_BRACKET_STROKE_WIDTH = 1.2;
+
+/** Vertical clearance (px) between the bracket line and the nearest staff line. */
+export const TUPLET_STAFF_CLEARANCE_PX = STAFF_LINE_SPACING * 0.6;
+
 /**
  * Rendered pixel height of each accidental symbol type.
  * Used to compute vertical clearance when stacking accidentals on chords.
