@@ -47,6 +47,16 @@ export const NOTE_HEAD_Y_OFFSET_CORRECTION = 10;
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
 
+/**
+ * Extra pixels added to the stem-down tip offset for notes with more than one
+ * flag. The note SVG extends the stem by (flagCount - 1) * FLAG_Y_SPACING
+ * coordinate units for each additional flag beyond the first (sixteenth, 32nd,
+ * etc.). This extension grows downward, so only stem-down beams are affected.
+ */
+export function flagStemExtensionPx(flagCount: number): number {
+  return flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING * NOTE_SCALE : 0;
+}
+
 // Notehead geometry in pixel space — used by ledgerLines.ts and chord.ts
 export const NOTE_HEAD_RADIUS_PX = HEAD_WIDTH * NOTE_SCALE; // ≈ 4.27px
 export const ADJACENT_NOTE_X_DISPLACEMENT_PX = 150 * NOTE_SCALE; // = 8px

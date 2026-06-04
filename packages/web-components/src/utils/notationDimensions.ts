@@ -305,6 +305,9 @@ export const TUPLET_NUMERAL_FONT_SIZE = STAFF_LINE_SPACING * 1.2;
 /** Stroke width (px) for the tuplet bracket lines. */
 export const TUPLET_BRACKET_STROKE_WIDTH = 1.2;
 
+/** Gap (px) between the beam surface and the tuplet numeral when the bracket is omitted. */
+export const TUPLET_NUMERAL_BEAM_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
 /** Vertical clearance (px) between the bracket line and the nearest staff line. */
 export const TUPLET_STAFF_CLEARANCE_PX = STAFF_LINE_SPACING * 0.6;
 

@@ -11,20 +11,26 @@ import {
   MUSIC_TUPLET_NODE,
 } from '../utils/consts';
 import {
-  BEAM_THICKNESS_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   TUPLET_BRACKET_LEVEL_OFFSET_PX,
   TUPLET_HOOK_LENGTH_PX,
+  TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
+  flagStemExtensionPx,
+  NOTE_HEAD_CX_STEM_DOWN_PX,
+  NOTE_HEAD_CX_STEM_UP_PX,
+  NOTE_STEM_TIP_Y_OFFSET,
+  NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
+import { durationToFlagCountMap } from './theoryConsts';
 
 export type ParsedTupletRatio = {
   actual: number;
@@ -239,7 +245,23 @@ export function computeTupletBracketGeometry(
       levelOffset;
   }
 
-  const numeralX = (startX + endX) / 2;
+  const noteheadCentreX = (idx: number): number => {
+    const leftEdge = noteXPositions.get(idx) ?? 0;
+    const headCx = stemDirections[idx]
+      ? NOTE_HEAD_CX_STEM_UP_PX
+      : NOTE_HEAD_CX_STEM_DOWN_PX;
+    return leftEdge + headCx;
+  };
+
+  const count = group.indices.length;
+  let numeralX: number;
+  if (count % 2 === 1) {
+    numeralX = noteheadCentreX(group.indices[Math.floor(count / 2)]);
+  } else {
+    const leftMid = noteheadCentreX(group.indices[count / 2 - 1]);
+    const rightMid = noteheadCentreX(group.indices[count / 2]);
+    numeralX = (leftMid + rightMid) / 2;
+  }
 
   let numeralY: number;
   if (omitBracket) {
@@ -261,25 +283,44 @@ export function computeTupletBracketGeometry(
       noteStaffYCoords,
       chordStaffYCoords
     );
-    const firstNoteX = noteXPositions.get(firstNonRest) ?? firstX;
-    const lastNoteX = noteXPositions.get(lastNonRest) ?? lastX;
+    const firstNoteX = noteheadCentreX(firstNonRest);
+    const lastNoteX = noteheadCentreX(lastNonRest);
     const yHeadOffset = stemUp
       ? NOTE_Y_HEAD_OFFSET_STEM_UP
       : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const stemTipOffset = stemUp
+      ? NOTE_STEM_TIP_Y_OFFSET
+      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    const flagExtension = stemUp
+      ? 0
+      : flagStemExtensionPx(
+          durationToFlagCountMap.get(elements[firstNonRest].duration) ?? 1
+        );
     const firstBeamY =
       firstStaffY !== null
-        ? STAFF_Y_PADDING + firstStaffY - yHeadOffset
+        ? STAFF_Y_PADDING +
+          firstStaffY -
+          yHeadOffset +
+          stemTipOffset +
+          flagExtension
         : baseY;
     const lastBeamY =
-      lastStaffY !== null ? STAFF_Y_PADDING + lastStaffY - yHeadOffset : baseY;
+      lastStaffY !== null
+        ? STAFF_Y_PADDING +
+          lastStaffY -
+          yHeadOffset +
+          stemTipOffset +
+          flagExtension
+        : baseY;
     const run = lastNoteX - firstNoteX;
     const beamYAtNumeralX =
       run > 0
         ? firstBeamY +
           ((numeralX - firstNoteX) / run) * (lastBeamY - firstBeamY)
         : firstBeamY;
-    // Offset numeral by half font size + beam thickness, toward the outside of the beam
-    const numeralOffset = TUPLET_NUMERAL_FONT_SIZE / 2 + BEAM_THICKNESS_PX + 1;
+    // Offset numeral by half font size + gap, toward the outside of the beam
+    const numeralOffset =
+      TUPLET_NUMERAL_FONT_SIZE / 2 + TUPLET_NUMERAL_BEAM_GAP_PX;
     numeralY = stemUp
       ? beamYAtNumeralX - numeralOffset
       : beamYAtNumeralX + numeralOffset;
