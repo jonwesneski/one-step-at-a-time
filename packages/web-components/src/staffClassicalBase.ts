@@ -5,15 +5,15 @@ import {
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { restToYCoordinate } from './rules/restRules';
-import { calculateStaffMinWidth } from './rules/staffWidth';
 import { computeAboveStaffBudget } from './rules/staffHeightRules';
+import { calculateStaffMinWidth } from './rules/staffWidth';
+import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import {
   buildTupletGroups,
   computeTupletBracketGeometry,
   parseTupletRatio,
   TupletGroup,
 } from './rules/tupletRules';
-import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
@@ -941,8 +941,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #spaceElements() {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
-    const describeRect = this.#describeContainer.getBoundingClientRect();
-    this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
+    if (typeof this.#describeContainer.getBBox === 'function') {
+      const describeBBox = this.#describeContainer.getBBox();
+      this.#describeEndX = Math.round(describeBBox.x + describeBBox.width);
+    } else {
+      const describeRect = this.#describeContainer.getBoundingClientRect();
+      this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
+    }
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
     // Expand the transcribe container upward to accommodate above-staff elements

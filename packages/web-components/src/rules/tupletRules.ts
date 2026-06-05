@@ -318,9 +318,10 @@ export function computeTupletBracketGeometry(
         ? firstBeamY +
           ((numeralX - firstNoteX) / run) * (lastBeamY - firstBeamY)
         : firstBeamY;
-    // Offset numeral by half font size + gap, toward the outside of the beam
+    // Offset numeral by half font size + gap, toward the outside of the beam.
+    // Apply levelOffset so nested tuplet numerals don't overlap.
     const numeralOffset =
-      TUPLET_NUMERAL_FONT_SIZE / 2 + TUPLET_NUMERAL_BEAM_GAP_PX;
+      TUPLET_NUMERAL_FONT_SIZE / 2 + TUPLET_NUMERAL_BEAM_GAP_PX + levelOffset;
     numeralY = stemUp
       ? beamYAtNumeralX - numeralOffset
       : beamYAtNumeralX + numeralOffset;
