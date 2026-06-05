@@ -694,53 +694,66 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
   test('nested tuplet renders two .tuplet-group elements at different Y positions', async ({
     page,
   }) => {
-    const positioned = waitForStaffNotesPositioned(page);
+    // Listener and DOM construction must be in the same page.evaluate so the
+    // listener is attached before host.appendChild(staff) triggers connectedCallback.
     await page.evaluate(
-      ({ staffTag, noteTag, tupletTag }) => {
-        const host = document.getElementById('host');
-        if (host === null) {
-          throw new Error('host missing');
-        }
-        host.innerHTML = '';
-        host.style.width = '800px';
-        const staff = document.createElement(staffTag);
-        const outer = document.createElement(tupletTag);
-        outer.setAttribute('ratio', '5:4');
-        const noteA = document.createElement(noteTag);
-        noteA.setAttribute('note', 'C5');
-        noteA.setAttribute('duration', 'sixteenth');
-        const noteB = document.createElement(noteTag);
-        noteB.setAttribute('note', 'D5');
-        noteB.setAttribute('duration', 'sixteenth');
-        const inner = document.createElement(tupletTag);
-        inner.setAttribute('ratio', '3');
-        for (let i = 0; i < 3; i++) {
-          const note = document.createElement(noteTag);
-          note.setAttribute('note', 'E5');
-          note.setAttribute('duration', 'thirtysecond');
-          inner.appendChild(note);
-        }
-        const noteC = document.createElement(noteTag);
-        noteC.setAttribute('note', 'F5');
-        noteC.setAttribute('duration', 'sixteenth');
-        const noteD = document.createElement(noteTag);
-        noteD.setAttribute('note', 'G5');
-        noteD.setAttribute('duration', 'sixteenth');
-        outer.appendChild(noteA);
-        outer.appendChild(noteB);
-        outer.appendChild(inner);
-        outer.appendChild(noteC);
-        outer.appendChild(noteD);
-        staff.appendChild(outer);
-        host.appendChild(staff);
-      },
+      ({ staffTag, noteTag, tupletTag }) =>
+        new Promise<void>((resolve, reject) => {
+          const host = document.getElementById('host');
+          if (host === null) {
+            throw new Error('host missing');
+          }
+          const timeoutId = window.setTimeout(
+            () => reject(new Error('staff-notes-positioned timeout')),
+            2000
+          );
+          host.addEventListener(
+            'staff-notes-positioned',
+            () => {
+              window.clearTimeout(timeoutId);
+              resolve();
+            },
+            { once: true }
+          );
+          host.innerHTML = '';
+          host.style.width = '800px';
+          const staff = document.createElement(staffTag);
+          const outer = document.createElement(tupletTag);
+          outer.setAttribute('ratio', '5:4');
+          const noteA = document.createElement(noteTag);
+          noteA.setAttribute('note', 'C5');
+          noteA.setAttribute('duration', 'sixteenth');
+          const noteB = document.createElement(noteTag);
+          noteB.setAttribute('note', 'D5');
+          noteB.setAttribute('duration', 'sixteenth');
+          const inner = document.createElement(tupletTag);
+          inner.setAttribute('ratio', '3');
+          for (let i = 0; i < 3; i++) {
+            const note = document.createElement(noteTag);
+            note.setAttribute('note', 'E5');
+            note.setAttribute('duration', 'thirtysecond');
+            inner.appendChild(note);
+          }
+          const noteC = document.createElement(noteTag);
+          noteC.setAttribute('note', 'F5');
+          noteC.setAttribute('duration', 'sixteenth');
+          const noteD = document.createElement(noteTag);
+          noteD.setAttribute('note', 'G5');
+          noteD.setAttribute('duration', 'sixteenth');
+          outer.appendChild(noteA);
+          outer.appendChild(noteB);
+          outer.appendChild(inner);
+          outer.appendChild(noteC);
+          outer.appendChild(noteD);
+          staff.appendChild(outer);
+          host.appendChild(staff);
+        }),
       {
         staffTag: MUSIC_STAFF_TREBLE,
         noteTag: MUSIC_NOTE,
         tupletTag: MUSIC_TUPLET,
       }
     );
-    await positioned;
     await waitForRedrawCycle(page);
 
     const groupYPositions = await page.evaluate((staffTag) => {
