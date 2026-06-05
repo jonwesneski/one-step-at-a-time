@@ -55,7 +55,8 @@ jobs:
         run: pnpm exec nx run-many -t lint build typecheck test
 
       - name: Browser Tests
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          # suppressing stdout with: > /dev/null 
-          pnpm exec playwright install --with-deps > /dev/null
+          pnpm exec playwright install --with-deps
           pnpm exec nx run web-components:browser-test
