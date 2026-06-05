@@ -6,23 +6,10 @@
   "targets": {
     "browser-test": {
       "executor": "nx:run-commands",
-      "cache": true,
-      "inputs": [
-        "default",
-        "^default",
-        "{projectRoot}/playwright.config.ts",
-        "{projectRoot}/vite.config.ts",
-        "{projectRoot}/test-fixtures/**/*"
-      ],
-      "outputs": [
-        "{projectRoot}/playwright-report",
-        "{projectRoot}/test-results"
-      ],
       "options": {
         "command": "playwright test",
         "cwd": "packages/web-components"
-      },
-      "dependsOn": ["typecheck"]
+      }
     }
   }
 }
