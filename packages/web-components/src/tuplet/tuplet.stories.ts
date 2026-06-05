@@ -18,7 +18,11 @@ export const SimpleTriplet: Story = {
         <music-note note="D" octave="4" duration="eighth"></music-note>
         <music-note note="E" octave="4" duration="eighth"></music-note>
       </music-tuplet>
-      <music-note note="C" octave="4" duration="quarter"></music-note>
+      <music-tuplet ratio="3">
+        <music-note note="C" octave="4" duration="quarter"></music-note>
+        <music-note note="D" octave="4" duration="quarter"></music-note>
+        <music-note note="E" octave="4" duration="quarter"></music-note>
+      </music-tuplet>
     </music-staff-treble>
   `,
 };

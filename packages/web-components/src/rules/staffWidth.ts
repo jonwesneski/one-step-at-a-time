@@ -10,6 +10,10 @@ import {
  *
  * minWidth = describeEndX + firstNoteAccidentalWidth + noteCount × MIN_NOTE_WIDTH
  *
+ * noteCount may be fractional when the measure contains tuplets — each tuplet
+ * note contributes (normal/actual) rather than 1.0, matching the reduced
+ * horizontal footprint used in #spaceElements().
+ *
  * firstNoteAccidentalWidth ensures the measure is wide enough when the first
  * note is shifted right to clear its accidental from the describe area.
  * This guarantees that proportionalWidth in #spaceElements() is never negative,

@@ -108,6 +108,23 @@ function flattenSlotElements(assigned: Element[]): {
   return { flatElements, tupletsByIndex };
 }
 
+function computeTupletScaledNoteCount(
+  elements: NoteChordOrRestElementType[],
+  tupletsByIndex: ReadonlyMap<number, TupletElementType>
+): number {
+  let count = 0;
+  for (let i = 0; i < elements.length; i++) {
+    const tupletEl = tupletsByIndex.get(i);
+    if (tupletEl !== undefined) {
+      const { actual, normal } = parseTupletRatio(tupletEl.ratio);
+      count += normal / actual;
+    } else {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
@@ -847,7 +864,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
-        elements.length,
+        computeTupletScaledNoteCount(elements, this.#tupletsByIndex),
         firstNoteAccidentalWidth
       );
       this.dispatchEvent(
@@ -960,16 +977,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
     const measureDuration = beatsInMeasure / beatType;
 
-    const proportionalWidth =
-      remainingWidth - this.#currentElements.length * MIN_NOTE_WIDTH;
+    const scaledNoteCount = computeTupletScaledNoteCount(
+      this.#currentElements,
+      this.#tupletsByIndex
+    );
+    const proportionalWidth = remainingWidth - scaledNoteCount * MIN_NOTE_WIDTH;
 
     let beatOffset = 0;
+    let minWidthAccumulator = 0;
     let previousRightEdge = this.#describeEndX;
     for (let i = 0; i < this.#currentElements.length; i++) {
       const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
       const xOffsetInNotesSpace =
-        i * MIN_NOTE_WIDTH + (beatOffset / measureDuration) * proportionalWidth;
+        minWidthAccumulator +
+        (beatOffset / measureDuration) * proportionalWidth;
 
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
@@ -1045,8 +1067,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (tupletForElement !== undefined) {
         const { actual, normal } = parseTupletRatio(tupletForElement.ratio);
         beatOffset += durationToFactor[duration] * (normal / actual);
+        minWidthAccumulator += MIN_NOTE_WIDTH * (normal / actual);
       } else {
         beatOffset += durationToFactor[duration];
+        minWidthAccumulator += MIN_NOTE_WIDTH;
       }
     }
     this.#beamRenderer?.spaceAll();
