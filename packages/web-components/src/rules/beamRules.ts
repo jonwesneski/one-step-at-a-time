@@ -26,17 +26,18 @@ export function buildBeamsRenderer(
   timeSig: [BeatsInMeasure, BeatTypeInMeasure],
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
-  tupletsByIndex: ReadonlyMap<number, TupletElementType>
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
   stemDirections: boolean[];
 } {
-  const elementDurationFactors = elements.map((el, i) => {
-    const dur = el.duration as DurationType;
-    const tuplet = tupletsByIndex.get(i);
-    if (tuplet !== undefined) {
-      const { actual, normal } = parseTupletRatio(tuplet.ratio);
+  const elementDurationFactors = elements.map((element, i) => {
+    const dur = element.duration as DurationType;
+    const ancestors = tupletsByIndex.get(i);
+    if (ancestors !== undefined) {
+      const innermostTuplet = ancestors[ancestors.length - 1];
+      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
       return durationToFactor[dur] * (normal / actual);
     }
     return durationToFactor[dur];

@@ -75,34 +75,34 @@ import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
 
 function flattenSlotElements(assigned: Element[]): {
   flatElements: NoteChordOrRestElementType[];
-  tupletsByIndex: Map<number, TupletElementType>;
+  tupletsByIndex: Map<number, TupletElementType[]>;
 } {
   const flatElements: NoteChordOrRestElementType[] = [];
-  const tupletsByIndex = new Map<number, TupletElementType>();
+  const tupletsByIndex = new Map<number, TupletElementType[]>();
 
   function flatten(
-    el: Element,
-    tupletAncestor: TupletElementType | null
+    element: Element,
+    tupletAncestors: TupletElementType[]
   ): void {
-    const tag = el.nodeName;
+    const tag = element.nodeName;
     if (
       tag === MUSIC_NOTE_NODE ||
       tag === MUSIC_CHORD_NODE ||
       tag === MUSIC_REST_NODE
     ) {
-      if (tupletAncestor !== null) {
-        tupletsByIndex.set(flatElements.length, tupletAncestor);
+      if (tupletAncestors.length > 0) {
+        tupletsByIndex.set(flatElements.length, [...tupletAncestors]);
       }
-      flatElements.push(el as NoteChordOrRestElementType);
+      flatElements.push(element as NoteChordOrRestElementType);
     } else if (tag === MUSIC_TUPLET_NODE) {
-      for (const child of el.children) {
-        flatten(child, el as TupletElementType);
+      for (const child of element.children) {
+        flatten(child, [...tupletAncestors, element as TupletElementType]);
       }
     }
   }
 
-  for (const el of assigned) {
-    flatten(el, null);
+  for (const element of assigned) {
+    flatten(element, []);
   }
 
   return { flatElements, tupletsByIndex };
@@ -110,13 +110,14 @@ function flattenSlotElements(assigned: Element[]): {
 
 function computeTupletScaledNoteCount(
   elements: NoteChordOrRestElementType[],
-  tupletsByIndex: ReadonlyMap<number, TupletElementType>
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
 ): number {
   let count = 0;
   for (let i = 0; i < elements.length; i++) {
-    const tupletEl = tupletsByIndex.get(i);
-    if (tupletEl !== undefined) {
-      const { actual, normal } = parseTupletRatio(tupletEl.ratio);
+    const ancestors = tupletsByIndex.get(i);
+    if (ancestors !== undefined) {
+      const innermostTuplet = ancestors[ancestors.length - 1];
+      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
       count += normal / actual;
     } else {
       count += 1;
@@ -156,7 +157,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #describeEndX = 0;
   #showDescribe = true;
   #tupletGroups: TupletGroup[] = [];
-  #tupletsByIndex: Map<number, TupletElementType> = new Map();
+  #tupletsByIndex: Map<number, TupletElementType[]> = new Map();
   #noteXPositions: Map<number, number> = new Map();
   #stemDirections: boolean[] = [];
   #beamedIndicesSnapshot: Set<number> = new Set();
@@ -772,12 +773,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
       const duration = element.duration;
-      const tupletForElement = this.#tupletsByIndex.get(i);
+      const tupletAncestors = this.#tupletsByIndex.get(i);
+      const innermostTuplet =
+        tupletAncestors !== undefined
+          ? tupletAncestors[tupletAncestors.length - 1]
+          : undefined;
       const durationContribution =
-        tupletForElement !== undefined
+        innermostTuplet !== undefined
           ? (() => {
               const { actual, normal } = parseTupletRatio(
-                tupletForElement.ratio
+                innermostTuplet.ratio
               );
               return (
                 durationToFactor[duration as DurationType] * (normal / actual)
@@ -950,10 +955,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
+    const maxNestingLevel = this.#tupletGroups.reduce(
+      (maximum, group) => Math.max(maximum, group.nestingLevel),
+      0
+    );
+
     // Expand the transcribe container upward to accommodate above-staff elements
     const aboveStaffBudget = computeAboveStaffBudget(
       this.#tupletGroups,
-      this.#stemDirections
+      this.#stemDirections,
+      maxNestingLevel
     );
     const containerWidth = Math.round(transcribeRect.width);
     const totalHeight = STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget;
@@ -1068,9 +1079,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         element.style.top = '0px';
       }
 
-      const tupletForElement = this.#tupletsByIndex.get(i);
-      if (tupletForElement !== undefined) {
-        const { actual, normal } = parseTupletRatio(tupletForElement.ratio);
+      const tupletAncestorsForElement = this.#tupletsByIndex.get(i);
+      const innermostTupletForElement =
+        tupletAncestorsForElement !== undefined
+          ? tupletAncestorsForElement[tupletAncestorsForElement.length - 1]
+          : undefined;
+      if (innermostTupletForElement !== undefined) {
+        const { actual, normal } = parseTupletRatio(
+          innermostTupletForElement.ratio
+        );
         beatOffset += durationToFactor[duration] * (normal / actual);
         minWidthAccumulator += MIN_NOTE_WIDTH * (normal / actual);
       } else {
@@ -1102,7 +1119,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#stemDirections,
         this.#beamedIndicesSnapshot,
         this.#noteStaffYCoordsSnapshot,
-        this.#chordStaffYCoordsSnapshot
+        this.#chordStaffYCoordsSnapshot,
+        maxNestingLevel
       );
       if (geometry !== null) {
         this.#tupletContainer.appendChild(createTupletBracketSvg(geometry));

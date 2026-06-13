@@ -35,8 +35,8 @@ function makeBasicGeometry(
   tupletEl.setAttribute('ratio', '3');
   document.body.appendChild(tupletEl);
 
-  const tupletsByIndex = new Map<number, TupletElementType>(
-    notes.map((_, i) => [i, tupletEl])
+  const tupletsByIndex = new Map<number, TupletElementType[]>(
+    notes.map((_, i) => [i, [tupletEl]])
   );
   const [group] = buildTupletGroups(notes, tupletsByIndex);
   const noteXPositions = new Map(notes.map((_, i) => [i, i * 40 + 20]));
@@ -53,7 +53,8 @@ function makeBasicGeometry(
     stemDirections,
     beamedIndices,
     noteStaffYCoords,
-    new Map()
+    new Map(),
+    0
   )!;
 
   return { ...geometry, ...overrides };
@@ -119,8 +120,8 @@ describe('createTupletBracketSvg', () => {
     tupletEl.setAttribute('ratio', '5:4');
     document.body.appendChild(tupletEl);
 
-    const tupletsByIndex = new Map<number, TupletElementType>(
-      notes.map((_, i) => [i, tupletEl])
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      notes.map((_, i) => [i, [tupletEl]])
     );
     const [group] = buildTupletGroups(notes, tupletsByIndex);
     const noteXPositions = new Map(notes.map((_, i) => [i, i * 30 + 10]));
@@ -134,7 +135,8 @@ describe('createTupletBracketSvg', () => {
       notes.map(() => true),
       new Set(),
       noteStaffYCoords,
-      new Map()
+      new Map(),
+      0
     )!;
 
     const result = createTupletBracketSvg(geom);

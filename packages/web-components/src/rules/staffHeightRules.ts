@@ -15,7 +15,8 @@ import { TupletGroup } from './tupletRules';
  */
 export function computeAboveStaffBudget(
   groups: TupletGroup[],
-  stemDirections: boolean[]
+  stemDirections: boolean[],
+  maxNestingLevel: number
 ): number {
   let maxBudget = 0;
   for (const group of groups) {
@@ -26,12 +27,13 @@ export function computeAboveStaffBudget(
     if (!stemUp) {
       continue;
     }
+    const depthFromOutside = maxNestingLevel - group.nestingLevel;
     const baseY =
       STAFF_TOP_LINE_Y -
       STAFF_Y_PADDING -
       TUPLET_STAFF_CLEARANCE_PX -
       TUPLET_HOOK_LENGTH_PX -
-      group.nestingLevel * TUPLET_BRACKET_LEVEL_OFFSET_PX;
+      depthFromOutside * TUPLET_BRACKET_LEVEL_OFFSET_PX;
     const numeralTop = baseY - TUPLET_NUMERAL_FONT_SIZE;
     if (numeralTop < 0) {
       maxBudget = Math.max(maxBudget, Math.ceil(-numeralTop) + 2);

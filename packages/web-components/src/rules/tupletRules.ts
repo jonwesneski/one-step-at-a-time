@@ -11,6 +11,8 @@ import {
   MUSIC_TUPLET_NODE,
 } from '../utils/consts';
 import {
+  BEAM_GAP_PX,
+  BEAM_THICKNESS_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
@@ -99,27 +101,29 @@ function computeNestingLevel(el: TupletElementType): number {
 
 export function buildTupletGroups(
   elements: NoteChordOrRestElementType[],
-  tupletsByIndex: ReadonlyMap<number, TupletElementType>
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
 ): TupletGroup[] {
   const tupletToIndices = new Map<TupletElementType, number[]>();
 
   for (let i = 0; i < elements.length; i++) {
-    const tupletEl = tupletsByIndex.get(i);
-    if (tupletEl === undefined) {
+    const ancestors = tupletsByIndex.get(i);
+    if (ancestors === undefined) {
       continue;
     }
-    if (!tupletToIndices.has(tupletEl)) {
-      tupletToIndices.set(tupletEl, []);
+    for (const tupletElement of ancestors) {
+      if (!tupletToIndices.has(tupletElement)) {
+        tupletToIndices.set(tupletElement, []);
+      }
+      tupletToIndices.get(tupletElement)!.push(i);
     }
-    tupletToIndices.get(tupletEl)!.push(i);
   }
 
   const groups: TupletGroup[] = [];
-  for (const [tupletEl, indices] of tupletToIndices) {
+  for (const [tupletElement, indices] of tupletToIndices) {
     groups.push({
       indices,
-      parsedRatio: parseTupletRatio(tupletEl.ratio),
-      nestingLevel: computeNestingLevel(tupletEl),
+      parsedRatio: parseTupletRatio(tupletElement.ratio),
+      nestingLevel: computeNestingLevel(tupletElement),
     });
   }
 
@@ -153,7 +157,8 @@ export function computeTupletBracketGeometry(
   stemDirections: boolean[],
   beamedIndices: ReadonlySet<number>,
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
-  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
+  maxNestingLevel: number
 ): TupletBracketGeometry | null {
   if (group.indices.length < 2) {
     return null;
@@ -174,8 +179,10 @@ export function computeTupletBracketGeometry(
   ).length;
   const stemUp = upVotes >= group.indices.length / 2;
 
-  // Omit bracket when all notes are beamed and no rests are present
+  // Omit bracket when all notes are beamed and no rests are present.
+  // The outermost bracket (nestingLevel 0) is always shown per notation convention.
   const omitBracket =
+    group.nestingLevel > 0 &&
     group.indices.every((i) => beamedIndices.has(i)) &&
     group.indices.every((i) => elements[i].nodeName !== MUSIC_REST_NODE);
 
@@ -224,11 +231,12 @@ export function computeTupletBracketGeometry(
     }
   }
 
-  // Bracket Y: outside the staff, offset per nesting level.
-  // Level 0 = closest to staff; higher levels push further out.
+  // Bracket Y: outermost bracket sits furthest from staff; inner brackets sit closer.
+  // depthFromOutside = 0 for innermost (closest to staff), maxNestingLevel for outermost.
   const staffTopInContainer = STAFF_TOP_LINE_Y - STAFF_Y_PADDING;
   const staffBottomInContainer = STAFF_BOTTOM_LINE_Y + STAFF_Y_PADDING;
-  const levelOffset = group.nestingLevel * TUPLET_BRACKET_LEVEL_OFFSET_PX;
+  const depthFromOutside = maxNestingLevel - group.nestingLevel;
+  const levelOffset = depthFromOutside * TUPLET_BRACKET_LEVEL_OFFSET_PX;
 
   let baseY: number;
   if (stemUp) {
@@ -291,11 +299,9 @@ export function computeTupletBracketGeometry(
     const stemTipOffset = stemUp
       ? NOTE_STEM_TIP_Y_OFFSET
       : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    const flagExtension = stemUp
-      ? 0
-      : flagStemExtensionPx(
-          durationToFlagCountMap.get(elements[firstNonRest].duration) ?? 1
-        );
+    const flagCount =
+      durationToFlagCountMap.get(elements[firstNonRest].duration) ?? 1;
+    const flagExtension = stemUp ? 0 : flagStemExtensionPx(flagCount);
     const firstBeamY =
       firstStaffY !== null
         ? STAFF_Y_PADDING +
@@ -318,10 +324,18 @@ export function computeTupletBracketGeometry(
         ? firstBeamY +
           ((numeralX - firstNoteX) / run) * (lastBeamY - firstBeamY)
         : firstBeamY;
-    // Offset numeral by half font size + gap, toward the outside of the beam.
+    // beamYAtNumeralX is at the stem tip — the inner edge of the first beam.
+    // The beam stack extends BEAM_THICKNESS_PX for the first beam plus
+    // (BEAM_THICKNESS_PX + BEAM_GAP_PX) per each additional beam layer beyond the first.
+    const beamStackOffset =
+      BEAM_THICKNESS_PX + (flagCount - 1) * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+    // Offset numeral to clear the full beam stack, then add gap and font half-height.
     // Apply levelOffset so nested tuplet numerals don't overlap.
     const numeralOffset =
-      TUPLET_NUMERAL_FONT_SIZE / 2 + TUPLET_NUMERAL_BEAM_GAP_PX + levelOffset;
+      TUPLET_NUMERAL_FONT_SIZE / 2 +
+      TUPLET_NUMERAL_BEAM_GAP_PX +
+      levelOffset +
+      beamStackOffset;
     numeralY = stemUp
       ? beamYAtNumeralX - numeralOffset
       : beamYAtNumeralX + numeralOffset;

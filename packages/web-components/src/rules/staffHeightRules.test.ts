@@ -34,7 +34,7 @@ function makeTuplet(ratio: string): TupletElementType {
 
 describe('computeAboveStaffBudget', () => {
   it('returns 0 for empty groups', () => {
-    expect(computeAboveStaffBudget([], [])).toBe(0);
+    expect(computeAboveStaffBudget([], [], 0)).toBe(0);
   });
 
   it('returns 0 when all groups are stem-down', () => {
@@ -44,15 +44,15 @@ describe('computeAboveStaffBudget', () => {
       makeNote(),
       makeNote(),
     ];
-    const tupletsByIndex = new Map<number, TupletElementType>([
-      [0, tupletEl],
-      [1, tupletEl],
-      [2, tupletEl],
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [tupletEl]],
+      [1, [tupletEl]],
+      [2, [tupletEl]],
     ]);
     const groups = buildTupletGroups(elements, tupletsByIndex);
     const stemDirections = [false, false, false];
 
-    expect(computeAboveStaffBudget(groups, stemDirections)).toBe(0);
+    expect(computeAboveStaffBudget(groups, stemDirections, 0)).toBe(0);
   });
 
   it('returns a positive budget for a stem-up group at nesting level 0', () => {
@@ -62,18 +62,20 @@ describe('computeAboveStaffBudget', () => {
       makeNote(),
       makeNote(),
     ];
-    const tupletsByIndex = new Map<number, TupletElementType>([
-      [0, tupletEl],
-      [1, tupletEl],
-      [2, tupletEl],
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [tupletEl]],
+      [1, [tupletEl]],
+      [2, [tupletEl]],
     ]);
     const groups = buildTupletGroups(elements, tupletsByIndex);
     const stemDirections = [true, true, true];
 
-    expect(computeAboveStaffBudget(groups, stemDirections)).toBeGreaterThan(0);
+    expect(computeAboveStaffBudget(groups, stemDirections, 0)).toBeGreaterThan(
+      0
+    );
   });
 
-  it('returns a larger budget for a stem-up group at nesting level 1 vs level 0', () => {
+  it('returns a larger budget for the outer bracket (nestingLevel 0) than the inner bracket (nestingLevel 1)', () => {
     const outerTuplet = document.createElement(
       MUSIC_TUPLET
     ) as TupletElementType;
@@ -86,37 +88,26 @@ describe('computeAboveStaffBudget', () => {
     innerTuplet.setAttribute('ratio', '3');
     outerTuplet.appendChild(innerTuplet);
 
-    const outerElements: NoteChordOrRestElementType[] = [
+    // All notes belong to both tuplets (outer and inner ancestor chain).
+    // maxNestingLevel = 1 because there are two levels (0 and 1).
+    const elements: NoteChordOrRestElementType[] = [
       makeNote(),
       makeNote(),
       makeNote(),
     ];
-    const outerTupletsByIndex = new Map<number, TupletElementType>(
-      outerElements.map((_, i) => [i, outerTuplet])
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [outerTuplet, innerTuplet]])
     );
-    const outerGroups = buildTupletGroups(outerElements, outerTupletsByIndex);
-    const outerBudget = computeAboveStaffBudget(outerGroups, [
-      true,
-      true,
-      true,
-    ]);
+    const groups = buildTupletGroups(elements, tupletsByIndex);
+    const outerGroup = groups.filter((g) => g.nestingLevel === 0);
+    const innerGroup = groups.filter((g) => g.nestingLevel === 1);
+    const stemDirections = [true, true, true];
 
-    const innerElements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
-    ];
-    const innerTupletsByIndex = new Map<number, TupletElementType>(
-      innerElements.map((_, i) => [i, innerTuplet])
-    );
-    const innerGroups = buildTupletGroups(innerElements, innerTupletsByIndex);
-    const innerBudget = computeAboveStaffBudget(innerGroups, [
-      true,
-      true,
-      true,
-    ]);
+    const outerBudget = computeAboveStaffBudget(outerGroup, stemDirections, 1);
+    const innerBudget = computeAboveStaffBudget(innerGroup, stemDirections, 1);
 
-    expect(innerBudget).toBeGreaterThan(outerBudget);
+    // Outer bracket (level 0, depthFromOutside = 1) sits furthest → needs more budget.
+    expect(outerBudget).toBeGreaterThan(innerBudget);
   });
 
   it('ignores stem-down groups when computing the budget', () => {
@@ -130,21 +121,22 @@ describe('computeAboveStaffBudget', () => {
       makeNote(),
       makeNote(),
     ];
-    const tupletsByIndex = new Map<number, TupletElementType>([
-      [0, stemUpTuplet],
-      [1, stemUpTuplet],
-      [2, stemUpTuplet],
-      [3, stemDownTuplet],
-      [4, stemDownTuplet],
-      [5, stemDownTuplet],
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [stemUpTuplet]],
+      [1, [stemUpTuplet]],
+      [2, [stemUpTuplet]],
+      [3, [stemDownTuplet]],
+      [4, [stemDownTuplet]],
+      [5, [stemDownTuplet]],
     ]);
     const groups = buildTupletGroups(allElements, tupletsByIndex);
     const stemDirections = [true, true, true, false, false, false];
 
-    const mixedBudget = computeAboveStaffBudget(groups, stemDirections);
+    const mixedBudget = computeAboveStaffBudget(groups, stemDirections, 0);
     const stemDownOnly = computeAboveStaffBudget(
       groups.filter((g) => g.indices[0] >= 3),
-      stemDirections
+      stemDirections,
+      0
     );
 
     expect(mixedBudget).toBeGreaterThan(0);
