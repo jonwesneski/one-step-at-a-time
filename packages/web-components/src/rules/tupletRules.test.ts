@@ -4,6 +4,7 @@
 import '../note/index';
 import '../tuplet/index';
 import {
+  ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
   TupletElementType,
@@ -1314,9 +1315,128 @@ describe('computeTupletBracketGeometry', () => {
     expect(downGap).toBeCloseTo(numeralOffset, 5);
   });
 
+  function makeBeamedGroup(staffY: number, stemUp: boolean) {
+    const tupletEl = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote('C', 'eighth')
+    );
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((el) => [el as NoteElementType, staffY])
+    );
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [tupletEl]])
+    );
+    const [group] = buildTupletGroups(elements, tupletsByIndex);
+    return {
+      group,
+      elements,
+      noteXPositions: new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      stemDirections: elements.map(() => stemUp),
+      beamedIndices: new Set(elements.map((_, i) => i)),
+      noteStaffYCoords,
+      chordStaffYCoords: new Map<ChordElementType, number[]>(),
+    };
+  }
+
+  function computeBeamY(staffY: number, stemUp: boolean): number {
+    if (stemUp) {
+      return (
+        STAFF_Y_PADDING +
+        staffY -
+        NOTE_Y_HEAD_OFFSET_STEM_UP +
+        NOTE_STEM_TIP_Y_OFFSET
+      );
+    }
+    return (
+      STAFF_Y_PADDING +
+      staffY -
+      NOTE_Y_HEAD_OFFSET_STEM_DOWN +
+      NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN
+    );
+  }
+
+  it('numeralY gap from beam outer edge is the same constant for notes very high on the staff', () => {
+    const staffY = -20; // above staff
+    const upInputs = makeBeamedGroup(staffY, true);
+    const downInputs = makeBeamedGroup(staffY, false);
+
+    const upResult = computeTupletBracketGeometry(
+      upInputs.group,
+      upInputs.elements,
+      upInputs.noteXPositions,
+      upInputs.stemDirections,
+      upInputs.beamedIndices,
+      upInputs.noteStaffYCoords,
+      upInputs.chordStaffYCoords,
+      null,
+      false
+    )!;
+    const downResult = computeTupletBracketGeometry(
+      downInputs.group,
+      downInputs.elements,
+      downInputs.noteXPositions,
+      downInputs.stemDirections,
+      downInputs.beamedIndices,
+      downInputs.noteStaffYCoords,
+      downInputs.chordStaffYCoords,
+      null,
+      false
+    )!;
+
+    const numeralOffset =
+      TUPLET_NUMERAL_FONT_SIZE / 2 +
+      TUPLET_NUMERAL_BEAM_GAP_PX +
+      BEAM_THICKNESS_PX;
+    const upBeamY = computeBeamY(staffY, true);
+    const downBeamY = computeBeamY(staffY, false);
+
+    expect(upBeamY - upResult.numeralY).toBeCloseTo(numeralOffset, 5);
+    expect(downResult.numeralY - downBeamY).toBeCloseTo(numeralOffset, 5);
+  });
+
+  it('numeralY gap from beam outer edge is the same constant for notes very low on the staff', () => {
+    const staffY = 80; // below staff
+    const upInputs = makeBeamedGroup(staffY, true);
+    const downInputs = makeBeamedGroup(staffY, false);
+
+    const upResult = computeTupletBracketGeometry(
+      upInputs.group,
+      upInputs.elements,
+      upInputs.noteXPositions,
+      upInputs.stemDirections,
+      upInputs.beamedIndices,
+      upInputs.noteStaffYCoords,
+      upInputs.chordStaffYCoords,
+      null,
+      false
+    )!;
+    const downResult = computeTupletBracketGeometry(
+      downInputs.group,
+      downInputs.elements,
+      downInputs.noteXPositions,
+      downInputs.stemDirections,
+      downInputs.beamedIndices,
+      downInputs.noteStaffYCoords,
+      downInputs.chordStaffYCoords,
+      null,
+      false
+    )!;
+
+    const numeralOffset =
+      TUPLET_NUMERAL_FONT_SIZE / 2 +
+      TUPLET_NUMERAL_BEAM_GAP_PX +
+      BEAM_THICKNESS_PX;
+    const upBeamY = computeBeamY(staffY, true);
+    const downBeamY = computeBeamY(staffY, false);
+
+    expect(upBeamY - upResult.numeralY).toBeCloseTo(numeralOffset, 5);
+    expect(downResult.numeralY - downBeamY).toBeCloseTo(numeralOffset, 5);
+  });
+
   // ─── flag extension effect on numeralY ───────────────────────────────────
 
-  it('stem-down numeralY is further down for thirtysecond notes than eighth notes', () => {
+  it('stem-down numeralY is further down for thirtysecond notes than eighth notes due to longer stems', () => {
     const eighthInputs = makeGeometryInputs(3, false, 'eighth');
     const thirtySecondInputs = makeGeometryInputs(3, false, 'thirtysecond');
     const eighthResult = computeTupletBracketGeometry(
@@ -1341,13 +1461,41 @@ describe('computeTupletBracketGeometry', () => {
       null,
       false
     )!;
-    // stem-down: larger Y = further below staff; thirty-second clears more beam layers.
+    // stem-down: flagExtension moves the beam baseline further down for more flags,
+    // so the numeral is further below even though beamStackOffset is the same (BEAM_THICKNESS_PX).
     expect(thirtySecondResult.numeralY).toBeGreaterThan(eighthResult.numeralY);
   });
 
-  it('stem-up numeralY is further above for thirtysecond notes than eighth notes', () => {
-    const eighthInputs = makeGeometryInputs(3, true, 'eighth');
-    const thirtySecondInputs = makeGeometryInputs(3, true, 'thirtysecond');
+  it('stem-up numeralY sits at the same gap from the primary beam face regardless of flag count', () => {
+    // Use the same note positions for both durations so any difference is purely from flag count.
+    const staffY = 72;
+    const makeInputs = (duration: DurationType) => {
+      const tupletEl = makeTuplet('3');
+      const elements: NoteChordOrRestElementType[] = Array.from(
+        { length: 3 },
+        () => makeNote('C', duration)
+      );
+      const noteStaffYCoords = new Map<NoteElementType, number>(
+        elements.map((el) => [el as NoteElementType, staffY])
+      );
+      const tupletsByIndex = new Map<number, TupletElementType[]>(
+        elements.map((_, i) => [i, [tupletEl]])
+      );
+      const [group] = buildTupletGroups(elements, tupletsByIndex);
+      return {
+        group,
+        elements,
+        noteXPositions: new Map(elements.map((_, i) => [i, i * 30 + 10])),
+        stemDirections: elements.map(() => true),
+        beamedIndices: new Set(elements.map((_, i) => i)),
+        noteStaffYCoords,
+        chordStaffYCoords: new Map(),
+      };
+    };
+
+    const eighthInputs = makeInputs('eighth');
+    const thirtySecondInputs = makeInputs('thirtysecond');
+
     const eighthResult = computeTupletBracketGeometry(
       eighthInputs.group,
       eighthInputs.elements,
@@ -1357,7 +1505,7 @@ describe('computeTupletBracketGeometry', () => {
       eighthInputs.noteStaffYCoords,
       eighthInputs.chordStaffYCoords,
       null,
-      false
+      true // hasInnerGroups → omitBracket=false so numeralY comes from beamYAtNumeralX
     )!;
     const thirtySecondResult = computeTupletBracketGeometry(
       thirtySecondInputs.group,
@@ -1368,9 +1516,11 @@ describe('computeTupletBracketGeometry', () => {
       thirtySecondInputs.noteStaffYCoords,
       thirtySecondInputs.chordStaffYCoords,
       null,
-      false
+      true
     )!;
-    // stem-up: smaller Y = further above staff; thirty-second clears more beam layers.
-    expect(thirtySecondResult.numeralY).toBeLessThan(eighthResult.numeralY);
+
+    // stem-up: secondary beams grow downward (away from numeral), so beamStackOffset is
+    // always BEAM_THICKNESS_PX. With identical note positions the numeralY should be equal.
+    expect(thirtySecondResult.numeralY).toBeCloseTo(eighthResult.numeralY);
   });
 });

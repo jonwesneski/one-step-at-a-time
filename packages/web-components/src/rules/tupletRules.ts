@@ -11,7 +11,6 @@ import {
   MUSIC_TUPLET_NODE,
 } from '../utils/consts';
 import {
-  BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
@@ -376,15 +375,14 @@ export function computeTupletBracketGeometry(
         ? firstBeamY +
           ((numeralX - firstNoteX) / run) * (lastBeamY - firstBeamY)
         : firstBeamY;
-    // beamYAtNumeralX is at the stem tip — the inner edge of the first beam.
-    // The full beam stack = BEAM_THICKNESS_PX for the first beam plus
-    // (BEAM_THICKNESS_PX + BEAM_GAP_PX) per additional beam layer.
-    const beamStackOffset =
-      BEAM_THICKNESS_PX + (flagCount - 1) * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+    // beamYAtNumeralX is at the inner face of the beam closest to the numeral:
+    // - stem-up: stem tip = primary beam inner face (secondary beams grow downward, away from numeral)
+    // - stem-down: flagExtension already moved the baseline to the outermost beam's inner face
+    // In both cases, clearing one beam thickness positions the numeral just outside that face.
     const numeralOffset =
       TUPLET_NUMERAL_FONT_SIZE / 2 +
       TUPLET_NUMERAL_BEAM_GAP_PX +
-      beamStackOffset;
+      BEAM_THICKNESS_PX;
     numeralY = stemUp
       ? beamYAtNumeralX - numeralOffset
       : beamYAtNumeralX + numeralOffset;
