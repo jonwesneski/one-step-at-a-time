@@ -15,8 +15,10 @@ import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
+  TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
+  TUPLET_STAFF_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
@@ -297,7 +299,8 @@ describe('computeTupletBracketGeometry', () => {
       new Set([0]),
       new Map(),
       new Map(),
-      null
+      null,
+      false
     );
 
     expect(result).toBeNull();
@@ -313,13 +316,14 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     );
 
     expect(result).toBeNull();
   });
 
-  it('sets omitBracket=false for outermost tuplet (nestingLevel 0) even when all notes are beamed', () => {
+  it('sets omitBracket=true for outermost tuplet (nestingLevel 0) when all notes are beamed and no inner groups', () => {
     const tupletEl = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
@@ -341,7 +345,49 @@ describe('computeTupletBracketGeometry', () => {
       new Set(elements.map((_, i) => i)),
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.omitBracket).toBe(true);
+  });
+
+  it('sets omitBracket=false for outermost tuplet (nestingLevel 0) when it has inner groups', () => {
+    const outerTuplet = document.createElement(
+      MUSIC_TUPLET
+    ) as TupletElementType;
+    outerTuplet.setAttribute('ratio', '5:4');
+    document.body.appendChild(outerTuplet);
+    const innerTuplet = document.createElement(
+      MUSIC_TUPLET
+    ) as TupletElementType;
+    innerTuplet.setAttribute('ratio', '3');
+    outerTuplet.appendChild(innerTuplet);
+
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote()
+    );
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((element, i) => [element as NoteElementType, 50 + i * 5])
+    );
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [outerTuplet, innerTuplet]])
+    );
+    const groups = buildTupletGroups(elements, tupletsByIndex);
+    const outerGroup = groups.find((g) => g.nestingLevel === 0)!;
+
+    const result = computeTupletBracketGeometry(
+      outerGroup,
+      elements,
+      new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      elements.map(() => true),
+      new Set(elements.map((_, i) => i)),
+      noteStaffYCoords,
+      new Map(),
+      null,
+      true // hasInnerGroups
     );
 
     expect(result).not.toBeNull();
@@ -382,7 +428,8 @@ describe('computeTupletBracketGeometry', () => {
       new Set(elements.map((_, i) => i)),
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
     );
 
     expect(result).not.toBeNull();
@@ -401,7 +448,8 @@ describe('computeTupletBracketGeometry', () => {
       partialBeamed,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     );
 
     expect(result!.omitBracket).toBe(false);
@@ -436,7 +484,8 @@ describe('computeTupletBracketGeometry', () => {
       new Set(elements.map((_, i) => i)),
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
     );
 
     expect(result!.omitBracket).toBe(false);
@@ -452,7 +501,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     );
 
     expect(result!.stemUp).toBe(true);
@@ -468,7 +518,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
 
     const staffTopInContainer = STAFF_TOP_LINE_Y - STAFF_Y_PADDING;
@@ -485,11 +536,193 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
 
     const staffBottomInContainer = STAFF_BOTTOM_LINE_Y + STAFF_Y_PADDING;
     expect(result.baseY).toBeGreaterThan(staffBottomInContainer);
+  });
+
+  // ─── baseY stem-tip clamping ──────────────────────────────────────────────────
+
+  it('clamps baseY above stem tips when stem-up beamed notes have long stems', () => {
+    const tupletEl = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote('C', 'eighth')
+    );
+    // staffY = -20: above staff → stem tips protrude well above the default bracket zone
+    const staffY = -20;
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((el) => [el as NoteElementType, staffY])
+    );
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [tupletEl]])
+    );
+    const [group] = buildTupletGroups(elements, tupletsByIndex);
+
+    const result = computeTupletBracketGeometry(
+      group,
+      elements,
+      new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      elements.map(() => true),
+      new Set(elements.map((_, i) => i)),
+      noteStaffYCoords,
+      new Map(),
+      null,
+      true // hasInnerGroups → omitBracket=false so baseY drives the bracket
+    )!;
+
+    const stemTipY =
+      STAFF_Y_PADDING +
+      staffY -
+      NOTE_Y_HEAD_OFFSET_STEM_UP +
+      NOTE_STEM_TIP_Y_OFFSET;
+    const expectedBaseY =
+      stemTipY - (TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX);
+    const staffBaseY =
+      STAFF_TOP_LINE_Y -
+      STAFF_Y_PADDING -
+      TUPLET_STAFF_CLEARANCE_PX -
+      TUPLET_HOOK_LENGTH_PX;
+
+    expect(result.baseY).toBeLessThan(staffBaseY);
+    expect(result.baseY).toBeCloseTo(expectedBaseY);
+  });
+
+  it('clamps baseY below stem tips when stem-down beamed notes have long stems', () => {
+    const tupletEl = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote('C', 'eighth')
+    );
+    // staffY = 50: below staff center → stem tips protrude well below the default bracket zone
+    const staffY = 50;
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((el) => [el as NoteElementType, staffY])
+    );
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [tupletEl]])
+    );
+    const [group] = buildTupletGroups(elements, tupletsByIndex);
+
+    const result = computeTupletBracketGeometry(
+      group,
+      elements,
+      new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      elements.map(() => false),
+      new Set(elements.map((_, i) => i)),
+      noteStaffYCoords,
+      new Map(),
+      null,
+      true // hasInnerGroups → omitBracket=false
+    )!;
+
+    const stemTipY =
+      STAFF_Y_PADDING +
+      staffY -
+      NOTE_Y_HEAD_OFFSET_STEM_DOWN +
+      NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    const expectedBaseY =
+      stemTipY + (TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX);
+    const staffBaseY =
+      STAFF_BOTTOM_LINE_Y +
+      STAFF_Y_PADDING +
+      TUPLET_STAFF_CLEARANCE_PX +
+      TUPLET_HOOK_LENGTH_PX;
+
+    expect(result.baseY).toBeGreaterThan(staffBaseY);
+    expect(result.baseY).toBeCloseTo(expectedBaseY);
+  });
+
+  it('does not clamp baseY when stem-up beamed notes have stems that stay within the bracket zone', () => {
+    const tupletEl = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote('C', 'eighth')
+    );
+    // staffY = 60: stem tips stop short of the default bracket position — no clamping needed
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((el) => [el as NoteElementType, 60])
+    );
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [tupletEl]])
+    );
+    const [group] = buildTupletGroups(elements, tupletsByIndex);
+
+    const result = computeTupletBracketGeometry(
+      group,
+      elements,
+      new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      elements.map(() => true),
+      new Set(elements.map((_, i) => i)),
+      noteStaffYCoords,
+      new Map(),
+      null,
+      true // hasInnerGroups → omitBracket=false
+    )!;
+
+    const staffBaseY =
+      STAFF_TOP_LINE_Y -
+      STAFF_Y_PADDING -
+      TUPLET_STAFF_CLEARANCE_PX -
+      TUPLET_HOOK_LENGTH_PX;
+    expect(result.baseY).toBeCloseTo(staffBaseY);
+  });
+
+  it('clamps baseY by non-rest stem tips when group has rests and beamed notes', () => {
+    const noteA = makeNote('C', 'eighth');
+    const noteB = makeNote('C', 'eighth');
+    const rest = makeNote('C', 'eighth');
+    Object.defineProperty(rest, 'nodeName', {
+      get: () => 'MUSIC-REST',
+      configurable: true,
+    });
+    const elements: NoteChordOrRestElementType[] = [noteA, rest, noteB];
+
+    // staffY = -20: above staff → long upward stems on the two notes
+    const staffY = -20;
+    const noteStaffYCoords = new Map<NoteElementType, number>([
+      [noteA as NoteElementType, staffY],
+      [noteB as NoteElementType, staffY],
+    ]);
+
+    const tupletEl = makeTuplet('3');
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [tupletEl]])
+    );
+    const [group] = buildTupletGroups(elements, tupletsByIndex);
+
+    const result = computeTupletBracketGeometry(
+      group,
+      elements,
+      new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      elements.map(() => true),
+      new Set(elements.map((_, i) => i)),
+      noteStaffYCoords,
+      new Map(),
+      null,
+      false // omitBracket=false because rest is present
+    )!;
+
+    expect(result.omitBracket).toBe(false);
+
+    const stemTipY =
+      STAFF_Y_PADDING +
+      staffY -
+      NOTE_Y_HEAD_OFFSET_STEM_UP +
+      NOTE_STEM_TIP_Y_OFFSET;
+    const expectedBaseY =
+      stemTipY - (TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX);
+    const staffBaseY =
+      STAFF_TOP_LINE_Y -
+      STAFF_Y_PADDING -
+      TUPLET_STAFF_CLEARANCE_PX -
+      TUPLET_HOOK_LENGTH_PX;
+
+    expect(result.baseY).toBeLessThan(staffBaseY);
+    expect(result.baseY).toBeCloseTo(expectedBaseY);
   });
 
   // ─── Invariant 1: beamed inner numeral is outside the beam ──────────────────
@@ -537,7 +770,8 @@ describe('computeTupletBracketGeometry', () => {
       beamedIndices,
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
     )!;
 
     // beamYAtNumeralX is at the stem tip. The outer beam edge is beamYAtNumeralX + BEAM_THICKNESS_PX.
@@ -601,7 +835,8 @@ describe('computeTupletBracketGeometry', () => {
       beamedIndices,
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
     )!;
 
     expect(innerGeom.omitBracket).toBe(true);
@@ -672,7 +907,8 @@ describe('computeTupletBracketGeometry', () => {
           beamedIndices,
           noteStaffYCoords,
           new Map(),
-          null
+          null,
+          false
         )!
     );
     const outerBaseY = computeOuterBracketBaseY(
@@ -687,7 +923,8 @@ describe('computeTupletBracketGeometry', () => {
       beamedIndices,
       noteStaffYCoords,
       new Map(),
-      outerBaseY
+      outerBaseY,
+      false
     )!;
 
     // Outer bracket must be beyond (larger Y for stem-down) all inner numerals.
@@ -749,7 +986,8 @@ describe('computeTupletBracketGeometry', () => {
           beamedIndices,
           noteStaffYCoords,
           new Map(),
-          null
+          null,
+          false
         )!
     );
     const outerBaseY = computeOuterBracketBaseY(
@@ -764,7 +1002,8 @@ describe('computeTupletBracketGeometry', () => {
       beamedIndices,
       noteStaffYCoords,
       new Map(),
-      outerBaseY
+      outerBaseY,
+      false
     )!;
 
     // Outer bracket must be beyond (smaller Y for stem-up) all inner numerals.
@@ -797,7 +1036,8 @@ describe('computeTupletBracketGeometry', () => {
       new Set(elements.map((_, i) => i)),
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
     )!;
 
     expect(result.angle).toBe(0);
@@ -830,7 +1070,8 @@ describe('computeTupletBracketGeometry', () => {
       new Set(elements.map((_, i) => i)),
       noteStaffYCoords,
       new Map(),
-      null
+      null,
+      false
     )!;
 
     expect(Math.abs(result.angle)).toBeLessThanOrEqual(0.15);
@@ -848,7 +1089,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const expectedNumeralX =
       inputs.noteXPositions.get(1)! + NOTE_HEAD_CX_STEM_UP_PX;
@@ -865,7 +1107,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const left = inputs.noteXPositions.get(1)! + NOTE_HEAD_CX_STEM_UP_PX;
     const right = inputs.noteXPositions.get(2)! + NOTE_HEAD_CX_STEM_UP_PX;
@@ -884,7 +1127,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const firstStaffY = 72;
     const beamY =
@@ -905,7 +1149,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const firstStaffY = 10;
     const beamY =
@@ -928,7 +1173,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     // makeGeometryInputs produces eighth notes (flagCount=1) with nestingLevel=1 and
     // maxNestingLevel=1: beamStackOffset=BEAM_THICKNESS_PX, no bracketClearance (replaced by clamp).
@@ -965,7 +1211,8 @@ describe('computeTupletBracketGeometry', () => {
       inputs.beamedIndices,
       inputs.noteStaffYCoords,
       inputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     // makeGeometryInputs produces eighth notes (flagCount=1) with nestingLevel=1 and
     // maxNestingLevel=1: beamStackOffset=BEAM_THICKNESS_PX, no bracketClearance (replaced by clamp).
@@ -1004,7 +1251,8 @@ describe('computeTupletBracketGeometry', () => {
       upInputs.beamedIndices,
       upInputs.noteStaffYCoords,
       upInputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const downResult = computeTupletBracketGeometry(
       downInputs.group,
@@ -1014,7 +1262,8 @@ describe('computeTupletBracketGeometry', () => {
       downInputs.beamedIndices,
       downInputs.noteStaffYCoords,
       downInputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     // makeGeometryInputs produces eighth notes (flagCount=1) with nestingLevel=1 and
     // maxNestingLevel=1: beamStackOffset=BEAM_THICKNESS_PX, no bracketClearance (replaced by clamp).
@@ -1078,7 +1327,8 @@ describe('computeTupletBracketGeometry', () => {
       eighthInputs.beamedIndices,
       eighthInputs.noteStaffYCoords,
       eighthInputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const thirtySecondResult = computeTupletBracketGeometry(
       thirtySecondInputs.group,
@@ -1088,7 +1338,8 @@ describe('computeTupletBracketGeometry', () => {
       thirtySecondInputs.beamedIndices,
       thirtySecondInputs.noteStaffYCoords,
       thirtySecondInputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     // stem-down: larger Y = further below staff; thirty-second clears more beam layers.
     expect(thirtySecondResult.numeralY).toBeGreaterThan(eighthResult.numeralY);
@@ -1105,7 +1356,8 @@ describe('computeTupletBracketGeometry', () => {
       eighthInputs.beamedIndices,
       eighthInputs.noteStaffYCoords,
       eighthInputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     const thirtySecondResult = computeTupletBracketGeometry(
       thirtySecondInputs.group,
@@ -1115,7 +1367,8 @@ describe('computeTupletBracketGeometry', () => {
       thirtySecondInputs.beamedIndices,
       thirtySecondInputs.noteStaffYCoords,
       thirtySecondInputs.chordStaffYCoords,
-      null
+      null,
+      false
     )!;
     // stem-up: smaller Y = further above staff; thirty-second clears more beam layers.
     expect(thirtySecondResult.numeralY).toBeLessThan(eighthResult.numeralY);

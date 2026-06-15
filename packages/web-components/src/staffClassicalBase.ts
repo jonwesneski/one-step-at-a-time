@@ -1118,6 +1118,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (group.nestingLevel === 0) {
         continue;
       }
+      const hasInnerGroups = this.#tupletGroups.some(
+        (other) =>
+          other.nestingLevel > group.nestingLevel &&
+          other.indices.every((i) => group.indices.includes(i))
+      );
       const geometry = computeTupletBracketGeometry(
         group,
         this.#currentElements,
@@ -1126,7 +1131,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#beamedIndicesSnapshot,
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
-        null
+        null,
+        hasInnerGroups
       );
       if (geometry !== null) {
         innerGeometriesByGroup.set(group, geometry);
@@ -1157,6 +1163,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           ? computeOuterBracketBaseY(innerNumeralYs, stemUp)
           : null;
 
+      const hasInnerGroups = innerNumeralYs.length > 0;
       const geometry = computeTupletBracketGeometry(
         group,
         this.#currentElements,
@@ -1165,7 +1172,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#beamedIndicesSnapshot,
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
-        outerBaseY
+        outerBaseY,
+        hasInnerGroups
       );
       if (geometry !== null) {
         allGeometries.push(geometry);

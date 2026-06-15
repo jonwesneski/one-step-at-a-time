@@ -54,7 +54,8 @@ function makeBasicGeometry(
     beamedIndices,
     noteStaffYCoords,
     new Map(),
-    null
+    null,
+    false
   )!;
 
   return { ...geometry, ...overrides };
@@ -136,7 +137,8 @@ describe('createTupletBracketSvg', () => {
       new Set(),
       noteStaffYCoords,
       new Map(),
-      0
+      0,
+      false
     )!;
 
     const result = createTupletBracketSvg(geom);

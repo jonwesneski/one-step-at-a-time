@@ -173,7 +173,8 @@ export function computeTupletBracketGeometry(
   beamedIndices: ReadonlySet<number>,
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
-  outerBaseY: number | null
+  outerBaseY: number | null,
+  hasInnerGroups: boolean
 ): TupletBracketGeometry | null {
   if (group.indices.length < 2) {
     return null;
@@ -194,14 +195,14 @@ export function computeTupletBracketGeometry(
   ).length;
   const stemUp = upVotes >= group.indices.length / 2;
 
-  // Omit bracket when all notes are beamed and no rests are present.
-  // The outermost bracket (nestingLevel 0) is always shown per notation convention.
+  // Omit bracket when all notes are beamed and no rests are present, and this
+  // group has no inner (child) tuplet groups that need an enclosing bracket.
   const omitBracket =
-    group.nestingLevel > 0 &&
+    !hasInnerGroups &&
     group.indices.every((i) => beamedIndices.has(i)) &&
     group.indices.every((i) => elements[i].nodeName !== MUSIC_REST_NODE);
 
-  const startX = firstX - NOTE_SVG_WIDTH / 2;
+  const startX = Math.max(0, firstX - NOTE_SVG_WIDTH / 2);
   const endX = lastX + NOTE_SVG_WIDTH / 2;
 
   // Compute bracket angle from slope of outer non-rest pitches
@@ -256,7 +257,53 @@ export function computeTupletBracketGeometry(
     : staffBottomInContainer +
       TUPLET_STAFF_CLEARANCE_PX +
       TUPLET_HOOK_LENGTH_PX;
-  const baseY = outerBaseY ?? staffBaseY;
+  let baseY = outerBaseY ?? staffBaseY;
+
+  // When notes are beamed, push baseY outward past the extreme stem tip so the
+  // bracket never overlaps a stem or beam. Only applies when we are drawing a
+  // bracket (omitBracket === false will be determined after, but we can check
+  // the beamed/rest conditions here since omitBracket implies we won't render a
+  // bracket line anyway).
+  const allBeamed = group.indices.every((i) => beamedIndices.has(i));
+  const nonRestIndicesForClamping = group.indices.filter(
+    (i) => elements[i].nodeName !== MUSIC_REST_NODE
+  );
+  if (allBeamed && nonRestIndicesForClamping.length > 0) {
+    const yHeadOffset = stemUp
+      ? NOTE_Y_HEAD_OFFSET_STEM_UP
+      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const stemTipOffset = stemUp
+      ? NOTE_STEM_TIP_Y_OFFSET
+      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    const gap = TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX;
+
+    const extremeStemTipY = nonRestIndicesForClamping.reduce(
+      (worst, i) => {
+        const staffY = getStaffYForIndex(
+          i,
+          elements,
+          stemDirections,
+          noteStaffYCoords,
+          chordStaffYCoords
+        );
+        if (staffY === null) {
+          return worst;
+        }
+        const tipY = STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+        return stemUp ? Math.min(worst, tipY) : Math.max(worst, tipY);
+      },
+      stemUp ? Infinity : -Infinity
+    );
+
+    if (isFinite(extremeStemTipY)) {
+      const requiredBaseY = stemUp
+        ? extremeStemTipY - gap
+        : extremeStemTipY + gap;
+      baseY = stemUp
+        ? Math.min(baseY, requiredBaseY)
+        : Math.max(baseY, requiredBaseY);
+    }
+  }
 
   const noteheadCentreX = (idx: number): number => {
     const leftEdge = noteXPositions.get(idx) ?? 0;

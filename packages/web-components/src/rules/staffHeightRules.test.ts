@@ -64,7 +64,8 @@ function makeGeometry(
     new Set<number>(), // not beamed — bracket shown
     noteStaffYCoords,
     new Map(),
-    outerBaseY
+    outerBaseY,
+    false
   )!;
 }
 
