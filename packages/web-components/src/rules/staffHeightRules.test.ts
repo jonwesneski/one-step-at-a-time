@@ -5,11 +5,16 @@ import '../note/index';
 import '../tuplet/index';
 import {
   NoteChordOrRestElementType,
+  NoteElementType,
   TupletElementType,
 } from '../types/elements';
 import { MUSIC_NOTE, MUSIC_TUPLET } from '../utils/consts';
 import { computeAboveStaffBudget } from './staffHeightRules';
-import { buildTupletGroups } from './tupletRules';
+import {
+  buildTupletGroups,
+  computeTupletBracketGeometry,
+  TupletBracketGeometry,
+} from './tupletRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -30,114 +35,74 @@ function makeTuplet(ratio: string): TupletElementType {
   return el;
 }
 
+function makeGeometry(
+  stemUp: boolean,
+  outerBaseY: number | null = null
+): TupletBracketGeometry {
+  const tupletEl = makeTuplet('3');
+  const elements: NoteChordOrRestElementType[] = [
+    makeNote(),
+    makeNote(),
+    makeNote(),
+  ];
+  const noteStaffYCoords = new Map<NoteElementType, number>(
+    elements.map((el, i) => [el as NoteElementType, 20 + i * 5])
+  );
+  const tupletsByIndex = new Map<number, TupletElementType[]>(
+    elements.map((_, i) => [i, [tupletEl]])
+  );
+  const [group] = buildTupletGroups(elements, tupletsByIndex);
+  const noteXPositions = new Map<number, number>(
+    elements.map((_, i) => [i, i * 30 + 10])
+  );
+  const stemDirections = elements.map(() => stemUp);
+  return computeTupletBracketGeometry(
+    group,
+    elements,
+    noteXPositions,
+    stemDirections,
+    new Set<number>(), // not beamed — bracket shown
+    noteStaffYCoords,
+    new Map(),
+    outerBaseY
+  )!;
+}
+
 // ─── computeAboveStaffBudget ──────────────────────────────────────────────────
 
 describe('computeAboveStaffBudget', () => {
-  it('returns 0 for empty groups', () => {
-    expect(computeAboveStaffBudget([], [], 0)).toBe(0);
+  it('returns 0 for empty geometries', () => {
+    expect(computeAboveStaffBudget([])).toBe(0);
   });
 
-  it('returns 0 when all groups are stem-down', () => {
-    const tupletEl = makeTuplet('3');
-    const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
-    ];
-    const tupletsByIndex = new Map<number, TupletElementType[]>([
-      [0, [tupletEl]],
-      [1, [tupletEl]],
-      [2, [tupletEl]],
-    ]);
-    const groups = buildTupletGroups(elements, tupletsByIndex);
-    const stemDirections = [false, false, false];
-
-    expect(computeAboveStaffBudget(groups, stemDirections, 0)).toBe(0);
+  it('returns 0 when all geometries are stem-down', () => {
+    const geometry = makeGeometry(false);
+    expect(computeAboveStaffBudget([geometry])).toBe(0);
   });
 
-  it('returns a positive budget for a stem-up group at nesting level 0', () => {
-    const tupletEl = makeTuplet('3');
-    const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
-    ];
-    const tupletsByIndex = new Map<number, TupletElementType[]>([
-      [0, [tupletEl]],
-      [1, [tupletEl]],
-      [2, [tupletEl]],
-    ]);
-    const groups = buildTupletGroups(elements, tupletsByIndex);
-    const stemDirections = [true, true, true];
-
-    expect(computeAboveStaffBudget(groups, stemDirections, 0)).toBeGreaterThan(
-      0
-    );
+  it('returns a positive budget for a stem-up bracket group', () => {
+    const geometry = makeGeometry(true);
+    expect(computeAboveStaffBudget([geometry])).toBeGreaterThan(0);
   });
 
-  it('returns a larger budget for the outer bracket (nestingLevel 0) than the inner bracket (nestingLevel 1)', () => {
-    const outerTuplet = document.createElement(
-      MUSIC_TUPLET
-    ) as TupletElementType;
-    outerTuplet.setAttribute('ratio', '5:4');
-    document.body.appendChild(outerTuplet);
-
-    const innerTuplet = document.createElement(
-      MUSIC_TUPLET
-    ) as TupletElementType;
-    innerTuplet.setAttribute('ratio', '3');
-    outerTuplet.appendChild(innerTuplet);
-
-    // All notes belong to both tuplets (outer and inner ancestor chain).
-    // maxNestingLevel = 1 because there are two levels (0 and 1).
-    const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
-    ];
-    const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [outerTuplet, innerTuplet]])
-    );
-    const groups = buildTupletGroups(elements, tupletsByIndex);
-    const outerGroup = groups.filter((g) => g.nestingLevel === 0);
-    const innerGroup = groups.filter((g) => g.nestingLevel === 1);
-    const stemDirections = [true, true, true];
-
-    const outerBudget = computeAboveStaffBudget(outerGroup, stemDirections, 1);
-    const innerBudget = computeAboveStaffBudget(innerGroup, stemDirections, 1);
-
-    // Outer bracket (level 0, depthFromOutside = 1) sits furthest → needs more budget.
+  it('outer bracket (higher baseY absolute value) produces larger budget than inner', () => {
+    // Inner geometry: staff-referenced baseY (no outerBaseY)
+    const innerGeometry = makeGeometry(true, null);
+    // Outer geometry: positioned even further above via a smaller explicit baseY
+    const outerGeometry = makeGeometry(true, innerGeometry.baseY - 20);
+    const outerBudget = computeAboveStaffBudget([outerGeometry]);
+    const innerBudget = computeAboveStaffBudget([innerGeometry]);
     expect(outerBudget).toBeGreaterThan(innerBudget);
   });
 
-  it('ignores stem-down groups when computing the budget', () => {
-    const stemUpTuplet = makeTuplet('3');
-    const stemDownTuplet = makeTuplet('3');
-    const allElements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
-      makeNote(),
-      makeNote(),
-      makeNote(),
-    ];
-    const tupletsByIndex = new Map<number, TupletElementType[]>([
-      [0, [stemUpTuplet]],
-      [1, [stemUpTuplet]],
-      [2, [stemUpTuplet]],
-      [3, [stemDownTuplet]],
-      [4, [stemDownTuplet]],
-      [5, [stemDownTuplet]],
+  it('ignores stem-down geometries when computing the budget', () => {
+    const stemUpGeometry = makeGeometry(true);
+    const stemDownGeometry = makeGeometry(false);
+    const mixedBudget = computeAboveStaffBudget([
+      stemUpGeometry,
+      stemDownGeometry,
     ]);
-    const groups = buildTupletGroups(allElements, tupletsByIndex);
-    const stemDirections = [true, true, true, false, false, false];
-
-    const mixedBudget = computeAboveStaffBudget(groups, stemDirections, 0);
-    const stemDownOnly = computeAboveStaffBudget(
-      groups.filter((g) => g.indices[0] >= 3),
-      stemDirections,
-      0
-    );
+    const stemDownOnly = computeAboveStaffBudget([stemDownGeometry]);
 
     expect(mixedBudget).toBeGreaterThan(0);
     expect(stemDownOnly).toBe(0);

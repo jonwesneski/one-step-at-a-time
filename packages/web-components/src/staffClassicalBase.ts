@@ -5,13 +5,14 @@ import {
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { restToYCoordinate } from './rules/restRules';
-import { computeAboveStaffBudget } from './rules/staffHeightRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import {
   buildTupletGroups,
+  computeOuterBracketBaseY,
   computeTupletBracketGeometry,
   parseTupletRatio,
+  TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
 import { StaffElementBase } from './staffBase';
@@ -60,9 +61,13 @@ import {
   KEY_SIG_SHARP_WIDTH,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
+  STAFF_TOP_LINE_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
+  TUPLET_HOOK_LENGTH_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
+  TUPLET_STAFF_CLEARANCE_PX,
 } from './utils/notationDimensions';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
@@ -955,17 +960,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
-    const maxNestingLevel = this.#tupletGroups.reduce(
-      (maximum, group) => Math.max(maximum, group.nestingLevel),
-      0
-    );
-
-    // Expand the transcribe container upward to accommodate above-staff elements
-    const aboveStaffBudget = computeAboveStaffBudget(
-      this.#tupletGroups,
-      this.#stemDirections,
-      maxNestingLevel
-    );
+    // Estimate above-staff budget using stem directions and staff-referenced positions.
+    // This is a conservative estimate computed before notes are positioned; the actual
+    // tuplet bracket geometries are computed after note positions are set (below).
+    const aboveStaffBudget = this.#estimateAboveStaffBudget();
     const containerWidth = Math.round(transcribeRect.width);
     const totalHeight = STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget;
     this.transcribeContainer.style.top =
@@ -1109,9 +1107,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       `${STAFF_TRANSCRIPTION_HEIGHT}`
     );
 
-    // Render tuplet brackets using the x positions collected above
-    this.#tupletContainer.innerHTML = '';
+    // Two-pass tuplet bracket rendering. Note positions are now set so x/y lookups work.
+
+    // Pass 1: inner groups (nestingLevel > 0) — beam-referenced numeral placement.
+    const innerGeometriesByGroup = new Map<
+      TupletGroup,
+      TupletBracketGeometry
+    >();
     for (const group of this.#tupletGroups) {
+      if (group.nestingLevel === 0) {
+        continue;
+      }
       const geometry = computeTupletBracketGeometry(
         group,
         this.#currentElements,
@@ -1120,12 +1126,77 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#beamedIndicesSnapshot,
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
-        maxNestingLevel
+        null
       );
       if (geometry !== null) {
-        this.#tupletContainer.appendChild(createTupletBracketSvg(geometry));
+        innerGeometriesByGroup.set(group, geometry);
       }
     }
+
+    // Pass 2: outer groups (nestingLevel=0) — baseY derived from actual inner numeralYs.
+    const allGeometries: TupletBracketGeometry[] = [
+      ...innerGeometriesByGroup.values(),
+    ];
+    for (const group of this.#tupletGroups) {
+      if (group.nestingLevel !== 0) {
+        continue;
+      }
+      const outerIndexSet = new Set(group.indices);
+      const innerNumeralYs = [...innerGeometriesByGroup.entries()]
+        .filter(([innerGroup]) =>
+          innerGroup.indices.every((i) => outerIndexSet.has(i))
+        )
+        .map(([, geom]) => geom.numeralY);
+
+      const upVotes = group.indices.filter(
+        (i) => this.#stemDirections[i] === true
+      ).length;
+      const stemUp = upVotes >= group.indices.length / 2;
+      const outerBaseY =
+        innerNumeralYs.length > 0
+          ? computeOuterBracketBaseY(innerNumeralYs, stemUp)
+          : null;
+
+      const geometry = computeTupletBracketGeometry(
+        group,
+        this.#currentElements,
+        this.#noteXPositions,
+        this.#stemDirections,
+        this.#beamedIndicesSnapshot,
+        this.#noteStaffYCoordsSnapshot,
+        this.#chordStaffYCoordsSnapshot,
+        outerBaseY
+      );
+      if (geometry !== null) {
+        allGeometries.push(geometry);
+      }
+    }
+
+    this.#tupletContainer.innerHTML = '';
+    for (const geometry of allGeometries) {
+      this.#tupletContainer.appendChild(createTupletBracketSvg(geometry));
+    }
+  }
+
+  // Conservative above-staff budget estimate using staff-referenced positions.
+  // Used before note x-positions are set; the actual rendering uses real geometry.
+  #estimateAboveStaffBudget(): number {
+    const hasStemUpTuplet = this.#tupletGroups.some((group) => {
+      const upVotes = group.indices.filter(
+        (i) => this.#stemDirections[i] === true
+      ).length;
+      return upVotes >= group.indices.length / 2;
+    });
+    if (!hasStemUpTuplet) {
+      return 0;
+    }
+    const topY =
+      STAFF_TOP_LINE_Y -
+      STAFF_Y_PADDING -
+      TUPLET_STAFF_CLEARANCE_PX -
+      TUPLET_HOOK_LENGTH_PX -
+      TUPLET_NUMERAL_FONT_SIZE;
+    return topY < 0 ? Math.ceil(-topY) + 2 : 0;
   }
 
   // Respace notes on resize

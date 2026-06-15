@@ -54,7 +54,7 @@ function makeBasicGeometry(
     beamedIndices,
     noteStaffYCoords,
     new Map(),
-    0
+    null
   )!;
 
   return { ...geometry, ...overrides };

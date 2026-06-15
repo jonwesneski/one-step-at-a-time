@@ -1,42 +1,27 @@
-import {
-  STAFF_TOP_LINE_Y,
-  STAFF_Y_PADDING,
-  TUPLET_BRACKET_LEVEL_OFFSET_PX,
-  TUPLET_HOOK_LENGTH_PX,
-  TUPLET_NUMERAL_FONT_SIZE,
-  TUPLET_STAFF_CLEARANCE_PX,
-} from '../utils/notationDimensions';
-import { TupletGroup } from './tupletRules';
+import { TUPLET_NUMERAL_FONT_SIZE } from '../utils/notationDimensions';
+import { TupletBracketGeometry } from './tupletRules';
 
 /**
  * Computes the above-staff SVG coordinate budget (px above y=0) needed to
- * render all tuplet brackets for the current groups without clipping.
- * Returns 0 when no above-staff budget is required (no stem-up tuplets).
+ * render all tuplet brackets without clipping. Based on actual computed geometry
+ * so the budget reflects real numeral/bracket positions rather than estimates.
+ * Returns 0 when no above-staff budget is required.
  */
 export function computeAboveStaffBudget(
-  groups: TupletGroup[],
-  stemDirections: boolean[],
-  maxNestingLevel: number
+  geometries: TupletBracketGeometry[]
 ): number {
   let maxBudget = 0;
-  for (const group of groups) {
-    const upVotes = group.indices.filter(
-      (i) => stemDirections[i] === true
-    ).length;
-    const stemUp = upVotes >= group.indices.length / 2;
-    if (!stemUp) {
+  for (const geometry of geometries) {
+    if (!geometry.stemUp) {
       continue;
     }
-    const depthFromOutside = maxNestingLevel - group.nestingLevel;
-    const baseY =
-      STAFF_TOP_LINE_Y -
-      STAFF_Y_PADDING -
-      TUPLET_STAFF_CLEARANCE_PX -
-      TUPLET_HOOK_LENGTH_PX -
-      depthFromOutside * TUPLET_BRACKET_LEVEL_OFFSET_PX;
-    const numeralTop = baseY - TUPLET_NUMERAL_FONT_SIZE;
-    if (numeralTop < 0) {
-      maxBudget = Math.max(maxBudget, Math.ceil(-numeralTop) + 2);
+    // The topmost rendered element is either the bracket arm (at baseY for bracket groups)
+    // or the numeral top edge (numeralY - font/2 for omitBracket groups).
+    const topY = geometry.omitBracket
+      ? geometry.numeralY - TUPLET_NUMERAL_FONT_SIZE / 2
+      : geometry.baseY - TUPLET_NUMERAL_FONT_SIZE;
+    if (topY < 0) {
+      maxBudget = Math.max(maxBudget, Math.ceil(-topY) + 2);
     }
   }
   return maxBudget;
