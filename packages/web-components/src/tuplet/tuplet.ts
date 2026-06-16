@@ -8,11 +8,11 @@ import {
   MUSIC_TUPLET_NODE,
 } from '../utils/consts';
 
-export function collectTupletChildren(
-  el: HTMLElement
+function collectTupletChildren(
+  element: HTMLElement
 ): NoteChordOrRestElementType[] {
   const result: NoteChordOrRestElementType[] = [];
-  for (const child of el.children) {
+  for (const child of element.children) {
     const tag = child.nodeName;
     if (
       tag === MUSIC_NOTE_NODE ||
@@ -35,12 +35,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     constructor() {
       super();
+      // todo: I may want to revisit this if I do standalone mode
       // this.attachShadow({ mode: 'open' });
       // this.shadowRoot!.innerHTML = '<slot></slot>';
     }
 
     get ratio(): TupletRatio {
-      return this.getAttribute('ratio') ?? '3';
+      return (this.getAttribute('ratio') ?? '3') as TupletRatio;
     }
 
     set ratio(value: TupletRatio) {
