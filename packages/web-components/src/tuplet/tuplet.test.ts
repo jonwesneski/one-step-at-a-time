@@ -9,6 +9,7 @@ import type {
   Note,
   Octave,
   TimeSignature,
+  TupletRatio,
 } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
@@ -36,7 +37,7 @@ describe(MUSIC_TUPLET, () => {
 
   it('reads ratio from attribute', () => {
     const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    element.setAttribute('ratio', '5:4');
+    element.setAttribute('ratio', '5:4' satisfies TupletRatio);
     document.body.appendChild(element);
 
     expect(element.ratio).toBe('5:4');
@@ -45,7 +46,7 @@ describe(MUSIC_TUPLET, () => {
   it('sets ratio via setter', () => {
     const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
     document.body.appendChild(element);
-    element.ratio = '7';
+    element.ratio = '7' satisfies TupletRatio;
 
     expect(element.getAttribute('ratio')).toBe('7');
     expect(element.ratio).toBe('7');
@@ -80,15 +81,15 @@ describe(MUSIC_TUPLET, () => {
 
   it('flatElements flattens nested music-tuplet children', () => {
     const outer = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    outer.setAttribute('ratio', '5:4');
+    outer.setAttribute('ratio', '5:4' satisfies TupletRatio);
 
     const note1 = document.createElement(MUSIC_NOTE);
     note1.setAttribute('note', 'C');
     note1.setAttribute('duration', 'sixteenth');
     outer.appendChild(note1);
 
-    const inner = document.createElement(MUSIC_TUPLET);
-    inner.setAttribute('ratio', '3');
+    const inner = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    inner.setAttribute('ratio', '3' satisfies TupletRatio);
     for (let i = 0; i < 3; i++) {
       const note = document.createElement(MUSIC_NOTE);
       note.setAttribute('note', 'D');
@@ -118,7 +119,7 @@ describe('staff integration', () => {
     );
     document.body.appendChild(staff);
 
-    const tuplet = document.createElement(MUSIC_TUPLET);
+    const tuplet = document.createElement(MUSIC_TUPLET) as TupletElementType;
     tuplet.setAttribute('ratio', '3');
     for (let i = 0; i < 3; i++) {
       const note = document.createElement(MUSIC_NOTE);
@@ -145,8 +146,8 @@ describe('staff integration', () => {
     );
     document.body.appendChild(staff);
 
-    const tuplet = document.createElement(MUSIC_TUPLET);
-    tuplet.setAttribute('ratio', '3');
+    const tuplet = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    tuplet.setAttribute('ratio', '3' satisfies TupletRatio);
     for (let i = 0; i < 3; i++) {
       const note = document.createElement(MUSIC_NOTE);
       note.setAttribute('note', 'E' satisfies Note);
