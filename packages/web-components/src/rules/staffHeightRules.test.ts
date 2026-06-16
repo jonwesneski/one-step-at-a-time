@@ -3,11 +3,12 @@
  */
 import '../note/index';
 import '../tuplet/index';
-import {
+import type {
   NoteChordOrRestElementType,
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
+import { DurationType, Note } from '../types/theory';
 import { MUSIC_NOTE, MUSIC_TUPLET } from '../utils/consts';
 import { computeAboveStaffBudget } from './staffHeightRules';
 import {
@@ -21,25 +22,25 @@ afterEach(() => {
 });
 
 function makeNote(): NoteChordOrRestElementType {
-  const el = document.createElement(MUSIC_NOTE);
-  el.setAttribute('note', 'C');
-  el.setAttribute('duration', 'eighth');
-  document.body.appendChild(el);
-  return el as NoteChordOrRestElementType;
+  const element = document.createElement(MUSIC_NOTE);
+  element.setAttribute('note', 'C' satisfies Note);
+  element.setAttribute('duration', 'eighth' satisfies DurationType);
+  document.body.appendChild(element);
+  return element as NoteChordOrRestElementType;
 }
 
 function makeTuplet(ratio: string): TupletElementType {
-  const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-  el.setAttribute('ratio', ratio);
-  document.body.appendChild(el);
-  return el;
+  const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+  element.setAttribute('ratio', ratio);
+  document.body.appendChild(element);
+  return element;
 }
 
 function makeGeometry(
   stemUp: boolean,
   outerBaseY: number | null = null
 ): TupletBracketGeometry {
-  const tupletEl = makeTuplet('3');
+  const tupletElement = makeTuplet('3');
   const elements: NoteChordOrRestElementType[] = [
     makeNote(),
     makeNote(),
@@ -49,7 +50,7 @@ function makeGeometry(
     elements.map((el, i) => [el as NoteElementType, 20 + i * 5])
   );
   const tupletsByIndex = new Map<number, TupletElementType[]>(
-    elements.map((_, i) => [i, [tupletEl]])
+    elements.map((_, i) => [i, [tupletElement]])
   );
   const [group] = buildTupletGroups(elements, tupletsByIndex);
   const noteXPositions = new Map<number, number>(

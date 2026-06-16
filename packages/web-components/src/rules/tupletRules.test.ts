@@ -3,14 +3,15 @@
  */
 import '../note/index';
 import '../tuplet/index';
-import {
+import type {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
 import { DurationType } from '../types/theory';
-import { MUSIC_NOTE, MUSIC_TUPLET } from '../utils/consts';
+import { MUSIC_TUPLET } from '../utils/consts';
+import { makeNote } from '../test-fixtures/unitHelpers';
 import {
   BEAM_THICKNESS_PX,
   STAFF_BOTTOM_LINE_Y,
@@ -84,43 +85,35 @@ describe('defaultNormalCount', () => {
 
 // ─── buildTupletGroups ───────────────────────────────────────────────────────
 
-function makeNote(noteLetter = 'C', duration = 'eighth'): NoteElementType {
-  const el = document.createElement(MUSIC_NOTE) as NoteElementType;
-  el.setAttribute('note', noteLetter);
-  el.setAttribute('duration', duration);
-  document.body.appendChild(el);
-  return el;
-}
-
 function makeTuplet(ratio: string): TupletElementType {
-  const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-  el.setAttribute('ratio', ratio);
-  document.body.appendChild(el);
-  return el;
+  const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+  element.setAttribute('ratio', ratio);
+  document.body.appendChild(element);
+  return element;
 }
 
 describe('buildTupletGroups', () => {
   it('returns empty array when no tuplets in map', () => {
     const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
     ];
     const result = buildTupletGroups(elements, new Map());
     expect(result).toHaveLength(0);
   });
 
   it('returns one group for a simple triplet (3 notes, same tuplet element)', () => {
-    const tupletEl = makeTuplet('3');
+    const tupletElementement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
     ];
     const tupletsByIndex = new Map<number, TupletElementType[]>([
-      [0, [tupletEl]],
-      [1, [tupletEl]],
-      [2, [tupletEl]],
+      [0, [tupletElementement]],
+      [1, [tupletElementement]],
+      [2, [tupletElementement]],
     ]);
 
     const result = buildTupletGroups(elements, tupletsByIndex);
@@ -146,11 +139,11 @@ describe('buildTupletGroups', () => {
     outerTuplet.appendChild(innerTuplet);
 
     const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
-      makeNote(),
-      makeNote(),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
     ];
     // Each note maps to all its tuplet ancestors (outermost first).
     // Notes 0,1,4 are direct children of the outer tuplet.
@@ -199,7 +192,7 @@ describe('buildTupletGroups', () => {
 
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 9 },
-      () => makeNote()
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const tupletsByIndex = new Map<number, TupletElementType[]>([
       [0, [outerTuplet, innerTuplet1]],
@@ -240,13 +233,13 @@ function makeGeometryInputs(
   const elements: NoteChordOrRestElementType[] = [];
   const noteStaffYCoords = new Map<NoteElementType, number>();
   for (let i = 0; i < noteCount; i++) {
-    const el = makeNote('C', duration);
-    elements.push(el);
+    const element = makeNote({ note: 'C', duration });
+    elements.push(element);
     // Choose note positions where the clamp doesn't trigger for the given stem direction.
     // Stem-up: notes far below staff (staffY ≥ 72) — long stems up, beam clears bracket.
     // Stem-down: notes high in staff (staffY ≤ 20) — short stems down, beam stays near staff.
     const baseStaffY = stemUp ? 72 : 10;
-    noteStaffYCoords.set(el, baseStaffY + i * 5);
+    noteStaffYCoords.set(element, baseStaffY + i * 5);
   }
 
   const stemDirections = elements.map(() => stemUp);
@@ -257,17 +250,17 @@ function makeGeometryInputs(
 
   // Nest the tuplet inside an outer tuplet so nestingLevel=1, which allows
   // omitBracket=true when all notes are beamed (the beam-based numeralY path).
-  const outerTupletEl = document.createElement(
+  const outerTupletElement = document.createElement(
     MUSIC_TUPLET
   ) as TupletElementType;
-  outerTupletEl.setAttribute('ratio', '3:2');
-  document.body.appendChild(outerTupletEl);
+  outerTupletElement.setAttribute('ratio', '3:2');
+  document.body.appendChild(outerTupletElement);
 
-  const tupletEl = makeTuplet('3');
-  outerTupletEl.appendChild(tupletEl);
+  const tupletElementement = makeTuplet('3');
+  outerTupletElement.appendChild(tupletElementement);
 
   const tupletsByIndex = new Map<number, TupletElementType[]>(
-    elements.map((_, i) => [i, [outerTupletEl, tupletEl]])
+    elements.map((_, i) => [i, [outerTupletElement, tupletElementement]])
   );
 
   const groups = buildTupletGroups(elements, tupletsByIndex);
@@ -286,10 +279,10 @@ function makeGeometryInputs(
 
 describe('computeTupletBracketGeometry', () => {
   it('returns null for a group with fewer than 2 indices', () => {
-    const el = makeNote();
-    const tupletEl = makeTuplet('3');
-    const elements = [el];
-    const tupletsByIndex = new Map([[0, [tupletEl]]]);
+    const element = makeNote({ note: 'C', duration: 'eighth' });
+    const tupletElementement = makeTuplet('3');
+    const elements = [element];
+    const tupletsByIndex = new Map([[0, [tupletElementement]]]);
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
     const result = computeTupletBracketGeometry(
@@ -325,16 +318,16 @@ describe('computeTupletBracketGeometry', () => {
   });
 
   it('sets omitBracket=true for outermost tuplet (nestingLevel 0) when all notes are beamed and no inner groups', () => {
-    const tupletEl = makeTuplet('3');
+    const tupletElementement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote()
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((element, i) => [element as NoteElementType, 50 + i * 5])
     );
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElementement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -368,7 +361,7 @@ describe('computeTupletBracketGeometry', () => {
 
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote()
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((element, i) => [element as NoteElementType, 50 + i * 5])
@@ -410,7 +403,7 @@ describe('computeTupletBracketGeometry', () => {
 
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote()
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((element, i) => [element as NoteElementType, 50 + i * 5])
@@ -458,9 +451,9 @@ describe('computeTupletBracketGeometry', () => {
 
   it('sets omitBracket=false when group contains a rest', () => {
     const elements: NoteChordOrRestElementType[] = [
-      makeNote(),
-      makeNote(),
-      makeNote(),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
     ];
     // Simulate a rest by overriding nodeName — easiest via a custom element stub
     Object.defineProperty(elements[1], 'nodeName', {
@@ -468,9 +461,9 @@ describe('computeTupletBracketGeometry', () => {
       configurable: true,
     });
 
-    const tupletEl = makeTuplet('3');
+    const tupletElementement = makeTuplet('3');
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElementement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -548,10 +541,10 @@ describe('computeTupletBracketGeometry', () => {
   // ─── baseY stem-tip clamping ──────────────────────────────────────────────────
 
   it('clamps baseY above stem tips when stem-up beamed notes have long stems', () => {
-    const tupletEl = makeTuplet('3');
+    const tupletElement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     // staffY = -20: above staff → stem tips protrude well above the default bracket zone
     const staffY = -20;
@@ -559,7 +552,7 @@ describe('computeTupletBracketGeometry', () => {
       elements.map((el) => [el as NoteElementType, staffY])
     );
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -593,10 +586,10 @@ describe('computeTupletBracketGeometry', () => {
   });
 
   it('clamps baseY below stem tips when stem-down beamed notes have long stems', () => {
-    const tupletEl = makeTuplet('3');
+    const tupletElement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     // staffY = 50: below staff center → stem tips protrude well below the default bracket zone
     const staffY = 50;
@@ -604,7 +597,7 @@ describe('computeTupletBracketGeometry', () => {
       elements.map((el) => [el as NoteElementType, staffY])
     );
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -638,17 +631,17 @@ describe('computeTupletBracketGeometry', () => {
   });
 
   it('does not clamp baseY when stem-up beamed notes have stems that stay within the bracket zone', () => {
-    const tupletEl = makeTuplet('3');
+    const tupletElement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     // staffY = 60: stem tips stop short of the default bracket position — no clamping needed
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((el) => [el as NoteElementType, 60])
     );
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -673,9 +666,9 @@ describe('computeTupletBracketGeometry', () => {
   });
 
   it('clamps baseY by non-rest stem tips when group has rests and beamed notes', () => {
-    const noteA = makeNote('C', 'eighth');
-    const noteB = makeNote('C', 'eighth');
-    const rest = makeNote('C', 'eighth');
+    const noteA = makeNote({ note: 'C', duration: 'eighth' });
+    const noteB = makeNote({ note: 'C', duration: 'eighth' });
+    const rest = makeNote({ note: 'C', duration: 'eighth' });
     Object.defineProperty(rest, 'nodeName', {
       get: () => 'MUSIC-REST',
       configurable: true,
@@ -689,9 +682,9 @@ describe('computeTupletBracketGeometry', () => {
       [noteB as NoteElementType, staffY],
     ]);
 
-    const tupletEl = makeTuplet('3');
+    const tupletElement = makeTuplet('3');
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -742,7 +735,7 @@ describe('computeTupletBracketGeometry', () => {
 
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     // Use steeply descending pitches to verify the numeral still clears the beam
     // regardless of beam angle.
@@ -809,7 +802,7 @@ describe('computeTupletBracketGeometry', () => {
 
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>([
       [elements[0] as NoteElementType, 72],
@@ -876,7 +869,7 @@ describe('computeTupletBracketGeometry', () => {
     // 6 notes: first 3 in innerTuplet1, last 3 in innerTuplet2 (descending slope).
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 6 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((element, i) => [element as NoteElementType, 5 + i * 5])
@@ -955,7 +948,7 @@ describe('computeTupletBracketGeometry', () => {
 
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 6 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((element, i) => [element as NoteElementType, 72 + i * 5])
@@ -1018,14 +1011,14 @@ describe('computeTupletBracketGeometry', () => {
   it('angle is 0 when all notes have the same pitch', () => {
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote()
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((el) => [el as NoteElementType, 50]) // same Y for all
     );
-    const tupletEl = makeTuplet('3');
+    const tupletElement = makeTuplet('3');
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -1047,16 +1040,16 @@ describe('computeTupletBracketGeometry', () => {
   it('clamps steep angle to 0.15', () => {
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 2 },
-      () => makeNote()
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     // Very steep ascending pitch (large staffY difference over short x span)
     const noteStaffYCoords = new Map<NoteElementType, number>([
       [elements[0] as NoteElementType, 10],
       [elements[1] as NoteElementType, 90],
     ]);
-    const tupletEl = makeTuplet('2');
+    const tupletElement = makeTuplet('2');
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
 
@@ -1316,16 +1309,16 @@ describe('computeTupletBracketGeometry', () => {
   });
 
   function makeBeamedGroup(staffY: number, stemUp: boolean) {
-    const tupletEl = makeTuplet('3');
+    const tupletElement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 3 },
-      () => makeNote('C', 'eighth')
+      () => makeNote({ note: 'C', duration: 'eighth' })
     );
     const noteStaffYCoords = new Map<NoteElementType, number>(
       elements.map((el) => [el as NoteElementType, staffY])
     );
     const tupletsByIndex = new Map<number, TupletElementType[]>(
-      elements.map((_, i) => [i, [tupletEl]])
+      elements.map((_, i) => [i, [tupletElement]])
     );
     const [group] = buildTupletGroups(elements, tupletsByIndex);
     return {
@@ -1470,16 +1463,16 @@ describe('computeTupletBracketGeometry', () => {
     // Use the same note positions for both durations so any difference is purely from flag count.
     const staffY = 72;
     const makeInputs = (duration: DurationType) => {
-      const tupletEl = makeTuplet('3');
+      const tupletElement = makeTuplet('3');
       const elements: NoteChordOrRestElementType[] = Array.from(
         { length: 3 },
-        () => makeNote('C', duration)
+        () => makeNote({ note: 'C', duration })
       );
       const noteStaffYCoords = new Map<NoteElementType, number>(
         elements.map((el) => [el as NoteElementType, staffY])
       );
       const tupletsByIndex = new Map<number, TupletElementType[]>(
-        elements.map((_, i) => [i, [tupletEl]])
+        elements.map((_, i) => [i, [tupletElement]])
       );
       const [group] = buildTupletGroups(elements, tupletsByIndex);
       return {

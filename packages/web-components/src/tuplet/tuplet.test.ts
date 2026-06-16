@@ -28,54 +28,54 @@ describe(MUSIC_TUPLET, () => {
   });
 
   it('returns default ratio of "3" when no attribute set', () => {
-    const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    document.body.appendChild(el);
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
 
-    expect(el.ratio).toBe('3');
+    expect(element.ratio).toBe('3');
   });
 
   it('reads ratio from attribute', () => {
-    const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    el.setAttribute('ratio', '5:4');
-    document.body.appendChild(el);
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    element.setAttribute('ratio', '5:4');
+    document.body.appendChild(element);
 
-    expect(el.ratio).toBe('5:4');
+    expect(element.ratio).toBe('5:4');
   });
 
   it('sets ratio via setter', () => {
-    const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    document.body.appendChild(el);
-    el.ratio = '7';
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
+    element.ratio = '7';
 
-    expect(el.getAttribute('ratio')).toBe('7');
-    expect(el.ratio).toBe('7');
+    expect(element.getAttribute('ratio')).toBe('7');
+    expect(element.ratio).toBe('7');
   });
 
   it('has no shadow root (pure grouping wrapper, no self-rendering)', () => {
-    const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    document.body.appendChild(el);
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
 
-    expect(el.shadowRoot).toBeNull();
+    expect(element.shadowRoot).toBeNull();
   });
 
   it('flatElements returns empty array when no children', () => {
-    const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
-    document.body.appendChild(el);
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
 
-    expect(el.flatElements).toHaveLength(0);
+    expect(element.flatElements).toHaveLength(0);
   });
 
   it('flatElements returns direct note children', () => {
-    const el = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
     for (let i = 0; i < 3; i++) {
       const note = document.createElement(MUSIC_NOTE);
       note.setAttribute('note', 'C');
       note.setAttribute('duration', 'eighth');
-      el.appendChild(note);
+      element.appendChild(note);
     }
-    document.body.appendChild(el);
+    document.body.appendChild(element);
 
-    expect(el.flatElements).toHaveLength(3);
+    expect(element.flatElements).toHaveLength(3);
   });
 
   it('flatElements flattens nested music-tuplet children', () => {

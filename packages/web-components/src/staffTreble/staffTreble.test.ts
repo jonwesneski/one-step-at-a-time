@@ -52,12 +52,12 @@ function expectedNoteTop(value: NoteLetterOctave): string {
 }
 
 function makeStaff(): Element {
-  const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-  el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
-  el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-  el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-  document.body.appendChild(el);
-  return el;
+  const element = document.createElement(MUSIC_STAFF_TREBLE) as any;
+  element.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  element.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  element.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+  document.body.appendChild(element);
+  return element;
 }
 
 function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {
@@ -77,16 +77,16 @@ describe(MUSIC_STAFF_TREBLE, () => {
   });
 
   it('renders shadow root with provided key signature attributes', () => {
-    const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-    el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
-    el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-    document.body.appendChild(el);
+    const element = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    element.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+    element.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+    element.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+    document.body.appendChild(element);
 
-    expect(el.keySig).toBe('C');
-    expect(el.mode).toBe('major');
-    expect(el.shadowRoot).not.toBeNull();
-    expect(el.shadowRoot.innerHTML).not.toBe('');
+    expect(element.keySig).toBe('C');
+    expect(element.mode).toBe('major');
+    expect(element.shadowRoot).not.toBeNull();
+    expect(element.shadowRoot.innerHTML).not.toBe('');
   });
 });
 
