@@ -129,3 +129,44 @@ export type Voice =
   | 'tenor'
   | 'baritone'
   | 'bass';
+
+export type TupletRatio =
+  // Simple form (numeral only — normal count inferred by defaultNormalCount)
+  | '2'
+  | '3'
+  | '4'
+  | '5'
+  | '6'
+  | '7'
+  | '8'
+  | '9'
+  | '10'
+  | '11'
+  | '13'
+  | '15'
+  | '16'
+  | '17'
+  | '32'
+  // Full form (actual:normal) — simple-time quarter-note beat
+  | '3:2'
+  | '5:4'
+  | '6:4'
+  | '7:4'
+  | '9:8'
+  | '10:8'
+  | '11:8'
+  | '17:16'
+  | '17:32'
+  // Full form — compound-time dotted-quarter-note beat
+  | '4:3'
+  | '5:3'
+  | '7:6'
+  | '8:6'
+  | '10:6'
+  | '11:6'
+  | '13:12'
+  // Full form — no literal ratio equivalents
+  | '8:5'
+  | '6:5'
+  | '8:7'
+  | '9:7';

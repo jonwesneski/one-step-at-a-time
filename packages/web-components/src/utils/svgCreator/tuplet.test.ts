@@ -1,0 +1,210 @@
+/**
+ * @jest-environment jsdom
+ */
+import '../../note/index';
+import {
+  buildTupletGroups,
+  computeTupletBracketGeometry,
+  TupletBracketGeometry,
+} from '../../rules/tupletRules';
+import '../../tuplet/index';
+import {
+  NoteChordOrRestElementType,
+  NoteElementType,
+  TupletElementType,
+} from '../../types/elements';
+import { MUSIC_NOTE, MUSIC_TUPLET } from '../consts';
+import { TUPLET_NUMERAL_GAP_PX } from '../notationDimensions';
+import { createTupletBracketSvg } from './tuplet';
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
+function makeBasicGeometry(
+  overrides: Partial<TupletBracketGeometry> = {}
+): TupletBracketGeometry {
+  const notes: NoteChordOrRestElementType[] = Array.from({ length: 3 }, () => {
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('note', 'C');
+    element.setAttribute('duration', 'eighth');
+    document.body.appendChild(element);
+    return element;
+  });
+  const tupletEl = document.createElement(MUSIC_TUPLET) as TupletElementType;
+  tupletEl.setAttribute('ratio', '3');
+  document.body.appendChild(tupletEl);
+
+  const tupletsByIndex = new Map<number, TupletElementType[]>(
+    notes.map((_, i) => [i, [tupletEl]])
+  );
+  const [group] = buildTupletGroups(notes, tupletsByIndex);
+  const noteXPositions = new Map(notes.map((_, i) => [i, i * 40 + 20]));
+  const stemDirections = notes.map(() => true);
+  const beamedIndices = new Set<number>();
+  const noteStaffYCoords = new Map<NoteElementType, number>(
+    notes.map((n) => [n as NoteElementType, 50])
+  );
+
+  const geometry = computeTupletBracketGeometry(
+    group,
+    notes,
+    noteXPositions,
+    stemDirections,
+    beamedIndices,
+    noteStaffYCoords,
+    new Map(),
+    null,
+    false
+  )!;
+
+  return { ...geometry, ...overrides };
+}
+
+describe('createTupletBracketSvg', () => {
+  it('returns an SVGGElement with class "tuplet-group"', () => {
+    const geometry = makeBasicGeometry();
+    const result = createTupletBracketSvg(geometry);
+
+    expect(result.nodeName).toBe('g');
+    expect(result.classList.contains('tuplet-group')).toBe(true);
+  });
+
+  it('renders 4 bracket lines and 1 text element when omitBracket=false', () => {
+    const geometry = makeBasicGeometry({ omitBracket: false });
+    const result = createTupletBracketSvg(geometry);
+
+    const lines = result.querySelectorAll('line');
+    const texts = result.querySelectorAll('text');
+    expect(lines.length).toBe(4);
+    expect(texts.length).toBe(1);
+  });
+
+  it('renders only 1 text element when omitBracket=true', () => {
+    const geometry = makeBasicGeometry({ omitBracket: true });
+    const result = createTupletBracketSvg(geometry);
+
+    const lines = result.querySelectorAll('line');
+    const texts = result.querySelectorAll('text');
+    expect(lines.length).toBe(0);
+    expect(texts.length).toBe(1);
+  });
+
+  it('text element has font-style="italic"', () => {
+    const geometry = makeBasicGeometry({ omitBracket: false });
+    const result = createTupletBracketSvg(geometry);
+
+    const text = result.querySelector('text')!;
+    expect(text.getAttribute('font-style')).toBe('italic');
+  });
+
+  it('text element contains the displayString', () => {
+    const geometry = makeBasicGeometry({ omitBracket: false });
+    const result = createTupletBracketSvg(geometry);
+
+    const text = result.querySelector('text')!;
+    expect(text.textContent).toBe('3');
+  });
+
+  it('text element contains "5:4" for a quintuplet', () => {
+    const notes: NoteChordOrRestElementType[] = Array.from(
+      { length: 5 },
+      () => {
+        const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+        element.setAttribute('note', 'C');
+        element.setAttribute('duration', 'sixteenth');
+        document.body.appendChild(element);
+        return element;
+      }
+    );
+    const tupletEl = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    tupletEl.setAttribute('ratio', '5:4');
+    document.body.appendChild(tupletEl);
+
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      notes.map((_, i) => [i, [tupletEl]])
+    );
+    const [group] = buildTupletGroups(notes, tupletsByIndex);
+    const noteXPositions = new Map(notes.map((_, i) => [i, i * 30 + 10]));
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      notes.map((n) => [n as NoteElementType, 50])
+    );
+    const geometry = computeTupletBracketGeometry(
+      group,
+      notes,
+      noteXPositions,
+      notes.map(() => true),
+      new Set(),
+      noteStaffYCoords,
+      new Map(),
+      0,
+      false
+    )!;
+
+    const result = createTupletBracketSvg(geometry);
+    expect(result.querySelector('text')!.textContent).toBe('5:4');
+  });
+
+  it('hook lines are vertical (x1 === x2) when omitBracket=false', () => {
+    const geometry = makeBasicGeometry({
+      omitBracket: false,
+      angle: 0, // horizontal bracket so hook positions are clear
+    });
+    const result = createTupletBracketSvg(geometry);
+
+    // Hooks are the lines where x1 === x2 (startX and endX columns)
+    const lines = Array.from(result.querySelectorAll('line'));
+    const hookLines = lines.filter(
+      (l) => l.getAttribute('x1') === l.getAttribute('x2')
+    );
+    expect(hookLines.length).toBe(2);
+  });
+
+  it('left arm ends before numeral gap center', () => {
+    const geometry = makeBasicGeometry({ omitBracket: false, angle: 0 });
+    const result = createTupletBracketSvg(geometry);
+
+    const lines = Array.from(result.querySelectorAll('line'));
+    // Left arm: x1 = startX, x2 < numeralX - gap/2
+    const leftArm = lines.find(
+      (l) =>
+        parseFloat(l.getAttribute('x1')!) === geometry.startX &&
+        parseFloat(l.getAttribute('x2')!) < geometry.numeralX
+    );
+    expect(leftArm).toBeDefined();
+    expect(parseFloat(leftArm!.getAttribute('x2')!)).toBeLessThanOrEqual(
+      geometry.numeralX - TUPLET_NUMERAL_GAP_PX / 2
+    );
+  });
+
+  it('right arm starts after numeral gap center', () => {
+    const geometry = makeBasicGeometry({ omitBracket: false, angle: 0 });
+    const result = createTupletBracketSvg(geometry);
+
+    const lines = Array.from(result.querySelectorAll('line'));
+    // Right arm: x2 = endX, x1 > numeralX + gap/2
+    const rightArm = lines.find(
+      (l) =>
+        parseFloat(l.getAttribute('x2')!) === geometry.endX &&
+        parseFloat(l.getAttribute('x1')!) > geometry.numeralX
+    );
+    expect(rightArm).toBeDefined();
+    expect(parseFloat(rightArm!.getAttribute('x1')!)).toBeGreaterThanOrEqual(
+      geometry.numeralX + TUPLET_NUMERAL_GAP_PX / 2
+    );
+  });
+
+  it('renders numeral only (no bracket lines) when bracket is too narrow', () => {
+    // Bracket width smaller than TUPLET_NUMERAL_GAP_PX + 4 → arms are skipped
+    const geometry = makeBasicGeometry({
+      omitBracket: false,
+      startX: 0,
+      endX: 5, // very narrow
+      numeralX: 2.5,
+    });
+    const result = createTupletBracketSvg(geometry);
+
+    const lines = result.querySelectorAll('line');
+    expect(lines.length).toBe(0);
+  });
+});

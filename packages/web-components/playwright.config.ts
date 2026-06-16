@@ -6,6 +6,7 @@ const dirname = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   testDir: './src',
   testMatch: /.*\.browser-test\.ts$/,
+  timeout: 30_000,
   fullyParallel: true,
   reporter: process.env.CI ? 'github' : 'list',
   use: {

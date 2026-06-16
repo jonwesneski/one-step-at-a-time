@@ -4,7 +4,7 @@ import '../index';
 import { DURATIONS, NOTES, OCTAVES } from '../utils';
 
 const meta: Meta = {
-  title: 'Components/MusicNote',
+  title: 'Components/Note',
   tags: ['autodocs'],
 };
 export default meta;

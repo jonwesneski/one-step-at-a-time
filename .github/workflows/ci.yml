@@ -14,8 +14,9 @@ jobs:
   main:
     name: PR Job
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    # getting some errors with v24 and installing playwright/chrome right now, so downgrading
+    # env:
+    #   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,7 +29,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: 'pnpm'
 
       # - name: Get pnpm store directory
@@ -55,7 +56,9 @@ jobs:
         run: pnpm exec nx run-many -t lint build typecheck test
 
       - name: Browser Tests
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          # suppressing stdout with: > /dev/null 
+          # suppressing stdout with: > /dev/null
           pnpm exec playwright install --with-deps > /dev/null
           pnpm exec nx run web-components:browser-test

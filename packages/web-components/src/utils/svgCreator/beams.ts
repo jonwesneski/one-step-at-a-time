@@ -178,6 +178,7 @@ import {
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
 import {
+  flagStemExtensionPx,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_STEM_X_OFFSET,
@@ -194,6 +195,12 @@ export type NoteYPosition = {
    * must be ≤ this value; for stem-down it must be ≥ this value.
    */
   chordClearanceY?: number;
+  /**
+   * Number of flags on this note (1 = eighth, 2 = sixteenth, 3 = 32nd, …).
+   * Required to correctly compute the stem-down tip Y, which grows by
+   * flagStemExtensionPx for each flag beyond the first.
+   */
+  flagCount?: number;
 };
 
 interface NoteData {
@@ -369,14 +376,15 @@ class BeamGroup {
     globalIndex: number,
     y: number,
     stemUp: boolean,
-    chordClearanceY?: number
+    chordClearanceY?: number,
+    flagCount = 1
   ): void {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
     this.#stemUp = stemUp;
     const tipOffset = stemUp
       ? NOTE_STEM_TIP_Y_OFFSET
-      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN + flagStemExtensionPx(flagCount);
     this.#notes[localIndex].y = y + tipOffset;
     if (chordClearanceY !== undefined) {
       this.#chordClearanceY[localIndex] = chordClearanceY;
@@ -573,9 +581,14 @@ export class BeamsBuilder {
 
   constructor(
     elements: NoteChordOrRestElementType[],
-    time: [BeatsInMeasure, BeatTypeInMeasure]
+    time: [BeatsInMeasure, BeatTypeInMeasure],
+    elementDurationFactors?: number[]
   ) {
-    const { groups, beamedIndices } = BeamsBuilder.#scan(elements, time);
+    const { groups, beamedIndices } = BeamsBuilder.#scan(
+      elements,
+      time,
+      elementDurationFactors
+    );
     this.#groups = groups;
     this.#beamedIndices = beamedIndices;
   }
@@ -596,7 +609,8 @@ export class BeamsBuilder {
 
   static #scan(
     elements: NoteChordOrRestElementType[],
-    time: [BeatsInMeasure, BeatTypeInMeasure]
+    time: [BeatsInMeasure, BeatTypeInMeasure],
+    elementDurationFactors?: number[]
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
     const [beats, beatType] = time;
     const measureDuration = beats / beatType;
@@ -608,13 +622,15 @@ export class BeamsBuilder {
     const beamedIndices = new Set<number>();
 
     // Whole-note-fraction offset at which each element starts.
+    // elementDurationFactors, when provided, supplies tuplet-scaled durations so
+    // that notes inside a tuplet are assigned to the correct beat window.
     const elementOffsets: number[] = [];
     let offset = 0;
-    for (const el of elements) {
+    for (let i = 0; i < elements.length; i++) {
       elementOffsets.push(offset);
-      const dur = (el.dataset.duration ??
-        el.getAttribute('duration')) as DurationType;
-      offset += durationToFactor[dur] ?? 0;
+      const dur = (elements[i].dataset.duration ??
+        elements[i].getAttribute('duration')) as DurationType;
+      offset += elementDurationFactors?.[i] ?? durationToFactor[dur] ?? 0;
     }
 
     // Flushes a completed consecutive run; creates a BeamGroup only when the run
@@ -708,7 +724,7 @@ export class BeamsBuilder {
       const pos = noteYPositions[i];
       if (pos === null) continue;
       for (const group of this.#groups) {
-        group.setY(i, pos.y, pos.stemUp, pos.chordClearanceY);
+        group.setY(i, pos.y, pos.stemUp, pos.chordClearanceY, pos.flagCount);
       }
     }
     const groupRenderers = this.#groups.map((g) => g.buildRenderer());

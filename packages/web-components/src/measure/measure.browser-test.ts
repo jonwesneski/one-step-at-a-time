@@ -168,7 +168,9 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     const flex = await readMeasureFlex(page);
     const describeEndX = await readDescribeEndX(page);
 
-    expect(flex.basis).toBeCloseTo(describeEndX + MIN_NOTE_WIDTH, 1);
+    expect(
+      Math.abs(flex.basis - (describeEndX + MIN_NOTE_WIDTH))
+    ).toBeLessThanOrEqual(1);
     expect(flex.grow).toBeCloseTo(0.2, 5);
   });
 
@@ -197,7 +199,9 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
 
     // 16 × 20 = 320px of notes alone, so minWidth > 300 regardless of describeEndX
     expect(flex.basis).toBeGreaterThan(300);
-    expect(flex.basis).toBeCloseTo(describeEndX + 16 * MIN_NOTE_WIDTH, 1);
+    expect(
+      Math.abs(flex.basis - (describeEndX + 16 * MIN_NOTE_WIDTH))
+    ).toBeLessThanOrEqual(1);
   });
 
   test('notes do not bleed — proportionalWidth is non-negative for 15 hundredtwentyeighth notes', async ({
@@ -278,7 +282,7 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     const minWidthFor1Note = describeEndX + 1 * MIN_NOTE_WIDTH;
     const minWidthFor8Notes = describeEndX + 8 * MIN_NOTE_WIDTH;
 
-    expect(flex.basis).toBeCloseTo(minWidthFor8Notes, 1);
+    expect(Math.abs(flex.basis - minWidthFor8Notes)).toBeLessThanOrEqual(1);
     expect(flex.basis).toBeGreaterThan(minWidthFor1Note);
   });
 

@@ -19,6 +19,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
 import './index';
+import '../tuplet/index';
 
 afterEach(() => {
   document.body.innerHTML = '';
