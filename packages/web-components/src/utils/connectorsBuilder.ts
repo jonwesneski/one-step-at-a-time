@@ -5,7 +5,10 @@ import {
   NoteLikeElementType,
 } from '../types/elements';
 import { createCurveSvg, CurveBulge } from './svgCreator';
-import { computeYHeadOffset } from './svgCreator/note';
+import {
+  computeYHeadOffset,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
+} from './svgCreator/note';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -197,6 +200,9 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
   return ref.getBoundingClientRect().top - rootRect.top;
 };
 
+// Notehead visual radius ≈ 4.3px (rotated ellipse + stroke). 5px clears the
+// edge so the arc endpoint visibly departs from the notehead per Gould's
+// "almost touch each notehead."
 const TIE_NOTEHEAD_OFFSET_PX = 5;
 const SLUR_NOTEHEAD_OFFSET_PX = 9;
 
@@ -261,12 +267,14 @@ const computeAnchor = (
 
   let y: number;
   if (note.tagName.toLowerCase() === 'music-chord') {
-    const yCoords = (note as unknown as ChordElementType).staffYCoordinates;
+    const chordElement = note as ChordElementType;
+    const yCoords = chordElement.staffYCoordinates;
     if (yCoords && yCoords.length > 0) {
       const noteheadY =
         bulge === 'above' ? Math.min(...yCoords) : Math.max(...yCoords);
-      const edgeOffset =
-        bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+      const edgeOffset = chordElement.stemUp
+        ? noteheadOffsetPx
+        : -noteheadOffsetPx;
       y = rect.top - rootRect.top + noteheadY + edgeOffset;
     } else {
       y =
@@ -276,13 +284,15 @@ const computeAnchor = (
     }
   } else {
     const noteEl = note as unknown as NoteElementType;
-    const noteheadY = computeYHeadOffset(
-      noteEl.stemUp,
-      noteEl.duration,
-      noteEl.noFlags
-    );
-    const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
-    y = rect.top - rootRect.top + noteheadY + edgeOffset;
+    // computeYHeadOffset includes NOTE_HEAD_Y_OFFSET_CORRECTION (+10), a CSS
+    // positioning fudge that makes rect.top + noteheadY land on the staff line,
+    // not the notehead pixel center. Subtract it to get the actual notehead
+    // center within the SVG viewport before applying the edge offset.
+    const noteheadCenterPx =
+      computeYHeadOffset(noteEl.stemUp, noteEl.duration, noteEl.noFlags) -
+      NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const edgeOffset = noteEl.stemUp ? noteheadOffsetPx : -noteheadOffsetPx;
+    y = rect.top - rootRect.top + noteheadCenterPx + edgeOffset;
   }
 
   return {
@@ -310,8 +320,8 @@ const pickBulge = (note: NoteLikeElementType): CurveBulge => {
       ? note.parentElement
       : note;
 
-  const stemUp = (sourceElement as unknown as { stemUp?: boolean }).stemUp;
-  return stemUp === false ? 'above' : 'below';
+  const stemUp = (sourceElement as NoteElementType | ChordElementType).stemUp;
+  return stemUp ? 'below' : 'above';
 };
 
 // For chord ties: each note's tie curves outward from the chord's vertical midpoint
@@ -351,7 +361,8 @@ export const buildConnectorSvgs = (
   const elements: SVGGElement[] = [];
 
   for (const pair of pairs) {
-    const bulge = pickBulge(pair.start);
+    const startBulge = pickBulge(pair.start);
+    const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
     const style = pair.kind === 'slide' ? 'straight' : 'smooth';
     const label = CONNECTOR_LABELS[pair.kind];
 
@@ -369,6 +380,7 @@ export const buildConnectorSvgs = (
 
       for (let i = 0; i < count; i++) {
         const noteBulge = pickChordNoteBulge(pair.start, startCoords, i);
+        const noteEndBulge = pickChordNoteBulge(pair.end, endCoords, i);
         const startAnchor = computeAnchorAtSpecificY(
           pair.start,
           rootRect,
@@ -379,7 +391,7 @@ export const buildConnectorSvgs = (
         const endAnchor = computeAnchorAtSpecificY(
           pair.end,
           rootRect,
-          noteBulge,
+          noteEndBulge,
           endCoords[i],
           TIE_NOTEHEAD_OFFSET_PX
         );
@@ -423,13 +435,13 @@ export const buildConnectorSvgs = (
     const startAnchor = computeAnchor(
       pair.start,
       rootRect,
-      bulge,
+      startBulge,
       noteheadOffsetPx
     );
     const endAnchor = computeAnchor(
       pair.end,
       rootRect,
-      bulge,
+      endBulge,
       noteheadOffsetPx
     );
 
@@ -438,7 +450,7 @@ export const buildConnectorSvgs = (
         createCurveSvg({
           from: { x: startAnchor.x, y: startAnchor.y },
           to: { x: endAnchor.x, y: endAnchor.y },
-          bulge,
+          bulge: startBulge,
           label,
           style,
           nestingLevel: pair.nestingLevel,
@@ -452,7 +464,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: startAnchor.x, y: startAnchor.y },
         to: { x: rowRight, y: startAnchor.y },
-        bulge,
+        bulge: startBulge,
         label,
         style,
         nestingLevel: pair.nestingLevel,
@@ -462,7 +474,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: rowLeft, y: endAnchor.y },
         to: { x: endAnchor.x, y: endAnchor.y },
-        bulge,
+        bulge: endBulge,
         style,
         nestingLevel: pair.nestingLevel,
       })
