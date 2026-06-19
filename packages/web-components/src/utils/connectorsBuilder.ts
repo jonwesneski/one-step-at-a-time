@@ -4,6 +4,12 @@ import {
   NoteElementType,
   NoteLikeElementType,
 } from '../types/elements';
+import {
+  MUSIC_CHORD,
+  MUSIC_GUITAR_NOTE,
+  MUSIC_MEASURE,
+  MUSIC_NOTE,
+} from './consts';
 import { createCurveSvg, CurveBulge } from './svgCreator';
 import {
   computeYHeadOffset,
@@ -50,14 +56,17 @@ export const collectNoteLikeElements = (
   root: ParentNode
 ): NoteLikeElementType[] => {
   const chordChildSelectors = Object.values(CONNECTOR_ATTRS)
-    .map((attr) => `music-chord music-note[${attr}]`)
+    .map((attr) => `${MUSIC_CHORD} ${MUSIC_NOTE}[${attr}]`)
     .join(', ');
-  const selector = `music-note:not(music-chord music-note), music-guitar-note, music-chord, ${chordChildSelectors}`;
+  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
   return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
 };
 
-const readRole = (el: HTMLElement, attr: string): ConnectorRole | null => {
-  const raw = el.getAttribute(attr);
+const readRole = (
+  element: HTMLElement,
+  attribute: string
+): ConnectorRole | null => {
+  const raw = element.getAttribute(attribute);
   if (raw === 'start' || raw === 'end') {
     return raw;
   }
@@ -71,8 +80,8 @@ const validateTiePitch = (
   // Only apply to classical music-note elements; guitar notes tie by string/fret
   // match rather than pitch, which we skip here (warning only helps classical).
   if (
-    start.tagName.toLowerCase() !== 'music-note' ||
-    end.tagName.toLowerCase() !== 'music-note'
+    start.tagName.toLowerCase() !== MUSIC_NOTE ||
+    end.tagName.toLowerCase() !== MUSIC_NOTE
   ) {
     return undefined;
   }
@@ -195,7 +204,7 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
   // so it cannot be used for row detection. The containing <music-measure>
   // is what wraps in the composition's flex grid, so its top reflects the
   // actual visual row.
-  const measure = note.closest('music-measure') as HTMLElement | null;
+  const measure = note.closest(MUSIC_MEASURE) as HTMLElement | null;
   const ref = measure ?? note;
   return ref.getBoundingClientRect().top - rootRect.top;
 };
@@ -231,12 +240,12 @@ const computeAnchor = (
 ): Anchor => {
   // Notes inside a chord have no layout box — anchor via parent chord geometry.
   if (
-    note.tagName.toLowerCase() === 'music-note' &&
-    note.parentElement?.tagName.toLowerCase() === 'music-chord'
+    note.tagName.toLowerCase() === MUSIC_NOTE &&
+    note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
   ) {
     const chord = note.parentElement as unknown as ChordElementType;
     const chordRect = chord.getBoundingClientRect();
-    const chordNotes = Array.from(chord.querySelectorAll('music-note'));
+    const chordNotes = Array.from(chord.querySelectorAll(MUSIC_NOTE));
     const noteIndex = chordNotes.indexOf(note as unknown as Element);
     const yCoords = chord.staffYCoordinates;
 
@@ -256,7 +265,7 @@ const computeAnchor = (
 
   // Guitar notes render their fret text at the top of the element box;
   // apply the notehead offset directly from rect.top so the curve clears the number.
-  if (note.tagName.toLowerCase() === 'music-guitar-note') {
+  if (note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE) {
     const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
     return {
       x: centerX,
@@ -266,7 +275,7 @@ const computeAnchor = (
   }
 
   let y: number;
-  if (note.tagName.toLowerCase() === 'music-chord') {
+  if (note.tagName.toLowerCase() === MUSIC_CHORD) {
     const chordElement = note as ChordElementType;
     const yCoords = chordElement.staffYCoordinates;
     if (yCoords && yCoords.length > 0) {
@@ -309,14 +318,14 @@ const pickBulge = (note: NoteLikeElementType): CurveBulge => {
   // Stems up → notehead on the staff, bulge above (opposite side of stem tip? no,
   // ties/slurs bulge AWAY from the stem — stems up = curve below; stems down = curve above).
   // For guitar tab there are no stems, default to above.
-  if (note.tagName.toLowerCase() === 'music-guitar-note') {
+  if (note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE) {
     return 'above';
   }
 
   // For notes inside a chord, stemUp is set on the chord element, not the note.
   const sourceElement =
-    note.tagName.toLowerCase() === 'music-note' &&
-    note.parentElement?.tagName.toLowerCase() === 'music-chord'
+    note.tagName.toLowerCase() === MUSIC_NOTE &&
+    note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
       ? note.parentElement
       : note;
 
@@ -368,8 +377,8 @@ export const buildConnectorSvgs = (
 
     const isChordTie =
       pair.kind === 'tie' &&
-      pair.start.tagName.toLowerCase() === 'music-chord' &&
-      pair.end.tagName.toLowerCase() === 'music-chord';
+      pair.start.tagName.toLowerCase() === MUSIC_CHORD &&
+      pair.end.tagName.toLowerCase() === MUSIC_CHORD;
 
     if (isChordTie) {
       const startCoords =

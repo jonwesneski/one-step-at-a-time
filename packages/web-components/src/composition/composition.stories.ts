@@ -181,14 +181,14 @@ export const WithTies: Story = {
             tie="end"
           ></music-note>
           <music-note
-            note="E"
-            octave="5"
+            note="C"
+            octave="4"
             duration="quarter"
             tie="start"
           ></music-note>
           <music-note
-            note="E"
-            octave="5"
+            note="C"
+            octave="4"
             duration="quarter"
             tie="end"
           ></music-note>
@@ -227,16 +227,16 @@ export const WithSlurs: Story = {
             slur="end"
           ></music-note>
           <music-note
-            note="G"
-            octave="5"
+            note="C"
+            octave="4"
             duration="eighth"
             slur="start"
           ></music-note>
-          <music-note note="A" octave="5" duration="eighth"></music-note>
-          <music-note note="B" octave="5" duration="eighth"></music-note>
+          <music-note note="D" octave="4" duration="eighth"></music-note>
+          <music-note note="E" octave="4" duration="eighth"></music-note>
           <music-note
-            note="C"
-            octave="6"
+            note="F"
+            octave="4"
             duration="eighth"
             slur="end"
           ></music-note>
