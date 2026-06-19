@@ -3,9 +3,15 @@
  */
 import '@/src/index';
 
-import { NoteLikeElementType } from '../types/elements';
-import { collectNoteLikeElements, pairConnectors } from './connectorsBuilder';
+import { NoteElementType, NoteLikeElementType } from '../types/elements';
+import {
+  buildConnectorSvgs,
+  collectNoteLikeElements,
+  ConnectorPair,
+  pairConnectors,
+} from './connectorsBuilder';
 import { MUSIC_GUITAR_NOTE, MUSIC_NOTE } from './consts';
+import { DurationType } from '../types/theory';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -170,5 +176,157 @@ describe('pairConnectors', () => {
     const pairs = pairConnectors([a, b]);
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('hammer-on');
+  });
+});
+
+describe('buildConnectorSvgs', () => {
+  const rootRect = {
+    top: 0,
+    left: 0,
+    right: 1000,
+    bottom: 500,
+    width: 1000,
+    height: 500,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect;
+
+  const makeLayoutNote = (opts: {
+    stemUp: boolean;
+    left?: number;
+    top?: number;
+  }): NoteElementType => {
+    const el = document.createElement(MUSIC_NOTE);
+    const left = opts.left ?? 50;
+    const top = opts.top ?? 100;
+    const rect = {
+      top,
+      bottom: top + 20,
+      left,
+      right: left + 20,
+      width: 20,
+      height: 20,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect;
+    jest.spyOn(el, 'getBoundingClientRect').mockReturnValue(rect);
+    Object.defineProperty(el, 'stemUp', {
+      get: () => opts.stemUp,
+      configurable: true,
+    });
+    Object.defineProperty(el, 'duration', {
+      get: (): DurationType => 'quarter',
+      configurable: true,
+    });
+    Object.defineProperty(el, 'noFlags', {
+      get: () => false,
+      configurable: true,
+    });
+    return el as unknown as NoteElementType;
+  };
+
+  const parsePath = (d: string) => {
+    const mMatch = d.match(/^M (\S+) (\S+)/);
+    const qMatch = d.match(/Q (\S+) (\S+) (\S+) (\S+)$/);
+    return {
+      fromX: Number(mMatch![1]),
+      fromY: Number(mMatch![2]),
+      cx: Number(qMatch![1]),
+      cy: Number(qMatch![2]),
+      toX: Number(qMatch![3]),
+      toY: Number(qMatch![4]),
+    };
+  };
+
+  it('stem-up note produces a tie that bulges below (control point y > anchor y)', () => {
+    const startNote = makeLayoutNote({ stemUp: true, left: 50 });
+    const endNote = makeLayoutNote({ stemUp: true, left: 150 });
+    const pair: ConnectorPair = {
+      kind: 'tie',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+    };
+
+    const [svgGroup] = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
+    const { fromY, cy } = parsePath(d);
+    expect(cy).toBeGreaterThan(fromY);
+  });
+
+  it('stem-down note produces a tie that bulges above (control point y < anchor y)', () => {
+    const startNote = makeLayoutNote({ stemUp: false, left: 50 });
+    const endNote = makeLayoutNote({ stemUp: false, left: 150 });
+    const pair: ConnectorPair = {
+      kind: 'tie',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+    };
+
+    const [svgGroup] = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
+    const { fromY, cy } = parsePath(d);
+    expect(cy).toBeLessThan(fromY);
+  });
+
+  it('tie anchors use each note own stem direction for y-offset independently', () => {
+    // start stemUp=true: anchor pushed below notehead center (+5px offset) → y=142
+    // end stemUp=false: anchor pushed above notehead center (-5px offset) → y=99
+    // Both notes at same rect.top=100 so fromY ≠ toY.
+    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
+    const endNote = makeLayoutNote({ stemUp: false, left: 150, top: 100 });
+    const pair: ConnectorPair = {
+      kind: 'tie',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+    };
+
+    const [svgGroup] = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
+    const { fromY, toY } = parsePath(d);
+    // stemUp=true anchor is further below than stemUp=false anchor for same rect.top
+    expect(fromY).toBeGreaterThan(toY);
+  });
+
+  it('slur uses start note stem direction for curve direction regardless of end note stem direction', () => {
+    // start stemUp=true (startBulge='below'), end stemUp=false (would be 'above' if independent)
+    // slur keeps startBulge for createCurveSvg → control point must be below the midpoint
+    const startNote = makeLayoutNote({ stemUp: true, left: 50 });
+    const endNote = makeLayoutNote({ stemUp: false, left: 150 });
+    const pair: ConnectorPair = {
+      kind: 'slur',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+    };
+
+    const [svgGroup] = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
+    const { fromY, cy, toY } = parsePath(d);
+    expect(cy).toBeGreaterThan((fromY + toY) / 2);
   });
 });

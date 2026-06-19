@@ -807,4 +807,196 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
 
     expect(mutationCount).toBeLessThanOrEqual(4);
   });
+
+  test('cross measure ties — single connector arcs above on same row then splits into two segments on cross-row after resize', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '1200px';
+
+        const composition = document.createElement(compositionTag);
+
+        // Measure 1: C5 E5 G5 filler + C5 quarter tie=start
+        const measure1 = document.createElement(measureTag);
+        const staff1 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['C', '5'],
+          ['E', '5'],
+          ['G', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff1.appendChild(n);
+        }
+        const tieStart = document.createElement(noteTag);
+        tieStart.setAttribute('note', 'C');
+        tieStart.setAttribute('octave', '5');
+        tieStart.setAttribute('duration', 'quarter');
+        tieStart.setAttribute('tie', 'start');
+        staff1.appendChild(tieStart);
+        measure1.appendChild(staff1);
+
+        // Measure 2: C5 half tie=end + E5 G5 filler
+        const measure2 = document.createElement(measureTag);
+        const staff2 = document.createElement(staffTag);
+        const tieEnd = document.createElement(noteTag);
+        tieEnd.setAttribute('note', 'C');
+        tieEnd.setAttribute('octave', '5');
+        tieEnd.setAttribute('duration', 'half');
+        tieEnd.setAttribute('tie', 'end');
+        staff2.appendChild(tieEnd);
+        for (const [note, octave] of [
+          ['E', '5'],
+          ['G', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff2.appendChild(n);
+        }
+        measure2.appendChild(staff2);
+
+        composition.appendChild(measure1);
+        composition.appendChild(measure2);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    // --- Phase 1: same row ---
+    const sameRow = await page.evaluate(
+      ({ compositionTag, noteTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const overlay = composition.shadowRoot.querySelector(
+          '.connectors-overlay'
+        );
+        // Path coordinates are relative to .composition-wrapper (the rootRect used
+        // in buildConnectorSvgs), not the composition element itself.
+        const wrapper = composition.shadowRoot.querySelector(
+          '.composition-wrapper'
+        );
+        if (overlay === null || wrapper === null) {
+          throw new Error('overlay or wrapper missing');
+        }
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const paths = Array.from(
+          overlay.querySelectorAll('path')
+        ) as SVGPathElement[];
+        const notes = Array.from(
+          composition.querySelectorAll(noteTag)
+        ) as HTMLElement[];
+
+        // notes[3] = tie-start (4th note), notes[4] = tie-end (5th note)
+        const startNoteRect = notes[3].getBoundingClientRect();
+        const endNoteRect = notes[4].getBoundingClientRect();
+        const startNoteCenterX =
+          startNoteRect.left - wrapperRect.left + startNoteRect.width / 2;
+        const endNoteCenterX =
+          endNoteRect.left - wrapperRect.left + endNoteRect.width / 2;
+
+        const d = paths[0]?.getAttribute('d') ?? '';
+        const mMatch = d.match(/^M (\S+) (\S+)/);
+        const qMatch = d.match(/Q (\S+) (\S+) (\S+) (\S+)$/);
+
+        return {
+          pathCount: paths.length,
+          fromX: Number(mMatch?.[1] ?? '0'),
+          fromY: Number(mMatch?.[2] ?? '0'),
+          cx: Number(qMatch?.[1] ?? '0'),
+          cy: Number(qMatch?.[2] ?? '0'),
+          toX: Number(qMatch?.[3] ?? '0'),
+          toY: Number(qMatch?.[4] ?? '0'),
+          startNoteCenterX,
+          endNoteCenterX,
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION, noteTag: MUSIC_NOTE }
+    );
+
+    // One connector — both notes are on the same row
+    expect(sameRow.pathCount).toBe(1);
+
+    // Connector x-range spans from near the start note to near the end note
+    expect(Math.abs(sameRow.fromX - sameRow.startNoteCenterX)).toBeLessThan(20);
+    expect(Math.abs(sameRow.toX - sameRow.endNoteCenterX)).toBeLessThan(20);
+
+    // C5 is above the staff middle line → stem-down → tie must arc ABOVE the notehead
+    expect(sameRow.cy).toBeLessThan(sameRow.fromY);
+    expect(sameRow.cy).toBeLessThan(sameRow.toY);
+
+    // --- Phase 2: cross-row after resize ---
+    await resizeHost(page, 200);
+    await waitForRedrawCycle(page);
+
+    const crossRow = await page.evaluate(
+      ({ compositionTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const overlay = composition.shadowRoot.querySelector(
+          '.connectors-overlay'
+        );
+        if (overlay === null) {
+          throw new Error('overlay missing');
+        }
+        const paths = Array.from(
+          overlay.querySelectorAll('path')
+        ) as SVGPathElement[];
+
+        const parseSegment = (d: string) => {
+          const mMatch = d.match(/^M (\S+) (\S+)/);
+          const qMatch = d.match(/Q (\S+) (\S+) (\S+) (\S+)$/);
+          return {
+            fromX: Number(mMatch?.[1] ?? '0'),
+            fromY: Number(mMatch?.[2] ?? '0'),
+            cx: Number(qMatch?.[1] ?? '0'),
+            cy: Number(qMatch?.[2] ?? '0'),
+            toX: Number(qMatch?.[3] ?? '0'),
+            toY: Number(qMatch?.[4] ?? '0'),
+          };
+        };
+
+        return {
+          pathCount: paths.length,
+          first: parseSegment(paths[0]?.getAttribute('d') ?? ''),
+          second: parseSegment(paths[1]?.getAttribute('d') ?? ''),
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION }
+    );
+
+    // Cross-row produces two path segments
+    expect(crossRow.pathCount).toBe(2);
+
+    // First segment: runs from the start-note anchor to the row-right edge
+    expect(crossRow.first.toX).toBeGreaterThan(crossRow.first.fromX);
+
+    // Second segment: starts at the row-left edge (notes area start, after the
+    // clef — typically ~40-80px from the left)
+    expect(crossRow.second.fromX).toBeLessThan(100);
+
+    // Both segments arc above (cy < fromY) — C5 is stem-down
+    expect(crossRow.first.cy).toBeLessThan(crossRow.first.fromY);
+    expect(crossRow.second.cy).toBeLessThan(crossRow.second.fromY);
+  });
 });

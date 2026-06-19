@@ -4,8 +4,17 @@ import {
   NoteElementType,
   NoteLikeElementType,
 } from '../types/elements';
+import {
+  MUSIC_CHORD,
+  MUSIC_GUITAR_NOTE,
+  MUSIC_MEASURE,
+  MUSIC_NOTE,
+} from './consts';
 import { createCurveSvg, CurveBulge } from './svgCreator';
-import { computeYHeadOffset } from './svgCreator/note';
+import {
+  computeYHeadOffset,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
+} from './svgCreator/note';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -47,14 +56,17 @@ export const collectNoteLikeElements = (
   root: ParentNode
 ): NoteLikeElementType[] => {
   const chordChildSelectors = Object.values(CONNECTOR_ATTRS)
-    .map((attr) => `music-chord music-note[${attr}]`)
+    .map((attr) => `${MUSIC_CHORD} ${MUSIC_NOTE}[${attr}]`)
     .join(', ');
-  const selector = `music-note:not(music-chord music-note), music-guitar-note, music-chord, ${chordChildSelectors}`;
+  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
   return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
 };
 
-const readRole = (el: HTMLElement, attr: string): ConnectorRole | null => {
-  const raw = el.getAttribute(attr);
+const readRole = (
+  element: HTMLElement,
+  attribute: string
+): ConnectorRole | null => {
+  const raw = element.getAttribute(attribute);
   if (raw === 'start' || raw === 'end') {
     return raw;
   }
@@ -68,8 +80,8 @@ const validateTiePitch = (
   // Only apply to classical music-note elements; guitar notes tie by string/fret
   // match rather than pitch, which we skip here (warning only helps classical).
   if (
-    start.tagName.toLowerCase() !== 'music-note' ||
-    end.tagName.toLowerCase() !== 'music-note'
+    start.tagName.toLowerCase() !== MUSIC_NOTE ||
+    end.tagName.toLowerCase() !== MUSIC_NOTE
   ) {
     return undefined;
   }
@@ -192,11 +204,14 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
   // so it cannot be used for row detection. The containing <music-measure>
   // is what wraps in the composition's flex grid, so its top reflects the
   // actual visual row.
-  const measure = note.closest('music-measure') as HTMLElement | null;
+  const measure = note.closest(MUSIC_MEASURE) as HTMLElement | null;
   const ref = measure ?? note;
   return ref.getBoundingClientRect().top - rootRect.top;
 };
 
+// Notehead visual radius ≈ 4.3px (rotated ellipse + stroke). 5px clears the
+// edge so the arc endpoint visibly departs from the notehead per Gould's
+// "almost touch each notehead."
 const TIE_NOTEHEAD_OFFSET_PX = 5;
 const SLUR_NOTEHEAD_OFFSET_PX = 9;
 
@@ -225,12 +240,12 @@ const computeAnchor = (
 ): Anchor => {
   // Notes inside a chord have no layout box — anchor via parent chord geometry.
   if (
-    note.tagName.toLowerCase() === 'music-note' &&
-    note.parentElement?.tagName.toLowerCase() === 'music-chord'
+    note.tagName.toLowerCase() === MUSIC_NOTE &&
+    note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
   ) {
     const chord = note.parentElement as unknown as ChordElementType;
     const chordRect = chord.getBoundingClientRect();
-    const chordNotes = Array.from(chord.querySelectorAll('music-note'));
+    const chordNotes = Array.from(chord.querySelectorAll(MUSIC_NOTE));
     const noteIndex = chordNotes.indexOf(note as unknown as Element);
     const yCoords = chord.staffYCoordinates;
 
@@ -250,7 +265,7 @@ const computeAnchor = (
 
   // Guitar notes render their fret text at the top of the element box;
   // apply the notehead offset directly from rect.top so the curve clears the number.
-  if (note.tagName.toLowerCase() === 'music-guitar-note') {
+  if (note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE) {
     const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
     return {
       x: centerX,
@@ -260,13 +275,15 @@ const computeAnchor = (
   }
 
   let y: number;
-  if (note.tagName.toLowerCase() === 'music-chord') {
-    const yCoords = (note as unknown as ChordElementType).staffYCoordinates;
+  if (note.tagName.toLowerCase() === MUSIC_CHORD) {
+    const chordElement = note as ChordElementType;
+    const yCoords = chordElement.staffYCoordinates;
     if (yCoords && yCoords.length > 0) {
       const noteheadY =
         bulge === 'above' ? Math.min(...yCoords) : Math.max(...yCoords);
-      const edgeOffset =
-        bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+      const edgeOffset = chordElement.stemUp
+        ? noteheadOffsetPx
+        : -noteheadOffsetPx;
       y = rect.top - rootRect.top + noteheadY + edgeOffset;
     } else {
       y =
@@ -276,13 +293,15 @@ const computeAnchor = (
     }
   } else {
     const noteEl = note as unknown as NoteElementType;
-    const noteheadY = computeYHeadOffset(
-      noteEl.stemUp,
-      noteEl.duration,
-      noteEl.noFlags
-    );
-    const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
-    y = rect.top - rootRect.top + noteheadY + edgeOffset;
+    // computeYHeadOffset includes NOTE_HEAD_Y_OFFSET_CORRECTION (+10), a CSS
+    // positioning fudge that makes rect.top + noteheadY land on the staff line,
+    // not the notehead pixel center. Subtract it to get the actual notehead
+    // center within the SVG viewport before applying the edge offset.
+    const noteheadCenterPx =
+      computeYHeadOffset(noteEl.stemUp, noteEl.duration, noteEl.noFlags) -
+      NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const edgeOffset = noteEl.stemUp ? noteheadOffsetPx : -noteheadOffsetPx;
+    y = rect.top - rootRect.top + noteheadCenterPx + edgeOffset;
   }
 
   return {
@@ -299,19 +318,19 @@ const pickBulge = (note: NoteLikeElementType): CurveBulge => {
   // Stems up → notehead on the staff, bulge above (opposite side of stem tip? no,
   // ties/slurs bulge AWAY from the stem — stems up = curve below; stems down = curve above).
   // For guitar tab there are no stems, default to above.
-  if (note.tagName.toLowerCase() === 'music-guitar-note') {
+  if (note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE) {
     return 'above';
   }
 
   // For notes inside a chord, stemUp is set on the chord element, not the note.
   const sourceElement =
-    note.tagName.toLowerCase() === 'music-note' &&
-    note.parentElement?.tagName.toLowerCase() === 'music-chord'
+    note.tagName.toLowerCase() === MUSIC_NOTE &&
+    note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
       ? note.parentElement
       : note;
 
-  const stemUp = (sourceElement as unknown as { stemUp?: boolean }).stemUp;
-  return stemUp === false ? 'above' : 'below';
+  const stemUp = (sourceElement as NoteElementType | ChordElementType).stemUp;
+  return stemUp ? 'below' : 'above';
 };
 
 // For chord ties: each note's tie curves outward from the chord's vertical midpoint
@@ -351,14 +370,15 @@ export const buildConnectorSvgs = (
   const elements: SVGGElement[] = [];
 
   for (const pair of pairs) {
-    const bulge = pickBulge(pair.start);
+    const startBulge = pickBulge(pair.start);
+    const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
     const style = pair.kind === 'slide' ? 'straight' : 'smooth';
     const label = CONNECTOR_LABELS[pair.kind];
 
     const isChordTie =
       pair.kind === 'tie' &&
-      pair.start.tagName.toLowerCase() === 'music-chord' &&
-      pair.end.tagName.toLowerCase() === 'music-chord';
+      pair.start.tagName.toLowerCase() === MUSIC_CHORD &&
+      pair.end.tagName.toLowerCase() === MUSIC_CHORD;
 
     if (isChordTie) {
       const startCoords =
@@ -369,6 +389,7 @@ export const buildConnectorSvgs = (
 
       for (let i = 0; i < count; i++) {
         const noteBulge = pickChordNoteBulge(pair.start, startCoords, i);
+        const noteEndBulge = pickChordNoteBulge(pair.end, endCoords, i);
         const startAnchor = computeAnchorAtSpecificY(
           pair.start,
           rootRect,
@@ -379,7 +400,7 @@ export const buildConnectorSvgs = (
         const endAnchor = computeAnchorAtSpecificY(
           pair.end,
           rootRect,
-          noteBulge,
+          noteEndBulge,
           endCoords[i],
           TIE_NOTEHEAD_OFFSET_PX
         );
@@ -423,13 +444,13 @@ export const buildConnectorSvgs = (
     const startAnchor = computeAnchor(
       pair.start,
       rootRect,
-      bulge,
+      startBulge,
       noteheadOffsetPx
     );
     const endAnchor = computeAnchor(
       pair.end,
       rootRect,
-      bulge,
+      endBulge,
       noteheadOffsetPx
     );
 
@@ -438,7 +459,7 @@ export const buildConnectorSvgs = (
         createCurveSvg({
           from: { x: startAnchor.x, y: startAnchor.y },
           to: { x: endAnchor.x, y: endAnchor.y },
-          bulge,
+          bulge: startBulge,
           label,
           style,
           nestingLevel: pair.nestingLevel,
@@ -452,7 +473,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: startAnchor.x, y: startAnchor.y },
         to: { x: rowRight, y: startAnchor.y },
-        bulge,
+        bulge: startBulge,
         label,
         style,
         nestingLevel: pair.nestingLevel,
@@ -462,7 +483,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: rowLeft, y: endAnchor.y },
         to: { x: endAnchor.x, y: endAnchor.y },
-        bulge,
+        bulge: endBulge,
         style,
         nestingLevel: pair.nestingLevel,
       })
