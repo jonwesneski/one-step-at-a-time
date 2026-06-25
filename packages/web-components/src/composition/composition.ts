@@ -229,21 +229,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
+    #computeNotesAreaLeftForStaff(
+      staff: HTMLElement,
+      rootRect: DOMRect
+    ): number {
+      const describeContainer = staff.shadowRoot?.querySelector(
+        '.describe-container'
+      );
+      if (!describeContainer) {
+        return 0;
+      }
+      return describeContainer.getBoundingClientRect().right - rootRect.left;
+    }
+
     #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
       const staff = element.closest(
         `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}`
       ) as HTMLElement | null;
-      if (!staff?.shadowRoot) {
+      if (!staff) {
         return 0;
       }
-      const dynamicsContainer = staff.shadowRoot.querySelector(
-        '.dynamics-container'
-      );
-      if (!dynamicsContainer) {
-        return 0;
-      }
-      const containerRect = dynamicsContainer.getBoundingClientRect();
-      return containerRect.top - rootRect.top + DYNAMICS_BASELINE_Y;
+      const staffRect = staff.getBoundingClientRect();
+      return staffRect.top - rootRect.top + DYNAMICS_BASELINE_Y;
     }
 
     #redrawHairpins() {
@@ -269,16 +276,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const pairs = pairHairpins(elements);
       const rootRect = wrapper.getBoundingClientRect();
-      const rowLeft = this.#computeNotesAreaLeft(rootRect);
-      const rowRight = rootRect.width;
 
       for (const pair of pairs) {
         const startElement = pair.startElement as unknown as Element;
         const endElement = pair.endElement as unknown as Element;
 
         // Skip intra-staff pairs — they are already rendered by the staff itself
-        const startStaff = startElement.closest(staffSelector);
-        const endStaff = endElement.closest(staffSelector);
+        const startStaff = startElement.closest(
+          staffSelector
+        ) as HTMLElement | null;
+        const endStaff = endElement.closest(
+          staffSelector
+        ) as HTMLElement | null;
         if (startStaff !== null && startStaff === endStaff) {
           continue;
         }
@@ -300,14 +309,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const startCenterY = this.#getDynamicsBaselineY(startElement, rootRect);
         const endCenterY = this.#getDynamicsBaselineY(endElement, rootRect);
 
+        // Use each staff's actual bounding rect so the hairpin ends exactly at
+        // the barline (staff right edge) and begins exactly at the notes-area
+        // left edge of the continuation row, regardless of composition width.
+        const pairRowRight = startStaff
+          ? startStaff.getBoundingClientRect().right - rootRect.left
+          : rootRect.width;
+        const pairRowLeft = endStaff
+          ? this.#computeNotesAreaLeftForStaff(endStaff, rootRect)
+          : this.#computeNotesAreaLeft(rootRect);
+
         const segments = resolveHairpinSegments(
           pair,
           startBounds,
           endBounds,
           startCenterY,
           endCenterY,
-          rowLeft,
-          rowRight
+          pairRowLeft,
+          pairRowRight
         );
 
         for (const segment of segments) {

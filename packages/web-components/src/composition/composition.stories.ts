@@ -457,7 +457,7 @@ export const ChordWithTie: Story = {
 
 export const WithCrossSystemHairpin: Story = {
   render: () => html`
-    <div style="max-width: 420px;">
+    <div style="max-width: 200px;">
       <music-composition keySig="C" mode="major" time="4/4">
         <music-measure>
           <music-staff-treble keySig="C" mode="major" time="4/4">
