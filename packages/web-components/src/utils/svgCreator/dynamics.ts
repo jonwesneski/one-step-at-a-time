@@ -53,8 +53,8 @@ export function createHairpinSvg(
   endX: number,
   centerY: number,
   openHeight: number = HAIRPIN_OPEN_HEIGHT,
-  openAtStart: boolean = false,
-  openAtEnd: boolean = false
+  openAtStart = false,
+  openAtEnd = false
 ): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('hairpin');
