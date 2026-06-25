@@ -26,3 +26,4 @@ export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
 export { createSharpSvg } from './sharp';
 export { createTimeSignatureSvg } from './timeSignature';
 export { createTupletBracketSvg } from './tuplet';
+export { createDynamicMarkingSvg, createHairpinSvg } from './dynamics';

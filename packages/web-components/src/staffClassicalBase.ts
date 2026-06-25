@@ -4,6 +4,7 @@ import {
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { getNoteDynamic, pairHairpins } from './rules/dynamicsRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
@@ -19,6 +20,8 @@ import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
   ChordNote,
+  IChordElement,
+  INoteElement,
   NoteChordOrRestElementType,
   NoteElementType,
   NoteLetterOctave,
@@ -37,7 +40,9 @@ import {
 import {
   BeamsBuilder,
   computeYHeadOffset,
+  createDynamicMarkingSvg,
   createFlatSvg,
+  createHairpinSvg,
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
@@ -56,6 +61,8 @@ import {
 } from './utils/consts';
 import {
   CLEF_X_OFFSET,
+  DYNAMICS_BASELINE_Y,
+  HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
@@ -154,6 +161,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     SVG_NS,
     'svg'
   ) as SVGSVGElement;
+  #dynamicsContainer: SVGSVGElement = document.createElementNS(
+    SVG_NS,
+    'svg'
+  ) as SVGSVGElement;
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteChordOrRestElementType[] = [];
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
@@ -169,6 +180,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
   #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
   #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
+  #boundRenderDynamics = () => {
+    this.#dynamicsContainer.innerHTML = '';
+    this.#renderDynamics();
+  };
   #boundNoteYChange = () => {
     if (this.#currentElements.length > 0) {
       this.#renderNotes(this.#currentElements);
@@ -329,6 +344,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#boundDrawConnectors
     );
     this.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
+    this.addEventListener(
+      NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
+      this.#boundRenderDynamics
+    );
   }
 
   #enableDrag() {
@@ -545,6 +564,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#tupletContainer.style.overflow = 'visible';
     this.#tupletContainer.style.pointerEvents = 'none';
     this.transcribeContainer.appendChild(this.#tupletContainer);
+
+    this.#dynamicsContainer.classList.add('dynamics-container');
+    this.#dynamicsContainer.style.overflow = 'visible';
+    this.#dynamicsContainer.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(this.#dynamicsContainer);
   }
 
   #refreshDescribe() {
@@ -631,6 +655,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#boundDrawConnectors
     );
     this.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
+    this.removeEventListener(
+      NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
+      this.#boundRenderDynamics
+    );
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
     } catch (e) {
@@ -718,9 +746,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Cancel any in-progress drag before clearing rendered content
     this.#noteTimingDragHandler?.cancelDrag();
 
-    // Clear previously rendered beams and tuplet brackets
+    // Clear previously rendered beams, tuplet brackets, and dynamics
     this.#beamsContainer.innerHTML = '';
     this.#tupletContainer.innerHTML = '';
+    this.#dynamicsContainer.innerHTML = '';
 
     const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
     // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
@@ -1183,6 +1212,57 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#tupletContainer.innerHTML = '';
     for (const geometry of allGeometries) {
       this.#tupletContainer.appendChild(createTupletBracketSvg(geometry));
+    }
+
+    this.#dynamicsContainer.setAttribute('x', `${this.#describeEndX}`);
+    this.#dynamicsContainer.setAttribute('width', `${remainingWidth}`);
+    this.#dynamicsContainer.setAttribute(
+      'viewBox',
+      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#dynamicsContainer.setAttribute(
+      'height',
+      `${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#dynamicsContainer.innerHTML = '';
+    this.#renderDynamics();
+  }
+
+  #renderDynamics(): void {
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (element.nodeName === MUSIC_REST_NODE) {
+        continue;
+      }
+      const noteOrChord = element as unknown as INoteElement | IChordElement;
+      const marking = getNoteDynamic(noteOrChord);
+      if (marking !== null) {
+        const noteX = this.#noteXPositions.get(i) ?? 0;
+        const centerX = noteX + NOTE_SVG_WIDTH / 2;
+        this.#dynamicsContainer.appendChild(
+          createDynamicMarkingSvg(marking, centerX, DYNAMICS_BASELINE_Y)
+        );
+      }
+    }
+
+    const pairs = pairHairpins(this.#currentElements);
+    for (const pair of pairs) {
+      const startIndex = this.#currentElements.indexOf(pair.startElement);
+      const endIndex = this.#currentElements.indexOf(pair.endElement);
+      if (startIndex === -1 || endIndex === -1) {
+        continue;
+      }
+      const startX = this.#noteXPositions.get(startIndex) ?? 0;
+      const endX = (this.#noteXPositions.get(endIndex) ?? 0) + NOTE_SVG_WIDTH;
+      this.#dynamicsContainer.appendChild(
+        createHairpinSvg(
+          pair.kind,
+          startX,
+          endX,
+          DYNAMICS_BASELINE_Y,
+          HAIRPIN_OPEN_HEIGHT
+        )
+      );
     }
   }
 

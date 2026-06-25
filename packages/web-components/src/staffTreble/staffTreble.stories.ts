@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import { MODES } from '../utils';
+import { DYNAMICS, MODES } from '../utils';
 
 const meta: Meta = {
   title: 'Components/StaffTreble',
@@ -176,6 +176,95 @@ export const WithTriplets: Story = {
         <music-note note="A" octave="4" duration="eighth"></music-note>
         <music-note note="B" octave="4" duration="eighth"></music-note>
       </music-tuplet>
+    </music-staff-treble>
+  `,
+};
+
+export const WithDynamics: Story = {
+  args: {
+    dynamic1: 'pp',
+    dynamic2: 'mf',
+    dynamic3: 'f',
+    dynamic4: 'sfz',
+  },
+  argTypes: {
+    dynamic1: { control: 'select', options: DYNAMICS },
+    dynamic2: { control: 'select', options: DYNAMICS },
+    dynamic3: { control: 'select', options: DYNAMICS },
+    dynamic4: { control: 'select', options: DYNAMICS },
+  },
+  render: (args) => html`
+    <music-staff-treble keySig="C" mode="major" time="4/4">
+      <music-note
+        duration="quarter"
+        note="C"
+        octave="5"
+        dynamic=${args.dynamic1}
+      ></music-note>
+      <music-note
+        duration="quarter"
+        note="E"
+        octave="5"
+        dynamic=${args.dynamic2}
+      ></music-note>
+      <music-note
+        duration="quarter"
+        note="G"
+        octave="5"
+        dynamic=${args.dynamic3}
+      ></music-note>
+      <music-note
+        duration="quarter"
+        note="B"
+        octave="4"
+        dynamic=${args.dynamic4}
+      ></music-note>
+    </music-staff-treble>
+  `,
+};
+
+export const WithHairpin: Story = {
+  render: () => html`
+    <music-staff-treble keySig="C" mode="major" time="4/4">
+      <music-note
+        duration="quarter"
+        note="C"
+        octave="5"
+        dynamic="p"
+        crescendo="start"
+      ></music-note>
+      <music-note duration="quarter" note="D" octave="5"></music-note>
+      <music-note duration="quarter" note="E" octave="5"></music-note>
+      <music-note
+        duration="quarter"
+        note="F"
+        octave="5"
+        dynamic="f"
+        crescendo="end"
+      ></music-note>
+    </music-staff-treble>
+    <music-staff-treble
+      keySig="C"
+      mode="major"
+      time="4/4"
+      style="margin-top: 1rem"
+    >
+      <music-note
+        duration="quarter"
+        note="G"
+        octave="5"
+        dynamic="ff"
+        decrescendo="start"
+      ></music-note>
+      <music-note duration="quarter" note="F" octave="5"></music-note>
+      <music-note duration="quarter" note="E" octave="5"></music-note>
+      <music-note
+        duration="quarter"
+        note="D"
+        octave="5"
+        dynamic="p"
+        decrescendo="end"
+      ></music-note>
     </music-staff-treble>
   `,
 };

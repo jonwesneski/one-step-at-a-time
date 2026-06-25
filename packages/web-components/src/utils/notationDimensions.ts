@@ -288,6 +288,33 @@ export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
  */
 export const ACCIDENTAL_NOTE_GAP = -7;
 
+// ─── Dynamics ─────────────────────────────────────────────────────────────────
+
+/**
+ * Y position (px, in note-coordinate space) of the dynamics baseline below the
+ * staff. Dynamics text and hairpin center-lines are drawn at this Y value.
+ * = STAFF_BOTTOM_LINE_Y + 2 × STAFF_LINE_SPACING  (= 70 + 20 = 90)
+ */
+export const DYNAMICS_BASELINE_Y = STAFF_BOTTOM_LINE_Y + STAFF_LINE_SPACING * 2;
+
+/**
+ * Half-height (px) of the open end of a hairpin wedge.
+ * The full open span is 2 × HAIRPIN_OPEN_HEIGHT, matching 2 staff spaces (20 px).
+ * = STAFF_LINE_SPACING  (= 10)
+ */
+export const HAIRPIN_OPEN_HEIGHT = STAFF_LINE_SPACING;
+
+/**
+ * Stroke width (px) for hairpin wedge lines.
+ */
+export const HAIRPIN_STROKE_WIDTH = 1.2;
+
+/**
+ * Font size (px) for dynamic text markings (pp, mf, sfz, etc.).
+ * = 1.4 × STAFF_LINE_SPACING  (= 14)
+ */
+export const DYNAMICS_FONT_SIZE = STAFF_LINE_SPACING * 1.4;
+
 // ─── Tuplets ──────────────────────────────────────────────────────────────────
 
 /** Vertical length (px) of the hook at each end of the tuplet bracket. */

@@ -455,6 +455,43 @@ export const ChordWithTie: Story = {
   `,
 };
 
+export const WithCrossSystemHairpin: Story = {
+  render: () => html`
+    <div style="max-width: 420px;">
+      <music-composition keySig="C" mode="major" time="4/4">
+        <music-measure>
+          <music-staff-treble keySig="C" mode="major" time="4/4">
+            <music-note
+              note="C"
+              octave="5"
+              duration="quarter"
+              dynamic="p"
+              crescendo="start"
+            ></music-note>
+            <music-note note="D" octave="5" duration="quarter"></music-note>
+            <music-note note="E" octave="5" duration="quarter"></music-note>
+            <music-note note="F" octave="5" duration="quarter"></music-note>
+          </music-staff-treble>
+        </music-measure>
+        <music-measure>
+          <music-staff-treble keySig="C" mode="major" time="4/4">
+            <music-note note="G" octave="5" duration="quarter"></music-note>
+            <music-note note="A" octave="5" duration="quarter"></music-note>
+            <music-note note="B" octave="5" duration="quarter"></music-note>
+            <music-note
+              note="C"
+              octave="6"
+              duration="quarter"
+              dynamic="f"
+              crescendo="end"
+            ></music-note>
+          </music-staff-treble>
+        </music-measure>
+      </music-composition>
+    </div>
+  `,
+};
+
 export const ChordWithSlur: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`

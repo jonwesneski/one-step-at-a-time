@@ -130,6 +130,25 @@ export type Voice =
   | 'baritone'
   | 'bass';
 
+export type DynamicMarking =
+  | 'ppp'
+  | 'pp'
+  | 'p'
+  | 'mp'
+  | 'mf'
+  | 'f'
+  | 'ff'
+  | 'fff'
+  | 'sfz'
+  | 'sf'
+  | 'fz'
+  | 'rfz'
+  | 'fp';
+
+export type HairpinRole = 'start' | 'end';
+
+export type HairpinKind = 'crescendo' | 'decrescendo';
+
 export type TupletRatio =
   // Simple form (numeral only — normal count inferred by defaultNormalCount)
   | '2'
