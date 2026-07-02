@@ -6,7 +6,14 @@ import {
   NoteElementType,
   NoteLetterOctave,
 } from '../types/elements';
-import { AccidentalType, Chord, DurationType, Octave } from '../types/theory';
+import {
+  AccidentalType,
+  Chord,
+  DurationType,
+  DynamicMarking,
+  HairpinRole,
+  Octave,
+} from '../types/theory';
 import {
   addLedgerLines,
   createChordSvg,
@@ -25,10 +32,45 @@ import {
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
 
+const VALID_DYNAMICS = new Set<string>([
+  'ppp',
+  'pp',
+  'p',
+  'mp',
+  'mf',
+  'f',
+  'ff',
+  'fff',
+  'sfz',
+  'sf',
+  'fz',
+  'rfz',
+  'fp',
+]);
+
+const parseConnectorRole = (value: string | null): ConnectorRole | null => {
+  if (value === 'start' || value === 'end') return value;
+  return null;
+};
+
+const parseDynamicMarking = (value: string | null): DynamicMarking | null => {
+  if (value !== null && VALID_DYNAMICS.has(value))
+    return value as DynamicMarking;
+  return null;
+};
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
-      return ['currentCount', 'duration', 'tie', 'slur'];
+      return [
+        'currentCount',
+        'duration',
+        'tie',
+        'slur',
+        'dynamic',
+        'crescendo',
+        'decrescendo',
+      ];
     }
 
     static readonly #standaloneYCoordinates = generateYCoordinates('C6', 'C4');
@@ -130,11 +172,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get tie(): ConnectorRole | null {
-      const raw = this.getAttribute('tie');
-      if (raw === 'start' || raw === 'end') {
-        return raw;
-      }
-      return null;
+      return parseConnectorRole(this.getAttribute('tie'));
     }
     set tie(value: ConnectorRole | null) {
       if (value === null) {
@@ -145,17 +183,46 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get slur(): ConnectorRole | null {
-      const raw = this.getAttribute('slur');
-      if (raw === 'start' || raw === 'end') {
-        return raw;
-      }
-      return null;
+      return parseConnectorRole(this.getAttribute('slur'));
     }
     set slur(value: ConnectorRole | null) {
       if (value === null) {
         this.removeAttribute('slur');
       } else {
         this.setAttribute('slur', value);
+      }
+    }
+
+    get dynamic(): DynamicMarking | null {
+      return parseDynamicMarking(this.getAttribute('dynamic'));
+    }
+    set dynamic(value: DynamicMarking | null) {
+      if (value === null) {
+        this.removeAttribute('dynamic');
+      } else {
+        this.setAttribute('dynamic', value);
+      }
+    }
+
+    get crescendo(): HairpinRole | null {
+      return parseConnectorRole(this.getAttribute('crescendo'));
+    }
+    set crescendo(value: HairpinRole | null) {
+      if (value === null) {
+        this.removeAttribute('crescendo');
+      } else {
+        this.setAttribute('crescendo', value);
+      }
+    }
+
+    get decrescendo(): HairpinRole | null {
+      return parseConnectorRole(this.getAttribute('decrescendo'));
+    }
+    set decrescendo(value: HairpinRole | null) {
+      if (value === null) {
+        this.removeAttribute('decrescendo');
+      } else {
+        this.setAttribute('decrescendo', value);
       }
     }
 
@@ -202,7 +269,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'tie' || name === 'slur') {
+      if (
+        name === 'tie' ||
+        name === 'slur' ||
+        name === 'crescendo' ||
+        name === 'decrescendo'
+      ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,

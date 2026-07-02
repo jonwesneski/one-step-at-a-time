@@ -2,6 +2,8 @@ import {
   AccidentalType,
   Chord,
   DurationType,
+  DynamicMarking,
+  HairpinRole,
   Note,
   NoteLetter,
   Octave,
@@ -22,6 +24,9 @@ export interface INoteElement {
   noStem: boolean;
   tie: ConnectorRole | null;
   slur: ConnectorRole | null;
+  dynamic: DynamicMarking | null;
+  crescendo: HairpinRole | null;
+  decrescendo: HairpinRole | null;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
@@ -47,6 +52,9 @@ export interface IChordElement {
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: ConnectorRole | null;
   slur: ConnectorRole | null;
+  dynamic: DynamicMarking | null;
+  crescendo: HairpinRole | null;
+  decrescendo: HairpinRole | null;
   batchUpdate(fn: () => void): void;
 }
 

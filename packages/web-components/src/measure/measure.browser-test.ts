@@ -43,11 +43,13 @@ async function readMeasureFlex(page: Page): Promise<FlexValues> {
 
 async function readDescribeEndX(page: Page): Promise<number> {
   return page.evaluate((staffTag) => {
-    const staff = document.querySelector(staffTag) as any;
+    const staff = document.querySelector(staffTag) as
+      | (Element & { describeEndX: number })
+      | null;
     if (staff === null) {
       throw new Error(`${staffTag} not found`);
     }
-    return staff.describeEndX as number;
+    return staff.describeEndX;
   }, MUSIC_STAFF_TREBLE);
 }
 
@@ -211,13 +213,15 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     await waitForRedrawCycle(page);
 
     const { staffWidth, describeEndX } = await page.evaluate((staffTag) => {
-      const staff = document.querySelector(staffTag) as any;
+      const staff = document.querySelector(staffTag) as
+        | (Element & { describeEndX: number })
+        | null;
       if (staff === null) {
         throw new Error('staff not found');
       }
       return {
-        staffWidth: (staff as Element).getBoundingClientRect().width,
-        describeEndX: staff.describeEndX as number,
+        staffWidth: staff.getBoundingClientRect().width,
+        describeEndX: staff.describeEndX,
       };
     }, MUSIC_STAFF_TREBLE);
 

@@ -1,0 +1,311 @@
+/**
+ * @jest-environment jsdom
+ */
+import '../note/index';
+import '../chord/index';
+import '../rest/index';
+import type {
+  NoteChordOrRestElementType,
+  NoteElementType,
+} from '../types/elements';
+import type { DynamicMarking } from '../types/theory';
+import { MUSIC_CHORD, MUSIC_NOTE, MUSIC_REST } from '../utils/consts';
+import {
+  getNoteDynamic,
+  pairHairpins,
+  resolveHairpinSegments,
+} from './dynamicsRules';
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
+function makeNote(attrs: Record<string, string> = {}): NoteElementType {
+  const el = document.createElement(MUSIC_NOTE) as NoteElementType;
+  for (const [key, value] of Object.entries(attrs)) {
+    el.setAttribute(key, value);
+  }
+  document.body.appendChild(el);
+  return el;
+}
+
+function makeElements(
+  specs: Array<Record<string, string>>
+): NoteChordOrRestElementType[] {
+  return specs.map((attrs) => makeNote(attrs));
+}
+
+describe('getNoteDynamic', () => {
+  it('returns the dynamic marking when set', () => {
+    const el = makeNote({ dynamic: 'mf' });
+    expect(getNoteDynamic(el as any)).toBe('mf' as DynamicMarking);
+  });
+
+  it('returns null when no dynamic attribute is set', () => {
+    const el = makeNote();
+    expect(getNoteDynamic(el as any)).toBeNull();
+  });
+
+  it('returns null for an invalid dynamic value', () => {
+    const el = makeNote({ dynamic: 'xyz' });
+    expect(getNoteDynamic(el as any)).toBeNull();
+  });
+
+  it('handles all valid dynamic markings', () => {
+    const markings: DynamicMarking[] = [
+      'ppp',
+      'pp',
+      'p',
+      'mp',
+      'mf',
+      'f',
+      'ff',
+      'fff',
+      'sfz',
+      'sf',
+      'fz',
+      'rfz',
+      'fp',
+    ];
+    for (const marking of markings) {
+      const el = makeNote({ dynamic: marking });
+      expect(getNoteDynamic(el as any)).toBe(marking);
+    }
+  });
+});
+
+describe('pairHairpins', () => {
+  it('pairs a single crescendo start and end', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      {},
+      { crescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].kind).toBe('crescendo');
+    expect(pairs[0].startElement).toBe(elements[0]);
+    expect(pairs[0].endElement).toBe(elements[2]);
+  });
+
+  it('pairs a single decrescendo start and end', () => {
+    const elements = makeElements([
+      { decrescendo: 'start' },
+      { decrescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].kind).toBe('decrescendo');
+  });
+
+  it('pairs multiple hairpins in sequence', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { crescendo: 'end' },
+      { decrescendo: 'start' },
+      { decrescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements);
+    expect(pairs).toHaveLength(2);
+    expect(pairs[0].kind).toBe('crescendo');
+    expect(pairs[1].kind).toBe('decrescendo');
+  });
+
+  it('drops an unpaired crescendo start', () => {
+    const elements = makeElements([{ crescendo: 'start' }, {}, {}]);
+    expect(pairHairpins(elements)).toHaveLength(0);
+  });
+
+  it('drops an orphaned crescendo end with no preceding start', () => {
+    const elements = makeElements([{}, { crescendo: 'end' }]);
+    expect(pairHairpins(elements)).toHaveLength(0);
+  });
+
+  it('returns an empty array for elements with no hairpin attributes', () => {
+    const elements = makeElements([{}, {}, {}]);
+    expect(pairHairpins(elements)).toHaveLength(0);
+  });
+
+  it('pairs crescendo and decrescendo that overlap (each closes independently)', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { decrescendo: 'start' },
+      { crescendo: 'end' },
+      { decrescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements);
+    expect(pairs).toHaveLength(2);
+    expect(pairs[0].kind).toBe('crescendo');
+    expect(pairs[1].kind).toBe('decrescendo');
+  });
+
+  it('ignores rest elements that have no hairpin attributes', () => {
+    const rest = document.createElement(
+      MUSIC_REST
+    ) as NoteChordOrRestElementType;
+    document.body.appendChild(rest);
+    const note1 = makeNote({ crescendo: 'start' });
+    const note2 = makeNote({ crescendo: 'end' });
+    const pairs = pairHairpins([note1, rest, note2]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].startElement).toBe(note1);
+    expect(pairs[0].endElement).toBe(note2);
+  });
+
+  it('uses the nearest end when a start is immediately followed by another start (second start overwrites)', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { crescendo: 'start' },
+      { crescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].startElement).toBe(elements[1]);
+    expect(pairs[0].endElement).toBe(elements[2]);
+  });
+});
+
+describe('resolveHairpinSegments', () => {
+  function makePair(kind: 'crescendo' | 'decrescendo') {
+    const start = makeNote({ [kind]: 'start' });
+    const end = makeNote({ [kind]: 'end' });
+    return { pair: { kind, startElement: start, endElement: end } as any };
+  }
+
+  const ROW_LEFT = 50;
+  const ROW_RIGHT = 400;
+  const START_CENTER_Y = 90;
+  const END_CENTER_Y = 90;
+
+  it('returns a single segment when start and end are on the same row', () => {
+    const { pair } = makePair('crescendo');
+    const startBounds = { left: 60, right: 80, top: 100 };
+    const endBounds = { left: 200, right: 220, top: 102 };
+    const segments = resolveHairpinSegments(
+      pair,
+      startBounds,
+      endBounds,
+      START_CENTER_Y,
+      END_CENTER_Y,
+      ROW_LEFT,
+      ROW_RIGHT
+    );
+    expect(segments).toHaveLength(1);
+    expect(segments[0].startX).toBe(80);
+    expect(segments[0].endX).toBe(200);
+    expect(segments[0].openAtStart).toBe(false);
+    expect(segments[0].openAtEnd).toBe(false);
+  });
+
+  it('returns two segments for a cross-row crescendo', () => {
+    const { pair } = makePair('crescendo');
+    const startBounds = { left: 60, right: 80, top: 100 };
+    const endBounds = { left: 100, right: 120, top: 300 };
+    const segments = resolveHairpinSegments(
+      pair,
+      startBounds,
+      endBounds,
+      START_CENTER_Y,
+      END_CENTER_Y,
+      ROW_LEFT,
+      ROW_RIGHT
+    );
+    expect(segments).toHaveLength(2);
+    expect(segments[0].startX).toBe(80);
+    expect(segments[0].endX).toBe(ROW_RIGHT);
+    expect(segments[0].openAtStart).toBe(false);
+    expect(segments[0].openAtEnd).toBe(false);
+    expect(segments[1].startX).toBe(ROW_LEFT);
+    expect(segments[1].endX).toBe(100);
+    expect(segments[1].openAtStart).toBe(true);
+    expect(segments[1].openAtEnd).toBe(false);
+  });
+
+  it('returns two segments for a cross-row decrescendo with openAtEnd on segment 1', () => {
+    const { pair } = makePair('decrescendo');
+    const startBounds = { left: 60, right: 80, top: 100 };
+    const endBounds = { left: 100, right: 120, top: 300 };
+    const segments = resolveHairpinSegments(
+      pair,
+      startBounds,
+      endBounds,
+      START_CENTER_Y,
+      END_CENTER_Y,
+      ROW_LEFT,
+      ROW_RIGHT
+    );
+    expect(segments).toHaveLength(2);
+    expect(segments[0].openAtEnd).toBe(true);
+    expect(segments[1].openAtStart).toBe(true);
+    expect(segments[1].openAtEnd).toBe(false);
+  });
+
+  it('uses startCenterY for segment 1 and endCenterY for segment 2 when cross-row', () => {
+    const { pair } = makePair('crescendo');
+    const startBounds = { left: 60, right: 80, top: 100 };
+    const endBounds = { left: 100, right: 120, top: 300 };
+    const segments = resolveHairpinSegments(
+      pair,
+      startBounds,
+      endBounds,
+      90,
+      95,
+      ROW_LEFT,
+      ROW_RIGHT
+    );
+    expect(segments[0].centerY).toBe(90);
+    expect(segments[1].centerY).toBe(95);
+  });
+
+  it('treats elements within 5px tolerance as same row', () => {
+    const { pair } = makePair('crescendo');
+    const startBounds = { left: 60, right: 80, top: 100 };
+    const endBounds = { left: 200, right: 220, top: 105 };
+    const segments = resolveHairpinSegments(
+      pair,
+      startBounds,
+      endBounds,
+      START_CENTER_Y,
+      END_CENTER_Y,
+      ROW_LEFT,
+      ROW_RIGHT
+    );
+    expect(segments).toHaveLength(1);
+  });
+
+  it('treats elements more than 5px apart as cross-row', () => {
+    const { pair } = makePair('crescendo');
+    const startBounds = { left: 60, right: 80, top: 100 };
+    const endBounds = { left: 200, right: 220, top: 106 };
+    const segments = resolveHairpinSegments(
+      pair,
+      startBounds,
+      endBounds,
+      START_CENTER_Y,
+      END_CENTER_Y,
+      ROW_LEFT,
+      ROW_RIGHT
+    );
+    expect(segments).toHaveLength(2);
+  });
+});
+
+describe('pairHairpins with chord elements', () => {
+  it('pairs hairpins on chord elements', () => {
+    const chord1 = document.createElement(
+      MUSIC_CHORD
+    ) as NoteChordOrRestElementType;
+    chord1.setAttribute('crescendo', 'start');
+    document.body.appendChild(chord1);
+
+    const chord2 = document.createElement(
+      MUSIC_CHORD
+    ) as NoteChordOrRestElementType;
+    chord2.setAttribute('crescendo', 'end');
+    document.body.appendChild(chord2);
+
+    const pairs = pairHairpins([chord1, chord2]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].kind).toBe('crescendo');
+  });
+});
