@@ -24,8 +24,7 @@
   "include": [
     "app/**/*",
     "vite.config.ts",
-    "../../packages/web-components/src/**/*.ts",
-    "../../packages/web-components/src/**/*.tsx"
+    "../../packages/web-components/src/**/*.ts"
   ],
   "exclude": [
     "../../packages/web-components/src/**/*.browser-test.ts",

@@ -37,7 +37,8 @@
               "@storybook/web-components",
               "@nx/vite",
               "vite",
-              "lit"
+              "lit",
+              "@playwright/test"
             ]
           }
         ]

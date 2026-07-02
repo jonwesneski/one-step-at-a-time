@@ -28,6 +28,7 @@
     },
     "typecheck": {
       "executor": "nx:run-commands",
+      "dependsOn": [{ "projects": ["@one-step-at-a-time/web-components"], "target": "build" }],
       "options": {
         "command": "tsc --noEmit",
         "cwd": "{projectRoot}"
