@@ -824,7 +824,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             })()
           : durationToFactor[duration as DurationType];
       if (beatOffset + durationContribution > measureDuration) {
-        console.error(
+        console.warn(
           `no more room for note(s); remaining duration is "${
             factorToDuration.get(measureDuration - beatOffset) ??
             measureDuration - beatOffset

@@ -340,7 +340,7 @@ Integration tests for notes, chords, and rests live in their **component's own t
 | `rest/rest.test.ts`   | `'staff integration'`      | Rest Y positioning per duration, double-whole overflow                               |
 
 - Pattern: import `'../staffTreble/index'` to register the staff, create staff → set `TIME_SIG` → `slot.assignedElements = () => [...]` → `slot.dispatchEvent(new Event('slotchange'))`
-- Use `jest.spyOn(console, 'error')` to assert overflow/error conditions
+- Use `jest.spyOn(console, 'warn')` to assert overflow/validation conditions (the library uses `console.warn` exclusively for non-fatal validation issues)
 
 `staffClassicalBase.test.ts` retains only **cross-cutting** `StaffClassicalElementBase` behaviour that doesn't belong to a single element type (currently: measure overflow/validation).
 
