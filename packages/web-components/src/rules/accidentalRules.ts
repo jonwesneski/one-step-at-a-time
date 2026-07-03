@@ -74,8 +74,8 @@ const MINOR_TO_RELATIVE_MAJOR: Partial<Record<string, string>> = {
 // ─── Inter-note spacing ────────────────────────────────────────────────────────
 
 // Returns the nudged xPosition so the accidental clears the previous element's
-// right edge. Per Behind Bars (Gould): place accidentals as close to the note
-// as possible — nudge only as much as needed to avoid collision.
+// right edge. Place accidentals as close to the note as possible — nudge only
+// as much as needed to avoid collision.
 export function computeInterNoteSpacing(
   xPosition: number,
   accidentalWidth: number,

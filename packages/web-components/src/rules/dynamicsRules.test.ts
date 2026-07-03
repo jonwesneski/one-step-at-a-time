@@ -11,6 +11,11 @@ import type {
 import type { DynamicMarking } from '../types/theory';
 import { MUSIC_CHORD, MUSIC_NOTE, MUSIC_REST } from '../utils/consts';
 import {
+  DYNAMICS_CHAR_WIDTH_PX,
+  HAIRPIN_DYNAMIC_GAP_PX,
+} from '../utils/notationDimensions';
+import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+import {
   getNoteDynamic,
   pairHairpins,
   resolveHairpinSegments,
@@ -33,6 +38,16 @@ function makeElements(
   specs: Array<Record<string, string>>
 ): NoteChordOrRestElementType[] {
   return specs.map((attrs) => makeNote(attrs));
+}
+
+// Evenly spaced X positions (100px apart), matching how staffClassicalBase
+// positions notes in order — enough room for hairpins to avoid endpoint collisions.
+function makeXPositions(count: number): Map<number, number> {
+  const positions = new Map<number, number>();
+  for (let i = 0; i < count; i++) {
+    positions.set(i, i * 100);
+  }
+  return positions;
 }
 
 describe('getNoteDynamic', () => {
@@ -81,7 +96,7 @@ describe('pairHairpins', () => {
       {},
       { crescendo: 'end' },
     ]);
-    const pairs = pairHairpins(elements);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('crescendo');
     expect(pairs[0].startElement).toBe(elements[0]);
@@ -93,7 +108,7 @@ describe('pairHairpins', () => {
       { decrescendo: 'start' },
       { decrescendo: 'end' },
     ]);
-    const pairs = pairHairpins(elements);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('decrescendo');
   });
@@ -105,7 +120,7 @@ describe('pairHairpins', () => {
       { decrescendo: 'start' },
       { decrescendo: 'end' },
     ]);
-    const pairs = pairHairpins(elements);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs).toHaveLength(2);
     expect(pairs[0].kind).toBe('crescendo');
     expect(pairs[1].kind).toBe('decrescendo');
@@ -113,17 +128,23 @@ describe('pairHairpins', () => {
 
   it('drops an unpaired crescendo start', () => {
     const elements = makeElements([{ crescendo: 'start' }, {}, {}]);
-    expect(pairHairpins(elements)).toHaveLength(0);
+    expect(
+      pairHairpins(elements, makeXPositions(elements.length))
+    ).toHaveLength(0);
   });
 
   it('drops an orphaned crescendo end with no preceding start', () => {
     const elements = makeElements([{}, { crescendo: 'end' }]);
-    expect(pairHairpins(elements)).toHaveLength(0);
+    expect(
+      pairHairpins(elements, makeXPositions(elements.length))
+    ).toHaveLength(0);
   });
 
   it('returns an empty array for elements with no hairpin attributes', () => {
     const elements = makeElements([{}, {}, {}]);
-    expect(pairHairpins(elements)).toHaveLength(0);
+    expect(
+      pairHairpins(elements, makeXPositions(elements.length))
+    ).toHaveLength(0);
   });
 
   it('pairs crescendo and decrescendo that overlap (each closes independently)', () => {
@@ -133,7 +154,7 @@ describe('pairHairpins', () => {
       { crescendo: 'end' },
       { decrescendo: 'end' },
     ]);
-    const pairs = pairHairpins(elements);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs).toHaveLength(2);
     expect(pairs[0].kind).toBe('crescendo');
     expect(pairs[1].kind).toBe('decrescendo');
@@ -146,7 +167,8 @@ describe('pairHairpins', () => {
     document.body.appendChild(rest);
     const note1 = makeNote({ crescendo: 'start' });
     const note2 = makeNote({ crescendo: 'end' });
-    const pairs = pairHairpins([note1, rest, note2]);
+    const elements = [note1, rest, note2];
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].startElement).toBe(note1);
     expect(pairs[0].endElement).toBe(note2);
@@ -158,10 +180,104 @@ describe('pairHairpins', () => {
       { crescendo: 'start' },
       { crescendo: 'end' },
     ]);
-    const pairs = pairHairpins(elements);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].startElement).toBe(elements[1]);
     expect(pairs[0].endElement).toBe(elements[2]);
+  });
+
+  it('computes startX/endX from note positions when there are no dynamics', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      {},
+      { crescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    expect(pairs[0].startX).toBe(0);
+    expect(pairs[0].endX).toBe(200 + NOTE_SVG_WIDTH);
+    expect(pairs[0].hasOverlapWarning).toBe(false);
+  });
+
+  it("shrinks startX inward to clear the dynamic text's actual right edge (text centered at noteX + NOTE_SVG_WIDTH/2)", () => {
+    const elements = makeElements([
+      { crescendo: 'start', dynamic: 'p' },
+      {},
+      { crescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    const expectedStartX =
+      NOTE_SVG_WIDTH / 2 +
+      (1 * DYNAMICS_CHAR_WIDTH_PX) / 2 +
+      HAIRPIN_DYNAMIC_GAP_PX;
+    expect(pairs[0].startX).toBeCloseTo(expectedStartX);
+    expect(pairs[0].hasOverlapWarning).toBe(false);
+  });
+
+  it("shrinks endX inward to clear the dynamic text's actual left edge (text centered at noteX + NOTE_SVG_WIDTH/2)", () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      {},
+      { crescendo: 'end', dynamic: 'f' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    const endNoteX = 200;
+    const expectedEndX =
+      endNoteX +
+      NOTE_SVG_WIDTH / 2 -
+      (1 * DYNAMICS_CHAR_WIDTH_PX) / 2 -
+      HAIRPIN_DYNAMIC_GAP_PX;
+    expect(pairs[0].endX).toBeCloseTo(expectedEndX);
+    expect(pairs[0].hasOverlapWarning).toBe(false);
+  });
+
+  it('flags an overlap warning and falls back to raw bounds when the dynamics collide (adjacent notes, no space between)', () => {
+    const elements = makeElements([
+      { crescendo: 'start', dynamic: 'fff' },
+      { crescendo: 'end', dynamic: 'ppp' },
+    ]);
+    // 0px apart — with wide markings on both ends the reserved gaps overlap.
+    const positions = new Map([
+      [0, 0],
+      [1, 0],
+    ]);
+    const pairs = pairHairpins(elements, positions);
+    expect(pairs[0].hasOverlapWarning).toBe(true);
+    expect(pairs[0].startX).toBe(positions.get(0));
+    expect(pairs[0].endX).toBe((positions.get(1) ?? 0) + NOTE_SVG_WIDTH);
+  });
+
+  it('does not warn when notes are spaced at least MIN_NOTE_WIDTH apart, even with endpoint dynamics', () => {
+    // Mirrors the WithHairpin story: crescendo p -> f over 4 quarter notes,
+    // spaced at the real layout's minimum note width (20px).
+    const MIN_NOTE_WIDTH = 20;
+    const elements = makeElements([
+      { crescendo: 'start', dynamic: 'p' },
+      {},
+      {},
+      { crescendo: 'end', dynamic: 'f' },
+    ]);
+    const positions = new Map([
+      [0, 0],
+      [1, MIN_NOTE_WIDTH],
+      [2, MIN_NOTE_WIDTH * 2],
+      [3, MIN_NOTE_WIDTH * 3],
+    ]);
+    const pairs = pairHairpins(elements, positions);
+    expect(pairs[0].hasOverlapWarning).toBe(false);
+    expect(pairs[0].startX).toBeLessThan(pairs[0].endX);
+  });
+
+  it('flags an overlap warning for an interim dynamic between start and end', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { dynamic: 'mf' },
+      { crescendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    expect(pairs[0].hasOverlapWarning).toBe(true);
+    // Endpoints have no dynamics, so bounds are still the raw note-edge positions.
+    expect(pairs[0].startX).toBe(0);
+    expect(pairs[0].endX).toBe(200 + NOTE_SVG_WIDTH);
   });
 });
 
@@ -304,7 +420,7 @@ describe('pairHairpins with chord elements', () => {
     chord2.setAttribute('crescendo', 'end');
     document.body.appendChild(chord2);
 
-    const pairs = pairHairpins([chord1, chord2]);
+    const pairs = pairHairpins([chord1, chord2], makeXPositions(2));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('crescendo');
   });

@@ -315,6 +315,19 @@ export const HAIRPIN_STROKE_WIDTH = 1.2;
  */
 export const DYNAMICS_FONT_SIZE = STAFF_LINE_SPACING * 1.4;
 
+/**
+ * Estimated width (px) per character of dynamic text (italic serif). Used to
+ * reserve a gap so hairpins don't run under dynamic text at their start/end.
+ * Mirrors AVG_LYRIC_CHAR_WIDTH_PX's estimate-don't-measure approach.
+ */
+export const DYNAMICS_CHAR_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.65;
+
+/**
+ * Minimum horizontal gap (px) between a dynamic marking's estimated edge and
+ * an adjacent hairpin's start/end point.
+ */
+export const HAIRPIN_DYNAMIC_GAP_PX = 4;
+
 // ─── Tuplets ──────────────────────────────────────────────────────────────────
 
 /** Vertical length (px) of the hook at each end of the tuplet bracket. */

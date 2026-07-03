@@ -274,7 +274,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      const pairs = pairHairpins(elements);
+      // Cross-staff geometry here comes from resolveHairpinSegments() below
+      // (via getBoundingClientRect), not from pairHairpins' own startX/endX —
+      // an empty positions map is fine since those fields go unused.
+      const pairs = pairHairpins(elements, new Map());
       const rootRect = wrapper.getBoundingClientRect();
 
       for (const pair of pairs) {

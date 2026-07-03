@@ -1245,20 +1245,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    const pairs = pairHairpins(this.#currentElements);
+    const pairs = pairHairpins(this.#currentElements, this.#noteXPositions);
     for (const pair of pairs) {
-      const startIndex = this.#currentElements.indexOf(pair.startElement);
-      const endIndex = this.#currentElements.indexOf(pair.endElement);
-      if (startIndex === -1 || endIndex === -1) {
-        continue;
+      if (pair.hasOverlapWarning) {
+        console.warn(
+          `Hairpin (${pair.kind}) overlaps a dynamic marking and cannot be cleanly positioned.`
+        );
       }
-      const startX = this.#noteXPositions.get(startIndex) ?? 0;
-      const endX = (this.#noteXPositions.get(endIndex) ?? 0) + NOTE_SVG_WIDTH;
       this.#dynamicsContainer.appendChild(
         createHairpinSvg(
           pair.kind,
-          startX,
-          endX,
+          pair.startX,
+          pair.endX,
           DYNAMICS_BASELINE_Y,
           HAIRPIN_OPEN_HEIGHT
         )

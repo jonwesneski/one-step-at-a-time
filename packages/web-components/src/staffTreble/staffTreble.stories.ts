@@ -223,7 +223,7 @@ export const WithDynamics: Story = {
   `,
 };
 
-export const WithHairpin: Story = {
+export const WithDynamicsAndHairpin: Story = {
   render: () => html`
     <music-staff-treble keySig="C" mode="major" time="4/4">
       <music-note

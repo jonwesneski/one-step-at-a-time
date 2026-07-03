@@ -210,8 +210,8 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
 };
 
 // Notehead visual radius ≈ 4.3px (rotated ellipse + stroke). 5px clears the
-// edge so the arc endpoint visibly departs from the notehead per Gould's
-// "almost touch each notehead."
+// edge so the arc endpoint visibly departs from the notehead, almost touching
+// it without overlapping.
 const TIE_NOTEHEAD_OFFSET_PX = 5;
 const SLUR_NOTEHEAD_OFFSET_PX = 9;
 
@@ -335,7 +335,7 @@ const pickBulge = (note: NoteLikeElementType): CurveBulge => {
 
 // For chord ties: each note's tie curves outward from the chord's vertical midpoint
 // (top notes curve above, bottom notes curve below). This is position-based, not
-// stem-based — standard engraving practice per Gould's "Behind Bars".
+// stem-based — standard engraving practice.
 const pickChordNoteBulge = (
   chord: NoteLikeElementType,
   yCoords: readonly number[],
