@@ -2,8 +2,10 @@ import {
   IChordElement,
   INoteElement,
   NoteChordOrRestElementType,
+  NoteOrChordElementType,
 } from '../types/elements';
 import { DynamicMarking, HairpinKind } from '../types/theory';
+import { MUSIC_REST_NODE } from '../utils/consts';
 import {
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
@@ -14,11 +16,11 @@ const ROW_TOLERANCE_PX = 5;
 
 export type HairpinPair = {
   kind: HairpinKind;
-  startElement: NoteChordOrRestElementType;
-  endElement: NoteChordOrRestElementType;
+  startElement: NoteOrChordElementType;
+  endElement: NoteOrChordElementType;
   startX: number;
   endX: number;
-  hasOverlapWarning: boolean;
+  errors: string[];
 };
 
 /**
@@ -31,7 +33,7 @@ export function getNoteDynamic(
 }
 
 type OpenHairpinStart = {
-  element: NoteChordOrRestElementType;
+  element: NoteOrChordElementType;
   index: number;
 };
 
@@ -42,11 +44,13 @@ type OpenHairpinStart = {
  *
  * Also computes each pair's rendered startX/endX, shrinking the span inward
  * when the start/end note itself carries a dynamic marking so the wedge
- * doesn't run under that text. hasOverlapWarning is set when that shrink
- * would invert the span (endpoint collision) or when a note strictly between
- * start and end also carries a dynamic (interim overlap) — in the endpoint
- * case the bounds fall back to the raw note-edge positions so the hairpin
- * still renders.
+ * doesn't run under that text. errors collects a message for each problem
+ * detected: the shrink inverting the span (endpoint collision), a note
+ * strictly between start and end also carrying a dynamic (interim overlap),
+ * or the start/end element actually being a rest (which should never happen —
+ * see the defensive check in buildHairpinPair). In the endpoint-collision and
+ * rest cases the bounds fall back to the raw note-edge positions so the
+ * hairpin still renders.
  */
 export function pairHairpins(
   elements: NoteChordOrRestElementType[],
@@ -61,8 +65,12 @@ export function pairHairpins(
     const decrescendo =
       'decrescendo' in noteOrChord ? noteOrChord.decrescendo : null;
 
+    // A rest never has crescendo/decrescendo, so reaching either 'start'/'end'
+    // branch below guarantees element is actually a note or chord.
+    const noteOrChordElement = element as unknown as NoteOrChordElementType;
+
     if (crescendo === 'start') {
-      openStarts.set('crescendo', { element, index });
+      openStarts.set('crescendo', { element: noteOrChordElement, index });
     } else if (crescendo === 'end') {
       const start = openStarts.get('crescendo');
       if (start !== undefined) {
@@ -70,7 +78,7 @@ export function pairHairpins(
           buildHairpinPair(
             'crescendo',
             start,
-            { element, index },
+            { element: noteOrChordElement, index },
             elements,
             noteXPositions
           )
@@ -80,7 +88,7 @@ export function pairHairpins(
     }
 
     if (decrescendo === 'start') {
-      openStarts.set('decrescendo', { element, index });
+      openStarts.set('decrescendo', { element: noteOrChordElement, index });
     } else if (decrescendo === 'end') {
       const start = openStarts.get('decrescendo');
       if (start !== undefined) {
@@ -88,7 +96,7 @@ export function pairHairpins(
           buildHairpinPair(
             'decrescendo',
             start,
-            { element, index },
+            { element: noteOrChordElement, index },
             elements,
             noteXPositions
           )
@@ -108,15 +116,34 @@ function buildHairpinPair(
   elements: NoteChordOrRestElementType[],
   noteXPositions: ReadonlyMap<number, number>
 ): HairpinPair {
+  const errors: string[] = [];
+
   const rawStartX = noteXPositions.get(start.index) ?? 0;
   const rawEndX = (noteXPositions.get(end.index) ?? 0) + NOTE_SVG_WIDTH;
 
-  const startMarking = getNoteDynamic(
-    start.element as unknown as INoteElement | IChordElement
-  );
-  const endMarking = getNoteDynamic(
-    end.element as unknown as INoteElement | IChordElement
-  );
+  // Defensive: a rest never has crescendo/decrescendo (see pairHairpins), so
+  // this should never trigger — but if it ever did, skip the dynamic-shift
+  // math entirely (a rest has no dynamic to clear) and flag it explicitly
+  // rather than silently trusting the note/chord cast.
+  const restDetected =
+    start.element.nodeName === MUSIC_REST_NODE ||
+    end.element.nodeName === MUSIC_REST_NODE;
+  if (restDetected) {
+    errors.push(
+      `Hairpin (${kind}) references a rest element, which cannot carry a dynamic or hairpin marking.`
+    );
+    return {
+      kind,
+      startElement: start.element,
+      endElement: end.element,
+      startX: rawStartX,
+      endX: rawEndX,
+      errors,
+    };
+  }
+
+  const startMarking = getNoteDynamic(start.element);
+  const endMarking = getNoteDynamic(end.element);
 
   // Dynamic text is rendered centered at noteX + NOTE_SVG_WIDTH/2 (see
   // #renderDynamics' centerX) — the shift must clear that text's actual edge,
@@ -147,6 +174,9 @@ function buildHairpinPair(
   if (endpointCollision) {
     startX = rawStartX;
     endX = rawEndX;
+    errors.push(
+      `Hairpin (${kind}) overlaps a dynamic marking and cannot be cleanly positioned.`
+    );
   }
 
   const hasInterimDynamic = elements
@@ -155,6 +185,11 @@ function buildHairpinPair(
       (el) =>
         getNoteDynamic(el as unknown as INoteElement | IChordElement) !== null
     );
+  if (hasInterimDynamic) {
+    errors.push(
+      `Hairpin (${kind}) overlaps an interim dynamic marking between its start and end.`
+    );
+  }
 
   return {
     kind,
@@ -162,7 +197,7 @@ function buildHairpinPair(
     endElement: end.element,
     startX,
     endX,
-    hasOverlapWarning: endpointCollision || hasInterimDynamic,
+    errors,
   };
 }
 

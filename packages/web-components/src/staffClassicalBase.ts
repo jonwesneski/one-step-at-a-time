@@ -1247,10 +1247,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const pairs = pairHairpins(this.#currentElements, this.#noteXPositions);
     for (const pair of pairs) {
-      if (pair.hasOverlapWarning) {
-        console.warn(
-          `Hairpin (${pair.kind}) overlaps a dynamic marking and cannot be cleanly positioned.`
-        );
+      if (pair.errors.length > 0) {
+        console.warn(pair.errors);
       }
       this.#dynamicsContainer.appendChild(
         createHairpinSvg(

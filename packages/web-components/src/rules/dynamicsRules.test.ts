@@ -9,7 +9,12 @@ import type {
   NoteElementType,
 } from '../types/elements';
 import type { DynamicMarking } from '../types/theory';
-import { MUSIC_CHORD, MUSIC_NOTE, MUSIC_REST } from '../utils/consts';
+import {
+  MUSIC_CHORD,
+  MUSIC_NOTE,
+  MUSIC_REST,
+  MUSIC_REST_NODE,
+} from '../utils/consts';
 import {
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
@@ -195,7 +200,7 @@ describe('pairHairpins', () => {
     const pairs = pairHairpins(elements, makeXPositions(elements.length));
     expect(pairs[0].startX).toBe(0);
     expect(pairs[0].endX).toBe(200 + NOTE_SVG_WIDTH);
-    expect(pairs[0].hasOverlapWarning).toBe(false);
+    expect(pairs[0].errors).toEqual([]);
   });
 
   it("shrinks startX inward to clear the dynamic text's actual right edge (text centered at noteX + NOTE_SVG_WIDTH/2)", () => {
@@ -210,7 +215,7 @@ describe('pairHairpins', () => {
       (1 * DYNAMICS_CHAR_WIDTH_PX) / 2 +
       HAIRPIN_DYNAMIC_GAP_PX;
     expect(pairs[0].startX).toBeCloseTo(expectedStartX);
-    expect(pairs[0].hasOverlapWarning).toBe(false);
+    expect(pairs[0].errors).toEqual([]);
   });
 
   it("shrinks endX inward to clear the dynamic text's actual left edge (text centered at noteX + NOTE_SVG_WIDTH/2)", () => {
@@ -227,7 +232,7 @@ describe('pairHairpins', () => {
       (1 * DYNAMICS_CHAR_WIDTH_PX) / 2 -
       HAIRPIN_DYNAMIC_GAP_PX;
     expect(pairs[0].endX).toBeCloseTo(expectedEndX);
-    expect(pairs[0].hasOverlapWarning).toBe(false);
+    expect(pairs[0].errors).toEqual([]);
   });
 
   it('flags an overlap warning and falls back to raw bounds when the dynamics collide (adjacent notes, no space between)', () => {
@@ -241,7 +246,9 @@ describe('pairHairpins', () => {
       [1, 0],
     ]);
     const pairs = pairHairpins(elements, positions);
-    expect(pairs[0].hasOverlapWarning).toBe(true);
+    expect(pairs[0].errors).toEqual([
+      'Hairpin (crescendo) overlaps a dynamic marking and cannot be cleanly positioned.',
+    ]);
     expect(pairs[0].startX).toBe(positions.get(0));
     expect(pairs[0].endX).toBe((positions.get(1) ?? 0) + NOTE_SVG_WIDTH);
   });
@@ -263,7 +270,7 @@ describe('pairHairpins', () => {
       [3, MIN_NOTE_WIDTH * 3],
     ]);
     const pairs = pairHairpins(elements, positions);
-    expect(pairs[0].hasOverlapWarning).toBe(false);
+    expect(pairs[0].errors).toEqual([]);
     expect(pairs[0].startX).toBeLessThan(pairs[0].endX);
   });
 
@@ -274,10 +281,48 @@ describe('pairHairpins', () => {
       { crescendo: 'end' },
     ]);
     const pairs = pairHairpins(elements, makeXPositions(elements.length));
-    expect(pairs[0].hasOverlapWarning).toBe(true);
+    expect(pairs[0].errors).toEqual([
+      'Hairpin (crescendo) overlaps an interim dynamic marking between its start and end.',
+    ]);
     // Endpoints have no dynamics, so bounds are still the raw note-edge positions.
     expect(pairs[0].startX).toBe(0);
     expect(pairs[0].endX).toBe(200 + NOTE_SVG_WIDTH);
+  });
+
+  it('flags an error and skips the dynamic-shift math if a rest element ever ends up as a hairpin start/end', () => {
+    // A real music-rest element can never satisfy this in practice (rest.ts
+    // defines no crescendo/decrescendo accessor), so this simulates the
+    // invariant being broken to verify buildHairpinPair's defensive guard.
+    const rogueRest = document.createElement(MUSIC_REST) as unknown as Record<
+      string,
+      unknown
+    >;
+    Object.defineProperty(rogueRest, 'nodeName', {
+      value: MUSIC_REST_NODE,
+      configurable: true,
+    });
+    rogueRest.crescendo = 'start';
+    document.body.appendChild(rogueRest as unknown as Node);
+
+    const endNote = makeNote({ crescendo: 'end', dynamic: 'f' });
+
+    const elements = [
+      rogueRest,
+      endNote,
+    ] as unknown as NoteChordOrRestElementType[];
+    const positions = new Map([
+      [0, 0],
+      [1, 100],
+    ]);
+    const pairs = pairHairpins(elements, positions);
+
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].errors).toEqual([
+      'Hairpin (crescendo) references a rest element, which cannot carry a dynamic or hairpin marking.',
+    ]);
+    // Falls back to raw bounds — no dynamic-shift math applied.
+    expect(pairs[0].startX).toBe(0);
+    expect(pairs[0].endX).toBe(100 + NOTE_SVG_WIDTH);
   });
 });
 

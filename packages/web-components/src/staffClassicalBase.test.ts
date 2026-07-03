@@ -134,7 +134,9 @@ describe('staffClassicalBase', () => {
       slot.dispatchEvent(new Event('slotchange'));
 
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('overlaps a dynamic marking')
+        expect.arrayContaining([
+          expect.stringContaining('overlaps an interim dynamic marking'),
+        ])
       );
 
       warnSpy.mockRestore();
