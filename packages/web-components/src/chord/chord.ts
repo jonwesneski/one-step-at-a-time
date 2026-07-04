@@ -18,6 +18,8 @@ import {
   addLedgerLines,
   createChordSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseConnectorRole,
+  parseDynamicMarking,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -31,33 +33,6 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
-
-const VALID_DYNAMICS = new Set<string>([
-  'ppp',
-  'pp',
-  'p',
-  'mp',
-  'mf',
-  'f',
-  'ff',
-  'fff',
-  'sfz',
-  'sf',
-  'fz',
-  'rfz',
-  'fp',
-]);
-
-const parseConnectorRole = (value: string | null): ConnectorRole | null => {
-  if (value === 'start' || value === 'end') return value;
-  return null;
-};
-
-const parseDynamicMarking = (value: string | null): DynamicMarking | null => {
-  if (value !== null && VALID_DYNAMICS.has(value))
-    return value as DynamicMarking;
-  return null;
-};
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {

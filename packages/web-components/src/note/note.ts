@@ -11,35 +11,10 @@ import {
   addLedgerLines,
   createNoteSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseConnectorRole,
+  parseDynamicMarking,
 } from '../utils';
-import { MUSIC_NOTE, NOTE_EVENTS } from '../utils/consts';
-
-const VALID_DYNAMICS = new Set<string>([
-  'ppp',
-  'pp',
-  'p',
-  'mp',
-  'mf',
-  'f',
-  'ff',
-  'fff',
-  'sfz',
-  'sf',
-  'fz',
-  'rfz',
-  'fp',
-]);
-
-const parseConnectorRole = (value: string | null): ConnectorRole | null => {
-  if (value === 'start' || value === 'end') return value;
-  return null;
-};
-
-const parseDynamicMarking = (value: string | null): DynamicMarking | null => {
-  if (value !== null && VALID_DYNAMICS.has(value))
-    return value as DynamicMarking;
-  return null;
-};
+import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES } from '../utils/consts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement implements INoteElement {
@@ -89,7 +64,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get octave(): Octave | null {
-      return (this.getAttribute('octave') as unknown as Octave) ?? null;
+      const attribute = this.getAttribute('octave');
+      if (attribute === null) {
+        return null;
+      }
+      const parsed = Number(attribute) as Octave;
+      return OCTAVES.includes(parsed) ? parsed : null;
     }
 
     set octave(val: Octave | null) {
