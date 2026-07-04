@@ -1,14 +1,13 @@
 /**
  * @jest-environment jsdom
  */
-import '../note/index';
 import '../chord/index';
+import '../note/index';
 import '../rest/index';
 import type {
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
-import type { DynamicMarking } from '../types/theory';
 import {
   MUSIC_CHORD,
   MUSIC_NOTE,
@@ -20,11 +19,7 @@ import {
   HAIRPIN_DYNAMIC_GAP_PX,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
-import {
-  getNoteDynamic,
-  pairHairpins,
-  resolveHairpinSegments,
-} from './dynamicsRules';
+import { pairHairpins, resolveHairpinSegments } from './dynamicsRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -54,45 +49,6 @@ function makeXPositions(count: number): Map<number, number> {
   }
   return positions;
 }
-
-describe('getNoteDynamic', () => {
-  it('returns the dynamic marking when set', () => {
-    const el = makeNote({ dynamic: 'mf' });
-    expect(getNoteDynamic(el as any)).toBe('mf' as DynamicMarking);
-  });
-
-  it('returns null when no dynamic attribute is set', () => {
-    const el = makeNote();
-    expect(getNoteDynamic(el as any)).toBeNull();
-  });
-
-  it('returns null for an invalid dynamic value', () => {
-    const el = makeNote({ dynamic: 'xyz' });
-    expect(getNoteDynamic(el as any)).toBeNull();
-  });
-
-  it('handles all valid dynamic markings', () => {
-    const markings: DynamicMarking[] = [
-      'ppp',
-      'pp',
-      'p',
-      'mp',
-      'mf',
-      'f',
-      'ff',
-      'fff',
-      'sfz',
-      'sf',
-      'fz',
-      'rfz',
-      'fp',
-    ];
-    for (const marking of markings) {
-      const el = makeNote({ dynamic: marking });
-      expect(getNoteDynamic(el as any)).toBe(marking);
-    }
-  });
-});
 
 describe('pairHairpins', () => {
   it('pairs a single crescendo start and end', () => {

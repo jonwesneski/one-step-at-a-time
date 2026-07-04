@@ -4,7 +4,7 @@ import {
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
-import { getNoteDynamic, pairHairpins } from './rules/dynamicsRules';
+import { pairHairpins } from './rules/dynamicsRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
@@ -1234,13 +1234,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (element.nodeName === MUSIC_REST_NODE) {
         continue;
       }
-      const noteOrChord = element as unknown as INoteElement | IChordElement;
-      const marking = getNoteDynamic(noteOrChord);
-      if (marking !== null) {
+      const noteOrChord = element as INoteElement | IChordElement;
+      if (noteOrChord.dynamic !== null) {
         const noteX = this.#noteXPositions.get(i) ?? 0;
         const centerX = noteX + NOTE_SVG_WIDTH / 2;
         this.#dynamicsContainer.appendChild(
-          createDynamicMarkingSvg(marking, centerX, DYNAMICS_BASELINE_Y)
+          createDynamicMarkingSvg(
+            noteOrChord.dynamic,
+            centerX,
+            DYNAMICS_BASELINE_Y
+          )
         );
       }
     }

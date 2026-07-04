@@ -4,7 +4,7 @@ import {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
 } from '../types/elements';
-import { DynamicMarking, HairpinKind } from '../types/theory';
+import { HairpinKind } from '../types/theory';
 import { MUSIC_REST_NODE } from '../utils/consts';
 import {
   DYNAMICS_CHAR_WIDTH_PX,
@@ -22,15 +22,6 @@ export type HairpinPair = {
   endX: number;
   errors: string[];
 };
-
-/**
- * Returns the dynamic marking on a note or chord element, or null if none is set.
- */
-export function getNoteDynamic(
-  element: INoteElement | IChordElement
-): DynamicMarking | null {
-  return element.dynamic;
-}
 
 type OpenHairpinStart = {
   element: NoteOrChordElementType;
@@ -60,14 +51,14 @@ export function pairHairpins(
   const openStarts = new Map<HairpinKind, OpenHairpinStart>();
 
   elements.forEach((element, index) => {
-    const noteOrChord = element as unknown as INoteElement | IChordElement;
+    const noteOrChord = element as INoteElement | IChordElement;
     const crescendo = 'crescendo' in noteOrChord ? noteOrChord.crescendo : null;
     const decrescendo =
       'decrescendo' in noteOrChord ? noteOrChord.decrescendo : null;
 
     // A rest never has crescendo/decrescendo, so reaching either 'start'/'end'
     // branch below guarantees element is actually a note or chord.
-    const noteOrChordElement = element as unknown as NoteOrChordElementType;
+    const noteOrChordElement = element as NoteOrChordElementType;
 
     if (crescendo === 'start') {
       openStarts.set('crescendo', { element: noteOrChordElement, index });
@@ -142,8 +133,8 @@ function buildHairpinPair(
     };
   }
 
-  const startMarking = getNoteDynamic(start.element);
-  const endMarking = getNoteDynamic(end.element);
+  const startMarking = start.element.dynamic;
+  const endMarking = end.element.dynamic;
 
   // Dynamic text is rendered centered at noteX + NOTE_SVG_WIDTH/2 (see
   // #renderDynamics' centerX) — the shift must clear that text's actual edge,
@@ -182,8 +173,7 @@ function buildHairpinPair(
   const hasInterimDynamic = elements
     .slice(start.index + 1, end.index)
     .some(
-      (el) =>
-        getNoteDynamic(el as unknown as INoteElement | IChordElement) !== null
+      (el) => (el as unknown as INoteElement | IChordElement).dynamic !== null
     );
   if (hasInterimDynamic) {
     errors.push(
