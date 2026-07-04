@@ -41,6 +41,42 @@ describe(MUSIC_NOTE, () => {
   });
 });
 
+describe('diminuendo alias', () => {
+  it('normalizes the diminuendo attribute into decrescendo', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.setAttribute('diminuendo', 'start');
+
+    expect(noteElement.getAttribute('decrescendo')).toBe('start');
+    expect(noteElement.getAttribute('diminuendo')).toBeNull();
+    expect(noteElement.decrescendo).toBe('start');
+    expect(noteElement.diminuendo).toBe('start');
+  });
+
+  it('sets decrescendo through the diminuendo property setter', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.diminuendo = 'end';
+
+    expect(noteElement.decrescendo).toBe('end');
+    expect(noteElement.getAttribute('decrescendo')).toBe('end');
+    expect(noteElement.getAttribute('diminuendo')).toBeNull();
+  });
+
+  it('clears decrescendo when diminuendo is set to null', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.decrescendo = 'start';
+    noteElement.diminuendo = null;
+
+    expect(noteElement.decrescendo).toBeNull();
+    expect(noteElement.getAttribute('decrescendo')).toBeNull();
+  });
+});
+
 const TREBLE_STAFF_Y: Record<string, number> = {
   C6: 10,
   B5: 15,

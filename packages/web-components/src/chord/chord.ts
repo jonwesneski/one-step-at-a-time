@@ -63,13 +63,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
       return [
-        'currentCount',
         'duration',
         'tie',
         'slur',
         'dynamic',
         'crescendo',
         'decrescendo',
+        'diminuendo',
       ];
     }
 
@@ -226,6 +226,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // Alias for decrescendo — always mirrors it, never holds separate state.
+    get diminuendo(): HairpinRole | null {
+      return this.decrescendo;
+    }
+    set diminuendo(value: HairpinRole | null) {
+      this.decrescendo = value;
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -265,7 +273,27 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue || !this.isConnected) {
+      if (oldValue === newValue) {
+        return;
+      }
+
+      // diminuendo is an alias for decrescendo — normalize immediately so
+      // decrescendo is the only hairpin attribute any other code ever sees.
+      // Runs even before the element is connected (unlike the rest of this
+      // callback) since callers commonly set attributes before appending.
+      // Only forward when diminuendo is being set (newValue !== null); the
+      // follow-up removeAttribute('diminuendo') below re-enters this callback
+      // with newValue === null and must be a no-op, or it would immediately
+      // clear the decrescendo value we just set.
+      if (name === 'diminuendo') {
+        if (newValue !== null) {
+          this.setAttribute('decrescendo', newValue);
+          this.removeAttribute('diminuendo');
+        }
+        return;
+      }
+
+      if (!this.isConnected) {
         return;
       }
 

@@ -31,6 +31,42 @@ describe(MUSIC_CHORD, () => {
     expect(el.shadowRoot.innerHTML).not.toBe('');
   });
 
+  describe('diminuendo alias', () => {
+    it('normalizes the diminuendo attribute into decrescendo', () => {
+      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
+      document.body.appendChild(el);
+
+      el.setAttribute('diminuendo', 'start');
+
+      expect(el.getAttribute('decrescendo')).toBe('start');
+      expect(el.getAttribute('diminuendo')).toBeNull();
+      expect(el.decrescendo).toBe('start');
+      expect(el.diminuendo).toBe('start');
+    });
+
+    it('sets decrescendo through the diminuendo property setter', () => {
+      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
+      document.body.appendChild(el);
+
+      el.diminuendo = 'end';
+
+      expect(el.decrescendo).toBe('end');
+      expect(el.getAttribute('decrescendo')).toBe('end');
+      expect(el.getAttribute('diminuendo')).toBeNull();
+    });
+
+    it('clears decrescendo when diminuendo is set to null', () => {
+      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
+      document.body.appendChild(el);
+
+      el.decrescendo = 'start';
+      el.diminuendo = null;
+
+      expect(el.decrescendo).toBeNull();
+      expect(el.getAttribute('decrescendo')).toBeNull();
+    });
+  });
+
   describe('notes getter', () => {
     it('returns empty array when no chord attribute and no child notes', () => {
       const el = document.createElement(MUSIC_CHORD) as any;

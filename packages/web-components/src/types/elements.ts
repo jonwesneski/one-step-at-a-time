@@ -27,6 +27,8 @@ export interface INoteElement {
   dynamic: DynamicMarking | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
+  // Alias for decrescendo — always mirrors it.
+  diminuendo: HairpinRole | null;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
@@ -55,6 +57,8 @@ export interface IChordElement {
   dynamic: DynamicMarking | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
+  // Alias for decrescendo — always mirrors it.
+  diminuendo: HairpinRole | null;
   batchUpdate(fn: () => void): void;
 }
 

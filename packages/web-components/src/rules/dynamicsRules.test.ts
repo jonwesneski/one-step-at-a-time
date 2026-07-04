@@ -74,6 +74,16 @@ describe('pairHairpins', () => {
     expect(pairs[0].kind).toBe('decrescendo');
   });
 
+  it('pairs a diminuendo start/end identically to decrescendo (diminuendo is an alias)', () => {
+    const elements = makeElements([
+      { diminuendo: 'start' },
+      { diminuendo: 'end' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].kind).toBe('decrescendo');
+  });
+
   it('pairs multiple hairpins in sequence', () => {
     const elements = makeElements([
       { crescendo: 'start' },
