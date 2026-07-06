@@ -272,14 +272,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (
-        name === 'tie' ||
-        name === 'slur' ||
-        name === 'crescendo' ||
-        name === 'decrescendo'
-      ) {
+      if (name === 'tie' || name === 'slur') {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (name === 'crescendo' || name === 'decrescendo') {
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })

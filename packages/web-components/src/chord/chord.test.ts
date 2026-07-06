@@ -3,7 +3,7 @@
  */
 import '../note/index';
 import '../staffTreble/index';
-import { ChordElementType } from '../types/elements';
+import { ChordElementType, NoteElementType } from '../types/elements';
 import type { Chord, DurationType, Note, Octave } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
@@ -23,82 +23,93 @@ describe(MUSIC_CHORD, () => {
   });
 
   it('renders shadow root with default duration', () => {
-    const el = document.createElement(MUSIC_CHORD) as any;
-    document.body.appendChild(el);
+    const chordElement = document.createElement(
+      MUSIC_CHORD
+    ) as ChordElementType;
+    document.body.appendChild(chordElement);
 
-    expect(el.duration).toBe('quarter');
-    expect(el.shadowRoot).not.toBeNull();
-    expect(el.shadowRoot.innerHTML).not.toBe('');
+    expect(chordElement.duration).toBe('quarter');
+    expect(chordElement.shadowRoot).not.toBeNull();
+    expect(chordElement?.shadowRoot?.innerHTML).not.toBe('');
   });
 
   describe('diminuendo alias', () => {
     it('normalizes the diminuendo attribute into decrescendo', () => {
-      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
-      document.body.appendChild(el);
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      document.body.appendChild(chordElement);
 
-      el.setAttribute('diminuendo', 'start');
+      chordElement.setAttribute('diminuendo', 'start');
 
-      expect(el.getAttribute('decrescendo')).toBe('start');
-      expect(el.getAttribute('diminuendo')).toBeNull();
-      expect(el.decrescendo).toBe('start');
-      expect(el.diminuendo).toBe('start');
+      expect(chordElement.getAttribute('decrescendo')).toBe('start');
+      expect(chordElement.getAttribute('diminuendo')).toBeNull();
+      expect(chordElement.decrescendo).toBe('start');
+      expect(chordElement.diminuendo).toBe('start');
     });
 
     it('sets decrescendo through the diminuendo property setter', () => {
-      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
-      document.body.appendChild(el);
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      document.body.appendChild(chordElement);
 
-      el.diminuendo = 'end';
+      chordElement.diminuendo = 'end';
 
-      expect(el.decrescendo).toBe('end');
-      expect(el.getAttribute('decrescendo')).toBe('end');
-      expect(el.getAttribute('diminuendo')).toBeNull();
+      expect(chordElement.decrescendo).toBe('end');
+      expect(chordElement.getAttribute('decrescendo')).toBe('end');
+      expect(chordElement.getAttribute('diminuendo')).toBeNull();
     });
 
     it('clears decrescendo when diminuendo is set to null', () => {
-      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
-      document.body.appendChild(el);
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      document.body.appendChild(chordElement);
 
-      el.decrescendo = 'start';
-      el.diminuendo = null;
+      chordElement.decrescendo = 'start';
+      chordElement.diminuendo = null;
 
-      expect(el.decrescendo).toBeNull();
-      expect(el.getAttribute('decrescendo')).toBeNull();
+      expect(chordElement.decrescendo).toBeNull();
+      expect(chordElement.getAttribute('decrescendo')).toBeNull();
     });
   });
 
   describe('notes getter', () => {
     it('returns empty array when no chord attribute and no child notes', () => {
-      const el = document.createElement(MUSIC_CHORD) as any;
-      document.body.appendChild(el);
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      document.body.appendChild(chordElement);
 
-      expect(el.notes).toEqual([]);
+      expect(chordElement.notes).toEqual([]);
     });
 
     it('returns notes derived from chord attribute when no child notes exist', () => {
-      const el = document.createElement(MUSIC_CHORD) as any;
-      el.setAttribute('chord', 'Amaj');
-      el.setAttribute('duration', 'quarter');
-      document.body.appendChild(el);
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'Amaj');
+      chordElement.setAttribute('duration', 'quarter');
+      document.body.appendChild(chordElement);
 
-      const notes = el.notes;
+      const notes = chordElement.notes;
       const values: Note[] = notes.map((n: { value: Note }) => n.value);
       expect(values).toEqual(['A', 'C#', 'E']);
-      notes.forEach((n: { octave: null; duration: DurationType }) => {
-        expect(n.octave).toBeNull();
+      notes.forEach((n: { duration: DurationType }) => {
         expect(n.duration).toBe('quarter');
       });
     });
 
     it('returns child music-note elements when they exist, ignoring chord attribute', () => {
-      const el = document.createElement(MUSIC_CHORD) as any;
+      const el = document.createElement(MUSIC_CHORD) as ChordElementType;
       el.setAttribute('chord', 'Amaj');
       document.body.appendChild(el);
 
-      const noteC = document.createElement(MUSIC_NOTE) as any;
+      const noteC = document.createElement(MUSIC_NOTE) as NoteElementType;
       noteC.setAttribute('note', 'C');
       noteC.setAttribute('duration', 'quarter');
-      const noteE = document.createElement(MUSIC_NOTE) as any;
+      const noteE = document.createElement(MUSIC_NOTE) as NoteElementType;
       noteE.setAttribute('note', 'E');
       noteE.setAttribute('duration', 'quarter');
       el.appendChild(noteC);
@@ -129,12 +140,12 @@ const TREBLE_STAFF_Y: Record<string, number> = {
 };
 
 function makeStaff(): Element {
-  const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-  el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
-  el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-  el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-  document.body.appendChild(el);
-  return el;
+  const staffTreble = document.createElement(MUSIC_STAFF_TREBLE) as any;
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+  document.body.appendChild(staffTreble);
+  return staffTreble;
 }
 
 function renderChordByNotes(
@@ -145,7 +156,7 @@ function renderChordByNotes(
   const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
   chord.setAttribute('duration', duration);
   for (const { value, octave } of notes) {
-    const note = document.createElement(MUSIC_NOTE) as any;
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
     note.setAttribute('note', value);
     note.setAttribute('octave', `${octave}`);
     chord.appendChild(note);

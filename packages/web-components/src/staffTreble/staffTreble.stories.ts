@@ -3,6 +3,8 @@ import { html } from 'lit';
 import '../index';
 import { DYNAMICS, MODES } from '../utils';
 
+const HAIRPIN_ROLES = ['start', 'end'] as const;
+
 const meta: Meta = {
   title: 'Components/StaffTreble',
   tags: ['autodocs'],
@@ -224,14 +226,34 @@ export const WithDynamics: Story = {
 };
 
 export const WithDynamicsAndHairpin: Story = {
-  render: () => html`
+  args: {
+    dynamic1: 'p',
+    crescendo1: 'start',
+    dynamic2: 'f',
+    crescendo2: 'end',
+    dynamic3: 'ff',
+    decrescendo3: 'start',
+    dynamic4: 'p',
+    decrescendo4: 'end',
+  },
+  argTypes: {
+    dynamic1: { control: 'select', options: DYNAMICS },
+    crescendo1: { control: 'select', options: HAIRPIN_ROLES },
+    dynamic2: { control: 'select', options: DYNAMICS },
+    crescendo2: { control: 'select', options: HAIRPIN_ROLES },
+    dynamic3: { control: 'select', options: DYNAMICS },
+    decrescendo3: { control: 'select', options: HAIRPIN_ROLES },
+    dynamic4: { control: 'select', options: DYNAMICS },
+    decrescendo4: { control: 'select', options: HAIRPIN_ROLES },
+  },
+  render: (args) => html`
     <music-staff-treble keySig="C" mode="major" time="4/4">
       <music-note
         duration="quarter"
         note="C"
         octave="5"
-        dynamic="p"
-        crescendo="start"
+        dynamic=${args.dynamic1}
+        crescendo=${args.crescendo1}
       ></music-note>
       <music-note duration="quarter" note="D" octave="5"></music-note>
       <music-note duration="quarter" note="E" octave="5"></music-note>
@@ -239,8 +261,8 @@ export const WithDynamicsAndHairpin: Story = {
         duration="quarter"
         note="F"
         octave="5"
-        dynamic="f"
-        crescendo="end"
+        dynamic=${args.dynamic2}
+        crescendo=${args.crescendo2}
       ></music-note>
     </music-staff-treble>
     <music-staff-treble
@@ -253,8 +275,8 @@ export const WithDynamicsAndHairpin: Story = {
         duration="quarter"
         note="G"
         octave="5"
-        dynamic="ff"
-        decrescendo="start"
+        dynamic=${args.dynamic3}
+        decrescendo=${args.decrescendo3}
       ></music-note>
       <music-note duration="quarter" note="F" octave="5"></music-note>
       <music-note duration="quarter" note="E" octave="5"></music-note>
@@ -262,8 +284,8 @@ export const WithDynamicsAndHairpin: Story = {
         duration="quarter"
         note="D"
         octave="5"
-        dynamic="p"
-        decrescendo="end"
+        dynamic=${args.dynamic4}
+        decrescendo=${args.decrescendo4}
       ></music-note>
     </music-staff-treble>
   `,
