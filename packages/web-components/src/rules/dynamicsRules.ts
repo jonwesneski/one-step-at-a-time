@@ -1,10 +1,10 @@
-import {
+import type {
   IChordElement,
   INoteElement,
   NoteChordOrRestElementType,
   NoteOrChordElementType,
 } from '../types/elements';
-import { HairpinKind } from '../types/theory';
+import type { HairpinKind } from '../types/theory';
 import { MUSIC_REST_NODE } from '../utils/consts';
 import {
   DYNAMICS_CHAR_WIDTH_PX,

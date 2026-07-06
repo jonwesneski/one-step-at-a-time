@@ -3,7 +3,7 @@
  */
 import '../note/index';
 import '../staffTreble/index';
-import { ChordElementType, NoteElementType } from '../types/elements';
+import type { ChordElementType, NoteElementType } from '../types/elements';
 import type { Chord, DurationType, Note, Octave } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,

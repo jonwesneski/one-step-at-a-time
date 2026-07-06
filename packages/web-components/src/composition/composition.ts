@@ -1,10 +1,11 @@
+import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
+import type { NoteChordOrRestElementType } from '../types/elements';
+import { createHairpinSvg } from '../utils';
 import {
   buildConnectorSvgs,
   collectNoteLikeElements,
   pairConnectors,
 } from '../utils/connectorsBuilder';
-import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
-import { NoteChordOrRestElementType } from '../types/elements';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
@@ -18,7 +19,6 @@ import {
   MUSIC_STAFF_VOCAL,
 } from '../utils/consts';
 import { DYNAMICS_BASELINE_Y } from '../utils/notationDimensions';
-import { createHairpinSvg } from '../utils';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
@@ -281,8 +281,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const rootRect = wrapper.getBoundingClientRect();
 
       for (const pair of pairs) {
-        const startElement = pair.startElement as unknown as Element;
-        const endElement = pair.endElement as unknown as Element;
+        const startElement = pair.startElement;
+        const endElement = pair.endElement;
 
         // Skip intra-staff pairs — they are already rendered by the staff itself
         const startStaff = startElement.closest(

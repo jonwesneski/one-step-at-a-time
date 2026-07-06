@@ -1,12 +1,12 @@
-import { ConnectorRole } from '../types/elements';
-import { DynamicMarking } from '../types/theory';
+import type { ConnectorRole } from '../types/elements';
+import type { DynamicMarking, HairpinRole } from '../types/theory';
 import { DYNAMICS } from './consts';
 
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
 
 export const parseConnectorRole = (
   value: string | null
-): ConnectorRole | null => {
+): ConnectorRole | HairpinRole | null => {
   if (value === 'start' || value === 'end') {
     return value;
   }
