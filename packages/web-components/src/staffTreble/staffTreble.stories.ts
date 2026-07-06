@@ -237,13 +237,25 @@ export const WithDynamicsAndHairpin: Story = {
     decrescendo4: 'end',
   },
   argTypes: {
-    dynamic1: { control: 'select', options: DYNAMICS },
+    dynamic1: {
+      control: { type: 'select', labels: { '': 'None' } },
+      options: ['', ...DYNAMICS],
+    },
     crescendo1: { control: 'select', options: HAIRPIN_ROLES },
-    dynamic2: { control: 'select', options: DYNAMICS },
+    dynamic2: {
+      control: { type: 'select', labels: { '': 'None' } },
+      options: ['', ...DYNAMICS],
+    },
     crescendo2: { control: 'select', options: HAIRPIN_ROLES },
-    dynamic3: { control: 'select', options: DYNAMICS },
+    dynamic3: {
+      control: { type: 'select', labels: { '': 'None' } },
+      options: ['', ...DYNAMICS],
+    },
     decrescendo3: { control: 'select', options: HAIRPIN_ROLES },
-    dynamic4: { control: 'select', options: DYNAMICS },
+    dynamic4: {
+      control: { type: 'select', labels: { '': 'None' } },
+      options: ['', ...DYNAMICS],
+    },
     decrescendo4: { control: 'select', options: HAIRPIN_ROLES },
   },
   render: (args) => html`
