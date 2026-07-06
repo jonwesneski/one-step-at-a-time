@@ -282,7 +282,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'dynamic' || name === 'crescendo' || name === 'decrescendo') {
+      if (
+        name === 'dynamic' ||
+        name === 'crescendo' ||
+        name === 'decrescendo'
+      ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
             bubbles: true,
