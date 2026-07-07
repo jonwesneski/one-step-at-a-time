@@ -170,11 +170,12 @@ function buildHairpinPair(
     );
   }
 
-  const hasInterimDynamic = elements
-    .slice(start.index + 1, end.index)
-    .some(
-      (el) => (el as unknown as INoteElement | IChordElement).dynamic !== null
-    );
+  const hasInterimDynamic = elements.slice(start.index + 1, end.index).some(
+    (el) =>
+      // a rest never carries a dynamic — not an error, just skip it
+      el.nodeName !== MUSIC_REST_NODE &&
+      (el as unknown as INoteElement | IChordElement).dynamic !== null
+  );
   if (hasInterimDynamic) {
     errors.push(
       `Hairpin (${kind}) overlaps an interim dynamic marking between its start and end.`

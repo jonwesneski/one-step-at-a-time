@@ -255,6 +255,33 @@ describe('pairHairpins', () => {
     expect(pairs[0].endX).toBe(200 + NOTE_SVG_WIDTH);
   });
 
+  it('does not flag an interim dynamic warning when a rest (with no dynamic) sits between start and end', () => {
+    const start = makeNote({ crescendo: 'start' });
+    const rest = document.createElement(
+      MUSIC_REST
+    ) as NoteChordOrRestElementType;
+    document.body.appendChild(rest);
+    const end = makeNote({ crescendo: 'end' });
+    const elements = [start, rest, end];
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    expect(pairs[0].errors).toEqual([]);
+  });
+
+  it('still flags an interim dynamic warning when a real dynamic follows a rest in the span', () => {
+    const start = makeNote({ crescendo: 'start' });
+    const rest = document.createElement(
+      MUSIC_REST
+    ) as NoteChordOrRestElementType;
+    document.body.appendChild(rest);
+    const interimNote = makeNote({ dynamic: 'mf' });
+    const end = makeNote({ crescendo: 'end' });
+    const elements = [start, rest, interimNote, end];
+    const pairs = pairHairpins(elements, makeXPositions(elements.length));
+    expect(pairs[0].errors).toEqual([
+      'Hairpin (crescendo) overlaps an interim dynamic marking between its start and end.',
+    ]);
+  });
+
   it('flags an error and skips the dynamic-shift math if a rest element ever ends up as a hairpin start/end', () => {
     // A real music-rest element can never satisfy this in practice (rest.ts
     // defines no crescendo/decrescendo accessor), so this simulates the
