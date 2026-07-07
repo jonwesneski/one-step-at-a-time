@@ -1,3 +1,6 @@
+import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
+import type { NoteChordOrRestElementType } from '../types/elements';
+import { createHairpinSvg } from '../utils';
 import {
   buildConnectorSvgs,
   collectNoteLikeElements,
@@ -5,14 +8,17 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_MEASURE_NODE,
+  MUSIC_NOTE,
   MUSIC_STAFF_BASS,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_TREBLE,
   MUSIC_STAFF_VOCAL,
 } from '../utils/consts';
+import { DYNAMICS_BASELINE_Y } from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
@@ -79,6 +85,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#resizeObserver = null;
       this.removeEventListener('staff-notes-positioned', this.#boundRedraw);
       this.removeEventListener('connector-attribute-change', this.#boundRedraw);
+      this.removeEventListener('dynamic-attribute-change', this.#boundRedraw);
     }
 
     attributeChangedCallback(
@@ -154,6 +161,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       this.addEventListener('staff-notes-positioned', this.#boundRedraw);
       this.addEventListener('connector-attribute-change', this.#boundRedraw);
+      this.addEventListener('dynamic-attribute-change', this.#boundRedraw);
     }
 
     #scheduleRedraw() {
@@ -165,6 +173,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#redrawConnectors();
+        this.#redrawHairpins();
         this.#updateDescribeVisibility();
       });
     }
@@ -220,6 +229,125 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return 0;
       }
       return describeContainer.getBoundingClientRect().right - rootRect.left;
+    }
+
+    #computeNotesAreaLeftForStaff(
+      staff: HTMLElement,
+      rootRect: DOMRect
+    ): number {
+      const describeContainer = staff.shadowRoot?.querySelector(
+        '.describe-container'
+      );
+      if (!describeContainer) {
+        return 0;
+      }
+      return describeContainer.getBoundingClientRect().right - rootRect.left;
+    }
+
+    #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
+      const staff = element.closest(
+        `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}`
+      ) as HTMLElement | null;
+      if (!staff) {
+        return 0;
+      }
+      const staffRect = staff.getBoundingClientRect();
+      return staffRect.top - rootRect.top + DYNAMICS_BASELINE_Y;
+    }
+
+    #redrawHairpins() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.connectors-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
+
+      const staffSelector = `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}`;
+      const selector = `${MUSIC_NOTE}[crescendo], ${MUSIC_NOTE}[decrescendo], ${MUSIC_CHORD}[crescendo], ${MUSIC_CHORD}[decrescendo]`;
+      const elements = Array.from(
+        this.querySelectorAll(selector)
+      ) as NoteChordOrRestElementType[];
+
+      if (elements.length === 0) {
+        return;
+      }
+
+      // Cross-staff geometry here comes from resolveHairpinSegments() below
+      // (via getBoundingClientRect), not from pairHairpins' own startX/endX —
+      // an empty positions map is fine since those fields go unused.
+      const pairs = pairHairpins(elements, new Map());
+      const rootRect = wrapper.getBoundingClientRect();
+
+      for (const pair of pairs) {
+        const startElement = pair.startElement;
+        const endElement = pair.endElement;
+
+        // Skip intra-staff pairs — they are already rendered by the staff itself
+        const startStaff = startElement.closest(
+          staffSelector
+        ) as HTMLElement | null;
+        const endStaff = endElement.closest(
+          staffSelector
+        ) as HTMLElement | null;
+        if (startStaff !== null && startStaff === endStaff) {
+          continue;
+        }
+
+        const startRect = startElement.getBoundingClientRect();
+        const endRect = endElement.getBoundingClientRect();
+
+        const startBounds = {
+          left: startRect.left - rootRect.left,
+          right: startRect.right - rootRect.left,
+          top: startRect.top - rootRect.top,
+        };
+        const endBounds = {
+          left: endRect.left - rootRect.left,
+          right: endRect.right - rootRect.left,
+          top: endRect.top - rootRect.top,
+        };
+
+        const startCenterY = this.#getDynamicsBaselineY(startElement, rootRect);
+        const endCenterY = this.#getDynamicsBaselineY(endElement, rootRect);
+
+        // Use each staff's actual bounding rect so the hairpin ends exactly at
+        // the barline (staff right edge) and begins exactly at the notes-area
+        // left edge of the continuation row, regardless of composition width.
+        const pairRowRight = startStaff
+          ? startStaff.getBoundingClientRect().right - rootRect.left
+          : rootRect.width;
+        const pairRowLeft = endStaff
+          ? this.#computeNotesAreaLeftForStaff(endStaff, rootRect)
+          : this.#computeNotesAreaLeft(rootRect);
+
+        const segments = resolveHairpinSegments(
+          pair,
+          startBounds,
+          endBounds,
+          startCenterY,
+          endCenterY,
+          pairRowLeft,
+          pairRowRight
+        );
+
+        for (const segment of segments) {
+          overlay.appendChild(
+            createHairpinSvg(
+              segment.kind,
+              segment.startX,
+              segment.endX,
+              segment.centerY,
+              undefined,
+              segment.openAtStart,
+              segment.openAtEnd
+            )
+          );
+        }
+      }
     }
 
     #updateDescribeVisibility() {

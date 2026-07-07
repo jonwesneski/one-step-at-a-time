@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import '../staffTreble/index';
-import type { NoteLetterOctave } from '../types/elements';
+import '../tuplet/index';
+import type { NoteElementType, NoteLetterOctave } from '../types/elements';
 import type {
   DurationType,
   Note,
@@ -19,7 +20,6 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
 import './index';
-import '../tuplet/index';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -31,13 +31,49 @@ describe(MUSIC_NOTE, () => {
   });
 
   it('renders with default duration and note', () => {
-    const el = document.createElement(MUSIC_NOTE) as any;
-    document.body.appendChild(el);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
 
-    expect(el.duration).toBe('quarter');
-    expect(el.note).toBe('C');
-    expect(el.shadowRoot).not.toBeNull();
-    expect(el.shadowRoot.innerHTML).not.toBe('');
+    expect(noteElement.duration).toBe('quarter');
+    expect(noteElement.note).toBe('C');
+    expect(noteElement.shadowRoot).not.toBeNull();
+    expect(noteElement.shadowRoot?.innerHTML).not.toBe('');
+  });
+});
+
+describe('diminuendo alias', () => {
+  it('normalizes the diminuendo attribute into decrescendo', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.setAttribute('diminuendo', 'start');
+
+    expect(noteElement.getAttribute('decrescendo')).toBe('start');
+    expect(noteElement.getAttribute('diminuendo')).toBeNull();
+    expect(noteElement.decrescendo).toBe('start');
+    expect(noteElement.diminuendo).toBe('start');
+  });
+
+  it('sets decrescendo through the diminuendo property setter', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.diminuendo = 'end';
+
+    expect(noteElement.decrescendo).toBe('end');
+    expect(noteElement.getAttribute('decrescendo')).toBe('end');
+    expect(noteElement.getAttribute('diminuendo')).toBeNull();
+  });
+
+  it('clears decrescendo when diminuendo is set to null', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.decrescendo = 'start';
+    noteElement.diminuendo = null;
+
+    expect(noteElement.decrescendo).toBeNull();
+    expect(noteElement.getAttribute('decrescendo')).toBeNull();
   });
 });
 
@@ -72,12 +108,12 @@ function expectedNoteTop(value: NoteLetterOctave): string {
 }
 
 function makeStaff(): Element {
-  const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-  el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
-  el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-  el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-  document.body.appendChild(el);
-  return el;
+  const staffTreble = document.createElement(MUSIC_STAFF_TREBLE) as any;
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+  document.body.appendChild(staffTreble);
+  return staffTreble;
 }
 
 function renderNote(
@@ -86,7 +122,7 @@ function renderNote(
   octave: Octave,
   duration: DurationType = 'quarter'
 ): HTMLElement {
-  const note = document.createElement(MUSIC_NOTE) as any;
+  const note = document.createElement(MUSIC_NOTE) as NoteElementType;
   note.setAttribute('duration', duration);
   note.setAttribute('note', value);
   note.setAttribute('octave', `${octave}`);
@@ -179,8 +215,8 @@ describe('staff integration', () => {
     expect(note.style.left).toBe(initialLeft);
   });
 
-  it('renders a double-whole note in a 4/2 staff without overflow error', () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  it('renders a double-whole note in a 4/2 staff without overflow warning', () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
     staff.setAttribute(
@@ -198,7 +234,7 @@ describe('staff integration', () => {
     slot.assignedElements = () => [note];
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(errorSpy).not.toHaveBeenCalled();
-    errorSpy.mockRestore();
+    expect(consoleSpy).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });

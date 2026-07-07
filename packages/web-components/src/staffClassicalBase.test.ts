@@ -17,12 +17,12 @@ afterEach(() => {
 
 // I'm using <music-staff-treble /> to test staffClassicalBase specific scenarios
 describe('staffClassicalBase', () => {
-  it('logs an error when adding another note on a filled measure', () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  it('logs a warning when adding another note on a filled measure', () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-    document.body.appendChild(el);
+    const staffTreble = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staffTreble.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+    document.body.appendChild(staffTreble);
 
     const notes = Array.from({ length: 5 }, () => {
       const note = document.createElement(MUSIC_NOTE) as any;
@@ -32,23 +32,23 @@ describe('staffClassicalBase', () => {
       return note;
     });
 
-    const slot = el.shadowRoot.querySelector('slot');
+    const slot = staffTreble.shadowRoot.querySelector('slot');
     slot.assignedElements = () => notes;
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(errorSpy).toHaveBeenCalledWith(
+    expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('no more room for note(s)')
     );
 
-    errorSpy.mockRestore();
+    consoleSpy.mockRestore();
   });
 
-  it('logs an error when adding a note that partially exceeds the remaining available space in measure', () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  it('logs a warning when adding a note that partially exceeds the remaining available space in measure', () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-    el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-    document.body.appendChild(el);
+    const staffTreble = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staffTreble.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+    document.body.appendChild(staffTreble);
 
     const notes = [
       ...Array.from({ length: 3 }, () => {
@@ -67,15 +67,15 @@ describe('staffClassicalBase', () => {
       })(),
     ];
 
-    const slot = el.shadowRoot.querySelector('slot');
+    const slot = staffTreble.shadowRoot.querySelector('slot');
     slot.assignedElements = () => notes;
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(errorSpy).toHaveBeenCalledWith(
+    expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('no more room for note(s)')
     );
 
-    errorSpy.mockRestore();
+    consoleSpy.mockRestore();
   });
 
   it('assigns ascending pitch Y coordinates to a chord driven by chord attribute', () => {
@@ -97,5 +97,51 @@ describe('staffClassicalBase', () => {
     // Each note should be higher in pitch (lower Y) than the previous
     expect(coords![1]).toBeLessThan(coords![0]);
     expect(coords![2]).toBeLessThan(coords![1]);
+  });
+
+  describe('hairpin/dynamics overlap warning', () => {
+    function makeNote(attrs: Record<string, string>) {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      for (const [key, value] of Object.entries(attrs)) {
+        note.setAttribute(key, value);
+      }
+      return note;
+    }
+
+    // Endpoint-collision math (shrinking startX/endX and falling back when the
+    // gaps would invert, plus the "enough room, no warning" case) is covered
+    // directly in dynamicsRules.test.ts against injected noteXPositions —
+    // jsdom has no real container width, so every note collapses to the same
+    // x here and can't be driven to reproduce realistic spacing end-to-end.
+
+    it('warns when an interim dynamic sits strictly between a hairpin start and end', () => {
+      const consoleSpy = jest
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      document.body.appendChild(staff);
+
+      const notes = [
+        makeNote({ crescendo: 'start' }),
+        makeNote({ dynamic: 'mf' }),
+        makeNote({ crescendo: 'end' }),
+      ];
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => notes;
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.stringContaining('overlaps an interim dynamic marking'),
+        ])
+      );
+
+      consoleSpy.mockRestore();
+    });
   });
 });

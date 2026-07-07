@@ -1,9 +1,9 @@
 /**
  * @jest-environment jsdom
  */
-import '../staffTreble/index';
 import { restToYCoordinate } from '../rules/restRules';
-import { RestElementType } from '../types/elements';
+import '../staffTreble/index';
+import type { RestElementType } from '../types/elements';
 import type { DurationType, TimeSignature } from '../types/theory';
 import { DURATIONS } from '../utils';
 import {
@@ -23,13 +23,13 @@ describe(MUSIC_REST, () => {
   });
 
   it('renders a rest SVG in shadow DOM', () => {
-    const el = document.createElement(MUSIC_REST) as any;
-    el.setAttribute('duration', 'quarter');
-    document.body.appendChild(el);
+    const restElement = document.createElement(MUSIC_REST) as RestElementType;
+    restElement.setAttribute('duration', 'quarter');
+    document.body.appendChild(restElement);
 
     // jsdom shadow DOM does not support CSS class selectors on SVG elements,
     // so we use attribute-based class matching instead.
-    const restSvg = el.shadowRoot.querySelector('svg[class~="rest"]');
+    const restSvg = restElement.shadowRoot?.querySelector('svg[class~="rest"]');
     expect(restSvg).not.toBeNull();
   });
 
@@ -48,53 +48,53 @@ describe(MUSIC_REST, () => {
   });
 
   it('renders standalone (without a staff parent) with non-empty shadow DOM', () => {
-    const el = document.createElement(MUSIC_REST) as any;
-    el.setAttribute('duration', 'half');
-    document.body.appendChild(el);
+    const restElement = document.createElement(MUSIC_REST) as RestElementType;
+    restElement.setAttribute('duration', 'half');
+    document.body.appendChild(restElement);
 
-    expect(el.shadowRoot.innerHTML).not.toBe('');
-    expect(el.shadowRoot.querySelector('svg')).not.toBeNull();
+    expect(restElement.shadowRoot?.innerHTML).not.toBe('');
+    expect(restElement.shadowRoot?.querySelector('svg')).not.toBeNull();
   });
 
   it('does not render accidental elements in shadow DOM', () => {
-    const el = document.createElement(MUSIC_REST) as any;
-    el.setAttribute('duration', 'eighth');
-    document.body.appendChild(el);
+    const restElement = document.createElement(MUSIC_REST) as RestElementType;
+    restElement.setAttribute('duration', 'eighth');
+    document.body.appendChild(restElement);
 
-    const accidentals = el.shadowRoot.querySelectorAll(
+    const accidentals = restElement.shadowRoot?.querySelectorAll(
       '.sharp, .flat, .natural'
     );
-    expect(accidentals.length).toBe(0);
+    expect(accidentals?.length).toBe(0);
   });
 
   it('defaults duration to quarter when attribute is absent', () => {
-    const el = document.createElement(MUSIC_REST) as any;
-    document.body.appendChild(el);
+    const restElement = document.createElement(MUSIC_REST) as RestElementType;
+    document.body.appendChild(restElement);
 
-    expect(el.duration).toBe('quarter');
+    expect(restElement.duration).toBe('quarter');
   });
 
   it('re-renders when duration attribute changes', () => {
-    const el = document.createElement(MUSIC_REST) as any;
-    el.setAttribute('duration', 'whole');
-    document.body.appendChild(el);
+    const restElement = document.createElement(MUSIC_REST) as any;
+    restElement.setAttribute('duration', 'whole');
+    document.body.appendChild(restElement);
 
-    let restSvg = el.shadowRoot.querySelector('svg[class~="rest"]');
+    let restSvg = restElement.shadowRoot.querySelector('svg[class~="rest"]');
     expect(restSvg?.dataset.duration).toBe('whole');
 
-    el.setAttribute('duration', 'eighth');
-    restSvg = el.shadowRoot.querySelector('svg[class~="rest"]');
+    restElement.setAttribute('duration', 'eighth');
+    restSvg = restElement.shadowRoot.querySelector('svg[class~="rest"]');
     expect(restSvg?.dataset.duration).toBe('eighth');
   });
 });
 
 function makeStaff(): Element {
-  const el = document.createElement(MUSIC_STAFF_TREBLE) as any;
-  el.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
-  el.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-  el.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-  document.body.appendChild(el);
-  return el;
+  const staffTreble = document.createElement(MUSIC_STAFF_TREBLE) as any;
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  staffTreble.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+  document.body.appendChild(staffTreble);
+  return staffTreble;
 }
 
 function renderRest(staff: Element, duration: DurationType): RestElementType {
@@ -131,8 +131,8 @@ describe('staff integration', () => {
     expect(rest.style.top).toBe(`${restToYCoordinate('whole')}px`);
   });
 
-  it('renders a double-whole rest in a 4/2 staff without overflow error', () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  it('renders a double-whole rest in a 4/2 staff without overflow warning', () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
     staff.setAttribute(
@@ -148,7 +148,7 @@ describe('staff integration', () => {
     slot.assignedElements = () => [rest];
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(errorSpy).not.toHaveBeenCalled();
-    errorSpy.mockRestore();
+    expect(consoleSpy).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });

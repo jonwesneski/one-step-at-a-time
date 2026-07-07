@@ -999,4 +999,350 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     expect(crossRow.first.cy).toBeLessThan(crossRow.first.fromY);
     expect(crossRow.second.cy).toBeLessThan(crossRow.second.fromY);
   });
+
+  test('cross-measure hairpin on the same row renders as a single segment', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '1200px';
+
+        const composition = document.createElement(compositionTag);
+
+        const measure1 = document.createElement(measureTag);
+        const staff1 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['C', '5'],
+          ['D', '5'],
+          ['E', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff1.appendChild(n);
+        }
+        const crescendoStart = document.createElement(noteTag);
+        crescendoStart.setAttribute('note', 'F');
+        crescendoStart.setAttribute('octave', '5');
+        crescendoStart.setAttribute('duration', 'quarter');
+        crescendoStart.setAttribute('crescendo', 'start');
+        staff1.appendChild(crescendoStart);
+        measure1.appendChild(staff1);
+
+        const measure2 = document.createElement(measureTag);
+        const staff2 = document.createElement(staffTag);
+        const crescendoEnd = document.createElement(noteTag);
+        crescendoEnd.setAttribute('note', 'G');
+        crescendoEnd.setAttribute('octave', '5');
+        crescendoEnd.setAttribute('duration', 'quarter');
+        crescendoEnd.setAttribute('crescendo', 'end');
+        staff2.appendChild(crescendoEnd);
+        for (const [note, octave] of [
+          ['A', '5'],
+          ['B', '5'],
+          ['C', '6'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff2.appendChild(n);
+        }
+        measure2.appendChild(staff2);
+
+        composition.appendChild(measure1);
+        composition.appendChild(measure2);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const hairpinCount = await page.evaluate((compositionTag) => {
+      const composition = document.querySelector(compositionTag);
+      if (composition === null || composition.shadowRoot === null) {
+        throw new Error('composition not ready');
+      }
+      const overlay = composition.shadowRoot.querySelector(
+        '.connectors-overlay'
+      );
+      if (overlay === null) {
+        throw new Error('overlay missing');
+      }
+      return overlay.querySelectorAll('g.hairpin').length;
+    }, MUSIC_COMPOSITION);
+
+    // Both notes are on the same row (different staves, same measure row) —
+    // resolveHairpinSegments' same-row branch renders exactly one segment.
+    expect(hairpinCount).toBe(1);
+  });
+
+  test('cross-system hairpin splits into two segments with correct edges and stays open (decrescendo)', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '1200px';
+
+        const composition = document.createElement(compositionTag);
+
+        const measure1 = document.createElement(measureTag);
+        const staff1 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['C', '5'],
+          ['D', '5'],
+          ['E', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff1.appendChild(n);
+        }
+        const decrescendoStart = document.createElement(noteTag);
+        decrescendoStart.setAttribute('note', 'F');
+        decrescendoStart.setAttribute('octave', '5');
+        decrescendoStart.setAttribute('duration', 'quarter');
+        decrescendoStart.setAttribute('decrescendo', 'start');
+        staff1.appendChild(decrescendoStart);
+        measure1.appendChild(staff1);
+
+        const measure2 = document.createElement(measureTag);
+        const staff2 = document.createElement(staffTag);
+        const decrescendoEnd = document.createElement(noteTag);
+        decrescendoEnd.setAttribute('note', 'G');
+        decrescendoEnd.setAttribute('octave', '5');
+        decrescendoEnd.setAttribute('duration', 'quarter');
+        decrescendoEnd.setAttribute('decrescendo', 'end');
+        staff2.appendChild(decrescendoEnd);
+        for (const [note, octave] of [
+          ['A', '5'],
+          ['B', '5'],
+          ['C', '6'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff2.appendChild(n);
+        }
+        measure2.appendChild(staff2);
+
+        composition.appendChild(measure1);
+        composition.appendChild(measure2);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    await resizeHost(page, 200);
+    await waitForRedrawCycle(page);
+
+    const segments = await page.evaluate((compositionTag) => {
+      const composition = document.querySelector(compositionTag);
+      if (composition === null || composition.shadowRoot === null) {
+        throw new Error('composition not ready');
+      }
+      const overlay = composition.shadowRoot.querySelector(
+        '.connectors-overlay'
+      );
+      if (overlay === null) {
+        throw new Error('overlay missing');
+      }
+      const groups = Array.from(
+        overlay.querySelectorAll('g.hairpin')
+      ) as SVGGElement[];
+
+      const parseLine = (d: string) => {
+        const match = d.match(/^M (\S+) (\S+) L (\S+) (\S+)$/);
+        return {
+          fromX: Number(match?.[1] ?? '0'),
+          fromY: Number(match?.[2] ?? '0'),
+          toX: Number(match?.[3] ?? '0'),
+          toY: Number(match?.[4] ?? '0'),
+        };
+      };
+
+      const wrapper = composition.shadowRoot.querySelector(
+        '.composition-wrapper'
+      );
+      const staffs = Array.from(
+        document.querySelectorAll('music-staff-treble')
+      ) as HTMLElement[];
+      if (wrapper === null || staffs.length !== 2) {
+        throw new Error('staves not ready');
+      }
+      const rootRect = wrapper.getBoundingClientRect();
+      const [staff1, staff2] = staffs;
+      const describeContainer2 = staff2.shadowRoot?.querySelector(
+        '.describe-container'
+      );
+      if (describeContainer2 === null || describeContainer2 === undefined) {
+        throw new Error('describe container missing');
+      }
+
+      return {
+        segments: groups.map((g) => {
+          const paths = Array.from(
+            g.querySelectorAll('path')
+          ) as SVGPathElement[];
+          return {
+            top: parseLine(paths[0]?.getAttribute('d') ?? ''),
+            bottom: parseLine(paths[1]?.getAttribute('d') ?? ''),
+          };
+        }),
+        expectedRowRight: staff1.getBoundingClientRect().right - rootRect.left,
+        expectedRowLeft:
+          describeContainer2.getBoundingClientRect().right - rootRect.left,
+      };
+    }, MUSIC_COMPOSITION);
+
+    expect(segments.segments).toHaveLength(2);
+    const [first, second] = segments.segments;
+
+    // First segment ends exactly at the row-right edge (staff1's own right
+    // edge — see composition.ts pairRowRight computation).
+    expect(first.top.toX).toBeCloseTo(segments.expectedRowRight, 0);
+    expect(first.bottom.toX).toBeCloseTo(segments.expectedRowRight, 0);
+
+    // Second segment starts exactly at the row-left edge (notes area start of
+    // staff2, after its clef — see composition.ts pairRowLeft computation).
+    expect(second.top.fromX).toBeCloseTo(segments.expectedRowLeft, 0);
+    expect(second.bottom.fromX).toBeCloseTo(segments.expectedRowLeft, 0);
+
+    // Decrescendo, first segment: right end "remains open" at the system edge
+    // (top/bottom haven't converged to a point) per the engraving rule in
+    // resolveHairpinSegments' openAtEnd handling.
+    expect(Math.abs(first.top.toY - first.bottom.toY)).toBeGreaterThan(1);
+
+    // Second segment starts already-open (signalling the change was in
+    // progress on the previous system) and converges to a point at its end.
+    const openHeightAtStart = Math.abs(second.top.fromY - second.bottom.fromY);
+    const openHeightAtEnd = Math.abs(second.top.toY - second.bottom.toY);
+    expect(openHeightAtStart).toBeGreaterThan(openHeightAtEnd);
+    expect(openHeightAtEnd).toBeLessThan(1);
+  });
+
+  test('adding a crescendo attribute after render triggers a hairpin redraw without a resize (regression: composition must listen for dynamic-attribute-change)', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '200px';
+
+        const composition = document.createElement(compositionTag);
+
+        const measure1 = document.createElement(measureTag);
+        const staff1 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['C', '5'],
+          ['D', '5'],
+          ['E', '5'],
+          ['F', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff1.appendChild(n);
+        }
+        measure1.appendChild(staff1);
+
+        const measure2 = document.createElement(measureTag);
+        const staff2 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['G', '5'],
+          ['A', '5'],
+          ['B', '5'],
+          ['C', '6'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff2.appendChild(n);
+        }
+        measure2.appendChild(staff2);
+
+        composition.appendChild(measure1);
+        composition.appendChild(measure2);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF_TREBLE,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const countHairpins = () =>
+      page.evaluate((compositionTag) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const overlay = composition.shadowRoot.querySelector(
+          '.connectors-overlay'
+        );
+        if (overlay === null) {
+          throw new Error('overlay missing');
+        }
+        return overlay.querySelectorAll('g.hairpin').length;
+      }, MUSIC_COMPOSITION);
+
+    expect(await countHairpins()).toBe(0);
+
+    // Mutate crescendo attributes only — no resize, no slotchange, no
+    // connector-attribute-change. The composition should still redraw via its
+    // dynamic-attribute-change listener.
+    await page.evaluate((staffTag) => {
+      const staves = Array.from(
+        document.querySelectorAll(staffTag)
+      ) as HTMLElement[];
+      const [staff1, staff2] = staves;
+      const lastNoteOfStaff1 = staff1.children[
+        staff1.children.length - 1
+      ] as HTMLElement;
+      const firstNoteOfStaff2 = staff2.children[0] as HTMLElement;
+      lastNoteOfStaff1.setAttribute('crescendo', 'start');
+      firstNoteOfStaff2.setAttribute('crescendo', 'end');
+    }, MUSIC_STAFF_TREBLE);
+    await waitForRedrawCycle(page);
+
+    // Staves are on separate rows (200px host), so the new hairpin renders as
+    // a two-segment cross-system split.
+    expect(await countHairpins()).toBe(2);
+  });
 });

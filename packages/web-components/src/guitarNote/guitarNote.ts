@@ -4,6 +4,7 @@ import {
   IGuitarNoteElement,
 } from '../types/elements';
 import { DurationType } from '../types/theory';
+import { parseConnectorRole } from '../utils';
 import { MUSIC_GUITAR_NOTE, NOTE_EVENTS, SVG_NS } from '../utils/consts';
 
 const CONNECTOR_ATTRS = [
@@ -13,13 +14,6 @@ const CONNECTOR_ATTRS = [
   'pull-off',
   'slide',
 ] as const;
-
-const parseConnectorRole = (value: string | null): ConnectorRole | null => {
-  if (value === 'start' || value === 'end') {
-    return value;
-  }
-  return null;
-};
 
 const parseFret = (value: string | null): GuitarFret => {
   if (value === null) {

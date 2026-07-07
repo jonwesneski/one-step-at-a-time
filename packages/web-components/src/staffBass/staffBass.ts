@@ -8,10 +8,15 @@ import type {
   NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
-import { Octave } from '../types/theory';
+import type { Octave } from '../types/theory';
 import { createBassClefSvg } from '../utils/svgCreator/clefs';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
+  // Note: I explicitly kept StaffTreble and StaffBass as separate elements
+  // because their allowed octaves are different. A single Staff element with a
+  // clef attribute sounds nice, but may confuse users about what octaves are
+  // allowed if they change the clef. This is not set in stone; I just want to
+  // clarify the reasoning for keeping them separate web components.
   class StaffBassElement extends StaffClassicalElementBase {
     static #bassClefSvg = createBassClefSvg();
     static #yCoordinates = generateYCoordinates('E4', 'E2');

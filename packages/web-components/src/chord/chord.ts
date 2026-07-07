@@ -6,11 +6,20 @@ import {
   NoteElementType,
   NoteLetterOctave,
 } from '../types/elements';
-import { AccidentalType, Chord, DurationType, Octave } from '../types/theory';
+import {
+  AccidentalType,
+  Chord,
+  DurationType,
+  DynamicMarking,
+  HairpinRole,
+  Octave,
+} from '../types/theory';
 import {
   addLedgerLines,
   createChordSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseConnectorRole,
+  parseDynamicMarking,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -28,7 +37,15 @@ import {
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
-      return ['currentCount', 'duration', 'tie', 'slur'];
+      return [
+        'duration',
+        'tie',
+        'slur',
+        'dynamic',
+        'crescendo',
+        'decrescendo',
+        'diminuendo',
+      ];
     }
 
     static readonly #standaloneYCoordinates = generateYCoordinates('C6', 'C4');
@@ -130,11 +147,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get tie(): ConnectorRole | null {
-      const raw = this.getAttribute('tie');
-      if (raw === 'start' || raw === 'end') {
-        return raw;
-      }
-      return null;
+      return parseConnectorRole(this.getAttribute('tie'));
     }
     set tie(value: ConnectorRole | null) {
       if (value === null) {
@@ -145,11 +158,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get slur(): ConnectorRole | null {
-      const raw = this.getAttribute('slur');
-      if (raw === 'start' || raw === 'end') {
-        return raw;
-      }
-      return null;
+      return parseConnectorRole(this.getAttribute('slur'));
     }
     set slur(value: ConnectorRole | null) {
       if (value === null) {
@@ -157,6 +166,47 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('slur', value);
       }
+    }
+
+    get dynamic(): DynamicMarking | null {
+      return parseDynamicMarking(this.getAttribute('dynamic'));
+    }
+    set dynamic(value: DynamicMarking | null) {
+      if (value === null) {
+        this.removeAttribute('dynamic');
+      } else {
+        this.setAttribute('dynamic', value);
+      }
+    }
+
+    get crescendo(): HairpinRole | null {
+      return parseConnectorRole(this.getAttribute('crescendo'));
+    }
+    set crescendo(value: HairpinRole | null) {
+      if (value === null) {
+        this.removeAttribute('crescendo');
+      } else {
+        this.setAttribute('crescendo', value);
+      }
+    }
+
+    get decrescendo(): HairpinRole | null {
+      return parseConnectorRole(this.getAttribute('decrescendo'));
+    }
+    set decrescendo(value: HairpinRole | null) {
+      if (value === null) {
+        this.removeAttribute('decrescendo');
+      } else {
+        this.setAttribute('decrescendo', value);
+      }
+    }
+
+    // Alias for decrescendo — always mirrors it, never holds separate state.
+    get diminuendo(): HairpinRole | null {
+      return this.decrescendo;
+    }
+    set diminuendo(value: HairpinRole | null) {
+      this.decrescendo = value;
     }
 
     batchUpdate(fn: () => void): void {
@@ -198,13 +248,47 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue || !this.isConnected) {
+      if (oldValue === newValue) {
+        return;
+      }
+
+      // diminuendo is an alias for decrescendo — normalize immediately so
+      // decrescendo is the only hairpin attribute any other code ever sees.
+      // Runs even before the element is connected (unlike the rest of this
+      // callback) since callers commonly set attributes before appending.
+      // Only forward when diminuendo is being set (newValue !== null); the
+      // follow-up removeAttribute('diminuendo') below re-enters this callback
+      // with newValue === null and must be a no-op, or it would immediately
+      // clear the decrescendo value we just set.
+      if (name === 'diminuendo') {
+        if (newValue !== null) {
+          this.setAttribute('decrescendo', newValue);
+          this.removeAttribute('diminuendo');
+        }
+        return;
+      }
+
+      if (!this.isConnected) {
         return;
       }
 
       if (name === 'tie' || name === 'slur') {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (
+        name === 'dynamic' ||
+        name === 'crescendo' ||
+        name === 'decrescendo'
+      ) {
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })

@@ -376,14 +376,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // Position each syllable below its corresponding note
         syllables.forEach((syllable, sylIndex) => {
           if (sylIndex >= noteElements.length) {
-            console.error(
+            console.warn(
               `Lyric verse has more syllables (${syllables.length}) than notes (${noteElements.length})`
             );
             return;
           }
 
-          const noteEl = noteElements[sylIndex];
-          const noteRect = noteEl.getBoundingClientRect();
+          const noteElement = noteElements[sylIndex];
+          const noteRect = noteElement.getBoundingClientRect();
           const noteX = noteRect.left - staffRect.left + noteRect.width / 2;
           const lyricY =
             baselineY +

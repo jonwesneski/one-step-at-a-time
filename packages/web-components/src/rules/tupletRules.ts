@@ -112,7 +112,7 @@ export function buildTupletGroups(
       if (!tupletToIndices.has(tupletElement)) {
         tupletToIndices.set(tupletElement, []);
       }
-      tupletToIndices.get(tupletElement)!.push(i);
+      (tupletToIndices.get(tupletElement) as number[]).push(i);
     }
   }
 
