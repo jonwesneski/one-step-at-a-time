@@ -1,5 +1,4 @@
 import {
-  AccentType,
   AccidentalType,
   ArticulationType,
   Chord,
@@ -32,9 +31,9 @@ export interface INoteElement {
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
   diminuendo: HairpinRole | null;
-  // Articulation marks — three independent slots (see theory.ts). Each is at
-  // most one value, so illegal within-family combinations cannot be expressed.
-  accent: AccentType | null;
+  // Articulation — a single enumerated slot of legal accent/length/hold
+  // combinations (see theory.ts), plus the orthogonal Schoenberg stress slot.
+  // Illegal combinations are not expressible as values.
   articulation: ArticulationType | null;
   stress: StressType | null;
   // undefined = auto-detect from note attribute (standalone)
@@ -69,7 +68,6 @@ export interface IChordElement {
   diminuendo: HairpinRole | null;
   // Chord-level articulation — one mark set for the whole chord, drawn once on
   // the notehead on the correct side of the stem (see theory.ts).
-  accent: AccentType | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
   batchUpdate(fn: () => void): void;

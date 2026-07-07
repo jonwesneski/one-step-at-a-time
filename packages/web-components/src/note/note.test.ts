@@ -78,36 +78,35 @@ describe('diminuendo alias', () => {
 });
 
 describe('articulations', () => {
-  it('round-trips each articulation slot between property and attribute', () => {
+  it('round-trips the articulation and stress slots between property and attribute', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(noteElement);
 
-    noteElement.accent = 'marcato';
-    noteElement.articulation = 'portato';
+    noteElement.articulation = 'marcato-portato';
     noteElement.stress = 'stressed';
 
-    expect(noteElement.getAttribute('accent')).toBe('marcato');
-    expect(noteElement.getAttribute('articulation')).toBe('portato');
+    expect(noteElement.getAttribute('articulation')).toBe('marcato-portato');
     expect(noteElement.getAttribute('stress')).toBe('stressed');
-    expect(noteElement.accent).toBe('marcato');
-    expect(noteElement.articulation).toBe('portato');
+    expect(noteElement.articulation).toBe('marcato-portato');
     expect(noteElement.stress).toBe('stressed');
   });
 
-  it('ignores unrecognized articulation values (non-throwing validation)', () => {
+  it('ignores unrecognized articulation values, including illegal combinations', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(noteElement);
 
-    noteElement.setAttribute('accent', 'banana');
-    noteElement.setAttribute('articulation', 'staccato-staccatissimo');
-    noteElement.setAttribute('stress', 'loud');
-
-    expect(noteElement.accent).toBeNull();
+    // Illegal combos are simply not values of the union → parsed as null.
+    noteElement.setAttribute('articulation', 'fermata-staccato');
     expect(noteElement.articulation).toBeNull();
+
+    noteElement.setAttribute('articulation', 'staccato-staccatissimo');
+    expect(noteElement.articulation).toBeNull();
+
+    noteElement.setAttribute('stress', 'loud');
     expect(noteElement.stress).toBeNull();
   });
 
-  it('clears an articulation slot when set to null', () => {
+  it('clears the articulation slot when set to null', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(noteElement);
 
@@ -118,18 +117,61 @@ describe('articulations', () => {
     expect(noteElement.getAttribute('articulation')).toBeNull();
   });
 
-  it('renders the requested glyphs inside the note SVG', () => {
+  it('renders the decomposed glyphs for a combined value inside the note SVG', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
-    noteElement.setAttribute('accent', 'accent');
-    noteElement.setAttribute('articulation', 'portato');
+    // accent-portato = standard accent + (tenuto + staccato).
+    noteElement.setAttribute('articulation', 'accent-portato');
     document.body.appendChild(noteElement);
 
     const marks = noteElement.shadowRoot?.querySelector('.articulations');
     expect(marks).not.toBeNull();
-    // portato = staccato dot + tenuto line, and the standard accent chevron.
     expect(marks?.querySelector('.staccato')).not.toBeNull();
     expect(marks?.querySelector('.tenuto')).not.toBeNull();
     expect(marks?.querySelector('.accent')).not.toBeNull();
+  });
+
+  it('places the fermata opposite the stem, outermost of the marks', () => {
+    // Stem-up note: marks go below the head. Fermata sits below, further out
+    // than the accent.
+    const stemUpNote = document.createElement(MUSIC_NOTE) as NoteElementType;
+    stemUpNote.stemUp = true;
+    stemUpNote.setAttribute('articulation', 'accent-fermata');
+    document.body.appendChild(stemUpNote);
+
+    const fermata = stemUpNote.shadowRoot?.querySelector('.fermata');
+    const accent = stemUpNote.shadowRoot?.querySelector('.accent');
+    const head = stemUpNote.shadowRoot?.querySelector('.head');
+    expect(fermata).not.toBeNull();
+    expect(accent).not.toBeNull();
+
+    const fermataDotY = Number(
+      fermata?.querySelector('circle')?.getAttribute('cy')
+    );
+    const headY = Number(head?.getAttribute('cy'));
+    // Middle vertex of the accent chevron ("x1,y1 x2,y2 x3,y3") is its center y.
+    const accentPoints = accent?.getAttribute('points') ?? '';
+    const accentY = Number(accentPoints.split(' ')[1]?.split(',')[1]);
+    // Below the head (larger y), and further from it than the accent chevron.
+    expect(fermataDotY).toBeGreaterThan(headY);
+    expect(fermataDotY).toBeGreaterThan(accentY);
+  });
+
+  it('places the fermata above a stem-down note', () => {
+    const stemDownNote = document.createElement(MUSIC_NOTE) as NoteElementType;
+    stemDownNote.stemUp = false;
+    stemDownNote.setAttribute('articulation', 'fermata');
+    document.body.appendChild(stemDownNote);
+
+    const fermataDotY = Number(
+      stemDownNote.shadowRoot
+        ?.querySelector('.fermata')
+        ?.querySelector('circle')
+        ?.getAttribute('cy')
+    );
+    const headY = Number(
+      stemDownNote.shadowRoot?.querySelector('.head')?.getAttribute('cy')
+    );
+    expect(fermataDotY).toBeLessThan(headY);
   });
 
   it('renders no articulation group when no marks are set', () => {

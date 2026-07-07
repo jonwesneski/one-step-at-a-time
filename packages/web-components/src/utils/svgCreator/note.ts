@@ -2,7 +2,6 @@
 
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import {
-  AccentType,
   AccidentalType,
   ArticulationType,
   DurationType,
@@ -85,7 +84,6 @@ export type NoteProps = {
   stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
   accidental?: AccidentalType;
-  accent?: AccentType | null;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
 };
@@ -97,7 +95,6 @@ export const createNoteSvg = ({
   stemExtension = 0,
   qualifiedElementName = 'svg',
   accidental,
-  accent,
   articulation,
   stress,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
@@ -291,7 +288,6 @@ export const createNoteSvg = ({
   // notehead), so they move/scale with the notehead group — unlike accidentals,
   // which are appended to the outer <svg> below.
   const articulationMarks = createArticulationMarks({
-    accent,
     articulation,
     stress,
     stemUp,

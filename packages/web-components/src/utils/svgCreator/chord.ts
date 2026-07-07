@@ -35,7 +35,6 @@ export const createChordSvg = ({
   stemUp = true,
   stemExtension = 0,
   noteAccidentals,
-  accent,
   articulation,
   stress,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
@@ -152,7 +151,6 @@ export const createChordSvg = ({
   // extremal note's SVG, so they overlay that notehead.
   const { cx: headCx, cy: headCy } = noteHeadCenter(stemUp, duration, noFlags);
   const articulationMarks = createArticulationMarks({
-    accent,
     articulation,
     stress,
     stemUp,

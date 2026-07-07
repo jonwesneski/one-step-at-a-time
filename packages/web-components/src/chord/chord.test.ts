@@ -89,31 +89,28 @@ describe(MUSIC_CHORD, () => {
       return chordElement;
     }
 
-    it('round-trips each articulation slot between property and attribute', () => {
+    it('round-trips the articulation and stress slots between property and attribute', () => {
       const chordElement = document.createElement(
         MUSIC_CHORD
       ) as ChordElementType;
       document.body.appendChild(chordElement);
 
-      chordElement.accent = 'accent';
-      chordElement.articulation = 'tenuto';
+      chordElement.articulation = 'accent-tenuto';
       chordElement.stress = 'unstressed';
 
-      expect(chordElement.getAttribute('accent')).toBe('accent');
-      expect(chordElement.getAttribute('articulation')).toBe('tenuto');
+      expect(chordElement.getAttribute('articulation')).toBe('accent-tenuto');
       expect(chordElement.getAttribute('stress')).toBe('unstressed');
-      expect(chordElement.accent).toBe('accent');
-      expect(chordElement.articulation).toBe('tenuto');
+      expect(chordElement.articulation).toBe('accent-tenuto');
       expect(chordElement.stress).toBe('unstressed');
     });
 
-    it('ignores unrecognized articulation values', () => {
+    it('ignores unrecognized articulation values, including illegal combinations', () => {
       const chordElement = document.createElement(
         MUSIC_CHORD
       ) as ChordElementType;
       document.body.appendChild(chordElement);
 
-      chordElement.setAttribute('articulation', 'not-a-real-mark');
+      chordElement.setAttribute('articulation', 'fermata-staccato');
 
       expect(chordElement.articulation).toBeNull();
     });
@@ -130,6 +127,16 @@ describe(MUSIC_CHORD, () => {
       expect(
         chordElement.shadowRoot?.querySelectorAll('.staccato').length
       ).toBe(1);
+    });
+
+    it('draws a chord fermata exactly once', () => {
+      const chordElement = makeChordWithNotes();
+      chordElement.setAttribute('articulation', 'fermata');
+      document.body.appendChild(chordElement);
+
+      expect(chordElement.shadowRoot?.querySelectorAll('.fermata').length).toBe(
+        1
+      );
     });
   });
 

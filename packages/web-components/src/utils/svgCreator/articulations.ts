@@ -9,6 +9,7 @@
 
 import type {
   AccentType,
+  ArticulationLength,
   ArticulationType,
   StressType,
 } from '../../types/theory';
@@ -26,13 +27,35 @@ const MARK_STEP = 150;
 const MARK_HALF_WIDTH = 70;
 
 export type ArticulationMarksProps = {
-  accent?: AccentType | null;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
   stemUp: boolean;
   // Notehead center in the 600-unit note coordinate space.
   headCx: number;
   headCy: number;
+};
+
+// Split a combined articulation value into its optional accent prefix and its
+// optional length/hold token, e.g. 'accent-portato' -> { accent: 'accent',
+// length: 'portato' }, 'fermata' -> { length: 'fermata' }, 'marcato' ->
+// { accent: 'marcato' }. The input is always a valid ArticulationType.
+const decomposeArticulation = (
+  value: ArticulationType
+): { accent?: AccentType; length?: ArticulationLength } => {
+  let accent: AccentType | undefined;
+  let rest: string = value;
+  if (value === 'accent' || value.startsWith('accent-')) {
+    accent = 'accent';
+    rest = value.slice('accent'.length);
+  } else if (value === 'marcato' || value.startsWith('marcato-')) {
+    accent = 'marcato';
+    rest = value.slice('marcato'.length);
+  }
+  if (rest.startsWith('-')) {
+    rest = rest.slice(1);
+  }
+  const length = rest === '' ? undefined : (rest as ArticulationLength);
+  return { accent, length };
 };
 
 const line = (
@@ -142,17 +165,23 @@ const createStressMark = (cx: number, cy: number): SVGElement => {
   return mark;
 };
 
-// Schoenberg unstressed note — a shallow breve arc (˘).
-const createUnstressMark = (cx: number, cy: number): SVGElement => {
+// Schoenberg unstressed note — a shallow breve arc (˘). Bulges away from the
+// head (the +dir side) so the cup opens toward the note, mirroring for placement
+// above vs below. `dir` is +1 below the head (stem-up) and -1 above it.
+const createUnstressMark = (
+  cx: number,
+  cy: number,
+  dir: number
+): SVGElement => {
   const half = 34;
   const depth = 30;
+  const endY = cy - (dir * depth) / 2;
+  const controlY = cy + dir * depth;
   const arc = document.createElementNS(SVG_NS, 'path');
   arc.classList.add('unstressed');
   arc.setAttribute(
     'd',
-    `M ${cx - half},${cy - depth / 2} Q ${cx},${cy + depth} ${cx + half},${
-      cy - depth / 2
-    }`
+    `M ${cx - half},${endY} Q ${cx},${controlY} ${cx + half},${endY}`
   );
   arc.setAttribute('fill', 'none');
   arc.setAttribute('stroke', 'currentColor');
@@ -161,27 +190,68 @@ const createUnstressMark = (cx: number, cy: number): SVGElement => {
   return arc;
 };
 
+// Fermata — a dome-shaped arc with a dot inside it, centered on the notehead.
+// (cx, cy) is the arc baseline center. The dome bulges away from the head
+// (the +dir side) so the opening + dot face the note, mirroring for placement
+// below the head just like the wedge/marcato. `dir` is +1 below the head
+// (stem-up) and -1 above it (stem-down).
+const createFermataSvg = (cx: number, cy: number, dir: number): SVGGElement => {
+  const radius = 100;
+  // sweep 1 draws the dome upward (smaller y); sweep 0 downward. The dome bulges
+  // away from the head: upward when placed above (dir -1), downward when below.
+  const sweep = dir === -1 ? 1 : 0;
+  const fermata = document.createElementNS(SVG_NS, 'g');
+  fermata.classList.add('fermata');
+
+  const arc = document.createElementNS(SVG_NS, 'path');
+  arc.setAttribute(
+    'd',
+    `M ${cx - radius},${cy} A ${radius},${radius} 0 0 ${sweep} ${
+      cx + radius
+    },${cy}`
+  );
+  arc.setAttribute('fill', 'none');
+  arc.setAttribute('stroke', 'currentColor');
+  arc.setAttribute('stroke-width', '16');
+  arc.setAttribute('stroke-linecap', 'round');
+  fermata.appendChild(arc);
+
+  const dot = document.createElementNS(SVG_NS, 'circle');
+  dot.setAttribute('cx', `${cx}`);
+  dot.setAttribute('cy', `${cy + dir * 30}`);
+  dot.setAttribute('r', '20');
+  dot.setAttribute('fill', 'currentColor');
+  fermata.appendChild(dot);
+
+  return fermata;
+};
+
 /**
  * Build the articulation marks for one note/chord as an SVG <g> in the note's
- * 600-unit coordinate space. Marks are placed on the side opposite the stem
- * (below the head for a stem-up note, above it for stem-down) and stack outward
- * from the notehead in engraving order: length mark closest, then accent, then
- * the Schoenberg stress mark outermost.
+ * 600-unit coordinate space. The combined `articulation` value is split into its
+ * accent prefix and length/hold token. All marks are placed on the side opposite
+ * the stem (below the head for a stem-up note, above it for stem-down), stacking
+ * outward: length mark closest, then accent, then a fermata (outermost, since it
+ * never coexists with a length mark). The Schoenberg stress mark (a separate
+ * attribute) is outermost of all.
  *
- * Returns null when no marks are set, so callers can skip appending / setting
+ * Returns null when nothing is set, so callers can skip appending / setting
  * overflow.
  */
 export const createArticulationMarks = ({
-  accent,
   articulation,
   stress,
   stemUp,
   headCx,
   headCy,
 }: ArticulationMarksProps): SVGGElement | null => {
-  if (!accent && !articulation && !stress) {
+  if (!articulation && !stress) {
     return null;
   }
+
+  const { accent, length } = articulation
+    ? decomposeArticulation(articulation)
+    : {};
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('articulations');
@@ -196,34 +266,40 @@ export const createArticulationMarks = ({
   };
 
   // Length family — closest to the notehead. portato / tenuto-staccatissimo are
-  // the two legal within-family combinations and stack the dot/wedge nearest
-  // the head with the tenuto line just beyond it.
-  if (articulation === 'staccato') {
+  // the two legal within-length combinations and stack the dot/wedge nearest the
+  // head with the tenuto line just beyond it. (fermata is handled separately.)
+  if (length === 'staccato') {
     group.appendChild(createStaccatoDot(headCx, nextY()));
-  } else if (articulation === 'staccatissimo') {
+  } else if (length === 'staccatissimo') {
     group.appendChild(createStaccatissimoWedge(headCx, nextY(), dir));
-  } else if (articulation === 'tenuto') {
+  } else if (length === 'tenuto') {
     group.appendChild(createTenutoLine(headCx, nextY()));
-  } else if (articulation === 'portato') {
+  } else if (length === 'portato') {
     group.appendChild(createStaccatoDot(headCx, nextY()));
     group.appendChild(createTenutoLine(headCx, nextY()));
-  } else if (articulation === 'tenuto-staccatissimo') {
+  } else if (length === 'tenuto-staccatissimo') {
     group.appendChild(createStaccatissimoWedge(headCx, nextY(), dir));
     group.appendChild(createTenutoLine(headCx, nextY()));
   }
 
-  // Accent family — outside the length marks.
+  // Accent — outside the length marks.
   if (accent === 'accent') {
     group.appendChild(createAccentMark(headCx, nextY()));
   } else if (accent === 'marcato') {
     group.appendChild(createMarcatoMark(headCx, nextY(), dir));
   }
 
-  // Schoenberg stress — outermost.
+  // Fermata — opposite the stem like the other marks, outermost (after any
+  // accent). Never coexists with a length mark.
+  if (length === 'fermata') {
+    group.appendChild(createFermataSvg(headCx, nextY(), dir));
+  }
+
+  // Schoenberg stress — outermost on the opposite-stem side.
   if (stress === 'stressed') {
     group.appendChild(createStressMark(headCx, nextY()));
   } else if (stress === 'unstressed') {
-    group.appendChild(createUnstressMark(headCx, nextY()));
+    group.appendChild(createUnstressMark(headCx, nextY(), dir));
   }
 
   return group;

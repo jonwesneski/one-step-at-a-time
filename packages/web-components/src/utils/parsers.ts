@@ -1,15 +1,13 @@
 import type { ConnectorRole } from '../types/elements';
 import type {
-  AccentType,
   ArticulationType,
   DynamicMarking,
   HairpinRole,
   StressType,
 } from '../types/theory';
-import { ACCENTS, ARTICULATIONS, DYNAMICS, STRESSES } from './consts';
+import { ARTICULATIONS, DYNAMICS, STRESSES } from './consts';
 
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
-const VALID_ACCENTS = new Set<string>(ACCENTS);
 const VALID_ARTICULATIONS = new Set<string>(ARTICULATIONS);
 const VALID_STRESSES = new Set<string>(STRESSES);
 
@@ -31,16 +29,10 @@ export const parseDynamicMarking = (
   return null;
 };
 
-// Each articulation family is validated independently. An unrecognized string
-// resolves to null (silently ignored), matching the library's existing
-// non-throwing validation convention.
-export const parseAccent = (value: string | null): AccentType | null => {
-  if (value !== null && VALID_ACCENTS.has(value)) {
-    return value as AccentType;
-  }
-  return null;
-};
-
+// Articulation is validated against the enumerated set of legal combinations.
+// An unrecognized string — including an illegal combination such as
+// "fermata-staccato" — resolves to null (silently ignored), matching the
+// library's existing non-throwing validation convention.
 export const parseArticulation = (
   value: string | null
 ): ArticulationType | null => {

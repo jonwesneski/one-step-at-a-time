@@ -1,14 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import {
-  ACCENTS,
-  ARTICULATIONS,
-  DURATIONS,
-  NOTES,
-  OCTAVES,
-  STRESSES,
-} from '../utils';
+import { ARTICULATIONS, DURATIONS, NOTES, OCTAVES, STRESSES } from '../utils';
 
 const meta: Meta = {
   title: 'Components/Note',
@@ -33,7 +26,6 @@ export const WithArticulations: Story = {
     duration: 'quarter',
     note: 'G',
     octave: 4,
-    accent: '',
     articulation: 'staccato',
     stress: '',
   },
@@ -41,10 +33,9 @@ export const WithArticulations: Story = {
     duration: { control: 'select', options: DURATIONS },
     note: { control: 'select', options: NOTES },
     octave: { control: 'select', options: OCTAVES },
-    // '' = no mark in that family. The three families are independent, so any
-    // combination selectable here is musically legal — illegal within-family
-    // combinations are not representable in the type system.
-    accent: { control: 'select', options: ['', ...ACCENTS] },
+    // Every option is a musically legal combination; illegal ones (e.g.
+    // fermata + staccato, or two accents) are simply not values of the union.
+    // '' = no articulation / no stress.
     articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
     stress: { control: 'select', options: ['', ...STRESSES] },
   },
@@ -54,7 +45,6 @@ export const WithArticulations: Story = {
         duration=${args.duration}
         note=${args.note}
         octave=${args.octave}
-        accent=${args.accent}
         articulation=${args.articulation}
         stress=${args.stress}
       ></music-note>
@@ -62,12 +52,12 @@ export const WithArticulations: Story = {
   `,
 };
 
-// Gallery of every mark and the legal length-family combinations.
+// Gallery of representative marks, legal length combos, and fermata combos.
 export const ArticulationGallery: Story = {
   render: () => html`
     <music-staff-treble time="4/4">
-      <music-note note="G" octave="4" accent="accent"></music-note>
-      <music-note note="G" octave="4" accent="marcato"></music-note>
+      <music-note note="G" octave="4" articulation="accent"></music-note>
+      <music-note note="G" octave="4" articulation="marcato"></music-note>
       <music-note note="G" octave="4" articulation="staccato"></music-note>
       <music-note note="G" octave="4" articulation="staccatissimo"></music-note>
       <music-note note="G" octave="4" articulation="tenuto"></music-note>
@@ -80,8 +70,13 @@ export const ArticulationGallery: Story = {
       <music-note
         note="G"
         octave="4"
-        accent="marcato"
-        articulation="staccato"
+        articulation="marcato-staccato"
+      ></music-note>
+      <music-note note="G" octave="4" articulation="fermata"></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        articulation="accent-fermata"
       ></music-note>
       <music-note note="G" octave="4" stress="stressed"></music-note>
       <music-note note="G" octave="4" stress="unstressed"></music-note>

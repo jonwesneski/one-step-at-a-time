@@ -1,6 +1,5 @@
 import { ConnectorRole, INoteElement } from '../types/elements';
 import {
-  AccentType,
   AccidentalType,
   ArticulationType,
   DurationType,
@@ -14,7 +13,6 @@ import {
   addLedgerLines,
   createNoteSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
-  parseAccent,
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
@@ -35,7 +33,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'crescendo',
         'decrescendo',
         'diminuendo',
-        'accent',
         'articulation',
         'stress',
       ];
@@ -200,17 +197,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.decrescendo = value;
     }
 
-    get accent(): AccentType | null {
-      return parseAccent(this.getAttribute('accent'));
-    }
-    set accent(value: AccentType | null) {
-      if (value === null) {
-        this.removeAttribute('accent');
-      } else {
-        this.setAttribute('accent', value);
-      }
-    }
-
     get articulation(): ArticulationType | null {
       return parseArticulation(this.getAttribute('articulation'));
     }
@@ -351,7 +337,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         noFlags: this.#noFlags,
         noStem: this.#noStem,
         accidental,
-        accent: this.accent,
         articulation: this.articulation,
         stress: this.stress,
       });

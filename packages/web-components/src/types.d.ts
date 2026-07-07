@@ -1,7 +1,6 @@
 import 'react';
 import type { ConnectorRole } from './types/elements';
 import type {
-  AccentType,
   ArticulationType,
   Chord,
   DurationType,
@@ -79,9 +78,10 @@ declare module 'react' {
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
-        // Articulation — three independent slots; illegal within-family combos
-        // (e.g. two accents, or staccato + staccatissimo) are not expressible.
-        accent?: AccentType;
+        // Articulation — a single enumerated value of legal accent/length/hold
+        // combinations; illegal combos (e.g. two accents, staccato +
+        // staccatissimo, fermata + staccato) are not expressible. `stress` is an
+        // orthogonal Schoenberg slot.
         articulation?: ArticulationType;
         stress?: StressType;
         onClick?: (e: MouseEvent) => void;
@@ -98,9 +98,10 @@ declare module 'react' {
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
-        // Articulation — three independent slots; illegal within-family combos
-        // (e.g. two accents, or staccato + staccatissimo) are not expressible.
-        accent?: AccentType;
+        // Articulation — a single enumerated value of legal accent/length/hold
+        // combinations; illegal combos (e.g. two accents, staccato +
+        // staccatissimo, fermata + staccato) are not expressible. `stress` is an
+        // orthogonal Schoenberg slot.
         articulation?: ArticulationType;
         stress?: StressType;
         onClick?: (e: MouseEvent) => void;
