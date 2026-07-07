@@ -7,19 +7,25 @@ import {
   NoteLetterOctave,
 } from '../types/elements';
 import {
+  AccentType,
   AccidentalType,
+  ArticulationType,
   Chord,
   DurationType,
   DynamicMarking,
   HairpinRole,
   Octave,
+  StressType,
 } from '../types/theory';
 import {
   addLedgerLines,
   createChordSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseAccent,
+  parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
+  parseStress,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -45,6 +51,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'crescendo',
         'decrescendo',
         'diminuendo',
+        'accent',
+        'articulation',
+        'stress',
       ];
     }
 
@@ -209,6 +218,39 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.decrescendo = value;
     }
 
+    get accent(): AccentType | null {
+      return parseAccent(this.getAttribute('accent'));
+    }
+    set accent(value: AccentType | null) {
+      if (value === null) {
+        this.removeAttribute('accent');
+      } else {
+        this.setAttribute('accent', value);
+      }
+    }
+
+    get articulation(): ArticulationType | null {
+      return parseArticulation(this.getAttribute('articulation'));
+    }
+    set articulation(value: ArticulationType | null) {
+      if (value === null) {
+        this.removeAttribute('articulation');
+      } else {
+        this.setAttribute('articulation', value);
+      }
+    }
+
+    get stress(): StressType | null {
+      return parseStress(this.getAttribute('stress'));
+    }
+    set stress(value: StressType | null) {
+      if (value === null) {
+        this.removeAttribute('stress');
+      } else {
+        this.setAttribute('stress', value);
+      }
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -309,6 +351,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
           noteAccidentals: this.#noteAccidentals,
+          accent: this.accent,
+          articulation: this.articulation,
+          stress: this.stress,
         });
         chordSvg.setAttribute('overflow', 'visible');
         addLedgerLines(
@@ -395,6 +440,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noFlags: false,
           stemExtension: 0,
           qualifiedElementName: 'g',
+          accent: this.accent,
+          articulation: this.articulation,
+          stress: this.stress,
         });
         chordSvg.setAttribute('overflow', 'visible');
 

@@ -77,6 +77,95 @@ describe('diminuendo alias', () => {
   });
 });
 
+describe('articulations', () => {
+  it('round-trips each articulation slot between property and attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.accent = 'marcato';
+    noteElement.articulation = 'portato';
+    noteElement.stress = 'stressed';
+
+    expect(noteElement.getAttribute('accent')).toBe('marcato');
+    expect(noteElement.getAttribute('articulation')).toBe('portato');
+    expect(noteElement.getAttribute('stress')).toBe('stressed');
+    expect(noteElement.accent).toBe('marcato');
+    expect(noteElement.articulation).toBe('portato');
+    expect(noteElement.stress).toBe('stressed');
+  });
+
+  it('ignores unrecognized articulation values (non-throwing validation)', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.setAttribute('accent', 'banana');
+    noteElement.setAttribute('articulation', 'staccato-staccatissimo');
+    noteElement.setAttribute('stress', 'loud');
+
+    expect(noteElement.accent).toBeNull();
+    expect(noteElement.articulation).toBeNull();
+    expect(noteElement.stress).toBeNull();
+  });
+
+  it('clears an articulation slot when set to null', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.articulation = 'staccato';
+    noteElement.articulation = null;
+
+    expect(noteElement.articulation).toBeNull();
+    expect(noteElement.getAttribute('articulation')).toBeNull();
+  });
+
+  it('renders the requested glyphs inside the note SVG', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('accent', 'accent');
+    noteElement.setAttribute('articulation', 'portato');
+    document.body.appendChild(noteElement);
+
+    const marks = noteElement.shadowRoot?.querySelector('.articulations');
+    expect(marks).not.toBeNull();
+    // portato = staccato dot + tenuto line, and the standard accent chevron.
+    expect(marks?.querySelector('.staccato')).not.toBeNull();
+    expect(marks?.querySelector('.tenuto')).not.toBeNull();
+    expect(marks?.querySelector('.accent')).not.toBeNull();
+  });
+
+  it('renders no articulation group when no marks are set', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.shadowRoot?.querySelector('.articulations')).toBeNull();
+  });
+
+  it('places marks on the side opposite the stem', () => {
+    // Stem-up note (default standalone): marks sit below the notehead (larger y).
+    const stemUpNote = document.createElement(MUSIC_NOTE) as NoteElementType;
+    stemUpNote.stemUp = true;
+    stemUpNote.setAttribute('articulation', 'staccato');
+    document.body.appendChild(stemUpNote);
+    const upDot = stemUpNote.shadowRoot?.querySelector('.staccato');
+    const upHead = stemUpNote.shadowRoot?.querySelector('.head');
+
+    const stemDownNote = document.createElement(MUSIC_NOTE) as NoteElementType;
+    stemDownNote.stemUp = false;
+    stemDownNote.setAttribute('articulation', 'staccato');
+    document.body.appendChild(stemDownNote);
+    const downDot = stemDownNote.shadowRoot?.querySelector('.staccato');
+    const downHead = stemDownNote.shadowRoot?.querySelector('.head');
+
+    const upDotY = Number(upDot?.getAttribute('cy'));
+    const upHeadY = Number(upHead?.getAttribute('cy'));
+    const downDotY = Number(downDot?.getAttribute('cy'));
+    const downHeadY = Number(downHead?.getAttribute('cy'));
+
+    // Below the head when stem is up, above it when stem is down.
+    expect(upDotY).toBeGreaterThan(upHeadY);
+    expect(downDotY).toBeLessThan(downHeadY);
+  });
+});
+
 const TREBLE_STAFF_Y: Record<string, number> = {
   C6: 10,
   B5: 15,

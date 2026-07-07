@@ -1,12 +1,18 @@
 import 'react';
-import { ConnectorRole } from './types/elements';
+import type { ConnectorRole } from './types/elements';
 import type {
+  AccentType,
+  ArticulationType,
   Chord,
   DurationType,
+  DynamicMarking,
+  HairpinRole,
   Mode,
   Note,
   Octave,
+  StressType,
   TimeSignature,
+  Voice,
 } from './types/theory';
 
 type WebComponentProps = {
@@ -51,7 +57,7 @@ declare module 'react' {
         children?: React.ReactNode;
       };
       'music-staff-vocal': WebComponentProps & {
-        voice?: 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
+        voice?: Voice;
         keySig?: Note;
         mode?: Mode;
         time?: TimeSignature;
@@ -65,8 +71,19 @@ declare module 'react' {
         duration?: DurationType;
       };
       'music-chord': WebComponentProps & {
-        value?: Chord;
+        chord?: Chord;
         duration?: DurationType;
+        tie?: ConnectorRole;
+        slur?: ConnectorRole;
+        dynamic?: DynamicMarking;
+        crescendo?: HairpinRole;
+        decrescendo?: HairpinRole;
+        diminuendo?: HairpinRole;
+        // Articulation — three independent slots; illegal within-family combos
+        // (e.g. two accents, or staccato + staccatissimo) are not expressible.
+        accent?: AccentType;
+        articulation?: ArticulationType;
+        stress?: StressType;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
@@ -77,6 +94,15 @@ declare module 'react' {
         octave?: Octave;
         tie?: ConnectorRole;
         slur?: ConnectorRole;
+        dynamic?: DynamicMarking;
+        crescendo?: HairpinRole;
+        decrescendo?: HairpinRole;
+        diminuendo?: HairpinRole;
+        // Articulation — three independent slots; illegal within-family combos
+        // (e.g. two accents, or staccato + staccatissimo) are not expressible.
+        accent?: AccentType;
+        articulation?: ArticulationType;
+        stress?: StressType;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;

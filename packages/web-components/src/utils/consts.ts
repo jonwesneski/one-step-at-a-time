@@ -1,9 +1,12 @@
 import type {
+  AccentType,
+  ArticulationType,
   DurationType,
   DynamicMarking,
   Mode,
   Note,
   Octave,
+  StressType,
   Voice,
 } from '../types/theory';
 
@@ -131,3 +134,15 @@ export const DYNAMICS: DynamicMarking[] = [
   'rfz',
   'fp',
 ];
+
+export const ACCENTS: AccentType[] = ['accent', 'marcato'];
+
+export const ARTICULATIONS: ArticulationType[] = [
+  'staccato',
+  'staccatissimo',
+  'tenuto',
+  'portato',
+  'tenuto-staccatissimo',
+];
+
+export const STRESSES: StressType[] = ['stressed', 'unstressed'];

@@ -10,11 +10,17 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   STAFF_Y_PADDING,
 } from '../notationDimensions';
+import { createArticulationMarks } from './articulations';
 import { createDoubleFlatSvg } from './doubleFlat';
 import { createDoubleSharpSvg } from './doubleSharp';
 import { createFlatSvg } from './flat';
 import { createNaturalSvg } from './natural';
-import { createNoteSvg, type NoteProps } from './note';
+import {
+  createNoteSvg,
+  NOTE_SCALE,
+  noteHeadCenter,
+  type NoteProps,
+} from './note';
 import { createSharpSvg } from './sharp';
 
 type ChordProps = NoteProps & {
@@ -29,6 +35,9 @@ export const createChordSvg = ({
   stemUp = true,
   stemExtension = 0,
   noteAccidentals,
+  accent,
+  articulation,
+  stress,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -51,9 +60,12 @@ export const createChordSvg = ({
   );
 
   let extremalYOffset = 0;
+  let extremalXOffset = 0;
   for (let i = 0; i < staffYCoordinates.length; i++) {
     const staffYCoordinate = staffYCoordinates[i];
     const isExtremal = staffYCoordinate === stemNoteY;
+    // Articulation is a chord-level mark drawn once (below), never per note, so
+    // the per-note SVGs are created without accent/articulation/stress.
     const [noteSvg, yOffset] = createNoteSvg({
       duration,
       noFlags,
@@ -70,6 +82,9 @@ export const createChordSvg = ({
       extremalYOffset = yOffset;
     }
     const xOffset = displacementMap.get(i) ?? 0;
+    if (isExtremal) {
+      extremalXOffset = xOffset;
+    }
     if (xOffset !== 0) {
       noteSvg.setAttribute('x', xOffset.toString());
     }
@@ -128,6 +143,38 @@ export const createChordSvg = ({
         svg.appendChild(symbolSvg);
       }
     }
+  }
+
+  // Chord-level articulation — drawn once, over the extremal (stem-side outer)
+  // notehead, per the reference rule "centre articulation on the notehead that
+  // is on the correct side of the stem". The marks are built in the note's
+  // 600-unit space and wrapped in a scaled <svg> positioned exactly like the
+  // extremal note's SVG, so they overlay that notehead.
+  const { cx: headCx, cy: headCy } = noteHeadCenter(stemUp, duration, noFlags);
+  const articulationMarks = createArticulationMarks({
+    accent,
+    articulation,
+    stress,
+    stemUp,
+    headCx,
+    headCy,
+  });
+  if (articulationMarks) {
+    const wrapper = document.createElementNS(SVG_NS, 'svg');
+    wrapper.setAttribute('overflow', 'visible');
+    if (extremalXOffset !== 0) {
+      wrapper.setAttribute('x', extremalXOffset.toString());
+    }
+    wrapper.setAttribute(
+      'y',
+      (STAFF_Y_PADDING + stemNoteY - extremalYOffset).toString()
+    );
+    const scaled = document.createElementNS(SVG_NS, 'g');
+    scaled.setAttribute('transform', `scale(${NOTE_SCALE})`);
+    scaled.appendChild(articulationMarks);
+    wrapper.appendChild(scaled);
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(wrapper);
   }
 
   return [svg, extremalYOffset];

@@ -1,13 +1,20 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
-import { AccidentalType, DurationType } from '../../types/theory';
+import {
+  AccentType,
+  AccidentalType,
+  ArticulationType,
+  DurationType,
+  StressType,
+} from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../notationDimensions';
+import { createArticulationMarks } from './articulations';
 import { createDoubleFlatSvg } from './doubleFlat';
 import { createDoubleSharpSvg } from './doubleSharp';
 import { createFlatSvg } from './flat';
@@ -78,6 +85,9 @@ export type NoteProps = {
   stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
   accidental?: AccidentalType;
+  accent?: AccentType | null;
+  articulation?: ArticulationType | null;
+  stress?: StressType | null;
 };
 export const createNoteSvg = ({
   duration,
@@ -87,6 +97,9 @@ export const createNoteSvg = ({
   stemExtension = 0,
   qualifiedElementName = 'svg',
   accidental,
+  accent,
+  articulation,
+  stress,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -274,6 +287,22 @@ export const createNoteSvg = ({
     }
   }
 
+  // Articulation marks live inside the note's scaled <g> (alongside the
+  // notehead), so they move/scale with the notehead group — unlike accidentals,
+  // which are appended to the outer <svg> below.
+  const articulationMarks = createArticulationMarks({
+    accent,
+    articulation,
+    stress,
+    stemUp,
+    headCx: Number(headXStartStr),
+    headCy: Number(headYStartStr),
+  });
+  if (articulationMarks) {
+    g.appendChild(articulationMarks);
+    svg.setAttribute('overflow', 'visible');
+  }
+
   svg.appendChild(g);
 
   if (accidental && qualifiedElementName === 'svg') {
@@ -321,4 +350,23 @@ export function computeYHeadOffset(
     !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
   return Math.round(10 + yStemEnd * NOTE_SCALE);
+}
+
+// Notehead center in the 600-unit note coordinate space. Mirrors the head
+// placement inside createNoteSvg, so callers (e.g. chord articulation) can
+// position marks over the notehead without re-deriving stem geometry.
+export function noteHeadCenter(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean
+): { cx: number; cy: number } {
+  const xStart = COORD_WIDTH / 2;
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  const flagStemExtension =
+    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
+  return {
+    cx: stemUp ? xStart - 10 : xStart + STEM_WIDTH,
+    cy: stemUp ? yStemEnd : HEAD_WIDTH,
+  };
 }

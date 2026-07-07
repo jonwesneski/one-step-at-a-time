@@ -1,3 +1,7 @@
+export {
+  createArticulationMarks,
+  type ArticulationMarksProps,
+} from './articulations';
 export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export {
@@ -19,6 +23,7 @@ export {
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  noteHeadCenter,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from './note';

@@ -149,6 +149,37 @@ export type HairpinRole = 'start' | 'end';
 
 export type HairpinKind = 'crescendo' | 'decrescendo';
 
+// Articulation marks split into three orthogonal families. Each family is a
+// single optional slot on a note/chord, so within-family illegal combinations
+// (e.g. two accents at once, or staccato AND staccatissimo) are unrepresentable,
+// while every cross-family combination — all of which are musically legal — is
+// expressible. See Gould, "Behind Bars", Articulation Marks.
+
+// Accent family — an attack strength. At most one.
+//   'accent'  = standard accent (>)
+//   'marcato' = strong accent (^)
+export type AccentType = 'accent' | 'marcato';
+
+// Length family — how the note's duration is shaped. At most one.
+// The only two legal within-family combinations are pre-enumerated as single
+// values so that illegal ones (e.g. staccato + staccatissimo) cannot be formed:
+//   'staccato'             = staccato dot (•)
+//   'staccatissimo'        = staccato wedge (▾), a heavier staccato
+//   'tenuto'               = tenuto line (—)
+//   'portato'              = tenuto + staccato (mezzo-staccato); lengthens the note
+//   'tenuto-staccatissimo' = tenuto + staccato wedge
+export type ArticulationType =
+  | 'staccato'
+  | 'staccatissimo'
+  | 'tenuto'
+  | 'portato'
+  | 'tenuto-staccatissimo';
+
+// Schoenberg stress family — placed outermost, above the stave. At most one.
+//   'stressed'   = stressed note
+//   'unstressed' = unstressed note
+export type StressType = 'stressed' | 'unstressed';
+
 export type TupletRatio =
   // Simple form (numeral only — normal count inferred by defaultNormalCount)
   | '2'

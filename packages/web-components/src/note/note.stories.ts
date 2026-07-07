@@ -1,7 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import { DURATIONS, NOTES, OCTAVES } from '../utils';
+import {
+  ACCENTS,
+  ARTICULATIONS,
+  DURATIONS,
+  NOTES,
+  OCTAVES,
+  STRESSES,
+} from '../utils';
 
 const meta: Meta = {
   title: 'Components/Note',
@@ -19,6 +26,67 @@ export const Standalone: Story = {
     duration: { control: 'select', options: DURATIONS },
   },
   render: (args) => html`<music-note duration=${args.duration}></music-note>`,
+};
+
+export const WithArticulations: Story = {
+  args: {
+    duration: 'quarter',
+    note: 'G',
+    octave: 4,
+    accent: '',
+    articulation: 'staccato',
+    stress: '',
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+    note: { control: 'select', options: NOTES },
+    octave: { control: 'select', options: OCTAVES },
+    // '' = no mark in that family. The three families are independent, so any
+    // combination selectable here is musically legal — illegal within-family
+    // combinations are not representable in the type system.
+    accent: { control: 'select', options: ['', ...ACCENTS] },
+    articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
+    stress: { control: 'select', options: ['', ...STRESSES] },
+  },
+  render: (args) => html`
+    <music-staff-treble time="4/4">
+      <music-note
+        duration=${args.duration}
+        note=${args.note}
+        octave=${args.octave}
+        accent=${args.accent}
+        articulation=${args.articulation}
+        stress=${args.stress}
+      ></music-note>
+    </music-staff-treble>
+  `,
+};
+
+// Gallery of every mark and the legal length-family combinations.
+export const ArticulationGallery: Story = {
+  render: () => html`
+    <music-staff-treble time="4/4">
+      <music-note note="G" octave="4" accent="accent"></music-note>
+      <music-note note="G" octave="4" accent="marcato"></music-note>
+      <music-note note="G" octave="4" articulation="staccato"></music-note>
+      <music-note note="G" octave="4" articulation="staccatissimo"></music-note>
+      <music-note note="G" octave="4" articulation="tenuto"></music-note>
+      <music-note note="G" octave="4" articulation="portato"></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        articulation="tenuto-staccatissimo"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        accent="marcato"
+        articulation="staccato"
+      ></music-note>
+      <music-note note="G" octave="4" stress="stressed"></music-note>
+      <music-note note="G" octave="4" stress="unstressed"></music-note>
+    </music-staff-treble>
+  `,
 };
 
 export const InStaff: Story = {
