@@ -85,6 +85,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#resizeObserver = null;
       this.removeEventListener('staff-notes-positioned', this.#boundRedraw);
       this.removeEventListener('connector-attribute-change', this.#boundRedraw);
+      this.removeEventListener('dynamic-attribute-change', this.#boundRedraw);
     }
 
     attributeChangedCallback(
@@ -160,6 +161,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       this.addEventListener('staff-notes-positioned', this.#boundRedraw);
       this.addEventListener('connector-attribute-change', this.#boundRedraw);
+      this.addEventListener('dynamic-attribute-change', this.#boundRedraw);
     }
 
     #scheduleRedraw() {
