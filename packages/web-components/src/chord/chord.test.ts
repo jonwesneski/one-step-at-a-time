@@ -75,6 +75,71 @@ describe(MUSIC_CHORD, () => {
     });
   });
 
+  describe('articulations', () => {
+    function makeChordWithNotes(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      for (const value of ['C', 'E', 'G'] satisfies Note[]) {
+        const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+        note.setAttribute('note', value);
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        chordElement.appendChild(note);
+      }
+      return chordElement;
+    }
+
+    it('round-trips the articulation and stress slots between property and attribute', () => {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      document.body.appendChild(chordElement);
+
+      chordElement.articulation = 'accent-tenuto';
+      chordElement.stress = 'unstressed';
+
+      expect(chordElement.getAttribute('articulation')).toBe('accent-tenuto');
+      expect(chordElement.getAttribute('stress')).toBe('unstressed');
+      expect(chordElement.articulation).toBe('accent-tenuto');
+      expect(chordElement.stress).toBe('unstressed');
+    });
+
+    it('ignores unrecognized articulation values, including illegal combinations', () => {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      document.body.appendChild(chordElement);
+
+      chordElement.setAttribute('articulation', 'fermata-staccato');
+
+      expect(chordElement.articulation).toBeNull();
+    });
+
+    it('draws the chord-level mark exactly once, not per notehead', () => {
+      const chordElement = makeChordWithNotes();
+      chordElement.setAttribute('articulation', 'staccato');
+      document.body.appendChild(chordElement);
+
+      const groups =
+        chordElement.shadowRoot?.querySelectorAll('.articulations') ?? [];
+      expect(groups.length).toBe(1);
+      // Exactly one staccato dot for the whole 3-note chord.
+      expect(
+        chordElement.shadowRoot?.querySelectorAll('.staccato').length
+      ).toBe(1);
+    });
+
+    it('draws a chord fermata exactly once', () => {
+      const chordElement = makeChordWithNotes();
+      chordElement.setAttribute('articulation', 'fermata');
+      document.body.appendChild(chordElement);
+
+      expect(chordElement.shadowRoot?.querySelectorAll('.fermata').length).toBe(
+        1
+      );
+    });
+  });
+
   describe('notes getter', () => {
     it('returns empty array when no chord attribute and no child notes', () => {
       const chordElement = document.createElement(

@@ -1,9 +1,11 @@
 import type {
+  ArticulationType,
   DurationType,
   DynamicMarking,
   Mode,
   Note,
   Octave,
+  StressType,
   Voice,
 } from '../types/theory';
 
@@ -131,3 +133,32 @@ export const DYNAMICS: DynamicMarking[] = [
   'rfz',
   'fp',
 ];
+
+export const ARTICULATIONS: ArticulationType[] = [
+  // length / hold only
+  'staccato',
+  'staccatissimo',
+  'tenuto',
+  'portato',
+  'tenuto-staccatissimo',
+  'fermata',
+  // accent only
+  'accent',
+  'marcato',
+  // standard accent + length/hold
+  'accent-staccato',
+  'accent-staccatissimo',
+  'accent-tenuto',
+  'accent-portato',
+  'accent-tenuto-staccatissimo',
+  'accent-fermata',
+  // strong accent (marcato) + length/hold
+  'marcato-staccato',
+  'marcato-staccatissimo',
+  'marcato-tenuto',
+  'marcato-portato',
+  'marcato-tenuto-staccatissimo',
+  'marcato-fermata',
+];
+
+export const STRESSES: StressType[] = ['stressed', 'unstressed'];

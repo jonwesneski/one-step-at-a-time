@@ -12,14 +12,14 @@ These define how a note begins, sustains, and ends.
 
 |          | Symbol | Name                 | Description                                          |
 | -------- | ------ | -------------------- | ---------------------------------------------------- |
-| &#x2610; | `.`    | Staccato             | Short, detached â€” play about half the note's value |
-| &#x2610; | `..`   | Staccatissimo        | Very short, even more detached than staccato         |
-| &#x2610; | `â€”`  | Tenuto               | Hold the full value; slight emphasis                 |
-| &#x2610; | `>`    | Accent (Standard)    | Emphasize the note with a strong attack              |
-| &#x2610; | `^`    | Marcato              | Strong accent with a tapering tone; "marked"         |
-| &#x2610; | `âˆ§`  | Strong Accent / Hat  | Even stronger than marcato                           |
-| &#x2610; | `~`    | Stress Mark          | Broad emphasis, common in orchestral writing         |
-| &#x2610; | `-`    | Non-legato / Portato | Slightly separated but not staccato                  |
+| &#x2611; | `.`    | Staccato             | Short, detached â€” play about half the note's value |
+| &#x2611; | `..`   | Staccatissimo        | Very short, even more detached than staccato         |
+| &#x2611; | `â€”`  | Tenuto               | Hold the full value; slight emphasis                 |
+| &#x2611; | `>`    | Accent (Standard)    | Emphasize the note with a strong attack              |
+| &#x2611; | `^`    | Marcato              | Strong accent with a tapering tone; "marked"         |
+| &#x2611; | `âˆ§`  | Strong Accent / Hat  | Even stronger than marcato                           |
+| &#x2611; | `~`    | Stress Mark          | Broad emphasis, common in orchestral writing         |
+| &#x2611; | `-`    | Non-legato / Portato | Slightly separated but not staccato                  |
 
 ---
 
@@ -29,20 +29,20 @@ These control the volume/intensity of a note or passage.
 
 |          | Marking      | Name                     | Meaning                    |
 | -------- | ------------ | ------------------------ | -------------------------- |
-| &#x2610; | `ppp`        | Pianississimo            | Extremely soft             |
-| &#x2610; | `pp`         | Pianissimo               | Very soft                  |
-| &#x2610; | `p`          | Piano                    | Soft                       |
-| &#x2610; | `mp`         | Mezzo-piano              | Moderately soft            |
-| &#x2610; | `mf`         | Mezzo-forte              | Moderately loud            |
-| &#x2610; | `f`          | Forte                    | Loud                       |
-| &#x2610; | `ff`         | Fortissimo               | Very loud                  |
-| &#x2610; | `fff`        | Fortississimo            | Extremely loud             |
-| &#x2610; | `fp`         | Forte-piano              | Loud then immediately soft |
-| &#x2610; | `sfz` / `sf` | Sforzando                | Sudden, forced accent      |
-| &#x2610; | `rfz` / `rf` | Rinforzando              | Reinforced accent          |
-| &#x2610; | `fz`         | Forzando                 | Forced emphasis            |
-| &#x2610; | `<`          | Crescendo                | Gradually getting louder   |
-| &#x2610; | `>`          | Decrescendo / Diminuendo | Gradually getting softer   |
+| &#x2611; | `ppp`        | Pianississimo            | Extremely soft             |
+| &#x2611; | `pp`         | Pianissimo               | Very soft                  |
+| &#x2611; | `p`          | Piano                    | Soft                       |
+| &#x2611; | `mp`         | Mezzo-piano              | Moderately soft            |
+| &#x2611; | `mf`         | Mezzo-forte              | Moderately loud            |
+| &#x2611; | `f`          | Forte                    | Loud                       |
+| &#x2611; | `ff`         | Fortissimo               | Very loud                  |
+| &#x2611; | `fff`        | Fortississimo            | Extremely loud             |
+| &#x2611; | `fp`         | Forte-piano              | Loud then immediately soft |
+| &#x2611; | `sfz` / `sf` | Sforzando                | Sudden, forced accent      |
+| &#x2611; | `rfz` / `rf` | Rinforzando              | Reinforced accent          |
+| &#x2611; | `fz`         | Forzando                 | Forced emphasis            |
+| &#x2611; | `<`          | Crescendo                | Gradually getting louder   |
+| &#x2611; | `>`          | Decrescendo / Diminuendo | Gradually getting softer   |
 
 ---
 
@@ -182,7 +182,7 @@ These alter the rhythmic length of a note.
 | &#x2610; | Triple Dot       | `...` after note    | Adds 87.5% of note's value           |
 | &#x2610; | Tie              | Curved line         | Extends note across a barline        |
 | &#x2610; | Tuplet / Triplet | Bracket with number | Groups of notes in irregular rhythms |
-| &#x2610; | Fermata          | `ð„`                | Hold the note longer than written    |
+| &#x2611; | Fermata          | `ð„`                | Hold the note longer than written    |
 | &#x2610; | Short Fermata    | Pointed fermata     | Shorter than normal fermata          |
 | &#x2610; | Long Fermata     | Square fermata      | Longer than normal fermata           |
 | &#x2610; | Ad libitum       | `ad lib.`           | At the performer's discretion        |
@@ -196,8 +196,8 @@ These alter the rhythmic length of a note.
 | &#x2611; | Slur                | Curved line over notes  | Play notes legato (connected)    |
 | &#x2611; | Tie                 | Curved line, same pitch | Extends note duration            |
 | &#x2610; | Phrase Mark         | Long curved line        | Groups a musical phrase visually |
-| &#x2610; | Hairpin Crescendo   | `<` hairpin             | Get louder over a span of notes  |
-| &#x2610; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes  |
+| &#x2611; | Hairpin Crescendo   | `<` hairpin             | Get louder over a span of notes  |
+| &#x2611; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes  |
 | &#x2610; | Niente              | `n` or circle at end    | Fade to/from silence             |
 
 ---

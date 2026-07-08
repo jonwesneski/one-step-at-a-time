@@ -53,16 +53,18 @@ one-step-at-a-time/
 │           ├── staffVocal/
 │           ├── rules/            # Music theory / domain computation (pure functions)
 │           │   ├── accidentalRules.ts
-│           │   └── beamRules.ts
-│           │   ├── staffWidth.ts         # Measure min-width calculation
+│           │   ├── beamRules.ts
+│           │   ├── staffWidth.ts          # Measure min-width calculation
+│           │   ├── theoryConsts.ts        # Duration/semitone lookup maps
+│           │   ├── theoryHelpers.ts       # Chord/note computation
+│           │   └── …                      # also chordRules, restRules, staffHeightRules, staffNoteRules, tupletRules, dynamicsRules
 │           ├── types/
 │           │   ├── theory.ts  # Core music theory types
 │           │   └── elements.ts
 │           └── utils/
 │               ├── consts.ts             # Custom element tag/event name constants
 │               ├── notationDimensions.ts # Pixel sizing and spacing constants
-│               ├── theoryConsts.ts       # Duration/semitone lookup maps
-│               ├── theoryHelpers.ts      # Chord/note computation
+│               ├── parsers.ts            # Set-backed attribute value validators, parseX → value | null
 │               ├── connectorsBuilder.ts  # Bar-line connector SVG
 │               ├── noteTimingDragHandler.ts
 │               ├── pitchDragHandler.ts
@@ -106,6 +108,91 @@ Each notation feature follows a three-layer pattern. `staffClassicalBase.ts` is 
 3. Wire-up only in `staffClassicalBase.ts` — call the rule functions and pass results to SVG creators
 
 Rule functions take explicit parameters (keySig, timeSig, a `noteToYCoordinate` callback, etc.) instead of `this`, making them independently testable.
+
+## Adding a Feature
+
+Use this as a **menu, not a mandatory sequence** — most features skip several steps. A typical
+Type A feature touches ~8 of these; a boolean or type-reusing attribute far fewer. Each step
+below leads with its **when-trigger**; the ones marked **(near-universal)** apply to virtually
+every note/chord attribute, everything else fires only on its trigger. The goal is to add the
+feature _and leave the surrounding code at least as clean_ — so watch for refactor
+opportunities as you go (step 16).
+
+Features land in one of two shapes; steps are tagged accordingly:
+
+- **`[A]` note/chord attribute** (e.g. articulations, accent, fermata): element-local, drawn
+  inside the note/chord SVG. Does **not** touch `src/rules/`, the staff base classes,
+  `notationDimensions.ts`, or `src/index.ts`.
+- **`[B]` staff-orchestrated span** (e.g. dynamics, hairpins): needs cross-note layout, so it
+  adds a rules file, a `notationDimensions.ts` block, an event constant, and wiring in
+  `staffClassicalBase.ts`; the element dispatches an event instead of only re-rendering.
+
+1. `[A][B]` **Domain type** — _when: the feature adds a new enumerated value set; skip for a
+   boolean attribute or one that reuses an existing type._ Add the value union to
+   `src/types/theory.ts`. Ref: `DynamicMarking`, `ArticulationType`, `StressType`.
+2. `[A][B]` **Runtime options / event const** — _when: value is enumerated → options array;
+   Type B or cross-element notify → event key._ Add the options array to `src/utils/consts.ts`
+   (`DYNAMICS`, `ARTICULATIONS`, `STRESSES`). Type B only: add a key to `NOTE_EVENTS` (e.g.
+   `DYNAMIC_ATTRIBUTE_CHANGE`).
+3. `[A][B]` **Getter validation** — _parser optional; a judgment call._ Three styles coexist,
+   in increasing weight: plain cast with a default (`get duration`), inline validation
+   (`get octave` checks `OCTAVES.includes`), or a shared `parseX` helper in
+   `src/utils/parsers.ts` (`get articulation`). **Add a `parseX` function only when you both
+   want to reject invalid values _and_ the same check is used in ≥2 places (note + chord).**
+   For a simple cast-with-default used in one spot, inline it — a parser file is overkill.
+4. `[A][B]` **Element interface** — _when: it's a consumer-facing note/chord property; skip for
+   staff-only or purely-internal features._ Add the `| null` field to `INoteElement` /
+   `IChordElement` in `src/types/elements.ts` (enforced via `implements`).
+5. `[A][B]` **Element wiring (near-universal for note/chord attrs)** — in `src/note/note.ts`
+   and `src/chord/chord.ts`: add to `observedAttributes` (lowercase), add getter/setter
+   (attribute-backed via `parseX`, or `#field`-backed), handle in `attributeChangedCallback`.
+   Type A: pass into the svgCreator call. Type B: dispatch the event from
+   `attributeChangedCallback`. Note which elements apply — some features are note-only or
+   chord-only. Ref: the `tie` / `dynamic` / `articulation` get/set blocks in `note.ts`.
+6. `[A][B]` **Check React JSX decls** — check whether `src/types.d.ts` needs updating; if the
+   feature adds a consumer-facing prop, add the optional prop to the `'music-note'` and
+   `'music-chord'` declarations (+ import the type). This file is _not_ enforced by
+   `implements`, so it silently drifts — check it explicitly.
+7. `[A]` **SVG (note-local)** — new `src/utils/svgCreator/<feature>.ts`, re-export from
+   `svgCreator/index.ts`, and accept the prop in `svgCreator/note.ts` + `svgCreator/chord.ts`.
+   Ref: `svgCreator/articulations.ts`.
+8. `[B]` **Rules** — _when: there's real cross-note theory/layout computation; a trivial span
+   may skip this._ New `src/rules/<feature>Rules.ts` with pure functions (explicit params, no
+   `this`). Ref: `rules/dynamicsRules.ts`.
+9. `[B]` **SVG (staff-drawn)** — new `svgCreator/<feature>.ts` + re-export. Ref:
+   `svgCreator/dynamics.ts`.
+10. `[A][B]` **Pixel constants** — _when: new rendering needs new sizing/offsets; skip if it
+    reuses existing dimensions._ Add a section to `src/utils/notationDimensions.ts`. Ref: the
+    "Dynamics" block.
+11. `[B]` **Orchestration** — in `src/staffClassicalBase.ts`: add a container, register the
+    event listener in `connectedCallback` / remove in `disconnectedCallback`, add `#renderX()`
+    and wire it into the render pass. Ref: `#renderDynamics`.
+12. **Inherited-attr variant** — if the feature is instead an _inherited staff attribute_ (like
+    `keysig`/`mode`/`time`), the wiring differs: add to `COMMON_ATTRIBUTES`, to
+    `observedAttributes` in composition/measure/staffClassicalBase, add `#effectiveX` +
+    `#resolveInheritedValue` calls, and the descendant push loop in `composition.ts`.
+13. `[A][B]` **Stories (near-universal)** — add/extend colocated `<component>.stories.ts`
+    (Type A → `note.stories.ts`; Type B → `staffTreble` / `composition` stories), using option
+    arrays from `../utils` and strong types from `../types/theory`.
+14. `[A][B]` **Tests (near-universal; tiers are conditional)** — Type A: `note.test.ts` +
+    `chord.test.ts`. Type B: new `rules/<feature>Rules.test.ts` + `staffClassicalBase.test.ts`.
+    Add a `*.browser-test.ts` **only when** layout/geometry/resize is involved.
+15. `[A][B]` **Tick TODO.md (near-universal)** — check whether the feature completes any row(s)
+    in `TODO.md` (the master notation-features tracker) and flip that row's checkbox from
+    `&#x2610;` to `&#x2611;`. A feature often satisfies several rows across sections (e.g. an
+    articulation ticks a base row _and_ its combination forms).
+16. `[A][B]` **Refactor pass (do this, don't skip)** — look for consolidation the feature
+    exposed: near-duplicate get/set blocks across `note.ts`/`chord.ts` that could share a
+    helper; a `parseX` duplicating an existing parser shape; an svgCreator glyph overlapping an
+    existing one (new articulation glyphs belong in the existing `svgCreator/articulations.ts`,
+    not a new file — as `accent`/`fermata` did); repeated pixel math that should be a named
+    constant in `notationDimensions.ts`; and any place the new code copies a rule instead of
+    calling the existing pure function in `src/rules/`. Prefer extending an existing file over
+    adding a parallel one.
+17. `[A][B]` **Format & test** — run `npx nx format:write`, then `npx nx test web-components`.
+
+**Common trap:** a plain new note/chord attribute does **not** touch `src/index.ts` or the
+staff base classes (`staffBase.ts`) — don't go looking for wiring there.
 
 ## Key Architecture Concepts
 
@@ -191,7 +278,7 @@ type VoiceType = 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
 
 `Chord` is a discriminated union of `NormalChord` and slash chords.
 
-## Key Utility Maps (`utils/theoryConsts.ts`)
+## Key Utility Maps (`rules/theoryConsts.ts`)
 
 | Map                       | Purpose                                               |
 | ------------------------- | ----------------------------------------------------- |

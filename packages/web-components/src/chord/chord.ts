@@ -8,18 +8,22 @@ import {
 } from '../types/elements';
 import {
   AccidentalType,
+  ArticulationType,
   Chord,
   DurationType,
   DynamicMarking,
   HairpinRole,
   Octave,
+  StressType,
 } from '../types/theory';
 import {
   addLedgerLines,
   createChordSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
+  parseStress,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -45,6 +49,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'crescendo',
         'decrescendo',
         'diminuendo',
+        'articulation',
+        'stress',
       ];
     }
 
@@ -209,6 +215,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.decrescendo = value;
     }
 
+    get articulation(): ArticulationType | null {
+      return parseArticulation(this.getAttribute('articulation'));
+    }
+    set articulation(value: ArticulationType | null) {
+      if (value === null) {
+        this.removeAttribute('articulation');
+      } else {
+        this.setAttribute('articulation', value);
+      }
+    }
+
+    get stress(): StressType | null {
+      return parseStress(this.getAttribute('stress'));
+    }
+    set stress(value: StressType | null) {
+      if (value === null) {
+        this.removeAttribute('stress');
+      } else {
+        this.setAttribute('stress', value);
+      }
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -309,6 +337,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
           noteAccidentals: this.#noteAccidentals,
+          articulation: this.articulation,
+          stress: this.stress,
         });
         chordSvg.setAttribute('overflow', 'visible');
         addLedgerLines(
@@ -395,6 +425,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noFlags: false,
           stemExtension: 0,
           qualifiedElementName: 'g',
+          articulation: this.articulation,
+          stress: this.stress,
         });
         chordSvg.setAttribute('overflow', 'visible');
 

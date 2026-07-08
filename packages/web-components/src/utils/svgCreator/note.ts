@@ -1,13 +1,19 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
-import { AccidentalType, DurationType } from '../../types/theory';
+import {
+  AccidentalType,
+  ArticulationType,
+  DurationType,
+  StressType,
+} from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../notationDimensions';
+import { createArticulationMarks } from './articulations';
 import { createDoubleFlatSvg } from './doubleFlat';
 import { createDoubleSharpSvg } from './doubleSharp';
 import { createFlatSvg } from './flat';
@@ -78,6 +84,8 @@ export type NoteProps = {
   stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
   accidental?: AccidentalType;
+  articulation?: ArticulationType | null;
+  stress?: StressType | null;
 };
 export const createNoteSvg = ({
   duration,
@@ -87,6 +95,8 @@ export const createNoteSvg = ({
   stemExtension = 0,
   qualifiedElementName = 'svg',
   accidental,
+  articulation,
+  stress,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -274,6 +284,21 @@ export const createNoteSvg = ({
     }
   }
 
+  // Articulation marks live inside the note's scaled <g> (alongside the
+  // notehead), so they move/scale with the notehead group — unlike accidentals,
+  // which are appended to the outer <svg> below.
+  const articulationMarks = createArticulationMarks({
+    articulation,
+    stress,
+    stemUp,
+    noteHeadCenterX: Number(headXStartStr),
+    noteHeadCenterY: Number(headYStartStr),
+  });
+  if (articulationMarks) {
+    g.appendChild(articulationMarks);
+    svg.setAttribute('overflow', 'visible');
+  }
+
   svg.appendChild(g);
 
   if (accidental && qualifiedElementName === 'svg') {
@@ -315,10 +340,22 @@ export function computeYHeadOffset(
   duration: DurationType,
   noFlags: boolean
 ): number {
-  if (!stemUp) return NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const { cy } = noteHeadCenter(stemUp, duration, noFlags);
+  return Math.round(NOTE_HEAD_Y_OFFSET_CORRECTION + cy * NOTE_SCALE);
+}
+
+export function noteHeadCenter(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean
+): { cx: number; cy: number } {
+  const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   const flagStemExtension =
     !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
-  return Math.round(10 + yStemEnd * NOTE_SCALE);
+  return {
+    cx: stemUp ? xStart - 10 : xStart + STEM_WIDTH,
+    cy: stemUp ? yStemEnd : HEAD_WIDTH,
+  };
 }

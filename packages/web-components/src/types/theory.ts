@@ -149,6 +149,47 @@ export type HairpinRole = 'start' | 'end';
 
 export type HairpinKind = 'crescendo' | 'decrescendo';
 
+// Accent family — attack strength. Internal helper, no longer an element
+export type AccentType = 'accent' | 'marcato';
+
+// Length/hold family — internal helper; the token following the accent prefix.
+export type ArticulationLength =
+  | 'staccato'
+  | 'staccatissimo'
+  | 'tenuto'
+  | 'portato'
+  | 'tenuto-staccatissimo'
+  | 'fermata';
+
+export type ArticulationType =
+  // length / hold only (no accent)
+  | 'staccato'
+  | 'staccatissimo'
+  | 'tenuto'
+  | 'portato'
+  | 'tenuto-staccatissimo'
+  | 'fermata'
+  // accent only
+  | 'accent'
+  | 'marcato'
+  // standard accent + length/hold
+  | 'accent-staccato'
+  | 'accent-staccatissimo'
+  | 'accent-tenuto'
+  | 'accent-portato'
+  | 'accent-tenuto-staccatissimo'
+  | 'accent-fermata'
+  // strong accent (marcato) + length/hold
+  | 'marcato-staccato'
+  | 'marcato-staccatissimo'
+  | 'marcato-tenuto'
+  | 'marcato-portato'
+  | 'marcato-tenuto-staccatissimo'
+  | 'marcato-fermata';
+
+// Schoenberg stress family
+export type StressType = 'stressed' | 'unstressed';
+
 export type TupletRatio =
   // Simple form (numeral only — normal count inferred by defaultNormalCount)
   | '2'
