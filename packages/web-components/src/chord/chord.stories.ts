@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import { DURATIONS, NOTES, OCTAVES } from '../utils';
+import { ARTICULATIONS, DURATIONS, NOTES, OCTAVES } from '../utils';
 
 const CHORDS = [
   'Cmaj',
@@ -31,21 +31,25 @@ export const StandaloneChordAttribute: Story = {
   args: {
     chord: 'Cmaj',
     duration: 'quarter',
+    articulation: 'staccato',
   },
   argTypes: {
     chord: { control: 'select', options: CHORDS },
     duration: { control: 'select', options: DURATIONS },
+    articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
   },
   render: (args) =>
     html`<music-chord
       chord=${args.chord}
       duration=${args.duration}
+      articulation=${args.articulation}
     ></music-chord>`,
 };
 
 export const StandaloneWithNotes: Story = {
   args: {
     duration: 'quarter',
+    articulation: 'accent',
     note1: 'C',
     octave1: 4,
     note2: 'E',
@@ -55,6 +59,7 @@ export const StandaloneWithNotes: Story = {
   },
   argTypes: {
     duration: { control: 'select', options: DURATIONS },
+    articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
     note1: { control: 'select', options: NOTES },
     octave1: { control: 'select', options: OCTAVES },
     note2: { control: 'select', options: NOTES },
@@ -63,7 +68,7 @@ export const StandaloneWithNotes: Story = {
     octave3: { control: 'select', options: OCTAVES },
   },
   render: (args) => html`
-    <music-chord duration=${args.duration}>
+    <music-chord duration=${args.duration} articulation=${args.articulation}>
       <music-note
         note=${args.note1}
         octave=${args.octave1}
@@ -87,7 +92,9 @@ export const InStaff: Story = {
   args: {
     chord1: 'Cmaj',
     duration1: 'quarter',
+    articulation1: 'marcato',
     duration2: 'quarter',
+    articulation2: 'tenuto',
     note1: 'C',
     octave1: 4,
     note2: 'E',
@@ -98,7 +105,9 @@ export const InStaff: Story = {
   argTypes: {
     chord1: { control: 'select', options: CHORDS },
     duration1: { control: 'select', options: DURATIONS },
+    articulation1: { control: 'select', options: ['', ...ARTICULATIONS] },
     duration2: { control: 'select', options: DURATIONS },
+    articulation2: { control: 'select', options: ['', ...ARTICULATIONS] },
     note1: { control: 'select', options: NOTES },
     octave1: { control: 'select', options: OCTAVES },
     note2: { control: 'select', options: NOTES },
@@ -111,8 +120,12 @@ export const InStaff: Story = {
       <music-chord
         chord=${args.chord1}
         duration=${args.duration1}
+        articulation=${args.articulation1}
       ></music-chord>
-      <music-chord duration=${args.duration2}>
+      <music-chord
+        duration=${args.duration2}
+        articulation=${args.articulation2}
+      >
         <music-note
           note=${args.note1}
           octave=${args.octave1}

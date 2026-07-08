@@ -33,9 +33,6 @@ export const WithArticulations: Story = {
     duration: { control: 'select', options: DURATIONS },
     note: { control: 'select', options: NOTES },
     octave: { control: 'select', options: OCTAVES },
-    // Every option is a musically legal combination; illegal ones (e.g.
-    // fermata + staccato, or two accents) are simply not values of the union.
-    // '' = no articulation / no stress.
     articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
     stress: { control: 'select', options: ['', ...STRESSES] },
   },
@@ -52,7 +49,6 @@ export const WithArticulations: Story = {
   `,
 };
 
-// Gallery of representative marks, legal length combos, and fermata combos.
 export const ArticulationGallery: Story = {
   render: () => html`
     <music-staff-treble time="4/4">
