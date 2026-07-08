@@ -149,31 +149,10 @@ export type HairpinRole = 'start' | 'end';
 
 export type HairpinKind = 'crescendo' | 'decrescendo';
 
-// Articulation is a single attribute whose value enumerates only the musically
-// legal combinations as hyphen-separated tokens: an optional accent prefix
-// followed by an optional length/hold token — `[accent-]?[length-or-hold]`.
-// Because every value is a legal combination (and every legal combination is a
-// value), illegal states are unrepresentable: two accents can't occur (single
-// prefix), two length marks can't occur (single token), and a fermata can't
-// combine with a length mark (fermata occupies the length-token position). The
-// only legal within-length combinations (portato, tenuto-staccatissimo) and the
-// fermata combination rules follow the referenced sources (Gould, "Behind Bars";
-// ultimatemusictheory.com/articulation-combinations).
-
 // Accent family — attack strength. Internal helper, no longer an element
-// attribute; it is the optional prefix of ArticulationType.
-//   'accent'  = standard accent (>)
-//   'marcato' = strong accent (^)
 export type AccentType = 'accent' | 'marcato';
 
 // Length/hold family — internal helper; the token following the accent prefix.
-//   'staccato'             = staccato dot (•)
-//   'staccatissimo'        = staccato wedge (▾), a heavier staccato
-//   'tenuto'               = tenuto line (—)
-//   'portato'              = tenuto + staccato (mezzo-staccato); lengthens the note
-//   'tenuto-staccatissimo' = tenuto + staccato wedge
-//   'fermata'              = hold; legal only alone or with an accent, never with
-//                            a length mark (occupies this same token position)
 export type ArticulationLength =
   | 'staccato'
   | 'staccatissimo'
@@ -208,10 +187,7 @@ export type ArticulationType =
   | 'marcato-tenuto-staccatissimo'
   | 'marcato-fermata';
 
-// Schoenberg stress family — its own attribute, placed outermost above the
-// stave. At most one.
-//   'stressed'   = stressed note
-//   'unstressed' = unstressed note
+// Schoenberg stress family
 export type StressType = 'stressed' | 'unstressed';
 
 export type TupletRatio =

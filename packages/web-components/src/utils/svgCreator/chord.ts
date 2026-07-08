@@ -145,17 +145,17 @@ export const createChordSvg = ({
   }
 
   // Chord-level articulation — drawn once, over the extremal (stem-side outer)
-  // notehead, per the reference rule "centre articulation on the notehead that
-  // is on the correct side of the stem". The marks are built in the note's
-  // 600-unit space and wrapped in a scaled <svg> positioned exactly like the
-  // extremal note's SVG, so they overlay that notehead.
-  const { cx: headCx, cy: headCy } = noteHeadCenter(stemUp, duration, noFlags);
+  const { cx: noteHeadCenterX, cy: noteHeadCenterY } = noteHeadCenter(
+    stemUp,
+    duration,
+    noFlags
+  );
   const articulationMarks = createArticulationMarks({
     articulation,
     stress,
     stemUp,
-    headCx,
-    headCy,
+    noteHeadCenterX,
+    noteHeadCenterY,
   });
   if (articulationMarks) {
     const wrapper = document.createElementNS(SVG_NS, 'svg');

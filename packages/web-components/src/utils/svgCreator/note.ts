@@ -291,8 +291,8 @@ export const createNoteSvg = ({
     articulation,
     stress,
     stemUp,
-    headCx: Number(headXStartStr),
-    headCy: Number(headYStartStr),
+    noteHeadCenterX: Number(headXStartStr),
+    noteHeadCenterY: Number(headYStartStr),
   });
   if (articulationMarks) {
     g.appendChild(articulationMarks);
@@ -340,17 +340,10 @@ export function computeYHeadOffset(
   duration: DurationType,
   noFlags: boolean
 ): number {
-  if (!stemUp) return NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
-  const flagStemExtension =
-    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
-  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
-  return Math.round(10 + yStemEnd * NOTE_SCALE);
+  const { cy } = noteHeadCenter(stemUp, duration, noFlags);
+  return Math.round(NOTE_HEAD_Y_OFFSET_CORRECTION + cy * NOTE_SCALE);
 }
 
-// Notehead center in the 600-unit note coordinate space. Mirrors the head
-// placement inside createNoteSvg, so callers (e.g. chord articulation) can
-// position marks over the notehead without re-deriving stem geometry.
 export function noteHeadCenter(
   stemUp: boolean,
   duration: DurationType,

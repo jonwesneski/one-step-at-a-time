@@ -78,10 +78,6 @@ declare module 'react' {
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
-        // Articulation — a single enumerated value of legal accent/length/hold
-        // combinations; illegal combos (e.g. two accents, staccato +
-        // staccatissimo, fermata + staccato) are not expressible. `stress` is an
-        // orthogonal Schoenberg slot.
         articulation?: ArticulationType;
         stress?: StressType;
         onClick?: (e: MouseEvent) => void;
@@ -98,10 +94,6 @@ declare module 'react' {
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
-        // Articulation — a single enumerated value of legal accent/length/hold
-        // combinations; illegal combos (e.g. two accents, staccato +
-        // staccatissimo, fermata + staccato) are not expressible. `stress` is an
-        // orthogonal Schoenberg slot.
         articulation?: ArticulationType;
         stress?: StressType;
         onClick?: (e: MouseEvent) => void;

@@ -29,10 +29,6 @@ export const parseDynamicMarking = (
   return null;
 };
 
-// Articulation is validated against the enumerated set of legal combinations.
-// An unrecognized string — including an illegal combination such as
-// "fermata-staccato" — resolves to null (silently ignored), matching the
-// library's existing non-throwing validation convention.
 export const parseArticulation = (
   value: string | null
 ): ArticulationType | null => {
