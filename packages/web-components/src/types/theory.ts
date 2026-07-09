@@ -190,6 +190,22 @@ export type ArticulationType =
 // Schoenberg stress family
 export type StressType = 'stressed' | 'unstressed';
 
+// Grace notes — small ornamental notes rendered before a main note or chord.
+// Acciaccatura carries a diagonal slash through the flag/beam; appoggiatura
+// is the same small note without the slash.
+export type GraceType = 'acciaccatura' | 'appoggiatura';
+
+// The written value of grace notes — visual only, grace notes never consume
+// beat budget. Controls flag count (single) and beam count (group).
+export type GraceDuration = Extract<
+  DurationType,
+  'half' | 'quarter' | 'eighth' | 'sixteenth' | 'thirtysecond' | 'sixtyfourth'
+>;
+
+// 'auto' draws a slur from the first grace notehead to the main notehead;
+// 'none' suppresses it.
+export type GraceSlur = 'auto' | 'none';
+
 export type TupletRatio =
   // Simple form (numeral only — normal count inferred by defaultNormalCount)
   | '2'

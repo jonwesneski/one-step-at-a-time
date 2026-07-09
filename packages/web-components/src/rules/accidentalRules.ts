@@ -9,7 +9,6 @@
 - **Key-change natural rendering** (naturals that cancel the old key signature before displaying the new one)
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
 - **Down-stem accidental displacement** (move accidental closer to stem than a displaced notehead when room allows)
-- **Grace note accidentals**
 - **Ornament accidentals** (confirm/cancel altered pitches for trills, turns, etc.)
 - **Microtones** (quarter-tones, arrows)
  */
@@ -73,18 +72,19 @@ const MINOR_TO_RELATIVE_MAJOR: Partial<Record<string, string>> = {
 
 // ─── Inter-note spacing ────────────────────────────────────────────────────────
 
-// Returns the nudged xPosition so the accidental clears the previous element's
-// right edge. Place accidentals as close to the note as possible — nudge only
-// as much as needed to avoid collision.
+// Returns the nudged xPosition so the element's leftward overhang (accidental
+// and/or grace notes) clears the previous element's right edge. Overhanging
+// glyphs sit as close to the note as possible — nudge only as much as needed
+// to avoid collision.
 export function computeInterNoteSpacing(
   xPosition: number,
-  accidentalWidth: number,
+  leftwardWidth: number,
   previousRightEdge: number
 ): number {
-  if (accidentalWidth <= 0) {
+  if (leftwardWidth <= 0) {
     return xPosition;
   }
-  return Math.max(xPosition, previousRightEdge + accidentalWidth);
+  return Math.max(xPosition, previousRightEdge + leftwardWidth);
 }
 
 // ─── Per-measure orchestration ─────────────────────────────────────────────────
@@ -99,6 +99,10 @@ export function computeNoteAccidentals(
     ChordElementType,
     (AccidentalType | null | undefined)[]
   >;
+  graceShowAccidentals: Map<
+    NoteElementType | ChordElementType,
+    (AccidentalType | null)[]
+  >;
 } {
   const keySigAccidentals = getKeySignatureAccidentals(keySig, mode);
   const inMeasureState = new Map<string, AccidentalType | null>();
@@ -108,10 +112,36 @@ export function computeNoteAccidentals(
     ChordElementType,
     (AccidentalType | null | undefined)[]
   >();
+  const graceShowAccidentals = new Map<
+    NoteElementType | ChordElementType,
+    (AccidentalType | null)[]
+  >();
+
+  // Grace notes sound before their host element, so their accidentals are
+  // resolved first and carry through the measure like any other accidental.
+  const resolveGraceAccidentals = (
+    hostElement: NoteElementType | ChordElementType
+  ): void => {
+    const graceNotes = hostElement.grace;
+    if (graceNotes === null || graceNotes.length === 0) {
+      return;
+    }
+    const resolved = graceNotes.map((graceNote) => {
+      const letter = graceNote[0].toUpperCase();
+      const graceAccidental = suffixToType(parseAccidentalSuffix(graceNote));
+      const effectiveState =
+        inMeasureState.get(letter) ?? keySigAccidentals.get(letter) ?? null;
+      const showAccidental = resolveAccidental(graceAccidental, effectiveState);
+      inMeasureState.set(letter, graceAccidental);
+      return showAccidental;
+    });
+    graceShowAccidentals.set(hostElement, resolved);
+  };
 
   for (const element of elements) {
     if (element.nodeName === MUSIC_NOTE_NODE) {
       const noteElement = element as NoteElementType;
+      resolveGraceAccidentals(noteElement);
       if (noteElement.tie === 'end') {
         noteShowAccidentals.set(noteElement, null);
         continue;
@@ -126,6 +156,7 @@ export function computeNoteAccidentals(
       inMeasureState.set(letter, noteAccidental);
     } else if (element.nodeName === MUSIC_CHORD_NODE) {
       const chordElement = element as ChordElementType;
+      resolveGraceAccidentals(chordElement);
       if (chordElement.tie === 'end') {
         chordNoteAccidentals.set(
           chordElement,
@@ -147,7 +178,7 @@ export function computeNoteAccidentals(
     }
   }
 
-  return { noteShowAccidentals, chordNoteAccidentals };
+  return { noteShowAccidentals, chordNoteAccidentals, graceShowAccidentals };
 }
 
 // Key signature accidentals are always single sharp or flat — never double accidentals.

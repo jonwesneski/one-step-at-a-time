@@ -8,43 +8,55 @@ import {
 /**
  * Calculates the minimum pixel width for a classical staff measure (no lyrics).
  *
- * minWidth = describeEndX + firstNoteAccidentalWidth + noteCount × MIN_NOTE_WIDTH
+ * minWidth = describeEndX + firstElementLeftwardWidth + extraLeftwardWidth
+ *          + noteCount × MIN_NOTE_WIDTH
  *
  * noteCount may be fractional when the measure contains tuplets — each tuplet
  * note contributes (normal/actual) rather than 1.0, matching the reduced
  * horizontal footprint used in #spaceElements().
  *
- * firstNoteAccidentalWidth ensures the measure is wide enough when the first
- * note is shifted right to clear its accidental from the describe area.
- * This guarantees that proportionalWidth in #spaceElements() is never negative,
- * preventing noteheads from bleeding into adjacent measures.
+ * firstElementLeftwardWidth ensures the measure is wide enough when the first
+ * element is shifted right to clear its leftward overhang (accidental and/or
+ * grace notes) from the describe area. extraLeftwardWidth reserves room for
+ * the grace-note overhangs of the remaining elements. Together they guarantee
+ * that proportionalWidth in #spaceElements() is never negative, preventing
+ * noteheads from bleeding into adjacent measures.
  */
 export function calculateStaffMinWidth(
   describeEndX: number,
   noteCount: number,
-  firstNoteAccidentalWidth = 0
+  firstElementLeftwardWidth = 0,
+  extraLeftwardWidth = 0
 ): number {
-  return describeEndX + firstNoteAccidentalWidth + noteCount * MIN_NOTE_WIDTH;
+  return (
+    describeEndX +
+    firstElementLeftwardWidth +
+    extraLeftwardWidth +
+    noteCount * MIN_NOTE_WIDTH
+  );
 }
 
 /**
  * Calculates the minimum pixel width for a vocal staff measure, accounting for
  * both note spacing and lyric character width.
  *
- * minWidth = describeEndX + max(noteCount × MIN_NOTE_WIDTH,
- *                               lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)
+ * minWidth = describeEndX + firstElementLeftwardWidth + extraLeftwardWidth
+ *          + max(noteCount × MIN_NOTE_WIDTH,
+ *                lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)
  */
 export function calculateStaffVocalMinWidth(
   describeEndX: number,
   noteCount: number,
   lyricCharCount: number,
-  firstNoteAccidentalWidth = 0
+  firstElementLeftwardWidth = 0,
+  extraLeftwardWidth = 0
 ): number {
   const noteMinWidth = noteCount * MIN_NOTE_WIDTH;
   const lyricMinWidth = lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
   return (
     describeEndX +
-    firstNoteAccidentalWidth +
+    firstElementLeftwardWidth +
+    extraLeftwardWidth +
     Math.max(noteMinWidth, lyricMinWidth)
   );
 }

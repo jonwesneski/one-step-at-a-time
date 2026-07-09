@@ -1,21 +1,40 @@
+import {
+  applyResolvedGraceAccidentals,
+  buildGraceNoteDescriptors,
+} from '../rules/graceRules';
 import { ConnectorRole, INoteElement } from '../types/elements';
 import {
   AccidentalType,
   ArticulationType,
   DurationType,
   DynamicMarking,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
   HairpinRole,
   Note,
+  NoteLetter,
   Octave,
   StressType,
 } from '../types/theory';
 import {
+  ACCIDENTAL_NOTE_GAP,
+  ACCIDENTAL_SYMBOL_WIDTH,
   addLedgerLines,
+  createGraceNotesSvg,
   createNoteSvg,
+  GRACE_MAIN_GAP_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  NOTE_SCALE,
+  noteHeadCenter,
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
+  parseGraceDuration,
+  parseGraceNotes,
+  parseGraceOctaves,
+  parseGraceSlur,
+  parseGraceType,
   parseStress,
 } from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES } from '../utils/consts';
@@ -35,6 +54,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'diminuendo',
         'articulation',
         'stress',
+        'grace',
+        'grace-octave',
+        'grace-type',
+        'grace-duration',
+        'grace-slur',
       ];
     }
 
@@ -42,8 +66,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #noStem = false;
+    // undefined = no override, infer accidental from the `note` suffix;
+    // null = explicit override, suppress the accidental; value = explicit override, force this symbol
     #showAccidental: AccidentalType | null | undefined = undefined;
     #staffY: number | null = null;
+    #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
     #batchDepth = 0;
     #renderPending = false;
 
@@ -129,6 +156,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // see #showAccidental declaration for explanation of the three possible types.
     get showAccidental(): AccidentalType | null | undefined {
       return this.#showAccidental;
     }
@@ -219,6 +247,69 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get grace(): Note[] | null {
+      return parseGraceNotes(this.getAttribute('grace'));
+    }
+    set grace(value: Note[] | null) {
+      if (value === null || value.length === 0) {
+        this.removeAttribute('grace');
+      } else {
+        this.setAttribute('grace', value.join(','));
+      }
+    }
+
+    get graceOctave(): (Octave | null)[] | null {
+      return parseGraceOctaves(this.getAttribute('grace-octave'));
+    }
+    set graceOctave(value: (Octave | null)[] | null) {
+      if (value === null || value.length === 0) {
+        this.removeAttribute('grace-octave');
+      } else {
+        this.setAttribute('grace-octave', value.map((v) => v ?? '').join(','));
+      }
+    }
+
+    get graceType(): GraceType {
+      return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
+    }
+    set graceType(value: GraceType | null) {
+      if (value === null) {
+        this.removeAttribute('grace-type');
+      } else {
+        this.setAttribute('grace-type', value);
+      }
+    }
+
+    get graceDuration(): GraceDuration | null {
+      return parseGraceDuration(this.getAttribute('grace-duration'));
+    }
+    set graceDuration(value: GraceDuration | null) {
+      if (value === null) {
+        this.removeAttribute('grace-duration');
+      } else {
+        this.setAttribute('grace-duration', value);
+      }
+    }
+
+    get graceSlur(): GraceSlur {
+      return parseGraceSlur(this.getAttribute('grace-slur')) ?? 'auto';
+    }
+    set graceSlur(value: GraceSlur | null) {
+      if (value === null) {
+        this.removeAttribute('grace-slur');
+      } else {
+        this.setAttribute('grace-slur', value);
+      }
+    }
+
+    get resolvedGraceAccidentals(): (AccidentalType | null)[] | null {
+      return this.#resolvedGraceAccidentals;
+    }
+    set resolvedGraceAccidentals(value: (AccidentalType | null)[] | null) {
+      this.#resolvedGraceAccidentals = value;
+      this.#scheduleRender();
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -303,6 +394,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (
+        name === 'grace' ||
+        name === 'grace-octave' ||
+        name === 'grace-type' ||
+        name === 'grace-duration' ||
+        name === 'grace-slur'
+      ) {
+        // The grace footprint changes horizontal spacing, so the staff must
+        // re-run its layout; the self-render below covers standalone usage.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        this.render();
+        return;
+      }
+
       this.render();
     }
 
@@ -350,6 +460,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         );
       }
 
+      this.#appendGraceNotes(noteSvg, accidental);
+
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it
       this.shadowRoot!.appendChild(noteSvg);
 
@@ -392,6 +504,48 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           })
         );
       });
+    }
+
+    // Grace notes render inside the note's own SVG, left of its accidental,
+    // so they work identically in-staff and standalone.
+    #appendGraceNotes(
+      noteSvg: SVGElement,
+      accidental: AccidentalType | undefined
+    ): void {
+      const graceNoteLetters = this.grace;
+      if (graceNoteLetters === null) {
+        return;
+      }
+
+      const graceNotes = buildGraceNoteDescriptors(
+        graceNoteLetters,
+        this.graceOctave ?? [],
+        this.note[0] as NoteLetter,
+        this.octave ?? 4
+      );
+      applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
+
+      const accidentalFootprint = accidental
+        ? ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP
+        : 0;
+      const { cx, cy } = noteHeadCenter(
+        this.#stemUp,
+        this.duration,
+        this.#noFlags
+      );
+      const graceGroup = createGraceNotesSvg({
+        graceNotes,
+        graceType: this.graceType,
+        graceDuration: this.graceDuration,
+        graceSlur: this.graceSlur,
+        mainHeadCenterXPx: cx * NOTE_SCALE,
+        mainHeadCenterYPx: cy * NOTE_SCALE,
+        anchorRightXPx: -accidentalFootprint - GRACE_MAIN_GAP_PX,
+        mainAccidentalShown: accidental !== undefined,
+        mainStaffY: this.#staffY,
+      });
+      noteSvg.setAttribute('overflow', 'visible');
+      noteSvg.appendChild(graceGroup);
     }
   }
 

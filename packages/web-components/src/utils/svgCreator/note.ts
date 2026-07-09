@@ -13,12 +13,8 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../notationDimensions';
+import { createAccidentalSvg } from './accidental';
 import { createArticulationMarks } from './articulations';
-import { createDoubleFlatSvg } from './doubleFlat';
-import { createDoubleSharpSvg } from './doubleSharp';
-import { createFlatSvg } from './flat';
-import { createNaturalSvg } from './natural';
-import { createSharpSvg } from './sharp';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
 export const NOTE_SVG_WIDTH = 32;
@@ -308,18 +304,7 @@ export const createNoteSvg = ({
       ? NOTE_Y_HEAD_OFFSET_STEM_UP
       : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
 
-    let symbolSvg: SVGElement;
-    if (accidental === 'sharp') {
-      symbolSvg = createSharpSvg();
-    } else if (accidental === 'flat') {
-      symbolSvg = createFlatSvg();
-    } else if (accidental === 'natural') {
-      symbolSvg = createNaturalSvg();
-    } else if (accidental === 'double-sharp') {
-      symbolSvg = createDoubleSharpSvg();
-    } else {
-      symbolSvg = createDoubleFlatSvg();
-    }
+    const symbolSvg = createAccidentalSvg(accidental);
 
     symbolSvg.setAttribute('x', `${-(symbolWidth + ACCIDENTAL_NOTE_GAP)}`);
     symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);

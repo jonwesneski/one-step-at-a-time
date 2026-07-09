@@ -2,6 +2,9 @@ import type {
   ArticulationType,
   DurationType,
   DynamicMarking,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
   Mode,
   Note,
   Octave,
@@ -162,3 +165,16 @@ export const ARTICULATIONS: ArticulationType[] = [
 ];
 
 export const STRESSES: StressType[] = ['stressed', 'unstressed'];
+
+export const GRACE_TYPES: GraceType[] = ['acciaccatura', 'appoggiatura'];
+
+export const GRACE_DURATIONS: GraceDuration[] = [
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtysecond',
+  'sixtyfourth',
+];
+
+export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];

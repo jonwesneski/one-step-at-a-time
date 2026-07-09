@@ -184,6 +184,138 @@ describe(MUSIC_CHORD, () => {
       expect(values).toEqual(['C', 'E']);
     });
   });
+
+  describe('grace notes', () => {
+    function makeChordWithNotes(
+      values: [Note, Octave][],
+      grace?: string,
+      graceOctave?: string
+    ): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      for (const [value, octave] of values) {
+        const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+        note.setAttribute('note', value);
+        note.setAttribute('octave', `${octave}`);
+        chordElement.appendChild(note);
+      }
+      if (grace !== undefined) {
+        chordElement.setAttribute('grace', grace);
+      }
+      if (graceOctave !== undefined) {
+        chordElement.setAttribute('grace-octave', graceOctave);
+      }
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips the grace attributes between property and attribute', () => {
+      const chordElement = makeChordWithNotes([
+        ['C', 4],
+        ['E', 4],
+      ]);
+
+      chordElement.grace = ['D', 'E'];
+      chordElement.graceOctave = [4, 4];
+      chordElement.graceType = 'appoggiatura';
+
+      expect(chordElement.getAttribute('grace')).toBe('D,E');
+      expect(chordElement.grace).toEqual(['D', 'E']);
+      expect(chordElement.getAttribute('grace-octave')).toBe('4,4');
+      expect(chordElement.graceOctave).toEqual([4, 4]);
+      expect(chordElement.graceType).toBe('appoggiatura');
+      expect(chordElement.graceSlur).toBe('auto');
+      expect(chordElement.graceDuration).toBeNull();
+    });
+
+    it('renders grace notes on a standalone chord', () => {
+      const chordElement = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+          ['G', 4],
+        ],
+        'B,C',
+        '3,4'
+      );
+
+      const graceGroup = chordElement.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup).not.toBeNull();
+      expect(graceGroup?.querySelectorAll('.grace-head')).toHaveLength(2);
+      expect(graceGroup?.querySelectorAll('.grace-beam')).toHaveLength(2);
+      expect(graceGroup?.querySelector('.grace-slash')).not.toBeNull();
+      expect(graceGroup?.querySelector('.grace-slur')).not.toBeNull();
+    });
+
+    it('positions grace heads relative to the reference note (notes[0])', () => {
+      // Grace pitch equals the reference pitch → same head Y as the lowest
+      // chord note; one step up → 5px higher (smaller y).
+      const samePitch = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'C',
+        '4'
+      );
+      const stepUp = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'D',
+        '4'
+      );
+
+      const headTransformY = (chordElement: ChordElementType): number => {
+        const transform =
+          chordElement.shadowRoot
+            ?.querySelector('.grace-notes .grace-note')
+            ?.getAttribute('transform') ?? '';
+        const match = transform.match(/translate\([^ ]+ ([^)]+)\)/);
+        return Number(match?.[1]);
+      };
+
+      expect(headTransformY(stepUp)).toBeCloseTo(headTransformY(samePitch) - 5);
+    });
+
+    it('defaults the grace octave to the reference note octave when grace-octave is omitted', () => {
+      const withDefault = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'C'
+      );
+      const withExplicit = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'C',
+        '4'
+      );
+
+      const headTransform = (chordElement: ChordElementType): string | null =>
+        chordElement.shadowRoot
+          ?.querySelector('.grace-notes .grace-note')
+          ?.getAttribute('transform') ?? null;
+
+      expect(headTransform(withDefault)).toBe(headTransform(withExplicit));
+    });
+
+    it('renders no grace group when the chord has no notes', () => {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('grace', 'C');
+      chordElement.setAttribute('grace-octave', '4');
+      document.body.appendChild(chordElement);
+
+      expect(chordElement.shadowRoot?.querySelector('.grace-notes')).toBeNull();
+    });
+  });
 });
 
 const TREBLE_STAFF_Y: Record<string, number> = {

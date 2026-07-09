@@ -362,3 +362,69 @@ export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
   flat: 25,
   'double-flat': 25,
 };
+
+// ─── Grace notes ──────────────────────────────────────────────────────────────
+
+/**
+ * Uniform scale applied to grace-note heads, stems, flags, beams, and
+ * accidentals. Grace notes are slightly smaller than a cue note (¾ size).
+ */
+export const GRACE_SCALE = 0.6;
+
+/**
+ * Stem length (px) for grace notes in a beamed group — about 2¼ staff spaces,
+ * shorter than a full-size stem.
+ */
+export const GRACE_STEM_LENGTH_PX = STAFF_LINE_SPACING * 2.25;
+
+/**
+ * Minimum grace stem length (px) when the group's beam line is raised to keep
+ * every stem long enough.
+ */
+export const GRACE_MIN_STEM_LENGTH_PX = STAFF_LINE_SPACING * 1.75;
+
+/**
+ * Horizontal advance (px) between consecutive grace-note head columns.
+ */
+export const GRACE_NOTE_ADVANCE_PX = STAFF_LINE_SPACING;
+
+/**
+ * Gap (px) between the right edge of the grace group and the main note's
+ * accidental (or notehead area when there is no accidental).
+ */
+export const GRACE_MAIN_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Default number of beams joining a grace-note group when no written duration
+ * is specified. Two beams give the least cluttered appearance regardless of
+ * group size.
+ */
+export const GRACE_BEAM_COUNT = 2;
+
+/**
+ * Beam thickness (px) for grace-note groups — full-size beam scaled down.
+ */
+export const GRACE_BEAM_THICKNESS_PX = BEAM_THICKNESS_PX * GRACE_SCALE;
+
+/**
+ * Vertical gap (px) between stacked grace beams.
+ */
+export const GRACE_BEAM_GAP_PX = BEAM_GAP_PX * GRACE_SCALE;
+
+/**
+ * Horizontal half-extent (px) of the acciaccatura slash from its crossing
+ * point. The slash rises left-to-right and must intersect the flag or beam
+ * without touching the notehead. Starting value — tune visually in Storybook.
+ */
+export const GRACE_SLASH_HALF_WIDTH_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Vertical half-extent (px) of the acciaccatura slash from its crossing point.
+ * Starting value — tune visually in Storybook.
+ */
+export const GRACE_SLASH_HALF_HEIGHT_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * Stroke width (px) of the acciaccatura slash.
+ */
+export const GRACE_SLASH_STROKE_WIDTH = 1.1;

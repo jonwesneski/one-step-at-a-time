@@ -208,6 +208,243 @@ describe('articulations', () => {
   });
 });
 
+describe('grace notes', () => {
+  it('round-trips the grace attributes between property and attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.grace = ['F#', 'G'];
+    noteElement.graceOctave = [4, 4];
+    noteElement.graceType = 'appoggiatura';
+    noteElement.graceDuration = 'sixteenth';
+    noteElement.graceSlur = 'none';
+
+    expect(noteElement.getAttribute('grace')).toBe('F#,G');
+    expect(noteElement.grace).toEqual(['F#', 'G']);
+    expect(noteElement.getAttribute('grace-octave')).toBe('4,4');
+    expect(noteElement.graceOctave).toEqual([4, 4]);
+    expect(noteElement.graceType).toBe('appoggiatura');
+    expect(noteElement.graceDuration).toBe('sixteenth');
+    expect(noteElement.graceSlur).toBe('none');
+  });
+
+  it('defaults grace-type to acciaccatura and grace-slur to auto', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.graceType).toBe('acciaccatura');
+    expect(noteElement.graceSlur).toBe('auto');
+    expect(noteElement.graceDuration).toBeNull();
+    expect(noteElement.graceOctave).toBeNull();
+
+    noteElement.setAttribute('grace-type', 'trill');
+    expect(noteElement.graceType).toBe('acciaccatura');
+  });
+
+  it('rejects the whole grace list when any note token is invalid', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    for (const invalid of ['G4', 'H', 'F#4', 'G,H']) {
+      noteElement.setAttribute('grace', invalid);
+      expect(noteElement.grace).toBeNull();
+    }
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('falls back to the main note octave for missing or invalid grace-octave slots', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C' satisfies Note);
+    noteElement.setAttribute('octave', '5');
+    noteElement.setAttribute('grace', 'B');
+    document.body.appendChild(noteElement);
+
+    // grace-octave omitted entirely → getter returns null.
+    expect(noteElement.graceOctave).toBeNull();
+
+    // Invalid single token → null slot, not a rejection.
+    noteElement.setAttribute('grace-octave', 'x');
+    expect(noteElement.graceOctave).toEqual([null]);
+
+    // Out of range → null slot.
+    noteElement.setAttribute('grace-octave', '9');
+    expect(noteElement.graceOctave).toEqual([null]);
+  });
+
+  it('renders a single grace note as a small flagged note with a slash and slur', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C' satisfies Note);
+    noteElement.setAttribute('octave', '5');
+    noteElement.setAttribute('grace', 'B');
+    noteElement.setAttribute('grace-octave', '4');
+    document.body.appendChild(noteElement);
+
+    const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+    expect(graceGroup).not.toBeNull();
+    expect(graceGroup?.querySelectorAll('.grace-head')).toHaveLength(1);
+    expect(graceGroup?.querySelector('.flag')).not.toBeNull();
+    expect(graceGroup?.querySelector('.grace-slash')).not.toBeNull();
+    expect(graceGroup?.querySelector('.grace-slur')).not.toBeNull();
+    expect(graceGroup?.querySelectorAll('.grace-beam')).toHaveLength(0);
+  });
+
+  it('renders the same layout when grace-octave is omitted and defaults to the main octave', () => {
+    const explicit = document.createElement(MUSIC_NOTE) as NoteElementType;
+    explicit.setAttribute('note', 'C' satisfies Note);
+    explicit.setAttribute('octave', '5');
+    explicit.setAttribute('grace', 'B');
+    explicit.setAttribute('grace-octave', '5');
+    document.body.appendChild(explicit);
+
+    const defaulted = document.createElement(MUSIC_NOTE) as NoteElementType;
+    defaulted.setAttribute('note', 'C' satisfies Note);
+    defaulted.setAttribute('octave', '5');
+    defaulted.setAttribute('grace', 'B');
+    document.body.appendChild(defaulted);
+
+    const headTransform = (element: NoteElementType): string | null =>
+      element.shadowRoot
+        ?.querySelector('.grace-notes .grace-note')
+        ?.getAttribute('transform') ?? null;
+
+    expect(headTransform(defaulted)).toBe(headTransform(explicit));
+  });
+
+  it('renders no slash for an appoggiatura and no slur when grace-slur is none', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('grace', 'B');
+    noteElement.setAttribute('grace-octave', '4');
+    noteElement.setAttribute('grace-type', 'appoggiatura');
+    noteElement.setAttribute('grace-slur', 'none');
+    document.body.appendChild(noteElement);
+
+    const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+    expect(graceGroup).not.toBeNull();
+    expect(graceGroup?.querySelector('.grace-slash')).toBeNull();
+    expect(graceGroup?.querySelector('.grace-slur')).toBeNull();
+  });
+
+  it('renders a grace group as beamed stemless heads with two beams and no flags', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C' satisfies Note);
+    noteElement.setAttribute('octave', '5');
+    noteElement.setAttribute('grace', 'G,A,B');
+    noteElement.setAttribute('grace-octave', '4,4,4');
+    document.body.appendChild(noteElement);
+
+    const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+    expect(graceGroup?.querySelectorAll('.grace-head')).toHaveLength(3);
+    expect(graceGroup?.querySelectorAll('.grace-stem')).toHaveLength(3);
+    expect(graceGroup?.querySelectorAll('.grace-beam')).toHaveLength(2);
+    expect(graceGroup?.querySelector('.flag')).toBeNull();
+    expect(graceGroup?.querySelector('.grace-slash')).not.toBeNull();
+  });
+
+  it('controls flag count on a single grace via grace-duration', () => {
+    const sixteenth = document.createElement(MUSIC_NOTE) as NoteElementType;
+    sixteenth.setAttribute('grace', 'B');
+    sixteenth.setAttribute('grace-octave', '4');
+    sixteenth.setAttribute('grace-duration', 'sixteenth');
+    document.body.appendChild(sixteenth);
+    // A sixteenth flag is the base path plus one <use> copy.
+    expect(
+      sixteenth.shadowRoot?.querySelectorAll('.grace-notes .flag use')
+    ).toHaveLength(1);
+
+    const quarter = document.createElement(MUSIC_NOTE) as NoteElementType;
+    quarter.setAttribute('grace', 'B');
+    quarter.setAttribute('grace-octave', '4');
+    quarter.setAttribute('grace-duration', 'quarter');
+    document.body.appendChild(quarter);
+    expect(quarter.shadowRoot?.querySelector('.grace-notes .flag')).toBeNull();
+    expect(
+      quarter.shadowRoot?.querySelector('.grace-notes .stem')
+    ).not.toBeNull();
+  });
+
+  it('controls beam count on a grace group via grace-duration', () => {
+    const thirtysecond = document.createElement(MUSIC_NOTE) as NoteElementType;
+    thirtysecond.setAttribute('grace', 'G,A');
+    thirtysecond.setAttribute('grace-octave', '4,4');
+    thirtysecond.setAttribute('grace-duration', 'thirtysecond');
+    document.body.appendChild(thirtysecond);
+    expect(
+      thirtysecond.shadowRoot?.querySelectorAll('.grace-notes .grace-beam')
+    ).toHaveLength(3);
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const quarter = document.createElement(MUSIC_NOTE) as NoteElementType;
+    quarter.setAttribute('grace', 'G,A');
+    quarter.setAttribute('grace-octave', '4,4');
+    quarter.setAttribute('grace-duration', 'quarter');
+    document.body.appendChild(quarter);
+    expect(
+      quarter.shadowRoot?.querySelectorAll('.grace-notes .grace-beam')
+    ).toHaveLength(2);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('keeps grace heads out of pitch-drag hit testing', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('grace', 'G,A');
+    noteElement.setAttribute('grace-octave', '4,4');
+    document.body.appendChild(noteElement);
+
+    const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+    expect(graceGroup?.querySelector('.head-hit-zone')).toBeNull();
+    expect(graceGroup?.querySelector('.head')).toBeNull();
+  });
+
+  it('renders a scaled accidental for a grace pitch with a suffix', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('grace', 'F#');
+    noteElement.setAttribute('grace-octave', '4');
+    document.body.appendChild(noteElement);
+
+    expect(
+      noteElement.shadowRoot?.querySelector('.grace-notes .grace-accidental')
+    ).not.toBeNull();
+  });
+
+  it('arcs the slur above the heads when the main note shows an accidental', () => {
+    const withAccidental = document.createElement(
+      MUSIC_NOTE
+    ) as NoteElementType;
+    withAccidental.setAttribute('note', 'C#' satisfies Note);
+    withAccidental.setAttribute('octave', '5');
+    withAccidental.setAttribute('grace', 'B');
+    withAccidental.setAttribute('grace-octave', '4');
+    document.body.appendChild(withAccidental);
+
+    const plain = document.createElement(MUSIC_NOTE) as NoteElementType;
+    plain.setAttribute('note', 'C' satisfies Note);
+    plain.setAttribute('octave', '5');
+    plain.setAttribute('grace', 'B');
+    plain.setAttribute('grace-octave', '4');
+    document.body.appendChild(plain);
+
+    // Path shape: M x y Q mx my ex ey — the control point y sits on the
+    // bulge side of the endpoints.
+    const controlPointY = (element: NoteElementType): number[] => {
+      const d =
+        element.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      const numbers = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      return numbers; // [x, y, mx, my, ex, ey]
+    };
+
+    const above = controlPointY(withAccidental);
+    expect(above[3]).toBeLessThan(Math.min(above[1], above[5]));
+
+    const below = controlPointY(plain);
+    expect(below[3]).toBeGreaterThan(Math.max(below[1], below[5]));
+  });
+});
+
 const TREBLE_STAFF_Y: Record<string, number> = {
   C6: 10,
   B5: 15,
@@ -367,5 +604,129 @@ describe('staff integration', () => {
 
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
+  });
+});
+
+describe('grace notes staff integration', () => {
+  function renderNotes(staff: Element, notes: NoteElementType[]): void {
+    for (const note of notes) {
+      staff.appendChild(note);
+    }
+    const slot = (staff as any).shadowRoot.querySelector('slot');
+    slot.assignedElements = () => notes;
+    slot.dispatchEvent(new Event('slotchange'));
+  }
+
+  function makeQuarterNote(
+    value: Note,
+    octave: Octave,
+    grace?: string,
+    graceOctave?: string
+  ): NoteElementType {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'quarter' satisfies DurationType);
+    note.setAttribute('note', value);
+    note.setAttribute('octave', `${octave}`);
+    if (grace !== undefined) {
+      note.setAttribute('grace', grace);
+    }
+    if (graceOctave !== undefined) {
+      note.setAttribute('grace-octave', graceOctave);
+    }
+    return note;
+  }
+
+  it('pushes a graced note right so the grace group clears the previous note', () => {
+    const staff = makeStaff();
+    const plainFirst = makeQuarterNote('E', 4);
+    const gracedSecond = makeQuarterNote('G', 4, 'A,B', '4,4');
+    renderNotes(staff, [plainFirst, gracedSecond]);
+
+    const firstLeft = parseFloat(plainFirst.style.left);
+    const secondLeft = parseFloat(gracedSecond.style.left);
+    // The grace footprint (2 columns + gap = 25px) must fit between the
+    // previous note's right edge (left + 32px note width) and this note.
+    expect(secondLeft).toBeGreaterThanOrEqual(firstLeft + 32 + 25);
+  });
+
+  it('grows the staff min-width when a note gains grace notes', () => {
+    const staff = makeStaff();
+    const minWidths: number[] = [];
+    staff.addEventListener('staff-min-width', (event) => {
+      minWidths.push((event as CustomEvent).detail.minWidth);
+    });
+
+    const note = makeQuarterNote('E', 4);
+    renderNotes(staff, [note]);
+    const withoutGrace = minWidths[minWidths.length - 1];
+
+    note.setAttribute('grace', 'A,B');
+    const withGrace = minWidths[minWidths.length - 1];
+
+    expect(withGrace).toBe(withoutGrace + 25);
+  });
+
+  it('suppresses grace accidentals covered by the key signature and shows naturals', () => {
+    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D' satisfies Note);
+    staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+    staff.setAttribute(
+      COMMON_ATTRIBUTES.TIME_SIG,
+      '4/4' satisfies TimeSignature
+    );
+    document.body.appendChild(staff);
+
+    // In D major F# is in the key signature: no symbol on a grace F#4.
+    const sharpGrace = makeQuarterNote('G', 4, 'F#', '4');
+    renderNotes(staff, [sharpGrace]);
+    expect(
+      sharpGrace.shadowRoot?.querySelector('.grace-notes .grace-accidental')
+    ).toBeNull();
+
+    // A grace F natural against the key signature takes a natural symbol.
+    const naturalGrace = makeQuarterNote('G', 4, 'F', '4');
+    renderNotes(staff, [naturalGrace]);
+    expect(
+      naturalGrace.shadowRoot?.querySelector('.grace-notes .grace-accidental')
+    ).not.toBeNull();
+  });
+
+  it('carries a grace accidental through the measure to the main notes', () => {
+    const staff = makeStaff();
+    const graced = makeQuarterNote('G', 4, 'F#', '4');
+    const laterSharp = makeQuarterNote('F#', 4);
+    renderNotes(staff, [graced, laterSharp]);
+
+    // The grace F# earlier in the measure already displayed the sharp.
+    expect(laterSharp.showAccidental).toBeNull();
+  });
+
+  it('renders ledger lines for grace pitches beyond the staff', () => {
+    const staff = makeStaff();
+    const highGrace = makeQuarterNote('C', 5, 'C', '6');
+    renderNotes(staff, [highGrace]);
+    // C6 (staffY 10) needs ledger lines at staffY 20 and 10.
+    expect(
+      highGrace.shadowRoot?.querySelectorAll('.grace-notes .grace-ledger-line')
+    ).toHaveLength(2);
+
+    const inStaffGrace = makeQuarterNote('C', 5, 'B', '4');
+    renderNotes(staff, [inStaffGrace]);
+    expect(
+      inStaffGrace.shadowRoot?.querySelectorAll(
+        '.grace-notes .grace-ledger-line'
+      )
+    ).toHaveLength(0);
+  });
+
+  it('defaults the grace octave to the main note octave when grace-octave is omitted', () => {
+    const staff = makeStaff();
+    const highGrace = makeQuarterNote('C', 5, 'C');
+    renderNotes(staff, [highGrace]);
+    // Without an explicit grace-octave, "C" defaults to the main note's own
+    // octave (5) — same pitch as the main note, not the C6 above the staff.
+    expect(
+      highGrace.shadowRoot?.querySelectorAll('.grace-notes .grace-ledger-line')
+    ).toHaveLength(0);
   });
 });

@@ -1,31 +1,46 @@
 import {
   computeChordAccidentalPlacements,
+  totalChordAccidentalWidth,
   type AccidentalPlacementInput,
 } from '../../rules/accidentalRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
-import { AccidentalType } from '../../types/theory';
+import { GraceNoteDescriptor } from '../../rules/graceRules';
+import {
+  AccidentalType,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
+} from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
+  GRACE_MAIN_GAP_PX,
   STAFF_Y_PADDING,
 } from '../notationDimensions';
+import { createAccidentalSvg } from './accidental';
 import { createArticulationMarks } from './articulations';
-import { createDoubleFlatSvg } from './doubleFlat';
-import { createDoubleSharpSvg } from './doubleSharp';
-import { createFlatSvg } from './flat';
-import { createNaturalSvg } from './natural';
+import { createGraceNotesSvg } from './graceNotes';
 import {
   createNoteSvg,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   noteHeadCenter,
   type NoteProps,
 } from './note';
-import { createSharpSvg } from './sharp';
 
 type ChordProps = NoteProps & {
   staffYCoordinates: number[];
   noteAccidentals?: (AccidentalType | null | undefined)[];
+  // Grace notes are placed relative to the chord's reference note (notes[0],
+  // which is staffYCoordinates[0] by index parity).
+  graceNotes?: GraceNoteDescriptor[] | null;
+  graceType?: GraceType;
+  graceDuration?: GraceDuration | null;
+  graceSlur?: GraceSlur;
+  // Staff Y of the reference note when ledger lines should render (in-staff
+  // mode); null in standalone mode, matching the chord's own ledger behavior.
+  graceLedgerStaffY?: number | null;
 };
 
 export const createChordSvg = ({
@@ -37,6 +52,11 @@ export const createChordSvg = ({
   noteAccidentals,
   articulation,
   stress,
+  graceNotes,
+  graceType = 'acciaccatura',
+  graceDuration = null,
+  graceSlur = 'auto',
+  graceLedgerStaffY = null,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -118,19 +138,7 @@ export const createChordSvg = ({
 
       for (const placement of placements) {
         const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[placement.accidental];
-
-        let symbolSvg: SVGElement;
-        if (placement.accidental === 'sharp') {
-          symbolSvg = createSharpSvg();
-        } else if (placement.accidental === 'flat') {
-          symbolSvg = createFlatSvg();
-        } else if (placement.accidental === 'natural') {
-          symbolSvg = createNaturalSvg();
-        } else if (placement.accidental === 'double-sharp') {
-          symbolSvg = createDoubleSharpSvg();
-        } else {
-          symbolSvg = createDoubleFlatSvg();
-        }
+        const symbolSvg = createAccidentalSvg(placement.accidental);
 
         // xOffset is already negative (left of notehead left edge)
         // yPixel is the notehead center in chord SVG space
@@ -142,6 +150,42 @@ export const createChordSvg = ({
         svg.appendChild(symbolSvg);
       }
     }
+  }
+
+  // Grace notes — placed before the chord, left of its accidental column and
+  // any leftward-displaced heads.
+  if (graceNotes && graceNotes.length > 0 && staffYCoordinates.length > 0) {
+    const referenceStaffY = staffYCoordinates[0];
+    const referenceHeadCenterYPx =
+      STAFF_Y_PADDING + referenceStaffY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const referenceHeadCenterXPx =
+      noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
+      (displacementMap.get(0) ?? 0);
+    const anyAccidentalShown =
+      noteAccidentals?.some((noteAccidental) => noteAccidental != null) ??
+      false;
+    const accidentalColumnWidth = anyAccidentalShown
+      ? totalChordAccidentalWidth(noteAccidentals ?? [], staffYCoordinates)
+      : 0;
+    const maxLeftHeadDisplacement = Math.max(
+      0,
+      ...displacements.map((displacement) => -displacement.xOffset)
+    );
+    const graceGroup = createGraceNotesSvg({
+      graceNotes,
+      graceType,
+      graceDuration,
+      graceSlur,
+      mainHeadCenterXPx: referenceHeadCenterXPx,
+      mainHeadCenterYPx: referenceHeadCenterYPx,
+      anchorRightXPx:
+        -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement) -
+        GRACE_MAIN_GAP_PX,
+      mainAccidentalShown: anyAccidentalShown,
+      mainStaffY: graceLedgerStaffY,
+    });
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(graceGroup);
   }
 
   // Chord-level articulation — drawn once, over the extremal (stem-side outer)

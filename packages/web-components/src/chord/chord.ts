@@ -1,3 +1,8 @@
+import {
+  applyResolvedGraceAccidentals,
+  buildGraceNoteDescriptors,
+  GraceNoteDescriptor,
+} from '../rules/graceRules';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
   ChordNote,
@@ -12,7 +17,12 @@ import {
   Chord,
   DurationType,
   DynamicMarking,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
   HairpinRole,
+  Note,
+  NoteLetter,
   Octave,
   StressType,
 } from '../types/theory';
@@ -23,6 +33,11 @@ import {
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
+  parseGraceDuration,
+  parseGraceNotes,
+  parseGraceOctaves,
+  parseGraceSlur,
+  parseGraceType,
   parseStress,
 } from '../utils';
 import {
@@ -51,6 +66,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'diminuendo',
         'articulation',
         'stress',
+        'grace',
+        'grace-octave',
+        'grace-type',
+        'grace-duration',
+        'grace-slur',
       ];
     }
 
@@ -62,6 +82,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #noFlags = false;
     #staffYCoordinates: number[] | null = null;
     #noteAccidentals: (AccidentalType | null | undefined)[] = [];
+    #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
     #batchDepth = 0;
     #renderPending = false;
     #childObserver: MutationObserver | null = null;
@@ -237,6 +258,69 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get grace(): Note[] | null {
+      return parseGraceNotes(this.getAttribute('grace'));
+    }
+    set grace(value: Note[] | null) {
+      if (value === null || value.length === 0) {
+        this.removeAttribute('grace');
+      } else {
+        this.setAttribute('grace', value.join(','));
+      }
+    }
+
+    get graceOctave(): (Octave | null)[] | null {
+      return parseGraceOctaves(this.getAttribute('grace-octave'));
+    }
+    set graceOctave(value: (Octave | null)[] | null) {
+      if (value === null || value.length === 0) {
+        this.removeAttribute('grace-octave');
+      } else {
+        this.setAttribute('grace-octave', value.map((v) => v ?? '').join(','));
+      }
+    }
+
+    get graceType(): GraceType {
+      return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
+    }
+    set graceType(value: GraceType | null) {
+      if (value === null) {
+        this.removeAttribute('grace-type');
+      } else {
+        this.setAttribute('grace-type', value);
+      }
+    }
+
+    get graceDuration(): GraceDuration | null {
+      return parseGraceDuration(this.getAttribute('grace-duration'));
+    }
+    set graceDuration(value: GraceDuration | null) {
+      if (value === null) {
+        this.removeAttribute('grace-duration');
+      } else {
+        this.setAttribute('grace-duration', value);
+      }
+    }
+
+    get graceSlur(): GraceSlur {
+      return parseGraceSlur(this.getAttribute('grace-slur')) ?? 'auto';
+    }
+    set graceSlur(value: GraceSlur | null) {
+      if (value === null) {
+        this.removeAttribute('grace-slur');
+      } else {
+        this.setAttribute('grace-slur', value);
+      }
+    }
+
+    get resolvedGraceAccidentals(): (AccidentalType | null)[] | null {
+      return this.#resolvedGraceAccidentals;
+    }
+    set resolvedGraceAccidentals(value: (AccidentalType | null)[] | null) {
+      this.#resolvedGraceAccidentals = value;
+      this.#scheduleRender();
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -324,6 +408,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (
+        name === 'grace' ||
+        name === 'grace-octave' ||
+        name === 'grace-type' ||
+        name === 'grace-duration' ||
+        name === 'grace-slur'
+      ) {
+        // The grace footprint changes horizontal spacing, so the staff must
+        // re-run its layout; the self-render below covers standalone usage.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        this.render();
+        return;
+      }
+
       this.render();
     }
 
@@ -339,6 +442,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteAccidentals: this.#noteAccidentals,
           articulation: this.articulation,
           stress: this.stress,
+          graceNotes: this.#buildGraceDescriptors(this.notes),
+          graceType: this.graceType,
+          graceDuration: this.graceDuration,
+          graceSlur: this.graceSlur,
+          graceLedgerStaffY: this.#staffYCoordinates[0] ?? null,
         });
         chordSvg.setAttribute('overflow', 'visible');
         addLedgerLines(
@@ -427,6 +535,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           qualifiedElementName: 'g',
           articulation: this.articulation,
           stress: this.stress,
+          graceNotes: this.#buildGraceDescriptors(notes),
+          graceType: this.graceType,
+          graceDuration: this.graceDuration,
+          graceSlur: this.graceSlur,
         });
         chordSvg.setAttribute('overflow', 'visible');
 
@@ -445,6 +557,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
         this.shadowRoot!.appendChild(svg);
       }
+    }
+
+    // Grace descriptors are relative to the chord's reference note (notes[0]).
+    #buildGraceDescriptors(notes: ChordNote[]): GraceNoteDescriptor[] | null {
+      const graceNoteLetters = this.grace;
+      if (graceNoteLetters === null || notes.length === 0) {
+        return null;
+      }
+      const graceNotes = buildGraceNoteDescriptors(
+        graceNoteLetters,
+        this.graceOctave ?? [],
+        notes[0].value[0] as NoteLetter,
+        notes[0].octave ?? 4
+      );
+      applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
+      return graceNotes;
     }
 
     #resolveStandaloneYCoordinates(): number[] {
