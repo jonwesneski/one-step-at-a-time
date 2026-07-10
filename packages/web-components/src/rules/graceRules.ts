@@ -108,17 +108,39 @@ export function computeGraceLayout(
   return { headXCenters, totalWidth: runningX };
 }
 
+// True when resolvedAccidentals is usable (non-null and index-aligned with
+// graceNotes) — the same fallback condition applyResolvedGraceAccidentals uses.
+function hasUsableResolvedAccidentals(
+  graceNotes: Note[],
+  resolvedAccidentals: (AccidentalType | null)[] | null | undefined
+): resolvedAccidentals is (AccidentalType | null)[] {
+  return (
+    resolvedAccidentals != null &&
+    resolvedAccidentals.length === graceNotes.length
+  );
+}
+
 // The leftward horizontal footprint (px) the staff must reserve for a grace
-// group, in addition to the main element's own accidental footprint. Uses the
-// suffix-derived accidentals — resolved (key-signature-aware) accidentals can
-// only shrink the width, so spacing stays safe.
-export function computeGraceFootprintWidth(graceNotes: Note[] | null): number {
+// group, in addition to the main element's own accidental footprint. Prefers
+// the key-signature-resolved accidentals (which can render a natural even for
+// a suffix-less grace note) and falls back to suffix-derived accidentals when
+// resolved data isn't available, e.g. standalone (no staff) rendering.
+export function computeGraceFootprintWidth(
+  graceNotes: Note[] | null,
+  resolvedAccidentals?: (AccidentalType | null)[] | null
+): number {
   if (graceNotes === null || graceNotes.length === 0) {
     return 0;
   }
+  const useResolved = hasUsableResolvedAccidentals(
+    graceNotes,
+    resolvedAccidentals
+  );
   let width = GRACE_MAIN_GAP_PX;
-  for (const graceNote of graceNotes) {
-    const accidental = graceAccidentalFromNote(graceNote);
+  for (let i = 0; i < graceNotes.length; i++) {
+    const accidental = useResolved
+      ? resolvedAccidentals[i]
+      : graceAccidentalFromNote(graceNotes[i]);
     if (accidental !== null) {
       width += graceAccidentalWidth(accidental);
     }

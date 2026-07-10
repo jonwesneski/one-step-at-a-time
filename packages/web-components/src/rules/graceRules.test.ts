@@ -158,6 +158,40 @@ describe('computeGraceFootprintWidth', () => {
       GRACE_MAIN_GAP_PX + 2 * GRACE_NOTE_ADVANCE_PX + accidentalWidth
     );
   });
+
+  it('reserves width for a resolved natural on a suffix-less grace note', () => {
+    const naturalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.natural + ACCIDENTAL_NOTE_GAP);
+    const graceNotes: Note[] = ['F'];
+    expect(computeGraceFootprintWidth(graceNotes, ['natural'])).toBe(
+      GRACE_MAIN_GAP_PX + GRACE_NOTE_ADVANCE_PX + naturalWidth
+    );
+  });
+
+  it('suppresses width when the resolved accidental is null despite a suffix', () => {
+    const graceNotes: Note[] = ['F#'];
+    expect(computeGraceFootprintWidth(graceNotes, [null])).toBe(
+      GRACE_MAIN_GAP_PX + GRACE_NOTE_ADVANCE_PX
+    );
+  });
+
+  it('falls back to suffix-derived accidentals when resolved data is null', () => {
+    const accidentalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
+    const graceNotes: Note[] = ['F#'];
+    expect(computeGraceFootprintWidth(graceNotes, null)).toBe(
+      GRACE_MAIN_GAP_PX + GRACE_NOTE_ADVANCE_PX + accidentalWidth
+    );
+  });
+
+  it('falls back to suffix-derived accidentals when resolved length mismatches', () => {
+    const accidentalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
+    const graceNotes: Note[] = ['F#', 'G'];
+    expect(computeGraceFootprintWidth(graceNotes, ['natural'])).toBe(
+      GRACE_MAIN_GAP_PX + 2 * GRACE_NOTE_ADVANCE_PX + accidentalWidth
+    );
+  });
 });
 
 describe('computeGraceBeamYs', () => {

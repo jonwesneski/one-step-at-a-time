@@ -5,8 +5,8 @@ import {
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { pairHairpins } from './rules/dynamicsRules';
-import { restToYCoordinate } from './rules/restRules';
 import { computeGraceFootprintWidth } from './rules/graceRules';
+import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor, factorToDuration } from './rules/theoryConsts';
 import {
@@ -889,25 +889,31 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const firstElement = elements[0];
       let firstElementLeftwardWidth = 0;
       if (firstElement.nodeName === MUSIC_NOTE_NODE) {
-        const noteEl = firstElement as NoteElementType;
-        if (noteEl.showAccidental) {
+        const noteElement = firstElement as NoteElementType;
+        if (noteElement.showAccidental) {
           firstElementLeftwardWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[noteEl.showAccidental] +
+            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
             ACCIDENTAL_NOTE_GAP;
         }
-        firstElementLeftwardWidth += computeGraceFootprintWidth(noteEl.grace);
+        firstElementLeftwardWidth += computeGraceFootprintWidth(
+          noteElement.grace,
+          noteElement.resolvedGraceAccidentals
+        );
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
-        const chordEl = firstElement as ChordElementType;
+        const chordElement = firstElement as ChordElementType;
         if (
-          chordEl.staffYCoordinates &&
-          chordEl.noteAccidentals.some((a) => a != null)
+          chordElement.staffYCoordinates &&
+          chordElement.noteAccidentals.some((a) => a != null)
         ) {
           firstElementLeftwardWidth = totalChordAccidentalWidth(
-            chordEl.noteAccidentals,
-            chordEl.staffYCoordinates
+            chordElement.noteAccidentals,
+            chordElement.staffYCoordinates
           );
         }
-        firstElementLeftwardWidth += computeGraceFootprintWidth(chordEl.grace);
+        firstElementLeftwardWidth += computeGraceFootprintWidth(
+          chordElement.grace,
+          chordElement.resolvedGraceAccidentals
+        );
       }
       // Grace overhangs of the remaining elements also consume horizontal
       // room beyond the per-note minimum spacing.
@@ -918,8 +924,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           element.nodeName === MUSIC_NOTE_NODE ||
           element.nodeName === MUSIC_CHORD_NODE
         ) {
+          const noteOrChordElement = element as
+            | NoteElementType
+            | ChordElementType;
           extraLeftwardWidth += computeGraceFootprintWidth(
-            (element as NoteElementType | ChordElementType).grace
+            noteOrChordElement.grace,
+            noteOrChordElement.resolvedGraceAccidentals
           );
         }
       }
@@ -1072,7 +1082,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
             ACCIDENTAL_NOTE_GAP;
         }
-        leftwardWidth += computeGraceFootprintWidth(noteElement.grace);
+        leftwardWidth += computeGraceFootprintWidth(
+          noteElement.grace,
+          noteElement.resolvedGraceAccidentals
+        );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = element as ChordElementType;
         if (
@@ -1084,7 +1097,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             chordElement.staffYCoordinates
           );
         }
-        leftwardWidth += computeGraceFootprintWidth(chordElement.grace);
+        leftwardWidth += computeGraceFootprintWidth(
+          chordElement.grace,
+          chordElement.resolvedGraceAccidentals
+        );
       }
 
       // Barline constraint: the overhang must not cross into the describe area
