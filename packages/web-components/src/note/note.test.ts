@@ -15,7 +15,10 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF_TREBLE,
 } from '../utils/consts';
+import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
+  NOTE_HEAD_RADIUS_PX,
+  NOTE_SCALE,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
@@ -442,6 +445,80 @@ describe('grace notes', () => {
 
     const below = controlPointY(plain);
     expect(below[3]).toBeGreaterThan(Math.max(below[1], below[5]));
+  });
+
+  it('anchors the slur clear of the grace stem and main stem', () => {
+    // Path shape: M x y Q mx my ex ey
+    const pathPoints = (element: NoteElementType): number[] => {
+      const d =
+        element.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      return d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? []; // [x, y, mx, my, ex, ey]
+    };
+    const graceHeadX = (element: NoteElementType): number => {
+      const transform =
+        element.shadowRoot
+          ?.querySelector('.grace-note')
+          ?.getAttribute('transform') ?? '';
+      const [x] = transform.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      return x;
+    };
+
+    const stemUpMain = document.createElement(MUSIC_NOTE) as NoteElementType;
+    stemUpMain.setAttribute('note', 'C' satisfies Note);
+    stemUpMain.setAttribute('octave', '5');
+    stemUpMain.setAttribute('grace', 'B');
+    stemUpMain.setAttribute('grace-octave', '4');
+    document.body.appendChild(stemUpMain);
+
+    const [startX] = pathPoints(stemUpMain);
+    expect(startX).toBeGreaterThan(graceHeadX(stemUpMain));
+
+    // The end anchor must clear the main notehead's own horizontal radius,
+    // not just a flat pixel gap — otherwise a diagonally-approaching curve
+    // still visually touches the (wider-than-tall) notehead ellipse.
+    const headCxAttr = Number(
+      stemUpMain.shadowRoot?.querySelector('.head')?.getAttribute('cx')
+    );
+    const mainHeadCenterXPx = headCxAttr * NOTE_SCALE;
+    const stemUpEndX = pathPoints(stemUpMain).at(-2) as number;
+    expect(mainHeadCenterXPx - stemUpEndX).toBeGreaterThanOrEqual(
+      NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX
+    );
+
+    // Same main note (so mainHeadCenterXPx is identical); only stemUp and
+    // accidental-shown vary. The stem-down + no-accidental combination is the
+    // only one where the main stem sits in the slur's approach path, so its
+    // end anchor must clear at least as much distance as the other two (the
+    // notehead-radius clearance and the stem clearance both apply — whichever
+    // is larger wins).
+    const stemDownNoAccidental = document.createElement(
+      MUSIC_NOTE
+    ) as NoteElementType;
+    stemDownNoAccidental.setAttribute('note', 'C' satisfies Note);
+    stemDownNoAccidental.setAttribute('octave', '5');
+    stemDownNoAccidental.setAttribute('grace', 'B');
+    stemDownNoAccidental.setAttribute('grace-octave', '4');
+    document.body.appendChild(stemDownNoAccidental);
+    stemDownNoAccidental.stemUp = false;
+
+    const stemDownWithAccidental = document.createElement(
+      MUSIC_NOTE
+    ) as NoteElementType;
+    stemDownWithAccidental.setAttribute('note', 'C' satisfies Note);
+    stemDownWithAccidental.setAttribute('octave', '5');
+    stemDownWithAccidental.setAttribute('grace', 'B');
+    stemDownWithAccidental.setAttribute('grace-octave', '4');
+    document.body.appendChild(stemDownWithAccidental);
+    stemDownWithAccidental.stemUp = false;
+    stemDownWithAccidental.showAccidental = 'natural';
+
+    const stemDownEnd = pathPoints(stemDownNoAccidental).at(-2) as number;
+    const stemDownAccidentalEnd = pathPoints(stemDownWithAccidental).at(
+      -2
+    ) as number;
+    expect(stemDownEnd).toBeLessThanOrEqual(stemDownAccidentalEnd);
   });
 });
 

@@ -182,6 +182,7 @@ export const createChordSvg = ({
         -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement) -
         GRACE_MAIN_GAP_PX,
       mainAccidentalShown: anyAccidentalShown,
+      mainStemUp: stemUp,
       mainStaffY: graceLedgerStaffY,
     });
     svg.setAttribute('overflow', 'visible');

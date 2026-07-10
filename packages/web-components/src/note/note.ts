@@ -542,6 +542,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         mainHeadCenterYPx: cy * NOTE_SCALE,
         anchorRightXPx: -accidentalFootprint - GRACE_MAIN_GAP_PX,
         mainAccidentalShown: accidental !== undefined,
+        mainStemUp: this.#stemUp,
         mainStaffY: this.#staffY,
       });
       noteSvg.setAttribute('overflow', 'visible');

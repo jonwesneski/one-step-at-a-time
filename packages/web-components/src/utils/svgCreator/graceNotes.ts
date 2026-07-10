@@ -26,23 +26,33 @@ import { createCurveSvg } from './curve';
 import {
   createNoteSvg,
   flagStemExtensionPx,
+  NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
+  NOTE_STEM_X_OFFSET_STEM_DOWN,
   noteHeadCenter,
 } from './note';
 
 // Full-size stem stroke is 22 units in the note's 600-unit space (≈1.17px);
 // grace stems scale that down.
 const GRACE_STEM_STROKE_WIDTH = 22 * NOTE_SCALE * GRACE_SCALE;
-// Horizontal offset from a grace head center to its stem (stem-up).
-const GRACE_STEM_X_FROM_HEAD_CENTER =
+// Horizontal offset from a grace head center to its stem (stem-up — grace
+// notes are always rendered stem-up).
+export const GRACE_STEM_X_FROM_HEAD_CENTER =
   GRACE_SCALE * (NOTE_STEM_X_OFFSET - NOTE_HEAD_CX_STEM_UP_PX);
+// Horizontal offset from a main notehead center to its stem when stem-down
+// (stem sits left of the head center; symmetric with the stem-up offset).
+export const MAIN_STEM_X_FROM_HEAD_CENTER =
+  NOTE_HEAD_CX_STEM_DOWN_PX - NOTE_STEM_X_OFFSET_STEM_DOWN;
 const GRACE_LEDGER_LINE_MARGIN = 2;
 const GRACE_LEDGER_STROKE_WIDTH = '0.8';
 // Vertical clearance between a notehead edge and the slur endpoints.
-const SLUR_HEAD_CLEARANCE_PX = 1.5;
+export const SLUR_HEAD_CLEARANCE_PX = 1.5;
+// Extra horizontal clearance past a stem's own X offset, so the slur anchors
+// clear of the stem instead of the stem crossing the slur's path.
+const SLUR_STEM_CLEARANCE_PX = 1.5;
 
 export type GraceNotesProps = {
   graceNotes: GraceNoteDescriptor[];
@@ -58,6 +68,10 @@ export type GraceNotesProps = {
   // When the main element displays an accidental the slur arcs above the
   // heads instead of below, so it does not cross the accidental.
   mainAccidentalShown: boolean;
+  // Main note's own stem direction. Stem-down puts the main stem on the same
+  // (left) side the slur approaches from, so the slur needs extra horizontal
+  // clearance on that end to avoid crossing it.
+  mainStemUp: boolean;
   // Staff Y of the main notehead — enables grace ledger lines. null in
   // standalone mode (matching the main note's own ledger-line behavior).
   mainStaffY: number | null;
@@ -72,6 +86,7 @@ export function createGraceNotesSvg({
   mainHeadCenterYPx,
   anchorRightXPx,
   mainAccidentalShown,
+  mainStemUp,
   mainStaffY,
 }: GraceNotesProps): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g') as SVGGElement;
@@ -188,7 +203,8 @@ export function createGraceNotesSvg({
         headYCenters[0],
         mainHeadCenterXPx,
         mainHeadCenterYPx,
-        mainAccidentalShown
+        mainAccidentalShown,
+        mainStemUp
       )
     );
   }
@@ -277,24 +293,47 @@ function buildSlash(crossingX: number, crossingY: number): SVGLineElement {
 
 // The slur runs from the first grace notehead to the main notehead, below the
 // heads. It flips above when the main accidental would sit in its path.
+//
+// Both ends are anchored past their nearest stem (not just the notehead), so
+// the curve — whose X moves strictly monotonically from `from.x` to `to.x`,
+// since createCurveSvg's control point uses the exact X midpoint — never
+// crosses a stem: the grace stem sits right of the grace head (grace notes
+// are always stem-up), so `from.x` is pushed right of it; the main stem only
+// sits on the slur's approach side (left of its head) when the main note is
+// stem-down, and only threatens the curve when it also spans downward from
+// the head center (the same side as a 'below' bulge) — so `to.x` is pushed
+// left of the stem only for that one dangerous combination.
 function buildGraceSlur(
   firstGraceHeadX: number,
   firstGraceHeadY: number,
   mainHeadCenterXPx: number,
   mainHeadCenterYPx: number,
-  mainAccidentalShown: boolean
+  mainAccidentalShown: boolean,
+  mainStemUp: boolean
 ): SVGGElement {
   const bulge = mainAccidentalShown ? 'above' : 'below';
   const direction = mainAccidentalShown ? -1 : 1;
   const graceHeadRy = GRACE_SCALE * NOTE_HEAD_RADIUS_PX * 0.75;
   const mainHeadRy = NOTE_HEAD_RADIUS_PX * 0.75;
+  const mainStemInApproachPath = !mainStemUp && !mainAccidentalShown;
+  // Always clear the notehead ellipse; additionally clear the stem's own
+  // offset when it sits in the curve's approach path (stem-down, no
+  // accidental) — whichever pullback is larger wins.
+  const headClearanceX = NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX;
+  const stemClearanceX = mainStemInApproachPath
+    ? MAIN_STEM_X_FROM_HEAD_CENTER + SLUR_STEM_CLEARANCE_PX
+    : 0;
+  const toX = mainHeadCenterXPx - Math.max(headClearanceX, stemClearanceX);
   const slur = createCurveSvg({
     from: {
-      x: firstGraceHeadX,
+      x:
+        firstGraceHeadX +
+        GRACE_STEM_X_FROM_HEAD_CENTER +
+        SLUR_STEM_CLEARANCE_PX,
       y: firstGraceHeadY + direction * (graceHeadRy + SLUR_HEAD_CLEARANCE_PX),
     },
     to: {
-      x: mainHeadCenterXPx,
+      x: toX,
       y: mainHeadCenterYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX),
     },
     bulge,
