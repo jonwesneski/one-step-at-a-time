@@ -88,41 +88,7 @@ import {
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
-
-function flattenSlotElements(assigned: Element[]): {
-  flatElements: NoteChordOrRestElementType[];
-  tupletsByIndex: Map<number, TupletElementType[]>;
-} {
-  const flatElements: NoteChordOrRestElementType[] = [];
-  const tupletsByIndex = new Map<number, TupletElementType[]>();
-
-  function flatten(
-    element: Element,
-    tupletAncestors: TupletElementType[]
-  ): void {
-    const tag = element.nodeName;
-    if (
-      tag === MUSIC_NOTE_NODE ||
-      tag === MUSIC_CHORD_NODE ||
-      tag === MUSIC_REST_NODE
-    ) {
-      if (tupletAncestors.length > 0) {
-        tupletsByIndex.set(flatElements.length, [...tupletAncestors]);
-      }
-      flatElements.push(element as NoteChordOrRestElementType);
-    } else if (tag === MUSIC_TUPLET_NODE) {
-      for (const child of element.children) {
-        flatten(child, [...tupletAncestors, element as TupletElementType]);
-      }
-    }
-  }
-
-  for (const element of assigned) {
-    flatten(element, []);
-  }
-
-  return { flatElements, tupletsByIndex };
-}
+import { flattenSlotElements } from './utils/slotElements';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
