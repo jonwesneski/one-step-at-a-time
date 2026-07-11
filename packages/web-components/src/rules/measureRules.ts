@@ -8,7 +8,7 @@ import {
   DurationType,
 } from '../types/theory';
 import { durationToFactor, factorToDuration } from './theoryConsts';
-import { parseTupletRatio } from './tupletRules';
+import { parseTupletRatio, resolveInnermostTuplet } from './tupletRules';
 
 export type MeasureFitResult = {
   allowedElementCount: number;
@@ -32,11 +32,7 @@ export function computeAllowedElementCount(
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i];
     const duration = element.duration as DurationType;
-    const tupletAncestors = tupletsByIndex.get(i);
-    const innermostTuplet =
-      tupletAncestors !== undefined
-        ? tupletAncestors[tupletAncestors.length - 1]
-        : undefined;
+    const innermostTuplet = resolveInnermostTuplet(tupletsByIndex, i);
     const durationContribution =
       innermostTuplet !== undefined
         ? (() => {

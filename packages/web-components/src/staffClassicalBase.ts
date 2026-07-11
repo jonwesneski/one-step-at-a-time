@@ -14,7 +14,9 @@ import {
   buildTupletGroups,
   computeOuterBracketBaseY,
   computeTupletBracketGeometry,
+  computeTupletScaledNoteCount,
   parseTupletRatio,
+  resolveInnermostTuplet,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -120,24 +122,6 @@ function flattenSlotElements(assigned: Element[]): {
   }
 
   return { flatElements, tupletsByIndex };
-}
-
-function computeTupletScaledNoteCount(
-  elements: NoteChordOrRestElementType[],
-  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
-): number {
-  let count = 0;
-  for (let i = 0; i < elements.length; i++) {
-    const ancestors = tupletsByIndex.get(i);
-    if (ancestors !== undefined) {
-      const innermostTuplet = ancestors[ancestors.length - 1];
-      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-      count += normal / actual;
-    } else {
-      count += 1;
-    }
-  }
-  return count;
 }
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
@@ -1128,11 +1112,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         element.style.top = '0px';
       }
 
-      const tupletAncestorsForElement = this.#tupletsByIndex.get(i);
-      const innermostTupletForElement =
-        tupletAncestorsForElement !== undefined
-          ? tupletAncestorsForElement[tupletAncestorsForElement.length - 1]
-          : undefined;
+      const innermostTupletForElement = resolveInnermostTuplet(
+        this.#tupletsByIndex,
+        i
+      );
       if (innermostTupletForElement !== undefined) {
         const { actual, normal } = parseTupletRatio(
           innermostTupletForElement.ratio
