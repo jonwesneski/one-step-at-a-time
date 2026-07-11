@@ -179,11 +179,11 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
   test('basis scales linearly with note count — delta = noteCount × MIN_NOTE_WIDTH', async ({
     page,
   }) => {
-    await buildMeasureWithNotes(page, 'quarter', ONE_NOTE);
+    await buildMeasureWithNotes(page, 'eighth', ONE_NOTE);
     await waitForRedrawCycle(page);
     const flex1 = await readMeasureFlex(page);
 
-    await buildMeasureWithNotes(page, 'quarter', EIGHT_NOTES);
+    await buildMeasureWithNotes(page, 'eighth', EIGHT_NOTES);
     await waitForRedrawCycle(page);
     const flex8 = await readMeasureFlex(page);
 

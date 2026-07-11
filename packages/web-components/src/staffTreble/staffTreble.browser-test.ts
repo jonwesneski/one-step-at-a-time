@@ -78,7 +78,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
     await buildStandaloneTrebleStaff(page, {
       notes: 8,
-      duration: 'quarter',
+      duration: 'eighth',
       hostWidth: 800,
     });
     await positionedAtStart;
@@ -107,7 +107,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
     await buildStandaloneTrebleStaff(page, {
       notes: 8,
-      duration: 'quarter',
+      duration: 'eighth',
       hostWidth: 800,
     });
     await positionedAtStart;
