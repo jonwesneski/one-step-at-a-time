@@ -39,6 +39,10 @@ describe('staffClassicalBase', () => {
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('no more room for note(s)')
     );
+    for (const note of notes.slice(0, 4)) {
+      expect(note.style.display).not.toBe('none');
+    }
+    expect(notes[4].style.display).toBe('none');
 
     consoleSpy.mockRestore();
   });
@@ -74,6 +78,10 @@ describe('staffClassicalBase', () => {
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('no more room for note(s)')
     );
+    for (const note of notes.slice(0, 3)) {
+      expect(note.style.display).not.toBe('none');
+    }
+    expect(notes[3].style.display).toBe('none');
 
     consoleSpy.mockRestore();
   });

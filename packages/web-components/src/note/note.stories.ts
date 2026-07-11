@@ -65,6 +65,8 @@ export const ArticulationGallery: Story = {
       <music-note note="G" octave="4" articulation="marcato"></music-note>
       <music-note note="G" octave="4" articulation="staccato"></music-note>
       <music-note note="G" octave="4" articulation="staccatissimo"></music-note>
+    </music-staff-treble>
+    <music-staff-treble time="4/4">
       <music-note note="G" octave="4" articulation="tenuto"></music-note>
       <music-note note="G" octave="4" articulation="portato"></music-note>
       <music-note
@@ -77,6 +79,8 @@ export const ArticulationGallery: Story = {
         octave="4"
         articulation="marcato-staccato"
       ></music-note>
+    </music-staff-treble>
+    <music-staff-treble time="4/4">
       <music-note note="G" octave="4" articulation="fermata"></music-note>
       <music-note
         note="G"

@@ -6,9 +6,10 @@ import {
 import { buildBeamsRenderer } from './rules/beamRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import { computeGraceFootprintWidth } from './rules/graceRules';
+import { computeAllowedElementCount } from './rules/measureRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
-import { durationToFactor, factorToDuration } from './rules/theoryConsts';
+import { durationToFactor } from './rules/theoryConsts';
 import {
   buildTupletGroups,
   computeOuterBracketBaseY,
@@ -752,9 +753,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#tupletContainer.innerHTML = '';
     this.#dynamicsContainer.innerHTML = '';
 
-    const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
-    // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
-    const measureDuration = beatsInMeasure / beatType;
+    const { allowedElementCount, error } = computeAllowedElementCount(
+      elements,
+      this.#effectiveTimeSig,
+      this.#tupletsByIndex
+    );
+    if (error !== null) {
+      console.warn(error);
+    }
+    for (let i = 0; i < elements.length; i++) {
+      elements[i].style.display = i < allowedElementCount ? '' : 'none';
+    }
+    elements = elements.slice(0, allowedElementCount);
 
     const noteStaffYCoords = new Map<NoteElementType, number>();
     const chordStaffYCoords = new Map<ChordElementType, number[]>();
@@ -804,36 +814,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     // Set rendering properties on each element
     // (triggers their self-render via requestAnimationFrame)
-    let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
-      const duration = element.duration;
-      const tupletAncestors = this.#tupletsByIndex.get(i);
-      const innermostTuplet =
-        tupletAncestors !== undefined
-          ? tupletAncestors[tupletAncestors.length - 1]
-          : undefined;
-      const durationContribution =
-        innermostTuplet !== undefined
-          ? (() => {
-              const { actual, normal } = parseTupletRatio(
-                innermostTuplet.ratio
-              );
-              return (
-                durationToFactor[duration as DurationType] * (normal / actual)
-              );
-            })()
-          : durationToFactor[duration as DurationType];
-      if (beatOffset + durationContribution > measureDuration) {
-        console.warn(
-          `no more room for note(s); remaining duration is "${
-            factorToDuration.get(measureDuration - beatOffset) ??
-            measureDuration - beatOffset
-          }", tried to add "${duration}"`
-        );
-        break;
-      }
-
       const stemUp = stemDirections[i];
       const isBeamed = beamsBuilder.isBeamed(i);
       const extension = this.#beamRenderer.stemExtension(i);
@@ -865,8 +847,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             graceShowAccidentals.get(chordElement) ?? null;
         });
       }
-
-      beatOffset += durationContribution;
     }
 
     this.#currentElements = elements;
