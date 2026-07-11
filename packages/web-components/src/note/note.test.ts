@@ -276,6 +276,23 @@ describe('grace notes', () => {
     expect(noteElement.graceOctave).toEqual([null]);
   });
 
+  it('re-renders grace notes on attribute change when used standalone', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C' satisfies Note);
+    noteElement.setAttribute('octave', '5');
+    document.body.appendChild(noteElement);
+    expect(noteElement.shadowRoot?.querySelector('.grace-notes')).toBeNull();
+
+    // With no parent staff to catch the NOTE_Y_CHANGE event, the element
+    // must render itself directly or this update would never appear.
+    noteElement.setAttribute('grace', 'B');
+    noteElement.setAttribute('grace-octave', '4');
+
+    const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+    expect(graceGroup).not.toBeNull();
+    expect(graceGroup?.querySelectorAll('.grace-head')).toHaveLength(1);
+  });
+
   it('renders a single grace note as a small flagged note with a slash and slur', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     noteElement.setAttribute('note', 'C' satisfies Note);
@@ -682,128 +699,149 @@ describe('staff integration', () => {
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
-});
 
-describe('grace notes staff integration', () => {
-  function renderNotes(staff: Element, notes: NoteElementType[]): void {
-    for (const note of notes) {
-      staff.appendChild(note);
+  describe('grace notes', () => {
+    function renderNotes(staff: Element, notes: NoteElementType[]): void {
+      for (const note of notes) {
+        staff.appendChild(note);
+      }
+      const slot = (staff as any).shadowRoot.querySelector('slot');
+      slot.assignedElements = () => notes;
+      slot.dispatchEvent(new Event('slotchange'));
     }
-    const slot = (staff as any).shadowRoot.querySelector('slot');
-    slot.assignedElements = () => notes;
-    slot.dispatchEvent(new Event('slotchange'));
-  }
 
-  function makeQuarterNote(
-    value: Note,
-    octave: Octave,
-    grace?: string,
-    graceOctave?: string
-  ): NoteElementType {
-    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
-    note.setAttribute('duration', 'quarter' satisfies DurationType);
-    note.setAttribute('note', value);
-    note.setAttribute('octave', `${octave}`);
-    if (grace !== undefined) {
-      note.setAttribute('grace', grace);
+    function makeQuarterNote(
+      value: Note,
+      octave: Octave,
+      grace?: string,
+      graceOctave?: string
+    ): NoteElementType {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', 'quarter' satisfies DurationType);
+      note.setAttribute('note', value);
+      note.setAttribute('octave', `${octave}`);
+      if (grace !== undefined) {
+        note.setAttribute('grace', grace);
+      }
+      if (graceOctave !== undefined) {
+        note.setAttribute('grace-octave', graceOctave);
+      }
+      return note;
     }
-    if (graceOctave !== undefined) {
-      note.setAttribute('grace-octave', graceOctave);
-    }
-    return note;
-  }
 
-  it('pushes a graced note right so the grace group clears the previous note', () => {
-    const staff = makeStaff();
-    const plainFirst = makeQuarterNote('E', 4);
-    const gracedSecond = makeQuarterNote('G', 4, 'A,B', '4,4');
-    renderNotes(staff, [plainFirst, gracedSecond]);
+    it('pushes a graced note right so the grace group clears the previous note', () => {
+      const staff = makeStaff();
+      const plainFirst = makeQuarterNote('E', 4);
+      const gracedSecond = makeQuarterNote('G', 4, 'A,B', '4,4');
+      renderNotes(staff, [plainFirst, gracedSecond]);
 
-    const firstLeft = parseFloat(plainFirst.style.left);
-    const secondLeft = parseFloat(gracedSecond.style.left);
-    // The grace footprint (2 columns + gap = 25px) must fit between the
-    // previous note's right edge (left + 32px note width) and this note.
-    expect(secondLeft).toBeGreaterThanOrEqual(firstLeft + 32 + 25);
-  });
-
-  it('grows the staff min-width when a note gains grace notes', () => {
-    const staff = makeStaff();
-    const minWidths: number[] = [];
-    staff.addEventListener('staff-min-width', (event) => {
-      minWidths.push((event as CustomEvent).detail.minWidth);
+      const firstLeft = parseFloat(plainFirst.style.left);
+      const secondLeft = parseFloat(gracedSecond.style.left);
+      // The grace footprint (2 columns + gap = 25px) must fit between the
+      // previous note's right edge (left + 32px note width) and this note.
+      expect(secondLeft).toBeGreaterThanOrEqual(firstLeft + 32 + 25);
     });
 
-    const note = makeQuarterNote('E', 4);
-    renderNotes(staff, [note]);
-    const withoutGrace = minWidths[minWidths.length - 1];
+    it('grows the staff min-width when a note gains grace notes', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
 
-    note.setAttribute('grace', 'A,B');
-    const withGrace = minWidths[minWidths.length - 1];
+      const note = makeQuarterNote('E', 4);
+      renderNotes(staff, [note]);
+      const withoutGrace = minWidths[minWidths.length - 1];
 
-    expect(withGrace).toBe(withoutGrace + 25);
-  });
+      note.setAttribute('grace', 'A,B');
+      const withGrace = minWidths[minWidths.length - 1];
 
-  it('suppresses grace accidentals covered by the key signature and shows naturals', () => {
-    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
-    staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D' satisfies Note);
-    staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-    staff.setAttribute(
-      COMMON_ATTRIBUTES.TIME_SIG,
-      '4/4' satisfies TimeSignature
-    );
-    document.body.appendChild(staff);
+      expect(withGrace).toBe(withoutGrace + 25);
+    });
 
-    // In D major F# is in the key signature: no symbol on a grace F#4.
-    const sharpGrace = makeQuarterNote('G', 4, 'F#', '4');
-    renderNotes(staff, [sharpGrace]);
-    expect(
-      sharpGrace.shadowRoot?.querySelector('.grace-notes .grace-accidental')
-    ).toBeNull();
+    it('suppresses grace accidentals covered by the key signature and shows naturals', () => {
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D' satisfies Note);
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(
+        COMMON_ATTRIBUTES.TIME_SIG,
+        '4/4' satisfies TimeSignature
+      );
+      document.body.appendChild(staff);
 
-    // A grace F natural against the key signature takes a natural symbol.
-    const naturalGrace = makeQuarterNote('G', 4, 'F', '4');
-    renderNotes(staff, [naturalGrace]);
-    expect(
-      naturalGrace.shadowRoot?.querySelector('.grace-notes .grace-accidental')
-    ).not.toBeNull();
-  });
+      // In D major F# is in the key signature: no symbol on a grace F#4.
+      const sharpGrace = makeQuarterNote('G', 4, 'F#', '4');
+      renderNotes(staff, [sharpGrace]);
+      expect(
+        sharpGrace.shadowRoot?.querySelector('.grace-notes .grace-accidental')
+      ).toBeNull();
 
-  it('carries a grace accidental through the measure to the main notes', () => {
-    const staff = makeStaff();
-    const graced = makeQuarterNote('G', 4, 'F#', '4');
-    const laterSharp = makeQuarterNote('F#', 4);
-    renderNotes(staff, [graced, laterSharp]);
+      // A grace F natural against the key signature takes a natural symbol.
+      const naturalGrace = makeQuarterNote('G', 4, 'F', '4');
+      renderNotes(staff, [naturalGrace]);
+      expect(
+        naturalGrace.shadowRoot?.querySelector('.grace-notes .grace-accidental')
+      ).not.toBeNull();
+    });
 
-    // The grace F# earlier in the measure already displayed the sharp.
-    expect(laterSharp.showAccidental).toBeNull();
-  });
+    it('carries a grace accidental through the measure to the main notes', () => {
+      const staff = makeStaff();
+      const graced = makeQuarterNote('G', 4, 'F#', '4');
+      const laterSharp = makeQuarterNote('F#', 4);
+      renderNotes(staff, [graced, laterSharp]);
 
-  it('renders ledger lines for grace pitches beyond the staff', () => {
-    const staff = makeStaff();
-    const highGrace = makeQuarterNote('C', 5, 'C', '6');
-    renderNotes(staff, [highGrace]);
-    // C6 (staffY 10) needs ledger lines at staffY 20 and 10.
-    expect(
-      highGrace.shadowRoot?.querySelectorAll('.grace-notes .grace-ledger-line')
-    ).toHaveLength(2);
+      // The grace F# earlier in the measure already displayed the sharp.
+      expect(laterSharp.showAccidental).toBeNull();
+    });
 
-    const inStaffGrace = makeQuarterNote('C', 5, 'B', '4');
-    renderNotes(staff, [inStaffGrace]);
-    expect(
-      inStaffGrace.shadowRoot?.querySelectorAll(
-        '.grace-notes .grace-ledger-line'
-      )
-    ).toHaveLength(0);
-  });
+    it('renders ledger lines for grace pitches beyond the staff', () => {
+      const staff = makeStaff();
+      const highGrace = makeQuarterNote('C', 5, 'C', '6');
+      renderNotes(staff, [highGrace]);
+      // C6 (staffY 10) needs ledger lines at staffY 20 and 10.
+      expect(
+        highGrace.shadowRoot?.querySelectorAll(
+          '.grace-notes .grace-ledger-line'
+        )
+      ).toHaveLength(2);
 
-  it('defaults the grace octave to the main note octave when grace-octave is omitted', () => {
-    const staff = makeStaff();
-    const highGrace = makeQuarterNote('C', 5, 'C');
-    renderNotes(staff, [highGrace]);
-    // Without an explicit grace-octave, "C" defaults to the main note's own
-    // octave (5) — same pitch as the main note, not the C6 above the staff.
-    expect(
-      highGrace.shadowRoot?.querySelectorAll('.grace-notes .grace-ledger-line')
-    ).toHaveLength(0);
+      const inStaffGrace = makeQuarterNote('C', 5, 'B', '4');
+      renderNotes(staff, [inStaffGrace]);
+      expect(
+        inStaffGrace.shadowRoot?.querySelectorAll(
+          '.grace-notes .grace-ledger-line'
+        )
+      ).toHaveLength(0);
+    });
+
+    it('re-renders grace notes on attribute change when inside a staff', () => {
+      const staff = makeStaff();
+      const note = makeQuarterNote('E', 4);
+      renderNotes(staff, [note]);
+      expect(note.shadowRoot?.querySelector('.grace-notes')).toBeNull();
+
+      // The staff's NOTE_Y_CHANGE listener round-trips into a batchUpdate
+      // that re-renders this note — the direct render() call in note.ts is
+      // skipped here since a parent staff is present.
+      note.setAttribute('grace', 'A,B');
+      note.setAttribute('grace-octave', '4,4');
+
+      const graceGroup = note.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup).not.toBeNull();
+      expect(graceGroup?.querySelectorAll('.grace-head')).toHaveLength(2);
+    });
+
+    it('defaults the grace octave to the main note octave when grace-octave is omitted', () => {
+      const staff = makeStaff();
+      const highGrace = makeQuarterNote('C', 5, 'C');
+      renderNotes(staff, [highGrace]);
+      // Without an explicit grace-octave, "C" defaults to the main note's own
+      // octave (5) — same pitch as the main note, not the C6 above the staff.
+      expect(
+        highGrace.shadowRoot?.querySelectorAll(
+          '.grace-notes .grace-ledger-line'
+        )
+      ).toHaveLength(0);
+    });
   });
 });

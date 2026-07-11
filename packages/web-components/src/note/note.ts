@@ -37,7 +37,7 @@ import {
   parseGraceType,
   parseStress,
 } from '../utils';
-import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES } from '../utils/consts';
+import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES, STAFF_TAGS } from '../utils/consts';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class NoteElement extends HTMLElement implements INoteElement {
@@ -340,7 +340,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue) return;
+      if (oldValue === newValue) {
+        return;
+      }
 
       // diminuendo is an alias for decrescendo — normalize immediately so
       // decrescendo is the only hairpin attribute any other code ever sees.
@@ -358,7 +360,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (!this.isConnected) return;
+      if (!this.isConnected) {
+        return;
+      }
 
       if (name === 'tie' || name === 'slur') {
         this.dispatchEvent(
@@ -401,15 +405,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace-duration' ||
         name === 'grace-slur'
       ) {
-        // The grace footprint changes horizontal spacing, so the staff must
-        // re-run its layout; the self-render below covers standalone usage.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
             composed: true,
           })
         );
-        this.render();
+        // Is standalone mode; if not, staff will call
+        // trigger a call to render() via batchUpdate()
+        if (!this.closest(STAFF_TAGS)) {
+          this.render();
+        }
         return;
       }
 

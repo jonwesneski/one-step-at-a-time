@@ -45,6 +45,7 @@ import {
   MUSIC_CHORD,
   MUSIC_NOTE,
   NOTE_EVENTS,
+  STAFF_TAGS,
   SVG_NS,
 } from '../utils/consts';
 import {
@@ -415,15 +416,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace-duration' ||
         name === 'grace-slur'
       ) {
-        // The grace footprint changes horizontal spacing, so the staff must
-        // re-run its layout; the self-render below covers standalone usage.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
             composed: true,
           })
         );
-        this.render();
+        // Is standalone mode; if not, staff will call
+        // trigger a call to render() via batchUpdate()
+        if (!this.closest(STAFF_TAGS)) {
+          this.render();
+        }
         return;
       }
 

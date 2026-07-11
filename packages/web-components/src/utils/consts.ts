@@ -28,6 +28,13 @@ export const MUSIC_STAFF_GUITAR_TAB = 'music-staff-guitar-tab';
 export const MUSIC_STAFF_VOCAL = 'music-staff-vocal';
 export const MUSIC_LYRICS = 'music-lyrics';
 
+export const STAFF_TAGS = [
+  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF_BASS,
+  MUSIC_STAFF_GUITAR_TAB,
+  MUSIC_STAFF_VOCAL,
+].join(', ');
+
 // Uppercase variants for nodeName comparisons (DOM nodeName is always uppercase)
 export const MUSIC_NOTE_NODE = MUSIC_NOTE.toUpperCase();
 export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
