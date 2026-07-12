@@ -161,9 +161,24 @@ export const createChordSvg = ({
     const referenceHeadCenterXPx =
       noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
       (displacementMap.get(0) ?? 0);
-    const anyAccidentalShown =
-      noteAccidentals?.some((noteAccidental) => noteAccidental != null) ??
-      false;
+    // The slur's landing target when it bulges above (see buildGraceSlur) —
+    // the chord's top (highest-pitch) note, found by actual staffY minimum
+    // since staffYCoordinates preserves declaration order, not pitch order.
+    const topNoteIndex = staffYCoordinates.indexOf(
+      Math.min(...staffYCoordinates)
+    );
+    const topNoteHeadCenterYPx =
+      STAFF_Y_PADDING +
+      staffYCoordinates[topNoteIndex] -
+      NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const topNoteHeadCenterXPx =
+      noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
+      (displacementMap.get(topNoteIndex) ?? 0);
+    const shownAccidentals = (noteAccidentals ?? []).filter(
+      (noteAccidental): noteAccidental is AccidentalType =>
+        noteAccidental != null
+    );
+    const anyAccidentalShown = shownAccidentals.length > 0;
     const accidentalColumnWidth = anyAccidentalShown
       ? totalChordAccidentalWidth(noteAccidentals ?? [], staffYCoordinates)
       : 0;
@@ -178,6 +193,8 @@ export const createChordSvg = ({
       graceSlur,
       mainHeadCenterXPx: referenceHeadCenterXPx,
       mainHeadCenterYPx: referenceHeadCenterYPx,
+      mainTopNoteXPx: topNoteHeadCenterXPx,
+      mainTopNoteYPx: topNoteHeadCenterYPx,
       anchorRightXPx:
         -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement) -
         GRACE_MAIN_GAP_PX,

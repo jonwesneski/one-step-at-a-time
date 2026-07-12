@@ -9,6 +9,7 @@ import type {
   Note,
   Octave,
   StressType,
+  TimeSignature,
   Voice,
 } from '../types/theory';
 
@@ -118,6 +119,17 @@ export const NOTES: Note[] = [
 export const OCTAVES: Octave[] = [2, 3, 4, 5, 6];
 
 export const MODES: Mode[] = ['major', 'minor'];
+
+export const TIMES: TimeSignature[] = [
+  '4/4',
+  '3/4',
+  '2/4',
+  '6/8',
+  '12/8',
+  '9/8',
+  '5/4',
+  '7/4',
+];
 
 export const VOICES: Voice[] = [
   'soprano',

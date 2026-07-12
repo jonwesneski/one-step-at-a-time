@@ -11,6 +11,7 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF_TREBLE,
 } from '../utils/consts';
+import { NOTE_SCALE } from '../utils/svgCreator/note';
 import './index';
 
 afterEach(() => {
@@ -246,6 +247,159 @@ describe(MUSIC_CHORD, () => {
       expect(graceGroup?.querySelectorAll('.grace-beam')).toHaveLength(2);
       expect(graceGroup?.querySelector('.grace-slash')).not.toBeNull();
       expect(graceGroup?.querySelector('.grace-slur')).not.toBeNull();
+    });
+
+    it('routes the grace slur clear of the reference note accidental horizontally, without growing its gap to the notehead', () => {
+      const endPoint = (element: ChordElementType): number[] => {
+        const d =
+          element.shadowRoot
+            ?.querySelector('.grace-slur path')
+            ?.getAttribute('d') ?? '';
+        const [, , , , endX, endY] =
+          d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return [endX, endY];
+      };
+
+      const withAccidental = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+        ],
+        'B',
+        '4'
+      );
+      const plain = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'B',
+        '4'
+      );
+
+      const [endXWithAccidental, endYWithAccidental] = endPoint(withAccidental);
+      const headCxAttr = Number(
+        withAccidental.shadowRoot?.querySelector('.head')?.getAttribute('cx')
+      );
+      // Every note in a chord shares the same internal (undisplaced) head
+      // cx/cy — chord.ts renders them all with the same duration/stemUp —
+      // so querying any one '.head' gives the right X regardless of which
+      // note the slur targets (per-note X differences come only from a
+      // wrapper <svg x=...> offset for adjacent-note displacement, which
+      // these thirds-apart test chords never trigger).
+      const mainHeadCenterX = headCxAttr * NOTE_SCALE;
+      // Standalone chords resolve Y from the same C6..C4 note-name map as an
+      // in-staff treble chord (accidentals don't move a note's staff line).
+      // mainHeadCenterY = STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION
+      // withAccidental=[C#4(80),E4(70)]: bulge above targets the top note,
+      // E4. plain=[C4(80),E4(70)]: bulge below targets the reference
+      // (bottom/index-0) note, C4.
+      const mainHeadCenterYWithAccidental = 8 + 70 - 10;
+      const mainHeadCenterYPlain = 8 + 80 - 10;
+      // A sharp is 10px wide (ACCIDENTAL_SYMBOL_WIDTH), sat ACCIDENTAL_NOTE_GAP
+      // (-7px, i.e. overlapping) left of the head center.
+      const accidentalLeftEdgeX = mainHeadCenterX - (10 + -7);
+
+      // Clears the accidental horizontally...
+      expect(endXWithAccidental).toBeLessThan(accidentalLeftEdgeX);
+
+      // ...and the endpoint's distance to its target notehead is the same
+      // constant whether or not an accidental is shown (only which note it
+      // targets, and the horizontal pullback, differ).
+      const [, endYPlain] = endPoint(plain);
+      const gapWithAccidental = Math.abs(
+        mainHeadCenterYWithAccidental - endYWithAccidental
+      );
+      const gapPlain = Math.abs(mainHeadCenterYPlain - endYPlain);
+      expect(gapWithAccidental).toBeCloseTo(gapPlain, 5);
+    });
+
+    it('keeps the slur-to-notehead gap constant regardless of which chord note the accidental sits on', () => {
+      // Accidental sits only on G#4 (index 2), not the reference note C4
+      // (index 0) — C4=80, G4=60, 20px of staffY apart. Both cases bulge
+      // above (an accidental is shown either way) and target their own top
+      // note: E4(70) for the 2-note chord, G#4(60) for the 3-note chord.
+      const accidentalOnReference = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+        ],
+        'B',
+        '4'
+      );
+      const accidentalOnNonReference = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+          ['G#', 4],
+        ],
+        'B',
+        '4'
+      );
+
+      const endY = (element: ChordElementType): number => {
+        const d =
+          element.shadowRoot
+            ?.querySelector('.grace-slur path')
+            ?.getAttribute('d') ?? '';
+        const [, , , , , y] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return y;
+      };
+
+      const gapOnReference = Math.abs(
+        8 + 70 - 10 - endY(accidentalOnReference) // top note E4, staffY=70
+      );
+      const gapOnNonReference = Math.abs(
+        8 + 60 - 10 - endY(accidentalOnNonReference) // top note G#4, staffY=60
+      );
+      expect(gapOnNonReference).toBeCloseTo(gapOnReference, 5);
+    });
+
+    it('keeps the slur-to-notehead gap constant for a grace GROUP into a chord with a multi-position accidental column', () => {
+      // Mirrors chord.stories.ts's WithGraceNotes second chord: a 2-note
+      // grace group into a chord with accidentals on both the reference note
+      // (C#4, index 0) and a note 20px of staffY away (G#4, index 2). Both
+      // chords' top note is at staffY=60 (G#4 and G4 share the same staff
+      // position — an accidental doesn't move it).
+      const twoAccidentals = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+          ['G#', 4],
+        ],
+        'C,D',
+        '4,4'
+      );
+      const oneAccidental = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+          ['G', 4],
+        ],
+        'C,D',
+        '4,4'
+      );
+
+      const endY = (element: ChordElementType): number => {
+        const d =
+          element.shadowRoot
+            ?.querySelector('.grace-slur path')
+            ?.getAttribute('d') ?? '';
+        const [, , , , , y] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return y;
+      };
+
+      const topNoteHeadCenterY = 8 + 60 - 10; // top note G#4/G4, staffY=60
+      const gapTwoAccidentals = Math.abs(
+        topNoteHeadCenterY - endY(twoAccidentals)
+      );
+      const gapOneAccidental = Math.abs(
+        topNoteHeadCenterY - endY(oneAccidental)
+      );
+      // The 2-accidental case's gap must not be larger than the 1-accidental
+      // case's — this is exactly the regression the user reported (chords
+      // with more accidentals showing a visibly bigger end-point gap).
+      expect(gapTwoAccidentals).toBeCloseTo(gapOneAccidental, 5);
     });
 
     it('positions grace heads relative to the reference note (notes[0])', () => {

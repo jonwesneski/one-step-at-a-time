@@ -384,6 +384,29 @@ describe('grace notes', () => {
     ).not.toBeNull();
   });
 
+  it('keeps the single-grace slash anchored near the stem tip regardless of flag count', () => {
+    const slashY = (duration: 'eighth' | 'sixteenth' | 'thirtysecond') => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('grace', 'B');
+      noteElement.setAttribute('grace-octave', '4');
+      noteElement.setAttribute('grace-duration', duration);
+      document.body.appendChild(noteElement);
+      const slash = noteElement.shadowRoot?.querySelector('.grace-slash');
+      expect(slash).not.toBeNull();
+      const y1 = Number(slash?.getAttribute('y1'));
+      const y2 = Number(slash?.getAttribute('y2'));
+      return (y1 + y2) / 2;
+    };
+
+    // Extra flags stack downward toward the head on a stem-up note, so the
+    // stem tip — and the slash crossing it — must not shift with flag count.
+    const eighthY = slashY('eighth');
+    const sixteenthY = slashY('sixteenth');
+    const thirtysecondY = slashY('thirtysecond');
+    expect(sixteenthY).toBeCloseTo(eighthY, 5);
+    expect(thirtysecondY).toBeCloseTo(eighthY, 5);
+  });
+
   it('controls beam count on a grace group via grace-duration', () => {
     const thirtysecond = document.createElement(MUSIC_NOTE) as NoteElementType;
     thirtysecond.setAttribute('grace', 'G,A');
@@ -464,6 +487,142 @@ describe('grace notes', () => {
     expect(below[3]).toBeGreaterThan(Math.max(below[1], below[5]));
   });
 
+  it('routes the slur clear of the main accidental horizontally, without growing its gap to the notehead', () => {
+    const endPoint = (element: NoteElementType): number[] => {
+      const d =
+        element.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      const [, , , , endX, endY] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      return [endX, endY];
+    };
+    const headCenter = (element: NoteElementType): number[] => {
+      const head = element.shadowRoot?.querySelector('.head');
+      const cx = Number(head?.getAttribute('cx'));
+      const cy = Number(head?.getAttribute('cy'));
+      return [cx * NOTE_SCALE, cy * NOTE_SCALE];
+    };
+
+    const withAccidental = document.createElement(
+      MUSIC_NOTE
+    ) as NoteElementType;
+    withAccidental.setAttribute('note', 'C#' satisfies Note);
+    withAccidental.setAttribute('octave', '5');
+    withAccidental.setAttribute('grace', 'B');
+    withAccidental.setAttribute('grace-octave', '4');
+    document.body.appendChild(withAccidental);
+
+    const plain = document.createElement(MUSIC_NOTE) as NoteElementType;
+    plain.setAttribute('note', 'C' satisfies Note);
+    plain.setAttribute('octave', '5');
+    plain.setAttribute('grace', 'B');
+    plain.setAttribute('grace-octave', '4');
+    document.body.appendChild(plain);
+
+    const [endXWithAccidental, endYWithAccidental] = endPoint(withAccidental);
+    const [mainHeadCenterX, mainHeadCenterY] = headCenter(withAccidental);
+    // A sharp is 10px wide (ACCIDENTAL_SYMBOL_WIDTH), sat ACCIDENTAL_NOTE_GAP
+    // (-7px, i.e. overlapping) left of the head center — so its bounding box
+    // left edge sits accidentalWidth + gap px away.
+    const accidentalLeftEdgeX = mainHeadCenterX - (10 + -7);
+
+    // The slur's main-side endpoint must clear the accidental horizontally...
+    expect(endXWithAccidental).toBeLessThan(accidentalLeftEdgeX);
+
+    // ...but its *distance to the main notehead* must be the same constant
+    // whether or not an accidental is shown — the accidental should only
+    // ever push the endpoint further left (X), never further from the head
+    // (Y), no matter how tall/wide the accidental is.
+    const [, endYPlain] = endPoint(plain);
+    const [, mainHeadCenterYPlain] = headCenter(plain);
+    const gapWithAccidental = Math.abs(mainHeadCenterY - endYWithAccidental);
+    const gapPlain = Math.abs(mainHeadCenterYPlain - endYPlain);
+    expect(gapWithAccidental).toBeCloseTo(gapPlain, 5);
+  });
+
+  it('anchors the grace-side slur start at the stem/beam tip (not the notehead) when clearing a main accidental', () => {
+    const graceHeadY = (element: NoteElementType): number => {
+      const transform =
+        element.shadowRoot
+          ?.querySelector('.grace-note')
+          ?.getAttribute('transform') ?? '';
+      const [, y] = transform.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      return y;
+    };
+    const slurStartY = (element: NoteElementType): number => {
+      const d =
+        element.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      const [, y] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      return y;
+    };
+    const firstBeamTopY = (element: NoteElementType): number => {
+      const points =
+        element.shadowRoot
+          ?.querySelector('.grace-beam')
+          ?.getAttribute('points') ?? '';
+      const [, y] = points.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      return y;
+    };
+
+    const withAccidental = document.createElement(
+      MUSIC_NOTE
+    ) as NoteElementType;
+    withAccidental.setAttribute('note', 'C#' satisfies Note);
+    withAccidental.setAttribute('octave', '5');
+    withAccidental.setAttribute('grace', 'G,A,B');
+    withAccidental.setAttribute('grace-octave', '4,4,4');
+    document.body.appendChild(withAccidental);
+
+    const plain = document.createElement(MUSIC_NOTE) as NoteElementType;
+    plain.setAttribute('note', 'C' satisfies Note);
+    plain.setAttribute('octave', '5');
+    plain.setAttribute('grace', 'G,A,B');
+    plain.setAttribute('grace-octave', '4,4,4');
+    document.body.appendChild(plain);
+
+    // With an accidental shown, the slur must start near the beam tip — well
+    // above (numerically less than) the grace notehead — rather than near
+    // the notehead itself.
+    expect(slurStartY(withAccidental)).toBeLessThan(graceHeadY(withAccidental));
+    expect(
+      Math.abs(slurStartY(withAccidental) - firstBeamTopY(withAccidental))
+    ).toBeLessThan(
+      Math.abs(slurStartY(withAccidental) - graceHeadY(withAccidental))
+    );
+
+    // Without an accidental, the default notehead-to-notehead rule still
+    // applies: the slur start stays close to (below) the notehead, not the
+    // beam tip.
+    expect(slurStartY(plain)).toBeGreaterThan(graceHeadY(plain));
+  });
+
+  it("clears the beam's highest point on an ascending grace group, not just the first note's beam Y", () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C#' satisfies Note);
+    noteElement.setAttribute('octave', '5');
+    // Ascending group (C4 -> D4): the first note's beam Y is the beam's
+    // lowest point, not its highest — the slur must clear the highest point
+    // (near the last note), not just the first.
+    noteElement.setAttribute('grace', 'C,D');
+    noteElement.setAttribute('grace-octave', '4,4');
+    document.body.appendChild(noteElement);
+
+    const stemTopYs = Array.from(
+      noteElement.shadowRoot?.querySelectorAll('.grace-stem') ?? []
+    ).map((stem) => Number(stem.getAttribute('y1')));
+    const highestBeamY = Math.min(...stemTopYs);
+
+    const d =
+      noteElement.shadowRoot
+        ?.querySelector('.grace-slur path')
+        ?.getAttribute('d') ?? '';
+    const [, startY] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+
+    expect(startY).toBeLessThan(highestBeamY);
+  });
+
   it('anchors the slur clear of the grace stem and main stem', () => {
     // Path shape: M x y Q mx my ex ey
     const pathPoints = (element: NoteElementType): number[] => {
@@ -504,12 +663,13 @@ describe('grace notes', () => {
       NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX
     );
 
-    // Same main note (so mainHeadCenterXPx is identical); only stemUp and
-    // accidental-shown vary. The stem-down + no-accidental combination is the
-    // only one where the main stem sits in the slur's approach path, so its
-    // end anchor must clear at least as much distance as the other two (the
-    // notehead-radius clearance and the stem clearance both apply — whichever
-    // is larger wins).
+    // Only stemUp and accidental-shown vary. The stem-down + no-accidental
+    // combination is the only one where the main stem sits in the slur's
+    // approach path (the notehead-radius clearance and the stem clearance
+    // both apply — whichever is larger wins), but the accidental-shown case
+    // clears the accidental's own rendered edge, a fixed ~8.5px pullback
+    // that's larger than the stem clearance in this codebase's current
+    // constants — so the accidental case pulls back the most of the three.
     const stemDownNoAccidental = document.createElement(
       MUSIC_NOTE
     ) as NoteElementType;
@@ -535,7 +695,7 @@ describe('grace notes', () => {
     const stemDownAccidentalEnd = pathPoints(stemDownWithAccidental).at(
       -2
     ) as number;
-    expect(stemDownEnd).toBeLessThanOrEqual(stemDownAccidentalEnd);
+    expect(stemDownAccidentalEnd).toBeLessThanOrEqual(stemDownEnd);
   });
 });
 

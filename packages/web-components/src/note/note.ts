@@ -546,6 +546,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         graceSlur: this.graceSlur,
         mainHeadCenterXPx: cx * NOTE_SCALE,
         mainHeadCenterYPx: cy * NOTE_SCALE,
+        // A single note has no top/bottom distinction — same point either way.
+        mainTopNoteXPx: cx * NOTE_SCALE,
+        mainTopNoteYPx: cy * NOTE_SCALE,
         anchorRightXPx: -accidentalFootprint - GRACE_MAIN_GAP_PX,
         mainAccidentalShown: accidental !== undefined,
         mainStemUp: this.#stemUp,

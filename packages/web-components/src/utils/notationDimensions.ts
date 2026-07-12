@@ -428,3 +428,10 @@ export const GRACE_SLASH_HALF_HEIGHT_PX = STAFF_LINE_SPACING * 0.6;
  * Stroke width (px) of the acciaccatura slash.
  */
 export const GRACE_SLASH_STROKE_WIDTH = 1.1;
+
+/**
+ * Vertical inset (px) of a single grace note's slash crossing point below the
+ * stem tip — keeps the diagonal off the very top of the stem/flag so white
+ * space shows above it, per standard engraving practice.
+ */
+export const GRACE_SLASH_TIP_INSET_PX = STAFF_LINE_SPACING * 0.5;

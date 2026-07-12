@@ -5,9 +5,10 @@ import {
 } from '../../rules/graceRules';
 import { computeLedgerLines } from '../../rules/staffNoteRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
-import { GraceDuration, GraceSlur, GraceType } from '../../types/theory';
+import type { GraceDuration, GraceSlur, GraceType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
   BASE_STEM_LENGTH_PX,
@@ -18,14 +19,14 @@ import {
   GRACE_SLASH_HALF_HEIGHT_PX,
   GRACE_SLASH_HALF_WIDTH_PX,
   GRACE_SLASH_STROKE_WIDTH,
+  GRACE_SLASH_TIP_INSET_PX,
   STAFF_Y_STEP,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
-import { createCurveSvg } from './curve';
+import { createCurveSvg, DEFAULT_BULGE_HEIGHT } from './curve';
 import {
   createNoteSvg,
-  flagStemExtensionPx,
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
@@ -53,20 +54,47 @@ export const SLUR_HEAD_CLEARANCE_PX = 1.5;
 // Extra horizontal clearance past a stem's own X offset, so the slur anchors
 // clear of the stem instead of the stem crossing the slur's path.
 const SLUR_STEM_CLEARANCE_PX = 1.5;
+// Shared base clearance on both ends of the slur when it bulges above to
+// avoid an accidental, so the visual gap matches on each side. Starting
+// value — tune visually in Storybook.
+const SLUR_ACCIDENTAL_CLEARANCE_PX = 1.5;
+// Vertical clearance above a grace stem/beam tip. Padded beyond
+// SLUR_ACCIDENTAL_CLEARANCE_PX because a group's outer beam layer renders
+// STEM_OVERLAP_PX * GRACE_SCALE above the raw beam Y (a deliberate
+// stem/beam-blend overlap), which would otherwise eat most of the margin —
+// a render-overlap correction, not a stylistic gap choice, so it only
+// applies to this (grace) side.
+const SLUR_STEM_TIP_CLEARANCE_PX =
+  SLUR_ACCIDENTAL_CLEARANCE_PX + STEM_OVERLAP_PX * GRACE_SCALE;
 
 export type GraceNotesProps = {
   graceNotes: GraceNoteDescriptor[];
   graceType: GraceType;
   graceDuration: GraceDuration | null;
   graceSlur: GraceSlur;
-  // Main notehead center in the host SVG's pixel space.
+  // Main notehead center in the host SVG's pixel space — the grace group's
+  // own anchor (head positions, ledger lines) and the slur's landing target
+  // when it bulges below (default). For a chord this is the reference note
+  // (staffYCoordinates[0]), not necessarily the lowest pitch.
   mainHeadCenterXPx: number;
   mainHeadCenterYPx: number;
+  // The chord's top (highest-pitch) note — same point as mainHeadCenterXPx/
+  // YPx for a single note. Used only as the slur's landing target when it
+  // bulges above (see buildGraceSlur): after arcing up and over, the curve
+  // should land on the nearest (top) notehead rather than travel back down
+  // past the other chord tones to reach the reference note.
+  mainTopNoteXPx: number;
+  mainTopNoteYPx: number;
   // Right edge available to the grace group — already left of the main
   // element's accidental footprint, including the grace-to-main gap.
   anchorRightXPx: number;
-  // When the main element displays an accidental the slur arcs above the
-  // heads instead of below, so it does not cross the accidental.
+  // Whether the main element displays an accidental. True flips the slur
+  // above the heads and anchors its grace-side start at the grace stem/beam
+  // tip instead of the notehead (more clearance altitude). The main-side
+  // endpoint's horizontal pullback (see buildGraceSlur) clears the
+  // accidental's actual rendered edge directly — not an approximated
+  // "footprint width" — so it's correct regardless of the accidental's
+  // type or how many other accidentals/columns the chord has.
   mainAccidentalShown: boolean;
   // Main note's own stem direction. Stem-down puts the main stem on the same
   // (left) side the slur approaches from, so the slur needs extra horizontal
@@ -84,6 +112,8 @@ export function createGraceNotesSvg({
   graceSlur,
   mainHeadCenterXPx,
   mainHeadCenterYPx,
+  mainTopNoteXPx,
+  mainTopNoteYPx,
   anchorRightXPx,
   mainAccidentalShown,
   mainStemUp,
@@ -116,6 +146,11 @@ export function createGraceNotesSvg({
     (headXCenter) => headXCenter + GRACE_STEM_X_FROM_HEAD_CENTER
   );
 
+  // Y of the first grace note's stem/beam tip — an alternate slur-start
+  // anchor to the notehead, used when the slur must bulge above to clear a
+  // main-element accidental (see buildGraceSlur).
+  let firstGraceStemTipY: number;
+
   if (isGroup) {
     for (let i = 0; i < graceNotes.length; i++) {
       group.appendChild(
@@ -130,6 +165,11 @@ export function createGraceNotesSvg({
     }
 
     const beamYs = computeGraceBeamYs(stemXs, headYCenters);
+    // The beam's topmost point, not just note 0's — on an ascending beam
+    // (pitch rising left to right) beamYs[0] is the beam's lowest point, so
+    // clearing only against it lets the slur graze the beam further along
+    // its rise.
+    firstGraceStemTipY = Math.min(...beamYs);
     for (let i = 0; i < graceNotes.length; i++) {
       const stem = document.createElementNS(SVG_NS, 'line');
       stem.classList.add('grace-stem');
@@ -185,13 +225,17 @@ export function createGraceNotesSvg({
       )
     );
 
+    // Grace notes are always stem-up, and a stem-up tip position doesn't
+    // move with flag count (extra flags stack down toward the head, not up
+    // past the tip), so this holds regardless of the grace duration's flag
+    // count.
+    const stemTipY = headYCenters[0] - GRACE_SCALE * BASE_STEM_LENGTH_PX;
+    firstGraceStemTipY = stemTipY;
+
     if (graceType === 'acciaccatura') {
-      // The slash crosses the flag (or bare stem) a little below the stem tip.
-      const flagCount = durationToFlagCountMap.get(writtenDuration) ?? 0;
-      const stemLengthPx = BASE_STEM_LENGTH_PX + flagStemExtensionPx(flagCount);
-      const stemTipY = headYCenters[0] - GRACE_SCALE * stemLengthPx;
+      // The slash crosses a little below the stem tip.
       group.appendChild(
-        buildSlash(stemXs[0] + 1.5, stemTipY + GRACE_SCALE * 8)
+        buildSlash(stemXs[0], stemTipY + GRACE_SLASH_TIP_INSET_PX)
       );
     }
   }
@@ -201,8 +245,11 @@ export function createGraceNotesSvg({
       buildGraceSlur(
         headXCenters[0],
         headYCenters[0],
+        firstGraceStemTipY,
         mainHeadCenterXPx,
         mainHeadCenterYPx,
+        mainTopNoteXPx,
+        mainTopNoteYPx,
         mainAccidentalShown,
         mainStemUp
       )
@@ -291,51 +338,111 @@ function buildSlash(crossingX: number, crossingY: number): SVGLineElement {
   return slash;
 }
 
-// The slur runs from the first grace notehead to the main notehead, below the
-// heads. It flips above when the main accidental would sit in its path.
+// The slur runs from the first grace note to a main-side target note. By
+// default (no main accidental) it goes below, notehead to notehead, landing
+// on the reference note (the chord's bottom note in a chord, or the only
+// note for a single note) — matching standard engraving practice. When the
+// main accidental would sit in its path, it flips above and its target
+// switches to the chord's *top* note instead: after arcing up and over, the
+// curve should land on the notehead nearest that side rather than travel
+// back down past the other chord tones to reach the reference note (which
+// is what a below-side target would force it to do). This also matches the
+// "slur leads to the pitch that resolves the ornament" engraving guidance.
+// The grace-side start also moves from the notehead to the grace note's
+// stem/beam tip in the above case — a higher "running start" altitude that
+// lets the curve clear a tall or far-reaching accidental without a
+// contorted shape.
+//
+// The main-side endpoint's *distance from its target notehead* stays the
+// same constant regardless of whether an accidental is shown, or how many
+// the chord has — it clears the accidental's actual rendered right edge
+// directly (see accidentalClearanceX below), not an approximated
+// "footprint width" tied to the accidental's own size or column depth. That
+// alone is provably sufficient to keep the curve clear of the symbol: since
+// createCurveSvg's control point X is always the exact midpoint of the two
+// endpoints, the quadratic Bezier's X-component collapses to pure linear
+// interpolation between them (the bulge only ever moves Y, never X) — so a
+// `to.x` right of the accidental's right edge (i.e. past it, toward the
+// notehead) keeps *every* point on the curve clear of it, no matter how
+// tall the arc is.
 //
 // Both ends are anchored past their nearest stem (not just the notehead), so
-// the curve — whose X moves strictly monotonically from `from.x` to `to.x`,
-// since createCurveSvg's control point uses the exact X midpoint — never
-// crosses a stem: the grace stem sits right of the grace head (grace notes
-// are always stem-up), so `from.x` is pushed right of it; the main stem only
-// sits on the slur's approach side (left of its head) when the main note is
-// stem-down, and only threatens the curve when it also spans downward from
-// the head center (the same side as a 'below' bulge) — so `to.x` is pushed
-// left of the stem only for that one dangerous combination.
+// the curve never crosses a stem: the grace stem sits right of the grace
+// head (grace notes are always stem-up), so `from.x` is pushed right of it;
+// the main stem only sits on the slur's approach side (left of its head)
+// when the main note is stem-down, and only threatens the curve when it
+// also spans downward from the head center (the same side as a 'below'
+// bulge) — so `to.x` is pushed left of the stem only for that one
+// dangerous combination.
 function buildGraceSlur(
   firstGraceHeadX: number,
   firstGraceHeadY: number,
+  firstGraceStemTipY: number,
   mainHeadCenterXPx: number,
   mainHeadCenterYPx: number,
-  mainAccidentalShown: boolean,
+  mainTopNoteXPx: number,
+  mainTopNoteYPx: number,
+  accidentalShown: boolean,
   mainStemUp: boolean
 ): SVGGElement {
-  const bulge = mainAccidentalShown ? 'above' : 'below';
-  const direction = mainAccidentalShown ? -1 : 1;
+  const bulge = accidentalShown ? 'above' : 'below';
+  const direction = accidentalShown ? -1 : 1;
+  const targetXPx = accidentalShown ? mainTopNoteXPx : mainHeadCenterXPx;
+  const targetYPx = accidentalShown ? mainTopNoteYPx : mainHeadCenterYPx;
   const graceHeadRy = GRACE_SCALE * NOTE_HEAD_RADIUS_PX * 0.75;
   const mainHeadRy = NOTE_HEAD_RADIUS_PX * 0.75;
-  const mainStemInApproachPath = !mainStemUp && !mainAccidentalShown;
+  const mainStemInApproachPath = !mainStemUp && !accidentalShown;
   // Always clear the notehead ellipse; additionally clear the stem's own
   // offset when it sits in the curve's approach path (stem-down, no
-  // accidental) — whichever pullback is larger wins.
+  // accidental), or the shown accidental's own rendered edge — whichever
+  // pullback is larger wins.
   const headClearanceX = NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX;
   const stemClearanceX = mainStemInApproachPath
     ? MAIN_STEM_X_FROM_HEAD_CENTER + SLUR_STEM_CLEARANCE_PX
     : 0;
-  const toX = mainHeadCenterXPx - Math.max(headClearanceX, stemClearanceX);
+  // A shown accidental's *nearest* column (the one closest to the notehead)
+  // always renders with its right edge at exactly -ACCIDENTAL_NOTE_GAP in
+  // the chord/note's own local space — both note.ts's single-accidental
+  // placement (`x = -(width + GAP)`) and accidentalRules.ts's chord-column
+  // placement (column 0's `xOffset = -(0 + width)`, rendered `x = xOffset -
+  // GAP`) reduce to the same `right edge = x + width = -GAP` once the width
+  // term cancels out — independent of the accidental's type/width, and of
+  // how many further (always further-left, never closer) columns the chord
+  // has. So clearing it needs no width/column data at all, only whether an
+  // accidental is shown. This fixes a prior bug: using the *aggregate*
+  // column width (correct for reserving the grace group's own layout space,
+  // wrong here) under-cleared multi-column chords, since the outermost
+  // column's width doesn't predict the nearest column's edge.
+  const accidentalClearanceX = accidentalShown
+    ? targetXPx + ACCIDENTAL_NOTE_GAP - SLUR_HEAD_CLEARANCE_PX
+    : 0;
+  const toX =
+    targetXPx - Math.max(headClearanceX, stemClearanceX, accidentalClearanceX);
+  const fromY = accidentalShown
+    ? firstGraceStemTipY + direction * SLUR_STEM_TIP_CLEARANCE_PX
+    : firstGraceHeadY + direction * (graceHeadRy + SLUR_HEAD_CLEARANCE_PX);
+  const toY = targetYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX);
+  // The default bulge assumes endpoints close to their noteheads; an
+  // accidental can push `toY` far past that, so grow the bulge to keep the
+  // curve's control point beyond both endpoints instead of dipping back
+  // toward the notehead it was supposed to clear.
+  const bulgeHeight = Math.max(
+    DEFAULT_BULGE_HEIGHT,
+    Math.abs(fromY - toY) / 2 + SLUR_HEAD_CLEARANCE_PX
+  );
   const slur = createCurveSvg({
     from: {
       x:
         firstGraceHeadX +
         GRACE_STEM_X_FROM_HEAD_CENTER +
         SLUR_STEM_CLEARANCE_PX,
-      y: firstGraceHeadY + direction * (graceHeadRy + SLUR_HEAD_CLEARANCE_PX),
+      y: fromY,
     },
     to: {
       x: toX,
-      y: mainHeadCenterYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX),
+      y: toY,
     },
+    bulgeHeight,
     bulge,
   });
   slur.classList.add('grace-slur');
