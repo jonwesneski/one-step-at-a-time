@@ -37,6 +37,7 @@ import {
   parseGraceSlur,
   parseGraceType,
   parseStress,
+  stemUpTipYPx,
 } from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES, STAFF_TAGS } from '../utils/consts';
 
@@ -568,6 +569,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.duration,
         this.#noFlags
       );
+      // Only used for a descending grace group's stem-tip slur anchoring
+      // (see buildGraceSlur) — the real stem tip when this note is
+      // stem-up, or the notehead itself when stem-down (no stem to
+      // project to). Unused (and harmless to compute) otherwise.
+      const mainSlurTargetXPx = cx * NOTE_SCALE;
+      const mainSlurTargetYPx = this.#stemUp
+        ? stemUpTipYPx(this.#stemExtension)
+        : cy * NOTE_SCALE;
       const graceGroup = createGraceNotesSvg({
         graceNotes,
         graceType: this.graceType,
@@ -578,6 +587,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // A single note has no top/bottom distinction — same point either way.
         mainTopNoteXPx: cx * NOTE_SCALE,
         mainTopNoteYPx: cy * NOTE_SCALE,
+        mainSlurTargetXPx,
+        mainSlurTargetYPx,
         anchorRightXPx: -accidentalFootprint - GRACE_MAIN_GAP_PX,
         mainAccidentalShown: accidental !== undefined,
         mainStemUp: this.#stemUp,

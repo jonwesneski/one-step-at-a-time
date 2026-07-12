@@ -91,6 +91,14 @@ export type GraceNotesProps = {
   // past the other chord tones to reach the reference note.
   mainTopNoteXPx: number;
   mainTopNoteYPx: number;
+  // The slur's landing point when the grace group is descending (see
+  // buildGraceSlur's descending-group branch) — the main note/chord's real
+  // stem tip when stem-up, or its notehead/top-note when stem-down (no
+  // stem to project to in that case). Unused for every other case
+  // (single-note or ascending-group default, accidental-shown case), which
+  // keep landing on mainHeadCenterXPx/YPx or mainTopNoteXPx/YPx as before.
+  mainSlurTargetXPx: number;
+  mainSlurTargetYPx: number;
   // Right edge available to the grace group — already left of the main
   // element's accidental footprint, including the grace-to-main gap.
   anchorRightXPx: number;
@@ -120,6 +128,8 @@ export function createGraceNotesSvg({
   mainHeadCenterYPx,
   mainTopNoteXPx,
   mainTopNoteYPx,
+  mainSlurTargetXPx,
+  mainSlurTargetYPx,
   anchorRightXPx,
   mainAccidentalShown,
   mainStemUp,
@@ -273,6 +283,11 @@ export function createGraceNotesSvg({
   }
 
   if (graceSlur === 'auto') {
+    // Same first-vs-last comparison as computeGraceBeamYs' own slant — Y
+    // grows downward, so a smaller first head Y means the group's pitch
+    // trends downward (descending) left to right.
+    const isDescendingGroup =
+      headYCenters[0] < headYCenters[headYCenters.length - 1];
     group.appendChild(
       buildGraceSlur(
         headXCenters[0],
@@ -282,8 +297,11 @@ export function createGraceNotesSvg({
         mainHeadCenterYPx,
         mainTopNoteXPx,
         mainTopNoteYPx,
+        mainSlurTargetXPx,
+        mainSlurTargetYPx,
         mainAccidentalShown,
-        mainStemUp
+        mainStemUp,
+        isDescendingGroup
       )
     );
   }
@@ -450,6 +468,25 @@ function buildSlash(crossingX: number, crossingY: number): SVGLineElement {
 // also spans downward from the head center (the same side as a 'below'
 // bulge) — so `to.x` is pushed left of the stem only for that one
 // dangerous combination.
+//
+// A descending grace group (first note higher than the last — the same
+// first-vs-last comparison the group's own beam slant already uses, see
+// computeGraceBeamYs in graceRules.ts) also bulges above, but for a
+// different reason and with a different anchor than the accidental case:
+// a below-bulge's endpoints trend downward across a descending run, so the
+// belly (and every interior note along that downward line) would sit
+// inside or near the arc. Landing both ends at genuine stem tips
+// (mainSlurTargetYPx, resolved by the caller — the real stem tip when
+// stem-up, or the highest notehead when stem-down, since no stem is
+// projected then) instead of noteheads guarantees the curve stays above
+// every note in the group, rather than only reducing the chance of a
+// collision the way a taller-but-still-notehead-anchored bulge would.
+// This is orthogonal to the accidental case: accidental clearance always
+// governs the *horizontal* target/pullback (never intersect the
+// accidental, no matter what), while isDescendingGroup only changes the
+// *vertical* anchor style — so when both are true, the slur still lands on
+// the top note horizontally (clearing the accidental), just anchored at
+// that note's stem tip instead of its notehead.
 function buildGraceSlur(
   firstGraceHeadX: number,
   firstGraceHeadY: number,
@@ -458,13 +495,37 @@ function buildGraceSlur(
   mainHeadCenterYPx: number,
   mainTopNoteXPx: number,
   mainTopNoteYPx: number,
+  // Resolved by the caller per its own stem-up/down state — see
+  // GraceNotesProps. Only consulted when isDescendingGroup is true.
+  mainSlurTargetXPx: number,
+  mainSlurTargetYPx: number,
   accidentalShown: boolean,
-  mainStemUp: boolean
+  mainStemUp: boolean,
+  isDescendingGroup: boolean
 ): SVGGElement {
-  const bulge = accidentalShown ? 'above' : 'below';
-  const direction = accidentalShown ? -1 : 1;
-  const targetXPx = accidentalShown ? mainTopNoteXPx : mainHeadCenterXPx;
-  const targetYPx = accidentalShown ? mainTopNoteYPx : mainHeadCenterYPx;
+  const bulgeAbove = accidentalShown || isDescendingGroup;
+  const bulge = bulgeAbove ? 'above' : 'below';
+  const direction = bulgeAbove ? -1 : 1;
+  // Horizontal target: accidental clearance always wins when shown,
+  // regardless of isDescendingGroup — the slur must clear the accidental's
+  // actual rendered edge no matter what (see toX below). Otherwise, a
+  // descending group lands on the real stem X (mainSlurTargetXPx — for a
+  // chord this may differ from the reference note's own head X, since the
+  // stem can sit at a displaced position); a plain ascending/single-note
+  // group keeps landing on the reference note's head X as before.
+  const targetXPx = accidentalShown
+    ? mainTopNoteXPx
+    : isDescendingGroup
+    ? mainSlurTargetXPx
+    : mainHeadCenterXPx;
+  // Vertical target: a descending group lands on the real stem tip (or
+  // highest notehead) instead of a plain notehead — independent of
+  // accidentalShown, which only picked the top-vs-reference note above.
+  const targetYPx = isDescendingGroup
+    ? mainSlurTargetYPx
+    : accidentalShown
+    ? mainTopNoteYPx
+    : mainHeadCenterYPx;
   const graceHeadRy = GRACE_SCALE * NOTE_HEAD_RADIUS_PX * 0.75;
   const mainHeadRy = NOTE_HEAD_RADIUS_PX * 0.75;
   const mainStemInApproachPath = !mainStemUp && !accidentalShown;
@@ -494,14 +555,27 @@ function buildGraceSlur(
     : 0;
   const toX =
     targetXPx - Math.max(headClearanceX, stemClearanceX, accidentalClearanceX);
-  const fromY = accidentalShown
-    ? firstGraceStemTipY + direction * SLUR_STEM_TIP_CLEARANCE_PX
-    : firstGraceHeadY + direction * (graceHeadRy + SLUR_HEAD_CLEARANCE_PX);
-  const toY = targetYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX);
+  // Grace-side start: a descending group always starts at the grace stem
+  // tip (structurally clears every interior grace head, which a
+  // notehead-anchored start cannot guarantee); the accidental case's
+  // existing running-start also uses the stem tip; otherwise the notehead.
+  const fromY =
+    isDescendingGroup || accidentalShown
+      ? firstGraceStemTipY + direction * SLUR_STEM_TIP_CLEARANCE_PX
+      : firstGraceHeadY + direction * (graceHeadRy + SLUR_HEAD_CLEARANCE_PX);
+  // Main-side landing: a descending group's targetYPx is already a stem
+  // tip/highest-notehead (mainSlurTargetYPx), which needs the same
+  // stem-tip-style margin as the grace side rather than a notehead-ellipse
+  // margin; the other two cases land on an actual notehead and need the
+  // full head-radius clearance.
+  const toY = isDescendingGroup
+    ? targetYPx + direction * SLUR_STEM_TIP_CLEARANCE_PX
+    : targetYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX);
   // The default bulge assumes endpoints close to their noteheads; an
-  // accidental can push `toY` far past that, so grow the bulge to keep the
-  // curve's control point beyond both endpoints instead of dipping back
-  // toward the notehead it was supposed to clear.
+  // accidental (or a descending group's taller stem-tip anchors) can push
+  // fromY/toY far past that, so grow the bulge to keep the curve's control
+  // point beyond both endpoints instead of dipping back toward whatever it
+  // was supposed to clear.
   const bulgeHeight = Math.max(
     DEFAULT_BULGE_HEIGHT,
     Math.abs(fromY - toY) / 2 + SLUR_HEAD_CLEARANCE_PX

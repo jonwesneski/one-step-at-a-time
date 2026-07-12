@@ -15,6 +15,7 @@ import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
+  BASE_STEM_LENGTH_PX,
   GRACE_MAIN_GAP_PX,
   STAFF_Y_PADDING,
 } from '../notationDimensions';
@@ -25,6 +26,7 @@ import {
   createNoteSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
+  NOTE_STEM_X_OFFSET,
   noteHeadCenter,
   type NoteProps,
 } from './note';
@@ -186,6 +188,25 @@ export const createChordSvg = ({
       0,
       ...displacements.map((displacement) => -displacement.xOffset)
     );
+    // Only used for a descending grace group's stem-tip slur anchoring (see
+    // buildGraceSlur): when the chord is stem-up, its real rendered stem
+    // tip (reusing the same stem X and chordSpread/stemExtension geometry
+    // the chord's own stem uses above, lines ~66-97); when stem-down, the
+    // chord's top note instead (no stem is projected in that case).
+    // Unused (and harmless to compute) otherwise.
+    const bottomNoteHeadCenterYPx =
+      STAFF_Y_PADDING +
+      Math.max(...staffYCoordinates) -
+      NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const effectiveStemExtension = noFlags
+      ? stemExtension
+      : Math.max(stemExtension, chordSpread);
+    const mainSlurTargetXPx = stemUp
+      ? NOTE_STEM_X_OFFSET + extremalXOffset
+      : topNoteHeadCenterXPx;
+    const mainSlurTargetYPx = stemUp
+      ? bottomNoteHeadCenterYPx - BASE_STEM_LENGTH_PX - effectiveStemExtension
+      : topNoteHeadCenterYPx;
     const graceGroup = createGraceNotesSvg({
       graceNotes,
       graceType,
@@ -195,6 +216,8 @@ export const createChordSvg = ({
       mainHeadCenterYPx: referenceHeadCenterYPx,
       mainTopNoteXPx: topNoteHeadCenterXPx,
       mainTopNoteYPx: topNoteHeadCenterYPx,
+      mainSlurTargetXPx,
+      mainSlurTargetYPx,
       anchorRightXPx:
         -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement) -
         GRACE_MAIN_GAP_PX,

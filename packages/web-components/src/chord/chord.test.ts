@@ -474,6 +474,70 @@ describe(MUSIC_CHORD, () => {
       expect(chordElement.shadowRoot?.querySelector('.grace-notes')).toBeNull();
     });
 
+    it('arcs the slur above every grace head when the group descends in pitch', () => {
+      // grace="F,E" into a chord referencing C4 — the group's pitch trends
+      // downward (first note F higher than last note E). Mirrors the
+      // note-level regression: stem-tip anchoring must keep the curve
+      // above every grace head, not just the two slur endpoints.
+      const chordElement = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'F,E',
+        '4,4'
+      );
+
+      const graceGroup = chordElement.shadowRoot?.querySelector('.grace-notes');
+      const heads = Array.from(
+        graceGroup?.querySelectorAll('.grace-head') ?? []
+      );
+      const d =
+        chordElement.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      const [, , , controlY] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+
+      const parseTranslate = (transform: string): [number, number] => {
+        const match = transform.match(
+          /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/
+        );
+        return match ? [Number(match[1]), Number(match[2])] : [0, 0];
+      };
+      const parseScale = (transform: string): number => {
+        const match = transform.match(/scale\(\s*(-?[\d.]+)/);
+        return match ? Number(match[1]) : 1;
+      };
+      const trueCenter = (
+        element: Element,
+        root: Element,
+        localX: number,
+        localY: number
+      ): [number, number] => {
+        let x = localX;
+        let y = localY;
+        let node: Element | null = element;
+        while (node !== null && node !== root) {
+          const transform = node.getAttribute('transform');
+          if (transform !== null) {
+            const scale = parseScale(transform);
+            const [translateX, translateY] = parseTranslate(transform);
+            x = translateX + scale * x;
+            y = translateY + scale * y;
+          }
+          node = node.parentElement;
+        }
+        return [x, y];
+      };
+
+      for (const head of heads) {
+        const cx = Number(head.getAttribute('cx'));
+        const cy = Number(head.getAttribute('cy'));
+        const [, y] = trueCenter(head, graceGroup as Element, cx, cy);
+        expect(controlY).toBeLessThan(y);
+      }
+    });
+
     describe('grace articulation', () => {
       it('round-trips the grace-articulation attribute between property and attribute', () => {
         const chordElement = makeChordWithNotes([

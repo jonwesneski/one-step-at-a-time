@@ -344,3 +344,13 @@ export function noteHeadCenter(
     cy: stemUp ? yStemEnd : HEAD_WIDTH,
   };
 }
+
+// Pixel Y of where a stem-up tip would sit, regardless of the note's actual
+// stem direction — per createNoteSvg's own stem geometry, a stem-up tip is
+// at NOTE_Y_STEM_START minus any external stemExtension (no flag-count
+// dependency: extra flags on a stem-up note extend the *head* end of the
+// stem, not the tip — see createNoteSvg's stemY1/stemY2). Used only by the
+// grace slur's descending-group stem-tip anchoring (see buildGraceSlur).
+export function stemUpTipYPx(stemExtension = 0): number {
+  return NOTE_STEM_TIP_Y_OFFSET - stemExtension;
+}

@@ -699,6 +699,127 @@ describe('grace notes', () => {
     expect(stemDownAccidentalEnd).toBeLessThanOrEqual(stemDownEnd);
   });
 
+  describe('descending grace group (stem-tip slur anchoring)', () => {
+    // Reconstructs the true rendered center of an SVG element bearing a
+    // local (cx, cy) by composing every ancestor translate+scale transform
+    // up to (not including) `root` — a generic transform-chain walk, not a
+    // reimplementation of any layout formula, so it stays honest as a check
+    // against buildGraceSlur's own math (rotate is ignored: rotating about
+    // a point never moves that point).
+    const parseTranslate = (transform: string): [number, number] => {
+      const match = transform.match(
+        /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/
+      );
+      return match ? [Number(match[1]), Number(match[2])] : [0, 0];
+    };
+    const parseScale = (transform: string): number => {
+      const match = transform.match(/scale\(\s*(-?[\d.]+)/);
+      return match ? Number(match[1]) : 1;
+    };
+    const trueCenter = (
+      element: Element,
+      root: Element,
+      localX: number,
+      localY: number
+    ): [number, number] => {
+      let x = localX;
+      let y = localY;
+      let node: Element | null = element;
+      while (node !== null && node !== root) {
+        const transform = node.getAttribute('transform');
+        if (transform !== null) {
+          const scale = parseScale(transform);
+          const [translateX, translateY] = parseTranslate(transform);
+          x = translateX + scale * x;
+          y = translateY + scale * y;
+        }
+        node = node.parentElement;
+      }
+      return [x, y];
+    };
+    const slurPathD = (element: NoteElementType): string =>
+      element.shadowRoot
+        ?.querySelector('.grace-slur path')
+        ?.getAttribute('d') ?? '';
+
+    it('arcs the slur above every grace head when the group descends in pitch, stem-up main note', () => {
+      // grace="F,E" before main note G4 — the group's pitch trends downward
+      // (first note F higher than last note E). This exact case previously
+      // let the slur cross the second grace note's head; stem-tip anchoring
+      // guarantees the curve stays above every head, not just the two
+      // slur endpoints.
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'G' satisfies Note);
+      noteElement.setAttribute('octave', '4');
+      noteElement.setAttribute('grace', 'F,E');
+      noteElement.setAttribute('grace-octave', '4,4');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      const heads = Array.from(
+        graceGroup?.querySelectorAll('.grace-head') ?? []
+      );
+      const d = slurPathD(noteElement);
+      const [, , , controlY] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+
+      for (const head of heads) {
+        const cx = Number(head.getAttribute('cx'));
+        const cy = Number(head.getAttribute('cy'));
+        const [, y] = trueCenter(head, graceGroup as Element, cx, cy);
+        expect(controlY).toBeLessThan(y - SLUR_HEAD_CLEARANCE_PX);
+      }
+    });
+
+    it('keeps the slur below the heads when the grace group ascends in pitch (no change from default)', () => {
+      // grace="A,B" before main note C5: pitch trends upward (A lower than
+      // B) — confirms the descending-only rule doesn't affect this case.
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'A,B');
+      noteElement.setAttribute('grace-octave', '4,4');
+      document.body.appendChild(noteElement);
+
+      const d = slurPathD(noteElement);
+      const points = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+      expect(points[3]).toBeGreaterThan(Math.max(points[1], points[5]));
+    });
+
+    it('anchors both ends of the descending-group slur at stem tips, not noteheads', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'G' satisfies Note);
+      noteElement.setAttribute('octave', '4');
+      noteElement.setAttribute('grace', 'F,E');
+      noteElement.setAttribute('grace-octave', '4,4');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      const firstHead = graceGroup?.querySelector('.grace-head');
+      const mainHead = noteElement.shadowRoot?.querySelector('.head');
+      if (firstHead === null || firstHead === undefined) {
+        throw new Error('expected a first grace head');
+      }
+      const firstHeadCx = Number(firstHead.getAttribute('cx'));
+      const firstHeadCy = Number(firstHead.getAttribute('cy'));
+      const [, firstHeadY] = trueCenter(
+        firstHead,
+        graceGroup as Element,
+        firstHeadCx,
+        firstHeadCy
+      );
+      const mainHeadY = Number(mainHead?.getAttribute('cy')) * NOTE_SCALE;
+
+      const d = slurPathD(noteElement);
+      const [, fromY, , , , toY] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+
+      // Both endpoints sit well above (smaller Y than) their own note's
+      // head center — a notehead-anchored slur would sit close to the
+      // head's own Y instead.
+      expect(fromY).toBeLessThan(firstHeadY - SLUR_HEAD_CLEARANCE_PX);
+      expect(toY).toBeLessThan(mainHeadY - SLUR_HEAD_CLEARANCE_PX);
+    });
+  });
+
   describe('grace articulation', () => {
     it('round-trips the grace-articulation attribute between property and attribute', () => {
       const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
