@@ -181,7 +181,7 @@ Features land in one of two shapes; steps are tagged accordingly:
     `#resolveInheritedValue` calls, and the descendant push loop in `composition.ts`.
 14. `[A][B]` **Stories (near-universal)** — add/extend colocated `<component>.stories.ts`
     (Type A → `note.stories.ts`; Type B → `staffTreble` / `composition` stories), using option
-    arrays from `../utils` and strong types from `../types/theory`.
+    arrays from `../utils` and strong types from `../types/theory`. For both Type A and Type B see if you can extend an existing story rather than making more new stories. If the feature is small like adding 1 or 2 attributes and their total number of possible values are small consider extending existing stories; otherwise you can plan for new stories
 15. `[A][B]` **Tests (near-universal; tiers are conditional)** — Type A: `note.test.ts` +
     `chord.test.ts`. Type B: new `rules/<feature>Rules.test.ts` + `staffClassicalBase.test.ts`.
     Add a `*.browser-test.ts` **only when** layout/geometry/resize is involved.
