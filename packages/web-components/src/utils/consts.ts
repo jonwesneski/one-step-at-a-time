@@ -2,10 +2,14 @@ import type {
   ArticulationType,
   DurationType,
   DynamicMarking,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
   Mode,
   Note,
   Octave,
   StressType,
+  TimeSignature,
   Voice,
 } from '../types/theory';
 
@@ -24,6 +28,13 @@ export const MUSIC_STAFF_BASS = 'music-staff-bass';
 export const MUSIC_STAFF_GUITAR_TAB = 'music-staff-guitar-tab';
 export const MUSIC_STAFF_VOCAL = 'music-staff-vocal';
 export const MUSIC_LYRICS = 'music-lyrics';
+
+export const STAFF_TAGS = [
+  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF_BASS,
+  MUSIC_STAFF_GUITAR_TAB,
+  MUSIC_STAFF_VOCAL,
+].join(', ');
 
 // Uppercase variants for nodeName comparisons (DOM nodeName is always uppercase)
 export const MUSIC_NOTE_NODE = MUSIC_NOTE.toUpperCase();
@@ -109,6 +120,17 @@ export const OCTAVES: Octave[] = [2, 3, 4, 5, 6];
 
 export const MODES: Mode[] = ['major', 'minor'];
 
+export const TIMES: TimeSignature[] = [
+  '4/4',
+  '3/4',
+  '2/4',
+  '6/8',
+  '12/8',
+  '9/8',
+  '5/4',
+  '7/4',
+];
+
 export const VOICES: Voice[] = [
   'soprano',
   'mezzo',
@@ -162,3 +184,16 @@ export const ARTICULATIONS: ArticulationType[] = [
 ];
 
 export const STRESSES: StressType[] = ['stressed', 'unstressed'];
+
+export const GRACE_TYPES: GraceType[] = ['acciaccatura', 'appoggiatura'];
+
+export const GRACE_DURATIONS: GraceDuration[] = [
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtysecond',
+  'sixtyfourth',
+];
+
+export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];

@@ -5,6 +5,9 @@ import type {
   Chord,
   DurationType,
   DynamicMarking,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
   HairpinRole,
   Mode,
   Note,
@@ -80,6 +83,19 @@ declare module 'react' {
         diminuendo?: HairpinRole;
         articulation?: ArticulationType;
         stress?: StressType;
+        // Comma-separated grace note letters, e.g. "F#,G"
+        grace?: string;
+        // Comma-separated grace octaves, aligned by index with `grace`.
+        // Omitted or missing slots default to the host element's own octave.
+        'grace-octave'?: string;
+        // Comma-separated per-grace-note articulation, aligned by index with
+        // `grace`. Omitted or missing slots mean no mark for that grace note.
+        'grace-articulation'?: string;
+        'grace-type'?: GraceType;
+        'grace-duration'?: GraceDuration;
+        'grace-slur'?: GraceSlur;
+        // A single dynamic for the whole grace group, independent of `dynamic`.
+        'grace-dynamic'?: DynamicMarking;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;
@@ -96,6 +112,19 @@ declare module 'react' {
         diminuendo?: HairpinRole;
         articulation?: ArticulationType;
         stress?: StressType;
+        // Comma-separated grace note letters, e.g. "F#,G"
+        grace?: string;
+        // Comma-separated grace octaves, aligned by index with `grace`.
+        // Omitted or missing slots default to the host element's own octave.
+        'grace-octave'?: string;
+        // Comma-separated per-grace-note articulation, aligned by index with
+        // `grace`. Omitted or missing slots mean no mark for that grace note.
+        'grace-articulation'?: string;
+        'grace-type'?: GraceType;
+        'grace-duration'?: GraceDuration;
+        'grace-slur'?: GraceSlur;
+        // A single dynamic for the whole grace group, independent of `dynamic`.
+        'grace-dynamic'?: DynamicMarking;
         onClick?: (e: MouseEvent) => void;
         onPointerDown?: (e: PointerEvent) => void;
         onPointerUp?: (e: PointerEvent) => void;

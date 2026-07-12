@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import { DYNAMICS, MODES } from '../utils';
+import { DYNAMICS, MODES, NOTES, TIMES } from '../utils';
 
 const HAIRPIN_ROLES = ['start', 'end'] as const;
 
@@ -23,30 +23,15 @@ const meta: Meta = {
   argTypes: {
     keySig: {
       control: 'select',
-      options: [
-        'C',
-        'G',
-        'D',
-        'A',
-        'E',
-        'B',
-        'F#',
-        'C#',
-        'F',
-        'Bb',
-        'Eb',
-        'Ab',
-        'Db',
-        'Gb',
-        'Cb',
-      ],
+      options: NOTES,
     },
     mode: {
       control: 'radio',
       options: MODES,
     },
     time: {
-      control: 'text',
+      control: 'select',
+      options: TIMES,
     },
   },
   args: {
@@ -83,26 +68,6 @@ export const WithBeamedEighthNotes: Story = {
   `,
 };
 
-export const WithChords: Story = {
-  args: { keySig: 'C', mode: 'major', time: '4/4' },
-  render: (args) => html`
-    <music-staff-treble
-      keySig=${args.keySig}
-      mode=${args.mode}
-      time=${args.time}
-    >
-      <music-chord duration="quarter">
-        <music-note note="C" duration="quarter"></music-note>
-        <music-note note="E" duration="quarter"></music-note>
-        <music-note note="G" duration="quarter"></music-note>
-      </music-chord>
-      <music-note note="E" duration="quarter"></music-note>
-      <music-note note="F" duration="quarter"></music-note>
-      <music-note note="G" duration="quarter"></music-note>
-    </music-staff-treble>
-  `,
-};
-
 export const ThreeQuarterTime: Story = {
   args: { keySig: 'C', mode: 'major', time: '3/4' },
   render: (args) => html`
@@ -119,13 +84,9 @@ export const ThreeQuarterTime: Story = {
 };
 
 export const WithLedgerLines: Story = {
-  args: { keySig: 'C', mode: 'major', time: '6/4' },
+  args: { keySig: 'C', mode: 'major' },
   render: (args) => html`
-    <music-staff-treble
-      keySig=${args.keySig}
-      mode=${args.mode}
-      time=${args.time}
-    >
+    <music-staff-treble keySig=${args.keySig} mode=${args.mode} time="6/4">
       <music-note note="A" octave="5" duration="quarter"></music-note>
       <music-note note="C" octave="6" duration="quarter"></music-note>
       <music-note note="D" octave="4" duration="quarter"></music-note>

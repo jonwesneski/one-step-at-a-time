@@ -1,7 +1,9 @@
+export { createAccidentalSvg } from './accidental';
 export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';
+export { createGraceNotesSvg, type GraceNotesProps } from './graceNotes';
 export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export {
@@ -23,9 +25,12 @@ export {
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  NOTE_SCALE,
   noteHeadCenter,
+  NOTE_STEM_X_OFFSET,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
+  stemUpTipYPx,
 } from './note';
 export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
 export { createSharpSvg } from './sharp';

@@ -11,6 +11,7 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF_TREBLE,
 } from '../utils/consts';
+import { NOTE_SCALE } from '../utils/svgCreator/note';
 import './index';
 
 afterEach(() => {
@@ -182,6 +183,474 @@ describe(MUSIC_CHORD, () => {
 
       const values: Note[] = el.notes.map((n: { value: Note }) => n.value);
       expect(values).toEqual(['C', 'E']);
+    });
+  });
+
+  describe('grace notes', () => {
+    function makeChordWithNotes(
+      values: [Note, Octave][],
+      grace?: string,
+      graceOctave?: string,
+      graceArticulation?: string
+    ): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      for (const [value, octave] of values) {
+        const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+        note.setAttribute('note', value);
+        note.setAttribute('octave', `${octave}`);
+        chordElement.appendChild(note);
+      }
+      if (grace !== undefined) {
+        chordElement.setAttribute('grace', grace);
+      }
+      if (graceOctave !== undefined) {
+        chordElement.setAttribute('grace-octave', graceOctave);
+      }
+      if (graceArticulation !== undefined) {
+        chordElement.setAttribute('grace-articulation', graceArticulation);
+      }
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips the grace attributes between property and attribute', () => {
+      const chordElement = makeChordWithNotes([
+        ['C', 4],
+        ['E', 4],
+      ]);
+
+      chordElement.grace = ['D', 'E'];
+      chordElement.graceOctave = [4, 4];
+      chordElement.graceType = 'appoggiatura';
+
+      expect(chordElement.getAttribute('grace')).toBe('D,E');
+      expect(chordElement.grace).toEqual(['D', 'E']);
+      expect(chordElement.getAttribute('grace-octave')).toBe('4,4');
+      expect(chordElement.graceOctave).toEqual([4, 4]);
+      expect(chordElement.graceType).toBe('appoggiatura');
+      expect(chordElement.graceSlur).toBe('auto');
+      expect(chordElement.graceDuration).toBeNull();
+    });
+
+    it('renders grace notes on a standalone chord', () => {
+      const chordElement = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+          ['G', 4],
+        ],
+        'B,C',
+        '3,4'
+      );
+
+      const graceGroup = chordElement.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup).not.toBeNull();
+      expect(graceGroup?.querySelectorAll('.grace-head')).toHaveLength(2);
+      expect(graceGroup?.querySelectorAll('.grace-beam')).toHaveLength(2);
+      expect(graceGroup?.querySelector('.grace-slash')).not.toBeNull();
+      expect(graceGroup?.querySelector('.grace-slur')).not.toBeNull();
+    });
+
+    it('routes the grace slur clear of the reference note accidental horizontally, without growing its gap to the notehead', () => {
+      const endPoint = (element: ChordElementType): number[] => {
+        const d =
+          element.shadowRoot
+            ?.querySelector('.grace-slur path')
+            ?.getAttribute('d') ?? '';
+        const [, , , , endX, endY] =
+          d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return [endX, endY];
+      };
+
+      const withAccidental = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+        ],
+        'B',
+        '4'
+      );
+      const plain = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'B',
+        '4'
+      );
+
+      const [endXWithAccidental, endYWithAccidental] = endPoint(withAccidental);
+      const headCxAttr = Number(
+        withAccidental.shadowRoot?.querySelector('.head')?.getAttribute('cx')
+      );
+      // Every note in a chord shares the same internal (undisplaced) head
+      // cx/cy — chord.ts renders them all with the same duration/stemUp —
+      // so querying any one '.head' gives the right X regardless of which
+      // note the slur targets (per-note X differences come only from a
+      // wrapper <svg x=...> offset for adjacent-note displacement, which
+      // these thirds-apart test chords never trigger).
+      const mainHeadCenterX = headCxAttr * NOTE_SCALE;
+      // Standalone chords resolve Y from the same C6..C4 note-name map as an
+      // in-staff treble chord (accidentals don't move a note's staff line).
+      // mainHeadCenterY = STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION
+      // withAccidental=[C#4(80),E4(70)]: bulge above targets the top note,
+      // E4. plain=[C4(80),E4(70)]: bulge below targets the reference
+      // (bottom/index-0) note, C4.
+      const mainHeadCenterYWithAccidental = 8 + 70 - 10;
+      const mainHeadCenterYPlain = 8 + 80 - 10;
+      // A sharp is 10px wide (ACCIDENTAL_SYMBOL_WIDTH), sat ACCIDENTAL_NOTE_GAP
+      // (-7px, i.e. overlapping) left of the head center.
+      const accidentalLeftEdgeX = mainHeadCenterX - (10 + -7);
+
+      // Clears the accidental horizontally...
+      expect(endXWithAccidental).toBeLessThan(accidentalLeftEdgeX);
+
+      // ...and the endpoint's distance to its target notehead is the same
+      // constant whether or not an accidental is shown (only which note it
+      // targets, and the horizontal pullback, differ).
+      const [, endYPlain] = endPoint(plain);
+      const gapWithAccidental = Math.abs(
+        mainHeadCenterYWithAccidental - endYWithAccidental
+      );
+      const gapPlain = Math.abs(mainHeadCenterYPlain - endYPlain);
+      expect(gapWithAccidental).toBeCloseTo(gapPlain, 5);
+    });
+
+    it('keeps the slur-to-notehead gap constant regardless of which chord note the accidental sits on', () => {
+      // Accidental sits only on G#4 (index 2), not the reference note C4
+      // (index 0) — C4=80, G4=60, 20px of staffY apart. Both cases bulge
+      // above (an accidental is shown either way) and target their own top
+      // note: E4(70) for the 2-note chord, G#4(60) for the 3-note chord.
+      const accidentalOnReference = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+        ],
+        'B',
+        '4'
+      );
+      const accidentalOnNonReference = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+          ['G#', 4],
+        ],
+        'B',
+        '4'
+      );
+
+      const endY = (element: ChordElementType): number => {
+        const d =
+          element.shadowRoot
+            ?.querySelector('.grace-slur path')
+            ?.getAttribute('d') ?? '';
+        const [, , , , , y] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return y;
+      };
+
+      const gapOnReference = Math.abs(
+        8 + 70 - 10 - endY(accidentalOnReference) // top note E4, staffY=70
+      );
+      const gapOnNonReference = Math.abs(
+        8 + 60 - 10 - endY(accidentalOnNonReference) // top note G#4, staffY=60
+      );
+      expect(gapOnNonReference).toBeCloseTo(gapOnReference, 5);
+    });
+
+    it('keeps the slur-to-notehead gap constant for a grace GROUP into a chord with a multi-position accidental column', () => {
+      // Mirrors chord.stories.ts's WithGraceNotes second chord: a 2-note
+      // grace group into a chord with accidentals on both the reference note
+      // (C#4, index 0) and a note 20px of staffY away (G#4, index 2). Both
+      // chords' top note is at staffY=60 (G#4 and G4 share the same staff
+      // position — an accidental doesn't move it).
+      const twoAccidentals = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+          ['G#', 4],
+        ],
+        'C,D',
+        '4,4'
+      );
+      const oneAccidental = makeChordWithNotes(
+        [
+          ['C#', 4],
+          ['E', 4],
+          ['G', 4],
+        ],
+        'C,D',
+        '4,4'
+      );
+
+      const endY = (element: ChordElementType): number => {
+        const d =
+          element.shadowRoot
+            ?.querySelector('.grace-slur path')
+            ?.getAttribute('d') ?? '';
+        const [, , , , , y] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return y;
+      };
+
+      const topNoteHeadCenterY = 8 + 60 - 10; // top note G#4/G4, staffY=60
+      const gapTwoAccidentals = Math.abs(
+        topNoteHeadCenterY - endY(twoAccidentals)
+      );
+      const gapOneAccidental = Math.abs(
+        topNoteHeadCenterY - endY(oneAccidental)
+      );
+      // The 2-accidental case's gap must not be larger than the 1-accidental
+      // case's — this is exactly the regression the user reported (chords
+      // with more accidentals showing a visibly bigger end-point gap).
+      expect(gapTwoAccidentals).toBeCloseTo(gapOneAccidental, 5);
+    });
+
+    it('positions grace heads relative to the reference note (notes[0])', () => {
+      // Grace pitch equals the reference pitch → same head Y as the lowest
+      // chord note; one step up → 5px higher (smaller y).
+      const samePitch = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'C',
+        '4'
+      );
+      const stepUp = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'D',
+        '4'
+      );
+
+      const headTransformY = (chordElement: ChordElementType): number => {
+        const transform =
+          chordElement.shadowRoot
+            ?.querySelector('.grace-notes .grace-note')
+            ?.getAttribute('transform') ?? '';
+        const match = transform.match(/translate\([^ ]+ ([^)]+)\)/);
+        return Number(match?.[1]);
+      };
+
+      expect(headTransformY(stepUp)).toBeCloseTo(headTransformY(samePitch) - 5);
+    });
+
+    it('defaults the grace octave to the reference note octave when grace-octave is omitted', () => {
+      const withDefault = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'C'
+      );
+      const withExplicit = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'C',
+        '4'
+      );
+
+      const headTransform = (chordElement: ChordElementType): string | null =>
+        chordElement.shadowRoot
+          ?.querySelector('.grace-notes .grace-note')
+          ?.getAttribute('transform') ?? null;
+
+      expect(headTransform(withDefault)).toBe(headTransform(withExplicit));
+    });
+
+    it('renders no grace group when the chord has no notes', () => {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('grace', 'C');
+      chordElement.setAttribute('grace-octave', '4');
+      document.body.appendChild(chordElement);
+
+      expect(chordElement.shadowRoot?.querySelector('.grace-notes')).toBeNull();
+    });
+
+    it('arcs the slur above every grace head when the group descends in pitch', () => {
+      // grace="F,E" into a chord referencing C4 — the group's pitch trends
+      // downward (first note F higher than last note E). Mirrors the
+      // note-level regression: stem-tip anchoring must keep the curve
+      // above every grace head, not just the two slur endpoints.
+      const chordElement = makeChordWithNotes(
+        [
+          ['C', 4],
+          ['E', 4],
+        ],
+        'F,E',
+        '4,4'
+      );
+
+      const graceGroup = chordElement.shadowRoot?.querySelector('.grace-notes');
+      const heads = Array.from(
+        graceGroup?.querySelectorAll('.grace-head') ?? []
+      );
+      const d =
+        chordElement.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      const [, , , controlY] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+
+      const parseTranslate = (transform: string): [number, number] => {
+        const match = transform.match(
+          /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/
+        );
+        return match ? [Number(match[1]), Number(match[2])] : [0, 0];
+      };
+      const parseScale = (transform: string): number => {
+        const match = transform.match(/scale\(\s*(-?[\d.]+)/);
+        return match ? Number(match[1]) : 1;
+      };
+      const trueCenter = (
+        element: Element,
+        root: Element,
+        localX: number,
+        localY: number
+      ): [number, number] => {
+        let x = localX;
+        let y = localY;
+        let node: Element | null = element;
+        while (node !== null && node !== root) {
+          const transform = node.getAttribute('transform');
+          if (transform !== null) {
+            const scale = parseScale(transform);
+            const [translateX, translateY] = parseTranslate(transform);
+            x = translateX + scale * x;
+            y = translateY + scale * y;
+          }
+          node = node.parentElement;
+        }
+        return [x, y];
+      };
+
+      for (const head of heads) {
+        const cx = Number(head.getAttribute('cx'));
+        const cy = Number(head.getAttribute('cy'));
+        const [, y] = trueCenter(head, graceGroup as Element, cx, cy);
+        expect(controlY).toBeLessThan(y);
+      }
+    });
+
+    describe('grace articulation', () => {
+      it('round-trips the grace-articulation attribute between property and attribute', () => {
+        const chordElement = makeChordWithNotes([
+          ['C', 4],
+          ['E', 4],
+        ]);
+
+        chordElement.grace = ['D', 'E'];
+        chordElement.graceArticulation = ['staccato', 'accent'];
+
+        expect(chordElement.getAttribute('grace-articulation')).toBe(
+          'staccato,accent'
+        );
+        expect(chordElement.graceArticulation).toEqual(['staccato', 'accent']);
+      });
+
+      it('falls back to no mark for missing or invalid grace-articulation slots, without rejecting the whole list', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'A,B'
+        );
+
+        expect(chordElement.graceArticulation).toBeNull();
+
+        chordElement.setAttribute('grace-articulation', 'staccato,not-a-mark');
+        expect(chordElement.graceArticulation).toEqual(['staccato', null]);
+      });
+
+      it('renders a mark on each grace note in a group independently, on a standalone chord', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'A,B',
+          '4,4',
+          'staccato,accent'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        expect(graceGroup?.querySelectorAll('.articulations')).toHaveLength(2);
+        expect(graceGroup?.querySelector('.staccato')).not.toBeNull();
+        expect(graceGroup?.querySelector('.accent')).not.toBeNull();
+      });
+
+      it('renders a mark on a single (non-grouped) grace note', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'B',
+          '4',
+          'tenuto'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        expect(graceGroup?.querySelector('.articulations')).not.toBeNull();
+        expect(graceGroup?.querySelector('.tenuto')).not.toBeNull();
+      });
+
+      it('renders no articulation marks when grace-articulation is unset', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'A,B',
+          '4,4'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        expect(graceGroup?.querySelector('.articulations')).toBeNull();
+      });
+
+      it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
+        // Regression test: createArticulationMarks() draws in the same
+        // 600-unit note-space createNoteSvg uses for the head, and
+        // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
+        // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
+        // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
+        // too large and land outside any clipped viewBox (invisible in-staff).
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'B',
+          '4',
+          'tenuto'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        const headInnerScale = graceGroup
+          ?.querySelector('.grace-head')
+          ?.closest('g[transform^="scale("]')
+          ?.getAttribute('transform');
+        const marksInnerScale = graceGroup
+          ?.querySelector('.articulations')
+          ?.closest('g[transform^="scale("]')
+          ?.getAttribute('transform');
+
+        expect(headInnerScale).not.toBeNull();
+        expect(marksInnerScale).toBe(headInnerScale);
+        expect(marksInnerScale).toContain(`scale(${NOTE_SCALE}`);
+      });
     });
   });
 });

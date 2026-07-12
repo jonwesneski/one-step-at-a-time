@@ -6,7 +6,7 @@
 
 ## Composable and Standalone Elements
 
-Elements are designed to be used **in isolation or composed together**. You do not need the full hierarchy to use any given element:
+Elements are designed to be used **in isolation or composed together**. You do not need the full hierarchy to use any given element. **"Standalone" means an element is used without its usual parent element** — e.g. a staff without a `<music-composition>`, or a note without a staff:
 
 - `<music-note>` and `<music-chord>` can be used standalone, outside any staff, measure, or composition
 - `<music-staff-treble>`, `<music-staff-bass>`, `<music-staff-guitar-tab>`, and `<music-staff-vocal>` can be used without a `<music-measure>` or `<music-composition>`
@@ -116,7 +116,7 @@ Type A feature touches ~8 of these; a boolean or type-reusing attribute far fewe
 below leads with its **when-trigger**; the ones marked **(near-universal)** apply to virtually
 every note/chord attribute, everything else fires only on its trigger. The goal is to add the
 feature _and leave the surrounding code at least as clean_ — so watch for refactor
-opportunities as you go (step 16).
+opportunities as you go (step 17).
 
 Features land in one of two shapes; steps are tagged accordingly:
 
@@ -127,61 +127,69 @@ Features land in one of two shapes; steps are tagged accordingly:
   adds a rules file, a `notationDimensions.ts` block, an event constant, and wiring in
   `staffClassicalBase.ts`; the element dispatches an event instead of only re-rendering.
 
-1. `[A][B]` **Domain type** — _when: the feature adds a new enumerated value set; skip for a
+1. `[A][B]` **Standalone vs in-parent support** — _when: always; decide before writing code._
+   Decide whether the feature should work when the element is used **standalone** (without its
+   usual parent — see "Composable and Standalone Elements" above) as well as inside the full
+   hierarchy. Supporting both is the ideal, but it doesn't always make sense — some features
+   inherently depend on a parent (attribute inheritance, measure-driven min-width layout). At
+   minimum _consider_ it: if the feature degrades or is absent standalone, make that a
+   deliberate choice and add it to the "Standalone degraded features" bullet in Known
+   Incomplete Areas.
+2. `[A][B]` **Domain type** — _when: the feature adds a new enumerated value set; skip for a
    boolean attribute or one that reuses an existing type._ Add the value union to
    `src/types/theory.ts`. Ref: `DynamicMarking`, `ArticulationType`, `StressType`.
-2. `[A][B]` **Runtime options / event const** — _when: value is enumerated → options array;
+3. `[A][B]` **Runtime options / event const** — _when: value is enumerated → options array;
    Type B or cross-element notify → event key._ Add the options array to `src/utils/consts.ts`
    (`DYNAMICS`, `ARTICULATIONS`, `STRESSES`). Type B only: add a key to `NOTE_EVENTS` (e.g.
    `DYNAMIC_ATTRIBUTE_CHANGE`).
-3. `[A][B]` **Getter validation** — _parser optional; a judgment call._ Three styles coexist,
+4. `[A][B]` **Getter validation** — _parser optional; a judgment call._ Three styles coexist,
    in increasing weight: plain cast with a default (`get duration`), inline validation
    (`get octave` checks `OCTAVES.includes`), or a shared `parseX` helper in
    `src/utils/parsers.ts` (`get articulation`). **Add a `parseX` function only when you both
    want to reject invalid values _and_ the same check is used in ≥2 places (note + chord).**
    For a simple cast-with-default used in one spot, inline it — a parser file is overkill.
-4. `[A][B]` **Element interface** — _when: it's a consumer-facing note/chord property; skip for
+5. `[A][B]` **Element interface** — _when: it's a consumer-facing note/chord property; skip for
    staff-only or purely-internal features._ Add the `| null` field to `INoteElement` /
    `IChordElement` in `src/types/elements.ts` (enforced via `implements`).
-5. `[A][B]` **Element wiring (near-universal for note/chord attrs)** — in `src/note/note.ts`
+6. `[A][B]` **Element wiring (near-universal for note/chord attrs)** — in `src/note/note.ts`
    and `src/chord/chord.ts`: add to `observedAttributes` (lowercase), add getter/setter
    (attribute-backed via `parseX`, or `#field`-backed), handle in `attributeChangedCallback`.
    Type A: pass into the svgCreator call. Type B: dispatch the event from
    `attributeChangedCallback`. Note which elements apply — some features are note-only or
    chord-only. Ref: the `tie` / `dynamic` / `articulation` get/set blocks in `note.ts`.
-6. `[A][B]` **Check React JSX decls** — check whether `src/types.d.ts` needs updating; if the
+7. `[A][B]` **Check React JSX decls** — check whether `src/types.d.ts` needs updating; if the
    feature adds a consumer-facing prop, add the optional prop to the `'music-note'` and
    `'music-chord'` declarations (+ import the type). This file is _not_ enforced by
    `implements`, so it silently drifts — check it explicitly.
-7. `[A]` **SVG (note-local)** — new `src/utils/svgCreator/<feature>.ts`, re-export from
+8. `[A]` **SVG (note-local)** — new `src/utils/svgCreator/<feature>.ts`, re-export from
    `svgCreator/index.ts`, and accept the prop in `svgCreator/note.ts` + `svgCreator/chord.ts`.
    Ref: `svgCreator/articulations.ts`.
-8. `[B]` **Rules** — _when: there's real cross-note theory/layout computation; a trivial span
+9. `[B]` **Rules** — _when: there's real cross-note theory/layout computation; a trivial span
    may skip this._ New `src/rules/<feature>Rules.ts` with pure functions (explicit params, no
    `this`). Ref: `rules/dynamicsRules.ts`.
-9. `[B]` **SVG (staff-drawn)** — new `svgCreator/<feature>.ts` + re-export. Ref:
-   `svgCreator/dynamics.ts`.
-10. `[A][B]` **Pixel constants** — _when: new rendering needs new sizing/offsets; skip if it
+10. `[B]` **SVG (staff-drawn)** — new `svgCreator/<feature>.ts` + re-export. Ref:
+    `svgCreator/dynamics.ts`.
+11. `[A][B]` **Pixel constants** — _when: new rendering needs new sizing/offsets; skip if it
     reuses existing dimensions._ Add a section to `src/utils/notationDimensions.ts`. Ref: the
     "Dynamics" block.
-11. `[B]` **Orchestration** — in `src/staffClassicalBase.ts`: add a container, register the
+12. `[B]` **Orchestration** — in `src/staffClassicalBase.ts`: add a container, register the
     event listener in `connectedCallback` / remove in `disconnectedCallback`, add `#renderX()`
     and wire it into the render pass. Ref: `#renderDynamics`.
-12. **Inherited-attr variant** — if the feature is instead an _inherited staff attribute_ (like
+13. **Inherited-attr variant** — if the feature is instead an _inherited staff attribute_ (like
     `keysig`/`mode`/`time`), the wiring differs: add to `COMMON_ATTRIBUTES`, to
     `observedAttributes` in composition/measure/staffClassicalBase, add `#effectiveX` +
     `#resolveInheritedValue` calls, and the descendant push loop in `composition.ts`.
-13. `[A][B]` **Stories (near-universal)** — add/extend colocated `<component>.stories.ts`
+14. `[A][B]` **Stories (near-universal)** — add/extend colocated `<component>.stories.ts`
     (Type A → `note.stories.ts`; Type B → `staffTreble` / `composition` stories), using option
-    arrays from `../utils` and strong types from `../types/theory`.
-14. `[A][B]` **Tests (near-universal; tiers are conditional)** — Type A: `note.test.ts` +
+    arrays from `../utils` and strong types from `../types/theory`. For both Type A and Type B see if you can extend an existing story rather than making more new stories. If the feature is small like adding 1 or 2 attributes and their total number of possible values are small consider extending existing stories; otherwise you can plan for new stories
+15. `[A][B]` **Tests (near-universal; tiers are conditional)** — Type A: `note.test.ts` +
     `chord.test.ts`. Type B: new `rules/<feature>Rules.test.ts` + `staffClassicalBase.test.ts`.
     Add a `*.browser-test.ts` **only when** layout/geometry/resize is involved.
-15. `[A][B]` **Tick TODO.md (near-universal)** — check whether the feature completes any row(s)
+16. `[A][B]` **Tick TODO.md (near-universal)** — check whether the feature completes any row(s)
     in `TODO.md` (the master notation-features tracker) and flip that row's checkbox from
     `&#x2610;` to `&#x2611;`. A feature often satisfies several rows across sections (e.g. an
     articulation ticks a base row _and_ its combination forms).
-16. `[A][B]` **Refactor pass (do this, don't skip)** — look for consolidation the feature
+17. `[A][B]` **Refactor pass (do this, don't skip)** — look for consolidation the feature
     exposed: near-duplicate get/set blocks across `note.ts`/`chord.ts` that could share a
     helper; a `parseX` duplicating an existing parser shape; an svgCreator glyph overlapping an
     existing one (new articulation glyphs belong in the existing `svgCreator/articulations.ts`,
@@ -189,7 +197,7 @@ Features land in one of two shapes; steps are tagged accordingly:
     constant in `notationDimensions.ts`; and any place the new code copies a rule instead of
     calling the existing pure function in `src/rules/`. Prefer extending an existing file over
     adding a parallel one.
-17. `[A][B]` **Format & test** — run `npx nx format:write`, then `npx nx test web-components`.
+18. `[A][B]` **Format & test** — run `npx nx format:write`, then `npx nx test web-components`.
 
 **Common trap:** a plain new note/chord attribute does **not** touch `src/index.ts` or the
 staff base classes (`staffBase.ts`) — don't go looking for wiring there.
@@ -360,7 +368,7 @@ Each note SVG includes a transparent `head-hit-zone` ellipse (1.5× the notehead
 - **`staffGuitarTab.ts`**: `onDisconnectedCallback` is still an empty stub
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
 - **Accidentals during pitch drag**: Pitch drag snaps to natural staff positions only; accidental changes (sharp/flat) need a separate mechanism
-- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation
+- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation. Ledger lines (both main-note and grace-note) require a staff-provided Y position, and grace-note accidentals fall back to suffix-driven rendering (no key-signature suppression) outside a staff
 
 ## Build & Test
 

@@ -4,6 +4,9 @@ import {
   Chord,
   DurationType,
   DynamicMarking,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
   HairpinRole,
   Note,
   NoteLetter,
@@ -33,6 +36,22 @@ export interface INoteElement {
   diminuendo: HairpinRole | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
+  grace: Note[] | null;
+  // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
+  // missing trailing slot) falls back to the host element's own octave.
+  graceOctave: (Octave | null)[] | null;
+  // Per-grace-note articulation, aligned by index with `grace`. A null slot
+  // (or a missing trailing slot) means no mark for that grace note.
+  graceArticulation: (ArticulationType | null)[] | null;
+  graceType: GraceType;
+  graceDuration: GraceDuration | null;
+  graceSlur: GraceSlur;
+  // Key-signature-resolved accidentals for the grace pitches, set by the
+  // staff. null = standalone mode (suffix-driven accidentals).
+  resolvedGraceAccidentals: (AccidentalType | null)[] | null;
+  // A single dynamic for the whole grace group, independent of the host
+  // note's own `dynamic`. Rendered by the staff under the first grace note.
+  graceDynamic: DynamicMarking | null;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
@@ -65,6 +84,22 @@ export interface IChordElement {
   diminuendo: HairpinRole | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
+  grace: Note[] | null;
+  // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
+  // missing trailing slot) falls back to the host element's reference octave.
+  graceOctave: (Octave | null)[] | null;
+  // Per-grace-note articulation, aligned by index with `grace`. A null slot
+  // (or a missing trailing slot) means no mark for that grace note.
+  graceArticulation: (ArticulationType | null)[] | null;
+  graceType: GraceType;
+  graceDuration: GraceDuration | null;
+  graceSlur: GraceSlur;
+  // Key-signature-resolved accidentals for the grace pitches, set by the
+  // staff. null = standalone mode (suffix-driven accidentals).
+  resolvedGraceAccidentals: (AccidentalType | null)[] | null;
+  // A single dynamic for the whole grace group, independent of the host
+  // note's own `dynamic`. Rendered by the staff under the first grace note.
+  graceDynamic: DynamicMarking | null;
   batchUpdate(fn: () => void): void;
 }
 

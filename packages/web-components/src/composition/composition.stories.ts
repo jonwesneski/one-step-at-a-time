@@ -3,7 +3,7 @@ import { html } from 'lit';
 import '../index';
 
 const meta: Meta = {
-  title: 'Components/MusicComposition',
+  title: 'Components/Composition',
   tags: ['autodocs'],
   render: (args) => html`
     <music-composition

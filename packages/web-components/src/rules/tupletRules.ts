@@ -85,6 +85,36 @@ export function parseTupletRatio(ratioString: TupletRatio): ParsedTupletRatio {
   return { actual, normal, displayString: ratioString };
 }
 
+export function resolveInnermostTuplet(
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
+  index: number
+): TupletElementType | undefined {
+  const ancestors = tupletsByIndex.get(index);
+  return ancestors !== undefined ? ancestors[ancestors.length - 1] : undefined;
+}
+
+/**
+ * Counts elements with tuplet-scaled weighting: a plain element contributes 1,
+ * a tupleted element contributes its ratio's normal/actual factor (matching
+ * the reduced horizontal footprint used in #spaceElements()).
+ */
+export function computeTupletScaledNoteCount(
+  elements: NoteChordOrRestElementType[],
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
+): number {
+  let count = 0;
+  for (let i = 0; i < elements.length; i++) {
+    const innermostTuplet = resolveInnermostTuplet(tupletsByIndex, i);
+    if (innermostTuplet !== undefined) {
+      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
+      count += normal / actual;
+    } else {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 function computeNestingLevel(el: TupletElementType): number {
   let level = 0;
   let ancestor = el.parentElement;

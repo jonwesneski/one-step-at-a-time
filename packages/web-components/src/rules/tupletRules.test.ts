@@ -34,8 +34,10 @@ import {
   buildTupletGroups,
   computeOuterBracketBaseY,
   computeTupletBracketGeometry,
+  computeTupletScaledNoteCount,
   defaultNormalCount,
   parseTupletRatio,
+  resolveInnermostTuplet,
 } from './tupletRules';
 
 afterEach(() => {
@@ -80,6 +82,92 @@ describe('defaultNormalCount', () => {
     [9, 8],
   ])('actual=%i → normal=%i', (actual, expected) => {
     expect(defaultNormalCount(actual)).toBe(expected);
+  });
+});
+
+// ─── resolveInnermostTuplet ────────────────────────────────────────────────
+
+describe('resolveInnermostTuplet', () => {
+  it('returns undefined when the index has no tuplet ancestors', () => {
+    const result = resolveInnermostTuplet(new Map(), 0);
+    expect(result).toBeUndefined();
+  });
+
+  it('returns the sole ancestor for a non-nested tuplet', () => {
+    const tupletElement = makeTuplet('3');
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [tupletElement]],
+    ]);
+
+    const result = resolveInnermostTuplet(tupletsByIndex, 0);
+
+    expect(result).toBe(tupletElement);
+  });
+
+  it('returns the last (innermost) ancestor for a nested tuplet', () => {
+    const outerTuplet = makeTuplet('3');
+    const innerTuplet = makeTuplet('5:4');
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [outerTuplet, innerTuplet]],
+    ]);
+
+    const result = resolveInnermostTuplet(tupletsByIndex, 0);
+
+    expect(result).toBe(innerTuplet);
+  });
+});
+
+// ─── computeTupletScaledNoteCount ───────────────────────────────────────────
+
+describe('computeTupletScaledNoteCount', () => {
+  it('counts each plain element as 1', () => {
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'C', duration: 'quarter' }),
+      makeNote({ note: 'C', duration: 'quarter' }),
+      makeNote({ note: 'C', duration: 'quarter' }),
+    ];
+
+    const result = computeTupletScaledNoteCount(elements, new Map());
+
+    expect(result).toBe(3);
+  });
+
+  it('scales tupleted elements by normal/actual', () => {
+    const tupletElement = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+    ];
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [tupletElement]],
+      [1, [tupletElement]],
+      [2, [tupletElement]],
+    ]);
+
+    const result = computeTupletScaledNoteCount(elements, tupletsByIndex);
+
+    // ratio "3" → normal=2, actual=3, so each note contributes 2/3
+    expect(result).toBeCloseTo(2);
+  });
+
+  it('mixes plain and tupleted elements', () => {
+    const tupletElement = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'eighth' }),
+      makeNote({ note: 'C', duration: 'quarter' }),
+    ];
+    const tupletsByIndex = new Map<number, TupletElementType[]>([
+      [0, [tupletElement]],
+      [1, [tupletElement]],
+      [2, [tupletElement]],
+    ]);
+
+    const result = computeTupletScaledNoteCount(elements, tupletsByIndex);
+
+    expect(result).toBeCloseTo(3);
   });
 });
 

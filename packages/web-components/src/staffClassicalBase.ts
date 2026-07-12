@@ -5,14 +5,21 @@ import {
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { pairHairpins } from './rules/dynamicsRules';
+import {
+  computeFirstGraceHeadX,
+  computeGraceFootprintWidth,
+} from './rules/graceRules';
+import { computeAllowedElementCount } from './rules/measureRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
-import { durationToFactor, factorToDuration } from './rules/theoryConsts';
+import { durationToFactor } from './rules/theoryConsts';
 import {
   buildTupletGroups,
   computeOuterBracketBaseY,
   computeTupletBracketGeometry,
+  computeTupletScaledNoteCount,
   parseTupletRatio,
+  resolveInnermostTuplet,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -84,59 +91,7 @@ import {
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
-
-function flattenSlotElements(assigned: Element[]): {
-  flatElements: NoteChordOrRestElementType[];
-  tupletsByIndex: Map<number, TupletElementType[]>;
-} {
-  const flatElements: NoteChordOrRestElementType[] = [];
-  const tupletsByIndex = new Map<number, TupletElementType[]>();
-
-  function flatten(
-    element: Element,
-    tupletAncestors: TupletElementType[]
-  ): void {
-    const tag = element.nodeName;
-    if (
-      tag === MUSIC_NOTE_NODE ||
-      tag === MUSIC_CHORD_NODE ||
-      tag === MUSIC_REST_NODE
-    ) {
-      if (tupletAncestors.length > 0) {
-        tupletsByIndex.set(flatElements.length, [...tupletAncestors]);
-      }
-      flatElements.push(element as NoteChordOrRestElementType);
-    } else if (tag === MUSIC_TUPLET_NODE) {
-      for (const child of element.children) {
-        flatten(child, [...tupletAncestors, element as TupletElementType]);
-      }
-    }
-  }
-
-  for (const element of assigned) {
-    flatten(element, []);
-  }
-
-  return { flatElements, tupletsByIndex };
-}
-
-function computeTupletScaledNoteCount(
-  elements: NoteChordOrRestElementType[],
-  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
-): number {
-  let count = 0;
-  for (let i = 0; i < elements.length; i++) {
-    const ancestors = tupletsByIndex.get(i);
-    if (ancestors !== undefined) {
-      const innermostTuplet = ancestors[ancestors.length - 1];
-      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-      count += normal / actual;
-    } else {
-      count += 1;
-    }
-  }
-  return count;
-}
+import { flattenSlotElements } from './utils/slotElements';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -175,6 +130,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #tupletGroups: TupletGroup[] = [];
   #tupletsByIndex: Map<number, TupletElementType[]> = new Map();
   #noteXPositions: Map<number, number> = new Map();
+  // X (beams-container space) of the first grace note's head, for elements
+  // that have both a grace group and a grace-dynamic. Populated alongside
+  // #noteXPositions during #spaceElements(), since only that pass has the
+  // leftward-overhang math (main accidental + grace footprint) in scope.
+  #firstGraceHeadXPositions: Map<number, number> = new Map();
   #stemDirections: boolean[] = [];
   #beamedIndicesSnapshot: Set<number> = new Set();
   #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
@@ -751,9 +711,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#tupletContainer.innerHTML = '';
     this.#dynamicsContainer.innerHTML = '';
 
-    const [beatsInMeasure, beatType] = this.#effectiveTimeSig;
-    // Measure duration as a fraction of a whole note (e.g. 4/4 = 1.0, 3/4 = 0.75, 6/8 = 0.75)
-    const measureDuration = beatsInMeasure / beatType;
+    const { allowedElementCount, error } = computeAllowedElementCount(
+      elements,
+      this.#effectiveTimeSig,
+      this.#tupletsByIndex
+    );
+    if (error !== null) {
+      console.warn(error);
+    }
+    for (let i = 0; i < elements.length; i++) {
+      elements[i].style.display = i < allowedElementCount ? '' : 'none';
+    }
+    elements = elements.slice(0, allowedElementCount);
 
     const noteStaffYCoords = new Map<NoteElementType, number>();
     const chordStaffYCoords = new Map<ChordElementType, number[]>();
@@ -794,7 +763,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#chordStaffYCoordsSnapshot = new Map(chordStaffYCoords);
     this.#tupletGroups = buildTupletGroups(elements, this.#tupletsByIndex);
 
-    const { noteShowAccidentals, chordNoteAccidentals } =
+    const { noteShowAccidentals, chordNoteAccidentals, graceShowAccidentals } =
       computeNoteAccidentals(
         elements,
         this.#effectiveKeySig,
@@ -803,36 +772,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     // Set rendering properties on each element
     // (triggers their self-render via requestAnimationFrame)
-    let beatOffset = 0;
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
-      const duration = element.duration;
-      const tupletAncestors = this.#tupletsByIndex.get(i);
-      const innermostTuplet =
-        tupletAncestors !== undefined
-          ? tupletAncestors[tupletAncestors.length - 1]
-          : undefined;
-      const durationContribution =
-        innermostTuplet !== undefined
-          ? (() => {
-              const { actual, normal } = parseTupletRatio(
-                innermostTuplet.ratio
-              );
-              return (
-                durationToFactor[duration as DurationType] * (normal / actual)
-              );
-            })()
-          : durationToFactor[duration as DurationType];
-      if (beatOffset + durationContribution > measureDuration) {
-        console.warn(
-          `no more room for note(s); remaining duration is "${
-            factorToDuration.get(measureDuration - beatOffset) ??
-            measureDuration - beatOffset
-          }", tried to add "${duration}"`
-        );
-        break;
-      }
-
       const stemUp = stemDirections[i];
       const isBeamed = beamsBuilder.isBeamed(i);
       const extension = this.#beamRenderer.stemExtension(i);
@@ -847,6 +788,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental = noteShowAccidentals.get(noteElement);
           noteElement.staffY = noteStaffYCoords.get(noteElement) ?? null;
+          noteElement.resolvedGraceAccidentals =
+            graceShowAccidentals.get(noteElement) ?? null;
         });
       } else {
         const chordElement = element as ChordElementType;
@@ -858,10 +801,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
           chordElement.noteAccidentals = accidentals;
+          chordElement.resolvedGraceAccidentals =
+            graceShowAccidentals.get(chordElement) ?? null;
         });
       }
-
-      beatOffset += durationContribution;
     }
 
     this.#currentElements = elements;
@@ -882,29 +825,57 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (elements.length > 0) {
       const firstElement = elements[0];
-      let firstNoteAccidentalWidth = 0;
+      let firstElementLeftwardWidth = 0;
       if (firstElement.nodeName === MUSIC_NOTE_NODE) {
-        const accidental = (firstElement as NoteElementType).showAccidental;
-        if (accidental) {
-          firstNoteAccidentalWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
+        const noteElement = firstElement as NoteElementType;
+        if (noteElement.showAccidental) {
+          firstElementLeftwardWidth =
+            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
+            ACCIDENTAL_NOTE_GAP;
         }
+        firstElementLeftwardWidth += computeGraceFootprintWidth(
+          noteElement.grace,
+          noteElement.resolvedGraceAccidentals
+        );
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
-        const chordEl = firstElement as ChordElementType;
+        const chordElement = firstElement as ChordElementType;
         if (
-          chordEl.staffYCoordinates &&
-          chordEl.noteAccidentals.some((a) => a != null)
+          chordElement.staffYCoordinates &&
+          chordElement.noteAccidentals.some((a) => a != null)
         ) {
-          firstNoteAccidentalWidth = totalChordAccidentalWidth(
-            chordEl.noteAccidentals,
-            chordEl.staffYCoordinates
+          firstElementLeftwardWidth = totalChordAccidentalWidth(
+            chordElement.noteAccidentals,
+            chordElement.staffYCoordinates
+          );
+        }
+        firstElementLeftwardWidth += computeGraceFootprintWidth(
+          chordElement.grace,
+          chordElement.resolvedGraceAccidentals
+        );
+      }
+      // Grace overhangs of the remaining elements also consume horizontal
+      // room beyond the per-note minimum spacing.
+      let extraLeftwardWidth = 0;
+      for (let i = 1; i < elements.length; i++) {
+        const element = elements[i];
+        if (
+          element.nodeName === MUSIC_NOTE_NODE ||
+          element.nodeName === MUSIC_CHORD_NODE
+        ) {
+          const noteOrChordElement = element as
+            | NoteElementType
+            | ChordElementType;
+          extraLeftwardWidth += computeGraceFootprintWidth(
+            noteOrChordElement.grace,
+            noteOrChordElement.resolvedGraceAccidentals
           );
         }
       }
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
         computeTupletScaledNoteCount(elements, this.#tupletsByIndex),
-        firstNoteAccidentalWidth
+        firstElementLeftwardWidth,
+        extraLeftwardWidth
       );
       this.dispatchEvent(
         new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
@@ -1004,6 +975,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
 
     this.#noteXPositions.clear();
+    this.#firstGraceHeadXPositions.clear();
 
     // Configure beams container to cover the notes area
     this.#beamsContainer.setAttribute('x', `${this.#describeEndX}`);
@@ -1039,39 +1011,48 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
 
-      // Compute this element's total accidental footprint (leftward width)
-      let accidentalWidth = 0;
+      // Compute this element's total leftward overhang: accidental footprint
+      // plus any grace-note group rendered before the note/chord.
+      let leftwardWidth = 0;
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         if (noteElement.showAccidental) {
-          accidentalWidth =
+          leftwardWidth =
             ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
             ACCIDENTAL_NOTE_GAP;
         }
+        leftwardWidth += computeGraceFootprintWidth(
+          noteElement.grace,
+          noteElement.resolvedGraceAccidentals
+        );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = element as ChordElementType;
         if (
           chordElement.staffYCoordinates &&
           chordElement.noteAccidentals.some((a) => a != null)
         ) {
-          accidentalWidth = totalChordAccidentalWidth(
+          leftwardWidth = totalChordAccidentalWidth(
             chordElement.noteAccidentals,
             chordElement.staffYCoordinates
           );
         }
+        leftwardWidth += computeGraceFootprintWidth(
+          chordElement.grace,
+          chordElement.resolvedGraceAccidentals
+        );
       }
 
-      // Barline constraint: accidental must not cross into the describe area
-      if (accidentalWidth > 0) {
+      // Barline constraint: the overhang must not cross into the describe area
+      if (leftwardWidth > 0) {
         xInWrapper = Math.max(
           xInWrapper,
-          this.#describeEndX + NOTES_AREA_LEFT_MARGIN + accidentalWidth
+          this.#describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
         );
       }
 
       xInWrapper = computeInterNoteSpacing(
         xInWrapper,
-        accidentalWidth,
+        leftwardWidth,
         previousRightEdge
       );
 
@@ -1080,6 +1061,28 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const xInBeamsContainer = xInWrapper - this.#describeEndX;
       this.#beamRenderer?.setX(i, xInBeamsContainer);
       this.#noteXPositions.set(i, xInBeamsContainer);
+
+      // Only needed when the element actually has a grace-dynamic to place —
+      // computeFirstGraceHeadX still needs `grace` itself (a grace-dynamic
+      // with no grace notes has nothing to anchor to and is simply skipped
+      // by #renderDynamics via the same null check).
+      const noteOrChordForGrace = element as INoteElement | IChordElement;
+      if (
+        element.nodeName !== MUSIC_REST_NODE &&
+        noteOrChordForGrace.graceDynamic !== null &&
+        noteOrChordForGrace.grace !== null
+      ) {
+        this.#firstGraceHeadXPositions.set(
+          i,
+          computeFirstGraceHeadX(
+            xInBeamsContainer,
+            leftwardWidth,
+            noteOrChordForGrace.grace,
+            noteOrChordForGrace.resolvedGraceAccidentals
+          )
+        );
+      }
+
       element.style.position = 'absolute';
       element.style.left = `${xInWrapper}px`;
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
@@ -1106,11 +1109,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         element.style.top = '0px';
       }
 
-      const tupletAncestorsForElement = this.#tupletsByIndex.get(i);
-      const innermostTupletForElement =
-        tupletAncestorsForElement !== undefined
-          ? tupletAncestorsForElement[tupletAncestorsForElement.length - 1]
-          : undefined;
+      const innermostTupletForElement = resolveInnermostTuplet(
+        this.#tupletsByIndex,
+        i
+      );
       if (innermostTupletForElement !== undefined) {
         const { actual, normal } = parseTupletRatio(
           innermostTupletForElement.ratio
@@ -1245,6 +1247,23 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             DYNAMICS_BASELINE_Y
           )
         );
+      }
+
+      // A grace-dynamic is independent of the host's own `dynamic` (both can
+      // render at once — see the engraving reference's f-under-grace,
+      // p-under-main example) and sits under the first grace note instead of
+      // the host's own column.
+      if (noteOrChord.graceDynamic !== null) {
+        const firstGraceHeadX = this.#firstGraceHeadXPositions.get(i);
+        if (firstGraceHeadX !== undefined) {
+          this.#dynamicsContainer.appendChild(
+            createDynamicMarkingSvg(
+              noteOrChord.graceDynamic,
+              firstGraceHeadX,
+              DYNAMICS_BASELINE_Y
+            )
+          );
+        }
       }
     }
 

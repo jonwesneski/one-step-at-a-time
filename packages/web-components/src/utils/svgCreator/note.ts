@@ -13,12 +13,8 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../notationDimensions';
+import { createAccidentalSvg } from './accidental';
 import { createArticulationMarks } from './articulations';
-import { createDoubleFlatSvg } from './doubleFlat';
-import { createDoubleSharpSvg } from './doubleSharp';
-import { createFlatSvg } from './flat';
-import { createNaturalSvg } from './natural';
-import { createSharpSvg } from './sharp';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
 export const NOTE_SVG_WIDTH = 32;
@@ -308,18 +304,7 @@ export const createNoteSvg = ({
       ? NOTE_Y_HEAD_OFFSET_STEM_UP
       : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
 
-    let symbolSvg: SVGElement;
-    if (accidental === 'sharp') {
-      symbolSvg = createSharpSvg();
-    } else if (accidental === 'flat') {
-      symbolSvg = createFlatSvg();
-    } else if (accidental === 'natural') {
-      symbolSvg = createNaturalSvg();
-    } else if (accidental === 'double-sharp') {
-      symbolSvg = createDoubleSharpSvg();
-    } else {
-      symbolSvg = createDoubleFlatSvg();
-    }
+    const symbolSvg = createAccidentalSvg(accidental);
 
     symbolSvg.setAttribute('x', `${-(symbolWidth + ACCIDENTAL_NOTE_GAP)}`);
     symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
@@ -358,4 +343,14 @@ export function noteHeadCenter(
     cx: stemUp ? xStart - 10 : xStart + STEM_WIDTH,
     cy: stemUp ? yStemEnd : HEAD_WIDTH,
   };
+}
+
+// Pixel Y of where a stem-up tip would sit, regardless of the note's actual
+// stem direction — per createNoteSvg's own stem geometry, a stem-up tip is
+// at NOTE_Y_STEM_START minus any external stemExtension (no flag-count
+// dependency: extra flags on a stem-up note extend the *head* end of the
+// stem, not the tip — see createNoteSvg's stemY1/stemY2). Used only by the
+// grace slur's descending-group stem-tip anchoring (see buildGraceSlur).
+export function stemUpTipYPx(stemExtension = 0): number {
+  return NOTE_STEM_TIP_Y_OFFSET - stemExtension;
 }

@@ -58,10 +58,10 @@ Short melodic decorations applied to a note.
 | &#x2610; | Inverted Mordent (Upper) | `ð†ª`                 | Quick upper-neighbor figure (note â†’ above â†’ note) |
 | &#x2610; | Turn                     | `âˆž` or `ð„Ž`        | Four-note figure: above â†’ note â†’ below â†’ note   |
 | &#x2610; | Inverted Turn            | Reversed turn symbol  | Below â†’ note â†’ above â†’ note                     |
-| &#x2610; | Appoggiatura             | Small note (slurred)  | Leaning grace note; takes half the beat value         |
-| &#x2610; | Acciaccatura             | Small note with slash | "Crushed" grace note; played almost simultaneously    |
-| &#x2610; | Grace Note (single)      | Small flagged note    | A quick ornamental note before the main note          |
-| &#x2610; | Grace Note (multiple)    | Small beamed notes    | A run of quick ornamental notes                       |
+| &#x2611; | Appoggiatura             | Small note (slurred)  | Leaning grace note; takes half the beat value         |
+| &#x2611; | Acciaccatura             | Small note with slash | "Crushed" grace note; played almost simultaneously    |
+| &#x2611; | Grace Note (single)      | Small flagged note    | A quick ornamental note before the main note          |
+| &#x2611; | Grace Note (multiple)    | Small beamed notes    | A run of quick ornamental notes                       |
 | &#x2610; | Glissando                | `gliss.` + line       | Slide between two pitches                             |
 | &#x2610; | Portamento               | Curved line           | Smooth, vocal-style slide between pitches             |
 

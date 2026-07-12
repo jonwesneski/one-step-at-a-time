@@ -1,7 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import { ARTICULATIONS, DURATIONS, NOTES, OCTAVES } from '../utils';
+import {
+  ARTICULATIONS,
+  DURATIONS,
+  DYNAMICS,
+  GRACE_TYPES,
+  NOTES,
+  OCTAVES,
+} from '../utils';
 
 const CHORDS = [
   'Cmaj',
@@ -85,6 +92,69 @@ export const StandaloneWithNotes: Story = {
         duration=${args.duration}
       ></music-note>
     </music-chord>
+  `,
+};
+
+export const WithGraceNotes: Story = {
+  args: {
+    grace: 'D,E',
+    graceOctave: '4,4',
+    graceArticulation: 'staccato,accent',
+    graceType: 'acciaccatura',
+    graceDynamic: 'f',
+    dynamic: 'p',
+  },
+  argTypes: {
+    grace: { control: 'text' },
+    graceOctave: { control: 'text' },
+    graceArticulation: { control: 'text' },
+    graceType: { control: 'select', options: GRACE_TYPES },
+    graceDynamic: { control: 'select', options: ['', ...DYNAMICS] },
+    dynamic: { control: 'select', options: ['', ...DYNAMICS] },
+  },
+  render: (args) => html`
+    <music-staff-treble time="4/4">
+      <music-chord
+        grace=${args.grace}
+        grace-octave=${args.graceOctave}
+        grace-articulation=${args.graceArticulation}
+        grace-type=${args.graceType}
+        grace-dynamic=${args.graceDynamic}
+        dynamic=${args.dynamic}
+      >
+        <music-note note="C" octave="4"></music-note>
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+      </music-chord>
+      <!-- chord with accidentals: grace sits left of the accidental column -->
+      <music-chord grace="C,D" grace-octave="4,4">
+        <music-note note="C#" octave="4"></music-note>
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G#" octave="4"></music-note>
+      </music-chord>
+      <!-- grace-octave omitted: defaults to the reference note's own octave -->
+      <music-chord grace="B,C">
+        <music-note note="C" octave="4"></music-note>
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+      </music-chord>
+    </music-staff-treble>
+  `,
+};
+
+export const StandaloneWithGraceNotes: Story = {
+  render: () => html`
+    <div style="padding: 40px">
+      <music-chord
+        grace="B,C"
+        grace-octave="3,4"
+        grace-articulation="tenuto,accent"
+      >
+        <music-note note="C" octave="4"></music-note>
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+      </music-chord>
+    </div>
   `,
 };
 
