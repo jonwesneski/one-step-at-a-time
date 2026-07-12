@@ -4,6 +4,7 @@ import '../index';
 import {
   ARTICULATIONS,
   DURATIONS,
+  DYNAMICS,
   GRACE_TYPES,
   NOTES,
   OCTAVES,
@@ -98,19 +99,28 @@ export const WithGraceNotes: Story = {
   args: {
     grace: 'D,E',
     graceOctave: '4,4',
+    graceArticulation: 'staccato,accent',
     graceType: 'acciaccatura',
+    graceDynamic: 'f',
+    dynamic: 'p',
   },
   argTypes: {
     grace: { control: 'text' },
     graceOctave: { control: 'text' },
+    graceArticulation: { control: 'text' },
     graceType: { control: 'select', options: GRACE_TYPES },
+    graceDynamic: { control: 'select', options: ['', ...DYNAMICS] },
+    dynamic: { control: 'select', options: ['', ...DYNAMICS] },
   },
   render: (args) => html`
     <music-staff-treble time="4/4">
       <music-chord
         grace=${args.grace}
         grace-octave=${args.graceOctave}
+        grace-articulation=${args.graceArticulation}
         grace-type=${args.graceType}
+        grace-dynamic=${args.graceDynamic}
+        dynamic=${args.dynamic}
       >
         <music-note note="C" octave="4"></music-note>
         <music-note note="E" octave="4"></music-note>
@@ -135,7 +145,11 @@ export const WithGraceNotes: Story = {
 export const StandaloneWithGraceNotes: Story = {
   render: () => html`
     <div style="padding: 40px">
-      <music-chord grace="B,C" grace-octave="3,4">
+      <music-chord
+        grace="B,C"
+        grace-octave="3,4"
+        grace-articulation="tenuto,accent"
+      >
         <music-note note="C" octave="4"></music-note>
         <music-note note="E" octave="4"></music-note>
         <music-note note="G" octave="4"></music-note>

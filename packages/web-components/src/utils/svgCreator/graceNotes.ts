@@ -5,8 +5,14 @@ import {
 } from '../../rules/graceRules';
 import { computeLedgerLines } from '../../rules/staffNoteRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
-import type { GraceDuration, GraceSlur, GraceType } from '../../types/theory';
+import type {
+  ArticulationType,
+  GraceDuration,
+  GraceSlur,
+  GraceType,
+} from '../../types/theory';
 import { SVG_NS } from '../consts';
+import { createArticulationMarks } from './articulations';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
@@ -162,6 +168,19 @@ export function createGraceNotesSvg({
           i
         )
       );
+      const articulation = graceNotes[i].articulation;
+      if (articulation !== null) {
+        const marks = buildGraceArticulation(
+          articulation,
+          writtenDuration,
+          true,
+          headXCenters[i],
+          headYCenters[i]
+        );
+        if (marks !== null) {
+          group.appendChild(marks);
+        }
+      }
     }
 
     const beamYs = computeGraceBeamYs(stemXs, headYCenters);
@@ -224,6 +243,19 @@ export function createGraceNotesSvg({
         0
       )
     );
+    const articulation = graceNotes[0].articulation;
+    if (articulation !== null) {
+      const marks = buildGraceArticulation(
+        articulation,
+        writtenDuration,
+        false,
+        headXCenters[0],
+        headYCenters[0]
+      );
+      if (marks !== null) {
+        group.appendChild(marks);
+      }
+    }
 
     // Grace notes are always stem-up, and a stem-up tip position doesn't
     // move with flag count (extra flags stack down toward the head, not up
@@ -309,6 +341,50 @@ function buildGraceHead(
   }
 
   return noteGroup as SVGGElement;
+}
+
+// Articulation for a single grace note, scaled and positioned identically to
+// its own head (same translate+scale transform as buildGraceHead) so the
+// mark travels with the grace note regardless of the group's layout. Grace
+// notes are always stem-up, so marks land opposite the stem — below the
+// head — matching the main-note convention and keeping them outside the
+// stave, where a scaled-down mark stays legible.
+//
+// createArticulationMarks() draws in the same 600-unit note-space createNoteSvg
+// uses for the head — createNoteSvg wraps that space in its own inner
+// scale(NOTE_SCALE) before buildGraceHead's outer translate+scale(GRACE_SCALE)
+// is applied. The marks bypass createNoteSvg entirely, so that inner scale
+// must be added explicitly here or the marks render at raw 600-unit-space
+// size (~1/NOTE_SCALE too large, invisible against a clipped staff viewBox).
+function buildGraceArticulation(
+  articulation: ArticulationType,
+  duration: GraceDuration,
+  stemless: boolean,
+  xCenter: number,
+  yCenter: number
+): SVGGElement | null {
+  const { cx, cy } = noteHeadCenter(true, duration, stemless);
+  const marks = createArticulationMarks({
+    articulation,
+    stemUp: true,
+    noteHeadCenterX: cx,
+    noteHeadCenterY: cy,
+  });
+  if (marks === null) {
+    return null;
+  }
+  const translateX = xCenter - GRACE_SCALE * cx * NOTE_SCALE;
+  const translateY = yCenter - GRACE_SCALE * cy * NOTE_SCALE;
+  const wrapper = document.createElementNS(SVG_NS, 'g') as SVGGElement;
+  wrapper.setAttribute(
+    'transform',
+    `translate(${translateX} ${translateY}) scale(${GRACE_SCALE})`
+  );
+  const noteSpaceScale = document.createElementNS(SVG_NS, 'g') as SVGGElement;
+  noteSpaceScale.setAttribute('transform', `scale(${NOTE_SCALE})`);
+  noteSpaceScale.appendChild(marks);
+  wrapper.appendChild(noteSpaceScale);
+  return wrapper;
 }
 
 function resolveGroupBeamCount(graceDuration: GraceDuration | null): number {

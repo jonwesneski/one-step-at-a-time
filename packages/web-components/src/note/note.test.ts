@@ -15,6 +15,7 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF_TREBLE,
 } from '../utils/consts';
+import { GRACE_SCALE } from '../utils/notationDimensions';
 import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
   NOTE_HEAD_RADIUS_PX,
@@ -696,6 +697,138 @@ describe('grace notes', () => {
       -2
     ) as number;
     expect(stemDownAccidentalEnd).toBeLessThanOrEqual(stemDownEnd);
+  });
+
+  describe('grace articulation', () => {
+    it('round-trips the grace-articulation attribute between property and attribute', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      document.body.appendChild(noteElement);
+
+      noteElement.grace = ['F#', 'G'];
+      noteElement.graceArticulation = ['staccato', 'accent'];
+
+      expect(noteElement.getAttribute('grace-articulation')).toBe(
+        'staccato,accent'
+      );
+      expect(noteElement.graceArticulation).toEqual(['staccato', 'accent']);
+    });
+
+    it('falls back to no mark for missing or invalid grace-articulation slots, without rejecting the whole list', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('grace', 'A,B,C');
+      document.body.appendChild(noteElement);
+
+      // grace-articulation omitted entirely → getter returns null.
+      expect(noteElement.graceArticulation).toBeNull();
+
+      // Middle token invalid, trailing token missing → both fall back to
+      // null for that position only, the valid first token still parses.
+      noteElement.setAttribute('grace-articulation', 'staccato,not-a-mark');
+      expect(noteElement.graceArticulation).toEqual(['staccato', null]);
+    });
+
+    it('renders a mark on each grace note in a group independently', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'A,B');
+      noteElement.setAttribute('grace-octave', '4,4');
+      noteElement.setAttribute('grace-articulation', 'staccato,accent');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup?.querySelectorAll('.articulations')).toHaveLength(2);
+      expect(graceGroup?.querySelector('.staccato')).not.toBeNull();
+      expect(graceGroup?.querySelector('.accent')).not.toBeNull();
+    });
+
+    it('renders no mark for a grace note whose slot is null, while its sibling still gets one', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'A,B');
+      noteElement.setAttribute('grace-octave', '4,4');
+      noteElement.setAttribute('grace-articulation', ',accent');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup?.querySelectorAll('.articulations')).toHaveLength(1);
+      expect(graceGroup?.querySelector('.accent')).not.toBeNull();
+    });
+
+    it('renders a mark on a single (non-grouped) grace note', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'B');
+      noteElement.setAttribute('grace-octave', '4');
+      noteElement.setAttribute('grace-articulation', 'tenuto');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup?.querySelector('.articulations')).not.toBeNull();
+      expect(graceGroup?.querySelector('.tenuto')).not.toBeNull();
+    });
+
+    it('scales the articulation mark with the grace note (GRACE_SCALE transform)', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'B');
+      noteElement.setAttribute('grace-octave', '4');
+      noteElement.setAttribute('grace-articulation', 'staccato');
+      document.body.appendChild(noteElement);
+
+      const marksOuterWrapper = noteElement.shadowRoot
+        ?.querySelector('.grace-notes .articulations')
+        ?.closest('g[transform^="translate("]');
+      expect(marksOuterWrapper?.getAttribute('transform')).toContain(
+        `scale(${GRACE_SCALE})`
+      );
+    });
+
+    it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
+      // Regression test: createArticulationMarks() draws in the same
+      // 600-unit note-space createNoteSvg uses for the head, and
+      // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
+      // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
+      // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
+      // too large and land outside any clipped viewBox (invisible in-staff).
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'B');
+      noteElement.setAttribute('grace-octave', '4');
+      noteElement.setAttribute('grace-articulation', 'staccato');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      const headInnerScale = graceGroup
+        ?.querySelector('.grace-head')
+        ?.closest('g[transform^="scale("]')
+        ?.getAttribute('transform');
+      const marksInnerScale = graceGroup
+        ?.querySelector('.articulations')
+        ?.closest('g[transform^="scale("]')
+        ?.getAttribute('transform');
+
+      expect(headInnerScale).not.toBeNull();
+      expect(marksInnerScale).toBe(headInnerScale);
+      expect(marksInnerScale).toContain(`scale(${NOTE_SCALE}`);
+    });
+
+    it('renders no articulation marks when grace-articulation is unset', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('grace', 'A,B');
+      noteElement.setAttribute('grace-octave', '4,4');
+      document.body.appendChild(noteElement);
+
+      const graceGroup = noteElement.shadowRoot?.querySelector('.grace-notes');
+      expect(graceGroup?.querySelector('.articulations')).toBeNull();
+    });
   });
 });
 

@@ -33,6 +33,7 @@ import {
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
+  parseGraceArticulations,
   parseGraceDuration,
   parseGraceNotes,
   parseGraceOctaves,
@@ -69,9 +70,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'stress',
         'grace',
         'grace-octave',
+        'grace-articulation',
         'grace-type',
         'grace-duration',
         'grace-slur',
+        'grace-dynamic',
       ];
     }
 
@@ -281,6 +284,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get graceArticulation(): (ArticulationType | null)[] | null {
+      return parseGraceArticulations(this.getAttribute('grace-articulation'));
+    }
+    set graceArticulation(value: (ArticulationType | null)[] | null) {
+      if (value === null || value.length === 0) {
+        this.removeAttribute('grace-articulation');
+      } else {
+        this.setAttribute(
+          'grace-articulation',
+          value.map((v) => v ?? '').join(',')
+        );
+      }
+    }
+
     get graceType(): GraceType {
       return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
     }
@@ -320,6 +337,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     set resolvedGraceAccidentals(value: (AccidentalType | null)[] | null) {
       this.#resolvedGraceAccidentals = value;
       this.#scheduleRender();
+    }
+
+    get graceDynamic(): DynamicMarking | null {
+      return parseDynamicMarking(this.getAttribute('grace-dynamic'));
+    }
+    set graceDynamic(value: DynamicMarking | null) {
+      if (value === null) {
+        this.removeAttribute('grace-dynamic');
+      } else {
+        this.setAttribute('grace-dynamic', value);
+      }
     }
 
     batchUpdate(fn: () => void): void {
@@ -398,7 +426,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (
         name === 'dynamic' ||
         name === 'crescendo' ||
-        name === 'decrescendo'
+        name === 'decrescendo' ||
+        name === 'grace-dynamic'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
@@ -412,6 +441,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (
         name === 'grace' ||
         name === 'grace-octave' ||
+        name === 'grace-articulation' ||
         name === 'grace-type' ||
         name === 'grace-duration' ||
         name === 'grace-slur'
@@ -422,8 +452,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             composed: true,
           })
         );
-        // Is standalone mode; if not, staff will call
-        // trigger a call to render() via batchUpdate()
+        // Is standalone mode; if not, staff will
+        //  trigger a call to render() via batchUpdate()
         if (!this.closest(STAFF_TAGS)) {
           this.render();
         }
@@ -572,7 +602,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         graceNoteLetters,
         this.graceOctave ?? [],
         notes[0].value[0] as NoteLetter,
-        notes[0].octave ?? 4
+        notes[0].octave ?? 4,
+        this.graceArticulation ?? []
       );
       applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
       return graceNotes;

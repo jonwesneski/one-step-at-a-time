@@ -5,7 +5,10 @@ import {
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { pairHairpins } from './rules/dynamicsRules';
-import { computeGraceFootprintWidth } from './rules/graceRules';
+import {
+  computeFirstGraceHeadX,
+  computeGraceFootprintWidth,
+} from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
@@ -127,6 +130,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #tupletGroups: TupletGroup[] = [];
   #tupletsByIndex: Map<number, TupletElementType[]> = new Map();
   #noteXPositions: Map<number, number> = new Map();
+  // X (beams-container space) of the first grace note's head, for elements
+  // that have both a grace group and a grace-dynamic. Populated alongside
+  // #noteXPositions during #spaceElements(), since only that pass has the
+  // leftward-overhang math (main accidental + grace footprint) in scope.
+  #firstGraceHeadXPositions: Map<number, number> = new Map();
   #stemDirections: boolean[] = [];
   #beamedIndicesSnapshot: Set<number> = new Set();
   #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
@@ -967,6 +975,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
 
     this.#noteXPositions.clear();
+    this.#firstGraceHeadXPositions.clear();
 
     // Configure beams container to cover the notes area
     this.#beamsContainer.setAttribute('x', `${this.#describeEndX}`);
@@ -1052,6 +1061,28 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const xInBeamsContainer = xInWrapper - this.#describeEndX;
       this.#beamRenderer?.setX(i, xInBeamsContainer);
       this.#noteXPositions.set(i, xInBeamsContainer);
+
+      // Only needed when the element actually has a grace-dynamic to place —
+      // computeFirstGraceHeadX still needs `grace` itself (a grace-dynamic
+      // with no grace notes has nothing to anchor to and is simply skipped
+      // by #renderDynamics via the same null check).
+      const noteOrChordForGrace = element as INoteElement | IChordElement;
+      if (
+        element.nodeName !== MUSIC_REST_NODE &&
+        noteOrChordForGrace.graceDynamic !== null &&
+        noteOrChordForGrace.grace !== null
+      ) {
+        this.#firstGraceHeadXPositions.set(
+          i,
+          computeFirstGraceHeadX(
+            xInBeamsContainer,
+            leftwardWidth,
+            noteOrChordForGrace.grace,
+            noteOrChordForGrace.resolvedGraceAccidentals
+          )
+        );
+      }
+
       element.style.position = 'absolute';
       element.style.left = `${xInWrapper}px`;
       previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
@@ -1216,6 +1247,23 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             DYNAMICS_BASELINE_Y
           )
         );
+      }
+
+      // A grace-dynamic is independent of the host's own `dynamic` (both can
+      // render at once — see the engraving reference's f-under-grace,
+      // p-under-main example) and sits under the first grace note instead of
+      // the host's own column.
+      if (noteOrChord.graceDynamic !== null) {
+        const firstGraceHeadX = this.#firstGraceHeadXPositions.get(i);
+        if (firstGraceHeadX !== undefined) {
+          this.#dynamicsContainer.appendChild(
+            createDynamicMarkingSvg(
+              noteOrChord.graceDynamic,
+              firstGraceHeadX,
+              DYNAMICS_BASELINE_Y
+            )
+          );
+        }
       }
     }
 

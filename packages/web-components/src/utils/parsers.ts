@@ -129,3 +129,20 @@ export const parseGraceOctaves = (
     return VALID_OCTAVES.has(parsed) ? parsed : null;
   });
 };
+
+// Parses a comma-separated per-grace-note articulation list (e.g.
+// "staccato,,accent"). Like parseGraceOctaves (and unlike parseGraceNotes),
+// an invalid or missing token does not reject the whole list — it resolves
+// to null for that position, so the other grace notes in the group keep
+// their own marks.
+export const parseGraceArticulations = (
+  value: string | null
+): (ArticulationType | null)[] | null => {
+  if (value === null) {
+    return null;
+  }
+  const tokens = value.split(',').map((token) => token.trim());
+  return tokens.map((token) =>
+    VALID_ARTICULATIONS.has(token) ? (token as ArticulationType) : null
+  );
+};

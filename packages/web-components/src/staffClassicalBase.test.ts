@@ -152,4 +152,82 @@ describe('staffClassicalBase', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('grace-dynamic', () => {
+    function makeNote(attrs: Record<string, string>) {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      for (const [key, value] of Object.entries(attrs)) {
+        note.setAttribute(key, value);
+      }
+      return note;
+    }
+
+    it('renders a dynamic-marking text for grace-dynamic, left of the main note’s own dynamic', () => {
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      document.body.appendChild(staff);
+
+      const note = makeNote({
+        grace: 'B',
+        'grace-octave': '4',
+        'grace-dynamic': 'f',
+        dynamic: 'p',
+      });
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      const markings = staff.shadowRoot.querySelectorAll('.dynamic-marking');
+      expect(markings).toHaveLength(2);
+      const texts = Array.from(markings).map((el: any) => el.textContent);
+      expect(texts).toEqual(expect.arrayContaining(['f', 'p']));
+
+      const graceMarking = Array.from(markings).find(
+        (el: any) => el.textContent === 'f'
+      ) as SVGTextElement;
+      const mainMarking = Array.from(markings).find(
+        (el: any) => el.textContent === 'p'
+      ) as SVGTextElement;
+      const graceX = Number(graceMarking.getAttribute('x'));
+      const mainX = Number(mainMarking.getAttribute('x'));
+      expect(graceX).toBeLessThan(mainX);
+    });
+
+    it('renders only the grace-dynamic marking when the main dynamic is unset', () => {
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      document.body.appendChild(staff);
+
+      const note = makeNote({
+        grace: 'B',
+        'grace-octave': '4',
+        'grace-dynamic': 'mf',
+      });
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      const markings = staff.shadowRoot.querySelectorAll('.dynamic-marking');
+      expect(markings).toHaveLength(1);
+      expect(markings[0].textContent).toBe('mf');
+    });
+
+    it('renders no grace-dynamic marking when grace-dynamic is set but the note has no grace notes', () => {
+      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      document.body.appendChild(staff);
+
+      const note = makeNote({ 'grace-dynamic': 'f' });
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(
+        staff.shadowRoot.querySelectorAll('.dynamic-marking')
+      ).toHaveLength(0);
+    });
+  });
 });

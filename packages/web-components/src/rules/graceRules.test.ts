@@ -13,6 +13,7 @@ import {
 } from '../utils/notationDimensions';
 import {
   buildGraceNoteDescriptors,
+  computeFirstGraceHeadX,
   computeGraceBeamYs,
   computeGraceFootprintWidth,
   computeGraceLayout,
@@ -45,8 +46,8 @@ describe('buildGraceNoteDescriptors', () => {
   it('computes steps relative to the reference pitch', () => {
     const descriptors = buildGraceNoteDescriptors(['G', 'A'], [4, 4], 'C', 5);
     expect(descriptors).toEqual([
-      { relativeStaffSteps: -3, accidental: null },
-      { relativeStaffSteps: -2, accidental: null },
+      { relativeStaffSteps: -3, accidental: null, articulation: null },
+      { relativeStaffSteps: -2, accidental: null, articulation: null },
     ]);
   });
 
@@ -55,10 +56,12 @@ describe('buildGraceNoteDescriptors', () => {
     expect(descriptors[0]).toEqual({
       relativeStaffSteps: 3,
       accidental: 'sharp',
+      articulation: null,
     });
     expect(descriptors[1]).toEqual({
       relativeStaffSteps: 6,
       accidental: 'flat',
+      articulation: null,
     });
   });
 
@@ -80,8 +83,13 @@ describe('buildGraceNoteDescriptors', () => {
     expect(descriptors[0]).toEqual({
       relativeStaffSteps: -3,
       accidental: null,
+      articulation: null,
     });
-    expect(descriptors[1]).toEqual({ relativeStaffSteps: 5, accidental: null });
+    expect(descriptors[1]).toEqual({
+      relativeStaffSteps: 5,
+      accidental: null,
+      articulation: null,
+    });
   });
 
   it('defaults a null octave slot (invalid token) to the reference octave', () => {
@@ -89,16 +97,47 @@ describe('buildGraceNoteDescriptors', () => {
     expect(descriptors[0]).toEqual({
       relativeStaffSteps: 4,
       accidental: null,
+      articulation: null,
     });
+  });
+
+  it('populates articulation per grace note, index-aligned with graceNotes', () => {
+    const descriptors = buildGraceNoteDescriptors(['G', 'A'], [4, 4], 'C', 5, [
+      'staccato',
+      'accent',
+    ]);
+    expect(descriptors[0].articulation).toBe('staccato');
+    expect(descriptors[1].articulation).toBe('accent');
+  });
+
+  it('defaults a missing or null articulation slot to null, without affecting other slots', () => {
+    const shortList = buildGraceNoteDescriptors(['G', 'A'], [4, 4], 'C', 5, [
+      'staccato',
+    ]);
+    expect(shortList[0].articulation).toBe('staccato');
+    expect(shortList[1].articulation).toBeNull();
+
+    const nullSlot = buildGraceNoteDescriptors(['G', 'A'], [4, 4], 'C', 5, [
+      null,
+      'accent',
+    ]);
+    expect(nullSlot[0].articulation).toBeNull();
+    expect(nullSlot[1].articulation).toBe('accent');
+  });
+
+  it('defaults articulation to null for every grace note when the parameter is omitted', () => {
+    const descriptors = buildGraceNoteDescriptors(['G', 'A'], [4, 4], 'C', 5);
+    expect(descriptors[0].articulation).toBeNull();
+    expect(descriptors[1].articulation).toBeNull();
   });
 });
 
 describe('computeGraceLayout', () => {
   it('advances one column per grace head', () => {
     const layout = computeGraceLayout([
-      { relativeStaffSteps: 0, accidental: null },
-      { relativeStaffSteps: 1, accidental: null },
-      { relativeStaffSteps: 2, accidental: null },
+      { relativeStaffSteps: 0, accidental: null, articulation: null },
+      { relativeStaffSteps: 1, accidental: null, articulation: null },
+      { relativeStaffSteps: 2, accidental: null, articulation: null },
     ]);
     expect(layout.totalWidth).toBe(3 * GRACE_NOTE_ADVANCE_PX);
     expect(layout.headXCenters).toEqual([
@@ -112,8 +151,8 @@ describe('computeGraceLayout', () => {
     const accidentalWidth =
       GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
     const layout = computeGraceLayout([
-      { relativeStaffSteps: 0, accidental: 'sharp' },
-      { relativeStaffSteps: 1, accidental: null },
+      { relativeStaffSteps: 0, accidental: 'sharp', articulation: null },
+      { relativeStaffSteps: 1, accidental: null, articulation: null },
     ]);
     expect(layout.totalWidth).toBe(2 * GRACE_NOTE_ADVANCE_PX + accidentalWidth);
     expect(layout.headXCenters[0]).toBe(
@@ -123,9 +162,9 @@ describe('computeGraceLayout', () => {
 
   it('produces monotonically increasing x centers', () => {
     const layout = computeGraceLayout([
-      { relativeStaffSteps: 0, accidental: 'flat' },
-      { relativeStaffSteps: 1, accidental: 'sharp' },
-      { relativeStaffSteps: 2, accidental: null },
+      { relativeStaffSteps: 0, accidental: 'flat', articulation: null },
+      { relativeStaffSteps: 1, accidental: 'sharp', articulation: null },
+      { relativeStaffSteps: 2, accidental: null, articulation: null },
     ]);
     for (let i = 1; i < layout.headXCenters.length; i++) {
       expect(layout.headXCenters[i]).toBeGreaterThan(
@@ -191,6 +230,61 @@ describe('computeGraceFootprintWidth', () => {
     expect(computeGraceFootprintWidth(graceNotes, ['natural'])).toBe(
       GRACE_MAIN_GAP_PX + 2 * GRACE_NOTE_ADVANCE_PX + accidentalWidth
     );
+  });
+});
+
+describe('computeFirstGraceHeadX', () => {
+  it('lands left of noteX by leftwardWidth, plus half a head advance for a plain grace note', () => {
+    const graceNotes: Note[] = ['B'];
+    const leftwardWidth = computeGraceFootprintWidth(graceNotes);
+    const x = computeFirstGraceHeadX(100, leftwardWidth, graceNotes);
+    expect(x).toBe(100 - leftwardWidth + GRACE_NOTE_ADVANCE_PX / 2);
+  });
+
+  it('shifts right by the first grace note’s own accidental width when it has a suffix', () => {
+    const graceNotes: Note[] = ['F#', 'G'];
+    const leftwardWidth = computeGraceFootprintWidth(graceNotes);
+    const accidentalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
+    const x = computeFirstGraceHeadX(100, leftwardWidth, graceNotes);
+    expect(x).toBe(
+      100 - leftwardWidth + accidentalWidth + GRACE_NOTE_ADVANCE_PX / 2
+    );
+  });
+
+  it('prefers the resolved accidental over the suffix for the first grace note', () => {
+    const graceNotes: Note[] = ['F'];
+    const resolved: ('natural' | null)[] = ['natural'];
+    const leftwardWidth = computeGraceFootprintWidth(graceNotes, resolved);
+    const naturalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.natural + ACCIDENTAL_NOTE_GAP);
+    const x = computeFirstGraceHeadX(100, leftwardWidth, graceNotes, resolved);
+    expect(x).toBe(
+      100 - leftwardWidth + naturalWidth + GRACE_NOTE_ADVANCE_PX / 2
+    );
+  });
+
+  it('only considers the first grace note — a later accidental does not change its own offset within the group', () => {
+    // The first head's offset from the group's own local origin (its X=0
+    // point, i.e. noteX - leftwardWidth) should be identical whether or not
+    // a later grace note in the group carries an accidental — only that
+    // later note's own column width changes, not anything about the first.
+    const withLaterAccidental: Note[] = ['G', 'F#'];
+    const plain: Note[] = ['G', 'A'];
+    const leftwardWidthWithLater =
+      computeGraceFootprintWidth(withLaterAccidental);
+    const leftwardWidthPlain = computeGraceFootprintWidth(plain);
+    const offsetWithLater =
+      computeFirstGraceHeadX(100, leftwardWidthWithLater, withLaterAccidental) -
+      (100 - leftwardWidthWithLater);
+    const offsetPlain =
+      computeFirstGraceHeadX(100, leftwardWidthPlain, plain) -
+      (100 - leftwardWidthPlain);
+    expect(offsetWithLater).toBe(offsetPlain);
+  });
+
+  it('falls back to noteX - leftwardWidth for an empty grace list', () => {
+    expect(computeFirstGraceHeadX(100, 20, [])).toBe(80);
   });
 });
 

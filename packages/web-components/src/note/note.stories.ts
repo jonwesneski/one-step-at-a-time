@@ -4,6 +4,7 @@ import '../index';
 import {
   ARTICULATIONS,
   DURATIONS,
+  DYNAMICS,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
@@ -100,9 +101,12 @@ export const WithGraceNotes: Story = {
     octave: 5,
     grace: 'A,B',
     graceOctave: '4,4',
+    graceArticulation: 'staccato,accent',
     graceType: 'acciaccatura',
     graceDuration: '',
     graceSlur: 'auto',
+    graceDynamic: 'f',
+    dynamic: 'p',
   },
   argTypes: {
     duration: { control: 'select', options: DURATIONS },
@@ -110,9 +114,12 @@ export const WithGraceNotes: Story = {
     octave: { control: 'select', options: OCTAVES },
     grace: { control: 'text' },
     graceOctave: { control: 'text' },
+    graceArticulation: { control: 'text' },
     graceType: { control: 'select', options: GRACE_TYPES },
     graceDuration: { control: 'select', options: ['', ...GRACE_DURATIONS] },
     graceSlur: { control: 'select', options: GRACE_SLURS },
+    graceDynamic: { control: 'select', options: ['', ...DYNAMICS] },
+    dynamic: { control: 'select', options: ['', ...DYNAMICS] },
   },
   render: (args) => html`
     <music-staff-treble time="4/4">
@@ -122,9 +129,12 @@ export const WithGraceNotes: Story = {
         octave=${args.octave}
         grace=${args.grace}
         grace-octave=${args.graceOctave}
+        grace-articulation=${args.graceArticulation}
         grace-type=${args.graceType}
         grace-duration=${args.graceDuration}
         grace-slur=${args.graceSlur}
+        grace-dynamic=${args.graceDynamic}
+        dynamic=${args.dynamic}
       ></music-note>
     </music-staff-treble>
   `,
@@ -134,11 +144,13 @@ export const StandaloneWithGraceNotes: Story = {
   args: {
     grace: 'B',
     graceOctave: '4',
+    graceArticulation: 'accent',
     graceType: 'acciaccatura',
   },
   argTypes: {
     grace: { control: 'text' },
     graceOctave: { control: 'text' },
+    graceArticulation: { control: 'text' },
     graceType: { control: 'select', options: GRACE_TYPES },
   },
   render: (args) => html`
@@ -148,6 +160,7 @@ export const StandaloneWithGraceNotes: Story = {
         octave="5"
         grace=${args.grace}
         grace-octave=${args.graceOctave}
+        grace-articulation=${args.graceArticulation}
         grace-type=${args.graceType}
       ></music-note>
     </div>
@@ -159,13 +172,16 @@ export const GraceNoteGallery: Story = {
     <music-staff-treble time="4/4">
       <!-- single acciaccatura (slashed eighth) -->
       <music-note note="C" octave="5" grace="B" grace-octave="4"></music-note>
-      <!-- single appoggiatura, no slash -->
+      <!-- single appoggiatura, no slash, with its own dynamic under the
+           grace note and the main note's dynamic under itself -->
       <music-note
         note="C"
         octave="5"
         grace="B"
         grace-octave="4"
         grace-type="appoggiatura"
+        grace-dynamic="f"
+        dynamic="p"
       ></music-note>
       <!-- quarter appoggiatura: bare stem, no flag -->
       <music-note
@@ -187,19 +203,21 @@ export const GraceNoteGallery: Story = {
       ></music-note>
     </music-staff-treble>
     <music-staff-treble time="4/4">
-      <!-- two-note run, default two beams -->
+      <!-- two-note run, default two beams, each grace note with its own mark -->
       <music-note
         note="C"
         octave="5"
         grace="A,B"
         grace-octave="4,4"
+        grace-articulation="staccato,accent"
       ></music-note>
-      <!-- four-note run -->
+      <!-- four-note run, marks on the first and last grace notes only -->
       <music-note
         note="G"
         octave="4"
         grace="C,D,E,F"
         grace-octave="4,4,4,4"
+        grace-articulation="tenuto,,,marcato"
       ></music-note>
       <!-- thirtysecond run: three beams -->
       <music-note

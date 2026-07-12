@@ -1,4 +1,10 @@
-import { AccidentalType, Note, NoteLetter, Octave } from '../types/theory';
+import {
+  AccidentalType,
+  ArticulationType,
+  Note,
+  NoteLetter,
+  Octave,
+} from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
@@ -17,6 +23,7 @@ export type GraceNoteDescriptor = {
   // identically in standalone and in-staff rendering.
   relativeStaffSteps: number;
   accidental: AccidentalType | null;
+  articulation: ArticulationType | null;
 };
 
 export type GraceLayout = {
@@ -46,11 +53,14 @@ export function graceAccidentalFromNote(note: Note): AccidentalType | null {
 
 // Missing or invalid octave slots (graceOctaves[i] is null, or the array is
 // shorter than graceNotes) default to the reference (main element's) octave.
+// Missing or invalid articulation slots (graceArticulations[i] is null/absent)
+// default to no mark for that grace note.
 export function buildGraceNoteDescriptors(
   graceNotes: Note[],
   graceOctaves: (Octave | null)[],
   referenceLetter: NoteLetter,
-  referenceOctave: Octave
+  referenceOctave: Octave,
+  graceArticulations: (ArticulationType | null)[] = []
 ): GraceNoteDescriptor[] {
   return graceNotes.map((graceNote, i) => {
     const letter = graceNote[0] as NoteLetter;
@@ -63,6 +73,7 @@ export function buildGraceNoteDescriptors(
         octave
       ),
       accidental: graceAccidentalFromNote(graceNote),
+      articulation: graceArticulations[i] ?? null,
     };
   });
 }
@@ -106,6 +117,44 @@ export function computeGraceLayout(
     runningX += GRACE_NOTE_ADVANCE_PX;
   }
   return { headXCenters, totalWidth: runningX };
+}
+
+// Absolute X (px, staff/beams-container space) of the first grace note's
+// head center, given the host note/chord's own left edge (noteX, as stored
+// in #noteXPositions) and its total leftward overhang (leftwardWidth — main
+// accidental footprint plus the grace group's own footprint, exactly as
+// already computed for spacing via computeGraceFootprintWidth). Used to
+// place a grace-group dynamic under the first grace note rather than under
+// the host's own column.
+//
+// Derivation: the grace group's own local origin (its layout's X=0 point)
+// sits at `noteX - leftwardWidth` in staff space — leftwardWidth already
+// equals the grace group's full rendered span (its footprint, which itself
+// equals GRACE_MAIN_GAP_PX + totalWidth) plus any main accidental width
+// reserved ahead of it, so no separate accounting for the gap or the main
+// accidental is needed here. Only the first grace note's own accidental
+// column (if any) needs resolving — mirrors computeGraceFootprintWidth's
+// resolved-vs-suffix-fallback preference, applied to index 0 only.
+export function computeFirstGraceHeadX(
+  noteX: number,
+  leftwardWidth: number,
+  graceNotes: Note[],
+  resolvedAccidentals?: (AccidentalType | null)[] | null
+): number {
+  if (graceNotes.length === 0) {
+    return noteX - leftwardWidth;
+  }
+  const useResolved = hasUsableResolvedAccidentals(
+    graceNotes,
+    resolvedAccidentals
+  );
+  const firstAccidental = useResolved
+    ? resolvedAccidentals[0]
+    : graceAccidentalFromNote(graceNotes[0]);
+  const firstAccidentalWidth =
+    firstAccidental !== null ? graceAccidentalWidth(firstAccidental) : 0;
+  const firstHeadXCenter = firstAccidentalWidth + GRACE_NOTE_ADVANCE_PX / 2;
+  return noteX - leftwardWidth + firstHeadXCenter;
 }
 
 // True when resolvedAccidentals is usable (non-null and index-aligned with

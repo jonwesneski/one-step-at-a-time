@@ -85,7 +85,6 @@ export type ChordType =
 
 type NormalChord = `${Note}${ChordType}`;
 
-// Slash chord where the bass note is different from root
 type SlashChord<Bass extends Note, Root extends Note> = Bass extends Root
   ? never
   : `${Bass}/${Root}${ChordType}`;
@@ -149,7 +148,6 @@ export type HairpinRole = 'start' | 'end';
 
 export type HairpinKind = 'crescendo' | 'decrescendo';
 
-// Accent family — attack strength. Internal helper, no longer an element
 export type AccentType = 'accent' | 'marcato';
 
 // Length/hold family — internal helper; the token following the accent prefix.
@@ -190,20 +188,14 @@ export type ArticulationType =
 // Schoenberg stress family
 export type StressType = 'stressed' | 'unstressed';
 
-// Grace notes — small ornamental notes rendered before a main note or chord.
-// Acciaccatura carries a diagonal slash through the flag/beam; appoggiatura
-// is the same small note without the slash.
+// Just a reminder: grace notes never consume beat budget
 export type GraceType = 'acciaccatura' | 'appoggiatura';
 
-// The written value of grace notes — visual only, grace notes never consume
-// beat budget. Controls flag count (single) and beam count (group).
 export type GraceDuration = Extract<
   DurationType,
   'half' | 'quarter' | 'eighth' | 'sixteenth' | 'thirtysecond' | 'sixtyfourth'
 >;
 
-// 'auto' draws a slur from the first grace notehead to the main notehead;
-// 'none' suppresses it.
 export type GraceSlur = 'auto' | 'none';
 
 export type TupletRatio =

@@ -190,7 +190,8 @@ describe(MUSIC_CHORD, () => {
     function makeChordWithNotes(
       values: [Note, Octave][],
       grace?: string,
-      graceOctave?: string
+      graceOctave?: string,
+      graceArticulation?: string
     ): ChordElementType {
       const chordElement = document.createElement(
         MUSIC_CHORD
@@ -206,6 +207,9 @@ describe(MUSIC_CHORD, () => {
       }
       if (graceOctave !== undefined) {
         chordElement.setAttribute('grace-octave', graceOctave);
+      }
+      if (graceArticulation !== undefined) {
+        chordElement.setAttribute('grace-articulation', graceArticulation);
       }
       document.body.appendChild(chordElement);
       return chordElement;
@@ -468,6 +472,121 @@ describe(MUSIC_CHORD, () => {
       document.body.appendChild(chordElement);
 
       expect(chordElement.shadowRoot?.querySelector('.grace-notes')).toBeNull();
+    });
+
+    describe('grace articulation', () => {
+      it('round-trips the grace-articulation attribute between property and attribute', () => {
+        const chordElement = makeChordWithNotes([
+          ['C', 4],
+          ['E', 4],
+        ]);
+
+        chordElement.grace = ['D', 'E'];
+        chordElement.graceArticulation = ['staccato', 'accent'];
+
+        expect(chordElement.getAttribute('grace-articulation')).toBe(
+          'staccato,accent'
+        );
+        expect(chordElement.graceArticulation).toEqual(['staccato', 'accent']);
+      });
+
+      it('falls back to no mark for missing or invalid grace-articulation slots, without rejecting the whole list', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'A,B'
+        );
+
+        expect(chordElement.graceArticulation).toBeNull();
+
+        chordElement.setAttribute('grace-articulation', 'staccato,not-a-mark');
+        expect(chordElement.graceArticulation).toEqual(['staccato', null]);
+      });
+
+      it('renders a mark on each grace note in a group independently, on a standalone chord', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'A,B',
+          '4,4',
+          'staccato,accent'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        expect(graceGroup?.querySelectorAll('.articulations')).toHaveLength(2);
+        expect(graceGroup?.querySelector('.staccato')).not.toBeNull();
+        expect(graceGroup?.querySelector('.accent')).not.toBeNull();
+      });
+
+      it('renders a mark on a single (non-grouped) grace note', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'B',
+          '4',
+          'tenuto'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        expect(graceGroup?.querySelector('.articulations')).not.toBeNull();
+        expect(graceGroup?.querySelector('.tenuto')).not.toBeNull();
+      });
+
+      it('renders no articulation marks when grace-articulation is unset', () => {
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'A,B',
+          '4,4'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        expect(graceGroup?.querySelector('.articulations')).toBeNull();
+      });
+
+      it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
+        // Regression test: createArticulationMarks() draws in the same
+        // 600-unit note-space createNoteSvg uses for the head, and
+        // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
+        // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
+        // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
+        // too large and land outside any clipped viewBox (invisible in-staff).
+        const chordElement = makeChordWithNotes(
+          [
+            ['C', 4],
+            ['E', 4],
+          ],
+          'B',
+          '4',
+          'tenuto'
+        );
+
+        const graceGroup =
+          chordElement.shadowRoot?.querySelector('.grace-notes');
+        const headInnerScale = graceGroup
+          ?.querySelector('.grace-head')
+          ?.closest('g[transform^="scale("]')
+          ?.getAttribute('transform');
+        const marksInnerScale = graceGroup
+          ?.querySelector('.articulations')
+          ?.closest('g[transform^="scale("]')
+          ?.getAttribute('transform');
+
+        expect(headInnerScale).not.toBeNull();
+        expect(marksInnerScale).toBe(headInnerScale);
+        expect(marksInnerScale).toContain(`scale(${NOTE_SCALE}`);
+      });
     });
   });
 });
