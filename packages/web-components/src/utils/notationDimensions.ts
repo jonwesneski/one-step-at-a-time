@@ -435,3 +435,69 @@ export const GRACE_SLASH_STROKE_WIDTH = 1.1;
  * space shows above it, per standard engraving practice.
  */
 export const GRACE_SLASH_TIP_INSET_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Clef changes ─────────────────────────────────────────────────────────────
+
+/**
+ * Horizontal width (px) reserved for a mid-stream <music-clef> glyph.
+ * Starting value — tune visually in Storybook.
+ */
+export const MID_STREAM_CLEF_WIDTH_PX = STAFF_LINE_SPACING * 3;
+
+/**
+ * Horizontal gap (px) on either side of a mid-stream clef glyph, separating
+ * it from the surrounding notes.
+ */
+export const MID_STREAM_CLEF_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Total horizontal space (px) a mid-stream clef change reserves in the note
+ * stream — the glyph plus a gap on each side.
+ */
+export const CLEF_CHANGE_RESERVED_WIDTH_PX =
+  MID_STREAM_CLEF_WIDTH_PX + MID_STREAM_CLEF_GAP_PX * 2;
+
+/**
+ * Vertical offset (px) of a mid-stream clef glyph from the top of the
+ * transcribe container. Starting value — tune visually in Storybook.
+ */
+export const MID_STREAM_CLEF_Y_OFFSET = STAFF_LINE_SPACING * 2;
+
+/**
+ * Uniform scale applied to a courtesy clef (the small clef preview drawn at
+ * the end of a line/measure when the next line changes clef).
+ */
+export const COURTESY_CLEF_SCALE = 0.7;
+
+/**
+ * Horizontal gap (px) between a courtesy clef and the right edge of the staff
+ * it's drawn on.
+ */
+export const COURTESY_CLEF_MARGIN_RIGHT_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Grand staff / part connectors ─────────────────────────────────────────────
+
+/**
+ * Horizontal depth (px) a brace connector's curve extends left of the
+ * staves it joins. Starting value — tune visually in Storybook.
+ */
+export const BRACE_WIDTH_PX = STAFF_LINE_SPACING * 2.2;
+
+/**
+ * How far (px) the brace's curve bulges left at its vertical midpoint,
+ * beyond its top/bottom anchor points.
+ */
+export const BRACE_MID_BULGE_PX = STAFF_LINE_SPACING * 1.8;
+
+/**
+ * Horizontal depth (px) a bracket connector extends left of the staves it
+ * joins — shallower than a brace, since it's just a straight line + ticks.
+ * Wide enough that its end-cap ticks read as visually distinct from the
+ * adjacent plain barline connector.
+ */
+export const BRACKET_WIDTH_PX = STAFF_LINE_SPACING * 1.4;
+
+/**
+ * Length (px) of each horizontal end-cap tick on a bracket connector.
+ */
+export const BRACKET_CAP_LENGTH_PX = STAFF_LINE_SPACING * 0.9;

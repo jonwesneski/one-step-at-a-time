@@ -21,18 +21,24 @@ import {
  * the grace-note overhangs of the remaining elements. Together they guarantee
  * that proportionalWidth in #spaceElements() is never negative, preventing
  * noteheads from bleeding into adjacent measures.
+ *
+ * clefChangeWidth reserves room for any mid-stream <music-clef> markers,
+ * which occupy horizontal space but are excluded from noteCount (they don't
+ * consume beat duration).
  */
 export function calculateStaffMinWidth(
   describeEndX: number,
   noteCount: number,
   firstElementLeftwardWidth = 0,
-  extraLeftwardWidth = 0
+  extraLeftwardWidth = 0,
+  clefChangeWidth = 0
 ): number {
   return (
     describeEndX +
     firstElementLeftwardWidth +
     extraLeftwardWidth +
-    noteCount * MIN_NOTE_WIDTH
+    noteCount * MIN_NOTE_WIDTH +
+    clefChangeWidth
   );
 }
 

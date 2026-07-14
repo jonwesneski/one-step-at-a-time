@@ -13,7 +13,7 @@ type Story = StoryObj;
 // Primary only, 2 groups: showing both ascending slant and descending slant
 export const Primary: Story = {
   render: () => html`
-    <music-staff-treble keySig="C" mode="major" time="4/4">
+    <music-staff clef="treble" keySig="C" mode="major" time="4/4">
       <music-note note="C" duration="eighth"></music-note>
       <music-note note="D" duration="eighth"></music-note>
       <music-note note="E" duration="eighth"></music-note>
@@ -23,14 +23,14 @@ export const Primary: Story = {
       <music-note note="F" duration="eighth"></music-note>
       <music-note note="E" duration="eighth"></music-note>
       <music-note note="D" duration="eighth"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 // Including Secondary
 export const Secondary: Story = {
   render: () => html`
-    <music-staff-treble keySig="C" mode="major" time="4/4">
+    <music-staff clef="treble" keySig="C" mode="major" time="4/4">
       <music-note note="C" duration="eighth"></music-note>
       <music-note note="D" duration="sixteenth"></music-note>
       <music-note note="E" duration="sixteenth"></music-note>
@@ -62,14 +62,14 @@ export const Secondary: Story = {
         <music-note note="B" duration="sixteenth"></music-note>
         <music-note note="D" duration="sixteenth"></music-note>
       </music-chord>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 // Including fractionals and no slants
 export const Fractional: Story = {
   render: () => html`
-    <music-staff-treble keySig="C" mode="major" time="6/8">
+    <music-staff clef="treble" keySig="C" mode="major" time="6/8">
       <music-note note="C" duration="sixteenth"></music-note>
       <music-note note="E" duration="eighth"></music-note>
       <music-note note="G" duration="eighth"></music-note>
@@ -78,6 +78,6 @@ export const Fractional: Story = {
       <music-note note="E" duration="eighth"></music-note>
       <music-note note="C" duration="eighth"></music-note>
       <music-note note="G" duration="sixteenth"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };

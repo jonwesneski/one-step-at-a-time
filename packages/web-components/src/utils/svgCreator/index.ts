@@ -5,6 +5,7 @@ export {
 } from './articulations';
 export { createGraceNotesSvg, type GraceNotesProps } from './graceNotes';
 export { BeamsBuilder, type NoteYPosition } from './beams';
+export { createBraceSvg, createBracketSvg } from './brace';
 export { createChordSvg } from './chord';
 export {
   createCurveSvg,

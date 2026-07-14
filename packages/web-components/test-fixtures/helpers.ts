@@ -1,11 +1,8 @@
 import type { Page } from '@playwright/test';
 import { NoteLetterOctave } from '../src/types/elements';
-import type { DurationType } from '../src/types/theory';
+import type { ClefType, DurationType } from '../src/types/theory';
 
-export type StaffType =
-  | 'music-staff-treble'
-  | 'music-staff-bass'
-  | 'music-staff-vocal';
+export type StaffType = 'music-staff' | 'music-staff-vocal';
 
 export interface BuildCompositionOptions {
   measureCount: number;
@@ -13,6 +10,7 @@ export interface BuildCompositionOptions {
   duration: DurationType;
   hostWidth: number;
   staffType?: StaffType;
+  clef?: ClefType;
 }
 
 const PITCH_CYCLE: NoteLetterOctave[] = [
@@ -77,6 +75,7 @@ export async function buildComposition(
       duration,
       hostWidth,
       staffType,
+      clef,
       pitchCycle,
     }) => {
       const host = document.getElementById('host');
@@ -87,11 +86,14 @@ export async function buildComposition(
       host.style.width = `${hostWidth}px`;
 
       const composition = document.createElement('music-composition');
-      const tag = staffType ?? 'music-staff-treble';
+      const tag = staffType ?? 'music-staff';
 
       for (let m = 0; m < measureCount; m++) {
         const measure = document.createElement('music-measure');
         const staff = document.createElement(tag);
+        if (tag === 'music-staff') {
+          staff.setAttribute('clef', clef ?? 'treble');
+        }
         for (let n = 0; n < notesPerMeasure; n++) {
           const note = document.createElement('music-note');
           const pitchIndex = (m * notesPerMeasure + n) % pitchCycle.length;
@@ -109,22 +111,24 @@ export async function buildComposition(
       notesPerMeasure: options.notesPerMeasure,
       duration: options.duration,
       hostWidth: options.hostWidth,
-      staffType: options.staffType ?? 'music-staff-treble',
+      staffType: options.staffType ?? 'music-staff',
+      clef: options.clef ?? 'treble',
       pitchCycle: PITCH_CYCLE,
     }
   );
 }
 
-export async function buildStandaloneTrebleStaff(
+export async function buildStandaloneStaff(
   page: Page,
   options: {
     notes: number;
     duration: DurationType;
     hostWidth: number;
+    clef?: ClefType;
   }
 ): Promise<void> {
   await page.evaluate(
-    ({ notes, duration, hostWidth, pitchCycle }) => {
+    ({ notes, duration, hostWidth, clef, pitchCycle }) => {
       const host = document.getElementById('host');
       if (host === null) {
         throw new Error('host element missing');
@@ -132,7 +136,8 @@ export async function buildStandaloneTrebleStaff(
       host.innerHTML = '';
       host.style.width = `${hostWidth}px`;
 
-      const staff = document.createElement('music-staff-treble');
+      const staff = document.createElement('music-staff');
+      staff.setAttribute('clef', clef);
       for (let n = 0; n < notes; n++) {
         const note = document.createElement('music-note');
         note.setAttribute('value', pitchCycle[n % pitchCycle.length]);
@@ -145,6 +150,7 @@ export async function buildStandaloneTrebleStaff(
       notes: options.notes,
       duration: options.duration,
       hostWidth: options.hostWidth,
+      clef: options.clef ?? 'treble',
       pitchCycle: PITCH_CYCLE,
     }
   );

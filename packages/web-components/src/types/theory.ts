@@ -129,6 +129,14 @@ export type Voice =
   | 'baritone'
   | 'bass';
 
+// TODO: extend with 'alto' | 'tenor' | ... once CLEF_DEFINITIONS in
+// rules/clefRules.ts has data for them
+export type ClefType = 'treble' | 'bass';
+
+// Connector drawn to the left of a staff and its implicit next sibling —
+// see StaffElementBase's `group` attribute and measure.ts's pairing logic.
+export type StaffGroupType = 'grand' | 'bracket';
+
 export type DynamicMarking =
   | 'ppp'
   | 'pp'

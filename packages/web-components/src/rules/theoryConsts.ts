@@ -1,5 +1,26 @@
 import { ChordType, DurationType, Note } from '../types/theory';
 
+// Minor key → its relative major. Used both for accidental key-signature
+// lookup and for deriving minor key-signature Y-coordinate tables from a
+// clef's major tables (same relative-major relationship applies to both).
+export const MINOR_TO_RELATIVE_MAJOR: Partial<Record<string, string>> = {
+  A: 'C',
+  E: 'G',
+  B: 'D',
+  'F#': 'A',
+  'C#': 'E',
+  'G#': 'B',
+  'D#': 'F#',
+  'A#': 'C#',
+  D: 'F',
+  G: 'Bb',
+  C: 'Eb',
+  F: 'Ab',
+  Bb: 'Db',
+  Eb: 'Gb',
+  Ab: 'Cb',
+};
+
 export const durationToFlagCountMap = new Map<DurationType, number>([
   ['eighth', 1],
   ['sixteenth', 2],

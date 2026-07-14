@@ -38,11 +38,11 @@ export const InStaff: Story = {
     duration4: { control: 'select', options: DURATIONS },
   },
   render: (args) => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-rest duration=${args.duration1}></music-rest>
       <music-rest duration=${args.duration2}></music-rest>
       <music-rest duration=${args.duration3}></music-rest>
       <music-rest duration=${args.duration4}></music-rest>
-    </music-staff-treble>
+    </music-staff>
   `,
 };

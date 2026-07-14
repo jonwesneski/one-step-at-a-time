@@ -1,9 +1,12 @@
 import {
+  ClefElementType,
+  ClefMarkerPlacement,
   NoteChordOrRestElementType,
   TupletElementType,
 } from '../types/elements';
 import {
   MUSIC_CHORD_NODE,
+  MUSIC_CLEF_NODE,
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
   MUSIC_TUPLET_NODE,
@@ -12,9 +15,11 @@ import {
 export function flattenSlotElements(assigned: Element[]): {
   flatElements: NoteChordOrRestElementType[];
   tupletsByIndex: Map<number, TupletElementType[]>;
+  clefMarkers: ClefMarkerPlacement[];
 } {
   const flatElements: NoteChordOrRestElementType[] = [];
   const tupletsByIndex = new Map<number, TupletElementType[]>();
+  const clefMarkers: ClefMarkerPlacement[] = [];
 
   function flatten(
     element: Element,
@@ -34,6 +39,17 @@ export function flattenSlotElements(assigned: Element[]): {
       for (const child of element.children) {
         flatten(child, [...tupletAncestors, element as TupletElementType]);
       }
+    } else if (tag === MUSIC_CLEF_NODE) {
+      if (tupletAncestors.length > 0) {
+        console.warn(
+          '[flattenSlotElements] <music-clef> inside <music-tuplet> is not supported; ignoring'
+        );
+        return;
+      }
+      clefMarkers.push({
+        afterElementIndex: flatElements.length - 1,
+        element: element as ClefElementType,
+      });
     }
   }
 
@@ -41,5 +57,5 @@ export function flattenSlotElements(assigned: Element[]): {
     flatten(element, []);
   }
 
-  return { flatElements, tupletsByIndex };
+  return { flatElements, tupletsByIndex, clefMarkers };
 }

@@ -6,8 +6,7 @@ import {
   COMMON_ATTRIBUTES,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
-  MUSIC_STAFF_BASS,
-  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF,
 } from '../utils/consts';
 
 afterEach(() => {
@@ -32,7 +31,7 @@ describe(MUSIC_COMPOSITION, () => {
 });
 
 describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
-  function makeTree(staffTag = MUSIC_STAFF_TREBLE): {
+  function makeTree(clef: 'treble' | 'bass' = 'treble'): {
     composition: any;
     measure: any;
     staff: any;
@@ -43,14 +42,15 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
     const measure = document.createElement(MUSIC_MEASURE) as any;
     composition.appendChild(measure);
 
-    const staff = document.createElement(staffTag) as any;
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute('clef', clef);
     measure.appendChild(staff);
 
     return { composition, measure, staff };
   }
 
   it('propagates keysig change to a descendant treble staff', () => {
-    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
+    const { composition, staff } = makeTree('treble');
 
     expect(staff.keySig).toBe('C');
 
@@ -60,7 +60,7 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
   });
 
   it('propagates mode change to a descendant treble staff', () => {
-    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
+    const { composition, staff } = makeTree('treble');
 
     expect(staff.mode).toBe('major');
 
@@ -70,7 +70,7 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
   });
 
   it('propagates time change to a descendant treble staff', () => {
-    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
+    const { composition, staff } = makeTree('treble');
 
     expect(staff.time).toBe('4/4');
 
@@ -80,7 +80,7 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
   });
 
   it('propagates keysig change to a descendant bass staff', () => {
-    const { composition, staff } = makeTree(MUSIC_STAFF_BASS);
+    const { composition, staff } = makeTree('bass');
 
     expect(staff.keySig).toBe('C');
 
@@ -90,7 +90,7 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
   });
 
   it('respects a staff-level keysig override over the composition value', () => {
-    const { composition, staff } = makeTree(MUSIC_STAFF_TREBLE);
+    const { composition, staff } = makeTree('treble');
     staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D');
 
     expect(staff.keySig).toBe('D');
@@ -110,7 +110,7 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
     measure.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'F');
     composition.appendChild(measure);
 
-    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    const staff = document.createElement(MUSIC_STAFF) as any;
     measure.appendChild(staff);
 
     expect(staff.keySig).toBe('F');

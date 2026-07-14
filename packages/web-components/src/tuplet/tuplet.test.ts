@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import '../note/index';
-import '../staffTreble/index';
+import '../staff/index';
 import { TupletElementType } from '../types/elements';
 import type {
   DurationType,
@@ -14,7 +14,7 @@ import type {
 import {
   COMMON_ATTRIBUTES,
   MUSIC_NOTE,
-  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF,
   MUSIC_TUPLET,
 } from '../utils/consts';
 import './index';
@@ -112,7 +112,7 @@ describe(MUSIC_TUPLET, () => {
 
 describe('staff integration', () => {
   it('renders a .tuplets-container svg in the shadow DOM when a tuplet is slotted', () => {
-    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    const staff = document.createElement(MUSIC_STAFF) as any;
     staff.setAttribute(
       COMMON_ATTRIBUTES.TIME_SIG,
       '4/4' satisfies TimeSignature
@@ -139,7 +139,7 @@ describe('staff integration', () => {
   });
 
   it('renders a .tuplet-group inside .tuplets-container for a triplet', () => {
-    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    const staff = document.createElement(MUSIC_STAFF) as any;
     staff.setAttribute(
       COMMON_ATTRIBUTES.TIME_SIG,
       '4/4' satisfies TimeSignature

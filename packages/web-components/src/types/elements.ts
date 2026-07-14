@@ -2,6 +2,7 @@ import {
   AccidentalType,
   ArticulationType,
   Chord,
+  ClefType,
   DurationType,
   DynamicMarking,
   GraceDuration,
@@ -120,6 +121,10 @@ export interface IRestElement {
   duration: DurationType;
 }
 
+export interface IClefElement {
+  clef: ClefType;
+}
+
 export interface ITupletElement {
   ratio: TupletRatio;
   readonly flatElements: NoteChordOrRestElementType[];
@@ -130,6 +135,7 @@ export type ChordElementType = HTMLElement & IChordElement;
 export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
+export type ClefElementType = HTMLElement & IClefElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
 export type NoteChordOrRestElementType =
   | NoteElementType
@@ -139,6 +145,15 @@ export type NoteLikeElementType =
   | NoteElementType
   | GuitarNoteElementType
   | ChordElementType;
+
+// A <music-clef> encountered in a staff's slotted content, marking a
+// mid-stream clef change. `afterElementIndex` is the index (into the
+// resulting flatElements array) of the note/chord/rest this marker follows;
+// -1 means the marker appears before any note/chord/rest.
+export type ClefMarkerPlacement = {
+  afterElementIndex: number;
+  element: ClefElementType;
+};
 
 export type YCoordinates = Partial<Record<NoteLetterOctave, number>>;
 

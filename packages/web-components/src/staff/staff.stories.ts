@@ -1,15 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { html } from 'lit';
 import '../index';
-import { DYNAMICS, MODES, NOTES, TIMES } from '../utils';
+import { CLEFS, DYNAMICS, MODES, NOTES, TIMES } from '../utils';
 
 const HAIRPIN_ROLES = ['start', 'end'] as const;
 
 const meta: Meta = {
-  title: 'Components/StaffTreble',
+  title: 'Components/Staff',
   tags: ['autodocs'],
   render: (args) => html`
-    <music-staff-treble
+    <music-staff
+      clef=${args.clef}
       keySig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
@@ -18,9 +19,13 @@ const meta: Meta = {
       <music-note note="E" duration="quarter"></music-note>
       <music-note note="C" octave="5" duration="quarter"></music-note>
       <music-note note="E" octave="5" duration="quarter"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
   argTypes: {
+    clef: {
+      control: 'radio',
+      options: CLEFS,
+    },
     keySig: {
       control: 'select',
       options: NOTES,
@@ -35,6 +40,7 @@ const meta: Meta = {
     },
   },
   args: {
+    clef: 'treble',
     keySig: 'C',
     mode: 'major',
     time: '4/4',
@@ -45,13 +51,31 @@ export default meta;
 type Story = StoryObj;
 
 export const Plain: Story = {
-  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major', time: '4/4' },
+};
+
+export const BassClef: Story = {
+  args: { clef: 'bass', keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-staff
+      clef=${args.clef}
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-note note="C" duration="quarter"></music-note>
+      <music-note note="E" duration="quarter"></music-note>
+      <music-note note="G" duration="quarter"></music-note>
+      <music-note note="C" duration="quarter"></music-note>
+    </music-staff>
+  `,
 };
 
 export const WithBeamedEighthNotes: Story = {
-  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <music-staff-treble
+    <music-staff
+      clef=${args.clef}
       keySig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
@@ -64,14 +88,15 @@ export const WithBeamedEighthNotes: Story = {
       <music-note note="A" duration="eighth"></music-note>
       <music-note note="B" duration="eighth"></music-note>
       <music-note note="C" duration="eighth"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 export const ThreeQuarterTime: Story = {
-  args: { keySig: 'C', mode: 'major', time: '3/4' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major', time: '3/4' },
   render: (args) => html`
-    <music-staff-treble
+    <music-staff
+      clef=${args.clef}
       keySig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
@@ -79,14 +104,19 @@ export const ThreeQuarterTime: Story = {
       <music-note note="G" duration="quarter"></music-note>
       <music-note note="E" duration="quarter"></music-note>
       <music-note note="C" duration="quarter"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 export const WithLedgerLines: Story = {
-  args: { keySig: 'C', mode: 'major' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major' },
   render: (args) => html`
-    <music-staff-treble keySig=${args.keySig} mode=${args.mode} time="6/4">
+    <music-staff
+      clef=${args.clef}
+      keySig=${args.keySig}
+      mode=${args.mode}
+      time="6/4"
+    >
       <music-note note="A" octave="5" duration="quarter"></music-note>
       <music-note note="C" octave="6" duration="quarter"></music-note>
       <music-note note="D" octave="4" duration="quarter"></music-note>
@@ -99,14 +129,15 @@ export const WithLedgerLines: Story = {
         <music-note note="B" octave="5" duration="quarter"></music-note>
         <music-note note="C" octave="6" duration="quarter"></music-note>
       </music-chord>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 export const WithAccidentals: Story = {
-  args: { keySig: 'C', mode: 'major', time: '5/4' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major', time: '5/4' },
   render: (args) => html`
-    <music-staff-treble
+    <music-staff
+      clef=${args.clef}
       keySig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
@@ -116,14 +147,20 @@ export const WithAccidentals: Story = {
       <music-note note="B" octave="4" duration="quarter"></music-note>
       <music-note note="C##" octave="5" duration="quarter"></music-note>
       <music-note note="Bbb" octave="4" duration="quarter"></music-note>
-    </music-staff-treble>
+      <music-chord duration="quarter">
+        <music-note note="C##" octave="3" duration="quarter"></music-note>
+        <music-note note="Eb" octave="3" duration="quarter"></music-note>
+        <music-note note="G#" octave="3" duration="quarter"></music-note>
+      </music-chord>
+    </music-staff>
   `,
 };
 
 export const WithTriplets: Story = {
-  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <music-staff-treble
+    <music-staff
+      clef=${args.clef}
       keySig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
@@ -139,7 +176,7 @@ export const WithTriplets: Story = {
         <music-note note="A" octave="4" duration="eighth"></music-note>
         <music-note note="B" octave="4" duration="eighth"></music-note>
       </music-tuplet>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
@@ -157,7 +194,7 @@ export const WithDynamics: Story = {
     dynamic4: { control: 'select', options: DYNAMICS },
   },
   render: (args) => html`
-    <music-staff-treble keySig="C" mode="major" time="4/4">
+    <music-staff clef="treble" keySig="C" mode="major" time="4/4">
       <music-note
         duration="quarter"
         note="C"
@@ -182,7 +219,7 @@ export const WithDynamics: Story = {
         octave="4"
         dynamic=${args.dynamic4}
       ></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
@@ -220,7 +257,7 @@ export const WithDynamicsAndHairpin: Story = {
     decrescendo4: { control: 'select', options: HAIRPIN_ROLES },
   },
   render: (args) => html`
-    <music-staff-treble keySig="C" mode="major" time="4/4">
+    <music-staff clef="treble" keySig="C" mode="major" time="4/4">
       <music-note
         duration="quarter"
         note="C"
@@ -237,8 +274,9 @@ export const WithDynamicsAndHairpin: Story = {
         dynamic=${args.dynamic2}
         crescendo=${args.crescendo2}
       ></music-note>
-    </music-staff-treble>
-    <music-staff-treble
+    </music-staff>
+    <music-staff
+      clef="treble"
       keySig="C"
       mode="major"
       time="4/4"
@@ -260,14 +298,15 @@ export const WithDynamicsAndHairpin: Story = {
         dynamic=${args.dynamic4}
         decrescendo=${args.decrescendo4}
       ></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 export const WithQuintuplet: Story = {
-  args: { keySig: 'C', mode: 'major', time: '5/4' },
+  args: { clef: 'treble', keySig: 'C', mode: 'major', time: '5/4' },
   render: (args) => html`
-    <music-staff-treble
+    <music-staff
+      clef=${args.clef}
       keySig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
@@ -283,6 +322,32 @@ export const WithQuintuplet: Story = {
       <music-note note="A" octave="4" duration="quarter"></music-note>
       <music-note note="G" octave="4" duration="quarter"></music-note>
       <music-note note="F" octave="4" duration="quarter"></music-note>
-    </music-staff-treble>
+    </music-staff>
+  `,
+};
+
+export const MidStreamClefChange: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+      <music-note note="E" octave="5" duration="quarter"></music-note>
+      <music-clef clef="bass"></music-clef>
+      <music-note note="C" octave="3" duration="quarter"></music-note>
+      <music-note note="E" octave="3" duration="quarter"></music-note>
+    </music-staff>
+  `,
+};
+
+export const MultipleClefChanges: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+      <music-clef clef="bass"></music-clef>
+      <music-note note="C" octave="3" duration="quarter"></music-note>
+      <music-clef clef="treble"></music-clef>
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+      <music-clef clef="bass"></music-clef>
+      <music-note note="C" octave="3" duration="quarter"></music-note>
+    </music-staff>
   `,
 };

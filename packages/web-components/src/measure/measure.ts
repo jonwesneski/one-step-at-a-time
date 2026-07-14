@@ -1,6 +1,26 @@
+import { resolveStaffGroupPairs } from '../rules/staffGroupRules';
 import { minWidthToFlexGrow } from '../rules/staffWidth';
-import { MUSIC_COMPOSITION, STAFF_EVENTS } from '../utils';
-import { EMPTY_MEASURE_FLEX_BASIS_PX } from '../utils/notationDimensions';
+import { StaffGroupType } from '../types/theory';
+import {
+  createBracketSvg,
+  createBraceSvg,
+  isStaffNodeName,
+  MUSIC_COMPOSITION,
+  STAFF_EVENTS,
+} from '../utils';
+import {
+  BRACE_WIDTH_PX,
+  BRACKET_WIDTH_PX,
+  EMPTY_MEASURE_FLEX_BASIS_PX,
+} from '../utils/notationDimensions';
+
+// Rough per-staff vertical footprint within a measure's stacked staff
+// children, used to approximate a group connector's vertical span — mirrors
+// the same staffHeight/paddingAndMargin approximation #updateConnectorVisibility
+// already uses for the plain full-measure barline.
+const STAFF_SLOT_HEIGHT_PX = 44;
+const STAFF_SLOT_GAP_PX = 54;
+const CONNECTOR_TOP_PX = 51;
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class MeasureElement extends HTMLElement {
@@ -129,9 +149,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           .staff-connector.hidden {
             opacity: 0;
           }
+
+          .group-connectors {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
+
+          .group-connectors > * {
+            position: absolute;
+          }
         </style>
         <div>
           <div class="staff-connector"></div>
+          <div class="group-connectors"></div>
           <span>${this.number}</span>
           <slot></slot>
         </div>
@@ -166,13 +199,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const currentIndex = allMeasures.indexOf(this);
       const total = Array.from(allMeasures[currentIndex].children).filter((n) =>
-        n.nodeName.startsWith('MUSIC-STAFF-')
+        isStaffNodeName(n.nodeName)
       ).length;
-      const staffHeight = 44;
-      const paddingAndMargin = 54;
       const connectorHeight =
-        staffHeight * total + paddingAndMargin * (total - 1);
+        STAFF_SLOT_HEIGHT_PX * total + STAFF_SLOT_GAP_PX * (total - 1);
       staffConnector.style.height = `${connectorHeight}px`;
+
+      this.#renderGroupConnectors();
 
       if (currentIndex === 0) {
         // First measure always shows connector
@@ -196,6 +229,50 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         staffConnector.classList.remove('hidden');
       } else {
         staffConnector.classList.add('hidden');
+      }
+    }
+
+    // A staff with a `group` attribute pairs implicitly with its immediate
+    // next sibling — no shared name needed, membership is purely positional.
+    // Pairing/validation is a pure function (rules/staffGroupRules.ts) so it
+    // stays independently testable; this method only turns the resolved
+    // pairs into positioned SVG glyphs.
+    #renderGroupConnectors() {
+      const container =
+        this.shadowRoot?.querySelector<HTMLElement>('.group-connectors');
+      if (!container) {
+        return;
+      }
+
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as (HTMLElement & { group?: StaffGroupType | null })[];
+
+      const { pairs, warnings } = resolveStaffGroupPairs(
+        staves.map((staff) => staff.group ?? null)
+      );
+      for (const warning of warnings) {
+        console.warn(`[music-measure] ${warning}`);
+      }
+
+      for (const { index, group } of pairs) {
+        const pairHeight = STAFF_SLOT_HEIGHT_PX * 2 + STAFF_SLOT_GAP_PX;
+        const topOffset =
+          CONNECTOR_TOP_PX + index * (STAFF_SLOT_HEIGHT_PX + STAFF_SLOT_GAP_PX);
+
+        const glyph =
+          group === 'grand'
+            ? createBraceSvg(pairHeight)
+            : createBracketSvg(pairHeight);
+        const glyphWidth =
+          group === 'grand' ? BRACE_WIDTH_PX : BRACKET_WIDTH_PX;
+        glyph.style.left = `${-glyphWidth}px`;
+        glyph.style.top = `${topOffset}px`;
+        container.appendChild(glyph);
       }
     }
   }

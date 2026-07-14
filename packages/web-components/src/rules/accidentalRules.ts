@@ -24,6 +24,7 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../utils/notationDimensions';
+import { MINOR_TO_RELATIVE_MAJOR } from './theoryConsts';
 
 // ─── Suffix parsing ────────────────────────────────────────────────────────────
 
@@ -50,24 +51,6 @@ const MAJOR_ACCIDENTAL_COUNT: Record<string, number> = {
   Db: -5,
   Gb: -6,
   Cb: -7,
-};
-
-const MINOR_TO_RELATIVE_MAJOR: Partial<Record<string, string>> = {
-  A: 'C',
-  E: 'G',
-  B: 'D',
-  'F#': 'A',
-  'C#': 'E',
-  'G#': 'B',
-  'D#': 'F#',
-  'A#': 'C#',
-  D: 'F',
-  G: 'Bb',
-  C: 'Eb',
-  F: 'Ab',
-  Bb: 'Db',
-  Eb: 'Gb',
-  Ab: 'Cb',
 };
 
 // ─── Inter-note spacing ────────────────────────────────────────────────────────
