@@ -4,13 +4,13 @@ import {
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import {
   computeFirstGraceHeadX,
   computeGraceFootprintWidth,
 } from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
-import { getClefRenderData } from './rules/clefRules';
 import { restToYCoordinate } from './rules/restRules';
 import { calculateStaffMinWidth } from './rules/staffWidth';
 import { durationToFactor } from './rules/theoryConsts';
@@ -91,13 +91,13 @@ import {
 } from './utils/notationDimensions';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
+import { flattenSlotElements } from './utils/slotElements';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
-import { flattenSlotElements } from './utils/slotElements';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -118,14 +118,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
-  #tupletContainer: SVGSVGElement = document.createElementNS(
-    SVG_NS,
-    'svg'
-  ) as SVGSVGElement;
-  #dynamicsContainer: SVGSVGElement = document.createElementNS(
-    SVG_NS,
-    'svg'
-  ) as SVGSVGElement;
+  #tupletContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
+  #dynamicsContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteChordOrRestElementType[] = [];
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;

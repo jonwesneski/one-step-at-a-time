@@ -17,7 +17,7 @@ const BRACKET_STROKE_WIDTH = 2;
  * staves' plain barline connector.
  */
 export function createBraceSvg(height: number): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('brace');
   svg.setAttribute('width', `${BRACE_WIDTH_PX}`);
   svg.setAttribute('height', `${height}`);
@@ -67,7 +67,7 @@ export function createBraceSvg(height: number): SVGSVGElement {
  * left of the staves' plain barline connector.
  */
 export function createBracketSvg(height: number): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('bracket');
   svg.setAttribute('width', `${BRACKET_WIDTH_PX}`);
   svg.setAttribute('height', `${height}`);

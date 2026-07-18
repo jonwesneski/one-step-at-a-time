@@ -12,7 +12,6 @@ import type {
   GraceType,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
-import { createArticulationMarks } from './articulations';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
@@ -30,6 +29,7 @@ import {
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
+import { createArticulationMarks } from './articulations';
 import { createCurveSvg, DEFAULT_BULGE_HEIGHT } from './curve';
 import {
   createNoteSvg,
@@ -135,7 +135,7 @@ export function createGraceNotesSvg({
   mainStemUp,
   mainStaffY,
 }: GraceNotesProps): SVGGElement {
-  const group = document.createElementNS(SVG_NS, 'g') as SVGGElement;
+  const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('grace-notes');
 
   const isGroup = graceNotes.length > 1;
@@ -393,12 +393,12 @@ function buildGraceArticulation(
   }
   const translateX = xCenter - GRACE_SCALE * cx * NOTE_SCALE;
   const translateY = yCenter - GRACE_SCALE * cy * NOTE_SCALE;
-  const wrapper = document.createElementNS(SVG_NS, 'g') as SVGGElement;
+  const wrapper = document.createElementNS(SVG_NS, 'g');
   wrapper.setAttribute(
     'transform',
     `translate(${translateX} ${translateY}) scale(${GRACE_SCALE})`
   );
-  const noteSpaceScale = document.createElementNS(SVG_NS, 'g') as SVGGElement;
+  const noteSpaceScale = document.createElementNS(SVG_NS, 'g');
   noteSpaceScale.setAttribute('transform', `scale(${NOTE_SCALE})`);
   noteSpaceScale.appendChild(marks);
   wrapper.appendChild(noteSpaceScale);
@@ -421,7 +421,7 @@ function resolveGroupBeamCount(graceDuration: GraceDuration | null): number {
 
 // The acciaccatura slash rises left-to-right through the crossing point.
 function buildSlash(crossingX: number, crossingY: number): SVGLineElement {
-  const slash = document.createElementNS(SVG_NS, 'line') as SVGLineElement;
+  const slash = document.createElementNS(SVG_NS, 'line');
   slash.classList.add('grace-slash');
   slash.setAttribute('x1', `${crossingX - GRACE_SLASH_HALF_WIDTH_PX}`);
   slash.setAttribute('y1', `${crossingY + GRACE_SLASH_HALF_HEIGHT_PX}`);
