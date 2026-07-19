@@ -9,46 +9,33 @@ import {
 const BRACE_STROKE_WIDTH = 2;
 const BRACKET_STROKE_WIDTH = 2;
 
-/**
- * A curly brace connecting two (or more) staves of a single instrument
- * (e.g. a piano grand staff), drawn as a symmetric pair of cubic-bezier
- * S-curves meeting at a leftward bulge at the vertical midpoint. Positioned
- * by the caller so this glyph's right edge (x=0) sits just left of the
- * staves' plain barline connector.
- */
+// grand staff
 export function createBraceSvg(height: number): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('brace');
   svg.setAttribute('width', `${BRACE_WIDTH_PX}`);
   svg.setAttribute('height', `${height}`);
-  svg.setAttribute(
-    'viewBox',
-    `${-BRACE_WIDTH_PX} 0 ${BRACE_WIDTH_PX} ${height}`
-  );
+  svg.setAttribute('viewBox', `0 0 ${BRACE_WIDTH_PX} ${height}`);
   svg.style.overflow = 'visible';
 
-  const topX = 0;
+  const topX = BRACE_WIDTH_PX;
   const topY = 0;
-  const bottomX = 0;
+  const bottomX = BRACE_WIDTH_PX;
   const bottomY = height;
-  const midX = -BRACE_MID_BULGE_PX;
+  const midX = BRACE_WIDTH_PX - BRACE_MID_BULGE_PX;
   const midY = height / 2;
 
-  // Each half is an S-curve tangent to VERTICAL at its staff-line anchor
-  // (top/bottom) and tangent to HORIZONTAL at the mid-bulge tip — control
-  // point offsets are chosen relative to each other's axis (near-anchor
-  // control point offset mostly in Y, near-bulge control point offset
-  // mostly in X) rather than scaling both from `height`, which previously
-  // produced a near-straight diagonal instead of a curl.
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute(
     'd',
     `M ${topX} ${topY} ` +
-      `C ${topX} ${topY + (midY - topY) * 0.55}, ` +
+      `C ${topX - BRACE_WIDTH_PX * 0.8} ${topY + (midY - topY) * 0.55}, ` +
       `${midX + BRACE_WIDTH_PX * 0.55} ${midY - (midY - topY) * 0.2}, ` +
       `${midX} ${midY} ` +
       `C ${midX + BRACE_WIDTH_PX * 0.55} ${midY + (bottomY - midY) * 0.2}, ` +
-      `${bottomX} ${bottomY - (bottomY - midY) * 0.55}, ` +
+      `${bottomX - BRACE_WIDTH_PX * 0.8} ${
+        bottomY - (bottomY - midY) * 0.55
+      }, ` +
       `${bottomX} ${bottomY}`
   );
   path.setAttribute('fill', 'none');
@@ -63,21 +50,18 @@ export function createBraceSvg(height: number): SVGSVGElement {
 /**
  * A square bracket connecting independently-notated staves (e.g. an SATB
  * choir pair) — a vertical line with a short horizontal tick at each end.
- * Positioned the same way createBraceSvg is: right edge (x=0) sits just
- * left of the staves' plain barline connector.
+ * Positioned the same way createBraceSvg is: right edge (x=BRACKET_WIDTH_PX)
+ * sits just left of the staves' plain barline connector.
  */
 export function createBracketSvg(height: number): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('bracket');
   svg.setAttribute('width', `${BRACKET_WIDTH_PX}`);
   svg.setAttribute('height', `${height}`);
-  svg.setAttribute(
-    'viewBox',
-    `${-BRACKET_WIDTH_PX} 0 ${BRACKET_WIDTH_PX} ${height}`
-  );
+  svg.setAttribute('viewBox', `0 0 ${BRACKET_WIDTH_PX} ${height}`);
   svg.style.overflow = 'visible';
 
-  const lineX = -BRACKET_WIDTH_PX * 0.5;
+  const lineX = BRACKET_WIDTH_PX * 0.5;
 
   const verticalLine = document.createElementNS(SVG_NS, 'line');
   verticalLine.setAttribute('x1', `${lineX}`);
