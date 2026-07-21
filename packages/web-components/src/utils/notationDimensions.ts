@@ -490,6 +490,13 @@ export const BRACE_WIDTH_PX = STAFF_LINE_SPACING * 2.2;
 export const BRACE_MID_BULGE_PX = STAFF_LINE_SPACING * 1.8;
 
 /**
+ * Horizontal gap (px) between the brace's right edge and the staff barline
+ * it connects to. Brace-only — bracket connectors stay flush against the
+ * barline. Starting value — tune visually in Storybook.
+ */
+export const BRACE_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
  * Horizontal depth (px) a bracket connector extends left of the staves it
  * joins — shallower than a brace, since it's just a straight line + ticks.
  * Wide enough that its end-cap ticks read as visually distinct from the

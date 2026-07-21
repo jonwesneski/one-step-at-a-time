@@ -21,6 +21,7 @@ import {
   isStaffNodeName,
 } from '../utils/consts';
 import {
+  BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
   BRACKET_WIDTH_PX,
   COURTESY_CLEF_MARGIN_RIGHT_PX,
@@ -130,7 +131,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           .composition-wrapper.has-group-connector {
-            padding-left: ${Math.max(BRACE_WIDTH_PX, BRACKET_WIDTH_PX)}px;
+            padding-left: ${Math.max(
+              BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX,
+              BRACKET_WIDTH_PX
+            )}px;
           }
 
           .composition-grid {

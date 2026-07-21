@@ -9,6 +9,7 @@ import {
   STAFF_EVENTS,
 } from '../utils';
 import {
+  BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
   BRACKET_WIDTH_PX,
   EMPTY_MEASURE_FLEX_BASIS_PX,
@@ -276,7 +277,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             : createBracketSvg(pairHeight);
         const glyphWidth =
           group === 'grand' ? BRACE_WIDTH_PX : BRACKET_WIDTH_PX;
-        glyph.style.left = `${-glyphWidth}px`;
+        const gap = group === 'grand' ? BRACE_STAFF_GAP_PX : 0;
+        glyph.style.left = `${-(glyphWidth + gap)}px`;
         glyph.style.top = `${topOffset}px`;
         container.appendChild(glyph);
       }
