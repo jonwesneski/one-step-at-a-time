@@ -2,8 +2,8 @@ import { resolveStaffGroupPairs } from '../rules/staffGroupRules';
 import { minWidthToFlexGrow } from '../rules/staffWidth';
 import { StaffGroupType } from '../types/theory';
 import {
-  createBracketSvg,
   createBraceSvg,
+  createBracketSvg,
   isStaffNodeName,
   MUSIC_COMPOSITION,
   STAFF_EVENTS,
@@ -12,14 +12,20 @@ import {
   BRACE_WIDTH_PX,
   BRACKET_WIDTH_PX,
   EMPTY_MEASURE_FLEX_BASIS_PX,
+  STAFF_BOTTOM_MARGIN,
+  STAFF_HEIGHT,
+  STAFF_LINE_START,
 } from '../utils/notationDimensions';
 
-// Rough per-staff vertical footprint within a measure's stacked staff
-// children, used to approximate a group connector's vertical span — mirrors
-// the same staffHeight/paddingAndMargin approximation #updateConnectorVisibility
-// already uses for the plain full-measure barline.
-const STAFF_SLOT_HEIGHT_PX = 44;
-const STAFF_SLOT_GAP_PX = 54;
+// Per-staff vertical footprint within a measure's stacked staff children,
+// used both by the plain full-measure barline (#updateConnectorVisibility)
+// and group connectors (brace/bracket) to size/position their vertical
+// span. Tied to the real staff geometry, plus small empirically-measured
+// nudges (+2 / -2) closing visible gaps the clean derivation alone
+// didn't fully account for. CONNECTOR_TOP_PX remains a separate,
+// still-empirical top-offset constant.
+const STAFF_SLOT_HEIGHT_PX = STAFF_HEIGHT + 2;
+const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
 const CONNECTOR_TOP_PX = 51;
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {

@@ -44,6 +44,22 @@ export default function StandAlone() {
           </music-measure>
         </music-composition>
       </Card>
+      <Card title="Grand Staff">
+        <music-composition>
+          <music-measure keySig="C" mode="major" time="4/4">
+            <music-staff clef="treble" group="grand">
+              <music-note note="C" duration="quarter"></music-note>
+              <music-note note="E" duration="quarter"></music-note>
+              <music-note note="G" duration="quarter"></music-note>
+              <music-note note="C" duration="quarter"></music-note>
+            </music-staff>
+            <music-staff clef="bass">
+              <music-note note="C" duration="half"></music-note>
+              <music-note note="G" duration="half"></music-note>
+            </music-staff>
+          </music-measure>
+        </music-composition>
+      </Card>
       <Card title="3 in a row">
         <music-composition>
           <music-measure>
