@@ -93,43 +93,47 @@ export function createBraceSvg(height: number): SVGSVGElement {
 // font (github.com/steinbergmedia/bravura, SIL Open Font License 1.1) — the
 // SMuFL (Standard Music Font Layout) reference font — via a one-off
 // extraction/processing script (not checked in), keeping the glyph's
-// original ~20-segment cubic-bezier structure intact: each on-curve anchor
-// point is moved inward toward the outline's local centerline by 12.5% of
-// its locally ray-cast stroke thickness there (~25% thinner overall once
-// both sides move), with the two tip caps and the mid-junction pinch
-// smoothed by interpolation instead, since a rounded cap has no
-// well-defined "opposite wall" for the ray-cast to find. Each segment's two
-// control points are shifted by the same vector as whichever endpoint
-// they're adjacent to, so the curve moves inward coherently. Finally the
-// origin is normalized so the path's own coordinate space is already
+// original 20-segment cubic-bezier structure intact. The outline traces
+// both walls of the brace's curved "ribbon" (an outer wall out to each tip,
+// an inner wall back from each tip to the mid-junction pinch); every point
+// in the path — anchors and control points alike — is tagged with which of
+// those four wall arcs it belongs to, matched against its nearest
+// (by vertical position) point on the opposite wall of the same tip's
+// ribbon, and moved 25% of the way toward that match. Since both sides of
+// a matched pair move toward each other by the same fraction, the gap
+// between them (the local stroke width) shrinks to half its original
+// size — verified by sampling cross-sections at several heights (~43-48%
+// width reduction at the humps, converging naturally to ~0 at the tips and
+// pinch where the two walls already meet). Finally the origin is
+// normalized so the path's own coordinate space is already
 // X ∈ [0, SMUFL_BRACE_NATURAL_WIDTH], Y ∈ [0, SMUFL_BRACE_NATURAL_HEIGHT]
 // (top-left origin, Y-down) — so no translation is needed at render time,
 // only the scale below.
 const SMUFL_BRACE_PATH_D =
-  'M 12.81 498.62 ' +
-  'C 41.81 480.62, 72.25 409.47, 72.25 350.47 ' +
-  'C 72.25 345.47, 72.09 340.31, 71.09 335.31 ' +
-  'C 64.09 275.31, 35.83 181.63, 35.83 127.63 ' +
-  'C 35.83 75.63, 60.56 24.92, 65.56 15.92 ' +
-  'C 68.56 9.92, 71.58 9.46, 71.58 6.46 ' +
-  'C 71.58 3.46, 69.6 0, 66.6 0 ' +
-  'C 64.6 0, 63.62 2.54, 59.62 7.54 ' +
-  'C 37.62 34.54, 13.81 91.61, 13.81 191.61 ' +
-  'C 13.81 290.61, 47.56 330.59, 47.56 393.59 ' +
-  'C 47.56 440.59, 28 467.12, 0 499.12 ' +
-  'C 18 519.12, 47.44 534.63, 47.44 599.63 ' +
-  'C 47.44 669.63, 13.82 731.63, 13.82 804.63 ' +
-  'C 13.82 904.63, 37.63 961.72, 59.63 989.72 ' +
-  'C 63.63 994.72, 64.6 996.27, 66.6 996.27 ' +
-  'C 69.6 996.27, 71.58 993.81, 71.58 990.81 ' +
-  'C 71.58 987.81, 69.55 986.36, 65.55 980.36 ' +
-  'C 60.55 972.36, 35.83 921.61, 35.83 868.61 ' +
-  'C 35.83 815.61, 64.21 720.94, 71.21 661.94 ' +
-  'C 72.21 656.94, 72.32 652.77, 72.32 646.77 ' +
-  'C 72.32 587.77, 41.81 516.62, 12.81 498.62 Z';
+  'M 6.25 504 ' +
+  'C 30.5 477.5, 60 406, 60 346 ' +
+  'C 60 342.25, 60 337.75, 59.25 334 ' +
+  'C 45.25 279, 22.75 184.5, 22.75 119 ' +
+  'C 22.75 80, 46.75 28, 56 14.5 ' +
+  'C 58.25 10, 59.75 9.25, 59.75 7 ' +
+  'C 60.75 3.5, 59 0, 56.75 0 ' +
+  'C 56.5 0, 55.75 2.5, 52.75 7 ' +
+  'C 33.75 32, 7.75 88, 7.75 189.5 ' +
+  'C 15.25 287, 43.25 332, 43.5 398 ' +
+  'C 43.5 433.25, 21 470.5, 0 494.5 ' +
+  'C 13.5 518.5, 35.25 530.5, 43.5 597 ' +
+  'C 43.25 668.25, 15.25 729.5, 7.75 807.75 ' +
+  'C 7.75 909.25, 33.75 965.25, 52.75 991 ' +
+  'C 55 996.25, 56.5 997, 58 997 ' +
+  'C 59 997, 60.75 994.5, 59.75 991 ' +
+  'C 59.75 988.75, 59 987.25, 56 982.75 ' +
+  'C 46.75 969.75, 22.75 917.75, 22.75 878 ' +
+  'C 22.75 813.25, 45.25 724.5, 59.25 664.75 ' +
+  'C 60 661, 60 657.25, 60 652.75 ' +
+  'C 60 591, 28 517.5, 6.25 504 Z';
 
 /** Full width (units) of the thinned+normalized glyph outline's bounding box. */
-const SMUFL_BRACE_NATURAL_WIDTH = 72.32;
+const SMUFL_BRACE_NATURAL_WIDTH = 60.75;
 
 /**
  * Full height (units) of the thinned+normalized glyph outline's bounding
@@ -138,7 +142,7 @@ const SMUFL_BRACE_NATURAL_WIDTH = 72.32;
  * whatever gap the connected staves need, which is what createSmuflBraceSvg
  * does below.
  */
-const SMUFL_BRACE_NATURAL_HEIGHT = 996.27;
+const SMUFL_BRACE_NATURAL_HEIGHT = 997;
 
 /**
  * Alternate brace renderer built from a SMuFL glyph outline (see
