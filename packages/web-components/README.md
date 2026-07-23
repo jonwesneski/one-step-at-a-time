@@ -13,3 +13,13 @@ StaffElementBase              (staffBase.ts)         — shadow DOM, lifecycle, 
 ```
 
 Clef data (Y-coordinate maps, octave ranges, key-signature tables, SVG glyphs) lives in `rules/clefRules.ts`, keyed by `ClefType`. A `<music-clef>` element placed inside a `<music-staff>`'s note stream marks a mid-piece clef change — it reserves horizontal space but does not consume beat duration.
+
+## Drawing
+
+to help draw svgs use the SMuFL design. Run:
+
+```bash
+packages/web-components/download-smufl-font.sh
+```
+
+once you have it prompt ai to use it

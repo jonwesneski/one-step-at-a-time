@@ -498,13 +498,38 @@ export const BRACE_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.3;
 
 /**
  * Horizontal depth (px) a bracket connector extends left of the staves it
- * joins — shallower than a brace, since it's just a straight line + ticks.
- * Wide enough that its end-cap ticks read as visually distinct from the
- * adjacent plain barline connector.
+ * joins — shallower than a brace, since it's just a stem + hooks. Wide
+ * enough that its end hooks read as visually distinct from the adjacent
+ * plain barline connector.
  */
 export const BRACKET_WIDTH_PX = STAFF_LINE_SPACING * 1.4;
 
 /**
- * Length (px) of each horizontal end-cap tick on a bracket connector.
+ * Half-width (px) of a bracket connector's stem. The stem is drawn as a
+ * filled path with two parallel vertical edges straddling its centerline
+ * rather than a stroked line, so this directly sets the visible stem
+ * thickness (2x this value).
  */
-export const BRACKET_CAP_LENGTH_PX = STAFF_LINE_SPACING * 0.9;
+export const BRACKET_STEM_HALF_WIDTH_PX = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Horizontal reach (px) of the curled hook at each end of a bracket
+ * connector, measured from the stem's centerline to the hook's outermost
+ * tip.
+ */
+export const BRACKET_HOOK_REACH_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Vertical rise (px) of a bracket connector's hook flourish — how far its
+ * peak extends beyond the stem's end (above the top, below the bottom)
+ * before curving back in to the tip. Starting value — tune visually in
+ * Storybook.
+ */
+export const BRACKET_HOOK_RISE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Half-width (px) of the small flat segment at the very tip of a bracket
+ * connector's hook flourish, so the curl reads as a short thick edge
+ * rather than tapering to a sharp point.
+ */
+export const BRACKET_TIP_WIDTH_PX = STAFF_LINE_SPACING * 0.1;

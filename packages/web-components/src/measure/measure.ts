@@ -2,8 +2,8 @@ import { resolveStaffGroupPairs } from '../rules/staffGroupRules';
 import { minWidthToFlexGrow } from '../rules/staffWidth';
 import { StaffGroupType } from '../types/theory';
 import {
-  createBraceSvg,
   createBracketSvg,
+  createSmuflBraceSvg,
   isStaffNodeName,
   MUSIC_COMPOSITION,
   STAFF_EVENTS,
@@ -273,7 +273,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
         const glyph =
           group === 'grand'
-            ? createBraceSvg(pairHeight)
+            ? createSmuflBraceSvg(pairHeight)
             : createBracketSvg(pairHeight);
         const glyphWidth =
           group === 'grand' ? BRACE_WIDTH_PX : BRACKET_WIDTH_PX;
