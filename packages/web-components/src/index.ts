@@ -2,10 +2,10 @@ import './chord';
 import './composition';
 import './tuplet';
 import './measure';
-import './staffBass';
 import './staffGuitarTab';
-import './staffTreble'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
+import './staff'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
 import './staffVocal';
+import './clef';
 
 import './guitarNote';
 import './note';

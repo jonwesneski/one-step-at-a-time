@@ -21,7 +21,7 @@ pnpm install
 ### Start the UI dev server
 
 ```bash
-nx run @one-step-at-a-time/ui:dev
+nx run ui:dev
 ```
 
 ## Commands

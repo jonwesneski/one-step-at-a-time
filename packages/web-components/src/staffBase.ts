@@ -11,6 +11,8 @@ import {
   STAFF_LINE_START,
   STAFF_WRAPPER_MIN_HEIGHT,
 } from './utils/notationDimensions';
+import { parseStaffGroup } from './utils/parsers';
+import { StaffGroupType } from './types/theory';
 
 // Use a runtime-safe fallback for environments without `HTMLElement` (SSR/Node).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- prevents errrors if loaded in SSR
@@ -49,6 +51,23 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected abstract onStaffResize(): void;
+
+  // Structural, non-rendering attribute — read directly by <music-measure> to
+  // decide whether this staff and its immediate next sibling should be
+  // joined by a brace/bracket connector. Purely a plain attribute (no
+  // observedAttributes/attributeChangedCallback wiring needed here) since
+  // the staff itself never renders anything differently based on `group`.
+  get group(): StaffGroupType | null {
+    return parseStaffGroup(this.getAttribute('group'));
+  }
+
+  set group(value: StaffGroupType | null) {
+    if (value === null) {
+      this.removeAttribute('group');
+    } else {
+      this.setAttribute('group', value);
+    }
+  }
 
   protected render() {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- contructor creates it

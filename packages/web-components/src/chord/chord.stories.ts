@@ -113,7 +113,7 @@ export const WithGraceNotes: Story = {
     dynamic: { control: 'select', options: ['', ...DYNAMICS] },
   },
   render: (args) => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-chord
         grace=${args.grace}
         grace-octave=${args.graceOctave}
@@ -138,7 +138,7 @@ export const WithGraceNotes: Story = {
         <music-note note="E" octave="4"></music-note>
         <music-note note="G" octave="4"></music-note>
       </music-chord>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
@@ -186,7 +186,7 @@ export const InStaff: Story = {
     octave3: { control: 'select', options: OCTAVES },
   },
   render: (args) => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-chord
         chord=${args.chord1}
         duration=${args.duration1}
@@ -212,6 +212,6 @@ export const InStaff: Story = {
           duration=${args.duration2}
         ></music-note>
       </music-chord>
-    </music-staff-treble>
+    </music-staff>
   `,
 };

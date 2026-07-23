@@ -12,7 +12,8 @@ const meta: Meta = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -21,10 +22,11 @@ const meta: Meta = {
           <music-note note="E" duration="quarter"></music-note>
           <music-note note="G" duration="quarter"></music-note>
           <music-note note="C" duration="quarter"></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -33,7 +35,7 @@ const meta: Meta = {
           <music-note note="F" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
           <music-note note="D" duration="quarter"></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -83,7 +85,8 @@ export const SingleMeasure: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -92,7 +95,7 @@ export const SingleMeasure: Story = {
           <music-note note="E" duration="quarter"></music-note>
           <music-note note="G" duration="quarter"></music-note>
           <music-note note="C" duration="quarter"></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -111,7 +114,9 @@ export const TrebleAndBass: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
+          group="grand"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -120,18 +125,21 @@ export const TrebleAndBass: Story = {
           <music-note note="B" duration="quarter"></music-note>
           <music-note note="D" duration="quarter"></music-note>
           <music-note note="G" duration="quarter"></music-note>
-        </music-staff-treble>
-        <music-staff-bass
+        </music-staff>
+        <music-staff
+          clef="bass"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
         >
           <music-note note="G" duration="half"></music-note>
           <music-note note="D" duration="half"></music-note>
-        </music-staff-bass>
+        </music-staff>
       </music-measure>
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
+          group="grand"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -140,15 +148,16 @@ export const TrebleAndBass: Story = {
           <music-note note="C" duration="quarter"></music-note>
           <music-note note="E" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
-        </music-staff-treble>
-        <music-staff-bass
+        </music-staff>
+        <music-staff
+          clef="bass"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
         >
           <music-note note="A" duration="half"></music-note>
           <music-note note="E" duration="half"></music-note>
-        </music-staff-bass>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -163,7 +172,8 @@ export const WithTies: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -192,7 +202,7 @@ export const WithTies: Story = {
             duration="quarter"
             tie="end"
           ></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -207,7 +217,8 @@ export const WithSlurs: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -240,7 +251,7 @@ export const WithSlurs: Story = {
             duration="eighth"
             slur="end"
           ></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -255,7 +266,8 @@ export const WithNestedSlurs: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -288,7 +300,7 @@ export const WithNestedSlurs: Story = {
             duration="eighth"
             slur="end"
           ></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -303,7 +315,8 @@ export const WithCrossMeasureTie: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -317,10 +330,11 @@ export const WithCrossMeasureTie: Story = {
             duration="quarter"
             tie="start"
           ></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -333,7 +347,7 @@ export const WithCrossMeasureTie: Story = {
           ></music-note>
           <music-note note="E" octave="5" duration="quarter"></music-note>
           <music-note note="G" octave="5" duration="quarter"></music-note>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -349,7 +363,8 @@ export const WithCrossRowTie: Story = {
         time=${args.time}
       >
         <music-measure>
-          <music-staff-treble
+          <music-staff
+            clef="treble"
             keySig=${args.keySig}
             mode=${args.mode}
             time=${args.time}
@@ -363,10 +378,11 @@ export const WithCrossRowTie: Story = {
               duration="quarter"
               tie="start"
             ></music-note>
-          </music-staff-treble>
+          </music-staff>
         </music-measure>
         <music-measure>
-          <music-staff-treble
+          <music-staff
+            clef="treble"
             keySig=${args.keySig}
             mode=${args.mode}
             time=${args.time}
@@ -378,7 +394,7 @@ export const WithCrossRowTie: Story = {
               tie="end"
             ></music-note>
             <music-note note="E" octave="5" duration="half"></music-note>
-          </music-staff-treble>
+          </music-staff>
         </music-measure>
       </music-composition>
     </div>
@@ -394,7 +410,8 @@ export const ChordWithPartialTie: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -419,7 +436,7 @@ export const ChordWithPartialTie: Story = {
             <music-note note="E" octave="5" duration="half"></music-note>
             <music-note note="C" octave="5" duration="half"></music-note>
           </music-chord>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -434,7 +451,8 @@ export const ChordWithTie: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -449,7 +467,7 @@ export const ChordWithTie: Story = {
             <music-note note="E" octave="5" duration="half"></music-note>
             <music-note note="G" octave="5" duration="half"></music-note>
           </music-chord>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,
@@ -460,7 +478,7 @@ export const WithCrossSystemHairpin: Story = {
     <div style="max-width: 200px;">
       <music-composition keySig="C" mode="major" time="4/4">
         <music-measure>
-          <music-staff-treble keySig="C" mode="major" time="4/4">
+          <music-staff clef="treble" keySig="C" mode="major" time="4/4">
             <music-note
               note="C"
               octave="5"
@@ -471,10 +489,10 @@ export const WithCrossSystemHairpin: Story = {
             <music-note note="D" octave="5" duration="quarter"></music-note>
             <music-note note="E" octave="5" duration="quarter"></music-note>
             <music-note note="F" octave="5" duration="quarter"></music-note>
-          </music-staff-treble>
+          </music-staff>
         </music-measure>
         <music-measure>
-          <music-staff-treble keySig="C" mode="major" time="4/4">
+          <music-staff clef="treble" keySig="C" mode="major" time="4/4">
             <music-note note="G" octave="5" duration="quarter"></music-note>
             <music-note note="A" octave="5" duration="quarter"></music-note>
             <music-note note="B" octave="5" duration="quarter"></music-note>
@@ -485,7 +503,59 @@ export const WithCrossSystemHairpin: Story = {
               dynamic="f"
               crescendo="end"
             ></music-note>
-          </music-staff-treble>
+          </music-staff>
+        </music-measure>
+      </music-composition>
+    </div>
+  `,
+};
+
+export const TwoPianosOneMeasure: Story = {
+  render: () => html`
+    <music-composition keySig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          keySig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note note="C" octave="5" duration="whole"></music-note>
+        </music-staff>
+        <music-staff clef="bass" keySig="C" mode="major" time="4/4">
+          <music-note note="C" octave="3" duration="whole"></music-note>
+        </music-staff>
+        <music-staff
+          clef="treble"
+          group="grand"
+          keySig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note note="G" octave="5" duration="whole"></music-note>
+        </music-staff>
+        <music-staff clef="bass" keySig="C" mode="major" time="4/4">
+          <music-note note="G" octave="3" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const CourtesyClefAtRowWrap: Story = {
+  render: () => html`
+    <div style="max-width: 150px;">
+      <music-composition keySig="C" mode="major" time="4/4">
+        <music-measure>
+          <music-staff clef="treble">
+            <music-note note="C" duration="whole"></music-note>
+          </music-staff>
+        </music-measure>
+        <music-measure>
+          <music-staff clef="bass">
+            <music-note note="C" octave="3" duration="whole"></music-note>
+          </music-staff>
         </music-measure>
       </music-composition>
     </div>
@@ -501,7 +571,8 @@ export const ChordWithSlur: Story = {
       time=${args.time}
     >
       <music-measure>
-        <music-staff-treble
+        <music-staff
+          clef="treble"
           keySig=${args.keySig}
           mode=${args.mode}
           time=${args.time}
@@ -526,7 +597,7 @@ export const ChordWithSlur: Story = {
             <music-note note="A" octave="5" duration="quarter"></music-note>
             <music-note note="C" octave="6" duration="quarter"></music-note>
           </music-chord>
-        </music-staff-treble>
+        </music-staff>
       </music-measure>
     </music-composition>
   `,

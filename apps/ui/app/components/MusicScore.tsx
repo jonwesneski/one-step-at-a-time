@@ -78,7 +78,7 @@ export default function MusicScore() {
   return (
     <music-composition keySig="D" mode="major" time="4/4">
       <music-measure>
-        <music-staff-treble editable managed ref={staffRef}>
+        <music-staff clef="treble" editable managed ref={staffRef}>
           {items.map((item) =>
             item.type === 'chord' ? (
               <music-chord key={item.id} duration={item.duration}>
@@ -94,22 +94,22 @@ export default function MusicScore() {
               ></music-note>
             )
           )}
-        </music-staff-treble>
-        <music-staff-bass>
+        </music-staff>
+        <music-staff clef="bass">
           <music-note note="A" duration="quarter"></music-note>
-        </music-staff-bass>
+        </music-staff>
         <music-staff-vocal></music-staff-vocal>
       </music-measure>
       <music-measure>
-        <music-staff-treble>
+        <music-staff clef="treble">
           <music-note note="A" duration="thirtysecond"></music-note>
           <music-note note="D" duration="eighth"></music-note>
-        </music-staff-treble>
-        <music-staff-bass>
+        </music-staff>
+        <music-staff clef="bass">
           <music-note note="A" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
           <music-rest duration="eighth"></music-rest>
-        </music-staff-bass>
+        </music-staff>
 
         <music-staff-vocal voice="soprano">
           <music-note note={'C'} octave={5} duration="eighth"></music-note>
@@ -126,15 +126,15 @@ export default function MusicScore() {
         </music-staff-vocal>
       </music-measure>
       <music-measure>
-        <music-staff-treble>
+        <music-staff clef="treble">
           <music-note note="A" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
           <music-note note="A" duration="quarter"></music-note>
-        </music-staff-treble>
-        <music-staff-bass>
+        </music-staff>
+        <music-staff clef="bass">
           <music-note note="A" duration="quarter"></music-note>
-        </music-staff-bass>
+        </music-staff>
         <music-staff-vocal></music-staff-vocal>
       </music-measure>
     </music-composition>

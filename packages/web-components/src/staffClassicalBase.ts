@@ -4,6 +4,7 @@ import {
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import {
   computeFirstGraceHeadX,
@@ -27,6 +28,7 @@ import { StaffElementBase } from './staffBase';
 import {
   ChordElementType,
   ChordNote,
+  ClefMarkerPlacement,
   IChordElement,
   INoteElement,
   NoteChordOrRestElementType,
@@ -38,6 +40,7 @@ import {
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
+  ClefType,
   DurationType,
   Mode,
   Note,
@@ -56,6 +59,7 @@ import {
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD_NODE,
+  MUSIC_CLEF_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
@@ -67,12 +71,14 @@ import {
   SVG_NS,
 } from './utils/consts';
 import {
+  CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
   DYNAMICS_BASELINE_Y,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
+  MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
   STAFF_TOP_LINE_Y,
@@ -85,13 +91,13 @@ import {
 } from './utils/notationDimensions';
 import { NoteTimingDragHandler } from './utils/noteTimingDragHandler';
 import { PitchDragHandler } from './utils/pitchDragHandler';
+import { flattenSlotElements } from './utils/slotElements';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
-import { flattenSlotElements } from './utils/slotElements';
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -112,14 +118,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #beamsContainer: SVGSVGElement;
-  #tupletContainer: SVGSVGElement = document.createElementNS(
-    SVG_NS,
-    'svg'
-  ) as SVGSVGElement;
-  #dynamicsContainer: SVGSVGElement = document.createElementNS(
-    SVG_NS,
-    'svg'
-  ) as SVGSVGElement;
+  #tupletContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
+  #dynamicsContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteChordOrRestElementType[] = [];
   #noteTimingDragHandler: NoteTimingDragHandler | null = null;
@@ -127,8 +127,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #boundPointerDown: ((e: PointerEvent) => void) | null = null;
   #describeEndX = 0;
   #showDescribe = true;
+  #clefChangeAtBoundary = false;
   #tupletGroups: TupletGroup[] = [];
   #tupletsByIndex: Map<number, TupletElementType[]> = new Map();
+  #clefMarkers: ClefMarkerPlacement[] = [];
   #noteXPositions: Map<number, number> = new Map();
   // X (beams-container space) of the first grace note's head, for elements
   // that have both a grace group and a grace-dynamic. Populated alongside
@@ -163,6 +165,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
     this.#showDescribe = value;
+    this.#refreshDescribe();
+  }
+
+  // Set by composition.ts when this staff starts a new visual row and its
+  // effectiveStartClef differs from the previous row's matching staff's
+  // effectiveEndClef — keeps the clef glyph visible (but not key/time
+  // signature) even though showDescribe is false for non-first-in-row staves.
+  get clefChangeAtBoundary(): boolean {
+    return this.#clefChangeAtBoundary;
+  }
+
+  set clefChangeAtBoundary(value: boolean) {
+    if (this.#clefChangeAtBoundary === value) {
+      return;
+    }
+    this.#clefChangeAtBoundary = value;
     this.#refreshDescribe();
   }
 
@@ -502,7 +520,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // Describe is: clef, key signature, time signature, and beams overlay
   #buildDescribe(clefSvgStr: string) {
     this.#describeContainer.classList.add('describe-container');
-    this.#describeContainer.innerHTML = this.#showDescribe ? clefSvgStr : '';
+    this.#describeContainer.innerHTML =
+      this.#showDescribe || this.#clefChangeAtBoundary ? clefSvgStr : '';
     this.transcribeContainer.appendChild(this.#describeContainer);
 
     const xOffsetOfClef = CLEF_X_OFFSET;
@@ -533,7 +552,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #refreshDescribe() {
     if (!this.isConnected) return;
-    this.#describeContainer.innerHTML = this.#showDescribe ? this.clefSvg : '';
+    this.#describeContainer.innerHTML =
+      this.#showDescribe || this.#clefChangeAtBoundary ? this.clefSvg : '';
     const xOffsetOfKeySignature = this.#showDescribe
       ? this.#appendKeySignatureSvg(this.#describeContainer, CLEF_X_OFFSET)
       : CLEF_X_OFFSET;
@@ -675,11 +695,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           e.nodeName === MUSIC_NOTE_NODE ||
           e.nodeName === MUSIC_CHORD_NODE ||
           e.nodeName === MUSIC_REST_NODE ||
-          e.nodeName === MUSIC_TUPLET_NODE
+          e.nodeName === MUSIC_TUPLET_NODE ||
+          e.nodeName === MUSIC_CLEF_NODE
       );
 
-    const { flatElements, tupletsByIndex } = flattenSlotElements(assigned);
+    const { flatElements, tupletsByIndex, clefMarkers } =
+      flattenSlotElements(assigned);
     this.#tupletsByIndex = tupletsByIndex;
+    this.#clefMarkers = clefMarkers;
     this.#renderNotes(flatElements);
 
     /*
@@ -724,23 +747,38 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     elements = elements.slice(0, allowedElementCount);
 
+    // Clef markers anchored to a note/chord/rest that got truncated above
+    // dangle — drop and hide them rather than positioning against an index
+    // that no longer exists in the rendered elements array.
+    const survivingClefMarkers: ClefMarkerPlacement[] = [];
+    for (const marker of this.#clefMarkers) {
+      if (marker.afterElementIndex < allowedElementCount) {
+        survivingClefMarkers.push(marker);
+      } else {
+        marker.element.style.display = 'none';
+      }
+    }
+    this.#clefMarkers = survivingClefMarkers;
+
     const noteStaffYCoords = new Map<NoteElementType, number>();
     const chordStaffYCoords = new Map<ChordElementType, number[]>();
-    for (const element of elements) {
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         noteStaffYCoords.set(
           noteElement,
           this.noteToYCoordinate(
             noteElement.note,
-            noteElement.octave ?? undefined
+            noteElement.octave ?? undefined,
+            i
           )
         );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = element as ChordElementType;
         chordStaffYCoords.set(
           chordElement,
-          this.#resolveChordStaffYCoordinates(chordElement.notes)
+          this.#resolveChordStaffYCoordinates(chordElement.notes, i)
         );
       }
     }
@@ -875,7 +913,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#describeEndX,
         computeTupletScaledNoteCount(elements, this.#tupletsByIndex),
         firstElementLeftwardWidth,
-        extraLeftwardWidth
+        extraLeftwardWidth,
+        this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
       );
       this.dispatchEvent(
         new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
@@ -887,13 +926,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   }
 
-  #resolveChordStaffYCoordinates(notes: ChordNote[]): number[] {
+  #resolveChordStaffYCoordinates(
+    notes: ChordNote[],
+    elementIndex: number
+  ): number[] {
     const result: number[] = [];
     let previousY = Infinity;
+    const { octaves } = this.#renderDataForIndex(elementIndex);
 
     for (const note of notes) {
       if (note.octave !== null) {
-        const y = this.noteToYCoordinate(note.value, note.octave ?? undefined);
+        const y = this.noteToYCoordinate(
+          note.value,
+          note.octave ?? undefined,
+          elementIndex
+        );
         result.push(y);
         previousY = y;
       } else {
@@ -901,8 +948,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // that is still strictly below the previous note's Y, ensuring ascending
         // pitch (root-position close voicing).
         const candidates: number[] = [];
-        for (const octave of this.octaves) {
-          const y = this.noteToYCoordinate(note.value, octave);
+        for (const octave of octaves) {
+          const y = this.noteToYCoordinate(note.value, octave, elementIndex);
           if (y > 0 && y < previousY) {
             candidates.push(y);
           }
@@ -910,7 +957,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const resolved =
           candidates.length > 0
             ? Math.max(...candidates)
-            : this.noteToYCoordinate(note.value, undefined);
+            : this.noteToYCoordinate(note.value, undefined, elementIndex);
         result.push(resolved);
         previousY = resolved;
       }
@@ -919,27 +966,86 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return result;
   }
 
+  // Finds the clef marker active at `elementIndex` — the latest marker whose
+  // `afterElementIndex` is strictly less than it — or null if segment 0 (the
+  // staff's own clef, via the abstract yCoordinates/octaves getters) applies.
+  // Always null for staves with no <music-clef> markers (e.g. StaffVocalElement),
+  // which is exactly what keeps this mechanism a no-op for them.
+  #activeClefAt(elementIndex: number): ClefType | null {
+    let active: ClefMarkerPlacement | null = null;
+    for (const marker of this.#clefMarkers) {
+      if (
+        marker.afterElementIndex < elementIndex &&
+        (active === null || marker.afterElementIndex > active.afterElementIndex)
+      ) {
+        active = marker;
+      }
+    }
+    return active ? active.element.clef : null;
+  }
+
+  #renderDataForIndex(elementIndex: number): {
+    yCoordinates: YCoordinates;
+    octaves: Octave[];
+  } {
+    const clef = this.#activeClefAt(elementIndex);
+    if (clef === null) {
+      return { yCoordinates: this.yCoordinates, octaves: this.octaves };
+    }
+    const { yCoordinates, octaves } = getClefRenderData(clef);
+    return { yCoordinates, octaves };
+  }
+
+  // Subclasses that have a genuine `clef` attribute (StaffElement) override
+  // this to `return this.clef`. Staves with no comparable clef concept
+  // (StaffVocalElement) leave it null, which makes effectiveStartClef/
+  // effectiveEndClef null too — composition.ts's courtesy-clef logic treats
+  // null as "not clef-comparable" and skips the pair.
+  protected get ownClef(): ClefType | null {
+    return null;
+  }
+
+  // The clef in effect at the very start of the staff's note stream — the
+  // staff's own clef (via `ownClef`), unless a <music-clef> marker sits at
+  // afterElementIndex === -1. Backs composition-level courtesy-clef logic.
+  public get effectiveStartClef(): ClefType | null {
+    return this.#activeClefAt(0) ?? this.ownClef;
+  }
+
+  // The clef in effect after the last note/chord/rest — the last marker's
+  // clef, or the start clef if there are no markers.
+  public get effectiveEndClef(): ClefType | null {
+    return this.#activeClefAt(Number.POSITIVE_INFINITY) ?? this.ownClef;
+  }
+
   // Return the y-coordinate for a given note and octave.
   // Accidentals are ignored for vertical placement — C# and C natural occupy
   // the same staff line/space.
-  public noteToYCoordinate(note: Note, octave?: Octave): number {
+  public noteToYCoordinate(
+    note: Note,
+    octave?: Octave,
+    elementIndex?: number
+  ): number {
     if (!note) {
       return 0;
     }
 
     // Strip accidentals: take the first character (always the letter A-G).
     const letter = note[0].toUpperCase();
+    const { yCoordinates, octaves } =
+      elementIndex !== undefined
+        ? this.#renderDataForIndex(elementIndex)
+        : { yCoordinates: this.yCoordinates, octaves: this.octaves };
 
     if (octave !== undefined) {
       const yCoordinate =
-        this.yCoordinates[`${letter}${octave}` as NoteLetterOctave];
+        yCoordinates[`${letter}${octave}` as NoteLetterOctave];
       if (yCoordinate !== undefined) {
         return yCoordinate;
       }
     } else {
-      for (const n of this.octaves) {
-        const yCoordinate =
-          this.yCoordinates[`${letter}${n}` as NoteLetterOctave];
+      for (const n of octaves) {
+        const yCoordinate = yCoordinates[`${letter}${n}` as NoteLetterOctave];
         if (yCoordinate !== undefined) {
           return yCoordinate;
         }
@@ -996,11 +1102,32 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#currentElements,
       this.#tupletsByIndex
     );
-    const proportionalWidth = remainingWidth - scaledNoteCount * MIN_NOTE_WIDTH;
+    const proportionalWidth =
+      remainingWidth -
+      scaledNoteCount * MIN_NOTE_WIDTH -
+      this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
+
+    const clefMarkersByAfterIndex = new Map(
+      this.#clefMarkers.map((marker) => [marker.afterElementIndex, marker])
+    );
 
     let beatOffset = 0;
     let minWidthAccumulator = 0;
     let previousRightEdge = this.#describeEndX;
+
+    // A marker before the first note/chord/rest (afterElementIndex === -1)
+    // is positioned here, ahead of the loop, since there's no element index
+    // to key off inside it.
+    const leadingClefMarker = clefMarkersByAfterIndex.get(-1);
+    if (leadingClefMarker) {
+      leadingClefMarker.element.style.position = 'absolute';
+      leadingClefMarker.element.style.left = `${previousRightEdge}px`;
+      leadingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
+      leadingClefMarker.element.style.display = '';
+      previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
+      minWidthAccumulator += CLEF_CHANGE_RESERVED_WIDTH_PX;
+    }
+
     for (let i = 0; i < this.#currentElements.length; i++) {
       const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
@@ -1100,7 +1227,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           STAFF_Y_PADDING +
           this.noteToYCoordinate(
             noteElement.note,
-            noteElement.octave ?? undefined
+            noteElement.octave ?? undefined,
+            i
           ) -
           yHeadOffset;
         element.style.top = `${noteY}px`;
@@ -1122,6 +1250,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       } else {
         beatOffset += durationToFactor[duration];
         minWidthAccumulator += MIN_NOTE_WIDTH;
+      }
+
+      // A marker following this element (afterElementIndex === i) is
+      // zero-duration — it does not advance beatOffset — but does reserve
+      // horizontal space, same as MIN_NOTE_WIDTH does for a real note.
+      const trailingClefMarker = clefMarkersByAfterIndex.get(i);
+      if (trailingClefMarker) {
+        trailingClefMarker.element.style.position = 'absolute';
+        trailingClefMarker.element.style.left = `${previousRightEdge}px`;
+        trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
+        trailingClefMarker.element.style.display = '';
+        previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
+        minWidthAccumulator += CLEF_CHANGE_RESERVED_WIDTH_PX;
       }
     }
     this.#beamRenderer?.spaceAll();

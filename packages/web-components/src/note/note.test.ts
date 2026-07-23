@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import '../staffTreble/index';
+import '../staff/index';
 import '../tuplet/index';
 import type { NoteElementType, NoteLetterOctave } from '../types/elements';
 import type {
@@ -10,11 +10,7 @@ import type {
   Octave,
   TimeSignature,
 } from '../types/theory';
-import {
-  COMMON_ATTRIBUTES,
-  MUSIC_NOTE,
-  MUSIC_STAFF_TREBLE,
-} from '../utils/consts';
+import { COMMON_ATTRIBUTES, MUSIC_NOTE, MUSIC_STAFF } from '../utils/consts';
 import { GRACE_SCALE } from '../utils/notationDimensions';
 import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
@@ -984,12 +980,12 @@ function expectedNoteTop(value: NoteLetterOctave): string {
 }
 
 function makeStaff(): Element {
-  const staffTreble = document.createElement(MUSIC_STAFF_TREBLE) as any;
-  staffTreble.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
-  staffTreble.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
-  staffTreble.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
-  document.body.appendChild(staffTreble);
-  return staffTreble;
+  const staff = document.createElement(MUSIC_STAFF) as any;
+  staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+  staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+  staff.setAttribute(COMMON_ATTRIBUTES.TIME_SIG, '4/4');
+  document.body.appendChild(staff);
+  return staff;
 }
 
 function renderNote(
@@ -1094,7 +1090,7 @@ describe('staff integration', () => {
   it('renders a double-whole note in a 4/2 staff without overflow warning', () => {
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+    const staff = document.createElement(MUSIC_STAFF) as any;
     staff.setAttribute(
       COMMON_ATTRIBUTES.TIME_SIG,
       '4/2' satisfies TimeSignature
@@ -1174,7 +1170,7 @@ describe('staff integration', () => {
     });
 
     it('suppresses grace accidentals covered by the key signature and shows naturals', () => {
-      const staff = document.createElement(MUSIC_STAFF_TREBLE) as any;
+      const staff = document.createElement(MUSIC_STAFF) as any;
       staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D' satisfies Note);
       staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
       staff.setAttribute(

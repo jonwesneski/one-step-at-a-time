@@ -60,26 +60,16 @@ export function StaffInput({
 
   return (
     <div className="relative">
-      {staff.type === 'treble' ? (
-        <music-staff-treble
-          className={staffClass}
-          keySig={keySig}
-          time={timeSig}
-          onClick={(e) => onSelectStaff(measureId, staffId, e)}
-        >
-          {entryNodes}
-        </music-staff-treble>
-      ) : (
-        <music-staff-bass
-          className={staffClass}
-          keySig={keySig}
-          mode={mode}
-          time={timeSig}
-          onClick={(e) => onSelectStaff(measureId, staffId, e)}
-        >
-          {entryNodes}
-        </music-staff-bass>
-      )}
+      <music-staff
+        clef={staff.type === 'treble' ? 'treble' : 'bass'}
+        className={staffClass}
+        keySig={keySig}
+        mode={mode}
+        time={timeSig}
+        onClick={(e) => onSelectStaff(measureId, staffId, e)}
+      >
+        {entryNodes}
+      </music-staff>
       {isSelected && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 z-20 mt-1 w-72 shadow-lg">
           <NoteChordInput

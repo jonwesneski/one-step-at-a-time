@@ -1,14 +1,15 @@
 import { expect, type Page, test } from '@playwright/test';
 import {
-  buildStandaloneTrebleStaff,
+  buildStandaloneStaff,
   resizeHost,
   waitForRedrawCycle,
   waitForStaffNotesPositioned,
 } from '../../test-fixtures/helpers';
 import {
+  MUSIC_CLEF,
   MUSIC_NOTE,
   MUSIC_REST,
-  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF,
   MUSIC_TUPLET,
 } from '../utils/consts';
 
@@ -46,7 +47,7 @@ async function readBeamShapes(
       count: beams.length,
       firstBBox: { x: bbox.x, width: bbox.width },
     };
-  }, MUSIC_STAFF_TREBLE);
+  }, MUSIC_STAFF);
 }
 
 async function readStandaloneConnectors(
@@ -68,15 +69,15 @@ async function readStandaloneConnectors(
       count: connectors.length,
       firstBBox: { x: bbox.x, width: bbox.width },
     };
-  }, MUSIC_STAFF_TREBLE);
+  }, MUSIC_STAFF);
 }
 
-test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
+test.describe(`${MUSIC_STAFF} responsive layout`, () => {
   test('note left-edges remain strictly monotonic across a resize', async ({
     page,
   }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await buildStandaloneTrebleStaff(page, {
+    await buildStandaloneStaff(page, {
       notes: 8,
       duration: 'eighth',
       hostWidth: 800,
@@ -105,7 +106,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
     page,
   }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await buildStandaloneTrebleStaff(page, {
+    await buildStandaloneStaff(page, {
       notes: 8,
       duration: 'eighth',
       hostWidth: 800,
@@ -143,7 +144,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
 
   test('beams persist across a resize for eighth notes', async ({ page }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await buildStandaloneTrebleStaff(page, {
+    await buildStandaloneStaff(page, {
       notes: 4,
       duration: 'eighth',
       hostWidth: 800,
@@ -176,7 +177,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
     page,
   }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await buildStandaloneTrebleStaff(page, {
+    await buildStandaloneStaff(page, {
       notes: 4,
       duration: 'quarter',
       hostWidth: 800,
@@ -197,7 +198,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
 
   test('beams reposition and rescale on resize', async ({ page }) => {
     const positionedAtStart = waitForStaffNotesPositioned(page);
-    await buildStandaloneTrebleStaff(page, {
+    await buildStandaloneStaff(page, {
       notes: 4,
       duration: 'eighth',
       hostWidth: 800,
@@ -255,7 +256,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
         staff.appendChild(noteC);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE }
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
     );
     await positionedAtStart;
     await waitForRedrawCycle(page);
@@ -307,7 +308,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
         staff.appendChild(noteB);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE }
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
     );
     await positionedAtStart;
     await waitForRedrawCycle(page);
@@ -348,7 +349,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
         staff.appendChild(noteB);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE }
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
     );
     await positionedAtStart;
     await waitForRedrawCycle(page);
@@ -366,7 +367,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} responsive layout`, () => {
   });
 });
 
-test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
+test.describe(`${MUSIC_STAFF} rests`, () => {
   test('rest elements position left-to-right among pitched notes', async ({
     page,
   }) => {
@@ -393,7 +394,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
         staff.appendChild(noteB);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
     );
     await positioned;
     await waitForRedrawCycle(page);
@@ -431,7 +432,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
         staff.appendChild(rest);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, restTag: MUSIC_REST }
+      { staffTag: MUSIC_STAFF, restTag: MUSIC_REST }
     );
     await positioned;
     await waitForRedrawCycle(page);
@@ -476,7 +477,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
         staff.appendChild(noteC);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE, restTag: MUSIC_REST }
     );
     await positioned;
     await waitForRedrawCycle(page);
@@ -488,7 +489,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
     const staffWidth = await page.evaluate((staffTag) => {
       const staff = document.querySelector(staffTag);
       return staff?.getBoundingClientRect().width ?? 0;
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
     if (beams.firstBBox !== null) {
       expect(beams.firstBBox.width).toBeLessThan(staffWidth * 0.8);
     }
@@ -512,20 +513,20 @@ test.describe(`${MUSIC_STAFF_TREBLE} rests`, () => {
         staff.appendChild(rest);
         host.appendChild(staff);
       },
-      { staffTag: MUSIC_STAFF_TREBLE, restTag: MUSIC_REST }
+      { staffTag: MUSIC_STAFF, restTag: MUSIC_REST }
     );
     await positioned;
     await waitForRedrawCycle(page);
 
     const staffExists = await page.evaluate(
       (staffTag) => document.querySelector(staffTag) !== null,
-      MUSIC_STAFF_TREBLE
+      MUSIC_STAFF
     );
     expect(staffExists).toBe(true);
   });
 });
 
-test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
+test.describe(`${MUSIC_STAFF} tuplets`, () => {
   test('triplet renders a numeral "3" in the tuplets container', async ({
     page,
   }) => {
@@ -551,7 +552,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
         host.appendChild(staff);
       },
       {
-        staffTag: MUSIC_STAFF_TREBLE,
+        staffTag: MUSIC_STAFF,
         noteTag: MUSIC_NOTE,
         tupletTag: MUSIC_TUPLET,
       }
@@ -567,7 +568,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
       return (
         staff.shadowRoot.querySelector('.tuplet-numeral')?.textContent ?? null
       );
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
     expect(numeralText).toBe('3');
   });
 
@@ -594,7 +595,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
         host.appendChild(staff);
       },
       {
-        staffTag: MUSIC_STAFF_TREBLE,
+        staffTag: MUSIC_STAFF,
         noteTag: MUSIC_NOTE,
         tupletTag: MUSIC_TUPLET,
       }
@@ -610,7 +611,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
       return (
         staff.shadowRoot.querySelector('.tuplet-numeral')?.textContent ?? null
       );
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
     expect(numeralText).toBe('5:4');
   });
 
@@ -637,7 +638,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
         host.appendChild(staff);
       },
       {
-        staffTag: MUSIC_STAFF_TREBLE,
+        staffTag: MUSIC_STAFF,
         noteTag: MUSIC_NOTE,
         tupletTag: MUSIC_TUPLET,
       }
@@ -658,7 +659,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
       }
       const bbox = group.getBBox();
       return { x: bbox.x, width: bbox.width };
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
     expect(wideBBox).not.toBeNull();
     if (wideBBox === null) {
       throw new Error('unreachable');
@@ -683,7 +684,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
       }
       const bbox = group.getBBox();
       return { x: bbox.x, width: bbox.width };
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
     expect(narrowBBox).not.toBeNull();
     if (narrowBBox === null) {
       throw new Error('unreachable');
@@ -749,7 +750,7 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
           host.appendChild(staff);
         }),
       {
-        staffTag: MUSIC_STAFF_TREBLE,
+        staffTag: MUSIC_STAFF,
         noteTag: MUSIC_NOTE,
         tupletTag: MUSIC_TUPLET,
       }
@@ -765,9 +766,131 @@ test.describe(`${MUSIC_STAFF_TREBLE} tuplets`, () => {
         staff.shadowRoot.querySelectorAll('.tuplet-group')
       ) as SVGGraphicsElement[];
       return groups.map((g) => g.getBBox().y);
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
 
     expect(groupYPositions.length).toBe(2);
     expect(groupYPositions[0]).not.toBe(groupYPositions[1]);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} mid-stream clef changes`, () => {
+  async function buildStaffWithClefChange(page: Page): Promise<void> {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag, clefTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C');
+        noteA.setAttribute('octave', '5');
+        noteA.setAttribute('duration', 'quarter');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'E');
+        noteB.setAttribute('octave', '5');
+        noteB.setAttribute('duration', 'quarter');
+        const clef = document.createElement(clefTag);
+        clef.setAttribute('clef', 'bass');
+        const noteC = document.createElement(noteTag);
+        noteC.setAttribute('note', 'C');
+        noteC.setAttribute('octave', '3');
+        noteC.setAttribute('duration', 'quarter');
+        const noteD = document.createElement(noteTag);
+        noteD.setAttribute('note', 'E');
+        noteD.setAttribute('octave', '3');
+        noteD.setAttribute('duration', 'quarter');
+
+        staff.appendChild(noteA);
+        staff.appendChild(noteB);
+        staff.appendChild(clef);
+        staff.appendChild(noteC);
+        staff.appendChild(noteD);
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE, clefTag: MUSIC_CLEF }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+  }
+
+  test('mid-stream clef marker renders and reserves horizontal space between notes', async ({
+    page,
+  }) => {
+    await buildStaffWithClefChange(page);
+
+    const lefts = await page.evaluate(
+      ({ noteTag, clefTag }) => {
+        const elements = Array.from(
+          document.querySelectorAll(`${noteTag}, ${clefTag}`)
+        );
+        return elements.map((el) => ({
+          tag: el.tagName,
+          left: el.getBoundingClientRect().left,
+        }));
+      },
+      { noteTag: MUSIC_NOTE, clefTag: MUSIC_CLEF }
+    );
+
+    // note, note, clef, note, note — strictly left-to-right, clef included
+    expect(lefts.length).toBe(5);
+    expect(lefts[2].tag).toBe(MUSIC_CLEF.toUpperCase());
+    for (let i = 1; i < lefts.length; i++) {
+      expect(lefts[i].left).toBeGreaterThan(lefts[i - 1].left);
+    }
+  });
+
+  test('notes before and after a mid-stream clef change use different clef Y positions', async ({
+    page,
+  }) => {
+    await buildStaffWithClefChange(page);
+
+    const tops = await page.evaluate((noteTag) => {
+      const notes = Array.from(document.querySelectorAll(noteTag));
+      return notes.map((n) => (n as HTMLElement).style.top);
+    }, MUSIC_NOTE);
+
+    expect(tops.length).toBe(4);
+    // C5/E5 (treble) sit well above C3/E3 (bass) in the shared staff
+    // coordinate space, so their computed top offsets must differ.
+    expect(tops[0]).not.toBe(tops[2]);
+    expect(tops[1]).not.toBe(tops[3]);
+  });
+
+  test('mid-stream clef change respaces correctly on resize', async ({
+    page,
+  }) => {
+    await buildStaffWithClefChange(page);
+
+    const wideLefts = await page.evaluate(
+      ({ noteTag, clefTag }) =>
+        Array.from(document.querySelectorAll(`${noteTag}, ${clefTag}`)).map(
+          (el) => el.getBoundingClientRect().left
+        ),
+      { noteTag: MUSIC_NOTE, clefTag: MUSIC_CLEF }
+    );
+
+    const positionedAfter = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 400);
+    await positionedAfter.catch(() => undefined);
+    await waitForRedrawCycle(page);
+
+    const narrowLefts = await page.evaluate(
+      ({ noteTag, clefTag }) =>
+        Array.from(document.querySelectorAll(`${noteTag}, ${clefTag}`)).map(
+          (el) => el.getBoundingClientRect().left
+        ),
+      { noteTag: MUSIC_NOTE, clefTag: MUSIC_CLEF }
+    );
+
+    expect(narrowLefts.length).toBe(wideLefts.length);
+    for (let i = 1; i < narrowLefts.length; i++) {
+      expect(narrowLefts[i]).toBeGreaterThan(narrowLefts[i - 1]);
+    }
   });
 });

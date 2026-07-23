@@ -1,6 +1,7 @@
 import type { ConnectorRole } from '../types/elements';
 import type {
   ArticulationType,
+  ClefType,
   DynamicMarking,
   GraceDuration,
   GraceSlur,
@@ -8,15 +9,18 @@ import type {
   HairpinRole,
   Note,
   Octave,
+  StaffGroupType,
   StressType,
 } from '../types/theory';
 import {
   ARTICULATIONS,
+  CLEFS,
   DYNAMICS,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
   OCTAVES,
+  STAFF_GROUPS,
   STRESSES,
 } from './consts';
 
@@ -27,6 +31,8 @@ const VALID_GRACE_TYPES = new Set<string>(GRACE_TYPES);
 const VALID_GRACE_DURATIONS = new Set<string>(GRACE_DURATIONS);
 const VALID_GRACE_SLURS = new Set<string>(GRACE_SLURS);
 const VALID_OCTAVES = new Set<number>(OCTAVES);
+const VALID_CLEFS = new Set<string>(CLEFS);
+const VALID_STAFF_GROUPS = new Set<string>(STAFF_GROUPS);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
 const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
@@ -54,6 +60,22 @@ export const parseArticulation = (
 ): ArticulationType | null => {
   if (value !== null && VALID_ARTICULATIONS.has(value)) {
     return value as ArticulationType;
+  }
+  return null;
+};
+
+export const parseClef = (value: string | null): ClefType | null => {
+  if (value !== null && VALID_CLEFS.has(value)) {
+    return value as ClefType;
+  }
+  return null;
+};
+
+export const parseStaffGroup = (
+  value: string | null
+): StaffGroupType | null => {
+  if (value !== null && VALID_STAFF_GROUPS.has(value)) {
+    return value as StaffGroupType;
   }
   return null;
 };

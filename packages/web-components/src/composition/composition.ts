@@ -1,3 +1,4 @@
+import { getClefRenderData } from '../rules/clefRules';
 import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
 import type { NoteChordOrRestElementType } from '../types/elements';
 import { createHairpinSvg } from '../utils';
@@ -13,12 +14,20 @@ import {
   MUSIC_MEASURE,
   MUSIC_MEASURE_NODE,
   MUSIC_NOTE,
-  MUSIC_STAFF_BASS,
+  MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
-  MUSIC_STAFF_TREBLE,
   MUSIC_STAFF_VOCAL,
+  SVG_NS,
+  isStaffNodeName,
 } from '../utils/consts';
-import { DYNAMICS_BASELINE_Y } from '../utils/notationDimensions';
+import {
+  BRACE_STAFF_GAP_PX,
+  BRACE_WIDTH_PX,
+  BRACKET_WIDTH_PX,
+  COURTESY_CLEF_MARGIN_RIGHT_PX,
+  COURTESY_CLEF_SCALE,
+  DYNAMICS_BASELINE_Y,
+} from '../utils/notationDimensions';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class CompositionElement extends HTMLElement {
@@ -99,7 +108,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.render();
       if (name === 'keysig' || name === 'mode' || name === 'time') {
         Array.from(this.querySelectorAll('*'))
-          .filter((el) => el.nodeName.startsWith('MUSIC-STAFF-'))
+          .filter((el) => isStaffNodeName(el.nodeName))
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
           .forEach((staff) => (staff as any).refreshInheritedAttrs?.());
       }
@@ -119,6 +128,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             width: 100%;
             max-width: 900px;
             margin: 0 auto;
+          }
+
+          .composition-wrapper.has-group-connector {
+            padding-left: ${Math.max(
+              BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX,
+              BRACKET_WIDTH_PX
+            )}px;
           }
 
           .composition-grid {
@@ -142,12 +158,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .courtesy-clef-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div class="composition-wrapper">
           <div class="composition-grid">
             <slot></slot>
           </div>
           <svg class="connectors-overlay"></svg>
+          <svg class="courtesy-clef-overlay"></svg>
         </div>
       `;
     }
@@ -175,7 +202,61 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawConnectors();
         this.#redrawHairpins();
         this.#updateDescribeVisibility();
+        this.#updateClefContinuity();
+        this.#updateGroupConnectorSpaceReservation();
       });
+    }
+
+    // A brace/bracket connector (see measure.ts's #renderGroupConnectors)
+    // extends left of a measure's own x=0 — reserve room for it on the
+    // composition wrapper only when at least one staff actually declares
+    // `group`, so compositions without any grouped staves don't waste space.
+    #updateGroupConnectorSpaceReservation() {
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!wrapper) {
+        return;
+      }
+
+      const hasGroupedStaff = Array.from(this.querySelectorAll('*')).some(
+        (el) =>
+          isStaffNodeName(el.nodeName) &&
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (el as any).group != null
+      );
+
+      wrapper.classList.toggle('has-group-connector', hasGroupedStaff);
+    }
+
+    // Groups measures into visual rows using the same top-diff-tolerance
+    // technique #updateDescribeVisibility already relied on — shared so
+    // #updateClefContinuity doesn't duplicate row-detection logic.
+    #computeMeasureRows(): HTMLElement[][] {
+      const measures = Array.from(
+        this.querySelectorAll('music-measure')
+      ) as HTMLElement[];
+
+      // Snapshot all top values before any mutations. Reading layout after a
+      // showDescribe write triggers a reflow, which shifts subsequent
+      // measures — causing later reads to see wrong row positions.
+      const tops = measures.map((m) => m.getBoundingClientRect().top);
+
+      const rows: HTMLElement[][] = [];
+      let previousTop: number | null = null;
+      for (let i = 0; i < measures.length; i++) {
+        const top = tops[i];
+        const isFirstInRow =
+          previousTop === null || Math.abs(top - previousTop) > 5;
+        previousTop = top;
+
+        if (isFirstInRow) {
+          rows.push([measures[i]]);
+        } else {
+          rows[rows.length - 1].push(measures[i]);
+        }
+      }
+      return rows;
     }
 
     #redrawConnectors() {
@@ -217,7 +298,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {
       const firstStaff = this.querySelector(
-        `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}, ${MUSIC_STAFF_GUITAR_TAB}`
+        `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}, ${MUSIC_STAFF_GUITAR_TAB}`
       ) as HTMLElement | null;
       if (!firstStaff?.shadowRoot) {
         return 0;
@@ -246,7 +327,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
       const staff = element.closest(
-        `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}`
+        `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`
       ) as HTMLElement | null;
       if (!staff) {
         return 0;
@@ -266,7 +347,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      const staffSelector = `${MUSIC_STAFF_TREBLE}, ${MUSIC_STAFF_BASS}, ${MUSIC_STAFF_VOCAL}`;
+      const staffSelector = `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`;
       const selector = `${MUSIC_NOTE}[crescendo], ${MUSIC_NOTE}[decrescendo], ${MUSIC_CHORD}[crescendo], ${MUSIC_CHORD}[decrescendo]`;
       const elements = Array.from(
         this.querySelectorAll(selector)
@@ -351,28 +432,142 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #updateDescribeVisibility() {
-      const measures = Array.from(
-        this.querySelectorAll('music-measure')
-      ) as HTMLElement[];
+      const rows = this.#computeMeasureRows();
+      for (const row of rows) {
+        for (let i = 0; i < row.length; i++) {
+          const isFirstInRow = i === 0;
+          Array.from(row[i].children)
+            .filter((el) => isStaffNodeName(el.nodeName))
+            .forEach((staff) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed, same pattern as refreshInheritedAttrs
+              (staff as any).showDescribe = isFirstInRow;
+            });
+        }
+      }
+    }
 
-      // Snapshot all top values before any mutations.
-      // Reading layout after a showDescribe write triggers a reflow, which shifts
-      // subsequent measures — causing later reads to see wrong row positions.
-      const tops = measures.map((m) => m.getBoundingClientRect().top);
+    // Clef changes at a measure boundary are a corollary of the same
+    // clef-segment machinery StaffClassicalElementBase uses for mid-stream
+    // <music-clef> markers, not a separate concept — effectiveStartClef/
+    // effectiveEndClef (duck-typed; only staves with a genuine clef, i.e.
+    // <music-staff>, implement them) do the actual clef determination. This
+    // method only handles row-layout detection and courtesy-glyph rendering.
+    //
+    // Two distinct behaviors, both driven by comparing EVERY pair of
+    // adjacent measures (not just row-boundary pairs) — a measure-boundary
+    // clef change is just two neighboring <music-staff> instances with
+    // different `clef` attributes, and it can happen mid-row just as often
+    // as at a row wrap (e.g. a cello part switching bass→tenor→treble):
+    //   1. clefChangeAtBoundary — the incoming measure's staff must show its
+    //      clef even when it isn't first-in-row (mirrors the existing
+    //      mid-composition time-signature-change precedent). Applies to
+    //      every differing pair, row wrap or not.
+    //   2. Courtesy clef preview — only drawn when the differing pair also
+    //      happens to fall exactly at a row wrap, matching standard
+    //      engraving practice (a courtesy clef previews the next line's
+    //      clef at the end of the current line; there's nothing to preview
+    //      for a mid-row change since the new clef is already visible
+    //      inline via behavior 1).
+    #updateClefContinuity() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.courtesy-clef-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
 
-      let previousTop: number | null = null;
-      for (let i = 0; i < measures.length; i++) {
-        const top = tops[i];
-        const isFirstInRow =
-          previousTop === null || Math.abs(top - previousTop) > 5;
-        previousTop = top;
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
 
-        Array.from(measures[i].children)
-          .filter((el) => el.nodeName.startsWith('MUSIC-STAFF-'))
-          .forEach((staff) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed, same pattern as refreshInheritedAttrs
-            (staff as any).showDescribe = isFirstInRow;
-          });
+      // Reset every staff's boundary flag before recomputing — a staff that
+      // needed the flag last pass but no longer does (clef no longer
+      // differs from its predecessor) must not keep showing a stale glyph.
+      Array.from(this.querySelectorAll('*'))
+        .filter((el) => isStaffNodeName(el.nodeName))
+        .forEach((staff) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (staff as any).clefChangeAtBoundary = false;
+        });
+
+      const rows = this.#computeMeasureRows();
+      const rowIndexByMeasure = new Map<HTMLElement, number>();
+      rows.forEach((row, rowIndex) => {
+        for (const measure of row) {
+          rowIndexByMeasure.set(measure, rowIndex);
+        }
+      });
+      const measures = rows.flat();
+      const rootRect = wrapper.getBoundingClientRect();
+
+      for (let i = 1; i < measures.length; i++) {
+        const outgoingMeasure = measures[i - 1];
+        const incomingMeasure = measures[i];
+        const isRowWrap =
+          rowIndexByMeasure.get(outgoingMeasure) !==
+          rowIndexByMeasure.get(incomingMeasure);
+
+        const outgoingStaves = Array.from(outgoingMeasure.children).filter(
+          (el) => isStaffNodeName(el.nodeName)
+        ) as HTMLElement[];
+        const incomingStaves = Array.from(incomingMeasure.children).filter(
+          (el) => isStaffNodeName(el.nodeName)
+        ) as HTMLElement[];
+
+        // Staves are matched by ordinal position within their measure (1st
+        // staff vs 1st, 2nd vs 2nd) — assumes consistent voice ordering
+        // across measures, which holds for this library's single-line-per-
+        // measure composition model.
+        const pairCount = Math.min(
+          outgoingStaves.length,
+          incomingStaves.length
+        );
+        for (let staffIndex = 0; staffIndex < pairCount; staffIndex++) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          const outgoingStaff = outgoingStaves[staffIndex] as any;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          const incomingStaff = incomingStaves[staffIndex] as any;
+          const outgoingClef = outgoingStaff.effectiveEndClef ?? null;
+          const incomingClef = incomingStaff.effectiveStartClef ?? null;
+
+          // null means "not clef-comparable" (e.g. a vocal or guitar-tab
+          // staff, which have no ClefType concept) — skip the pair.
+          if (outgoingClef === null || incomingClef === null) {
+            continue;
+          }
+
+          if (outgoingClef !== incomingClef) {
+            incomingStaff.clefChangeAtBoundary = true;
+
+            if (!isRowWrap) {
+              continue;
+            }
+
+            const outgoingRect = (
+              outgoingStaves[staffIndex] as HTMLElement
+            ).getBoundingClientRect();
+            const glyphWidth = 30 * COURTESY_CLEF_SCALE;
+            const x =
+              outgoingRect.right -
+              rootRect.left -
+              glyphWidth -
+              COURTESY_CLEF_MARGIN_RIGHT_PX;
+            const y = outgoingRect.top - rootRect.top;
+
+            const courtesyGroup = document.createElementNS(SVG_NS, 'g');
+            courtesyGroup.setAttribute(
+              'transform',
+              `translate(${x}, ${y}) scale(${COURTESY_CLEF_SCALE})`
+            );
+            // Courtesy clef previews the UPCOMING clef (next line's), not a
+            // repeat of the current one — that's the entire point of it.
+            courtesyGroup.innerHTML = getClefRenderData(incomingClef).clefSvg;
+            overlay.appendChild(courtesyGroup);
+          }
+        }
       }
     }
 

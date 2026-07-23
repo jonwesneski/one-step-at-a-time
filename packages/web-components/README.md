@@ -7,7 +7,19 @@ Web Components library for rendering music notation in the browser.
 ```
 StaffElementBase              (staffBase.ts)         — shadow DOM, lifecycle, abstract render()
 ├── StaffClassicalElementBase (staffClassicalBase.ts) — key sig, time sig, note Y-coords, beam/note rendering
-│   ├── StaffTrebleElement    (staffTreble.ts)        — treble clef, Y-coord map, key sig Y-coords
-│   └── StaffBassElement      (staffBass.ts)          — bass clef, Y-coord map, key sig Y-coords
+│   ├── StaffElement          (staff/staff.ts)        — clef-driven staff (`clef` attribute: treble/bass), <music-clef> mid-stream clef changes
+│   └── StaffVocalElement     (staffVocal.ts)         — voice-driven staff, lyrics
 └── StaffGuitarTabElement     (staffGuitarTab.ts)     — 6-line tab staff, no music theory
 ```
+
+Clef data (Y-coordinate maps, octave ranges, key-signature tables, SVG glyphs) lives in `rules/clefRules.ts`, keyed by `ClefType`. A `<music-clef>` element placed inside a `<music-staff>`'s note stream marks a mid-piece clef change — it reserves horizontal space but does not consume beat duration.
+
+## Drawing
+
+to help draw svgs use the SMuFL design. Run:
+
+```bash
+packages/web-components/download-smufl-font.sh
+```
+
+once you have it prompt ai to use it

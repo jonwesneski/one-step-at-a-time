@@ -8,6 +8,7 @@ import { STAFF_LINE_SPACING } from '../utils/notationDimensions';
 import {
   ChordSemitoneMap,
   ChordSemitoneMapAliases,
+  MINOR_TO_RELATIVE_MAJOR,
   noteSemitoneMap,
   semitoneNoteMap,
 } from './theoryConsts';
@@ -187,4 +188,24 @@ export const generateKeySignatureYCoordinates = (
   }
 
   return keySignatureYCoordinates;
+};
+
+/**
+ * Derives a minor-key signature Y-coordinate table from a major-key one, using
+ * the relative-major relationship (e.g. E minor borrows G major's coordinates).
+ * Only produces entries whose relative major exists in `majorYCoordinates` —
+ * pass the sharp table to get sharp minor keys, the flat table for flat ones.
+ */
+export const generateMinorKeySignatureYCoordinates = (
+  majorYCoordinates: KeySignatureYCoordinates
+): KeySignatureYCoordinates => {
+  const minorYCoordinates: KeySignatureYCoordinates = {};
+  for (const minorKey in MINOR_TO_RELATIVE_MAJOR) {
+    const relativeMajor = MINOR_TO_RELATIVE_MAJOR[minorKey] as Note;
+    const coordinates = majorYCoordinates[relativeMajor];
+    if (coordinates !== undefined) {
+      minorYCoordinates[minorKey as Note] = coordinates;
+    }
+  }
+  return minorYCoordinates;
 };

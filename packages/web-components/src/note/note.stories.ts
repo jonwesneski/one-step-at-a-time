@@ -47,7 +47,7 @@ export const WithArticulations: Story = {
     stress: { control: 'select', options: ['', ...STRESSES] },
   },
   render: (args) => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-note
         duration=${args.duration}
         note=${args.note}
@@ -55,19 +55,19 @@ export const WithArticulations: Story = {
         articulation=${args.articulation}
         stress=${args.stress}
       ></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
 export const ArticulationGallery: Story = {
   render: () => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-note note="G" octave="4" articulation="accent"></music-note>
       <music-note note="G" octave="4" articulation="marcato"></music-note>
       <music-note note="G" octave="4" articulation="staccato"></music-note>
       <music-note note="G" octave="4" articulation="staccatissimo"></music-note>
-    </music-staff-treble>
-    <music-staff-treble time="4/4">
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
       <music-note note="G" octave="4" articulation="tenuto"></music-note>
       <music-note note="G" octave="4" articulation="portato"></music-note>
       <music-note
@@ -80,8 +80,8 @@ export const ArticulationGallery: Story = {
         octave="4"
         articulation="marcato-staccato"
       ></music-note>
-    </music-staff-treble>
-    <music-staff-treble time="4/4">
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
       <music-note note="G" octave="4" articulation="fermata"></music-note>
       <music-note
         note="G"
@@ -90,7 +90,7 @@ export const ArticulationGallery: Story = {
       ></music-note>
       <music-note note="G" octave="4" stress="stressed"></music-note>
       <music-note note="G" octave="4" stress="unstressed"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
@@ -122,7 +122,7 @@ export const WithGraceNotes: Story = {
     dynamic: { control: 'select', options: ['', ...DYNAMICS] },
   },
   render: (args) => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-note
         duration=${args.duration}
         note=${args.note}
@@ -136,7 +136,7 @@ export const WithGraceNotes: Story = {
         grace-dynamic=${args.graceDynamic}
         dynamic=${args.dynamic}
       ></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
@@ -169,7 +169,7 @@ export const StandaloneWithGraceNotes: Story = {
 
 export const GraceNoteGallery: Story = {
   render: () => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <!-- single acciaccatura (slashed eighth) -->
       <music-note note="C" octave="5" grace="B" grace-octave="4"></music-note>
       <!-- single appoggiatura, no slash, with its own dynamic under the
@@ -201,8 +201,8 @@ export const GraceNoteGallery: Story = {
         grace-type="appoggiatura"
         grace-duration="sixteenth"
       ></music-note>
-    </music-staff-treble>
-    <music-staff-treble time="4/4">
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
       <!-- two-note run, default two beams, each grace note with its own mark -->
       <music-note
         note="C"
@@ -229,8 +229,8 @@ export const GraceNoteGallery: Story = {
       ></music-note>
       <!-- grace with accidental -->
       <music-note note="G" octave="4" grace="F#" grace-octave="4"></music-note>
-    </music-staff-treble>
-    <music-staff-treble time="4/4">
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
       <!-- grace before a stem-down main note (grace stays stem-up) -->
       <music-note
         note="B"
@@ -248,15 +248,15 @@ export const GraceNoteGallery: Story = {
         grace="F,E"
         grace-octave="4,4"
       ></music-note>
-    </music-staff-treble>
-    <music-staff-treble time="4/4">
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
       <!-- high grace pitches on ledger lines -->
       <music-note note="A" octave="5" grace="C" grace-octave="6"></music-note>
       <!-- low grace pitch on ledger lines -->
       <music-note note="E" octave="4" grace="C" grace-octave="4"></music-note>
       <!-- grace-octave omitted: grace note defaults to the main note's own octave -->
       <music-note note="C" octave="5" grace="B"></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };
 
@@ -290,7 +290,7 @@ export const InStaff: Story = {
     octave4: { control: 'select', options: OCTAVES },
   },
   render: (args) => html`
-    <music-staff-treble time="4/4">
+    <music-staff clef="treble" time="4/4">
       <music-note
         duration=${args.duration1}
         note=${args.note1}
@@ -311,6 +311,6 @@ export const InStaff: Story = {
         note=${args.note4}
         octave=${args.octave4}
       ></music-note>
-    </music-staff-treble>
+    </music-staff>
   `,
 };

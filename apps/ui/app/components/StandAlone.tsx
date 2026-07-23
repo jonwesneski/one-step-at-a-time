@@ -21,78 +21,94 @@ export default function StandAlone() {
         </music-chord>
       </Card>
       <Card title="Staff Chords">
-        <music-staff-treble>
+        <music-staff clef="treble">
           <music-chord>
             <music-note></music-note>
             <music-note></music-note>
           </music-chord>
-        </music-staff-treble>
+        </music-staff>
       </Card>
       <Card title="Staff Tie">
-        <music-staff-treble>
+        <music-staff clef="treble">
           <music-note note="A" tie="start"></music-note>
           <music-note note="A" tie="end"></music-note>
-        </music-staff-treble>
+        </music-staff>
       </Card>
       <Card title="Composition Tie">
         <music-composition>
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="A" tie="start"></music-note>
               <music-note note="A" tie="end"></music-note>
-            </music-staff-treble>
+            </music-staff>
+          </music-measure>
+        </music-composition>
+      </Card>
+      <Card title="Grand Staff">
+        <music-composition>
+          <music-measure keySig="C" mode="major" time="4/4">
+            <music-staff clef="treble" group="grand">
+              <music-note note="C" duration="quarter"></music-note>
+              <music-note note="E" duration="quarter"></music-note>
+              <music-note note="G" duration="quarter"></music-note>
+              <music-note note="C" duration="quarter"></music-note>
+            </music-staff>
+            <music-staff clef="bass">
+              <music-note note="C" duration="half"></music-note>
+              <music-note note="G" duration="half"></music-note>
+            </music-staff>
           </music-measure>
         </music-composition>
       </Card>
       <Card title="3 in a row">
         <music-composition>
           <music-measure>
-            <music-staff-treble></music-staff-treble>
+            <music-staff clef="treble"></music-staff>
           </music-measure>
           <music-measure>
-            <music-staff-treble></music-staff-treble>
+            <music-staff clef="treble"></music-staff>
           </music-measure>
           <music-measure>
-            <music-staff-treble></music-staff-treble>
+            <music-staff clef="treble"></music-staff>
           </music-measure>
           {/** 4th shows on next row */}
           <music-measure>
-            <music-staff-treble></music-staff-treble>
+            <music-staff clef="treble"></music-staff>
           </music-measure>
         </music-composition>
       </Card>
       <Card title="5 in a row">
         <music-composition>
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="E" duration="whole"></music-note>
-            </music-staff-treble>
+            </music-staff>
           </music-measure>
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="E" duration="whole"></music-note>
-            </music-staff-treble>
+            </music-staff>
           </music-measure>
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="E" duration="whole"></music-note>
-            </music-staff-treble>
+            </music-staff>
           </music-measure>
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="E" duration="whole"></music-note>
-            </music-staff-treble>
+            </music-staff>
           </music-measure>
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="E" duration="whole"></music-note>
-            </music-staff-treble>
+            </music-staff>
           </music-measure>
           {/** 6th shows on next row */}
           <music-measure>
-            <music-staff-treble>
+            <music-staff clef="treble">
               <music-note note="E" duration="whole"></music-note>
-            </music-staff-treble>
+            </music-staff>
           </music-measure>
         </music-composition>
       </Card>

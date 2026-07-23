@@ -6,7 +6,7 @@ import {
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
-  MUSIC_STAFF_TREBLE,
+  MUSIC_STAFF,
 } from '../utils/consts';
 
 const MIN_NOTE_WIDTH = 20;
@@ -50,7 +50,7 @@ async function readDescribeEndX(page: Page): Promise<number> {
       throw new Error(`${staffTag} not found`);
     }
     return staff.describeEndX;
-  }, MUSIC_STAFF_TREBLE);
+  }, MUSIC_STAFF);
 }
 
 async function buildMeasureWithNotes(
@@ -92,7 +92,7 @@ async function buildMeasureWithNotes(
       noteValues,
       compositionTag: MUSIC_COMPOSITION,
       measureTag: MUSIC_MEASURE,
-      staffTag: MUSIC_STAFF_TREBLE,
+      staffTag: MUSIC_STAFF,
       noteTag: MUSIC_NOTE,
     }
   );
@@ -223,7 +223,7 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
         staffWidth: staff.getBoundingClientRect().width,
         describeEndX: staff.describeEndX,
       };
-    }, MUSIC_STAFF_TREBLE);
+    }, MUSIC_STAFF);
 
     const proportionalWidth = staffWidth - describeEndX - 15 * MIN_NOTE_WIDTH;
     expect(proportionalWidth).toBeGreaterThanOrEqual(0);
@@ -274,7 +274,7 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
       {
         compositionTag: MUSIC_COMPOSITION,
         measureTag: MUSIC_MEASURE,
-        staffTag: MUSIC_STAFF_TREBLE,
+        staffTag: MUSIC_STAFF,
         noteTag: MUSIC_NOTE,
       }
     );
@@ -311,5 +311,153 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     for (let i = 1; i < grows.length; i++) {
       expect(grows[i]).toBeGreaterThanOrEqual(grows[i - 1]);
     }
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} group connectors`, () => {
+  async function buildMeasureWithStaves(
+    page: Page,
+    staffGroups: (string | null)[]
+  ): Promise<void> {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag, staffGroups }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+
+        for (const group of staffGroups) {
+          const staff = document.createElement(staffTag);
+          if (group !== null) {
+            staff.setAttribute('group', group);
+          }
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'C');
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'whole');
+          staff.appendChild(note);
+          measure.appendChild(staff);
+        }
+
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        staffGroups,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readGroupConnectorGlyphs(
+    page: Page
+  ): Promise<{ tag: string; className: string }[]> {
+    return page.evaluate((measureTag) => {
+      const measure = document.querySelector(measureTag);
+      const container = measure?.shadowRoot?.querySelector('.group-connectors');
+      if (!container) {
+        return [];
+      }
+      return Array.from(container.children).map((el) => ({
+        tag: el.tagName,
+        className: el.getAttribute('class') ?? '',
+      }));
+    }, MUSIC_MEASURE);
+  }
+
+  test('a grand-staff pair renders exactly one brace glyph', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, ['grand', null]);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs).toHaveLength(1);
+    expect(glyphs[0].className).toContain('brace');
+  });
+
+  test('a bracket pair renders exactly one bracket glyph', async ({ page }) => {
+    await buildMeasureWithStaves(page, ['bracket', null]);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs).toHaveLength(1);
+    expect(glyphs[0].className).toContain('bracket');
+  });
+
+  test('two independent grand-staff pairs in one measure render two brace glyphs', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, ['grand', null, 'grand', null]);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs).toHaveLength(2);
+    expect(glyphs.every((g) => g.className.includes('brace'))).toBe(true);
+  });
+
+  test('a grouped staff with no next sibling renders no connector', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, [null, 'grand']);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs).toHaveLength(0);
+  });
+
+  test('ungrouped staves render no group connector', async ({ page }) => {
+    await buildMeasureWithStaves(page, [null, null]);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs).toHaveLength(0);
+  });
+
+  test('a grand-staff pair connector height matches its 2 staves, not the whole measure', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, ['grand', null, null]);
+    const heights = await page.evaluate((measureTag) => {
+      const measure = document.querySelector(measureTag);
+      const shadow = measure?.shadowRoot;
+      const brace = shadow?.querySelector('.group-connectors svg.brace');
+      const barline = shadow?.querySelector<HTMLElement>('.staff-connector');
+      return {
+        braceHeight: brace ? Number(brace.getAttribute('height')) : null,
+        barlineHeight: barline ? parseFloat(barline.style.height) : null,
+      };
+    }, MUSIC_MEASURE);
+
+    expect(heights.braceHeight).not.toBeNull();
+    expect(heights.barlineHeight).not.toBeNull();
+    // The brace only spans 2 of the 3 staves, so it must be shorter than the
+    // barline that spans all 3.
+    expect(heights.braceHeight as number).toBeLessThan(
+      heights.barlineHeight as number
+    );
+  });
+
+  test('composition reserves left padding only when a grouped staff is present', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, ['grand', null]);
+    const withGroup = await page.evaluate((compositionTag) => {
+      const composition = document.querySelector(compositionTag);
+      const wrapper = composition?.shadowRoot?.querySelector(
+        '.composition-wrapper'
+      );
+      return wrapper?.classList.contains('has-group-connector') ?? false;
+    }, MUSIC_COMPOSITION);
+    expect(withGroup).toBe(true);
+
+    await buildMeasureWithStaves(page, [null, null]);
+    const withoutGroup = await page.evaluate((compositionTag) => {
+      const composition = document.querySelector(compositionTag);
+      const wrapper = composition?.shadowRoot?.querySelector(
+        '.composition-wrapper'
+      );
+      return wrapper?.classList.contains('has-group-connector') ?? false;
+    }, MUSIC_COMPOSITION);
+    expect(withoutGroup).toBe(false);
   });
 });

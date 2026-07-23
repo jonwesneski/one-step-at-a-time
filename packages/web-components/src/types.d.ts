@@ -3,6 +3,7 @@ import type { ConnectorRole } from './types/elements';
 import type {
   ArticulationType,
   Chord,
+  ClefType,
   DurationType,
   DynamicMarking,
   GraceDuration,
@@ -12,6 +13,7 @@ import type {
   Mode,
   Note,
   Octave,
+  StaffGroupType,
   StressType,
   TimeSignature,
   Voice,
@@ -38,24 +40,24 @@ declare module 'react' {
         time?: TimeSignature;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
-      'music-staff-bass': WebComponentProps & {
+      'music-staff': WebComponentProps & {
+        clef?: ClefType;
         keySig?: Note;
         mode?: Mode;
         time?: TimeSignature;
         editable?: boolean;
         managed?: boolean;
+        // Pairs this staff with its immediate next sibling under a
+        // brace ("grand") or bracket connector — see StaffElementBase#group.
+        group?: StaffGroupType;
         onClick?: React.MouseEventHandler<HTMLElement>;
       };
-      'music-staff-treble': WebComponentProps & {
-        keySig?: Note;
-        mode?: Mode;
-        time?: TimeSignature;
-        editable?: boolean;
-        managed?: boolean;
-        onClick?: React.MouseEventHandler<HTMLElement>;
+      'music-clef': WebComponentProps & {
+        clef?: ClefType;
       };
       'music-staff-guitar-tab': WebComponentProps & {
         time?: TimeSignature;
+        group?: StaffGroupType;
         children?: React.ReactNode;
       };
       'music-staff-vocal': WebComponentProps & {
@@ -65,6 +67,7 @@ declare module 'react' {
         time?: TimeSignature;
         editable?: boolean;
         managed?: boolean;
+        group?: StaffGroupType;
       };
       'music-lyrics': WebComponentProps & {
         verse?: string;

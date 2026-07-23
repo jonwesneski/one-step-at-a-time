@@ -16,7 +16,7 @@ export function createLedgerLineElements(
   staffYPadding: number
 ): SVGLineElement[] {
   return ledgerLines.map((ledgerLine) => {
-    const line = document.createElementNS(SVG_NS, 'line') as SVGLineElement;
+    const line = document.createElementNS(SVG_NS, 'line');
     line.classList.add('ledger-line');
 
     const svgY = staffYPadding + ledgerLine.staffY;
