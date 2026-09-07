@@ -1,5 +1,6 @@
 import {
   AccidentalType,
+  ArpeggioType,
   ArticulationType,
   Chord,
   ClefType,
@@ -52,6 +53,9 @@ export interface INoteElement {
   diminuendo: HairpinRole | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
+  // Arpeggio (rolled chord) sign drawn left of the element, spanning its
+  // notehead range. On a lone note the sign is ~1 notehead tall.
+  arpeggio: ArpeggioType | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -103,6 +107,9 @@ export interface IChordElement {
   diminuendo: HairpinRole | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
+  // Arpeggio (rolled chord) sign drawn left of the element, spanning its
+  // notehead range. On a lone note the sign is ~1 notehead tall.
+  arpeggio: ArpeggioType | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a

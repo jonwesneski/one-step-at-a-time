@@ -555,3 +555,63 @@ export const BRACKET_EXTRA_HEIGHT_PX = STAFF_LINE_SPACING * 0.5;
  * reference engraving font's bracket stem thickness (0.5 staff-spaces).
  */
 export const BRACKET_STEM_THICKNESS_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Arpeggiation ─────────────────────────────────────────────────────────────
+//
+// The wavy line is built by tiling one engraved wiggle segment vertically (see
+// utils/svgCreator/arpeggio.ts, which also holds the per-tile repeat pitch).
+// Every value here is a starting point — tune visually in Storybook.
+
+/** Rendered peak-to-peak horizontal width (px) of the wavy line. */
+export const ARPEGGIO_WAVE_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
+
+/** How far (px) the sign extends past the outer notehead centers, top and bottom. */
+export const ARPEGGIO_VERTICAL_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between the wave's right edge and the accidental-column left edge
+ * (or the notehead left edge when there is no accidental).
+ */
+export const ARPEGGIO_CHORD_GAP_PX = STAFF_LINE_SPACING * 0.35;
+
+/** Stroke width (px) of the non-arpeggiate bracket. */
+export const ARPEGGIO_STROKE_WIDTH = 1.4;
+
+/** Length (px) of each horizontal lip on the non-arpeggiate square bracket. */
+export const ARPEGGIO_BRACKET_LIP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Approximate distance (px) from a note/chord SVG's left edge to the left edge
+ * of its noteheads — the arpeggio sign sits just outside this when the element
+ * has no accidental, so only the part of the sign past the SVG's own left edge
+ * needs reserving.
+ */
+export const ARPEGGIO_NOTEHEAD_INSET_PX = STAFF_LINE_SPACING * 1.1;
+
+/**
+ * Leftward footprint (px) an arpeggio sign reserves when the element also shows
+ * an accidental: the sign clears the accidental column entirely, so this is
+ * added on top of the separately-computed accidental footprint. The arrowhead
+ * extends only vertically, so it adds nothing here.
+ */
+export const ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX =
+  ARPEGGIO_CHORD_GAP_PX + ARPEGGIO_WAVE_WIDTH_PX;
+
+/**
+ * Leftward footprint (px) an arpeggio sign reserves with no accidental — the
+ * sign starts just left of the noteheads, which are already inset from the
+ * SVG's left edge, so most of it fits without extra room.
+ */
+export const ARPEGGIO_FOOTPRINT_PX = Math.max(
+  0,
+  ARPEGGIO_CHORD_GAP_PX + ARPEGGIO_WAVE_WIDTH_PX - ARPEGGIO_NOTEHEAD_INSET_PX
+);
+
+/** Font size (px) of the `sempre arpeggiando` passage instruction text. */
+export const ARPEGGIO_TEXT_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
+
+/**
+ * Vertical distance (px) above the staff top line at which the `sempre
+ * arpeggiando` text baseline sits.
+ */
+export const ARPEGGIO_TEXT_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.4;

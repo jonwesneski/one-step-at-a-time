@@ -16,6 +16,7 @@ import {
 } from '../types/elements';
 import {
   AccidentalType,
+  ArpeggioType,
   ArticulationType,
   Chord,
   DurationType,
@@ -34,6 +35,7 @@ import {
   createChordSvg,
   graceListToAttr,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseArpeggio,
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
@@ -79,6 +81,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
    * @attr {ArticulationType} articulation - Articulation/accent mark.
    * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
+   * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
    * @attr {string} grace - Comma-separated grace-note pitches preceding the chord, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.
    * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`. The property also accepts an `(ArticulationType | null)[]`.
@@ -109,6 +112,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'diminuendo',
         'articulation',
         'stress',
+        'arpeggio',
         'grace',
         'grace-octave',
         'grace-articulation',
@@ -303,6 +307,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get arpeggio(): ArpeggioType | null {
+      return parseArpeggio(this.getAttribute('arpeggio'));
+    }
+    set arpeggio(value: ArpeggioType | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio');
+      } else {
+        this.setAttribute('arpeggio', value);
+      }
+    }
+
     get grace(): Note[] | null {
       return parseGraceNotes(this.getAttribute('grace'));
     }
@@ -482,6 +497,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'arpeggio' ||
         name === 'grace' ||
         name === 'grace-octave' ||
         name === 'grace-articulation' ||
@@ -489,6 +505,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace-duration' ||
         name === 'grace-slur'
       ) {
+        // arpeggio changes the chord's leftward footprint the same way a grace
+        // change does, so it takes the same path.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -511,6 +529,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           staffYCoordinates: this.#staffYCoordinates,
+          arpeggio: this.arpeggio,
           noFlags: this.#noFlags,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
@@ -603,6 +622,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           staffYCoordinates: standaloneYCoordinates,
+          arpeggio: this.arpeggio,
           stemUp,
           noteAccidentals,
           noFlags: false,

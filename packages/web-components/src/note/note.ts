@@ -1,3 +1,4 @@
+import { computeArpeggioFootprintWidth } from '../rules/arpeggioRules';
 import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
@@ -11,6 +12,7 @@ import {
 } from '../types/elements';
 import {
   AccidentalType,
+  ArpeggioType,
   ArticulationType,
   DurationType,
   DynamicMarking,
@@ -34,6 +36,7 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   noteHeadCenter,
+  parseArpeggio,
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
@@ -68,6 +71,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
    * @attr {ArticulationType} articulation - Articulation/accent mark, e.g. `staccato`, `accent`, `marcato-tenuto`, `fermata`.
    * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
+   * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
    * @attr {string} grace - Comma-separated grace-note pitches preceding this note, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
    * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.
@@ -96,6 +100,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'diminuendo',
         'articulation',
         'stress',
+        'arpeggio',
         'grace',
         'grace-octave',
         'grace-articulation',
@@ -294,6 +299,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get arpeggio(): ArpeggioType | null {
+      return parseArpeggio(this.getAttribute('arpeggio'));
+    }
+    set arpeggio(value: ArpeggioType | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio');
+      } else {
+        this.setAttribute('arpeggio', value);
+      }
+    }
+
     get grace(): Note[] | null {
       return parseGraceNotes(this.getAttribute('grace'));
     }
@@ -474,6 +490,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'arpeggio' ||
         name === 'grace' ||
         name === 'grace-octave' ||
         name === 'grace-articulation' ||
@@ -481,6 +498,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace-duration' ||
         name === 'grace-slur'
       ) {
+        // arpeggio changes the element's leftward footprint the same way a
+        // grace change does, so it takes the same path: the staff re-runs its
+        // layout pass on NOTE_Y_CHANGE, and standalone we re-render here.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -531,6 +551,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         accidental,
         articulation: this.articulation,
         stress: this.stress,
+        arpeggio: this.arpeggio,
       });
 
       if (this.#staffY !== null) {
@@ -609,6 +630,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const accidentalFootprint = accidental
         ? ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP
         : 0;
+      const arpeggioFootprint = computeArpeggioFootprintWidth(
+        this.arpeggio,
+        accidental !== undefined
+      );
       const { cx, cy } = noteHeadCenter(
         this.#stemUp,
         this.duration,
@@ -634,7 +659,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         mainTopNoteYPx: cy * NOTE_SCALE,
         mainSlurTargetXPx,
         mainSlurTargetYPx,
-        anchorRightXPx: -accidentalFootprint - GRACE_MAIN_GAP_PX,
+        anchorRightXPx:
+          -accidentalFootprint - arpeggioFootprint - GRACE_MAIN_GAP_PX,
         mainAccidentalShown: accidental !== undefined,
         mainStemUp: this.#stemUp,
         mainStaffY: this.#staffY,

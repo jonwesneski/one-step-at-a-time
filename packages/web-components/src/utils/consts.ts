@@ -1,4 +1,5 @@
 import type {
+  ArpeggioType,
   ArticulationType,
   ClefType,
   DurationType,
@@ -197,6 +198,13 @@ export const ARTICULATIONS: ArticulationType[] = [
 ];
 
 export const STRESSES: StressType[] = ['stressed', 'unstressed'];
+
+export const ARPEGGIOS: ArpeggioType[] = [
+  'up',
+  'up-arrow',
+  'down',
+  'non-arpeggiate',
+];
 
 export const GRACE_TYPES: GraceType[] = ['acciaccatura', 'appoggiatura'];
 

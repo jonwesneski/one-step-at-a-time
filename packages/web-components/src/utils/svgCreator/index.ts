@@ -1,5 +1,10 @@
 export { createAccidentalSvg } from './accidental';
 export {
+  createArpeggioSvg,
+  createSempreArpeggiandoText,
+  type ArpeggioProps,
+} from './arpeggio';
+export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';

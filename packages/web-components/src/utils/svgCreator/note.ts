@@ -3,6 +3,7 @@
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import {
   AccidentalType,
+  ArpeggioType,
   ArticulationType,
   DurationType,
   StressType,
@@ -12,8 +13,10 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
+  ARPEGGIO_CHORD_GAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
+import { createArpeggioSvg } from './arpeggio';
 import { createArticulationMarks } from './articulations';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -82,6 +85,7 @@ export type NoteProps = {
   accidental?: AccidentalType;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
+  arpeggio?: ArpeggioType | null;
 };
 export const createNoteSvg = ({
   duration,
@@ -93,6 +97,7 @@ export const createNoteSvg = ({
   accidental,
   articulation,
   stress,
+  arpeggio,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -310,6 +315,28 @@ export const createNoteSvg = ({
     symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(symbolSvg);
+  }
+
+  if (arpeggio && qualifiedElementName === 'svg') {
+    const headCenterY = stemUp
+      ? NOTE_Y_HEAD_OFFSET_STEM_UP
+      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const headLeftX =
+      (stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX) -
+      NOTE_HEAD_RADIUS_PX;
+    const accidentalLeftX = accidental
+      ? -(ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP)
+      : headLeftX;
+    const sign = createArpeggioSvg({
+      arpeggio,
+      topY: headCenterY,
+      bottomY: headCenterY,
+      rightEdgeX: accidentalLeftX - ARPEGGIO_CHORD_GAP_PX,
+    });
+    if (sign) {
+      svg.setAttribute('overflow', 'visible');
+      svg.appendChild(sign);
+    }
   }
 
   const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);

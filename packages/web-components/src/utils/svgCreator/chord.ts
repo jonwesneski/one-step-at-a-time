@@ -3,10 +3,12 @@ import {
   totalChordAccidentalWidth,
   type AccidentalPlacementInput,
 } from '../../rules/accidentalRules';
+import { computeArpeggioFootprintWidth } from '../../rules/arpeggioRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
 import {
   AccidentalType,
+  ArpeggioType,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -15,15 +17,18 @@ import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
+  ARPEGGIO_CHORD_GAP_PX,
   BASE_STEM_LENGTH_PX,
   GRACE_MAIN_GAP_PX,
   STAFF_Y_PADDING,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
+import { createArpeggioSvg } from './arpeggio';
 import { createArticulationMarks } from './articulations';
 import { createGraceNotesSvg } from './graceNotes';
 import {
   createNoteSvg,
+  NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
@@ -33,6 +38,7 @@ import {
 
 type ChordProps = NoteProps & {
   staffYCoordinates: number[];
+  arpeggio?: ArpeggioType | null;
   noteAccidentals?: (AccidentalType | null | undefined)[];
   // Grace notes are placed relative to the chord's reference note (notes[0],
   // which is staffYCoordinates[0] by index parity).
@@ -48,6 +54,7 @@ type ChordProps = NoteProps & {
 export const createChordSvg = ({
   duration,
   staffYCoordinates,
+  arpeggio = null,
   noFlags = false,
   stemUp = true,
   stemExtension = 0,
@@ -154,8 +161,26 @@ export const createChordSvg = ({
     }
   }
 
-  // Grace notes — placed before the chord, left of its accidental column and
-  // any leftward-displaced heads.
+  // Leftward extent of the chord's own column (accidentals and displaced
+  // heads) — the arpeggio sign sits just left of this, and the grace group
+  // just left of the sign.
+  const anyAccidentalShown = (noteAccidentals ?? []).some(
+    (noteAccidental) => noteAccidental != null
+  );
+  const accidentalColumnWidth = anyAccidentalShown
+    ? totalChordAccidentalWidth(noteAccidentals ?? [], staffYCoordinates)
+    : 0;
+  const maxLeftHeadDisplacement = Math.max(
+    0,
+    ...displacements.map((displacement) => -displacement.xOffset)
+  );
+  const arpeggioFootprint = computeArpeggioFootprintWidth(
+    arpeggio,
+    anyAccidentalShown
+  );
+
+  // Grace notes — placed before the chord, left of its accidental column,
+  // any leftward-displaced heads, and any arpeggio sign.
   if (graceNotes && graceNotes.length > 0 && staffYCoordinates.length > 0) {
     const referenceStaffY = staffYCoordinates[0];
     const referenceHeadCenterYPx =
@@ -176,18 +201,6 @@ export const createChordSvg = ({
     const topNoteHeadCenterXPx =
       noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
       (displacementMap.get(topNoteIndex) ?? 0);
-    const shownAccidentals = (noteAccidentals ?? []).filter(
-      (noteAccidental): noteAccidental is AccidentalType =>
-        noteAccidental != null
-    );
-    const anyAccidentalShown = shownAccidentals.length > 0;
-    const accidentalColumnWidth = anyAccidentalShown
-      ? totalChordAccidentalWidth(noteAccidentals ?? [], staffYCoordinates)
-      : 0;
-    const maxLeftHeadDisplacement = Math.max(
-      0,
-      ...displacements.map((displacement) => -displacement.xOffset)
-    );
     // Only used for a descending grace group's stem-tip slur anchoring (see
     // buildGraceSlur): when the chord is stem-up, its real rendered stem
     // tip (reusing the same stem X and chordSpread/stemExtension geometry
@@ -220,6 +233,7 @@ export const createChordSvg = ({
       mainSlurTargetYPx,
       anchorRightXPx:
         -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement) -
+        arpeggioFootprint -
         GRACE_MAIN_GAP_PX,
       mainAccidentalShown: anyAccidentalShown,
       mainStemUp: stemUp,
@@ -227,6 +241,34 @@ export const createChordSvg = ({
     });
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(graceGroup);
+  }
+
+  // Arpeggio sign — left of the accidental column / displaced heads (or just
+  // left of the noteheads when there is neither), spanning the chord's
+  // notehead range. staffYCoordinates is declaration order, not pitch order,
+  // hence Math.min / Math.max for the top and bottom heads.
+  if (arpeggio && staffYCoordinates.length > 0) {
+    const columnLeftX =
+      anyAccidentalShown || maxLeftHeadDisplacement > 0
+        ? -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement)
+        : noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE -
+          NOTE_HEAD_RADIUS_PX;
+    const sign = createArpeggioSvg({
+      arpeggio,
+      topY:
+        STAFF_Y_PADDING +
+        Math.min(...staffYCoordinates) -
+        NOTE_HEAD_Y_OFFSET_CORRECTION,
+      bottomY:
+        STAFF_Y_PADDING +
+        Math.max(...staffYCoordinates) -
+        NOTE_HEAD_Y_OFFSET_CORRECTION,
+      rightEdgeX: columnLeftX - ARPEGGIO_CHORD_GAP_PX,
+    });
+    if (sign) {
+      svg.setAttribute('overflow', 'visible');
+      svg.appendChild(sign);
+    }
   }
 
   // Chord-level articulation — drawn once, over the extremal (stem-side outer)

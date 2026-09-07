@@ -17,6 +17,7 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF,
 } from '../utils/consts';
+import { ARPEGGIO_FOOTPRINT_PX } from '../utils/notationDimensions';
 import { NOTE_SCALE } from '../utils/svgCreator/note';
 import './index';
 
@@ -75,6 +76,41 @@ describe(MUSIC_CHORD, () => {
 
       expect(chordElement.decrescendo).toBeNull();
       expect(chordElement.getAttribute('decrescendo')).toBeNull();
+    });
+  });
+
+  describe('arpeggio (standalone)', () => {
+    function makeChord(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'C' satisfies Chord);
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips the arpeggio slot and rejects unknown values', () => {
+      const chordElement = makeChord();
+      chordElement.arpeggio = 'down';
+      expect(chordElement.getAttribute('arpeggio')).toBe('down');
+      expect(chordElement.arpeggio).toBe('down');
+
+      chordElement.setAttribute('arpeggio', 'nope');
+      expect(chordElement.arpeggio).toBeNull();
+
+      chordElement.arpeggio = 'up';
+      chordElement.arpeggio = null;
+      expect(chordElement.getAttribute('arpeggio')).toBeNull();
+    });
+
+    it('renders its own sign standalone, and only when set', () => {
+      const chordElement = makeChord();
+      expect(chordElement.shadowRoot?.querySelector('.arpeggio')).toBeNull();
+
+      chordElement.arpeggio = 'non-arpeggiate';
+      const sign = chordElement.shadowRoot?.querySelector('.arpeggio');
+      expect(sign?.querySelector('.arpeggio-bracket')).not.toBeNull();
+      expect(sign?.querySelector('.arpeggio-wave')).toBeNull();
     });
   });
 
@@ -940,6 +976,45 @@ describe('staff integration', () => {
       // Exactly one note (D4) is displaced
       expect(xValues.filter((x) => x !== null).length).toBe(1);
       expect(xValues).toContain(ADJACENT_NOTE_X_DISPLACEMENT_PX.toString());
+    });
+  });
+
+  describe('arpeggio', () => {
+    it('grows the staff min-width when a chord gains an arpeggio sign', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ]);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      chord.setAttribute('arpeggio', 'up');
+      const withSign = minWidths[minWidths.length - 1];
+
+      expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
+    });
+
+    it('renders one sign spanning the whole chord', () => {
+      const staff = makeStaff();
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ]);
+      chord.setAttribute('arpeggio', 'up-arrow');
+
+      const signs = chord.shadowRoot!.querySelectorAll('.arpeggio');
+      expect(signs.length).toBe(1);
+      expect(
+        signs[0].querySelectorAll('.arpeggio-wave').length
+      ).toBeGreaterThan(1);
+      expect(signs[0].querySelector('.arpeggio-arrowhead')).not.toBeNull();
     });
   });
 });

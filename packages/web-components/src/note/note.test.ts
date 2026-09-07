@@ -12,7 +12,10 @@ import type {
   TimeSignature,
 } from '../types/theory';
 import { COMMON_ATTRIBUTES, MUSIC_NOTE, MUSIC_STAFF } from '../utils/consts';
-import { GRACE_SCALE } from '../utils/notationDimensions';
+import {
+  ARPEGGIO_FOOTPRINT_PX,
+  GRACE_SCALE,
+} from '../utils/notationDimensions';
 import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
   NOTE_HEAD_RADIUS_PX,
@@ -1005,6 +1008,76 @@ describe('grace notes', () => {
   });
 });
 
+describe('arpeggio', () => {
+  it('round-trips the arpeggio slot between property and attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.arpeggio = 'up-arrow';
+    expect(noteElement.getAttribute('arpeggio')).toBe('up-arrow');
+    expect(noteElement.arpeggio).toBe('up-arrow');
+  });
+
+  it('ignores unrecognized arpeggio values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.setAttribute('arpeggio', 'sideways');
+    expect(noteElement.arpeggio).toBeNull();
+  });
+
+  it('clears the arpeggio slot when set to null', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.arpeggio = 'up';
+    noteElement.arpeggio = null;
+
+    expect(noteElement.arpeggio).toBeNull();
+    expect(noteElement.getAttribute('arpeggio')).toBeNull();
+  });
+
+  it('renders the wave group only when set', () => {
+    const plain = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(plain);
+    expect(plain.shadowRoot?.querySelector('.arpeggio')).toBeNull();
+
+    plain.arpeggio = 'up';
+    const sign = plain.shadowRoot?.querySelector('.arpeggio');
+    expect(sign).not.toBeNull();
+    expect(sign?.classList.contains('arpeggio-up')).toBe(true);
+    expect(sign?.querySelector('.arpeggio-wave')).not.toBeNull();
+    expect(sign?.querySelector('.arpeggio-arrowhead')).toBeNull();
+    expect(sign?.querySelector('.arpeggio-bracket')).toBeNull();
+  });
+
+  it('draws an arrowhead only for the arrow variants', () => {
+    const upArrow = document.createElement(MUSIC_NOTE) as NoteElementType;
+    upArrow.setAttribute('arpeggio', 'up-arrow');
+    document.body.appendChild(upArrow);
+    expect(
+      upArrow.shadowRoot?.querySelector('.arpeggio-arrowhead')
+    ).not.toBeNull();
+
+    const down = document.createElement(MUSIC_NOTE) as NoteElementType;
+    down.setAttribute('arpeggio', 'down');
+    document.body.appendChild(down);
+    expect(
+      down.shadowRoot?.querySelector('.arpeggio-arrowhead')
+    ).not.toBeNull();
+  });
+
+  it('draws a bracket (no wave, no arrow) for non-arpeggiate', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('arpeggio', 'non-arpeggiate');
+    document.body.appendChild(noteElement);
+
+    const sign = noteElement.shadowRoot?.querySelector('.arpeggio');
+    expect(sign?.querySelector('.arpeggio-bracket')).not.toBeNull();
+    expect(sign?.querySelector('.arpeggio-wave')).toBeNull();
+  });
+});
+
 const TREBLE_STAFF_Y: Record<string, number> = {
   C6: 10,
   B5: 15,
@@ -1220,6 +1293,23 @@ describe('staff integration', () => {
       const withGrace = minWidths[minWidths.length - 1];
 
       expect(withGrace).toBe(withoutGrace + 25);
+    });
+
+    it('grows the staff min-width when a note gains an arpeggio sign', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const note = makeQuarterNote('E', 4);
+      renderNotes(staff, [note]);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      note.setAttribute('arpeggio', 'up');
+      const withSign = minWidths[minWidths.length - 1];
+
+      expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
     });
 
     it('suppresses grace accidentals covered by the key signature and shows naturals', () => {

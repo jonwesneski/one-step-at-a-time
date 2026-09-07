@@ -3,6 +3,7 @@ import {
   computeNoteAccidentals,
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
+import { computeArpeggioFootprintWidth } from './rules/arpeggioRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
@@ -96,6 +97,20 @@ import {
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+
+// Whether a note/chord currently shows an accidental — the arpeggio sign sits
+// left of the accidental column, so its reserved footprint depends on this.
+function elementHasShownAccidental(
+  element: NoteElementType | ChordElementType
+): boolean {
+  if (element.nodeName === MUSIC_NOTE_NODE) {
+    return (element as NoteElementType).showAccidental != null;
+  }
+  const chord = element as ChordElementType;
+  return (
+    !!chord.staffYCoordinates && chord.noteAccidentals.some((a) => a != null)
+  );
+}
 
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
@@ -653,6 +668,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.grace,
           noteElement.resolvedGraceAccidentals
         );
+        firstElementLeftwardWidth += computeArpeggioFootprintWidth(
+          noteElement.arpeggio,
+          elementHasShownAccidental(noteElement)
+        );
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = firstElement as ChordElementType;
         if (
@@ -667,6 +686,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         firstElementLeftwardWidth += computeGraceFootprintWidth(
           chordElement.grace,
           chordElement.resolvedGraceAccidentals
+        );
+        firstElementLeftwardWidth += computeArpeggioFootprintWidth(
+          chordElement.arpeggio,
+          elementHasShownAccidental(chordElement)
         );
       }
       // Grace overhangs of the remaining elements also consume horizontal
@@ -684,6 +707,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           extraLeftwardWidth += computeGraceFootprintWidth(
             noteOrChordElement.grace,
             noteOrChordElement.resolvedGraceAccidentals
+          );
+          extraLeftwardWidth += computeArpeggioFootprintWidth(
+            noteOrChordElement.arpeggio,
+            elementHasShownAccidental(noteOrChordElement)
           );
         }
       }
@@ -950,6 +977,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.grace,
           noteElement.resolvedGraceAccidentals
         );
+        leftwardWidth += computeArpeggioFootprintWidth(
+          noteElement.arpeggio,
+          elementHasShownAccidental(noteElement)
+        );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = element as ChordElementType;
         if (
@@ -964,6 +995,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         leftwardWidth += computeGraceFootprintWidth(
           chordElement.grace,
           chordElement.resolvedGraceAccidentals
+        );
+        leftwardWidth += computeArpeggioFootprintWidth(
+          chordElement.arpeggio,
+          elementHasShownAccidental(chordElement)
         );
       }
 

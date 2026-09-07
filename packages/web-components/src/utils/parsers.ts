@@ -1,5 +1,6 @@
 import type { ConnectorRole } from '../types/elements';
 import type {
+  ArpeggioType,
   ArticulationType,
   ClefType,
   DynamicMarking,
@@ -13,6 +14,7 @@ import type {
   StressType,
 } from '../types/theory';
 import {
+  ARPEGGIOS,
   ARTICULATIONS,
   CLEFS,
   DYNAMICS,
@@ -27,6 +29,7 @@ import {
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
 const VALID_ARTICULATIONS = new Set<string>(ARTICULATIONS);
 const VALID_STRESSES = new Set<string>(STRESSES);
+const VALID_ARPEGGIOS = new Set<string>(ARPEGGIOS);
 const VALID_GRACE_TYPES = new Set<string>(GRACE_TYPES);
 const VALID_GRACE_DURATIONS = new Set<string>(GRACE_DURATIONS);
 const VALID_GRACE_SLURS = new Set<string>(GRACE_SLURS);
@@ -83,6 +86,13 @@ export const parseStaffGroup = (
 export const parseStress = (value: string | null): StressType | null => {
   if (value !== null && VALID_STRESSES.has(value)) {
     return value as StressType;
+  }
+  return null;
+};
+
+export const parseArpeggio = (value: string | null): ArpeggioType | null => {
+  if (value !== null && VALID_ARPEGGIOS.has(value)) {
+    return value as ArpeggioType;
   }
   return null;
 };

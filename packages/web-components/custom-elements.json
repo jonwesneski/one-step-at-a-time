@@ -225,6 +225,13 @@
             },
             {
               "kind": "field",
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "grace",
               "type": {
                 "text": "Note[] | null"
@@ -425,6 +432,13 @@
                 "text": "'stressed' | 'unstressed'"
               },
               "description": "Schoenberg stress mark."
+            },
+            {
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType"
+              },
+              "description": "Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket)."
             },
             {
               "name": "grace",
@@ -1368,6 +1382,13 @@
             },
             {
               "kind": "field",
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "grace",
               "type": {
                 "text": "Note[] | null"
@@ -1568,6 +1589,13 @@
                 "text": "'stressed' | 'unstressed'"
               },
               "description": "Schoenberg stress mark."
+            },
+            {
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType"
+              },
+              "description": "Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket)."
             },
             {
               "name": "grace",

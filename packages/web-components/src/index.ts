@@ -28,6 +28,7 @@ export * from './types/theory';
  * build pickers/controls without importing from deep paths.
  */
 export {
+  ARPEGGIOS,
   ARTICULATIONS,
   CLEFS,
   DURATIONS,

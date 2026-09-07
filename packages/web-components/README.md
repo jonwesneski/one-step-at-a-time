@@ -92,6 +92,32 @@ polyfills.
 See [`CLAUDE.md`](./CLAUDE.md) for architecture, the feature-adding workflow, and
 the test tiers.
 
+## Drawing / SMuFL glyphs
+
+Every notation symbol is drawn as SVG in `src/utils/svgCreator/`. Most glyphs
+(noteheads, stems, most accidentals) are hand-authored path data. A few
+engraving-heavy glyphs — the grand-staff brace/bracket, the arpeggio wiggle —
+are instead **extracted from a bundled reference font** and then hand-tuned:
+
+1. `./download-smufl-font.sh` — fetches `smufl/Bravura.otf` + `smufl/bravura_metadata.json`
+   (already committed; only needed on a fresh checkout or a font bump).
+2. `pnpm --filter @one-step-at-a-time/web-components extract-glyphs -- <glyphName>[:rotate90] …`
+   — runs `scripts/extract-glyphs.mjs`, which loads the font, normalizes each
+   requested glyph's outline (bbox-min origin, staff-space units, y-down;
+   `:rotate90` rotates a horizontal glyph to vertical), and prints one
+   ready-to-paste block of `*_PATH_D` / `*_NATURAL_WIDTH` / `*_NATURAL_HEIGHT` /
+   `*_ADVANCE` constants per glyph. Add new glyph codepoints to the `CODEPOINTS`
+   table in that script.
+3. Paste the printed constants into the target `svgCreator/*.ts` file and commit.
+
+**The pasted constants are the source of truth and the only thing that ships.**
+`scripts/extract-glyphs.mjs` and its `opentype.js` dev-dependency are
+author-time-only — never run by the build, tests, CI, or the published bundle,
+and safe to ignore in day-to-day work. The script is kept in the repo purely so
+that extraction stays reproducible for the next glyph. (The committed metadata
+JSON has drifted from the committed `.otf`, so the extractor reads geometry from
+the font outline, not the metadata.)
+
 ## License
 
 MIT

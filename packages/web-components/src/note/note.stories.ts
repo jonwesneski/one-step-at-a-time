@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index';
 import {
+  ARPEGGIOS,
   ARTICULATIONS,
   DURATIONS,
   DYNAMICS,
@@ -39,6 +40,7 @@ export const WithArticulations: Story = {
     octave: 4,
     articulation: 'staccato',
     stress: '',
+    arpeggio: '',
   },
   argTypes: {
     duration: { control: 'select', options: DURATIONS },
@@ -46,6 +48,7 @@ export const WithArticulations: Story = {
     octave: { control: 'select', options: OCTAVES },
     articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
     stress: { control: 'select', options: ['', ...STRESSES] },
+    arpeggio: { control: 'select', options: ['', ...ARPEGGIOS] },
   },
   render: (args) => html`
     <music-staff clef="treble" time="4/4">
@@ -55,6 +58,7 @@ export const WithArticulations: Story = {
         octave=${args.octave}
         articulation=${args.articulation}
         stress=${args.stress}
+        arpeggio=${args.arpeggio}
       ></music-note>
     </music-staff>
   `,

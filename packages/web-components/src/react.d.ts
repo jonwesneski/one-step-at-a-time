@@ -5,6 +5,7 @@
  *   /// <reference types="@one-step-at-a-time/web-components/react" />
  */
 import type {
+  ArpeggioType,
   ArticulationType,
   Chord,
   ClefType,
@@ -104,6 +105,7 @@ declare module 'react' {
         diminuendo?: HairpinRole;
         articulation?: ArticulationType;
         stress?: StressType;
+        arpeggio?: ArpeggioType;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;
@@ -125,6 +127,7 @@ declare module 'react' {
         diminuendo?: HairpinRole;
         articulation?: ArticulationType;
         stress?: StressType;
+        arpeggio?: ArpeggioType;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;
