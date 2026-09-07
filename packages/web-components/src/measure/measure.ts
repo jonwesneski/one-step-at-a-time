@@ -356,7 +356,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const staves = Array.from(this.children).filter((el) =>
         isStaffNodeName(el.nodeName)
       ) as StaffElementBaseType[];
-      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}`;
+      // `:defined` skips not-yet-upgraded custom elements — writing our internal
+      // properties on those would create shadowing own data properties.
+      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
       const perStaffElements = staves.map(
         (staff) =>
           Array.from(
