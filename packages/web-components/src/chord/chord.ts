@@ -82,6 +82,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {ArticulationType} articulation - Articulation/accent mark.
    * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
    * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
+   * @attr {string} arpeggio-for - `id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from.
    * @attr {string} grace - Comma-separated grace-note pitches preceding the chord, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.
    * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`. The property also accepts an `(ArticulationType | null)[]`.
@@ -113,6 +114,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'articulation',
         'stress',
         'arpeggio',
+        'arpeggio-for',
         'grace',
         'grace-octave',
         'grace-articulation',
@@ -129,6 +131,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemUp = true;
     #stemExtension = 0;
     #noFlags = false;
+    #renderArpeggioSign = true;
     #staffYCoordinates: number[] | null = null;
     #noteAccidentals: (AccidentalType | null | undefined)[] = [];
     #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
@@ -318,6 +321,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // `id` of the upper-staff element this chord continues an unbroken
+    // cross-staff arpeggio from. Resolved by the ancestor <music-measure>.
+    get arpeggioFor(): string | null {
+      return this.getAttribute('arpeggio-for');
+    }
+    set arpeggioFor(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio-for');
+      } else {
+        this.setAttribute('arpeggio-for', value);
+      }
+    }
+
+    get renderArpeggioSign(): boolean {
+      return this.#renderArpeggioSign;
+    }
+    set renderArpeggioSign(value: boolean) {
+      if (this.#renderArpeggioSign === value) {
+        return;
+      }
+      this.#renderArpeggioSign = value;
+      this.#scheduleRender();
+    }
+
     get grace(): Note[] | null {
       return parseGraceNotes(this.getAttribute('grace'));
     }
@@ -496,6 +523,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'arpeggio' || name === 'arpeggio-for') {
+        // The ancestor measure re-resolves cross-staff arpeggio spans.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        if (name === 'arpeggio-for') {
+          if (!this.closest(STAFF_TAGS)) {
+            this.render();
+          }
+          return;
+        }
+      }
+
       if (
         name === 'arpeggio' ||
         name === 'grace' ||
@@ -529,7 +572,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           staffYCoordinates: this.#staffYCoordinates,
-          arpeggio: this.arpeggio,
+          arpeggio: this.#renderArpeggioSign ? this.arpeggio : null,
           noFlags: this.#noFlags,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
@@ -622,7 +665,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           staffYCoordinates: standaloneYCoordinates,
-          arpeggio: this.arpeggio,
+          arpeggio: this.#renderArpeggioSign ? this.arpeggio : null,
           stemUp,
           noteAccidentals,
           noFlags: false,

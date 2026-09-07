@@ -58,6 +58,15 @@
             },
             {
               "kind": "field",
+              "name": "#renderArpeggioSign",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true"
+            },
+            {
+              "kind": "field",
               "name": "#staffYCoordinates",
               "privacy": "private",
               "type": {
@@ -228,6 +237,20 @@
               "name": "arpeggio",
               "type": {
                 "text": "ArpeggioType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "renderArpeggioSign",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -439,6 +462,13 @@
                 "text": "ArpeggioType"
               },
               "description": "Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket)."
+            },
+            {
+              "name": "arpeggio-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from."
             },
             {
               "name": "grace",
@@ -1044,6 +1074,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawArpeggios",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "number",
               "type": {
                 "text": "number | null"
@@ -1105,6 +1140,29 @@
                   "name": "currentIndex",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawArpeggios",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#headRects",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DOMRect[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
                   }
                 }
               ]
@@ -1215,6 +1273,15 @@
                 "text": "boolean"
               },
               "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#renderArpeggioSign",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true"
             },
             {
               "kind": "field",
@@ -1385,6 +1452,20 @@
               "name": "arpeggio",
               "type": {
                 "text": "ArpeggioType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "renderArpeggioSign",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -1596,6 +1677,13 @@
                 "text": "ArpeggioType"
               },
               "description": "Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket)."
+            },
+            {
+              "name": "arpeggio-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from."
             },
             {
               "name": "grace",

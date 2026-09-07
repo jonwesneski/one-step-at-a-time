@@ -56,6 +56,13 @@ export interface INoteElement {
   // Arpeggio (rolled chord) sign drawn left of the element, spanning its
   // notehead range. On a lone note the sign is ~1 notehead tall.
   arpeggio: ArpeggioType | null;
+  // `id` of the upper-staff element this element continues an unbroken
+  // cross-staff arpeggio from (grand staff).
+  arpeggioFor: string | null;
+  // Set false by an ancestor <music-measure> when this element is one end of a
+  // continuous cross-staff arpeggio it draws itself; the element then skips its
+  // own local sign. Not an attribute.
+  renderArpeggioSign: boolean;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -110,6 +117,13 @@ export interface IChordElement {
   // Arpeggio (rolled chord) sign drawn left of the element, spanning its
   // notehead range. On a lone note the sign is ~1 notehead tall.
   arpeggio: ArpeggioType | null;
+  // `id` of the upper-staff element this element continues an unbroken
+  // cross-staff arpeggio from (grand staff).
+  arpeggioFor: string | null;
+  // Set false by an ancestor <music-measure> when this element is one end of a
+  // continuous cross-staff arpeggio it draws itself; the element then skips its
+  // own local sign. Not an attribute.
+  renderArpeggioSign: boolean;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a

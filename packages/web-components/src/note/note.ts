@@ -72,6 +72,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {ArticulationType} articulation - Articulation/accent mark, e.g. `staccato`, `accent`, `marcato-tenuto`, `fermata`.
    * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
    * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
+   * @attr {string} arpeggio-for - `id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from.
    * @attr {string} grace - Comma-separated grace-note pitches preceding this note, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
    * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.
@@ -101,6 +102,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'articulation',
         'stress',
         'arpeggio',
+        'arpeggio-for',
         'grace',
         'grace-octave',
         'grace-articulation',
@@ -115,6 +117,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #noFlags = false;
     #noStem = false;
+    #renderArpeggioSign = true;
     // undefined = no override, infer accidental from the `note` suffix;
     // null = explicit override, suppress the accidental; value = explicit override, force this symbol
     #showAccidental: AccidentalType | null | undefined = undefined;
@@ -310,6 +313,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // `id` of the upper-staff element this element continues an unbroken
+    // cross-staff arpeggio from. Resolved by the ancestor <music-measure>.
+    get arpeggioFor(): string | null {
+      return this.getAttribute('arpeggio-for');
+    }
+    set arpeggioFor(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio-for');
+      } else {
+        this.setAttribute('arpeggio-for', value);
+      }
+    }
+
+    get renderArpeggioSign(): boolean {
+      return this.#renderArpeggioSign;
+    }
+    set renderArpeggioSign(value: boolean) {
+      if (this.#renderArpeggioSign === value) {
+        return;
+      }
+      this.#renderArpeggioSign = value;
+      this.#scheduleRender();
+    }
+
     get grace(): Note[] | null {
       return parseGraceNotes(this.getAttribute('grace'));
     }
@@ -489,6 +516,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'arpeggio' || name === 'arpeggio-for') {
+        // The ancestor measure re-resolves cross-staff arpeggio spans.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        if (name === 'arpeggio-for') {
+          if (!this.closest(STAFF_TAGS)) {
+            this.render();
+          }
+          return;
+        }
+      }
+
       if (
         name === 'arpeggio' ||
         name === 'grace' ||
@@ -551,7 +594,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         accidental,
         articulation: this.articulation,
         stress: this.stress,
-        arpeggio: this.arpeggio,
+        arpeggio: this.#renderArpeggioSign ? this.arpeggio : null,
       });
 
       if (this.#staffY !== null) {

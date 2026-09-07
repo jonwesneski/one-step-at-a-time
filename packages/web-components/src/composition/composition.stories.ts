@@ -264,6 +264,40 @@ export const GrandStaff: Story = {
   `,
 };
 
+export const GrandStaffArpeggio: Story = {
+  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-composition
+      key-sig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-measure>
+        <music-staff clef="treble" group="grand" time=${args.time}>
+          <!-- Unbroken: one continuous line through both staves -->
+          <music-chord id="roll1" chord="Cmaj" duration="half" arpeggio="up">
+          </music-chord>
+          <!-- Broken: a separate sign per hand -->
+          <music-chord chord="Fmaj" duration="half" arpeggio="up-arrow">
+          </music-chord>
+        </music-staff>
+        <music-staff clef="bass" time=${args.time}>
+          <music-chord chord="Cmaj" duration="half" arpeggio-for="roll1">
+            <music-note note="C" octave="3"></music-note>
+            <music-note note="E" octave="3"></music-note>
+            <music-note note="G" octave="3"></music-note>
+          </music-chord>
+          <music-chord chord="Fmaj" duration="half" arpeggio="up-arrow">
+            <music-note note="F" octave="2"></music-note>
+            <music-note note="A" octave="2"></music-note>
+            <music-note note="C" octave="3"></music-note>
+          </music-chord>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const WithCrossMeasureTie: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`

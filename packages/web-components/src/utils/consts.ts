@@ -61,6 +61,7 @@ export const NOTE_EVENTS = {
   CONNECTOR_ATTRIBUTE_CHANGE: 'connector-attribute-change',
   NOTE_Y_CHANGE: 'note-y-change',
   DYNAMIC_ATTRIBUTE_CHANGE: 'dynamic-attribute-change',
+  ARPEGGIO_ATTRIBUTE_CHANGE: 'arpeggio-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',
