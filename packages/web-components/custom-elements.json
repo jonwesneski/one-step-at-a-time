@@ -67,6 +67,15 @@
             },
             {
               "kind": "field",
+              "name": "#impliedArpeggio",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#staffYCoordinates",
               "privacy": "private",
               "type": {
@@ -251,6 +260,20 @@
               "name": "renderArpeggioSign",
               "type": {
                 "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggiate",
+              "type": {
+                "text": "ConnectorRole | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "impliedArpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
               }
             },
             {
@@ -469,6 +492,13 @@
                 "text": "string"
               },
               "description": "`id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from."
+            },
+            {
+              "name": "arpeggiate",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`)."
             },
             {
               "name": "grace",
@@ -1285,6 +1315,15 @@
             },
             {
               "kind": "field",
+              "name": "#impliedArpeggio",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#showAccidental",
               "privacy": "private",
               "type": {
@@ -1466,6 +1505,20 @@
               "name": "renderArpeggioSign",
               "type": {
                 "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggiate",
+              "type": {
+                "text": "ConnectorRole | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "impliedArpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
               }
             },
             {
@@ -1684,6 +1737,13 @@
                 "text": "string"
               },
               "description": "`id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from."
+            },
+            {
+              "name": "arpeggiate",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`)."
             },
             {
               "name": "grace",
@@ -2633,6 +2693,42 @@
             {
               "kind": "method",
               "name": "#renderDynamics",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveArpeggiandoPassages",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderArpeggiandoText",
               "privacy": "private",
               "return": {
                 "type": {
@@ -4744,6 +4840,42 @@
             {
               "kind": "method",
               "name": "#renderDynamics",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveArpeggiandoPassages",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderArpeggiandoText",
               "privacy": "private",
               "return": {
                 "type": {

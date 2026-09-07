@@ -63,6 +63,11 @@ export interface INoteElement {
   // continuous cross-staff arpeggio it draws itself; the element then skips its
   // own local sign. Not an attribute.
   renderArpeggioSign: boolean;
+  // Marks the start / end of a `sempre arpeggiando` passage.
+  arpeggiate: ConnectorRole | null;
+  // Set by the staff to `'up'` for elements inside a `sempre arpeggiando`
+  // passage that carry no explicit `arpeggio`; null otherwise. Not an attribute.
+  impliedArpeggio: ArpeggioType | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -124,6 +129,11 @@ export interface IChordElement {
   // continuous cross-staff arpeggio it draws itself; the element then skips its
   // own local sign. Not an attribute.
   renderArpeggioSign: boolean;
+  // Marks the start / end of a `sempre arpeggiando` passage.
+  arpeggiate: ConnectorRole | null;
+  // Set by the staff to `'up'` for elements inside a `sempre arpeggiando`
+  // passage that carry no explicit `arpeggio`; null otherwise. Not an attribute.
+  impliedArpeggio: ArpeggioType | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a

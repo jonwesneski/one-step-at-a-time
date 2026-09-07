@@ -107,6 +107,7 @@ declare module 'react' {
         stress?: StressType;
         arpeggio?: ArpeggioType;
         'arpeggio-for'?: string;
+        arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;
@@ -130,6 +131,7 @@ declare module 'react' {
         stress?: StressType;
         arpeggio?: ArpeggioType;
         'arpeggio-for'?: string;
+        arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;

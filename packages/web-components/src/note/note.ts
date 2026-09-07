@@ -31,6 +31,7 @@ import {
   addLedgerLines,
   createGraceNotesSvg,
   createNoteSvg,
+  createSempreArpeggiandoText,
   GRACE_MAIN_GAP_PX,
   graceListToAttr,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
@@ -73,6 +74,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
    * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
    * @attr {string} arpeggio-for - `id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from.
+   * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
    * @attr {string} grace - Comma-separated grace-note pitches preceding this note, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
    * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.
@@ -103,6 +105,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'stress',
         'arpeggio',
         'arpeggio-for',
+        'arpeggiate',
         'grace',
         'grace-octave',
         'grace-articulation',
@@ -118,6 +121,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
+    #impliedArpeggio: ArpeggioType | null = null;
     // undefined = no override, infer accidental from the `note` suffix;
     // null = explicit override, suppress the accidental; value = explicit override, force this symbol
     #showAccidental: AccidentalType | null | undefined = undefined;
@@ -337,6 +341,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    get arpeggiate(): ConnectorRole | null {
+      return parseConnectorRole(
+        this.getAttribute('arpeggiate')
+      ) as ConnectorRole | null;
+    }
+    set arpeggiate(value: ConnectorRole | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggiate');
+      } else {
+        this.setAttribute('arpeggiate', value);
+      }
+    }
+
+    get impliedArpeggio(): ArpeggioType | null {
+      return this.#impliedArpeggio;
+    }
+    set impliedArpeggio(value: ArpeggioType | null) {
+      if (this.#impliedArpeggio === value) {
+        return;
+      }
+      this.#impliedArpeggio = value;
+      this.#scheduleRender();
+    }
+
     get grace(): Note[] | null {
       return parseGraceNotes(this.getAttribute('grace'));
     }
@@ -516,8 +544,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'arpeggio' || name === 'arpeggio-for') {
-        // The ancestor measure re-resolves cross-staff arpeggio spans.
+      if (
+        name === 'arpeggio' ||
+        name === 'arpeggio-for' ||
+        name === 'arpeggiate'
+      ) {
+        // The ancestor measure re-resolves cross-staff arpeggio spans; the
+        // staff re-resolves `sempre arpeggiando` passages.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, {
             bubbles: true,
@@ -534,6 +567,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       if (
         name === 'arpeggio' ||
+        name === 'arpeggiate' ||
         name === 'grace' ||
         name === 'grace-octave' ||
         name === 'grace-articulation' ||
@@ -594,7 +628,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         accidental,
         articulation: this.articulation,
         stress: this.stress,
-        arpeggio: this.#renderArpeggioSign ? this.arpeggio : null,
+        arpeggio: this.#renderArpeggioSign
+          ? this.arpeggio ?? this.#impliedArpeggio
+          : null,
       });
 
       if (this.#staffY !== null) {
@@ -607,6 +643,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.#appendGraceNotes(noteSvg, accidental);
+
+      // Standalone: the `sempre arpeggiando` instruction renders next to this
+      // element. Inside a staff the staff draws it once at the passage start
+      // and propagates implied signs (see StaffClassicalElementBase).
+      if (this.arpeggiate === 'start' && !this.closest(STAFF_TAGS)) {
+        noteSvg.setAttribute('overflow', 'visible');
+        noteSvg.appendChild(createSempreArpeggiandoText(0, -2));
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
       this.shadowRoot!.appendChild(noteSvg);
@@ -674,7 +718,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ? ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP
         : 0;
       const arpeggioFootprint = computeArpeggioFootprintWidth(
-        this.arpeggio,
+        this.arpeggio ?? this.#impliedArpeggio,
         accidental !== undefined
       );
       const { cx, cy } = noteHeadCenter(

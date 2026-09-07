@@ -53,6 +53,7 @@ import {
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
+  createSempreArpeggiandoText,
   createSharpSvg,
   createTimeSignatureSvg,
 } from './utils';
@@ -71,6 +72,8 @@ import {
   SVG_NS,
 } from './utils/consts';
 import {
+  ARPEGGIO_TEXT_ABOVE_STAFF_PX,
+  ARPEGGIO_TEXT_FONT_SIZE,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
   DYNAMICS_BASELINE_Y,
@@ -97,6 +100,12 @@ import {
   NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+
+// The arpeggio sign a note/chord actually draws — its own `arpeggio` if set,
+// otherwise a `sempre arpeggiando` passage's implied one.
+function effectiveArpeggio(element: NoteElementType | ChordElementType) {
+  return element.arpeggio ?? element.impliedArpeggio;
+}
 
 // Whether a note/chord currently shows an accidental — the arpeggio sign sits
 // left of the accidental column, so its reserved footprint depends on this.
@@ -639,6 +648,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     this.#currentElements = elements;
+    this.#resolveArpeggiandoPassages(elements);
     this.#spaceElements();
 
     for (const svgGroup of this.#beamRenderer.svgGroups) {
@@ -669,7 +679,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.resolvedGraceAccidentals
         );
         firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          noteElement.arpeggio,
+          effectiveArpeggio(noteElement),
           elementHasShownAccidental(noteElement)
         );
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
@@ -688,7 +698,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.resolvedGraceAccidentals
         );
         firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          chordElement.arpeggio,
+          effectiveArpeggio(chordElement),
           elementHasShownAccidental(chordElement)
         );
       }
@@ -709,7 +719,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             noteOrChordElement.resolvedGraceAccidentals
           );
           extraLeftwardWidth += computeArpeggioFootprintWidth(
-            noteOrChordElement.arpeggio,
+            effectiveArpeggio(noteOrChordElement),
             elementHasShownAccidental(noteOrChordElement)
           );
         }
@@ -978,7 +988,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.resolvedGraceAccidentals
         );
         leftwardWidth += computeArpeggioFootprintWidth(
-          noteElement.arpeggio,
+          effectiveArpeggio(noteElement),
           elementHasShownAccidental(noteElement)
         );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
@@ -997,7 +1007,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.resolvedGraceAccidentals
         );
         leftwardWidth += computeArpeggioFootprintWidth(
-          chordElement.arpeggio,
+          effectiveArpeggio(chordElement),
           elementHasShownAccidental(chordElement)
         );
       }
@@ -1243,27 +1253,102 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         )
       );
     }
+
+    this.#renderArpeggiandoText();
+  }
+
+  // `sempre arpeggiando` (abbreviated `sempre arpegg.`): from an element marked
+  // arpeggiate="start" until the next arpeggiate="end" (or the end of the
+  // staff), every note/chord that carries no explicit `arpeggio` gets an
+  // implied `up` sign. Elements with their own `arpeggio` (including
+  // `non-arpeggiate`) are left untouched. Runs before spacing so the implied
+  // signs are counted in the leftward footprint.
+  #resolveArpeggiandoPassages(elements: NoteChordOrRestElementType[]): void {
+    let inPassage = false;
+    for (const element of elements) {
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const noteOrChord = element as NoteElementType | ChordElementType;
+      // start is inclusive (the marked element rolls); end is exclusive (the
+      // marked element is the first one after the passage).
+      if (noteOrChord.arpeggiate === 'start') {
+        inPassage = true;
+      } else if (noteOrChord.arpeggiate === 'end') {
+        inPassage = false;
+      }
+      noteOrChord.impliedArpeggio =
+        inPassage && noteOrChord.arpeggio === null ? 'up' : null;
+    }
+  }
+
+  #renderArpeggiandoText(): void {
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      if (
+        (element as NoteElementType | ChordElementType).arpeggiate !== 'start'
+      ) {
+        continue;
+      }
+      const noteX = this.#noteXPositions.get(i) ?? 0;
+      this.#dynamicsContainer.appendChild(
+        createSempreArpeggiandoText(
+          noteX,
+          STAFF_TOP_LINE_Y - ARPEGGIO_TEXT_ABOVE_STAFF_PX
+        )
+      );
+    }
   }
 
   // Conservative above-staff budget estimate using staff-referenced positions.
   // Used before note x-positions are set; the actual rendering uses real geometry.
   #estimateAboveStaffBudget(): number {
+    let budget = 0;
+
+    const hasArpeggiandoText = this.#currentElements.some(
+      (element) =>
+        (element.nodeName === MUSIC_NOTE_NODE ||
+          element.nodeName === MUSIC_CHORD_NODE) &&
+        (element as NoteElementType | ChordElementType).arpeggiate === 'start'
+    );
+    if (hasArpeggiandoText) {
+      const textTopY =
+        STAFF_TOP_LINE_Y -
+        ARPEGGIO_TEXT_ABOVE_STAFF_PX -
+        ARPEGGIO_TEXT_FONT_SIZE;
+      if (textTopY < 0) {
+        budget = Math.max(budget, Math.ceil(-textTopY) + 2);
+      }
+    }
+
     const hasStemUpTuplet = this.#tupletGroups.some((group) => {
       const upVotes = group.indices.filter(
         (i) => this.#stemDirections[i] === true
       ).length;
       return upVotes >= group.indices.length / 2;
     });
-    if (!hasStemUpTuplet) {
-      return 0;
+    if (hasStemUpTuplet) {
+      const topY =
+        STAFF_TOP_LINE_Y -
+        STAFF_Y_PADDING -
+        TUPLET_STAFF_CLEARANCE_PX -
+        TUPLET_HOOK_LENGTH_PX -
+        TUPLET_NUMERAL_FONT_SIZE;
+      if (topY < 0) {
+        budget = Math.max(budget, Math.ceil(-topY) + 2);
+      }
     }
-    const topY =
-      STAFF_TOP_LINE_Y -
-      STAFF_Y_PADDING -
-      TUPLET_STAFF_CLEARANCE_PX -
-      TUPLET_HOOK_LENGTH_PX -
-      TUPLET_NUMERAL_FONT_SIZE;
-    return topY < 0 ? Math.ceil(-topY) + 2 : 0;
+
+    return budget;
   }
 
   // Respace notes on resize. Runs even when there are no notes/chords, since

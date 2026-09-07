@@ -58,6 +58,25 @@ export const StandaloneChordAttribute: Story = {
     ></music-chord>`,
 };
 
+export const SempreArpeggiando: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-chord
+        chord="Cmaj"
+        duration="quarter"
+        arpeggiate="start"
+      ></music-chord>
+      <music-chord chord="Fmaj" duration="quarter"></music-chord>
+      <music-chord
+        chord="Gmaj"
+        duration="quarter"
+        arpeggio="non-arpeggiate"
+      ></music-chord>
+      <music-chord chord="Cmaj" duration="quarter"></music-chord>
+    </music-staff>
+  `,
+};
+
 export const Arpeggiated: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">

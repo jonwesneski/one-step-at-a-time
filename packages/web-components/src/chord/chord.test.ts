@@ -1017,4 +1017,92 @@ describe('staff integration', () => {
       expect(signs[0].querySelector('.arpeggio-arrowhead')).not.toBeNull();
     });
   });
+
+  describe('sempre arpeggiando passage', () => {
+    function renderChords(
+      staff: Element,
+      specs: { chord: string; arpeggiate?: string; arpeggio?: string }[]
+    ): ChordElementType[] {
+      const chords = specs.map((spec) => {
+        const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+        chord.setAttribute('chord', spec.chord);
+        chord.setAttribute('duration', 'quarter' satisfies DurationType);
+        if (spec.arpeggiate) {
+          chord.setAttribute('arpeggiate', spec.arpeggiate);
+        }
+        if (spec.arpeggio) {
+          chord.setAttribute('arpeggio', spec.arpeggio);
+        }
+        staff.appendChild(chord);
+        return chord;
+      });
+      const slot = (staff as any).shadowRoot.querySelector('slot');
+      slot.assignedElements = () => chords;
+      slot.dispatchEvent(new Event('slotchange'));
+      return chords;
+    }
+
+    it('draws the instruction once and rolls every following chord', () => {
+      const staff = makeStaff();
+      const [first, second, third] = renderChords(staff, [
+        { chord: 'Cmaj', arpeggiate: 'start' },
+        { chord: 'Fmaj' },
+        { chord: 'Gmaj' },
+      ]);
+
+      expect(
+        staff.shadowRoot?.querySelectorAll('.sempre-arpeggiando').length
+      ).toBe(1);
+      expect(first.shadowRoot?.querySelector('.arpeggio')).not.toBeNull();
+      expect(second.shadowRoot?.querySelector('.arpeggio')).not.toBeNull();
+      expect(third.shadowRoot?.querySelector('.arpeggio')).not.toBeNull();
+    });
+
+    it('lets a chord opt out with its own arpeggio value', () => {
+      const staff = makeStaff();
+      const [, opted] = renderChords(staff, [
+        { chord: 'Cmaj', arpeggiate: 'start' },
+        { chord: 'Fmaj', arpeggio: 'non-arpeggiate' },
+      ]);
+
+      expect(
+        opted.shadowRoot?.querySelector('.arpeggio-bracket')
+      ).not.toBeNull();
+      expect(opted.shadowRoot?.querySelector('.arpeggio-wave')).toBeNull();
+    });
+
+    it('stops the passage at arpeggiate="end"', () => {
+      const staff = makeStaff();
+      const [, , after] = renderChords(staff, [
+        { chord: 'Cmaj', arpeggiate: 'start' },
+        { chord: 'Fmaj', arpeggiate: 'end' },
+        { chord: 'Gmaj' },
+      ]);
+
+      expect(after.shadowRoot?.querySelector('.arpeggio')).toBeNull();
+    });
+
+    it('reserves leftward space for the implied signs', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const [first] = renderChords(staff, [
+        { chord: 'Cmaj' },
+        { chord: 'Fmaj' },
+      ]);
+      const withoutPassage = minWidths[minWidths.length - 1];
+
+      first.setAttribute('arpeggiate', 'start');
+      const withPassage = minWidths[minWidths.length - 1];
+
+      // Both chords now carry an (implied) sign.
+      expect(withPassage).toBeCloseTo(
+        withoutPassage + 2 * ARPEGGIO_FOOTPRINT_PX,
+        5
+      );
+    });
+  });
 });
