@@ -504,10 +504,10 @@ Sung text placed directly below the notes it corresponds to.
 
 |          | Element        | Description                                      |
 | -------- | -------------- | ------------------------------------------------ |
-| &#x2610; | Syllable       | Single syllable per note                         |
-| &#x2610; | Hyphen `-`     | Connects syllables of the same word across notes |
-| &#x2610; | Underscore `_` | Extends a syllable across multiple notes         |
-| &#x2610; | Melisma line   | A line showing one syllable spans many notes     |
+| &#x2611; | Syllable       | Single syllable per note                         |
+| &#x2611; | Hyphen `-`     | Connects syllables of the same word across notes |
+| &#x2611; | Underscore `_` | Extends a syllable across multiple notes         |
+| &#x2611; | Melisma line   | A line showing one syllable spans many notes     |
 | &#x2610; | Verse numbers  | `1.`, `2.` to indicate multiple verse texts      |
 | &#x2610; | Chorus label   | `Cho.` or inline label                           |
 
