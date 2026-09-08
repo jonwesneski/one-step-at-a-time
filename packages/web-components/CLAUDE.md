@@ -24,6 +24,8 @@ Some features may be unavailable or degraded when elements are used outside thei
       │   ├─ <music-note>        — note/note.ts
       │   ├─ <music-chord>       — chord/chord.ts
       │   │   └─ <music-note>    (children)
+      │   ├─ <music-tuplet>      — tuplet/tuplet.ts (wraps notes/chords/rests as a tuplet)
+      │   ├─ <music-arpeggio>    — arpeggio/arpeggio.ts (written-out arpeggio: a run of notes tied into a final chord; run consumes no beat time. NOT the `arpeggio` wavy-line attribute)
       │   └─ <music-clef>        — clef/clef.ts (mid-stream clef change; zero beat-duration)
       ├─ <music-staff-guitar-tab>  — staffGuitarTab/staffGuitarTab.ts
       └─ <music-staff-vocal>  — staffVocal/staffVocal.ts

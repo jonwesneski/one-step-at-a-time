@@ -329,4 +329,41 @@ describe('buildConnectorSvgs', () => {
     const { fromY, cy, toY } = parsePath(d);
     expect(cy).toBeGreaterThan((fromY + toY) / 2);
   });
+
+  it('draws one fanned tie per run-to-chord pair for a music-arpeggio', () => {
+    const chord = makeLayoutNote({ stemUp: false, left: 300, top: 100 });
+    Object.defineProperty(chord, 'staffYCoordinates', {
+      get: () => [20, 12, 4],
+      configurable: true,
+    });
+    const run = [50, 120, 190].map((left) =>
+      makeLayoutNote({ stemUp: true, left, top: 100 })
+    );
+
+    const pairs: ConnectorPair[] = run.map((runNote, i) => ({
+      kind: 'tie',
+      start: runNote,
+      end: chord as unknown as NoteLikeElementType,
+      nestingLevel: 0,
+      arpeggioRun: { targetToneIndex: i, runNotes: run },
+    }));
+
+    const svgs = buildConnectorSvgs(pairs, {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+    expect(svgs).toHaveLength(3);
+
+    // Each curve starts at its own run x and ends near the chord.
+    const ends = svgs.map(
+      (g) => parsePath(g.querySelector('path')!.getAttribute('d')!).toX
+    );
+    expect(new Set(ends).size).toBe(1); // all converge on the chord centre x (bbox fallback)
+    const starts = svgs.map(
+      (g) => parsePath(g.querySelector('path')!.getAttribute('d')!).fromX
+    );
+    expect(starts).toEqual([...starts].sort((a, b) => a - b));
+    expect(new Set(starts).size).toBe(3); // distinct run x's
+  });
 });

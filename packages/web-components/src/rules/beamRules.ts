@@ -26,7 +26,8 @@ export function buildBeamsRenderer(
   timeSig: [BeatsInMeasure, BeatTypeInMeasure],
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
-  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
+  arpeggioRunIndices: ReadonlySet<number> = new Set()
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -34,6 +35,11 @@ export function buildBeamsRenderer(
 } {
   const elementDurationFactors = elements.map((element, i) => {
     const dur = element.duration as DurationType;
+    // A `<music-arpeggio>` run note consumes no beat time — a zero factor keeps
+    // the whole run inside one beat-group window (it cannot straddle an edge).
+    if (arpeggioRunIndices.has(i)) {
+      return 0;
+    }
     const ancestors = tupletsByIndex.get(i);
     if (ancestors !== undefined) {
       const innermostTuplet = ancestors[ancestors.length - 1];

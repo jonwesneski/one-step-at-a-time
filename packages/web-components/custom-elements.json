@@ -4,6 +4,159 @@
   "modules": [
     {
       "kind": "javascript-module",
+      "path": "src/arpeggio/arpeggio.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "The written-out arpeggiated chord (\"chord notated as consecutive pitches\"):\na beamed run of `<music-note>`s followed by the target `<music-chord>` (or a\nlone `<music-note>`). Each run note is tied to its matching-pitch chord tone;\nthe run does not consume beat duration.\n\nThis is the consecutive-pitch form. For the **wavy vertical line** use the\n`arpeggio` attribute on `<music-note>` / `<music-chord>` instead.\n\nThe wrapper is layout-only (no shadow DOM); the staff reads the group and\ndraws the ties. Run notes with no `duration` are given `run-duration`.",
+          "name": "ArpeggioElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#childObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#applyingDefaults",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#ownedDurations",
+              "privacy": "private",
+              "default": "new WeakSet<Element>()"
+            },
+            {
+              "kind": "field",
+              "name": "runDuration",
+              "type": {
+                "text": "DurationType"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unmatched",
+              "type": {
+                "text": "'lv' | 'skip'"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "flatElements",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "runElements",
+              "type": {
+                "text": "NoteElementType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "targetElement",
+              "type": {
+                "text": "NoteOrChordElementType | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "#elementChildren",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#onChildChange",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyDefaults",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#notify",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "run-duration",
+              "type": {
+                "text": "DurationType"
+              },
+              "description": "Note value drawn for run notes that set no `duration` of their own. Defaults to `thirtysecond`."
+            },
+            {
+              "name": "unmatched",
+              "type": {
+                "text": "'lv' | 'skip'"
+              },
+              "description": "A run note whose pitch is not in the target chord becomes a laissez-vibrer tie (`lv`, default) or is dropped (`skip`)."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "music-arpeggio",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_ARPEGGIO",
+          "declaration": {
+            "name": "ArpeggioElement",
+            "module": "src/arpeggio/arpeggio.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/chord/chord.ts",
       "declarations": [
         {
@@ -2180,6 +2333,19 @@
             },
             {
               "kind": "field",
+              "name": "#arpeggioGroups",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioGroupPlacement[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#noteXPositions",
               "privacy": "private",
               "type": {
@@ -2528,6 +2694,37 @@
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reRenderFromCurrentSlot",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderFromSlot",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "slot",
+                  "type": {
+                    "text": "HTMLSlotElement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
               }
             },
             {
@@ -4343,6 +4540,19 @@
             },
             {
               "kind": "field",
+              "name": "#arpeggioGroups",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioGroupPlacement[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#noteXPositions",
               "privacy": "private",
               "type": {
@@ -4669,6 +4879,37 @@
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reRenderFromCurrentSlot",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderFromSlot",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "slot",
+                  "type": {
+                    "text": "HTMLSlotElement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
               }
             },
             {

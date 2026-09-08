@@ -542,3 +542,16 @@ export const ChordWithSlur: Story = {
     </music-staff>
   `,
 };
+
+export const WrittenOutArpeggio: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-arpeggio>
+        <music-note note="C" octave="4"></music-note>
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+        <music-chord chord="Cmaj" duration="whole"></music-chord>
+      </music-arpeggio>
+    </music-staff>
+  `,
+};

@@ -30,6 +30,7 @@ import {
 } from './rules/tupletRules';
 import { StaffElementBase } from './staffBase';
 import {
+  ArpeggioGroupPlacement,
   ChordElementType,
   ChordNote,
   ClefMarkerPlacement,
@@ -62,6 +63,7 @@ import {
   CLEF_EVENTS,
   COMMON_ATTRIBUTES,
   isStaffNodeName,
+  MUSIC_ARPEGGIO_NODE,
   MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
   MUSIC_COMPOSITION,
@@ -180,6 +182,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #tupletGroups: TupletGroup[] = [];
   #tupletsByIndex: Map<number, TupletElementType[]> = new Map();
   #clefMarkers: ClefMarkerPlacement[] = [];
+  #arpeggioGroups: ArpeggioGroupPlacement[] = [];
   #noteXPositions: Map<number, number> = new Map();
   // X (beams-container space) of the first grace note's head, for elements
   // that have both a grace group and a grace-dynamic. Populated alongside
@@ -190,7 +193,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamedIndicesSnapshot: Set<number> = new Set();
   #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
   #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
-  #boundDrawConnectors = () => this.drawConnectorsWhenStandalone();
+  #boundDrawConnectors = (event?: Event) => {
+    const path =
+      (event as CustomEvent | undefined)?.composedPath?.() ??
+      ([] as EventTarget[]);
+    if (path.some((node) => (node as Node)?.nodeName === MUSIC_ARPEGGIO_NODE)) {
+      // A <music-arpeggio> changed — re-flatten so bar-fit / beams / the
+      // written-in run durations re-resolve, then the tie overlay redraws too.
+      this.#reRenderFromCurrentSlot();
+      return;
+    }
+    this.drawConnectorsWhenStandalone();
+  };
   #boundRenderDynamics = () => {
     this.#dynamicsContainer.innerHTML = '';
     this.#renderDynamics();
@@ -521,7 +535,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   protected onHandleSlotChange(event: Event) {
-    const slot = event.target as HTMLSlotElement;
+    this.#renderFromSlot(event.target as HTMLSlotElement);
+  }
+
+  // Re-run the full slot pipeline (flatten → bar-fit → beams → render). Needed
+  // when a `<music-arpeggio>` mutates: its run notes gain a `duration` and the
+  // groups must be re-flattened, which the cached #currentElements can't do.
+  #reRenderFromCurrentSlot(): void {
+    const slot = this.shadowRoot?.querySelector('slot');
+    if (slot) {
+      this.#renderFromSlot(slot as HTMLSlotElement);
+    }
+  }
+
+  #renderFromSlot(slot: HTMLSlotElement) {
     const assignedElements = slot.assignedElements();
     this.upgradeAssignedElements(assignedElements);
     const assigned = assignedElements.filter(
@@ -530,13 +557,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         e.nodeName === MUSIC_CHORD_NODE ||
         e.nodeName === MUSIC_REST_NODE ||
         e.nodeName === MUSIC_TUPLET_NODE ||
+        e.nodeName === MUSIC_ARPEGGIO_NODE ||
         e.nodeName === MUSIC_CLEF_NODE
     );
 
-    const { flatElements, tupletsByIndex, clefMarkers } =
+    const { flatElements, tupletsByIndex, clefMarkers, arpeggioGroups } =
       flattenSlotElements(assigned);
     this.#tupletsByIndex = tupletsByIndex;
     this.#clefMarkers = clefMarkers;
+    this.#arpeggioGroups = arpeggioGroups;
     this.#renderNotes(flatElements);
 
     /*
@@ -568,7 +597,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const { allowedElementCount, error } = computeAllowedElementCount(
       elements,
       this.effectiveTimeSig,
-      this.#tupletsByIndex
+      this.#tupletsByIndex,
+      this.#arpeggioGroups
     );
     if (error !== null) {
       console.warn(error);
@@ -614,12 +644,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
+    const arpeggioRunIndices = new Set<number>(
+      this.#arpeggioGroups.flatMap((group) => group.runIndices)
+    );
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.effectiveTimeSig,
       noteStaffYCoords,
       chordStaffYCoords,
-      this.#tupletsByIndex
+      this.#tupletsByIndex,
+      arpeggioRunIndices
     );
     this.#beamRenderer = beamRenderer;
 

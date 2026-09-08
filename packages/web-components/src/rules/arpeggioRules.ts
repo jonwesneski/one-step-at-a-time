@@ -1,8 +1,14 @@
-import type { ArpeggioType } from '../types/theory';
+import type {
+  NoteElementType,
+  NoteOrChordElementType,
+} from '../types/elements';
+import type { ArpeggioType, Note, Octave } from '../types/theory';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
 } from '../utils/notationDimensions';
+import { MUSIC_CHORD } from '../utils/consts';
+import { noteSemitoneMap } from './theoryConsts';
 
 // ─── Cross-staff (grand staff) unbroken arpeggio ─────────────────────────────
 //
@@ -152,4 +158,139 @@ export function computeArpeggioFootprintWidth(
   return hasShownAccidental
     ? ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX
     : ARPEGGIO_FOOTPRINT_PX;
+}
+
+// ─── Written-out arpeggio (`<music-arpeggio>`: consecutive pitches tied to a chord) ───
+//
+// Distinct from the wavy-line sign above: this pairs each note of a beamed run
+// with its matching-pitch tone of the following chord so the staff can draw the
+// fan of ties. Pure — reads only `note`/`octave` attributes and `chord.notes`.
+
+export type ArpeggioTiePairing = {
+  runNote: NoteElementType;
+  target: NoteOrChordElementType;
+  /** Index into `chord.notes` / `staffYCoordinates`; 0 for a single-note target. */
+  targetToneIndex: number;
+  variant: 'run-to-chord' | 'laissez-vibrer';
+};
+
+type Tone = { pitchClass: number; octave: Octave | null; index: number };
+
+const pitchClassOf = (note: string | null): number | null => {
+  if (note === null) {
+    return null;
+  }
+  const value = noteSemitoneMap.get(note as Note);
+  return value === undefined ? null : value;
+};
+
+const targetTones = (target: NoteOrChordElementType): Tone[] => {
+  if (target.tagName.toLowerCase() === MUSIC_CHORD) {
+    return (target as { notes: { value: Note; octave: Octave | null }[] }).notes
+      .map((tone, index) => ({
+        pitchClass: pitchClassOf(tone.value),
+        octave: tone.octave,
+        index,
+      }))
+      .filter((tone): tone is Tone => tone.pitchClass !== null);
+  }
+  const note = target as NoteElementType;
+  const pitchClass = pitchClassOf(note.getAttribute('note'));
+  return pitchClass === null
+    ? []
+    : [{ pitchClass, octave: note.octave, index: 0 }];
+};
+
+/**
+ * Pairs each `<music-arpeggio>` run note with its matching-pitch tone of the
+ * target chord. Matching is by pitch class (enharmonic-aware), with octave as a
+ * tiebreaker when both are known. A run note that matches no tone becomes a
+ * laissez-vibrer tie (`unmatched: 'lv'`) or is dropped (`'skip'`). A run note
+ * with an authored `tie` attribute is left to the normal connector path.
+ */
+export function resolveArpeggioTiePairings(
+  runNotes: readonly NoteElementType[],
+  target: NoteOrChordElementType,
+  unmatched: 'lv' | 'skip'
+): { pairings: ArpeggioTiePairing[]; warnings: string[] } {
+  const pairings: ArpeggioTiePairing[] = [];
+  const warnings: string[] = [];
+  const tones = targetTones(target);
+  const usedToneIndices = new Set<number>();
+
+  for (const runNote of runNotes) {
+    if (runNote.getAttribute('tie') !== null) {
+      warnings.push(
+        `[music-arpeggio] run note <music-note note="${runNote.getAttribute(
+          'note'
+        )}"> has an authored tie; skipping auto-tie for it`
+      );
+      continue;
+    }
+    const runPitchClass = pitchClassOf(runNote.getAttribute('note'));
+    const runOctave = runNote.octave;
+
+    const candidates = tones.filter(
+      (tone) => tone.pitchClass === runPitchClass
+    );
+    let chosen = candidates.find((tone) => !usedToneIndices.has(tone.index));
+    if (chosen === undefined && candidates.length > 0) {
+      // All matching tones already used — reuse the closest by octave.
+      chosen = candidates[candidates.length - 1];
+    }
+    if (candidates.length > 1 && runOctave !== null) {
+      const byOctave = candidates
+        .filter(
+          (tone) => tone.octave !== null && !usedToneIndices.has(tone.index)
+        )
+        .sort(
+          (a, b) =>
+            Math.abs((a.octave as number) - runOctave) -
+            Math.abs((b.octave as number) - runOctave)
+        );
+      if (byOctave.length > 0) {
+        chosen = byOctave[0];
+      }
+    }
+
+    if (chosen === undefined) {
+      warnings.push(
+        `[music-arpeggio] run note <music-note note="${runNote.getAttribute(
+          'note'
+        )}"> has no matching tone in the target chord`
+      );
+      if (unmatched === 'lv') {
+        pairings.push({
+          runNote,
+          target,
+          targetToneIndex: 0,
+          variant: 'laissez-vibrer',
+        });
+      }
+      continue;
+    }
+
+    const toneIndex = chosen.index;
+    if (usedToneIndices.has(toneIndex)) {
+      warnings.push(
+        `[music-arpeggio] more than one run note ties to the same chord tone; keeping the last`
+      );
+      // Drop the earlier pairing to that tone.
+      const earlier = pairings.findIndex(
+        (p) => p.variant === 'run-to-chord' && p.targetToneIndex === toneIndex
+      );
+      if (earlier >= 0) {
+        pairings.splice(earlier, 1);
+      }
+    }
+    usedToneIndices.add(toneIndex);
+    pairings.push({
+      runNote,
+      target,
+      targetToneIndex: chosen.index,
+      variant: 'run-to-chord',
+    });
+  }
+
+  return { pairings, warnings };
 }

@@ -6,6 +6,7 @@ import './staff'; // order of import matters for some reason, otherwise <note> c
 import './staffGuitarTab';
 import './staffVocal';
 import './tuplet';
+import './arpeggio';
 
 import './guitarNote';
 import './note';

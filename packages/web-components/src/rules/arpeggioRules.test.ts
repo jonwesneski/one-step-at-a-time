@@ -6,10 +6,15 @@ import {
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
 } from '../utils/notationDimensions';
+import '../chord/index';
+import '../note/index';
+import type { ChordElementType, NoteElementType } from '../types/elements';
+import { MUSIC_CHORD, MUSIC_NOTE } from '../utils/consts';
 import {
   type ArpeggioEntry,
   computeArpeggioFootprintWidth,
   resolveArpeggioSpans,
+  resolveArpeggioTiePairings,
 } from './arpeggioRules';
 
 describe('computeArpeggioFootprintWidth', () => {
@@ -178,5 +183,86 @@ describe('resolveArpeggioSpans', () => {
     ]);
     expect(spans).toEqual([]);
     expect(warnings[0]).toMatch(/no wave variant/);
+  });
+});
+
+describe('resolveArpeggioTiePairings', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const runNote = (pitch: string, octave = 4): NoteElementType => {
+    const el = document.createElement(MUSIC_NOTE) as NoteElementType;
+    el.setAttribute('note', pitch);
+    el.setAttribute('octave', `${octave}`);
+    document.body.appendChild(el);
+    return el;
+  };
+  const targetChord = (name: string): ChordElementType => {
+    const el = document.createElement(MUSIC_CHORD) as ChordElementType;
+    el.setAttribute('chord', name);
+    document.body.appendChild(el);
+    return el;
+  };
+
+  it('pairs each run note with its matching chord tone by pitch class', () => {
+    const run = [runNote('C'), runNote('E'), runNote('G')];
+    const { pairings, warnings } = resolveArpeggioTiePairings(
+      run,
+      targetChord('Cmaj'),
+      'lv'
+    );
+    expect(warnings).toEqual([]);
+    expect(pairings.map((p) => p.variant)).toEqual([
+      'run-to-chord',
+      'run-to-chord',
+      'run-to-chord',
+    ]);
+    expect(pairings.map((p) => p.targetToneIndex)).toEqual([0, 1, 2]);
+  });
+
+  it('matches enharmonically (Gb ties to F#)', () => {
+    const { pairings } = resolveArpeggioTiePairings(
+      [runNote('Gb')],
+      targetChord('Dmaj'), // D F# A
+      'lv'
+    );
+    expect(pairings).toHaveLength(1);
+    expect(pairings[0].variant).toBe('run-to-chord');
+  });
+
+  it('makes an unmatched run note a laissez-vibrer pairing (unmatched: lv)', () => {
+    const { pairings, warnings } = resolveArpeggioTiePairings(
+      [runNote('C'), runNote('D')],
+      targetChord('Cmaj'),
+      'lv'
+    );
+    expect(pairings.map((p) => p.variant)).toEqual([
+      'run-to-chord',
+      'laissez-vibrer',
+    ]);
+    expect(warnings.some((w) => /no matching tone/.test(w))).toBe(true);
+  });
+
+  it('drops an unmatched run note when unmatched: skip', () => {
+    const { pairings } = resolveArpeggioTiePairings(
+      [runNote('C'), runNote('D')],
+      targetChord('Cmaj'),
+      'skip'
+    );
+    expect(pairings).toHaveLength(1);
+  });
+
+  it('skips a run note that carries an authored tie', () => {
+    const authored = runNote('C');
+    authored.setAttribute('tie', 'start');
+    const { pairings, warnings } = resolveArpeggioTiePairings(
+      [authored, runNote('E')],
+      targetChord('Cmaj'),
+      'lv'
+    );
+    expect(pairings).toHaveLength(1);
+    expect(pairings[0].targetToneIndex).toBe(1);
+    expect(warnings.some((w) => /authored tie/.test(w))).toBe(true);
   });
 });

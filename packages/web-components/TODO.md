@@ -50,21 +50,22 @@ These control the volume/intensity of a note or passage.
 
 Short melodic decorations applied to a note.
 
-|          | Name                       | Symbol / Notation     | Description                                                                                                                                                         |
-| -------- | -------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| &#x2610; | Trill                      | `tr` or `tr~~~`       | Rapid alternation between the note and the one above                                                                                                                |
-| &#x2610; | Trill with ending          | `tr` + turn           | Trill that resolves with a turn figure                                                                                                                              |
-| &#x2610; | Mordent (Lower)            | `ð†©`                 | Quick lower-neighbor figure (note â†’ below â†’ note)                                                                                                               |
-| &#x2610; | Inverted Mordent (Upper)   | `ð†ª`                 | Quick upper-neighbor figure (note â†’ above â†’ note)                                                                                                               |
-| &#x2610; | Turn                       | `âˆž` or `ð„Ž`        | Four-note figure: above â†’ note â†’ below â†’ note                                                                                                                 |
-| &#x2610; | Inverted Turn              | Reversed turn symbol  | Below â†’ note â†’ above â†’ note                                                                                                                                   |
-| &#x2611; | Appoggiatura               | Small note (slurred)  | Leaning grace note; takes half the beat value                                                                                                                       |
-| &#x2611; | Acciaccatura               | Small note with slash | "Crushed" grace note; played almost simultaneously                                                                                                                  |
-| &#x2611; | Grace Note (single)        | Small flagged note    | A quick ornamental note before the main note                                                                                                                        |
-| &#x2611; | Grace Note (multiple)      | Small beamed notes    | A run of quick ornamental notes                                                                                                                                     |
-| &#x2610; | Glissando                  | `gliss.` + line       | Slide between two pitches                                                                                                                                           |
-| &#x2610; | Portamento                 | Curved line           | Smooth, vocal-style slide between pitches                                                                                                                           |
-| &#x2611; | Arpeggiated / Rolled Chord | Wavy vertical line    | Spread a chord bottom→top; arrow variants for direction, square bracket for non-arpeggiate; continuous line across a grand staff; `sempre arpeggiando` passage text |
+|          | Name                            | Symbol / Notation            | Description                                                                                                                                                         |
+| -------- | ------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| &#x2610; | Trill                           | `tr` or `tr~~~`              | Rapid alternation between the note and the one above                                                                                                                |
+| &#x2610; | Trill with ending               | `tr` + turn                  | Trill that resolves with a turn figure                                                                                                                              |
+| &#x2610; | Mordent (Lower)                 | `ð†©`                        | Quick lower-neighbor figure (note â†’ below â†’ note)                                                                                                               |
+| &#x2610; | Inverted Mordent (Upper)        | `ð†ª`                        | Quick upper-neighbor figure (note â†’ above â†’ note)                                                                                                               |
+| &#x2610; | Turn                            | `âˆž` or `ð„Ž`               | Four-note figure: above â†’ note â†’ below â†’ note                                                                                                                 |
+| &#x2610; | Inverted Turn                   | Reversed turn symbol         | Below â†’ note â†’ above â†’ note                                                                                                                                   |
+| &#x2611; | Appoggiatura                    | Small note (slurred)         | Leaning grace note; takes half the beat value                                                                                                                       |
+| &#x2611; | Acciaccatura                    | Small note with slash        | "Crushed" grace note; played almost simultaneously                                                                                                                  |
+| &#x2611; | Grace Note (single)             | Small flagged note           | A quick ornamental note before the main note                                                                                                                        |
+| &#x2611; | Grace Note (multiple)           | Small beamed notes           | A run of quick ornamental notes                                                                                                                                     |
+| &#x2610; | Glissando                       | `gliss.` + line              | Slide between two pitches                                                                                                                                           |
+| &#x2610; | Portamento                      | Curved line                  | Smooth, vocal-style slide between pitches                                                                                                                           |
+| &#x2611; | Arpeggiated / Rolled Chord      | Wavy vertical line           | Spread a chord bottom→top; arrow variants for direction, square bracket for non-arpeggiate; continuous line across a grand staff; `sempre arpeggiando` passage text |
+| &#x2611; | Arpeggio as consecutive pitches | Beamed run tied into a chord | `<music-arpeggio>` wrapper: run notes auto-beamed, pitch-matched fanned ties to the chord tones, run consumes no beat time                                          |
 
 ---
 

@@ -183,6 +183,25 @@ export interface ITupletElement {
   readonly flatElements: NoteChordOrRestElementType[];
 }
 
+/**
+ * `<music-arpeggio>` — the written-out arpeggiated chord: a beamed run of
+ * `<music-note>`s followed by the target `<music-chord>` (or a single
+ * `<music-note>`), each run note tied to its matching-pitch chord tone. This is
+ * the consecutive-pitch notation; the wavy vertical line is the `arpeggio`
+ * attribute on `<music-note>` / `<music-chord>`.
+ */
+export interface IArpeggioElement {
+  /** Note value drawn for run notes that have no `duration` of their own. */
+  runDuration: DurationType;
+  /** What to do with a run note whose pitch is not in the target chord. */
+  unmatched: 'lv' | 'skip';
+  readonly flatElements: NoteChordOrRestElementType[];
+  /** The run `<music-note>`s — every `<music-note>` child except the last element child. */
+  readonly runElements: NoteElementType[];
+  /** The target chord/note — the last element child, or null when malformed. */
+  readonly targetElement: NoteOrChordElementType | null;
+}
+
 export interface IStaffElementBase {
   group: StaffGroupType | null;
   groupId: string | null;
@@ -202,6 +221,7 @@ export type ChordElementType = HTMLElement & IChordElement;
 export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
+export type ArpeggioElementType = HTMLElement & IArpeggioElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -222,6 +242,15 @@ export type NoteLikeElementType =
 export type ClefMarkerPlacement = {
   afterElementIndex: number;
   element: ClefElementType;
+};
+
+// A `<music-arpeggio>` group found in a staff's slotted content. `runIndices`
+// and `targetIndex` are indices into the resulting flatElements array (the run
+// notes and the final chord/note, which all render as ordinary elements).
+export type ArpeggioGroupPlacement = {
+  runIndices: number[];
+  targetIndex: number;
+  element: ArpeggioElementType;
 };
 
 export type YCoordinates = Partial<Record<NoteLetterOctave, number>>;
