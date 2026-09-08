@@ -1312,6 +1312,26 @@ describe('staff integration', () => {
       expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
     });
 
+    it('re-runs staff spacing when arpeggio-for is toggled on a connected note', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const note = makeQuarterNote('E', 4);
+      renderNotes(staff, [note]);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      note.setAttribute('arpeggio-for', 'top');
+      const withSign = minWidths[minWidths.length - 1];
+      expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
+
+      note.removeAttribute('arpeggio-for');
+      const removed = minWidths[minWidths.length - 1];
+      expect(removed).toBeCloseTo(withoutSign, 5);
+    });
+
     it('suppresses grace accidentals covered by the key signature and shows naturals', () => {
       const staff = document.createElement(MUSIC_STAFF) as any;
       staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D' satisfies Note);

@@ -179,6 +179,23 @@ export const createChordSvg = ({
     anyAccidentalShown
   );
 
+  // Absolute left edge (chord-SVG coords) of the chord's leftmost column.
+  // maxLeftHeadDisplacement is a leftward delta on an adjacent head, not a
+  // coordinate, so subtract it from the real notehead-left edge.
+  const normalHeadLeftX =
+    noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE -
+    NOTE_HEAD_RADIUS_PX;
+  let columnLeftX = normalHeadLeftX;
+  if (maxLeftHeadDisplacement > 0) {
+    columnLeftX = Math.min(
+      columnLeftX,
+      normalHeadLeftX - maxLeftHeadDisplacement
+    );
+  }
+  if (anyAccidentalShown) {
+    columnLeftX = Math.min(columnLeftX, -accidentalColumnWidth);
+  }
+
   // Grace notes — placed before the chord, left of its accidental column,
   // any leftward-displaced heads, and any arpeggio sign.
   if (graceNotes && graceNotes.length > 0 && staffYCoordinates.length > 0) {
@@ -231,10 +248,7 @@ export const createChordSvg = ({
       mainTopNoteYPx: topNoteHeadCenterYPx,
       mainSlurTargetXPx,
       mainSlurTargetYPx,
-      anchorRightXPx:
-        -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement) -
-        arpeggioFootprint -
-        GRACE_MAIN_GAP_PX,
+      anchorRightXPx: columnLeftX - arpeggioFootprint - GRACE_MAIN_GAP_PX,
       mainAccidentalShown: anyAccidentalShown,
       mainStemUp: stemUp,
       mainStaffY: graceLedgerStaffY,
@@ -248,11 +262,6 @@ export const createChordSvg = ({
   // notehead range. staffYCoordinates is declaration order, not pitch order,
   // hence Math.min / Math.max for the top and bottom heads.
   if (arpeggio && staffYCoordinates.length > 0) {
-    const columnLeftX =
-      anyAccidentalShown || maxLeftHeadDisplacement > 0
-        ? -Math.max(accidentalColumnWidth, maxLeftHeadDisplacement)
-        : noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE -
-          NOTE_HEAD_RADIUS_PX;
     const sign = createArpeggioSvg({
       arpeggio,
       topY:

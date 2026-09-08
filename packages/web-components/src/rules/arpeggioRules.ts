@@ -9,6 +9,11 @@ import {
 // Pure resolution/validation, kept out of measure.ts so it is unit-testable
 // (jsdom's ResizeObserver polyfill never fires, so measure.ts's real render
 // path only runs in browser tests). Mirrors resolveStaffGroups.
+//
+// A cross-staff span is only ever formed by an explicit `arpeggio-for`. Two
+// unlinked `arpeggio` marks — even a same-index pair on a grand staff — stay
+// as independent per-staff signs (the "broken" grand-staff form), which is
+// otherwise impossible to express.
 
 export type ArpeggioEntry = {
   /** Ordinal of the staff this element sits in, within the measure. */
@@ -42,20 +47,24 @@ const isWaveVariant = (
 /**
  * Pairs the two ends of each unbroken cross-staff arpeggio.
  *
- * - Explicit: a lower element with `arpeggio-for="<id>"` pairs with the element
- *   whose `id` matches, when that element is in a different staff. If both
- *   carry `arpeggio` and disagree, the lower element's value wins (with a
- *   warning).
- * - Implicit (only when the measure's first staff is `group="grand"`): an
- *   element with `arpeggio` and no `arpeggio-for` at entry index _i_ of staff 0
- *   pairs with an `arpeggio`, no-`arpeggio-for` element at index _i_ of staff 1.
+ * A pair is formed only by an explicit `arpeggio-for="<id>"` on the lower
+ * element, matching the element whose `id` it names when that element is in a
+ * different staff. If both ends carry `arpeggio` and disagree, the lower
+ * element's value wins (with a warning). Two `arpeggio` marks with no
+ * `arpeggio-for` between them are never joined — they stay as separate
+ * per-staff signs (the "broken" form), whether or not the measure is a grand
+ * staff.
+ *
+ * Each element is an endpoint of at most one span; an `arpeggio-for` that
+ * references an element already paired (by an earlier reference, or as the
+ * upper end of another span) is rejected so connectors never branch from a
+ * shared notehead.
  *
  * Any failure produces a warning and no span — the two elements then keep their
  * own per-staff signs.
  */
 export function resolveArpeggioSpans(
-  entries: ArpeggioEntry[],
-  firstStaffIsGrand: boolean
+  entries: ArpeggioEntry[]
 ): ArpeggioSpanResolution {
   const spans: ArpeggioSpan[] = [];
   const warnings: string[] = [];
@@ -75,6 +84,12 @@ export function resolveArpeggioSpans(
     if (!upper) {
       warnings.push(
         `arpeggio-for="${lower.arpeggioFor}" matches no element; drawing per-staff signs instead`
+      );
+      continue;
+    }
+    if (paired.has(upper) || paired.has(lower)) {
+      warnings.push(
+        `arpeggio-for="${lower.arpeggioFor}" reuses an element already paired in another cross-staff arpeggio; drawing per-staff signs instead`
       );
       continue;
     }
@@ -113,35 +128,6 @@ export function resolveArpeggioSpans(
     });
     paired.add(upper);
     paired.add(lower);
-  }
-
-  if (firstStaffIsGrand) {
-    const staffZero = entries.filter(
-      (e) => e.staffIndex === 0 && e.arpeggioFor === null && !paired.has(e)
-    );
-    for (const upper of staffZero) {
-      if (!isWaveVariant(upper.arpeggio)) {
-        continue;
-      }
-      const lower = entries.find(
-        (e) =>
-          e.staffIndex === 1 &&
-          e.entryIndex === upper.entryIndex &&
-          e.arpeggioFor === null &&
-          !paired.has(e) &&
-          isWaveVariant(e.arpeggio)
-      );
-      if (!lower) {
-        continue;
-      }
-      spans.push({
-        upper: { staffIndex: upper.staffIndex, entryIndex: upper.entryIndex },
-        lower: { staffIndex: lower.staffIndex, entryIndex: lower.entryIndex },
-        arpeggio: upper.arpeggio,
-      });
-      paired.add(upper);
-      paired.add(lower);
-    }
   }
 
   return { spans, warnings };

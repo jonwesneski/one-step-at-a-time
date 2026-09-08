@@ -17,8 +17,16 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF,
 } from '../utils/consts';
-import { ARPEGGIO_FOOTPRINT_PX } from '../utils/notationDimensions';
-import { NOTE_SCALE } from '../utils/svgCreator/note';
+import {
+  ARPEGGIO_CHORD_GAP_PX,
+  ARPEGGIO_FOOTPRINT_PX,
+  ARPEGGIO_WAVE_WIDTH_PX,
+} from '../utils/notationDimensions';
+import {
+  NOTE_HEAD_CX_STEM_DOWN_PX,
+  NOTE_HEAD_RADIUS_PX,
+  NOTE_SCALE,
+} from '../utils/svgCreator/note';
 import './index';
 
 afterEach(() => {
@@ -1000,6 +1008,29 @@ describe('staff integration', () => {
       expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
     });
 
+    it('re-runs staff spacing when arpeggio-for is toggled on a connected chord', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ]);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      chord.setAttribute('arpeggio-for', 'top');
+      const withSign = minWidths[minWidths.length - 1];
+      expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
+
+      chord.removeAttribute('arpeggio-for');
+      const removed = minWidths[minWidths.length - 1];
+      expect(removed).toBeCloseTo(withoutSign, 5);
+    });
+
     it('renders one sign spanning the whole chord', () => {
       const staff = makeStaff();
       const chord = renderChordByNotes(staff, [
@@ -1015,6 +1046,62 @@ describe('staff integration', () => {
         signs[0].querySelectorAll('.arpeggio-wave').length
       ).toBeGreaterThan(1);
       expect(signs[0].querySelector('.arpeggio-arrowhead')).not.toBeNull();
+    });
+
+    // G5 + A5 sit above the middle line (stem-down) and are one step apart, so
+    // the top head is displaced left by ADJACENT_NOTE_X_DISPLACEMENT_PX.
+    function renderStemDownSecond(staff: Element): ChordElementType {
+      const chord = renderChordByNotes(staff, [
+        { value: 'G', octave: 5 },
+        { value: 'A', octave: 5 },
+      ]);
+      const xValues = Array.from(
+        chord.shadowRoot!.querySelectorAll('.note')
+      ).map((note) => note.getAttribute('x'));
+      expect(xValues).toContain((-ADJACENT_NOTE_X_DISPLACEMENT_PX).toString());
+      return chord;
+    }
+
+    it('reserves the left-head displacement on top of the arpeggio footprint', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const chord = renderStemDownSecond(staff);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      chord.setAttribute('arpeggio', 'up');
+      const withSign = minWidths[minWidths.length - 1];
+
+      expect(withSign).toBeCloseTo(
+        withoutSign + ARPEGGIO_FOOTPRINT_PX + ADJACENT_NOTE_X_DISPLACEMENT_PX,
+        5
+      );
+    });
+
+    it('places the sign left of the displaced head edge, not the raw displacement', () => {
+      const staff = makeStaff();
+      const chord = renderStemDownSecond(staff);
+      chord.setAttribute('arpeggio', 'up');
+
+      const sign = chord.shadowRoot!.querySelector('.arpeggio')!;
+      const translateX = Number(
+        /translate\(\s*(-?[\d.]+)/.exec(
+          sign.getAttribute('transform') ?? ''
+        )![1]
+      );
+
+      const normalHeadLeftX = NOTE_HEAD_CX_STEM_DOWN_PX - NOTE_HEAD_RADIUS_PX;
+      const expectedRightEdgeX =
+        normalHeadLeftX -
+        ADJACENT_NOTE_X_DISPLACEMENT_PX -
+        ARPEGGIO_CHORD_GAP_PX;
+      expect(translateX).toBeCloseTo(
+        expectedRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+        4
+      );
     });
   });
 
@@ -1103,6 +1190,51 @@ describe('staff integration', () => {
         withoutPassage + 2 * ARPEGGIO_FOOTPRINT_PX,
         5
       );
+    });
+
+    function reassignSlot(staff: Element, chords: ChordElementType[]): void {
+      const slot = (staff as any).shadowRoot.querySelector('slot');
+      slot.assignedElements = () => chords;
+      slot.dispatchEvent(new Event('slotchange'));
+    }
+
+    it('clears impliedArpeggio on a chord removed from the staff mid-passage', () => {
+      const staff = makeStaff();
+      const [first, second] = renderChords(staff, [
+        { chord: 'Cmaj', arpeggiate: 'start' },
+        { chord: 'Fmaj' },
+      ]);
+      expect(second.impliedArpeggio).toBe('up');
+
+      second.remove();
+      reassignSlot(staff, [first]);
+
+      expect(second.impliedArpeggio).toBeNull();
+
+      document.body.appendChild(second);
+      expect(second.shadowRoot?.querySelector('.arpeggio')).toBeNull();
+    });
+
+    it('leaves impliedArpeggio alone when the chord moved to another staff in a passage', () => {
+      const staffA = makeStaff();
+      const [firstA, moved] = renderChords(staffA, [
+        { chord: 'Cmaj', arpeggiate: 'start' },
+        { chord: 'Fmaj' },
+      ]);
+      expect(moved.impliedArpeggio).toBe('up');
+
+      const staffB = makeStaff();
+      const startB = document.createElement(MUSIC_CHORD) as ChordElementType;
+      startB.setAttribute('chord', 'Gmaj');
+      startB.setAttribute('duration', 'quarter' satisfies DurationType);
+      startB.setAttribute('arpeggiate', 'start');
+      staffB.appendChild(startB);
+      staffB.appendChild(moved);
+
+      reassignSlot(staffB, [startB, moved]);
+      reassignSlot(staffA, [firstA]);
+
+      expect(moved.impliedArpeggio).toBe('up');
     });
   });
 });

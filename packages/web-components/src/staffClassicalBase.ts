@@ -5,6 +5,7 @@ import {
 } from './rules/accidentalRules';
 import { computeArpeggioFootprintWidth } from './rules/arpeggioRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import {
@@ -60,6 +61,7 @@ import {
 import {
   CLEF_EVENTS,
   COMMON_ATTRIBUTES,
+  isStaffNodeName,
   MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
   MUSIC_COMPOSITION,
@@ -105,6 +107,33 @@ import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
 // otherwise a `sempre arpeggiando` passage's implied one.
 function effectiveArpeggio(element: NoteElementType | ChordElementType) {
   return element.arpeggio ?? element.impliedArpeggio;
+}
+
+// The arpeggio variant that determines this element's reserved leftward
+// footprint: its own sign, an implied `sempre arpeggiando` sign, or — for the
+// lower end of a cross-staff span carrying only `arpeggio-for` — the wave the
+// ancestor measure draws for the span. Every wave variant reserves the same
+// width, so the exact value past non-null does not matter here.
+function footprintArpeggio(element: NoteElementType | ChordElementType) {
+  return (
+    effectiveArpeggio(element) ?? (element.arpeggioFor !== null ? 'up' : null)
+  );
+}
+
+// A stem-down chord's adjacent second shifts its head left by
+// ADJACENT_NOTE_X_DISPLACEMENT_PX, past the notehead inset the arpeggio
+// footprint constants assume — reserve that delta when the chord shows a sign.
+function chordLeftHeadDisplacementPx(chord: ChordElementType): number {
+  const coords = chord.staffYCoordinates;
+  if (coords === null || coords.length < 2) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    ...computeAdjacentDisplacements(coords, chord.stemUp).map(
+      (displacement) => -displacement.xOffset
+    )
+  );
 }
 
 // Whether a note/chord currently shows an accidental — the arpeggio sign sits
@@ -647,8 +676,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
+    const previousElements = this.#currentElements;
     this.#currentElements = elements;
-    this.#resolveArpeggiandoPassages(elements);
+    this.#resolveArpeggiandoPassages(elements, previousElements);
     this.#spaceElements();
 
     for (const svgGroup of this.#beamRenderer.svgGroups) {
@@ -679,7 +709,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.resolvedGraceAccidentals
         );
         firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          effectiveArpeggio(noteElement),
+          footprintArpeggio(noteElement),
           elementHasShownAccidental(noteElement)
         );
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
@@ -698,9 +728,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.resolvedGraceAccidentals
         );
         firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          effectiveArpeggio(chordElement),
+          footprintArpeggio(chordElement),
           elementHasShownAccidental(chordElement)
         );
+        if (footprintArpeggio(chordElement) !== null) {
+          firstElementLeftwardWidth +=
+            chordLeftHeadDisplacementPx(chordElement);
+        }
       }
       // Grace overhangs of the remaining elements also consume horizontal
       // room beyond the per-note minimum spacing.
@@ -719,9 +753,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             noteOrChordElement.resolvedGraceAccidentals
           );
           extraLeftwardWidth += computeArpeggioFootprintWidth(
-            effectiveArpeggio(noteOrChordElement),
+            footprintArpeggio(noteOrChordElement),
             elementHasShownAccidental(noteOrChordElement)
           );
+          if (
+            element.nodeName === MUSIC_CHORD_NODE &&
+            footprintArpeggio(noteOrChordElement) !== null
+          ) {
+            extraLeftwardWidth += chordLeftHeadDisplacementPx(
+              noteOrChordElement as ChordElementType
+            );
+          }
         }
       }
       const minWidth = calculateStaffMinWidth(
@@ -988,7 +1030,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.resolvedGraceAccidentals
         );
         leftwardWidth += computeArpeggioFootprintWidth(
-          effectiveArpeggio(noteElement),
+          footprintArpeggio(noteElement),
           elementHasShownAccidental(noteElement)
         );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
@@ -1007,9 +1049,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.resolvedGraceAccidentals
         );
         leftwardWidth += computeArpeggioFootprintWidth(
-          effectiveArpeggio(chordElement),
+          footprintArpeggio(chordElement),
           elementHasShownAccidental(chordElement)
         );
+        if (footprintArpeggio(chordElement) !== null) {
+          leftwardWidth += chordLeftHeadDisplacementPx(chordElement);
+        }
       }
 
       // Barline constraint: the overhang must not cross into the describe area
@@ -1263,7 +1308,31 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // implied `up` sign. Elements with their own `arpeggio` (including
   // `non-arpeggiate`) are left untouched. Runs before spacing so the implied
   // signs are counted in the leftward footprint.
-  #resolveArpeggiandoPassages(elements: NoteChordOrRestElementType[]): void {
+  //
+  // The implied sign is a derived property living on the element, so an element
+  // dropped from the staff mid-passage would keep it — clear it on anything in
+  // the previous list that is gone and has not been re-slotted into another
+  // staff (which then owns its implied sign).
+  #resolveArpeggiandoPassages(
+    elements: NoteChordOrRestElementType[],
+    previousElements: NoteChordOrRestElementType[] = []
+  ): void {
+    const next = new Set(elements);
+    for (const element of previousElements) {
+      if (
+        next.has(element) ||
+        (element.nodeName !== MUSIC_NOTE_NODE &&
+          element.nodeName !== MUSIC_CHORD_NODE)
+      ) {
+        continue;
+      }
+      const parent = element.parentElement;
+      if (parent !== null && isStaffNodeName(parent.nodeName)) {
+        continue;
+      }
+      (element as NoteElementType | ChordElementType).impliedArpeggio = null;
+    }
+
     let inPassage = false;
     for (const element of elements) {
       if (

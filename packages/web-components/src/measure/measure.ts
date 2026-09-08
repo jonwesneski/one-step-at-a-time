@@ -212,6 +212,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     ): void {
       if (oldValue !== newValue) {
         this.render();
+        // render() replaced the shadow DOM, so the connector overlays are now
+        // empty while the paired arpeggio endpoints stay locally suppressed.
+        // A `number` change triggers no staff relayout or arpeggio event, so
+        // nothing else redraws them — do it here.
+        if (this.isConnected) {
+          this.#updateConnectorVisibility();
+        }
       }
     }
 
@@ -272,6 +279,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         <div>
           <div class="staff-connector"></div>
           <div class="group-connectors"></div>
+          <!-- must be <svg>: holds <g> arpeggio-sign nodes that share this
+               element's coordinate space; inset:0 aligns that space 1:1 with
+               the measure box so #redrawArpeggios can position with raw px -->
           <svg class="arpeggio-connectors"></svg>
           <span>${this.number}</span>
           <slot></slot>
@@ -382,12 +392,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         });
       });
 
-      const firstStaffIsGrand =
-        (staves[0] as StaffElementBaseType | undefined)?.group === 'grand';
-      const { spans, warnings } = resolveArpeggioSpans(
-        entries,
-        firstStaffIsGrand
-      );
+      const { spans, warnings } = resolveArpeggioSpans(entries);
       for (const warning of warnings) {
         console.warn(`[music-measure] ${warning}`);
       }

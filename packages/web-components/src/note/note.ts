@@ -557,16 +557,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             composed: true,
           })
         );
-        if (name === 'arpeggio-for') {
-          if (!this.closest(STAFF_TAGS)) {
-            this.render();
-          }
-          return;
-        }
       }
 
       if (
         name === 'arpeggio' ||
+        name === 'arpeggio-for' ||
         name === 'arpeggiate' ||
         name === 'grace' ||
         name === 'grace-octave' ||
@@ -578,6 +573,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // arpeggio changes the element's leftward footprint the same way a
         // grace change does, so it takes the same path: the staff re-runs its
         // layout pass on NOTE_Y_CHANGE, and standalone we re-render here.
+        // `arpeggio-for` reserves the same footprint for the lower end of a
+        // cross-staff span, whose wave the ancestor measure draws.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,

@@ -2719,6 +2719,13 @@
                   "type": {
                     "text": "NoteChordOrRestElementType[]"
                   }
+                },
+                {
+                  "name": "previousElements",
+                  "default": "[]",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -4863,6 +4870,13 @@
               "parameters": [
                 {
                   "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "previousElements",
+                  "default": "[]",
                   "type": {
                     "text": "NoteChordOrRestElementType[]"
                   }

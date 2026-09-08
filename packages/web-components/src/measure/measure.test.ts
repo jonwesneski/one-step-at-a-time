@@ -71,6 +71,7 @@ describe(MUSIC_MEASURE, () => {
 
       const upper = document.createElement(MUSIC_CHORD) as ChordElementType;
       upper.setAttribute('chord', 'Cmaj' satisfies Chord);
+      upper.id = 'upperSpan';
       if (upperArpeggio) {
         upper.setAttribute('arpeggio', upperArpeggio);
       }
@@ -78,6 +79,9 @@ describe(MUSIC_MEASURE, () => {
       lower.setAttribute('chord', 'Cmaj' satisfies Chord);
       if (lowerArpeggio) {
         lower.setAttribute('arpeggio', lowerArpeggio);
+      }
+      if (upperArpeggio && lowerArpeggio) {
+        lower.setAttribute('arpeggio-for', 'upperSpan');
       }
       treble.appendChild(upper);
       bass.appendChild(lower);
@@ -95,7 +99,7 @@ describe(MUSIC_MEASURE, () => {
       return { measure, upper, lower };
     }
 
-    it('suppresses both per-staff signs when a grand-staff pair is spanned', () => {
+    it('suppresses both per-staff signs when a cross-staff pair is spanned', () => {
       const { measure, upper, lower } = grandStaffMeasure('up', 'up');
 
       expect(upper.renderArpeggioSign).toBe(false);
@@ -115,14 +119,40 @@ describe(MUSIC_MEASURE, () => {
       expect(lower.shadowRoot?.querySelector('.arpeggio')).toBeNull();
     });
 
-    it('restores the local sign after the pairing is removed', () => {
+    it('keeps per-staff signs (broken arpeggio) when both hands are marked but unlinked', () => {
+      const { measure, upper, lower } = grandStaffMeasure('up', null);
+      lower.setAttribute('arpeggio', 'up');
+
+      expect(upper.renderArpeggioSign).toBe(true);
+      expect(lower.renderArpeggioSign).toBe(true);
+      expect(
+        measure.shadowRoot?.querySelectorAll('.arpeggio-connector').length
+      ).toBe(0);
+    });
+
+    it('restores the local sign after the arpeggio-for link is removed', () => {
       const { upper, lower } = grandStaffMeasure('up', 'up');
       expect(upper.renderArpeggioSign).toBe(false);
 
-      lower.removeAttribute('arpeggio');
+      lower.removeAttribute('arpeggio-for');
 
       expect(upper.renderArpeggioSign).toBe(true);
       expect(upper.shadowRoot?.querySelector('.arpeggio')).not.toBeNull();
+    });
+
+    it('keeps the spanning sign after a `number` change rebuilds the shadow DOM', () => {
+      const { measure, upper, lower } = grandStaffMeasure('up', 'up');
+      expect(
+        measure.shadowRoot?.querySelectorAll('.arpeggio-connector').length
+      ).toBe(1);
+
+      measure.setAttribute('number', '3');
+
+      expect(
+        measure.shadowRoot?.querySelectorAll('.arpeggio-connector').length
+      ).toBe(1);
+      expect(upper.renderArpeggioSign).toBe(false);
+      expect(lower.renderArpeggioSign).toBe(false);
     });
   });
 });

@@ -55,53 +55,30 @@ describe('resolveArpeggioSpans', () => {
     ...over,
   });
 
-  it('pairs a grand-staff pair implicitly by matching entry index', () => {
-    const { spans, warnings } = resolveArpeggioSpans(
-      [
-        entry({ staffIndex: 0, entryIndex: 2, arpeggio: 'up' }),
-        entry({ staffIndex: 1, entryIndex: 2, arpeggio: 'up' }),
-      ],
-      true
-    );
-    expect(warnings).toEqual([]);
-    expect(spans).toEqual([
-      {
-        upper: { staffIndex: 0, entryIndex: 2 },
-        lower: { staffIndex: 1, entryIndex: 2 },
-        arpeggio: 'up',
-      },
+  it('does not pair two unlinked arpeggio marks at the same index (broken form)', () => {
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({ staffIndex: 0, entryIndex: 2, arpeggio: 'up' }),
+      entry({ staffIndex: 1, entryIndex: 2, arpeggio: 'up' }),
     ]);
-  });
-
-  it('does not pair implicitly when the first staff is not a grand staff', () => {
-    const { spans } = resolveArpeggioSpans(
-      [
-        entry({ staffIndex: 0, entryIndex: 0 }),
-        entry({ staffIndex: 1, entryIndex: 0 }),
-      ],
-      false
-    );
     expect(spans).toEqual([]);
+    expect(warnings).toEqual([]);
   });
 
-  it('pairs explicitly via arpeggio-for regardless of grand-staff status', () => {
-    const { spans, warnings } = resolveArpeggioSpans(
-      [
-        entry({
-          staffIndex: 0,
-          entryIndex: 1,
-          id: 'top',
-          arpeggio: 'up-arrow',
-        }),
-        entry({
-          staffIndex: 1,
-          entryIndex: 4,
-          arpeggio: 'up-arrow',
-          arpeggioFor: 'top',
-        }),
-      ],
-      false
-    );
+  it('pairs explicitly via arpeggio-for', () => {
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({
+        staffIndex: 0,
+        entryIndex: 1,
+        id: 'top',
+        arpeggio: 'up-arrow',
+      }),
+      entry({
+        staffIndex: 1,
+        entryIndex: 4,
+        arpeggio: 'up-arrow',
+        arpeggioFor: 'top',
+      }),
+    ]);
     expect(warnings).toEqual([]);
     expect(spans).toEqual([
       {
@@ -113,34 +90,93 @@ describe('resolveArpeggioSpans', () => {
   });
 
   it('warns and skips when arpeggio-for matches nothing', () => {
-    const { spans, warnings } = resolveArpeggioSpans(
-      [entry({ staffIndex: 1, arpeggioFor: 'missing' })],
-      false
-    );
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({ staffIndex: 1, arpeggioFor: 'missing' }),
+    ]);
     expect(spans).toEqual([]);
     expect(warnings[0]).toMatch(/matches no element/);
   });
 
   it('warns and keeps the lower value when the two ends disagree', () => {
-    const { spans, warnings } = resolveArpeggioSpans(
-      [
-        entry({ staffIndex: 0, id: 'a', arpeggio: 'up' }),
-        entry({ staffIndex: 1, arpeggio: 'down', arpeggioFor: 'a' }),
-      ],
-      false
-    );
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({ staffIndex: 0, id: 'a', arpeggio: 'up' }),
+      entry({ staffIndex: 1, arpeggio: 'down', arpeggioFor: 'a' }),
+    ]);
     expect(spans[0].arpeggio).toBe('down');
     expect(warnings[0]).toMatch(/disagree/);
   });
 
-  it('never produces a span for non-arpeggiate', () => {
-    const { spans } = resolveArpeggioSpans(
-      [
-        entry({ staffIndex: 0, entryIndex: 0, arpeggio: 'non-arpeggiate' }),
-        entry({ staffIndex: 1, entryIndex: 0, arpeggio: 'non-arpeggiate' }),
-      ],
-      true
-    );
+  it('rejects a second reference to an already-paired endpoint', () => {
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({ staffIndex: 0, entryIndex: 0, id: 'top', arpeggio: 'up' }),
+      entry({
+        staffIndex: 1,
+        entryIndex: 1,
+        arpeggio: 'up',
+        arpeggioFor: 'top',
+      }),
+      entry({
+        staffIndex: 1,
+        entryIndex: 2,
+        arpeggio: 'up',
+        arpeggioFor: 'top',
+      }),
+    ]);
+    expect(spans).toEqual([
+      {
+        upper: { staffIndex: 0, entryIndex: 0 },
+        lower: { staffIndex: 1, entryIndex: 1 },
+        arpeggio: 'up',
+      },
+    ]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/already paired/);
+  });
+
+  it('rejects the third link of an arpeggio-for chain', () => {
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({ staffIndex: 0, entryIndex: 0, id: 'a', arpeggio: 'up' }),
+      entry({
+        staffIndex: 1,
+        entryIndex: 0,
+        id: 'b',
+        arpeggio: 'up',
+        arpeggioFor: 'a',
+      }),
+      entry({
+        staffIndex: 0,
+        entryIndex: 1,
+        arpeggio: 'up',
+        arpeggioFor: 'b',
+      }),
+    ]);
+    expect(spans).toEqual([
+      {
+        upper: { staffIndex: 0, entryIndex: 0 },
+        lower: { staffIndex: 1, entryIndex: 0 },
+        arpeggio: 'up',
+      },
+    ]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/arpeggio-for="b".*already paired/);
+  });
+
+  it('never produces a span for non-arpeggiate, even when linked', () => {
+    const { spans, warnings } = resolveArpeggioSpans([
+      entry({
+        staffIndex: 0,
+        entryIndex: 0,
+        id: 'top',
+        arpeggio: 'non-arpeggiate',
+      }),
+      entry({
+        staffIndex: 1,
+        entryIndex: 0,
+        arpeggio: 'non-arpeggiate',
+        arpeggioFor: 'top',
+      }),
+    ]);
     expect(spans).toEqual([]);
+    expect(warnings[0]).toMatch(/no wave variant/);
   });
 });

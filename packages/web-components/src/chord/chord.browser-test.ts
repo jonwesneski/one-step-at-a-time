@@ -156,3 +156,48 @@ test('an unbroken cross-staff arpeggio is one line and suppresses the per-staff 
   expect(localSigns).toBe(0);
   expect(connectors).toBe(1);
 });
+
+test('adding arpeggio-for to a connected chord reflows its staff', async ({
+  page,
+}) => {
+  // The bass chord shows accidentals, so the arpeggio sign sits left of the
+  // whole accidental column — a clearly measurable reservation
+  // (ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX), unlike the sub-2px no-accidental
+  // footprint.
+  await render(
+    page,
+    `<music-composition time="4/4">
+       <music-measure>
+         <music-staff clef="treble" group="grand" time="4/4">
+           <music-chord id="top" chord="Cmaj" duration="whole" arpeggio="up"></music-chord>
+         </music-staff>
+         <music-staff clef="bass" time="4/4">
+           <music-chord id="bottom" duration="whole">
+             <music-note note="C#" octave="3"></music-note>
+             <music-note note="E" octave="3"></music-note>
+             <music-note note="G#" octave="3"></music-note>
+           </music-chord>
+         </music-staff>
+       </music-measure>
+     </music-composition>`
+  );
+
+  const before = await headBox(page, '#bottom');
+
+  await page.evaluate(() => {
+    document.querySelector('#bottom')?.setAttribute('arpeggio-for', 'top');
+  });
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+
+  const after = await headBox(page, '#bottom');
+  const connectors = await page.evaluate(
+    () =>
+      document
+        .querySelector('music-measure')
+        ?.shadowRoot?.querySelectorAll('.arpeggio-connector').length ?? 0
+  );
+
+  expect(after.x).toBeGreaterThan(before.x + 6);
+  expect(connectors).toBe(1);
+});
