@@ -21,6 +21,7 @@ export type {
   GraceNotesType,
   GraceOctavesType,
   GuitarFret,
+  TieValue,
 } from './types/elements';
 export * from './types/theory';
 

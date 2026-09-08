@@ -137,3 +137,26 @@ test('divides a tie into two stubs when a cluster target would obscure it', asyn
   });
   expect(paths.length).toBeGreaterThan(3);
 });
+
+test('an unmatched run pitch gets a laissez-vibrer tie with an l.v. label', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-arpeggio lv-label unmatched="lv">
+         <music-note note="C" octave="4"></music-note>
+         <music-note note="F" octave="4"></music-note>
+         <music-chord chord="Cmaj" duration="whole"></music-chord>
+       </music-arpeggio>
+     </music-staff>`
+  );
+
+  const labels = await page.evaluate(() => {
+    const staff = document.querySelector('music-staff');
+    return Array.from(
+      staff?.shadowRoot?.querySelectorAll('.connector text') ?? []
+    ).map((t) => t.textContent);
+  });
+  expect(labels).toContain('l.v.');
+});

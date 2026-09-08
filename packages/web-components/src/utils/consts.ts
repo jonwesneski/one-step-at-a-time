@@ -216,6 +216,9 @@ export const ARPEGGIO_UNMATCHED_MODES = ['lv', 'skip'] as const;
 /** Note value drawn for `<music-arpeggio>` run notes that set no `duration`. */
 export const ARPEGGIO_RUN_DEFAULT_DURATION: DurationType = 'thirtysecond';
 
+/** Accepted values of the `tie` attribute on `<music-note>` / `<music-chord>`. */
+export const TIE_VALUES = ['start', 'end', 'laissez-vibrer'] as const;
+
 export const GRACE_TYPES: GraceType[] = ['acciaccatura', 'appoggiatura'];
 
 export const GRACE_DURATIONS: GraceDuration[] = [

@@ -25,6 +25,13 @@ export type NoteLetterOctave = `${NoteLetter}${Octave}`;
 /** Which end of a tie, slur, or technique connector an element marks. */
 export type ConnectorRole = 'start' | 'end';
 
+/**
+ * Value of the `tie` attribute: a `start`/`end` endpoint, or `laissez-vibrer`
+ * — an open-ended tie curving off the notehead into empty space, for a note
+ * left to ring (not held to a matching next notehead).
+ */
+export type TieValue = ConnectorRole | 'laissez-vibrer';
+
 // The three array-valued grace properties reflect a comma-separated string
 // attribute. Reads return the parsed array (internal renderers rely on that);
 // writes also accept the raw string, since React and Storybook assign the JSX
@@ -44,8 +51,10 @@ export interface INoteElement {
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
-  tie: ConnectorRole | null;
+  tie: TieValue | null;
   slur: ConnectorRole | null;
+  /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
+  lvLabel: boolean;
   dynamic: DynamicMarking | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
@@ -110,8 +119,10 @@ export interface IChordElement {
   noFlags: boolean;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
-  tie: ConnectorRole | null;
+  tie: TieValue | null;
   slur: ConnectorRole | null;
+  /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
+  lvLabel: boolean;
   dynamic: DynamicMarking | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
@@ -195,6 +206,8 @@ export interface IArpeggioElement {
   runDuration: DurationType;
   /** What to do with a run note whose pitch is not in the target chord. */
   unmatched: 'lv' | 'skip';
+  /** Draw an `l.v.` label on the laissez-vibrer ties this group produces. */
+  lvLabel: boolean;
   readonly flatElements: NoteChordOrRestElementType[];
   /** The run `<music-note>`s — every `<music-note>` child except the last element child. */
   readonly runElements: NoteElementType[];

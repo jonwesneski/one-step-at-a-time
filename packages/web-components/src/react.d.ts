@@ -25,6 +25,7 @@ import type {
   Octave,
   StaffGroupType,
   StressType,
+  TieValue,
   TimeSignature,
   TupletRatio,
   Voice,
@@ -93,10 +94,16 @@ declare module 'react' {
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
       };
+      'music-arpeggio': WebComponentProps & {
+        'run-duration'?: DurationType;
+        unmatched?: 'lv' | 'skip';
+        'lv-label'?: boolean;
+      };
       'music-chord': WebComponentProps & {
         chord?: Chord;
         duration?: DurationType;
-        tie?: ConnectorRole;
+        tie?: TieValue;
+        'lv-label'?: boolean;
         slur?: ConnectorRole;
         for?: string;
         dynamic?: DynamicMarking;
@@ -120,7 +127,8 @@ declare module 'react' {
         note?: Note;
         duration?: DurationType;
         octave?: Octave;
-        tie?: ConnectorRole;
+        tie?: TieValue;
+        'lv-label'?: boolean;
         slur?: ConnectorRole;
         for?: string;
         dynamic?: DynamicMarking;

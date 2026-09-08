@@ -51,6 +51,13 @@
             },
             {
               "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
               "name": "flatElements",
               "type": {
                 "text": "NoteChordOrRestElementType[]"
@@ -135,6 +142,13 @@
                 "text": "'lv' | 'skip'"
               },
               "description": "A run note whose pitch is not in the target chord becomes a laissez-vibrer tie (`lv`, default) or is dropped (`skip`)."
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draw an `l.v.` label on the laissez-vibrer ties this group produces."
             }
           ],
           "superclass": {
@@ -342,7 +356,14 @@
               "kind": "field",
               "name": "tie",
               "type": {
-                "text": "ConnectorRole | null"
+                "text": "TieValue | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -579,9 +600,16 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end'"
+                "text": "'start' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Marks this chord as the start or end of a tie."
+              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draw an `l.v.` label on a `tie=\"laissez-vibrer\"` tie."
             },
             {
               "name": "slur",
@@ -1573,7 +1601,14 @@
               "kind": "field",
               "name": "tie",
               "type": {
-                "text": "ConnectorRole | null"
+                "text": "TieValue | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -1824,9 +1859,16 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end'"
+                "text": "'start' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Marks this note as the start or end of a tie to the same pitch."
+              "description": "Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draw an `l.v.` label on a `tie=\"laissez-vibrer\"` tie."
             },
             {
               "name": "slur",

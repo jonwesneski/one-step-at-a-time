@@ -9,6 +9,7 @@ import {
   GraceNotesType,
   GraceOctavesType,
   INoteElement,
+  TieValue,
 } from '../types/elements';
 import {
   AccidentalType,
@@ -40,6 +41,7 @@ import {
   parseArpeggio,
   parseArticulation,
   parseConnectorRole,
+  parseTieValue,
   parseDynamicMarking,
   parseGraceArticulations,
   parseGraceDuration,
@@ -63,7 +65,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {Note} note - Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.
    * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
    * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`.
-   * @attr {'start' | 'end'} tie - Marks this note as the start or end of a tie to the same pitch.
+   * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+   * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
    * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
    * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs.
    * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
@@ -96,6 +99,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'note',
         'octave',
         'tie',
+        'lv-label',
         'slur',
         'dynamic',
         'crescendo',
@@ -204,14 +208,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
-    get tie(): ConnectorRole | null {
-      return parseConnectorRole(this.getAttribute('tie'));
+    get tie(): TieValue | null {
+      return parseTieValue(this.getAttribute('tie'));
     }
-    set tie(value: ConnectorRole | null) {
+    set tie(value: TieValue | null) {
       if (value === null) {
         this.removeAttribute('tie');
       } else {
         this.setAttribute('tie', value);
+      }
+    }
+
+    get lvLabel(): boolean {
+      return this.hasAttribute('lv-label');
+    }
+    set lvLabel(value: boolean) {
+      if (value) {
+        this.setAttribute('lv-label', '');
+      } else {
+        this.removeAttribute('lv-label');
       }
     }
 
@@ -509,7 +524,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'tie' || name === 'slur') {
+      if (name === 'tie' || name === 'slur' || name === 'lv-label') {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,

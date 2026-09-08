@@ -68,6 +68,32 @@ export const DividedTies: Story = {
   `,
 };
 
+/**
+ * A run pitch not in the target chord gets a laissez-vibrer (open) tie instead
+ * (the `unmatched="lv"` default). `lv-label` adds the `l.v.` marking.
+ */
+export const LaissezVibrer: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-arpeggio lv-label>
+        <music-note note="C" octave="4"></music-note>
+        <music-note note="D" octave="4"></music-note>
+        <music-note note="E" octave="4"></music-note>
+        <music-chord chord="Cmaj" duration="whole"></music-chord>
+      </music-arpeggio>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="C"
+        octave="5"
+        duration="half"
+        tie="laissez-vibrer"
+      ></music-note>
+      <music-chord chord="Fmaj" duration="half" tie="lv"></music-chord>
+    </music-staff>
+  `,
+};
+
 export const RunDurationOverride: Story = {
   args: { runDuration: 'sixteenth' },
   argTypes: {

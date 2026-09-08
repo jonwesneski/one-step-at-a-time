@@ -1008,6 +1008,34 @@ describe('grace notes', () => {
   });
 });
 
+describe('tie="laissez-vibrer"', () => {
+  it('round-trips the value (and the lv alias) plus lv-label', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.tie = 'laissez-vibrer';
+    expect(noteElement.getAttribute('tie')).toBe('laissez-vibrer');
+    expect(noteElement.tie).toBe('laissez-vibrer');
+
+    noteElement.setAttribute('tie', 'lv');
+    expect(noteElement.tie).toBe('laissez-vibrer');
+
+    noteElement.lvLabel = true;
+    expect(noteElement.hasAttribute('lv-label')).toBe(true);
+    noteElement.lvLabel = false;
+    expect(noteElement.hasAttribute('lv-label')).toBe(false);
+  });
+
+  it('still accepts start/end and rejects junk', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    noteElement.setAttribute('tie', 'start');
+    expect(noteElement.tie).toBe('start');
+    noteElement.setAttribute('tie', 'sideways');
+    expect(noteElement.tie).toBeNull();
+  });
+});
+
 describe('arpeggio', () => {
   it('round-trips the arpeggio slot between property and attribute', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;

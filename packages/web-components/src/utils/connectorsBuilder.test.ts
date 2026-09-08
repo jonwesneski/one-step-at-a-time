@@ -177,6 +177,29 @@ describe('pairConnectors', () => {
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('hammer-on');
   });
+
+  it('emits a self-pair for tie="laissez-vibrer" (and the lv alias)', () => {
+    const a = makeNote({ note: 'C', octave: '4', tie: 'laissez-vibrer' });
+    const b = makeNote({ note: 'D', octave: '4', tie: 'lv' });
+    const pairs = pairConnectors([a, b]);
+    expect(pairs).toHaveLength(2);
+    expect(pairs[0]).toMatchObject({
+      kind: 'tie',
+      start: a,
+      end: a,
+      laissezVibrer: true,
+    });
+    expect(pairs[1].laissezVibrer).toBe(true);
+  });
+
+  it('does not treat slur="laissez-vibrer" as an l.v. tie', () => {
+    const warn = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const a = makeNote({ slur: 'laissez-vibrer' });
+    expect(pairConnectors([a])).toHaveLength(0);
+    warn.mockRestore();
+  });
 });
 
 describe('buildConnectorSvgs', () => {
@@ -365,6 +388,28 @@ describe('buildConnectorSvgs', () => {
     );
     expect(starts).toEqual([...starts].sort((a, b) => a - b));
     expect(new Set(starts).size).toBe(3); // distinct run x's
+  });
+
+  it('draws a laissez-vibrer tie as one open curve, with an l.v. label when set', () => {
+    const note = makeLayoutNote({ stemUp: true, left: 100, top: 100 });
+    const svgs = buildConnectorSvgs(
+      [
+        {
+          kind: 'tie',
+          start: note,
+          end: note,
+          nestingLevel: 0,
+          laissezVibrer: true,
+          label: 'l.v.',
+        } as ConnectorPair,
+      ],
+      { rootRect, rowLeft: 0, rowRight: 800 }
+    );
+    expect(svgs).toHaveLength(1);
+    const path = parsePath(svgs[0].querySelector('path')!.getAttribute('d')!);
+    // Curves forward (to the right) off the notehead.
+    expect(path.toX).toBeGreaterThan(path.fromX);
+    expect(svgs[0].querySelector('text')?.textContent).toBe('l.v.');
   });
 
   it('divides a run-to-chord tie into two stubs when a run notehead obscures it', () => {

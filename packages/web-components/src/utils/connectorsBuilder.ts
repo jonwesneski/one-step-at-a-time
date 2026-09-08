@@ -27,6 +27,7 @@ import {
   ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
   ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
   ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+  LAISSEZ_VIBRER_CURVE_LENGTH_PX,
 } from './notationDimensions';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
@@ -70,6 +71,12 @@ export type ConnectorPair = {
     targetToneIndex: number;
     runNotes: readonly NoteLikeElementType[];
   };
+  // `tie="laissez-vibrer"` — an open-ended tie. `start === end`. For a chord,
+  // `lvToneIndex` picks the tone.
+  laissezVibrer?: boolean;
+  lvToneIndex?: number;
+  /** `l.v.` when the element sets `lv-label`. */
+  label?: string;
 };
 
 export const collectNoteLikeElements = (
@@ -103,9 +110,17 @@ export const collectArpeggioTiePairs = (root: ParentNode): ConnectorPair[] => {
     for (const warning of warnings) {
       console.warn(warning);
     }
+    const lvLabel = element.lvLabel ? 'l.v.' : undefined;
     for (const pairing of pairings) {
-      // Phase 3 renders 'laissez-vibrer' pairings; for now only tied ones.
-      if (pairing.variant !== 'run-to-chord') {
+      if (pairing.variant === 'laissez-vibrer') {
+        pairs.push({
+          kind: 'tie',
+          start: pairing.runNote as unknown as NoteLikeElementType,
+          end: pairing.runNote as unknown as NoteLikeElementType,
+          nestingLevel: 0,
+          laissezVibrer: true,
+          label: lvLabel,
+        });
         continue;
       }
       pairs.push({
@@ -170,6 +185,36 @@ export const pairConnectors = (
 
   notes.forEach((note, noteIndex) => {
     for (const kind of kinds) {
+      if (kind === 'tie') {
+        const raw = note.getAttribute('tie');
+        if (raw === 'laissez-vibrer' || raw === 'lv') {
+          const label = (note as { lvLabel?: boolean }).lvLabel
+            ? 'l.v.'
+            : undefined;
+          const isChord = note.tagName.toLowerCase() === MUSIC_CHORD;
+          const toneCount = isChord
+            ? Math.max(
+                1,
+                ((note as ChordElementType).staffYCoordinates ?? []).length
+              )
+            : 1;
+          for (let toneIndex = 0; toneIndex < toneCount; toneIndex++) {
+            indexedPairs.push({
+              kind: 'tie',
+              start: note,
+              end: note,
+              nestingLevel: 0,
+              startIndex: noteIndex,
+              endIndex: noteIndex,
+              laissezVibrer: true,
+              lvToneIndex: isChord ? toneIndex : undefined,
+              label,
+            });
+          }
+          continue;
+        }
+      }
+
       const role = readRole(note, CONNECTOR_ATTRS[kind]);
       if (role === null) {
         continue;
@@ -244,6 +289,9 @@ export const pairConnectors = (
     kind: pair.kind,
     start: pair.start,
     end: pair.end,
+    laissezVibrer: pair.laissezVibrer,
+    lvToneIndex: pair.lvToneIndex,
+    label: pair.label,
     nestingLevel: indexedPairs.filter(
       (other) =>
         other !== pair &&
@@ -561,6 +609,42 @@ export const buildConnectorSvgs = (
     const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
     const style = pair.kind === 'slide' ? 'straight' : 'smooth';
     const label = CONNECTOR_LABELS[pair.kind];
+
+    // Laissez-vibrer: an open-ended tie curving forward off the notehead.
+    if (pair.laissezVibrer) {
+      const isChord = pair.start.tagName.toLowerCase() === MUSIC_CHORD;
+      const coords =
+        (pair.start as unknown as ChordElementType).staffYCoordinates ?? [];
+      const lvBulge =
+        isChord && coords.length > 1 && pair.lvToneIndex !== undefined
+          ? pickChordNoteBulge(pair.start, coords, pair.lvToneIndex)
+          : startBulge;
+      const anchor =
+        isChord && pair.lvToneIndex !== undefined
+          ? computeChordToneAnchor(
+              pair.start,
+              pair.lvToneIndex,
+              rootRect,
+              lvBulge,
+              TIE_NOTEHEAD_OFFSET_PX
+            )
+          : computeAnchor(
+              pair.start,
+              rootRect,
+              lvBulge,
+              TIE_NOTEHEAD_OFFSET_PX
+            );
+      elements.push(
+        createOpenTieSvg({
+          anchor: { x: anchor.x, y: anchor.y },
+          direction: 1,
+          length: LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+          bulge: lvBulge,
+          label: pair.label,
+        })
+      );
+      continue;
+    }
 
     // Synthesized `<music-arpeggio>` run→chord tie: run note (real box) to one
     // tone of the target chord, fanned outward by tone position.

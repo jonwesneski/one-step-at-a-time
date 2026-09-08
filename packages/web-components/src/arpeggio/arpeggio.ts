@@ -35,6 +35,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @customElement music-arpeggio
    * @attr {DurationType} run-duration - Note value drawn for run notes that set no `duration` of their own. Defaults to `thirtysecond`.
    * @attr {'lv' | 'skip'} unmatched - A run note whose pitch is not in the target chord becomes a laissez-vibrer tie (`lv`, default) or is dropped (`skip`).
+   * @attr {boolean} lv-label - Draw an `l.v.` label on the laissez-vibrer ties this group produces.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -48,7 +49,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    */
   class ArpeggioElement extends HTMLElement implements IArpeggioElement {
     static get observedAttributes(): string[] {
-      return ['run-duration', 'unmatched'];
+      return ['run-duration', 'unmatched', 'lv-label'];
     }
 
     #childObserver: MutationObserver | null = null;
@@ -75,6 +76,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set unmatched(value: 'lv' | 'skip') {
       this.setAttribute('unmatched', value);
+    }
+
+    get lvLabel(): boolean {
+      return this.hasAttribute('lv-label');
+    }
+    set lvLabel(value: boolean) {
+      if (value) {
+        this.setAttribute('lv-label', '');
+      } else {
+        this.removeAttribute('lv-label');
+      }
     }
 
     get flatElements(): NoteChordOrRestElementType[] {

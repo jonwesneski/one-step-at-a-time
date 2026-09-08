@@ -7,6 +7,7 @@ import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
   ChordNote,
   ConnectorRole,
+  TieValue,
   GraceArticulationsType,
   GraceNotesType,
   GraceOctavesType,
@@ -39,6 +40,7 @@ import {
   parseArpeggio,
   parseArticulation,
   parseConnectorRole,
+  parseTieValue,
   parseDynamicMarking,
   parseGraceArticulations,
   parseGraceDuration,
@@ -73,7 +75,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @customElement music-chord
    * @attr {Chord} chord - Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`.
    * @attr {DurationType} duration - Note value for the chord. Defaults to `quarter`.
-   * @attr {'start' | 'end'} tie - Marks this chord as the start or end of a tie.
+   * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+   * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
    * @attr {'start' | 'end'} slur - Marks this chord as the start or end of a slur.
    * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs.
    * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
@@ -108,6 +111,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return [
         'duration',
         'tie',
+        'lv-label',
         'slur',
         'dynamic',
         'crescendo',
@@ -229,14 +233,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
-    get tie(): ConnectorRole | null {
-      return parseConnectorRole(this.getAttribute('tie'));
+    get tie(): TieValue | null {
+      return parseTieValue(this.getAttribute('tie'));
     }
-    set tie(value: ConnectorRole | null) {
+    set tie(value: TieValue | null) {
       if (value === null) {
         this.removeAttribute('tie');
       } else {
         this.setAttribute('tie', value);
+      }
+    }
+
+    get lvLabel(): boolean {
+      return this.hasAttribute('lv-label');
+    }
+    set lvLabel(value: boolean) {
+      if (value) {
+        this.setAttribute('lv-label', '');
+      } else {
+        this.removeAttribute('lv-label');
       }
     }
 
@@ -526,7 +541,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'tie' || name === 'slur') {
+      if (name === 'tie' || name === 'slur' || name === 'lv-label') {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,

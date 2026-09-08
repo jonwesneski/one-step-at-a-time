@@ -1,4 +1,4 @@
-import type { ConnectorRole } from '../types/elements';
+import type { ConnectorRole, TieValue } from '../types/elements';
 import type {
   ArpeggioType,
   ArticulationType,
@@ -45,6 +45,17 @@ export const parseConnectorRole = (
 ): ConnectorRole | HairpinRole | null => {
   if (value === 'start' || value === 'end') {
     return value;
+  }
+  return null;
+};
+
+// `tie` accepts `start` / `end` plus `laissez-vibrer` (alias `lv`).
+export const parseTieValue = (value: string | null): TieValue | null => {
+  if (value === 'start' || value === 'end' || value === 'laissez-vibrer') {
+    return value;
+  }
+  if (value === 'lv') {
+    return 'laissez-vibrer';
   }
   return null;
 };
