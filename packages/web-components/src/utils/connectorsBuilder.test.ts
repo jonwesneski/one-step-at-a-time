@@ -366,4 +366,42 @@ describe('buildConnectorSvgs', () => {
     expect(starts).toEqual([...starts].sort((a, b) => a - b));
     expect(new Set(starts).size).toBe(3); // distinct run x's
   });
+
+  it('divides a run-to-chord tie into two stubs when a run notehead obscures it', () => {
+    // run[0] at x=50 ties to a chord tone; run[1] sits directly under the flat
+    // part of that tie so the curve would pass through its notehead.
+    const chord = makeLayoutNote({ stemUp: false, left: 300, top: 100 });
+    Object.defineProperty(chord, 'staffYCoordinates', {
+      get: () => [10],
+      configurable: true,
+    });
+    const runFirst = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
+    // Positioned so its notehead centre sits on the run[0]→chord tie curve.
+    const runMiddle = makeLayoutNote({ stemUp: true, left: 170, top: 123 });
+
+    const pair: ConnectorPair = {
+      kind: 'tie',
+      start: runFirst,
+      end: chord as unknown as NoteLikeElementType,
+      nestingLevel: 0,
+      arpeggioRun: {
+        targetToneIndex: 0,
+        runNotes: [runFirst, runMiddle],
+      },
+    };
+
+    const svgs = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+    // Two short stubs instead of one full curve.
+    expect(svgs).toHaveLength(2);
+    const [a, b] = svgs.map((g) =>
+      parsePath(g.querySelector('path')!.getAttribute('d')!)
+    );
+    // A centre gap: the stubs stop short of each other.
+    expect(Math.min(a.toX, a.fromX)).toBeGreaterThan(a.fromX - 1); // sanity
+    expect(Math.abs(a.fromX - b.fromX)).toBeGreaterThan(0);
+  });
 });

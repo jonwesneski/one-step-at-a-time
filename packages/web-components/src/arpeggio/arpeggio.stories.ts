@@ -47,6 +47,27 @@ export const PartialArpeggio: Story = {
   `,
 };
 
+/**
+ * A cluster target (seconds) forces at least one tie to be "divided" into two
+ * short stubs so it doesn't pass through an intervening notehead.
+ */
+export const DividedTies: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-arpeggio>
+        <music-note note="C" octave="5"></music-note>
+        <music-note note="D" octave="5"></music-note>
+        <music-note note="E" octave="5"></music-note>
+        <music-chord duration="whole">
+          <music-note note="C" octave="5"></music-note>
+          <music-note note="D" octave="5"></music-note>
+          <music-note note="E" octave="5"></music-note>
+        </music-chord>
+      </music-arpeggio>
+    </music-staff>
+  `,
+};
+
 export const RunDurationOverride: Story = {
   args: { runDuration: 'sixteenth' },
   argTypes: {

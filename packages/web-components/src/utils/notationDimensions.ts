@@ -615,3 +615,21 @@ export const ARPEGGIO_TEXT_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
  * arpeggiando` text baseline sits.
  */
 export const ARPEGGIO_TEXT_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.4;
+
+// ─── Written-out arpeggio (`<music-arpeggio>`: run notes tied into a chord) ───
+// Ties and their divided/open forms. Starting values — tune in Storybook.
+
+/** Length (px) of each half of a divided tie (a short hook off one notehead). */
+export const ARPEGGIO_RUN_TIE_STUB_LENGTH_PX = STAFF_LINE_SPACING * 1.1;
+
+/** Half the centre gap (px) left where a divided tie's two stubs stop short. */
+export const ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * A tie is divided when another notehead's centre lies within this vertical
+ * distance (px) of the tie curve along the run.
+ */
+export const ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.7;
+
+/** Length (px) of an open-ended (laissez vibrer) tie curve. */
+export const LAISSEZ_VIBRER_CURVE_LENGTH_PX = STAFF_LINE_SPACING * 1.6;

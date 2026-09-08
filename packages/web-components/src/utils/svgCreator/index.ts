@@ -12,9 +12,12 @@ export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export {
   createCurveSvg,
+  createOpenTieSvg,
+  DEFAULT_BULGE_HEIGHT,
   type CurveBulge,
   type CurveProps,
   type CurveStyle,
+  type OpenTieProps,
 } from './curve';
 export { createDoubleFlatSvg } from './doubleFlat';
 export { createDoubleSharpSvg } from './doubleSharp';

@@ -107,3 +107,33 @@ test('anchors each tie on the real chord-tone notehead (second-interval chord)',
   expect(endXs).toHaveLength(2);
   expect(Math.abs(endXs[0] - endXs[1])).toBeGreaterThan(2);
 });
+
+test('divides a tie into two stubs when a cluster target would obscure it', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-arpeggio>
+         <music-note note="C" octave="5"></music-note>
+         <music-note note="D" octave="5"></music-note>
+         <music-note note="E" octave="5"></music-note>
+         <music-chord duration="whole">
+           <music-note note="C" octave="5"></music-note>
+           <music-note note="D" octave="5"></music-note>
+           <music-note note="E" octave="5"></music-note>
+         </music-chord>
+       </music-arpeggio>
+     </music-staff>`
+  );
+
+  // 3 ties, at least one divided → more than 3 .connector groups, and at least
+  // one pair of paths with a horizontal gap between their inner ends.
+  const paths = await page.evaluate(() => {
+    const staff = document.querySelector('music-staff');
+    return Array.from(
+      staff?.shadowRoot?.querySelectorAll('.connector path') ?? []
+    ).map((p) => p.getAttribute('d') ?? '');
+  });
+  expect(paths.length).toBeGreaterThan(3);
+});

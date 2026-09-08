@@ -13,11 +13,21 @@ import {
   MUSIC_MEASURE,
   MUSIC_NOTE,
 } from './consts';
-import { createCurveSvg, CurveBulge } from './svgCreator';
+import {
+  createCurveSvg,
+  createOpenTieSvg,
+  CurveBulge,
+  DEFAULT_BULGE_HEIGHT,
+} from './svgCreator';
 import {
   computeYHeadOffset,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
 } from './svgCreator/note';
+import {
+  ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
+  ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
+  ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+} from './notationDimensions';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -410,6 +420,87 @@ const computeChordToneAnchor = (
 const sameRow = (a: Anchor, b: Anchor): boolean =>
   Math.abs(a.rowTop - b.rowTop) <= ROW_TOLERANCE_PX;
 
+// `createCurveSvg`'s control point is the horizontal midpoint, so x is linear
+// in t. Returns the tie curve's y at a given x, or null when x is outside the
+// span.
+const tieCurveYAt = (
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  bulge: CurveBulge,
+  x: number
+): number | null => {
+  const span = to.x - from.x;
+  if (span === 0) {
+    return null;
+  }
+  const t = (x - from.x) / span;
+  if (t <= 0 || t >= 1) {
+    return null;
+  }
+  const midY =
+    (from.y + to.y) / 2 + (bulge === 'above' ? -1 : 1) * DEFAULT_BULGE_HEIGHT;
+  const mt = 1 - t;
+  return mt * mt * from.y + 2 * mt * t * midY + t * t * to.y;
+};
+
+// True when a notehead centre in `obstacles` lies close enough to the tie curve
+// to be obscured — the tie should then be divided into two open stubs.
+const tieIsObscured = (
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  bulge: CurveBulge,
+  obstacles: readonly { x: number; y: number }[]
+): boolean =>
+  obstacles.some((obstacle) => {
+    const curveY = tieCurveYAt(from, to, bulge, obstacle.x);
+    return (
+      curveY !== null &&
+      Math.abs(curveY - obstacle.y) <= ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX
+    );
+  });
+
+// Notehead centre (root-rect space) of a note-like element, preferring the real
+// rendered `.head` rect over the element's own (tall) layout box.
+const noteheadCenter = (
+  element: NoteLikeElementType,
+  rootRect: DOMRect
+): { x: number; y: number } => {
+  const head = element.shadowRoot?.querySelector<SVGGraphicsElement>('.head');
+  const rect = (head ?? element).getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2 - rootRect.left,
+    y: rect.top + rect.height / 2 - rootRect.top,
+  };
+};
+
+// Notehead centres (root-rect space) of a chord's tones other than `exceptIndex`.
+const chordOtherToneCenters = (
+  chord: NoteLikeElementType,
+  exceptIndex: number,
+  rootRect: DOMRect
+): { x: number; y: number }[] => {
+  const heads = chord.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+    'svg.chord > svg .head'
+  );
+  if (!heads) {
+    return [];
+  }
+  const centers: { x: number; y: number }[] = [];
+  heads.forEach((head, index) => {
+    if (index === exceptIndex) {
+      return;
+    }
+    const rect = head.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      centers.push({
+        x: rect.left + rect.width / 2 - rootRect.left,
+        y: rect.top + rect.height / 2 - rootRect.top,
+      });
+    }
+  });
+  return centers;
+};
+
 const pickBulge = (note: NoteLikeElementType): CurveBulge => {
   // Stems up → notehead on the staff, bulge above (opposite side of stem tip? no,
   // ties/slurs bulge AWAY from the stem — stems up = curve below; stems down = curve above).
@@ -495,7 +586,43 @@ export const buildConnectorSvgs = (
         TIE_NOTEHEAD_OFFSET_PX
       );
       // A `<music-arpeggio>` group is one gesture at a single x position, so its
-      // ties never span a system break — always one curve.
+      // ties never span a system break — always one curve (or two stubs).
+      const obstacles = [
+        ...chordOtherToneCenters(pair.end, toneIndex, rootRect),
+        ...pair.arpeggioRun.runNotes
+          .filter((runNote) => runNote !== pair.start)
+          .map((runNote) => noteheadCenter(runNote, rootRect)),
+      ];
+
+      if (tieIsObscured(startAnchor, endAnchor, toneBulge, obstacles)) {
+        const halfSpan = Math.abs(endAnchor.x - startAnchor.x) / 2;
+        const stubLength = Math.max(
+          2,
+          Math.min(
+            ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+            halfSpan - ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX
+          )
+        );
+        const forward = endAnchor.x >= startAnchor.x ? 1 : -1;
+        elements.push(
+          createOpenTieSvg({
+            anchor: startAnchor,
+            direction: forward === 1 ? 1 : -1,
+            length: stubLength,
+            bulge: toneBulge,
+          })
+        );
+        elements.push(
+          createOpenTieSvg({
+            anchor: endAnchor,
+            direction: forward === 1 ? -1 : 1,
+            length: stubLength,
+            bulge: toneBulge,
+          })
+        );
+        continue;
+      }
+
       elements.push(
         createCurveSvg({
           from: { x: startAnchor.x, y: startAnchor.y },
