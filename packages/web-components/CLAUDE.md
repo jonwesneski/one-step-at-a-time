@@ -437,9 +437,9 @@ leaf.** The sidebar tree is entirely the `/`-delimited `title` path plus the `st
 in `.storybook/preview.ts` — there is no `Components/` wrapper. A feature is organised by _what
 it is_, not by which element renders it in the example: a feature that only draws inside a
 staff/composition pass (ties, slurs, dynamics, hairpins, beams, tuplet brackets, arpeggio
-signs) lives under `Universal Notations/…` in its own file; a feature that renders standalone
-on a note/chord (articulations, grace notes, stress, fermata, single accidentals) stays in
-that element's file.
+signs, grace notes, clef changes) lives under `Universal Notations/…` in its own file; a
+feature that renders standalone on a note/chord (articulations, stress, fermata, single
+accidentals) stays in that element's file.
 
 **Sidebar leaves → files** (this is also the `storySort` order):
 
@@ -448,7 +448,7 @@ that element's file.
 | `Note`                                                                                  | `src/note/note.stories.ts`                                                                                                                    |
 | `Chord`                                                                                 | `src/chord/chord.stories.ts`                                                                                                                  |
 | `Rest`                                                                                  | `src/rest/rest.stories.ts`                                                                                                                    |
-| `Clef`                                                                                  | `src/clef/clef.stories.ts` (standalone glyph + in-staff `<music-clef>` changes)                                                               |
+| `Clef`                                                                                  | `src/clef/clef.stories.ts` (standalone glyph)                                                                                                 |
 | `Staff`                                                                                 | `src/staff/staff.stories.ts` (staff basics, ledger lines, key-sig accidentals)                                                                |
 | `Measure`                                                                               | `src/measure/measure.stories.ts`                                                                                                              |
 | `Composition`                                                                           | `src/composition/composition.stories.ts`                                                                                                      |
@@ -458,6 +458,8 @@ that element's file.
 | `Universal Notations/Dynamics & Hairpins`                                               | `src/utils/svgCreator/dynamics.stories.ts`                                                                                                    |
 | `Universal Notations/Tuplets`                                                           | `src/tuplet/tuplet.stories.ts`                                                                                                                |
 | `Universal Notations/Arpeggio`                                                          | `src/arpeggio/arpeggio.stories.ts` (`<music-arpeggio>` **and** the `arpeggio`/`arpeggiate` attribute, incl. cross-staff)                      |
+| `Universal Notations/Grace Notes`                                                       | `src/utils/svgCreator/graceNotes.stories.ts`                                                                                                  |
+| `Universal Notations/Clef Changes`                                                      | `src/clef/clefChanges.stories.ts`                                                                                                             |
 | `Universal Notations/Beams`                                                             | `src/utils/svgCreator/beams.stories.ts`                                                                                                       |
 | `Instruments/Voice`                                                                     | `src/staffVocal/staffVocal.stories.ts`                                                                                                        |
 | `Instruments/Guitar`                                                                    | `src/staffGuitarTab/staffGuitarTab.stories.ts`                                                                                                |

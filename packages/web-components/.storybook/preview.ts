@@ -35,6 +35,8 @@ const preview: Preview = {
             'Dynamics & Hairpins',
             'Tuplets',
             'Arpeggio',
+            'Grace Notes',
+            'Clef Changes',
             'Beams',
           ],
           'Instruments',
