@@ -1,7 +1,10 @@
 export { createAccidentalSvg } from './accidental';
 export {
+  appendArpeggioHairpin,
   createArpeggioSvg,
   createSempreArpeggiandoText,
+  isArpeggioWaveVariant,
+  type ArpeggioHairpinProps,
   type ArpeggioProps,
 } from './arpeggio';
 export {
@@ -21,7 +24,11 @@ export {
 } from './curve';
 export { createDoubleFlatSvg } from './doubleFlat';
 export { createDoubleSharpSvg } from './doubleSharp';
-export { createDynamicMarkingSvg, createHairpinSvg } from './dynamics';
+export {
+  createDynamicMarkingSvg,
+  createHairpinSvg,
+  createVerticalHairpinSvg,
+} from './dynamics';
 export { createFlatSvg } from './flat';
 export { createGraceNotesSvg, type GraceNotesProps } from './graceNotes';
 export { addLedgerLines, createLedgerLineElements } from './ledgerLines';

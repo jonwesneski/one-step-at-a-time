@@ -2,12 +2,13 @@ import type {
   NoteElementType,
   NoteOrChordElementType,
 } from '../types/elements';
-import type { ArpeggioType, Note, Octave } from '../types/theory';
+import type { ArpeggioType, HairpinKind, Note, Octave } from '../types/theory';
+import { MUSIC_CHORD } from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
+  ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
 } from '../utils/notationDimensions';
-import { MUSIC_CHORD } from '../utils/consts';
 import { noteSemitoneMap } from './theoryConsts';
 
 // ─── Cross-staff (grand staff) unbroken arpeggio ─────────────────────────────
@@ -158,6 +159,16 @@ export function computeArpeggioFootprintWidth(
   return hasShownAccidental
     ? ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX
     : ARPEGGIO_FOOTPRINT_PX;
+}
+
+/**
+ * Extra leftward footprint (px) for the vertical dynamic-change hairpin, stacked
+ * in front of the arpeggio sign's own footprint. Zero when there is no hairpin.
+ */
+export function computeArpeggioHairpinFootprintWidth(
+  arpeggioHairpin: HairpinKind | null
+): number {
+  return arpeggioHairpin === null ? 0 : ARPEGGIO_HAIRPIN_FOOTPRINT_PX;
 }
 
 // ─── Written-out arpeggio (`<music-arpeggio>`: consecutive pitches tied to a chord) ───

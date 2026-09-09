@@ -120,6 +120,70 @@ test('grace group, arpeggio sign and noteheads stay in left-to-right order', asy
   expect(arpeggio.x + arpeggio.width).toBeLessThanOrEqual(heads.x + 1);
 });
 
+test('the vertical hairpin spans the chord, sits left of the sign, and puts a dynamic letter outside each end of the staff', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-chord
+         id="c"
+         chord="Cmaj7"
+         duration="whole"
+         arpeggio="up"
+         arpeggio-hairpin="crescendo"
+         arpeggio-hairpin-from="p"
+         arpeggio-hairpin-to="f"
+       ></music-chord>
+     </music-staff>`
+  );
+
+  const wedge = await signBox(page, '#c', '.arpeggio-hairpin');
+  const sign = await signBox(page, '#c', '.arpeggio');
+  const heads = await headBox(page, '#c');
+  expect(wedge).not.toBeNull();
+  expect(sign).not.toBeNull();
+  if (wedge === null || sign === null) {
+    return;
+  }
+
+  // Extends to at least the staff height (the low Cmaj7 chord's own range is
+  // smaller, so the staff-relative extension must have kicked in).
+  const staffLines = await page.evaluate(() => {
+    const staff = document.querySelector('music-staff');
+    const lines = Array.from(
+      staff?.shadowRoot?.querySelectorAll('.staff-line, line') ?? []
+    ) as SVGGraphicsElement[];
+    const rects = lines.map((l) => l.getBoundingClientRect());
+    return {
+      top: Math.min(...rects.map((r) => r.top)),
+      bottom: Math.max(...rects.map((r) => r.bottom)),
+    };
+  });
+  expect(wedge.y).toBeLessThanOrEqual(staffLines.top + 2);
+  expect(wedge.y + wedge.height).toBeGreaterThanOrEqual(staffLines.bottom - 2);
+  // Sits left of the arpeggio sign.
+  expect(wedge.x + wedge.width).toBeLessThanOrEqual(sign.x + 1);
+
+  // Two dynamic letters, one clear above the top notehead and one clear below
+  // the bottom notehead.
+  const letters = await page.evaluate(() => {
+    const chord = document.querySelector('#c');
+    const texts = Array.from(
+      chord?.shadowRoot?.querySelectorAll('.dynamic-marking') ?? []
+    ) as SVGGraphicsElement[];
+    const rects = texts.map((t) => t.getBoundingClientRect());
+    return {
+      count: texts.length,
+      minBottom: Math.min(...rects.map((r) => r.bottom)),
+      maxTop: Math.max(...rects.map((r) => r.top)),
+    };
+  });
+  expect(letters.count).toBe(2);
+  expect(letters.minBottom).toBeLessThan(heads.y);
+  expect(letters.maxTop).toBeGreaterThan(heads.y + heads.height);
+});
+
 test('an unbroken cross-staff arpeggio is one line and suppresses the per-staff signs', async ({
   page,
 }) => {
@@ -155,6 +219,70 @@ test('an unbroken cross-staff arpeggio is one line and suppresses the per-staff 
 
   expect(localSigns).toBe(0);
   expect(connectors).toBe(1);
+});
+
+test('a cross-staff arpeggio draws one continuous vertical hairpin through both staves', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-composition time="4/4">
+       <music-measure>
+         <music-staff clef="treble" group="grand" time="4/4">
+           <music-chord
+             id="top"
+             chord="Cmaj"
+             duration="whole"
+             arpeggio="up"
+             arpeggio-hairpin="crescendo"
+             arpeggio-hairpin-from="p"
+             arpeggio-hairpin-to="mf"
+           ></music-chord>
+         </music-staff>
+         <music-staff clef="bass" time="4/4">
+           <music-chord chord="Cmaj" duration="whole" arpeggio-for="top">
+             <music-note note="C" octave="3"></music-note>
+             <music-note note="E" octave="3"></music-note>
+             <music-note note="G" octave="3"></music-note>
+           </music-chord>
+         </music-staff>
+       </music-measure>
+     </music-composition>`
+  );
+
+  const result = await page.evaluate(() => {
+    const measure = document.querySelector('music-measure');
+    const overlay = measure?.shadowRoot?.querySelector('.arpeggio-connectors');
+    const wedge = overlay?.querySelector('.arpeggio-hairpin-connector');
+    const staves = Array.from(document.querySelectorAll('music-staff'));
+    const trebleBox = staves[0]?.getBoundingClientRect();
+    const bassBox = staves[1]?.getBoundingClientRect();
+    const wedgeBox = (
+      wedge as SVGGraphicsElement | null
+    )?.getBoundingClientRect();
+    const localHairpins = Array.from(
+      document.querySelectorAll('music-chord')
+    ).filter((c) => c.shadowRoot?.querySelector('.arpeggio-hairpin')).length;
+    const letters =
+      overlay?.querySelectorAll('.arpeggio-hairpin-connector text').length ?? 0;
+    return {
+      wedges:
+        overlay?.querySelectorAll('.arpeggio-hairpin-connector').length ?? 0,
+      localHairpins,
+      letters,
+      crossesGap:
+        wedgeBox != null &&
+        trebleBox != null &&
+        bassBox != null &&
+        wedgeBox.top <= trebleBox.bottom &&
+        wedgeBox.bottom >= bassBox.top,
+    };
+  });
+
+  expect(result.wedges).toBe(1);
+  expect(result.localHairpins).toBe(0);
+  expect(result.letters).toBe(2);
+  expect(result.crossesGap).toBe(true);
 });
 
 test('adding arpeggio-for to a connected chord reflows its staff', async ({

@@ -20,6 +20,7 @@ import {
 import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_FOOTPRINT_PX,
+  ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
 } from '../utils/notationDimensions';
 import {
@@ -119,6 +120,70 @@ describe(MUSIC_CHORD, () => {
       const sign = chordElement.shadowRoot?.querySelector('.arpeggio');
       expect(sign?.querySelector('.arpeggio-bracket')).not.toBeNull();
       expect(sign?.querySelector('.arpeggio-wave')).toBeNull();
+    });
+  });
+
+  describe('arpeggio-hairpin (standalone)', () => {
+    function makeArpeggioChord(
+      attrs: Record<string, string> = {}
+    ): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'Cmaj' satisfies Chord);
+      chordElement.setAttribute('arpeggio', 'up');
+      for (const [key, value] of Object.entries(attrs)) {
+        chordElement.setAttribute(key, value);
+      }
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips arpeggio-hairpin and the from/to letters', () => {
+      const chordElement = makeArpeggioChord();
+      chordElement.arpeggioHairpin = 'crescendo';
+      chordElement.arpeggioHairpinFrom = 'p';
+      chordElement.arpeggioHairpinTo = 'mf';
+      expect(chordElement.getAttribute('arpeggio-hairpin')).toBe('crescendo');
+      expect(chordElement.arpeggioHairpin).toBe('crescendo');
+      expect(chordElement.arpeggioHairpinFrom).toBe('p');
+      expect(chordElement.arpeggioHairpinTo).toBe('mf');
+    });
+
+    it('normalizes diminuendo to decrescendo', () => {
+      const chordElement = makeArpeggioChord({
+        'arpeggio-hairpin': 'diminuendo',
+      });
+      expect(chordElement.arpeggioHairpin).toBe('decrescendo');
+    });
+
+    it('renders the wedge and both dynamic letters element-local', () => {
+      const chordElement = makeArpeggioChord({
+        'arpeggio-hairpin': 'crescendo',
+        'arpeggio-hairpin-from': 'p',
+        'arpeggio-hairpin-to': 'f',
+      });
+      const wedge = chordElement.shadowRoot?.querySelector('.arpeggio-hairpin');
+      expect(wedge).not.toBeNull();
+      expect(wedge?.querySelectorAll('path')).toHaveLength(2);
+      expect(
+        chordElement.shadowRoot?.querySelectorAll('.dynamic-marking')
+      ).toHaveLength(2);
+    });
+
+    it('does not render the wedge for non-arpeggiate', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation();
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'Cmaj' satisfies Chord);
+      chordElement.setAttribute('arpeggio', 'non-arpeggiate');
+      document.body.appendChild(chordElement);
+      chordElement.setAttribute('arpeggio-hairpin', 'crescendo');
+      expect(
+        chordElement.shadowRoot?.querySelector('.arpeggio-hairpin')
+      ).toBeNull();
+      warn.mockRestore();
     });
   });
 
@@ -1102,6 +1167,50 @@ describe('staff integration', () => {
         expectedRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
         4
       );
+    });
+
+    it('grows the staff min-width by the hairpin footprint on top of the sign', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ]);
+      chord.setAttribute('arpeggio', 'up');
+      const withSign = minWidths[minWidths.length - 1];
+
+      chord.setAttribute('arpeggio-hairpin', 'crescendo');
+      const withHairpin = minWidths[minWidths.length - 1];
+
+      expect(withHairpin).toBeCloseTo(
+        withSign + ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
+        5
+      );
+    });
+
+    it('renders the hairpin wedge and its dynamic letters inside the staff', () => {
+      const staff = makeStaff();
+      const chord = renderChordByNotes(staff, [
+        { value: 'C', octave: 4 },
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ]);
+      chord.setAttribute('arpeggio', 'up');
+      chord.setAttribute('arpeggio-hairpin', 'crescendo');
+      chord.setAttribute('arpeggio-hairpin-from', 'p');
+      chord.setAttribute('arpeggio-hairpin-to', 'f');
+
+      expect(
+        chord.shadowRoot!.querySelectorAll('.arpeggio-hairpin').length
+      ).toBe(1);
+      expect(
+        chord.shadowRoot!.querySelectorAll('.dynamic-marking').length
+      ).toBe(2);
     });
   });
 

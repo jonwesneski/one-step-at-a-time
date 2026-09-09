@@ -19,6 +19,7 @@ import type {
   GraceSlur,
   GraceType,
   GuitarFret,
+  HairpinKind,
   HairpinRole,
   Mode,
   Note,
@@ -114,6 +115,9 @@ declare module 'react' {
         stress?: StressType;
         arpeggio?: ArpeggioType;
         'arpeggio-for'?: string;
+        'arpeggio-hairpin'?: HairpinKind | 'diminuendo';
+        'arpeggio-hairpin-from'?: DynamicMarking;
+        'arpeggio-hairpin-to'?: DynamicMarking;
         arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
@@ -139,6 +143,9 @@ declare module 'react' {
         stress?: StressType;
         arpeggio?: ArpeggioType;
         'arpeggio-for'?: string;
+        'arpeggio-hairpin'?: HairpinKind | 'diminuendo';
+        'arpeggio-hairpin-from'?: DynamicMarking;
+        'arpeggio-hairpin-to'?: DynamicMarking;
         arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;

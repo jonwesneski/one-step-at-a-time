@@ -4,18 +4,18 @@ import {
   GraceNoteDescriptor,
 } from '../rules/graceRules';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
-import {
+import type {
   ChordNote,
   ConnectorRole,
-  TieValue,
   GraceArticulationsType,
   GraceNotesType,
   GraceOctavesType,
   IChordElement,
   NoteElementType,
   NoteLetterOctave,
+  TieValue,
 } from '../types/elements';
-import {
+import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
@@ -25,6 +25,7 @@ import {
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
   HairpinRole,
   Note,
   NoteLetter,
@@ -40,7 +41,6 @@ import {
   parseArpeggio,
   parseArticulation,
   parseConnectorRole,
-  parseTieValue,
   parseDynamicMarking,
   parseGraceArticulations,
   parseGraceDuration,
@@ -48,7 +48,9 @@ import {
   parseGraceOctaves,
   parseGraceSlur,
   parseGraceType,
+  parseHairpinKind,
   parseStress,
+  parseTieValue,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -87,6 +89,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
    * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
    * @attr {string} arpeggio-for - `id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from.
+   * @attr {'crescendo' | 'diminuendo'} arpeggio-hairpin - A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`).
+   * @attr {DynamicMarking} arpeggio-hairpin-from - Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff.
+   * @attr {DynamicMarking} arpeggio-hairpin-to - Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff.
    * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
    * @attr {string} grace - Comma-separated grace-note pitches preceding the chord, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.
@@ -121,6 +126,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'stress',
         'arpeggio',
         'arpeggio-for',
+        'arpeggio-hairpin',
+        'arpeggio-hairpin-from',
+        'arpeggio-hairpin-to',
         'arpeggiate',
         'grace',
         'grace-octave',
@@ -353,6 +361,59 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // Dynamic change during the roll — a vertical hairpin left of the arpeggio
+    // sign. Accepts `crescendo` / `decrescendo` (`diminuendo` normalizes to
+    // `decrescendo`). Honoured only alongside a wave-variant `arpeggio`.
+    get arpeggioHairpin(): HairpinKind | null {
+      return parseHairpinKind(this.getAttribute('arpeggio-hairpin'));
+    }
+    set arpeggioHairpin(value: HairpinKind | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio-hairpin');
+      } else {
+        this.setAttribute('arpeggio-hairpin', value);
+      }
+    }
+
+    get arpeggioHairpinFrom(): DynamicMarking | null {
+      return parseDynamicMarking(this.getAttribute('arpeggio-hairpin-from'));
+    }
+    set arpeggioHairpinFrom(value: DynamicMarking | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio-hairpin-from');
+      } else {
+        this.setAttribute('arpeggio-hairpin-from', value);
+      }
+    }
+
+    get arpeggioHairpinTo(): DynamicMarking | null {
+      return parseDynamicMarking(this.getAttribute('arpeggio-hairpin-to'));
+    }
+    set arpeggioHairpinTo(value: DynamicMarking | null) {
+      if (value === null) {
+        this.removeAttribute('arpeggio-hairpin-to');
+      } else {
+        this.setAttribute('arpeggio-hairpin-to', value);
+      }
+    }
+
+    // The hairpin kind actually drawn — `arpeggioHairpin` when the effective
+    // arpeggio (own, implied, or the `arpeggio-for` continuation) is a rolled
+    // wave; null otherwise.
+    #effectiveArpeggioHairpin(): HairpinKind | null {
+      const hairpin = this.arpeggioHairpin;
+      if (hairpin === null) {
+        return null;
+      }
+      const arpeggio =
+        this.arpeggio ??
+        this.#impliedArpeggio ??
+        (this.arpeggioFor !== null ? 'up' : null);
+      return arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down'
+        ? hairpin
+        : null;
+    }
+
     get renderArpeggioSign(): boolean {
       return this.#renderArpeggioSign;
     }
@@ -569,21 +630,37 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
+        name === 'arpeggio-hairpin' ||
+        name === 'arpeggio-hairpin-from' ||
+        name === 'arpeggio-hairpin-to' ||
         name === 'arpeggiate'
       ) {
-        // The ancestor measure re-resolves cross-staff arpeggio spans; the
-        // staff re-resolves `sempre arpeggiando` passages.
+        // The ancestor measure re-resolves cross-staff arpeggio spans (and the
+        // continuous hairpin); the staff re-resolves `sempre arpeggiando`
+        // passages.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })
         );
+        if (
+          name === 'arpeggio-hairpin' &&
+          newValue !== null &&
+          this.#effectiveArpeggioHairpin() === null
+        ) {
+          console.warn(
+            `[music-chord] arpeggio-hairpin is set without a rolled arpeggio (up / up-arrow / down); it will not render`
+          );
+        }
       }
 
       if (
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
+        name === 'arpeggio-hairpin' ||
+        name === 'arpeggio-hairpin-from' ||
+        name === 'arpeggio-hairpin-to' ||
         name === 'arpeggiate' ||
         name === 'grace' ||
         name === 'grace-octave' ||
@@ -621,6 +698,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           arpeggio: this.#renderArpeggioSign
             ? this.arpeggio ?? this.#impliedArpeggio
             : null,
+          arpeggioHairpin: this.#renderArpeggioSign
+            ? this.#effectiveArpeggioHairpin()
+            : null,
+          arpeggioHairpinFrom: this.arpeggioHairpinFrom,
+          arpeggioHairpinTo: this.arpeggioHairpinTo,
           noFlags: this.#noFlags,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
@@ -716,6 +798,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           arpeggio: this.#renderArpeggioSign
             ? this.arpeggio ?? this.#impliedArpeggio
             : null,
+          arpeggioHairpin: this.#renderArpeggioSign
+            ? this.#effectiveArpeggioHairpin()
+            : null,
+          arpeggioHairpinFrom: this.arpeggioHairpinFrom,
+          arpeggioHairpinTo: this.arpeggioHairpinTo,
           stemUp,
           noteAccidentals,
           noFlags: false,

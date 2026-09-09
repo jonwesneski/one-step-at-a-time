@@ -1,4 +1,4 @@
-import {
+import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
@@ -9,6 +9,7 @@ import {
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
   HairpinRole,
   Mode,
   Note,
@@ -68,6 +69,15 @@ export interface INoteElement {
   // `id` of the upper-staff element this element continues an unbroken
   // cross-staff arpeggio from (grand staff).
   arpeggioFor: string | null;
+  // A dynamic change during the roll: a vertical hairpin wedge drawn just left
+  // of the arpeggio sign, spanning the chord's vertical extent, with a dynamic
+  // letter outside the staff at each end. Honoured only alongside a wave-variant
+  // `arpeggio`.
+  arpeggioHairpin: HairpinKind | null;
+  // Dynamic letter at the start of the roll (bottom end for an upward roll).
+  arpeggioHairpinFrom: DynamicMarking | null;
+  // Dynamic letter at the end of the roll (top end for an upward roll).
+  arpeggioHairpinTo: DynamicMarking | null;
   // Set false by an ancestor <music-measure> when this element is one end of a
   // continuous cross-staff arpeggio it draws itself; the element then skips its
   // own local sign. Not an attribute.
@@ -136,6 +146,15 @@ export interface IChordElement {
   // `id` of the upper-staff element this element continues an unbroken
   // cross-staff arpeggio from (grand staff).
   arpeggioFor: string | null;
+  // A dynamic change during the roll: a vertical hairpin wedge drawn just left
+  // of the arpeggio sign, spanning the chord's vertical extent, with a dynamic
+  // letter outside the staff at each end. Honoured only alongside a wave-variant
+  // `arpeggio`.
+  arpeggioHairpin: HairpinKind | null;
+  // Dynamic letter at the start of the roll (bottom end for an upward roll).
+  arpeggioHairpinFrom: DynamicMarking | null;
+  // Dynamic letter at the end of the roll (top end for an upward roll).
+  arpeggioHairpinTo: DynamicMarking | null;
   // Set false by an ancestor <music-measure> when this element is one end of a
   // continuous cross-staff arpeggio it draws itself; the element then skips its
   // own local sign. Not an attribute.

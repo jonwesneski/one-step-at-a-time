@@ -3,27 +3,37 @@ import {
   totalChordAccidentalWidth,
   type AccidentalPlacementInput,
 } from '../../rules/accidentalRules';
-import { computeArpeggioFootprintWidth } from '../../rules/arpeggioRules';
+import {
+  computeArpeggioFootprintWidth,
+  computeArpeggioHairpinFootprintWidth,
+} from '../../rules/arpeggioRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
-import {
+import type {
   AccidentalType,
   ArpeggioType,
+  DynamicMarking,
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_CHORD_GAP_PX,
+  ARPEGGIO_WAVE_WIDTH_PX,
   BASE_STEM_LENGTH_PX,
   GRACE_MAIN_GAP_PX,
   STAFF_Y_PADDING,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
-import { createArpeggioSvg } from './arpeggio';
+import {
+  appendArpeggioHairpin,
+  createArpeggioSvg,
+  isArpeggioWaveVariant,
+} from './arpeggio';
 import { createArticulationMarks } from './articulations';
 import { createGraceNotesSvg } from './graceNotes';
 import {
@@ -39,6 +49,9 @@ import {
 type ChordProps = NoteProps & {
   staffYCoordinates: number[];
   arpeggio?: ArpeggioType | null;
+  arpeggioHairpin?: HairpinKind | null;
+  arpeggioHairpinFrom?: DynamicMarking | null;
+  arpeggioHairpinTo?: DynamicMarking | null;
   noteAccidentals?: (AccidentalType | null | undefined)[];
   // Grace notes are placed relative to the chord's reference note (notes[0],
   // which is staffYCoordinates[0] by index parity).
@@ -55,6 +68,9 @@ export const createChordSvg = ({
   duration,
   staffYCoordinates,
   arpeggio = null,
+  arpeggioHairpin = null,
+  arpeggioHairpinFrom = null,
+  arpeggioHairpinTo = null,
   noFlags = false,
   stemUp = true,
   stemExtension = 0,
@@ -178,6 +194,11 @@ export const createChordSvg = ({
     arpeggio,
     anyAccidentalShown
   );
+  const drawArpeggioHairpin =
+    arpeggioHairpin !== null && isArpeggioWaveVariant(arpeggio);
+  const arpeggioHairpinFootprint = drawArpeggioHairpin
+    ? computeArpeggioHairpinFootprintWidth(arpeggioHairpin)
+    : 0;
 
   // Absolute left edge (chord-SVG coords) of the chord's leftmost column.
   // maxLeftHeadDisplacement is a leftward delta on an adjacent head, not a
@@ -248,7 +269,11 @@ export const createChordSvg = ({
       mainTopNoteYPx: topNoteHeadCenterYPx,
       mainSlurTargetXPx,
       mainSlurTargetYPx,
-      anchorRightXPx: columnLeftX - arpeggioFootprint - GRACE_MAIN_GAP_PX,
+      anchorRightXPx:
+        columnLeftX -
+        arpeggioFootprint -
+        arpeggioHairpinFootprint -
+        GRACE_MAIN_GAP_PX,
       mainAccidentalShown: anyAccidentalShown,
       mainStemUp: stemUp,
       mainStaffY: graceLedgerStaffY,
@@ -262,21 +287,37 @@ export const createChordSvg = ({
   // notehead range. staffYCoordinates is declaration order, not pitch order,
   // hence Math.min / Math.max for the top and bottom heads.
   if (arpeggio && staffYCoordinates.length > 0) {
+    const topY =
+      STAFF_Y_PADDING +
+      Math.min(...staffYCoordinates) -
+      NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const bottomY =
+      STAFF_Y_PADDING +
+      Math.max(...staffYCoordinates) -
+      NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const signRightEdgeX = columnLeftX - ARPEGGIO_CHORD_GAP_PX;
     const sign = createArpeggioSvg({
       arpeggio,
-      topY:
-        STAFF_Y_PADDING +
-        Math.min(...staffYCoordinates) -
-        NOTE_HEAD_Y_OFFSET_CORRECTION,
-      bottomY:
-        STAFF_Y_PADDING +
-        Math.max(...staffYCoordinates) -
-        NOTE_HEAD_Y_OFFSET_CORRECTION,
-      rightEdgeX: columnLeftX - ARPEGGIO_CHORD_GAP_PX,
+      topY,
+      bottomY,
+      rightEdgeX: signRightEdgeX,
     });
     if (sign) {
       svg.setAttribute('overflow', 'visible');
       svg.appendChild(sign);
+    }
+
+    if (drawArpeggioHairpin && isArpeggioWaveVariant(arpeggio)) {
+      appendArpeggioHairpin(svg, {
+        kind: arpeggioHairpin,
+        from: arpeggioHairpinFrom,
+        to: arpeggioHairpinTo,
+        arpeggio,
+        topY,
+        bottomY,
+        signLeftEdgeX: signRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+        staffRelative: true,
+      });
     }
   }
 

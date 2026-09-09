@@ -431,6 +431,37 @@
             },
             {
               "kind": "field",
+              "name": "arpeggioHairpin",
+              "type": {
+                "text": "HairpinKind | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinFrom",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinTo",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#effectiveArpeggioHairpin",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinKind | null"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "renderArpeggioSign",
               "type": {
                 "text": "boolean"
@@ -673,6 +704,27 @@
                 "text": "string"
               },
               "description": "`id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from."
+            },
+            {
+              "name": "arpeggio-hairpin",
+              "type": {
+                "text": "'crescendo' | 'diminuendo'"
+              },
+              "description": "A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`)."
+            },
+            {
+              "name": "arpeggio-hairpin-from",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff."
+            },
+            {
+              "name": "arpeggio-hairpin-to",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff."
             },
             {
               "name": "arpeggiate",
@@ -1690,6 +1742,37 @@
             },
             {
               "kind": "field",
+              "name": "arpeggioHairpin",
+              "type": {
+                "text": "HairpinKind | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinFrom",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinTo",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#effectiveArpeggioHairpin",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinKind | null"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "renderArpeggioSign",
               "type": {
                 "text": "boolean"
@@ -1932,6 +2015,27 @@
                 "text": "string"
               },
               "description": "`id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from."
+            },
+            {
+              "name": "arpeggio-hairpin",
+              "type": {
+                "text": "'crescendo' | 'diminuendo'"
+              },
+              "description": "A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`)."
+            },
+            {
+              "name": "arpeggio-hairpin-from",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff."
+            },
+            {
+              "name": "arpeggio-hairpin-to",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff."
             },
             {
               "name": "arpeggiate",

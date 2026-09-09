@@ -298,6 +298,43 @@ export const GrandStaffArpeggio: Story = {
   `,
 };
 
+/**
+ * A dynamic change during a cross-staff roll: one continuous vertical hairpin
+ * through both staves, drawn left of the arpeggio sign, with a dynamic letter
+ * outside the staff at each end (`p` below, `mf` above).
+ */
+export const GrandStaffArpeggioDynamicChange: Story = {
+  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-composition
+      key-sig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-measure>
+        <music-staff clef="treble" group="grand" time=${args.time}>
+          <music-chord
+            id="roll1"
+            chord="Cmaj"
+            duration="whole"
+            arpeggio="up"
+            arpeggio-hairpin="crescendo"
+            arpeggio-hairpin-from="p"
+            arpeggio-hairpin-to="mf"
+          ></music-chord>
+        </music-staff>
+        <music-staff clef="bass" time=${args.time}>
+          <music-chord chord="Cmaj" duration="whole" arpeggio-for="roll1">
+            <music-note note="C" octave="3"></music-note>
+            <music-note note="E" octave="3"></music-note>
+            <music-note note="G" octave="3"></music-note>
+          </music-chord>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const WithCrossMeasureTie: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`

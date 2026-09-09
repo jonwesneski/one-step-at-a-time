@@ -105,6 +105,18 @@ export const Arpeggiated: Story = {
         <music-note note="C#" octave="5"></music-note>
       </music-chord>
     </music-staff>
+    <!-- A dynamic change during the roll: a vertical hairpin left of the sign,
+         with a dynamic letter outside the staff at each end -->
+    <music-staff clef="treble" time="4/4">
+      <music-chord
+        chord="Cmaj7"
+        duration="whole"
+        arpeggio="up"
+        arpeggio-hairpin="crescendo"
+        arpeggio-hairpin-from="p"
+        arpeggio-hairpin-to="f"
+      ></music-chord>
+    </music-staff>
   `,
 };
 

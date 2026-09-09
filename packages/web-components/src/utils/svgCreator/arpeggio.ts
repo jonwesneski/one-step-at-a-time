@@ -1,13 +1,25 @@
-import type { ArpeggioType } from '../../types/theory';
+import type {
+  ArpeggioType,
+  DynamicMarking,
+  HairpinKind,
+} from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ARPEGGIO_BRACKET_LIP_PX,
+  ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX,
+  ARPEGGIO_HAIRPIN_GAP_PX,
+  ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX,
+  ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_STROKE_WIDTH,
   ARPEGGIO_TEXT_FONT_SIZE,
   ARPEGGIO_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  DYNAMICS_FONT_SIZE,
+  STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
+  STAFF_TOP_LINE_Y,
 } from '../notationDimensions';
+import { createDynamicMarkingSvg, createVerticalHairpinSvg } from './dynamics';
 
 // ─── Wiggle tiles ────────────────────────────────────────────────────────────
 //
@@ -135,6 +147,95 @@ export function createArpeggioSvg({
   }
 
   return group;
+}
+
+/** Whether an arpeggio value is a rolled wave (not the non-arpeggiate bracket). */
+export const isArpeggioWaveVariant = (
+  arpeggio: ArpeggioType | null
+): arpeggio is Exclude<ArpeggioType, 'non-arpeggiate'> =>
+  arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down';
+
+export type ArpeggioHairpinProps = {
+  kind: HairpinKind;
+  from: DynamicMarking | null;
+  to: DynamicMarking | null;
+  /** The rolled wave variant this hairpin accompanies — sets the roll direction. */
+  arpeggio: Exclude<ArpeggioType, 'non-arpeggiate'>;
+  /** Pixel Y of the top notehead center in the host SVG's coordinate space. */
+  topY: number;
+  /** Pixel Y of the bottom notehead center (equal to topY for a single note). */
+  bottomY: number;
+  /** Left edge (px X) of the arpeggio sign — the hairpin sits just left of it. */
+  signLeftEdgeX: number;
+  /**
+   * When true, the wedge is extended to span at least the staff height and the
+   * dynamic letters land just beyond the staff lines — used element-local so
+   * the letters clear the staff even for a low chord. Omit for the cross-staff
+   * form, whose span already covers both staves.
+   */
+  staffRelative?: boolean;
+};
+
+/**
+ * Append the vertical dynamic-change hairpin — a wedge plus a dynamic letter
+ * outside each end — just left of the arpeggio sign. `from`/`to` are in roll
+ * order; an upward roll puts `from` at the bottom and `to` at the top, a
+ * downward roll the reverse.
+ */
+export function appendArpeggioHairpin(
+  target: SVGElement,
+  {
+    kind,
+    from,
+    to,
+    arpeggio,
+    topY,
+    bottomY,
+    signLeftEdgeX,
+    staffRelative = false,
+  }: ArpeggioHairpinProps
+): void {
+  let spanTopY = topY - ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX;
+  let spanBottomY = bottomY + ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX;
+  if (staffRelative) {
+    spanTopY = Math.min(spanTopY, STAFF_TOP_LINE_Y);
+    spanBottomY = Math.max(spanBottomY, STAFF_BOTTOM_LINE_Y);
+  }
+  const spineX =
+    signLeftEdgeX -
+    ARPEGGIO_HAIRPIN_GAP_PX -
+    ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX / 2;
+
+  // Roll runs bottom→top for up / up-arrow, top→bottom for down.
+  const fromEnd: 'top' | 'bottom' = arpeggio === 'down' ? 'top' : 'bottom';
+  const toEnd: 'top' | 'bottom' = fromEnd === 'top' ? 'bottom' : 'top';
+  const narrowEnd = kind === 'crescendo' ? fromEnd : toEnd;
+
+  target.setAttribute('overflow', 'visible');
+  target.appendChild(
+    createVerticalHairpinSvg(kind, spanTopY, spanBottomY, spineX, narrowEnd)
+  );
+
+  const topMark = fromEnd === 'top' ? from : to;
+  const bottomMark = fromEnd === 'bottom' ? from : to;
+  if (topMark !== null) {
+    target.appendChild(
+      createDynamicMarkingSvg(
+        topMark,
+        spineX,
+        spanTopY - ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX
+      )
+    );
+  }
+  if (bottomMark !== null) {
+    target.appendChild(
+      createDynamicMarkingSvg(
+        bottomMark,
+        spineX,
+        spanBottomY + ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX + DYNAMICS_FONT_SIZE
+      )
+    );
+  }
 }
 
 /**

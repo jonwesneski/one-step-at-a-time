@@ -8,7 +8,9 @@ import type {
   NoteOrChordElementType,
   StaffElementBaseType,
 } from '../types/elements';
+import type { HairpinKind } from '../types/theory';
 import {
+  appendArpeggioHairpin,
   COMMON_ATTRIBUTES,
   createArpeggioSvg,
   createBraceSvg,
@@ -20,9 +22,11 @@ import {
   MUSIC_NOTE,
   NOTE_EVENTS,
   STAFF_EVENTS,
+  SVG_NS,
 } from '../utils';
 import {
   ARPEGGIO_CHORD_GAP_PX,
+  ARPEGGIO_WAVE_WIDTH_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
   BRACKET_EXTRA_HEIGHT_PX,
@@ -440,6 +444,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (sign) {
           sign.classList.add('arpeggio-connector');
           overlay.appendChild(sign);
+        }
+
+        // One continuous dynamic-change hairpin through both staves, left of
+        // the wave — read off whichever end carries `arpeggio-hairpin`.
+        const hairpinHost =
+          upper.arpeggioHairpin !== null
+            ? upper
+            : lower.arpeggioHairpin !== null
+            ? lower
+            : null;
+        if (hairpinHost !== null) {
+          const wrap = document.createElementNS(SVG_NS, 'g');
+          wrap.classList.add('arpeggio-hairpin-connector');
+          appendArpeggioHairpin(wrap, {
+            kind: hairpinHost.arpeggioHairpin as HairpinKind,
+            from: hairpinHost.arpeggioHairpinFrom,
+            to: hairpinHost.arpeggioHairpinTo,
+            arpeggio: span.arpeggio,
+            topY,
+            bottomY,
+            signLeftEdgeX: rightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+          });
+          overlay.appendChild(wrap);
         }
       }
 

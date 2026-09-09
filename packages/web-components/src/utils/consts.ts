@@ -7,6 +7,7 @@ import type {
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
   Mode,
   Note,
   Octave,
@@ -201,6 +202,10 @@ export const ARTICULATIONS: ArticulationType[] = [
 ];
 
 export const STRESSES: StressType[] = ['stressed', 'unstressed'];
+
+/** Hairpin directions — used by the `arpeggio-hairpin` attribute (a dynamic
+ * change drawn as a vertical wedge through the arpeggiated chord). */
+export const HAIRPIN_KINDS: HairpinKind[] = ['crescendo', 'decrescendo'];
 
 export const ARPEGGIOS: ArpeggioType[] = [
   'up',

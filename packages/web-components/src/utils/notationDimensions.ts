@@ -616,6 +616,36 @@ export const ARPEGGIO_TEXT_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
  */
 export const ARPEGGIO_TEXT_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.4;
 
+// ─── Arpeggio dynamic-change hairpin ─────────────────────────────────────────
+// A vertical crescendo/diminuendo wedge drawn just left of the arpeggio sign,
+// spanning the chord's vertical extent, with a dynamic letter outside the staff
+// at each end. Starting values — tune in Storybook.
+
+/** Gap (px) between the arpeggio wave's left edge and the hairpin's right edge. */
+export const ARPEGGIO_HAIRPIN_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Horizontal spread (px) at the open end of the vertical hairpin wedge. */
+export const ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
+
+/** How far (px) the wedge runs past the outer noteheads, top and bottom. */
+export const ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between a wedge end and the dynamic letter placed beyond it. */
+export const ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Leftward footprint (px) the staff reserves for the vertical hairpin, stacked
+ * in front of the arpeggio sign's own footprint.
+ */
+export const ARPEGGIO_HAIRPIN_FOOTPRINT_PX =
+  ARPEGGIO_HAIRPIN_GAP_PX + ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX;
+
+/**
+ * Vertical distance (px) above the staff top line at which the upper dynamic
+ * letter of a vertical hairpin sits — feeds the above-staff budget estimate.
+ */
+export const ARPEGGIO_HAIRPIN_DYNAMIC_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.4;
+
 // ─── Written-out arpeggio (`<music-arpeggio>`: run notes tied into a chord) ───
 // Ties and their divided/open forms. Starting values — tune in Storybook.
 

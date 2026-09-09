@@ -1,18 +1,20 @@
 /**
  * @jest-environment jsdom
  */
-import type { ArpeggioType } from '../types/theory';
-import {
-  ARPEGGIO_FOOTPRINT_PX,
-  ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
-} from '../utils/notationDimensions';
 import '../chord/index';
 import '../note/index';
 import type { ChordElementType, NoteElementType } from '../types/elements';
+import type { ArpeggioType, HairpinKind } from '../types/theory';
 import { MUSIC_CHORD, MUSIC_NOTE } from '../utils/consts';
+import {
+  ARPEGGIO_FOOTPRINT_PX,
+  ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
+  ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
+} from '../utils/notationDimensions';
 import {
   type ArpeggioEntry,
   computeArpeggioFootprintWidth,
+  computeArpeggioHairpinFootprintWidth,
   resolveArpeggioSpans,
   resolveArpeggioTiePairings,
 } from './arpeggioRules';
@@ -48,6 +50,21 @@ describe('computeArpeggioFootprintWidth', () => {
       computeArpeggioFootprintWidth('up', false)
     );
   });
+});
+
+describe('computeArpeggioHairpinFootprintWidth', () => {
+  it('reserves nothing when there is no hairpin', () => {
+    expect(computeArpeggioHairpinFootprintWidth(null)).toBe(0);
+  });
+
+  it.each(['crescendo', 'decrescendo'] as HairpinKind[])(
+    'reserves the hairpin footprint for "%s"',
+    (kind) => {
+      expect(computeArpeggioHairpinFootprintWidth(kind)).toBe(
+        ARPEGGIO_HAIRPIN_FOOTPRINT_PX
+      );
+    }
+  );
 });
 
 describe('resolveArpeggioSpans', () => {

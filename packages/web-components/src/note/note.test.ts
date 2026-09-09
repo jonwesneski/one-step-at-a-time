@@ -1106,6 +1106,98 @@ describe('arpeggio', () => {
   });
 });
 
+describe('arpeggio-hairpin', () => {
+  function makeArpeggioNote(
+    attrs: Record<string, string> = {}
+  ): NoteElementType {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('arpeggio', 'up');
+    for (const [key, value] of Object.entries(attrs)) {
+      note.setAttribute(key, value);
+    }
+    document.body.appendChild(note);
+    return note;
+  }
+
+  it('round-trips arpeggio-hairpin between property and attribute', () => {
+    const note = makeArpeggioNote();
+    note.arpeggioHairpin = 'crescendo';
+    expect(note.getAttribute('arpeggio-hairpin')).toBe('crescendo');
+    expect(note.arpeggioHairpin).toBe('crescendo');
+  });
+
+  it('normalizes diminuendo to decrescendo', () => {
+    const note = makeArpeggioNote({ 'arpeggio-hairpin': 'diminuendo' });
+    expect(note.arpeggioHairpin).toBe('decrescendo');
+  });
+
+  it('ignores an unrecognized arpeggio-hairpin value', () => {
+    const note = makeArpeggioNote({ 'arpeggio-hairpin': 'swell' });
+    expect(note.arpeggioHairpin).toBeNull();
+  });
+
+  it('round-trips the from/to dynamic letters', () => {
+    const note = makeArpeggioNote({
+      'arpeggio-hairpin': 'crescendo',
+      'arpeggio-hairpin-from': 'p',
+      'arpeggio-hairpin-to': 'f',
+    });
+    expect(note.arpeggioHairpinFrom).toBe('p');
+    expect(note.arpeggioHairpinTo).toBe('f');
+  });
+
+  it('renders the wedge and both dynamic letters element-local', () => {
+    const note = makeArpeggioNote({
+      'arpeggio-hairpin': 'crescendo',
+      'arpeggio-hairpin-from': 'p',
+      'arpeggio-hairpin-to': 'f',
+    });
+    const wedge = note.shadowRoot?.querySelector('.arpeggio-hairpin');
+    expect(wedge).not.toBeNull();
+    expect(wedge?.querySelectorAll('path')).toHaveLength(2);
+    expect(note.shadowRoot?.querySelectorAll('.dynamic-marking')).toHaveLength(
+      2
+    );
+  });
+
+  it('does not render the wedge without a rolled arpeggio', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(note);
+    note.setAttribute('arpeggio-hairpin', 'crescendo');
+    expect(note.shadowRoot?.querySelector('.arpeggio-hairpin')).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('does not render the wedge for non-arpeggiate', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('arpeggio', 'non-arpeggiate');
+    document.body.appendChild(note);
+    note.setAttribute('arpeggio-hairpin', 'crescendo');
+    expect(note.shadowRoot?.querySelector('.arpeggio-hairpin')).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('flips the wedge point end between crescendo and diminuendo', () => {
+    const cresc = makeArpeggioNote({ 'arpeggio-hairpin': 'crescendo' });
+    const dim = makeArpeggioNote({ 'arpeggio-hairpin': 'diminuendo' });
+
+    const pointY = (note: NoteElementType): number => {
+      const d =
+        note.shadowRoot
+          ?.querySelector('.arpeggio-hairpin path')
+          ?.getAttribute('d') ?? '';
+      // "M <x> <pointY> L <x> <openY>"
+      return Number(d.split(/\s+/)[2]);
+    };
+    // Upward roll: crescendo narrows at the bottom (larger Y), diminuendo at
+    // the top (smaller Y).
+    expect(pointY(cresc)).toBeGreaterThan(pointY(dim));
+  });
+});
+
 const TREBLE_STAFF_Y: Record<string, number> = {
   C6: 10,
   B5: 15,

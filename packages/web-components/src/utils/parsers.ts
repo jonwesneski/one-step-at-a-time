@@ -7,6 +7,7 @@ import type {
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
   HairpinRole,
   Note,
   Octave,
@@ -45,6 +46,18 @@ export const parseConnectorRole = (
 ): ConnectorRole | HairpinRole | null => {
   if (value === 'start' || value === 'end') {
     return value;
+  }
+  return null;
+};
+
+// `arpeggio-hairpin` accepts `crescendo` / `decrescendo`, plus `diminuendo` as
+// an alias for `decrescendo` (mirrors the note/chord hairpin attributes).
+export const parseHairpinKind = (value: string | null): HairpinKind | null => {
+  if (value === 'crescendo') {
+    return 'crescendo';
+  }
+  if (value === 'decrescendo' || value === 'diminuendo') {
+    return 'decrescendo';
   }
   return null;
 };

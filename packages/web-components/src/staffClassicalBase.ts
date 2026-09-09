@@ -3,7 +3,10 @@ import {
   computeNoteAccidentals,
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
-import { computeArpeggioFootprintWidth } from './rules/arpeggioRules';
+import {
+  computeArpeggioFootprintWidth,
+  computeArpeggioHairpinFootprintWidth,
+} from './rules/arpeggioRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
@@ -29,7 +32,7 @@ import {
   TupletGroup,
 } from './rules/tupletRules';
 import { StaffElementBase } from './staffBase';
-import {
+import type {
   ArpeggioGroupPlacement,
   ChordElementType,
   ChordNote,
@@ -45,6 +48,7 @@ import {
 import type {
   ClefType,
   DurationType,
+  HairpinKind,
   Mode,
   Note,
   Octave,
@@ -58,6 +62,7 @@ import {
   createSempreArpeggiandoText,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
 } from './utils';
 import {
   CLEF_EVENTS,
@@ -76,11 +81,14 @@ import {
   SVG_NS,
 } from './utils/consts';
 import {
+  ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX,
+  ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
   ARPEGGIO_TEXT_FONT_SIZE,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
   DYNAMICS_BASELINE_Y,
+  DYNAMICS_FONT_SIZE,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
@@ -120,6 +128,21 @@ function footprintArpeggio(element: NoteElementType | ChordElementType) {
   return (
     effectiveArpeggio(element) ?? (element.arpeggioFor !== null ? 'up' : null)
   );
+}
+
+// The hairpin kind whose leftward footprint this element reserves — only when
+// it carries `arpeggioHairpin` alongside an effective rolled wave (own,
+// implied, or a cross-staff `arpeggio-for` continuation).
+function footprintArpeggioHairpin(
+  element: NoteElementType | ChordElementType
+): HairpinKind | null {
+  if (element.arpeggioHairpin === null) {
+    return null;
+  }
+  const arpeggio = footprintArpeggio(element);
+  return arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down'
+    ? element.arpeggioHairpin
+    : null;
 }
 
 // A stem-down chord's adjacent second shifts its head left by
@@ -746,6 +769,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           footprintArpeggio(noteElement),
           elementHasShownAccidental(noteElement)
         );
+        firstElementLeftwardWidth += computeArpeggioHairpinFootprintWidth(
+          footprintArpeggioHairpin(noteElement)
+        );
       } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = firstElement as ChordElementType;
         if (
@@ -764,6 +790,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         firstElementLeftwardWidth += computeArpeggioFootprintWidth(
           footprintArpeggio(chordElement),
           elementHasShownAccidental(chordElement)
+        );
+        firstElementLeftwardWidth += computeArpeggioHairpinFootprintWidth(
+          footprintArpeggioHairpin(chordElement)
         );
         if (footprintArpeggio(chordElement) !== null) {
           firstElementLeftwardWidth +=
@@ -789,6 +818,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           extraLeftwardWidth += computeArpeggioFootprintWidth(
             footprintArpeggio(noteOrChordElement),
             elementHasShownAccidental(noteOrChordElement)
+          );
+          extraLeftwardWidth += computeArpeggioHairpinFootprintWidth(
+            footprintArpeggioHairpin(noteOrChordElement)
           );
           if (
             element.nodeName === MUSIC_CHORD_NODE &&
@@ -1067,6 +1099,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           footprintArpeggio(noteElement),
           elementHasShownAccidental(noteElement)
         );
+        leftwardWidth += computeArpeggioHairpinFootprintWidth(
+          footprintArpeggioHairpin(noteElement)
+        );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = element as ChordElementType;
         if (
@@ -1085,6 +1120,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         leftwardWidth += computeArpeggioFootprintWidth(
           footprintArpeggio(chordElement),
           elementHasShownAccidental(chordElement)
+        );
+        leftwardWidth += computeArpeggioHairpinFootprintWidth(
+          footprintArpeggioHairpin(chordElement)
         );
         if (footprintArpeggio(chordElement) !== null) {
           leftwardWidth += chordLeftHeadDisplacementPx(chordElement);
@@ -1428,6 +1466,44 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         STAFF_TOP_LINE_Y -
         ARPEGGIO_TEXT_ABOVE_STAFF_PX -
         ARPEGGIO_TEXT_FONT_SIZE;
+      if (textTopY < 0) {
+        budget = Math.max(budget, Math.ceil(-textTopY) + 2);
+      }
+    }
+
+    // The upper dynamic letter of an arpeggio-hairpin sits above the chord's
+    // top notehead — reserve room when it would otherwise poke past the SVG.
+    for (const element of this.#currentElements) {
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const el = element as NoteElementType | ChordElementType;
+      if (footprintArpeggioHairpin(el) === null) {
+        continue;
+      }
+      const effective =
+        el.arpeggio ??
+        el.impliedArpeggio ??
+        (el.arpeggioFor !== null ? 'up' : null);
+      const topMark =
+        effective === 'down' ? el.arpeggioHairpinFrom : el.arpeggioHairpinTo;
+      if (topMark === null) {
+        continue;
+      }
+      const staffYs =
+        element.nodeName === MUSIC_NOTE_NODE
+          ? [this.#noteStaffYCoordsSnapshot.get(el as NoteElementType) ?? 0]
+          : this.#chordStaffYCoordsSnapshot.get(el as ChordElementType) ?? [0];
+      const topHeadY =
+        STAFF_Y_PADDING + Math.min(...staffYs) - NOTE_HEAD_Y_OFFSET_CORRECTION;
+      const textTopY =
+        topHeadY -
+        ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX -
+        ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX -
+        DYNAMICS_FONT_SIZE;
       if (textTopY < 0) {
         budget = Math.max(budget, Math.ceil(-textTopY) + 2);
       }
