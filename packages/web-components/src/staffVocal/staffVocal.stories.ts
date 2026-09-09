@@ -14,7 +14,7 @@ const notesByVoice: Record<Voice, string[]> = {
 };
 
 const meta: Meta = {
-  title: 'Components/StaffVocal',
+  title: 'Instruments/Voice',
   component: 'music-staff-vocal',
   tags: ['autodocs'],
   argTypes: {

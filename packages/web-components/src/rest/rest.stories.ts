@@ -4,7 +4,7 @@ import '../index';
 import { DURATIONS } from '../utils';
 
 const meta: Meta = {
-  title: 'Components/MusicRest',
+  title: 'Rest',
   component: 'music-rest',
   tags: ['autodocs'],
 };

@@ -197,9 +197,13 @@ Features land in one of two shapes; steps are tagged accordingly:
     `StaffGuitarTabElement` adds its own `observedAttributes`/`attributeChangedCallback` override
     that re-resolves the inherited base field, since each concrete class declares its own
     `observedAttributes`.
-14. `[A][B]` **Stories (near-universal)** — add/extend colocated `<component>.stories.ts`
-    (Type A → `note.stories.ts`; Type B → `staff` / `composition` stories), using option
-    arrays from `../utils` and strong types from `../types/theory`. For both Type A and Type B see if you can extend an existing story rather than making more new stories. If the feature is small like adding 1 or 2 attributes and their total number of possible values are small consider extending existing stories; otherwise you can plan for new stories
+14. `[A][B]` **Stories (near-universal)** — one `.stories.ts` = one sidebar leaf (see Storybook
+    Stories below). A note/chord attribute that renders standalone extends `note.stories.ts` /
+    `chord.stories.ts`; a staff/composition-rendered feature gets its own
+    `Universal Notations/<Feature>` file (colocated with its `rules`/`svgCreator` code), added
+    to the `storySort` order in `.storybook/preview.ts` — **not** appended to `staff` /
+    `composition`. Use option arrays from `../utils` and strong types from `../types/theory`.
+    Prefer extending an existing story in the right leaf over adding a new one.
 15. `[A][B]` **Tests (near-universal; tiers are conditional)** — Type A: `note.test.ts` +
     `chord.test.ts`. Type B: new `rules/<feature>Rules.test.ts` + `staffClassicalBase.test.ts`.
     Add a `*.browser-test.ts` **only when** layout/geometry/resize is involved.
@@ -427,30 +431,57 @@ A brace or bracket is an **additional** decoration, drawn further left, spanning
 
 ## Storybook Stories
 
-Story files are colocated with their component using the `<component>.stories.ts` naming convention (e.g. `src/note/note.stories.ts`). The exception is feature-level utilities: `src/utils/svgCreator/beams.stories.ts`.
+Story files are colocated with the code they exercise (`src/note/note.stories.ts`,
+`src/utils/svgCreator/beams.stories.ts`). **One `.stories.ts` file = one `title` = one sidebar
+leaf.** The sidebar tree is entirely the `/`-delimited `title` path plus the `storySort` order
+in `.storybook/preview.ts` — there is no `Components/` wrapper. A feature is organised by _what
+it is_, not by which element renders it in the example: a feature that only draws inside a
+staff/composition pass (ties, slurs, dynamics, hairpins, beams, tuplet brackets, arpeggio
+signs) lives under `Universal Notations/…` in its own file; a feature that renders standalone
+on a note/chord (articulations, grace notes, stress, fermata, single accidentals) stays in
+that element's file.
 
-**Existing story files:**
-`chord`, `clef`, `composition`, `measure`, `note`, `rest`, `staff`, `staffGuitarTab`, `staffVocal`, `utils/svgCreator/beams`
+**Sidebar leaves → files** (this is also the `storySort` order):
+
+| Leaf                                                                                    | File                                                                                                                                          |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Note`                                                                                  | `src/note/note.stories.ts`                                                                                                                    |
+| `Chord`                                                                                 | `src/chord/chord.stories.ts`                                                                                                                  |
+| `Rest`                                                                                  | `src/rest/rest.stories.ts`                                                                                                                    |
+| `Clef`                                                                                  | `src/clef/clef.stories.ts` (standalone glyph + in-staff `<music-clef>` changes)                                                               |
+| `Staff`                                                                                 | `src/staff/staff.stories.ts` (staff basics, ledger lines, key-sig accidentals)                                                                |
+| `Measure`                                                                               | `src/measure/measure.stories.ts`                                                                                                              |
+| `Composition`                                                                           | `src/composition/composition.stories.ts`                                                                                                      |
+| `Composition/Staff Groups`                                                              | `src/composition/staffGroups.stories.ts` (grand staff, brace, bracket)                                                                        |
+| `Universal Notations/Ties`                                                              | `src/utils/svgCreator/ties.stories.ts`                                                                                                        |
+| `Universal Notations/Slurs`                                                             | `src/utils/svgCreator/slurs.stories.ts`                                                                                                       |
+| `Universal Notations/Dynamics & Hairpins`                                               | `src/utils/svgCreator/dynamics.stories.ts`                                                                                                    |
+| `Universal Notations/Tuplets`                                                           | `src/tuplet/tuplet.stories.ts`                                                                                                                |
+| `Universal Notations/Arpeggio`                                                          | `src/arpeggio/arpeggio.stories.ts` (`<music-arpeggio>` **and** the `arpeggio`/`arpeggiate` attribute, incl. cross-staff)                      |
+| `Universal Notations/Beams`                                                             | `src/utils/svgCreator/beams.stories.ts`                                                                                                       |
+| `Instruments/Voice`                                                                     | `src/staffVocal/staffVocal.stories.ts`                                                                                                        |
+| `Instruments/Guitar`                                                                    | `src/staffGuitarTab/staffGuitarTab.stories.ts`                                                                                                |
+| `Instruments/Strings`, `Instruments/Winds & Brass`, `Instruments/Percussion & Keyboard` | `src/{strings,windsBrass,percussionKeyboard}.stories.ts` — placeholders (`tags: ['!autodocs']`, one `Planned` story) until the notations land |
 
 **Standard imports:**
 
 ```ts
-import type { Meta, StoryObj } from '@storybook/web-components';
+import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index'; // registers all custom elements
 import { DURATIONS, NOTES, OCTAVES } from '../utils'; // for control option arrays
 ```
 
-**Meta shape:** `title: 'Components/...'`, `component: '<tag-name>'` (e.g. `'music-note'` —
-links the story to its `custom-elements.json` entry so the Docs tab renders the attribute
-table), `tags: ['autodocs']`, optional global `render`/`argTypes`/`args`.
+**Meta shape:** nested `title` path (e.g. `'Universal Notations/Ties'`), `component:
+'<tag-name>'` where one element dominates (links the Docs tab to the `custom-elements.json`
+attribute table), `tags: ['autodocs']`, optional global `render`/`argTypes`/`args`.
 
 **Consumer guides** are MDX under `src/*.mdx` / `src/guides/*.mdx` (`Introduction`,
 `Getting Started`, `Framework Integration`, `Concepts`). `.storybook/preview.ts` loads the
 manifest via `setCustomElementsManifest`. The whole Storybook is deployed to GitHub Pages by
 `.github/workflows/docs.yml`.
 
-**Story naming conventions:** `Standalone`, `InStaff`, key-signature variants (`CMajor`, `GMajor`, …), feature combos (`WithChords`, `WithAccidentals`, `WithTies`, etc.).
+**Story naming conventions:** `Standalone`, `InStaff`, key-signature variants (`CMajor`, `GMajor`, …), feature combos (`WithChords`, `WithAccidentals`, `NoteToNote`, etc.).
 
 **No decorators or play functions** — stories are self-contained `render` functions using Lit `html` tag.
 

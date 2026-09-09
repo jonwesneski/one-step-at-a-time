@@ -3,12 +3,28 @@ import { html } from 'lit';
 import '../../index';
 
 const meta: Meta = {
-  title: 'Notation/Beams',
+  title: 'Universal Notations/Beams',
   tags: ['autodocs'],
 };
 export default meta;
 
 type Story = StoryObj;
+
+// A single group of 8 eighth notes: the simplest beamed run
+export const EighthNoteRun: Story = {
+  render: () => html`
+    <music-staff clef="treble" key-sig="C" mode="major" time="4/4">
+      <music-note note="C" duration="eighth"></music-note>
+      <music-note note="D" duration="eighth"></music-note>
+      <music-note note="E" duration="eighth"></music-note>
+      <music-note note="F" duration="eighth"></music-note>
+      <music-note note="G" duration="eighth"></music-note>
+      <music-note note="A" duration="eighth"></music-note>
+      <music-note note="B" duration="eighth"></music-note>
+      <music-note note="C" duration="eighth"></music-note>
+    </music-staff>
+  `,
+};
 
 // Primary only, 2 groups: showing both ascending slant and descending slant
 export const Primary: Story = {

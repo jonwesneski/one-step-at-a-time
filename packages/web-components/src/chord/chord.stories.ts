@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index';
 import {
-  ARPEGGIOS,
   ARTICULATIONS,
   DURATIONS,
   DYNAMICS,
@@ -28,7 +27,7 @@ const CHORDS = [
 ];
 
 const meta: Meta = {
-  title: 'Components/Chord',
+  title: 'Chord',
   component: 'music-chord',
   tags: ['autodocs'],
 };
@@ -41,90 +40,24 @@ export const StandaloneChordAttribute: Story = {
     chord: 'Cmaj',
     duration: 'quarter',
     articulation: 'staccato',
-    arpeggio: '',
   },
   argTypes: {
     chord: { control: 'select', options: CHORDS },
     duration: { control: 'select', options: DURATIONS },
     articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
-    arpeggio: { control: 'select', options: ['', ...ARPEGGIOS] },
   },
   render: (args) =>
     html`<music-chord
       chord=${args.chord}
       duration=${args.duration}
       articulation=${args.articulation}
-      arpeggio=${args.arpeggio}
     ></music-chord>`,
-};
-
-export const SempreArpeggiando: Story = {
-  render: () => html`
-    <music-staff clef="treble" time="4/4">
-      <music-chord
-        chord="Cmaj"
-        duration="quarter"
-        arpeggiate="start"
-      ></music-chord>
-      <music-chord chord="Fmaj" duration="quarter"></music-chord>
-      <music-chord
-        chord="Gmaj"
-        duration="quarter"
-        arpeggio="non-arpeggiate"
-      ></music-chord>
-      <music-chord chord="Cmaj" duration="quarter"></music-chord>
-    </music-staff>
-  `,
-};
-
-export const Arpeggiated: Story = {
-  render: () => html`
-    <music-staff clef="treble" time="4/4">
-      <music-chord chord="Cmaj7" duration="quarter" arpeggio="up"></music-chord>
-      <music-chord
-        chord="Cmaj7"
-        duration="quarter"
-        arpeggio="up-arrow"
-      ></music-chord>
-      <music-chord
-        chord="Cmaj7"
-        duration="quarter"
-        arpeggio="down"
-      ></music-chord>
-      <music-chord
-        chord="Cmaj7"
-        duration="quarter"
-        arpeggio="non-arpeggiate"
-      ></music-chord>
-    </music-staff>
-    <music-staff clef="treble" time="4/4">
-      <music-chord duration="whole" arpeggio="up-arrow" grace="F#,G">
-        <music-note note="D#" octave="4"></music-note>
-        <music-note note="F#" octave="4"></music-note>
-        <music-note note="A#" octave="4"></music-note>
-        <music-note note="C#" octave="5"></music-note>
-      </music-chord>
-    </music-staff>
-    <!-- A dynamic change during the roll: a vertical hairpin left of the sign,
-         with a dynamic letter outside the staff at each end -->
-    <music-staff clef="treble" time="4/4">
-      <music-chord
-        chord="Cmaj7"
-        duration="whole"
-        arpeggio="up"
-        arpeggio-hairpin="crescendo"
-        arpeggio-hairpin-from="p"
-        arpeggio-hairpin-to="f"
-      ></music-chord>
-    </music-staff>
-  `,
 };
 
 export const StandaloneWithNotes: Story = {
   args: {
     duration: 'quarter',
     articulation: 'accent',
-    arpeggio: '',
     note1: 'C',
     octave1: 4,
     note2: 'E',
@@ -135,7 +68,6 @@ export const StandaloneWithNotes: Story = {
   argTypes: {
     duration: { control: 'select', options: DURATIONS },
     articulation: { control: 'select', options: ['', ...ARTICULATIONS] },
-    arpeggio: { control: 'select', options: ['', ...ARPEGGIOS] },
     note1: { control: 'select', options: NOTES },
     octave1: { control: 'select', options: OCTAVES },
     note2: { control: 'select', options: NOTES },
@@ -144,11 +76,7 @@ export const StandaloneWithNotes: Story = {
     octave3: { control: 'select', options: OCTAVES },
   },
   render: (args) => html`
-    <music-chord
-      duration=${args.duration}
-      articulation=${args.articulation}
-      arpeggio=${args.arpeggio}
-    >
+    <music-chord duration=${args.duration} articulation=${args.articulation}>
       <music-note
         note=${args.note1}
         octave=${args.octave1}
@@ -236,10 +164,8 @@ export const InStaff: Story = {
     chord1: 'Cmaj',
     duration1: 'quarter',
     articulation1: 'marcato',
-    arpeggio1: 'up',
     duration2: 'quarter',
     articulation2: 'tenuto',
-    arpeggio2: 'down',
     note1: 'C',
     octave1: 4,
     note2: 'E',
@@ -251,10 +177,8 @@ export const InStaff: Story = {
     chord1: { control: 'select', options: CHORDS },
     duration1: { control: 'select', options: DURATIONS },
     articulation1: { control: 'select', options: ['', ...ARTICULATIONS] },
-    arpeggio1: { control: 'select', options: ['', ...ARPEGGIOS] },
     duration2: { control: 'select', options: DURATIONS },
     articulation2: { control: 'select', options: ['', ...ARTICULATIONS] },
-    arpeggio2: { control: 'select', options: ['', ...ARPEGGIOS] },
     note1: { control: 'select', options: NOTES },
     octave1: { control: 'select', options: OCTAVES },
     note2: { control: 'select', options: NOTES },
@@ -268,12 +192,10 @@ export const InStaff: Story = {
         chord=${args.chord1}
         duration=${args.duration1}
         articulation=${args.articulation1}
-        arpeggio=${args.arpeggio1}
       ></music-chord>
       <music-chord
         duration=${args.duration2}
         articulation=${args.articulation2}
-        arpeggio=${args.arpeggio2}
       >
         <music-note
           note=${args.note1}
