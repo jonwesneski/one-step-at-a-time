@@ -218,6 +218,19 @@ export type ArticulationType =
 /** Schoenberg stress family. */
 export type StressType = 'stressed' | 'unstressed';
 
+/**
+ * Arpeggio (rolled / spread chord) sign, drawn as a vertical wavy line left of
+ * the chord — left of any accidentals — spanning the top-to-bottom notehead
+ * range, not the stems.
+ * - `up`             plain wavy line: arpeggiate bottom→top (the default reading)
+ * - `up-arrow`       wavy line with an arrowhead at the top: explicit upward roll
+ *                    (disambiguates from a nearby downward one)
+ * - `down`           wavy line with an arrowhead at the bottom: arpeggiate top→bottom
+ * - `non-arpeggiate` vertical square bracket, no wave: a chord NOT to be spread,
+ *                    inside an otherwise-arpeggiated passage
+ */
+export type ArpeggioType = 'up' | 'up-arrow' | 'down' | 'non-arpeggiate';
+
 /** Grace-note style. Grace notes never consume beat budget. */
 export type GraceType = 'acciaccatura' | 'appoggiatura';
 

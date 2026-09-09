@@ -3,7 +3,8 @@
  */
 import '../note/index';
 import '../tuplet/index';
-import { makeNote } from '../test-fixtures/unitHelpers';
+import '../chord/index';
+import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
 import {
   NoteChordOrRestElementType,
   TupletElementType,
@@ -116,5 +117,63 @@ describe('computeAllowedElementCount', () => {
 
     expect(allowedElementCount).toBe(0);
     expect(error).toEqual(expect.stringContaining('no more room for note(s)'));
+  });
+
+  describe('<music-arpeggio> run notes', () => {
+    it('does not count run-note durations toward the measure', () => {
+      // 3 thirtysecond run notes + a quarter target chord in 1/4 — without the
+      // exemption the run would overflow.
+      const elements: NoteChordOrRestElementType[] = [
+        makeNote({ note: 'C', duration: 'thirtysecond' }),
+        makeNote({ note: 'E', duration: 'thirtysecond' }),
+        makeNote({ note: 'G', duration: 'thirtysecond' }),
+        makeChord({
+          notes: [
+            { note: 'C', octave: 4 },
+            { note: 'E', octave: 4 },
+            { note: 'G', octave: 4 },
+          ],
+          duration: 'quarter',
+        }),
+      ];
+      const { allowedElementCount, error } = computeAllowedElementCount(
+        elements,
+        [1, 4],
+        new Map(),
+        [
+          {
+            runIndices: [0, 1, 2],
+            targetIndex: 3,
+            element: elements[3] as never,
+          },
+        ]
+      );
+      expect(allowedElementCount).toBe(4);
+      expect(error).toBeNull();
+    });
+
+    it('drops the whole group when the target overflows', () => {
+      const elements: NoteChordOrRestElementType[] = [
+        makeNote({ note: 'C', duration: 'quarter' }),
+        makeNote({ note: 'C', duration: 'thirtysecond' }),
+        makeNote({ note: 'E', duration: 'thirtysecond' }),
+        makeChord({
+          notes: [
+            { note: 'C', octave: 4 },
+            { note: 'E', octave: 4 },
+            { note: 'G', octave: 4 },
+          ],
+          duration: 'whole',
+        }),
+      ];
+      const { allowedElementCount } = computeAllowedElementCount(
+        elements,
+        [1, 4],
+        new Map(),
+        [{ runIndices: [1, 2], targetIndex: 3, element: elements[3] as never }]
+      );
+      // The first quarter fits; the run + whole target don't → drop from index 1.
+      expect(allowedElementCount).toBe(1);
+    });
   });
 });

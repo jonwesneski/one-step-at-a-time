@@ -7,6 +7,7 @@ import type {
 import { createHairpinSvg } from '../utils';
 import {
   buildConnectorSvgs,
+  collectArpeggioTiePairs,
   collectNoteLikeElements,
   pairConnectors,
 } from '../utils/connectorsBuilder';
@@ -317,12 +318,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const notes = collectNoteLikeElements(this);
-      if (notes.length === 0) {
-        return;
-      }
-
-      const pairs = pairConnectors(notes);
+      const pairs = [
+        ...pairConnectors(collectNoteLikeElements(this)),
+        ...collectArpeggioTiePairs(this),
+      ];
       if (pairs.length === 0) {
         return;
       }

@@ -855,3 +855,114 @@ test.describe(`${MUSIC_MEASURE} group connectors`, () => {
     expect(after).toBe(true);
   });
 });
+
+test.describe(`${MUSIC_MEASURE} cross-staff arpeggio persistence`, () => {
+  async function arpeggioConnectorState(
+    page: Page
+  ): Promise<{ connectors: number; endpointsSuppressed: boolean }> {
+    return page.evaluate((measureTag) => {
+      const measure = Array.from(document.querySelectorAll(measureTag)).find(
+        (m) => m.querySelector('music-chord') !== null
+      );
+      const connectors =
+        measure?.shadowRoot?.querySelectorAll('.arpeggio-connector').length ??
+        0;
+      const chords = Array.from(
+        measure?.querySelectorAll('music-chord') ?? []
+      ) as (Element & { renderArpeggioSign: boolean })[];
+      return {
+        connectors,
+        endpointsSuppressed:
+          chords.length === 2 && chords.every((c) => !c.renderArpeggioSign),
+      };
+    }, MUSIC_MEASURE);
+  }
+
+  test('a `number` change (measure renumbering) keeps the spanning sign and endpoint suppression', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        composition.setAttribute('time', '4/4');
+
+        const grandMeasure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        treble.setAttribute('time', '4/4');
+        treble.innerHTML =
+          '<music-chord id="top" chord="Cmaj" duration="whole" arpeggio="up"></music-chord>';
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('time', '4/4');
+        bass.innerHTML =
+          '<music-chord chord="Cmaj" duration="whole" arpeggio-for="top">' +
+          '<music-note note="C" octave="3"></music-note>' +
+          '<music-note note="E" octave="3"></music-note>' +
+          '<music-note note="G" octave="3"></music-note></music-chord>';
+        grandMeasure.append(treble, bass);
+
+        const plainMeasure = document.createElement(measureTag);
+        const plainStaff = document.createElement(staffTag);
+        plainStaff.setAttribute('clef', 'treble');
+        plainStaff.setAttribute('time', '4/4');
+        plainStaff.innerHTML =
+          '<music-note note="C" octave="4" duration="whole"></music-note>';
+        plainMeasure.appendChild(plainStaff);
+
+        composition.append(grandMeasure, plainMeasure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const initial = await arpeggioConnectorState(page);
+    expect(initial.connectors).toBe(1);
+    expect(initial.endpointsSuppressed).toBe(true);
+
+    // Prepend a measure so the grand-staff measure is renumbered 1 -> 2,
+    // firing its attributeChangedCallback('number') and rebuilding its shadow
+    // DOM. No staff relayout or arpeggio event follows.
+    await page.evaluate(
+      ({ measureTag, staffTag }) => {
+        const composition = document.querySelector('music-composition');
+        const newMeasure = document.createElement(measureTag);
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        staff.setAttribute('time', '4/4');
+        staff.innerHTML =
+          '<music-note note="D" octave="4" duration="whole"></music-note>';
+        newMeasure.appendChild(staff);
+        composition?.insertBefore(newMeasure, composition.firstChild);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const grandMeasureNumber = await page.evaluate(
+      (measureTag) =>
+        document.querySelectorAll(measureTag)[1]?.getAttribute('number') ??
+        null,
+      MUSIC_MEASURE
+    );
+    expect(grandMeasureNumber).toBe('2');
+
+    const afterRenumber = await arpeggioConnectorState(page);
+    expect(afterRenumber.connectors).toBe(1);
+    expect(afterRenumber.endpointsSuppressed).toBe(true);
+  });
+});

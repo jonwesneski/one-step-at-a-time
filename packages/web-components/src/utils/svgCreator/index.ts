@@ -1,5 +1,13 @@
 export { createAccidentalSvg } from './accidental';
 export {
+  appendArpeggioHairpin,
+  createArpeggioSvg,
+  createSempreArpeggiandoText,
+  isArpeggioWaveVariant,
+  type ArpeggioHairpinProps,
+  type ArpeggioProps,
+} from './arpeggio';
+export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';
@@ -7,13 +15,20 @@ export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export {
   createCurveSvg,
+  createOpenTieSvg,
+  DEFAULT_BULGE_HEIGHT,
   type CurveBulge,
   type CurveProps,
   type CurveStyle,
+  type OpenTieProps,
 } from './curve';
 export { createDoubleFlatSvg } from './doubleFlat';
 export { createDoubleSharpSvg } from './doubleSharp';
-export { createDynamicMarkingSvg, createHairpinSvg } from './dynamics';
+export {
+  createDynamicMarkingSvg,
+  createHairpinSvg,
+  createVerticalHairpinSvg,
+} from './dynamics';
 export { createFlatSvg } from './flat';
 export { createGraceNotesSvg, type GraceNotesProps } from './graceNotes';
 export { addLedgerLines, createLedgerLineElements } from './ledgerLines';

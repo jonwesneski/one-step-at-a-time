@@ -1,6 +1,7 @@
-import { HairpinKind, DynamicMarking } from '../../types/theory';
+import type { DynamicMarking, HairpinKind } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX,
   DYNAMICS_FONT_SIZE,
   HAIRPIN_OPEN_HEIGHT,
   HAIRPIN_STROKE_WIDTH,
@@ -83,6 +84,44 @@ export function createHairpinSvg(
   }
 
   for (const d of [topPath, bottomPath]) {
+    const line = document.createElementNS(SVG_NS, 'path');
+    line.setAttribute('d', d);
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', 'currentColor');
+    line.setAttribute('stroke-width', `${HAIRPIN_STROKE_WIDTH}`);
+    line.setAttribute('stroke-linecap', 'round');
+    group.appendChild(line);
+  }
+
+  return group;
+}
+
+/**
+ * Renders a hairpin wedge rotated to run vertically, for a dynamic change during
+ * an arpeggiated (rolled) chord. The wedge spans `topY`..`bottomY` with its
+ * spine at `spineX`; one end is a point (`narrowEnd`) and the other opens to
+ * `spineX ± openWidth/2`. `kind` selects which visual style but the geometry is
+ * driven entirely by `narrowEnd` (the caller derives it from the roll direction).
+ */
+export function createVerticalHairpinSvg(
+  kind: HairpinKind,
+  topY: number,
+  bottomY: number,
+  spineX: number,
+  narrowEnd: 'top' | 'bottom',
+  openWidth: number = ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX
+): SVGGElement {
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('arpeggio-hairpin', `arpeggio-hairpin-${kind}`);
+
+  const halfWidth = openWidth / 2;
+  const pointY = narrowEnd === 'top' ? topY : bottomY;
+  const openY = narrowEnd === 'top' ? bottomY : topY;
+
+  const leftPath = `M ${spineX} ${pointY} L ${spineX - halfWidth} ${openY}`;
+  const rightPath = `M ${spineX} ${pointY} L ${spineX + halfWidth} ${openY}`;
+
+  for (const d of [leftPath, rightPath]) {
     const line = document.createElementNS(SVG_NS, 'path');
     line.setAttribute('d', d);
     line.setAttribute('fill', 'none');

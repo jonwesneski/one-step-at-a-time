@@ -1,10 +1,13 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
-import {
+import type {
   AccidentalType,
+  ArpeggioType,
   ArticulationType,
   DurationType,
+  DynamicMarking,
+  HairpinKind,
   StressType,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
@@ -12,8 +15,15 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
+  ARPEGGIO_CHORD_GAP_PX,
+  ARPEGGIO_WAVE_WIDTH_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
+import {
+  appendArpeggioHairpin,
+  createArpeggioSvg,
+  isArpeggioWaveVariant,
+} from './arpeggio';
 import { createArticulationMarks } from './articulations';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -82,6 +92,10 @@ export type NoteProps = {
   accidental?: AccidentalType;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
+  arpeggio?: ArpeggioType | null;
+  arpeggioHairpin?: HairpinKind | null;
+  arpeggioHairpinFrom?: DynamicMarking | null;
+  arpeggioHairpinTo?: DynamicMarking | null;
 };
 export const createNoteSvg = ({
   duration,
@@ -93,6 +107,10 @@ export const createNoteSvg = ({
   accidental,
   articulation,
   stress,
+  arpeggio,
+  arpeggioHairpin = null,
+  arpeggioHairpinFrom = null,
+  arpeggioHairpinTo = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -310,6 +328,44 @@ export const createNoteSvg = ({
     symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(symbolSvg);
+  }
+
+  if (arpeggio && qualifiedElementName === 'svg') {
+    const headCenterY = stemUp
+      ? NOTE_Y_HEAD_OFFSET_STEM_UP
+      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const headLeftX =
+      (stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX) -
+      NOTE_HEAD_RADIUS_PX;
+    const accidentalLeftX = accidental
+      ? -(ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP)
+      : headLeftX;
+    const signRightEdgeX = accidentalLeftX - ARPEGGIO_CHORD_GAP_PX;
+    const sign = createArpeggioSvg({
+      arpeggio,
+      topY: headCenterY,
+      bottomY: headCenterY,
+      rightEdgeX: signRightEdgeX,
+    });
+    if (sign) {
+      svg.setAttribute('overflow', 'visible');
+      svg.appendChild(sign);
+    }
+
+    if (arpeggioHairpin && isArpeggioWaveVariant(arpeggio)) {
+      // A lone note has no staff-line frame in its local coordinate space, so
+      // the letters stay at the wedge ends rather than being pushed outside a
+      // staff (a lone-note arpeggio hairpin is a rare edge case anyway).
+      appendArpeggioHairpin(svg, {
+        kind: arpeggioHairpin,
+        from: arpeggioHairpinFrom,
+        to: arpeggioHairpinTo,
+        arpeggio,
+        topY: headCenterY,
+        bottomY: headCenterY,
+        signLeftEdgeX: signRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+      });
+    }
   }
 
   const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);

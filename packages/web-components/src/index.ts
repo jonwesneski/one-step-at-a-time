@@ -6,6 +6,7 @@ import './staff'; // order of import matters for some reason, otherwise <note> c
 import './staffGuitarTab';
 import './staffVocal';
 import './tuplet';
+import './arpeggio';
 
 import './guitarNote';
 import './note';
@@ -20,6 +21,7 @@ export type {
   GraceNotesType,
   GraceOctavesType,
   GuitarFret,
+  TieValue,
 } from './types/elements';
 export * from './types/theory';
 
@@ -28,6 +30,7 @@ export * from './types/theory';
  * build pickers/controls without importing from deep paths.
  */
 export {
+  ARPEGGIOS,
   ARTICULATIONS,
   CLEFS,
   DURATIONS,

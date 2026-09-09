@@ -555,3 +555,111 @@ export const BRACKET_EXTRA_HEIGHT_PX = STAFF_LINE_SPACING * 0.5;
  * reference engraving font's bracket stem thickness (0.5 staff-spaces).
  */
 export const BRACKET_STEM_THICKNESS_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Arpeggiation ─────────────────────────────────────────────────────────────
+//
+// The wavy line is built by tiling one engraved wiggle segment vertically (see
+// utils/svgCreator/arpeggio.ts, which also holds the per-tile repeat pitch).
+// Every value here is a starting point — tune visually in Storybook.
+
+/** Rendered peak-to-peak horizontal width (px) of the wavy line. */
+export const ARPEGGIO_WAVE_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
+
+/** How far (px) the sign extends past the outer notehead centers, top and bottom. */
+export const ARPEGGIO_VERTICAL_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between the wave's right edge and the accidental-column left edge
+ * (or the notehead left edge when there is no accidental).
+ */
+export const ARPEGGIO_CHORD_GAP_PX = STAFF_LINE_SPACING * 0.35;
+
+/** Stroke width (px) of the non-arpeggiate bracket. */
+export const ARPEGGIO_STROKE_WIDTH = 1.4;
+
+/** Length (px) of each horizontal lip on the non-arpeggiate square bracket. */
+export const ARPEGGIO_BRACKET_LIP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Approximate distance (px) from a note/chord SVG's left edge to the left edge
+ * of its noteheads — the arpeggio sign sits just outside this when the element
+ * has no accidental, so only the part of the sign past the SVG's own left edge
+ * needs reserving.
+ */
+export const ARPEGGIO_NOTEHEAD_INSET_PX = STAFF_LINE_SPACING * 1.1;
+
+/**
+ * Leftward footprint (px) an arpeggio sign reserves when the element also shows
+ * an accidental: the sign clears the accidental column entirely, so this is
+ * added on top of the separately-computed accidental footprint. The arrowhead
+ * extends only vertically, so it adds nothing here.
+ */
+export const ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX =
+  ARPEGGIO_CHORD_GAP_PX + ARPEGGIO_WAVE_WIDTH_PX;
+
+/**
+ * Leftward footprint (px) an arpeggio sign reserves with no accidental — the
+ * sign starts just left of the noteheads, which are already inset from the
+ * SVG's left edge, so most of it fits without extra room.
+ */
+export const ARPEGGIO_FOOTPRINT_PX = Math.max(
+  0,
+  ARPEGGIO_CHORD_GAP_PX + ARPEGGIO_WAVE_WIDTH_PX - ARPEGGIO_NOTEHEAD_INSET_PX
+);
+
+/** Font size (px) of the `sempre arpeggiando` passage instruction text. */
+export const ARPEGGIO_TEXT_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
+
+/**
+ * Vertical distance (px) above the staff top line at which the `sempre
+ * arpeggiando` text baseline sits.
+ */
+export const ARPEGGIO_TEXT_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.4;
+
+// ─── Arpeggio dynamic-change hairpin ─────────────────────────────────────────
+// A vertical crescendo/diminuendo wedge drawn just left of the arpeggio sign,
+// spanning the chord's vertical extent, with a dynamic letter outside the staff
+// at each end. Starting values — tune in Storybook.
+
+/** Gap (px) between the arpeggio wave's left edge and the hairpin's right edge. */
+export const ARPEGGIO_HAIRPIN_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Horizontal spread (px) at the open end of the vertical hairpin wedge. */
+export const ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
+
+/** How far (px) the wedge runs past the outer noteheads, top and bottom. */
+export const ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between a wedge end and the dynamic letter placed beyond it. */
+export const ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Leftward footprint (px) the staff reserves for the vertical hairpin, stacked
+ * in front of the arpeggio sign's own footprint.
+ */
+export const ARPEGGIO_HAIRPIN_FOOTPRINT_PX =
+  ARPEGGIO_HAIRPIN_GAP_PX + ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX;
+
+/**
+ * Vertical distance (px) above the staff top line at which the upper dynamic
+ * letter of a vertical hairpin sits — feeds the above-staff budget estimate.
+ */
+export const ARPEGGIO_HAIRPIN_DYNAMIC_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.4;
+
+// ─── Written-out arpeggio (`<music-arpeggio>`: run notes tied into a chord) ───
+// Ties and their divided/open forms. Starting values — tune in Storybook.
+
+/** Length (px) of each half of a divided tie (a short hook off one notehead). */
+export const ARPEGGIO_RUN_TIE_STUB_LENGTH_PX = STAFF_LINE_SPACING * 1.1;
+
+/** Half the centre gap (px) left where a divided tie's two stubs stop short. */
+export const ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * A tie is divided when another notehead's centre lies within this vertical
+ * distance (px) of the tie curve along the run.
+ */
+export const ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.7;
+
+/** Length (px) of an open-ended (laissez vibrer) tie curve. */
+export const LAISSEZ_VIBRER_CURVE_LENGTH_PX = STAFF_LINE_SPACING * 1.6;

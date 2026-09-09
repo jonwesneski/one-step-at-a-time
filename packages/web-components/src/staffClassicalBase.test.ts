@@ -296,4 +296,40 @@ describe('staffClassicalBase', () => {
       expect(staff.timeChangeAtBoundary).toBe(false);
     });
   });
+
+  describe('<music-arpeggio>', () => {
+    it('exempts run notes from bar-fit and beams them', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '1/4');
+      document.body.appendChild(staff);
+
+      const wrapper = document.createElement('music-arpeggio');
+      const runPitches = ['C', 'E', 'G'];
+      const runNotes = runPitches.map((pitch) => {
+        const note = document.createElement(MUSIC_NOTE);
+        note.setAttribute('note', pitch);
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        return note;
+      });
+      const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+      chord.setAttribute('chord', 'Cmaj' satisfies Chord);
+      chord.setAttribute('duration', 'quarter');
+      wrapper.append(...runNotes, chord);
+      staff.appendChild(wrapper);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [wrapper];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      // Run notes fit despite 3×1/32 + 1/4 > 1/4, and are drawn.
+      for (const note of runNotes) {
+        expect(note.style.display).not.toBe('none');
+        expect(note.getAttribute('duration')).toBe('thirtysecond');
+      }
+      expect(chord.style.display).not.toBe('none');
+      expect(
+        staff.shadowRoot.querySelectorAll('.beams-container .beam').length
+      ).toBeGreaterThan(0);
+    });
+  });
 });

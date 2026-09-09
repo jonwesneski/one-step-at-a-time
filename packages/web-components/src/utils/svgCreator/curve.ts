@@ -81,3 +81,32 @@ export const createCurveSvg = ({
 
   return group;
 };
+
+export type OpenTieProps = {
+  anchor: { x: number; y: number };
+  /** +1 draws forward in time (right); -1 draws back toward the source. */
+  direction: 1 | -1;
+  length: number;
+  bulge: CurveBulge;
+  label?: string;
+};
+
+/**
+ * A tie that starts (or ends) at a notehead and curves out into empty space —
+ * one half of a divided tie, or a laissez-vibrer tie. Built as a short
+ * `createCurveSvg` with a flattened bulge.
+ */
+export const createOpenTieSvg = ({
+  anchor,
+  direction,
+  length,
+  bulge,
+  label,
+}: OpenTieProps): SVGGElement =>
+  createCurveSvg({
+    from: { x: anchor.x, y: anchor.y },
+    to: { x: anchor.x + direction * length, y: anchor.y },
+    bulge,
+    bulgeHeight: DEFAULT_BULGE_HEIGHT * 0.6,
+    label,
+  });

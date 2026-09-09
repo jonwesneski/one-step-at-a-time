@@ -177,6 +177,29 @@ describe('pairConnectors', () => {
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('hammer-on');
   });
+
+  it('emits a self-pair for tie="laissez-vibrer" (and the lv alias)', () => {
+    const a = makeNote({ note: 'C', octave: '4', tie: 'laissez-vibrer' });
+    const b = makeNote({ note: 'D', octave: '4', tie: 'lv' });
+    const pairs = pairConnectors([a, b]);
+    expect(pairs).toHaveLength(2);
+    expect(pairs[0]).toMatchObject({
+      kind: 'tie',
+      start: a,
+      end: a,
+      laissezVibrer: true,
+    });
+    expect(pairs[1].laissezVibrer).toBe(true);
+  });
+
+  it('does not treat slur="laissez-vibrer" as an l.v. tie', () => {
+    const warn = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const a = makeNote({ slur: 'laissez-vibrer' });
+    expect(pairConnectors([a])).toHaveLength(0);
+    warn.mockRestore();
+  });
 });
 
 describe('buildConnectorSvgs', () => {
@@ -328,5 +351,102 @@ describe('buildConnectorSvgs', () => {
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
     const { fromY, cy, toY } = parsePath(d);
     expect(cy).toBeGreaterThan((fromY + toY) / 2);
+  });
+
+  it('draws one fanned tie per run-to-chord pair for a music-arpeggio', () => {
+    const chord = makeLayoutNote({ stemUp: false, left: 300, top: 100 });
+    Object.defineProperty(chord, 'staffYCoordinates', {
+      get: () => [20, 12, 4],
+      configurable: true,
+    });
+    const run = [50, 120, 190].map((left) =>
+      makeLayoutNote({ stemUp: true, left, top: 100 })
+    );
+
+    const pairs: ConnectorPair[] = run.map((runNote, i) => ({
+      kind: 'tie',
+      start: runNote,
+      end: chord as unknown as NoteLikeElementType,
+      nestingLevel: 0,
+      arpeggioRun: { targetToneIndex: i, runNotes: run },
+    }));
+
+    const svgs = buildConnectorSvgs(pairs, {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+    expect(svgs).toHaveLength(3);
+
+    // Each curve starts at its own run x and ends near the chord.
+    const ends = svgs.map(
+      (g) => parsePath(g.querySelector('path')!.getAttribute('d')!).toX
+    );
+    expect(new Set(ends).size).toBe(1); // all converge on the chord centre x (bbox fallback)
+    const starts = svgs.map(
+      (g) => parsePath(g.querySelector('path')!.getAttribute('d')!).fromX
+    );
+    expect(starts).toEqual([...starts].sort((a, b) => a - b));
+    expect(new Set(starts).size).toBe(3); // distinct run x's
+  });
+
+  it('draws a laissez-vibrer tie as one open curve, with an l.v. label when set', () => {
+    const note = makeLayoutNote({ stemUp: true, left: 100, top: 100 });
+    const svgs = buildConnectorSvgs(
+      [
+        {
+          kind: 'tie',
+          start: note,
+          end: note,
+          nestingLevel: 0,
+          laissezVibrer: true,
+          label: 'l.v.',
+        } as ConnectorPair,
+      ],
+      { rootRect, rowLeft: 0, rowRight: 800 }
+    );
+    expect(svgs).toHaveLength(1);
+    const path = parsePath(svgs[0].querySelector('path')!.getAttribute('d')!);
+    // Curves forward (to the right) off the notehead.
+    expect(path.toX).toBeGreaterThan(path.fromX);
+    expect(svgs[0].querySelector('text')?.textContent).toBe('l.v.');
+  });
+
+  it('divides a run-to-chord tie into two stubs when a run notehead obscures it', () => {
+    // run[0] at x=50 ties to a chord tone; run[1] sits directly under the flat
+    // part of that tie so the curve would pass through its notehead.
+    const chord = makeLayoutNote({ stemUp: false, left: 300, top: 100 });
+    Object.defineProperty(chord, 'staffYCoordinates', {
+      get: () => [10],
+      configurable: true,
+    });
+    const runFirst = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
+    // Positioned so its notehead centre sits on the run[0]→chord tie curve.
+    const runMiddle = makeLayoutNote({ stemUp: true, left: 170, top: 123 });
+
+    const pair: ConnectorPair = {
+      kind: 'tie',
+      start: runFirst,
+      end: chord as unknown as NoteLikeElementType,
+      nestingLevel: 0,
+      arpeggioRun: {
+        targetToneIndex: 0,
+        runNotes: [runFirst, runMiddle],
+      },
+    };
+
+    const svgs = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+    // Two short stubs instead of one full curve.
+    expect(svgs).toHaveLength(2);
+    const [a, b] = svgs.map((g) =>
+      parsePath(g.querySelector('path')!.getAttribute('d')!)
+    );
+    // A centre gap: the stubs stop short of each other.
+    expect(Math.min(a.toX, a.fromX)).toBeGreaterThan(a.fromX - 1); // sanity
+    expect(Math.abs(a.fromX - b.fromX)).toBeGreaterThan(0);
   });
 });

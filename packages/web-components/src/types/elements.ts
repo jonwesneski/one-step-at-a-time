@@ -1,5 +1,6 @@
-import {
+import type {
   AccidentalType,
+  ArpeggioType,
   ArticulationType,
   Chord,
   ClefType,
@@ -8,6 +9,7 @@ import {
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
   HairpinRole,
   Mode,
   Note,
@@ -23,6 +25,13 @@ export type NoteLetterOctave = `${NoteLetter}${Octave}`;
 
 /** Which end of a tie, slur, or technique connector an element marks. */
 export type ConnectorRole = 'start' | 'end';
+
+/**
+ * Value of the `tie` attribute: a `start`/`end` endpoint, or `laissez-vibrer`
+ * — an open-ended tie curving off the notehead into empty space, for a note
+ * left to ring (not held to a matching next notehead).
+ */
+export type TieValue = ConnectorRole | 'laissez-vibrer';
 
 // The three array-valued grace properties reflect a comma-separated string
 // attribute. Reads return the parsed array (internal renderers rely on that);
@@ -43,8 +52,10 @@ export interface INoteElement {
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
-  tie: ConnectorRole | null;
+  tie: TieValue | null;
   slur: ConnectorRole | null;
+  /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
+  lvLabel: boolean;
   dynamic: DynamicMarking | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
@@ -52,6 +63,30 @@ export interface INoteElement {
   diminuendo: HairpinRole | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
+  // Arpeggio (rolled chord) sign drawn left of the element, spanning its
+  // notehead range. On a lone note the sign is ~1 notehead tall.
+  arpeggio: ArpeggioType | null;
+  // `id` of the upper-staff element this element continues an unbroken
+  // cross-staff arpeggio from (grand staff).
+  arpeggioFor: string | null;
+  // A dynamic change during the roll: a vertical hairpin wedge drawn just left
+  // of the arpeggio sign, spanning the chord's vertical extent, with a dynamic
+  // letter outside the staff at each end. Honoured only alongside a wave-variant
+  // `arpeggio`.
+  arpeggioHairpin: HairpinKind | null;
+  // Dynamic letter at the start of the roll (bottom end for an upward roll).
+  arpeggioHairpinFrom: DynamicMarking | null;
+  // Dynamic letter at the end of the roll (top end for an upward roll).
+  arpeggioHairpinTo: DynamicMarking | null;
+  // Set false by an ancestor <music-measure> when this element is one end of a
+  // continuous cross-staff arpeggio it draws itself; the element then skips its
+  // own local sign. Not an attribute.
+  renderArpeggioSign: boolean;
+  // Marks the start / end of a `sempre arpeggiando` passage.
+  arpeggiate: ConnectorRole | null;
+  // Set by the staff to `'up'` for elements inside a `sempre arpeggiando`
+  // passage that carry no explicit `arpeggio`; null otherwise. Not an attribute.
+  impliedArpeggio: ArpeggioType | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -94,8 +129,10 @@ export interface IChordElement {
   noFlags: boolean;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
-  tie: ConnectorRole | null;
+  tie: TieValue | null;
   slur: ConnectorRole | null;
+  /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
+  lvLabel: boolean;
   dynamic: DynamicMarking | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
@@ -103,6 +140,30 @@ export interface IChordElement {
   diminuendo: HairpinRole | null;
   articulation: ArticulationType | null;
   stress: StressType | null;
+  // Arpeggio (rolled chord) sign drawn left of the element, spanning its
+  // notehead range. On a lone note the sign is ~1 notehead tall.
+  arpeggio: ArpeggioType | null;
+  // `id` of the upper-staff element this element continues an unbroken
+  // cross-staff arpeggio from (grand staff).
+  arpeggioFor: string | null;
+  // A dynamic change during the roll: a vertical hairpin wedge drawn just left
+  // of the arpeggio sign, spanning the chord's vertical extent, with a dynamic
+  // letter outside the staff at each end. Honoured only alongside a wave-variant
+  // `arpeggio`.
+  arpeggioHairpin: HairpinKind | null;
+  // Dynamic letter at the start of the roll (bottom end for an upward roll).
+  arpeggioHairpinFrom: DynamicMarking | null;
+  // Dynamic letter at the end of the roll (top end for an upward roll).
+  arpeggioHairpinTo: DynamicMarking | null;
+  // Set false by an ancestor <music-measure> when this element is one end of a
+  // continuous cross-staff arpeggio it draws itself; the element then skips its
+  // own local sign. Not an attribute.
+  renderArpeggioSign: boolean;
+  // Marks the start / end of a `sempre arpeggiando` passage.
+  arpeggiate: ConnectorRole | null;
+  // Set by the staff to `'up'` for elements inside a `sempre arpeggiando`
+  // passage that carry no explicit `arpeggio`; null otherwise. Not an attribute.
+  impliedArpeggio: ArpeggioType | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -152,6 +213,27 @@ export interface ITupletElement {
   readonly flatElements: NoteChordOrRestElementType[];
 }
 
+/**
+ * `<music-arpeggio>` — the written-out arpeggiated chord: a beamed run of
+ * `<music-note>`s followed by the target `<music-chord>` (or a single
+ * `<music-note>`), each run note tied to its matching-pitch chord tone. This is
+ * the consecutive-pitch notation; the wavy vertical line is the `arpeggio`
+ * attribute on `<music-note>` / `<music-chord>`.
+ */
+export interface IArpeggioElement {
+  /** Note value drawn for run notes that have no `duration` of their own. */
+  runDuration: DurationType;
+  /** What to do with a run note whose pitch is not in the target chord. */
+  unmatched: 'lv' | 'skip';
+  /** Draw an `l.v.` label on the laissez-vibrer ties this group produces. */
+  lvLabel: boolean;
+  readonly flatElements: NoteChordOrRestElementType[];
+  /** The run `<music-note>`s — every `<music-note>` child except the last element child. */
+  readonly runElements: NoteElementType[];
+  /** The target chord/note — the last element child, or null when malformed. */
+  readonly targetElement: NoteOrChordElementType | null;
+}
+
 export interface IStaffElementBase {
   group: StaffGroupType | null;
   groupId: string | null;
@@ -171,6 +253,7 @@ export type ChordElementType = HTMLElement & IChordElement;
 export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
+export type ArpeggioElementType = HTMLElement & IArpeggioElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -191,6 +274,15 @@ export type NoteLikeElementType =
 export type ClefMarkerPlacement = {
   afterElementIndex: number;
   element: ClefElementType;
+};
+
+// A `<music-arpeggio>` group found in a staff's slotted content. `runIndices`
+// and `targetIndex` are indices into the resulting flatElements array (the run
+// notes and the final chord/note, which all render as ordinary elements).
+export type ArpeggioGroupPlacement = {
+  runIndices: number[];
+  targetIndex: number;
+  element: ArpeggioElementType;
 };
 
 export type YCoordinates = Partial<Record<NoteLetterOctave, number>>;

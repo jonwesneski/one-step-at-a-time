@@ -1,4 +1,5 @@
 import type {
+  ArpeggioType,
   ArticulationType,
   ClefType,
   DurationType,
@@ -6,6 +7,7 @@ import type {
   GraceDuration,
   GraceSlur,
   GraceType,
+  HairpinKind,
   Mode,
   Note,
   Octave,
@@ -22,6 +24,7 @@ export const MUSIC_NOTE = 'music-note';
 export const MUSIC_REST = 'music-rest';
 export const MUSIC_CHORD = 'music-chord';
 export const MUSIC_TUPLET = 'music-tuplet';
+export const MUSIC_ARPEGGIO = 'music-arpeggio';
 export const MUSIC_GUITAR_NOTE = 'music-guitar-note';
 export const MUSIC_GUITAR_CHORD = 'music-guitar-chord';
 export const MUSIC_MEASURE = 'music-measure';
@@ -46,6 +49,7 @@ export const MUSIC_NOTE_NODE = MUSIC_NOTE.toUpperCase();
 export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
 export const MUSIC_CHORD_NODE = MUSIC_CHORD.toUpperCase();
 export const MUSIC_TUPLET_NODE = MUSIC_TUPLET.toUpperCase();
+export const MUSIC_ARPEGGIO_NODE = MUSIC_ARPEGGIO.toUpperCase();
 export const MUSIC_GUITAR_NOTE_NODE = MUSIC_GUITAR_NOTE.toUpperCase();
 export const MUSIC_GUITAR_CHORD_NODE = MUSIC_GUITAR_CHORD.toUpperCase();
 export const MUSIC_MEASURE_NODE = MUSIC_MEASURE.toUpperCase();
@@ -60,6 +64,7 @@ export const NOTE_EVENTS = {
   CONNECTOR_ATTRIBUTE_CHANGE: 'connector-attribute-change',
   NOTE_Y_CHANGE: 'note-y-change',
   DYNAMIC_ATTRIBUTE_CHANGE: 'dynamic-attribute-change',
+  ARPEGGIO_ATTRIBUTE_CHANGE: 'arpeggio-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',
@@ -197,6 +202,27 @@ export const ARTICULATIONS: ArticulationType[] = [
 ];
 
 export const STRESSES: StressType[] = ['stressed', 'unstressed'];
+
+/** Hairpin directions — used by the `arpeggio-hairpin` attribute (a dynamic
+ * change drawn as a vertical wedge through the arpeggiated chord). */
+export const HAIRPIN_KINDS: HairpinKind[] = ['crescendo', 'decrescendo'];
+
+export const ARPEGGIOS: ArpeggioType[] = [
+  'up',
+  'up-arrow',
+  'down',
+  'non-arpeggiate',
+];
+
+/** `<music-arpeggio>` `unmatched` attribute — what to do with a run note whose
+ * pitch is not in the target chord. */
+export const ARPEGGIO_UNMATCHED_MODES = ['lv', 'skip'] as const;
+
+/** Note value drawn for `<music-arpeggio>` run notes that set no `duration`. */
+export const ARPEGGIO_RUN_DEFAULT_DURATION: DurationType = 'thirtysecond';
+
+/** Accepted values of the `tie` attribute on `<music-note>` / `<music-chord>`. */
+export const TIE_VALUES = ['start', 'end', 'laissez-vibrer'] as const;
 
 export const GRACE_TYPES: GraceType[] = ['acciaccatura', 'appoggiatura'];
 

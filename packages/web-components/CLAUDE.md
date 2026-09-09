@@ -24,6 +24,8 @@ Some features may be unavailable or degraded when elements are used outside thei
       │   ├─ <music-note>        — note/note.ts
       │   ├─ <music-chord>       — chord/chord.ts
       │   │   └─ <music-note>    (children)
+      │   ├─ <music-tuplet>      — tuplet/tuplet.ts (wraps notes/chords/rests as a tuplet)
+      │   ├─ <music-arpeggio>    — arpeggio/arpeggio.ts (written-out arpeggio: a run of notes tied into a final chord; run consumes no beat time. NOT the `arpeggio` wavy-line attribute)
       │   └─ <music-clef>        — clef/clef.ts (mid-stream clef change; zero beat-duration)
       ├─ <music-staff-guitar-tab>  — staffGuitarTab/staffGuitarTab.ts
       └─ <music-staff-vocal>  — staffVocal/staffVocal.ts
@@ -83,7 +85,10 @@ one-step-at-a-time/
 │                   ├── natural.ts
 │                   ├── doubleSharp.ts
 │                   ├── doubleFlat.ts
-│                   └── curve.ts
+│                   ├── curve.ts
+│                   └── arpeggio.ts          # …also articulations, dynamics, graceNotes, ledgerLines, rest, staffGroup, tuplet
+├── scripts/
+│   └── extract-glyphs.mjs   # author-time-only: extract engraved glyph outlines → paste PATH_D consts into svgCreator/*
 ├── jest.config.js   # Nx-based Jest config
 └── tsconfig.base.json
 ```
@@ -192,9 +197,13 @@ Features land in one of two shapes; steps are tagged accordingly:
     `StaffGuitarTabElement` adds its own `observedAttributes`/`attributeChangedCallback` override
     that re-resolves the inherited base field, since each concrete class declares its own
     `observedAttributes`.
-14. `[A][B]` **Stories (near-universal)** — add/extend colocated `<component>.stories.ts`
-    (Type A → `note.stories.ts`; Type B → `staff` / `composition` stories), using option
-    arrays from `../utils` and strong types from `../types/theory`. For both Type A and Type B see if you can extend an existing story rather than making more new stories. If the feature is small like adding 1 or 2 attributes and their total number of possible values are small consider extending existing stories; otherwise you can plan for new stories
+14. `[A][B]` **Stories (near-universal)** — one `.stories.ts` = one sidebar leaf (see Storybook
+    Stories below). A note/chord attribute that renders standalone extends `note.stories.ts` /
+    `chord.stories.ts`; a staff/composition-rendered feature gets its own
+    `Universal Notations/<Feature>` file (colocated with its `rules`/`svgCreator` code), added
+    to the `storySort` order in `.storybook/preview.ts` — **not** appended to `staff` /
+    `composition`. Use option arrays from `../utils` and strong types from `../types/theory`.
+    Prefer extending an existing story in the right leaf over adding a new one.
 15. `[A][B]` **Tests (near-universal; tiers are conditional)** — Type A: `note.test.ts` +
     `chord.test.ts`. Type B: new `rules/<feature>Rules.test.ts` + `staffClassicalBase.test.ts`.
     Add a `*.browser-test.ts` **only when** layout/geometry/resize is involved.
@@ -401,7 +410,7 @@ A brace or bracket is an **additional** decoration, drawn further left, spanning
 - `StaffElementBase#group` (getter/setter, values `'grand' | 'bracket'`, backed by the `group` attribute) marks a staff as wanting a connector. `group="grand"` membership is always **implicit**: a grand staff pairs with its immediate next sibling — no shared identifier needed, and therefore always joins exactly two staves (matches the piano/harp use case it exists for). `group="bracket"` supports two ways to declare membership — see `StaffElementBase#groupId` below.
 - `StaffElementBase#groupId` (getter/setter, plain string, backed by the `group-id` attribute) is an optional shared identifier for `group="bracket"` staves that lets a bracket span more than two staves (e.g. a 4-staff SATB choir): every staff carrying the same `group-id` value joins one bracket, however many that is. Staves sharing a `group-id` must be contiguous siblings. Leave `group-id` unset for a plain 2-staff bracket — it falls back to the same implicit pair-with-next-sibling behavior as `group="grand"`. Meaningless on `group="grand"` staves (ignored).
 - `rules/staffGroupRules.ts`'s `resolveStaffGroups(entries: { group, groupId }[])` is the pure resolution/validation function — kept separate from `measure.ts` specifically so it's unit-testable, since jsdom's `ResizeObserver` polyfill (`jest.setup.ts`) is a no-op that never fires, meaning `measure.ts`'s actual rendering path only ever runs in real-browser `*.browser-test.ts` tests. It warns and skips (without cascading past the offending span) when: a grouped staff has no next sibling, its next sibling also declares its own `group`, a `group-id` matches only one staff, or a `group-id` reappears in a second, non-contiguous run.
-- `measure.ts`'s `#renderGroupConnectors()` turns each resolved span into a positioned `createBraceSvg()`/`createBracketSvg()` glyph (`utils/svgCreator/brace.ts`) in a `.group-connectors` overlay, re-run alongside the existing resize-driven `#updateConnectorVisibility()` pass (same trigger as the plain barline). A span's height scales with however many staves it covers (`STAFF_SLOT_HEIGHT_PX * count + STAFF_SLOT_GAP_PX * (count - 1)`), so both glyph renderers must support an arbitrary span, not just a fixed 2-staff gap. A brace/bracket is a system-start decoration, like the clef/key/time signature (see `showDescribe` under Responsive Layout above): `#renderGroupConnectors()` only draws for the first measure of each visual row (`#isFirstInRow()`, the same 5px top-diff comparison `#updateConnectorVisibility()` already used for the plain barline), clearing any glyph on every other measure in the row even if their own staves also declare `group`.
+- `measure.ts`'s `#renderGroupConnectors()` turns each resolved span into a positioned `createBraceSvg()`/`createBracketSvg()` glyph (`utils/svgCreator/staffGroup.ts`) in a `.group-connectors` overlay, re-run alongside the existing resize-driven `#updateConnectorVisibility()` pass (same trigger as the plain barline). A span's height scales with however many staves it covers (`STAFF_SLOT_HEIGHT_PX * count + STAFF_SLOT_GAP_PX * (count - 1)`), so both glyph renderers must support an arbitrary span, not just a fixed 2-staff gap. A brace/bracket is a system-start decoration, like the clef/key/time signature (see `showDescribe` under Responsive Layout above): `#renderGroupConnectors()` only draws for the first measure of each visual row (`#isFirstInRow()`, the same 5px top-diff comparison `#updateConnectorVisibility()` already used for the plain barline), clearing any glyph on every other measure in the row even if their own staves also declare `group`.
 - Since the brace/bracket glyph is drawn with a negative `left` (poking out past the measure's own box, see above), `measure.ts`'s `#renderGroupConnectors()` also toggles a `.has-group-connector` class on the `<music-measure>` host itself whenever it resolves at least one group for the current (first-in-row) measure. A `:host(.has-group-connector)` rule reserves that space via `margin-left` (the same `max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX)` sizing). Because this lives on the measure rather than on `composition.ts`, it applies identically whether or not a `<music-composition>` ancestor is present — a standalone `<music-measure>` with a grouped staff reserves its own space, and a composition gets it for free per-row rather than needing its own separate, whole-composition-wide reservation.
 - **Reactivity**: `group`/`group-id` changes on an already-connected staff are picked up immediately, not just on resize. Each concrete staff subclass observes `group`/`group-id` and, on change, calls `StaffElementBase#dispatchGroupAttributeChange()` (`staffBase.ts`), which dispatches a bubbling/composed `STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE` custom event (same dispatch shape as `CLEF_EVENTS.ATTRIBUTE_CHANGE`/`NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE`). `measure.ts` listens for it directly to re-run `#updateConnectorVisibility()`/`#renderGroupConnectors()` (which also re-toggles `.has-group-connector`); `composition.ts` listens for it in `#observeForRedraws()` to re-run `#scheduleRedraw()`, whose downstream row/describe recalculation lets each measure's own reservation take effect. The staff's own shadow DOM still never renders differently based on `group`/`group-id` — this is purely a notify-ancestors path.
 
@@ -409,9 +418,9 @@ A brace or bracket is an **additional** decoration, drawn further left, spanning
 
 - **`staffGuitarTab.ts`**: `onDisconnectedCallback` is still an empty stub
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
-- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation. Ledger lines (both main-note and grace-note) require a staff-provided Y position, and grace-note accidentals fall back to suffix-driven rendering (no key-signature suppression) outside a staff
+- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation. Ledger lines (both main-note and grace-note) require a staff-provided Y position, and grace-note accidentals fall back to suffix-driven rendering (no key-signature suppression) outside a staff. An arpeggio sign renders standalone but reserves no leftward layout space (like grace notes); the `sempre arpeggiando` passage instruction renders its own text next to a standalone element but does not propagate implied signs to the elements that follow it. The `arpeggio-hairpin` vertical dynamic-change hairpin (wedge + both `-from` / `-to` letters) renders element-local on a standalone `<music-chord>`, like the sign; its continuous cross-staff form still needs a `<music-measure>` ancestor, and on a lone `<music-note>` the letters stay at the wedge ends rather than being pushed clear of a staff. A `<music-arpeggio>` (written-out arpeggio) used with no `<music-staff>` renders its run notes and target chord as plain elements — no auto-beam, no synthesized ties, no bar-fit exemption; inside a bare staff it is fully supported. A `tie="laissez-vibrer"` renders its notehead standalone but the l.v. curve is only drawn by a staff/composition connector pass
 - **Clef support**: only `treble` and `bass` have data in `rules/clefRules.ts`'s `CLEF_DEFINITIONS` today (`ClefType` is intentionally kept to those two rather than a wider, partially-backed union — see the `// TODO` above its declaration in `types/theory.ts`). Adding alto/tenor is a two-part change: a `ClefDefinition` entry plus a new clef glyph in `utils/svgCreator/clefs.ts`.
-- **SMuFL glyph extraction (transition in progress)**: the repo carries SMuFL infrastructure for deriving notation glyphs from a real engraving font instead of hand-computing bezier shapes — `README.md`'s "Drawing" section, `download-smufl-font.sh`, and the downloaded `smufl/Bravura.otf` + `smufl/bravura_metadata.json` assets. So far only the brace and bracket glyphs (`createBraceSvg()` / `createBracketSvg()` in `utils/svgCreator/brace.ts`) have actually been pulled from it, and by hand via one-off scripts rather than a repeatable pipeline reading `bravura_metadata.json`. Every other `svgCreator/` glyph (clefs, accidentals, noteheads, etc.) is still hand-drawn. Prefer extracting from the SMuFL font/metadata already in the repo over hand-computing new glyphs going forward; brace.ts's source comments deliberately avoid naming SMuFL/Bravura directly — this entry is the canonical place for that context.
+- **SMuFL glyph extraction (transition in progress)**: the repo carries SMuFL infrastructure for deriving notation glyphs from a real engraving font instead of hand-computing bezier shapes — the "Drawing / SMuFL glyphs" section of `README.md`, `download-smufl-font.sh`, and the downloaded `smufl/Bravura.otf` + `smufl/bravura_metadata.json` assets. The brace and bracket glyphs (`createBraceSvg()` / `createBracketSvg()` in `utils/svgCreator/staffGroup.ts`) were pulled by hand via a discarded one-off script; the arpeggio wiggle (`utils/svgCreator/arpeggio.ts`) was the first glyph extracted through the now-checked-in `scripts/extract-glyphs.mjs` (a generic, argument-driven extractor — `pnpm --filter @one-step-at-a-time/web-components extract-glyphs -- <glyphName>[:rotate90] ...`). That script is author-time-only — never run by the build, tests, CI, or the bundle; `opentype.js` is a dev-only dependency; the committed `*_PATH_D` string constants in `svgCreator/` are the source of truth and the only thing that ships. Every other `svgCreator/` glyph (clefs, accidentals, noteheads, etc.) is still hand-drawn. Prefer extracting via `scripts/extract-glyphs.mjs` over hand-computing new glyphs going forward, adding the glyph's codepoint to that script's table. Note: the checked-in `bravura_metadata.json` has drifted from the checked-in `.otf` (bounding boxes no longer match), so the extractor reads geometry from the font outline directly. Per convention, `svgCreator/` source comments deliberately avoid naming SMuFL/Bravura — this entry is the canonical place for that context.
 
 ## Build & Test
 
@@ -422,30 +431,59 @@ A brace or bracket is an **additional** decoration, drawn further left, spanning
 
 ## Storybook Stories
 
-Story files are colocated with their component using the `<component>.stories.ts` naming convention (e.g. `src/note/note.stories.ts`). The exception is feature-level utilities: `src/utils/svgCreator/beams.stories.ts`.
+Story files are colocated with the code they exercise (`src/note/note.stories.ts`,
+`src/utils/svgCreator/beams.stories.ts`). **One `.stories.ts` file = one `title` = one sidebar
+leaf.** The sidebar tree is entirely the `/`-delimited `title` path plus the `storySort` order
+in `.storybook/preview.ts` — there is no `Components/` wrapper. A feature is organised by _what
+it is_, not by which element renders it in the example: a feature that only draws inside a
+staff/composition pass (ties, slurs, dynamics, hairpins, beams, tuplet brackets, arpeggio
+signs, grace notes, clef changes) lives under `Universal Notations/…` in its own file; a
+feature that renders standalone on a note/chord (articulations, stress, fermata, single
+accidentals) stays in that element's file.
 
-**Existing story files:**
-`chord`, `clef`, `composition`, `measure`, `note`, `rest`, `staff`, `staffGuitarTab`, `staffVocal`, `utils/svgCreator/beams`
+**Sidebar leaves → files** (this is also the `storySort` order):
+
+| Leaf                                                                                    | File                                                                                                                                          |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Note`                                                                                  | `src/note/note.stories.ts`                                                                                                                    |
+| `Chord`                                                                                 | `src/chord/chord.stories.ts`                                                                                                                  |
+| `Rest`                                                                                  | `src/rest/rest.stories.ts`                                                                                                                    |
+| `Clef`                                                                                  | `src/clef/clef.stories.ts` (standalone glyph)                                                                                                 |
+| `Staff`                                                                                 | `src/staff/staff.stories.ts` (staff basics, ledger lines, key-sig accidentals)                                                                |
+| `Measure`                                                                               | `src/measure/measure.stories.ts`                                                                                                              |
+| `Composition`                                                                           | `src/composition/composition.stories.ts`                                                                                                      |
+| `Composition/Staff Groups`                                                              | `src/composition/staffGroups.stories.ts` (grand staff, brace, bracket)                                                                        |
+| `Universal Notations/Ties`                                                              | `src/utils/svgCreator/ties.stories.ts`                                                                                                        |
+| `Universal Notations/Slurs`                                                             | `src/utils/svgCreator/slurs.stories.ts`                                                                                                       |
+| `Universal Notations/Dynamics & Hairpins`                                               | `src/utils/svgCreator/dynamics.stories.ts`                                                                                                    |
+| `Universal Notations/Tuplets`                                                           | `src/tuplet/tuplet.stories.ts`                                                                                                                |
+| `Universal Notations/Arpeggio`                                                          | `src/arpeggio/arpeggio.stories.ts` (`<music-arpeggio>` **and** the `arpeggio`/`arpeggiate` attribute, incl. cross-staff)                      |
+| `Universal Notations/Grace Notes`                                                       | `src/utils/svgCreator/graceNotes.stories.ts`                                                                                                  |
+| `Universal Notations/Clef Changes`                                                      | `src/clef/clefChanges.stories.ts`                                                                                                             |
+| `Universal Notations/Beams`                                                             | `src/utils/svgCreator/beams.stories.ts`                                                                                                       |
+| `Instruments/Voice`                                                                     | `src/staffVocal/staffVocal.stories.ts`                                                                                                        |
+| `Instruments/Guitar`                                                                    | `src/staffGuitarTab/staffGuitarTab.stories.ts`                                                                                                |
+| `Instruments/Strings`, `Instruments/Winds & Brass`, `Instruments/Percussion & Keyboard` | `src/{strings,windsBrass,percussionKeyboard}.stories.ts` — placeholders (`tags: ['!autodocs']`, one `Planned` story) until the notations land |
 
 **Standard imports:**
 
 ```ts
-import type { Meta, StoryObj } from '@storybook/web-components';
+import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index'; // registers all custom elements
 import { DURATIONS, NOTES, OCTAVES } from '../utils'; // for control option arrays
 ```
 
-**Meta shape:** `title: 'Components/...'`, `component: '<tag-name>'` (e.g. `'music-note'` —
-links the story to its `custom-elements.json` entry so the Docs tab renders the attribute
-table), `tags: ['autodocs']`, optional global `render`/`argTypes`/`args`.
+**Meta shape:** nested `title` path (e.g. `'Universal Notations/Ties'`), `component:
+'<tag-name>'` where one element dominates (links the Docs tab to the `custom-elements.json`
+attribute table), `tags: ['autodocs']`, optional global `render`/`argTypes`/`args`.
 
 **Consumer guides** are MDX under `src/*.mdx` / `src/guides/*.mdx` (`Introduction`,
 `Getting Started`, `Framework Integration`, `Concepts`). `.storybook/preview.ts` loads the
 manifest via `setCustomElementsManifest`. The whole Storybook is deployed to GitHub Pages by
 `.github/workflows/docs.yml`.
 
-**Story naming conventions:** `Standalone`, `InStaff`, key-signature variants (`CMajor`, `GMajor`, …), feature combos (`WithChords`, `WithAccidentals`, `WithTies`, etc.).
+**Story naming conventions:** `Standalone`, `InStaff`, key-signature variants (`CMajor`, `GMajor`, …), feature combos (`WithChords`, `WithAccidentals`, `NoteToNote`, etc.).
 
 **No decorators or play functions** — stories are self-contained `render` functions using Lit `html` tag.
 

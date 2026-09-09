@@ -12,7 +12,10 @@ import type {
   TimeSignature,
 } from '../types/theory';
 import { COMMON_ATTRIBUTES, MUSIC_NOTE, MUSIC_STAFF } from '../utils/consts';
-import { GRACE_SCALE } from '../utils/notationDimensions';
+import {
+  ARPEGGIO_FOOTPRINT_PX,
+  GRACE_SCALE,
+} from '../utils/notationDimensions';
 import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
   NOTE_HEAD_RADIUS_PX,
@@ -1005,6 +1008,196 @@ describe('grace notes', () => {
   });
 });
 
+describe('tie="laissez-vibrer"', () => {
+  it('round-trips the value (and the lv alias) plus lv-label', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.tie = 'laissez-vibrer';
+    expect(noteElement.getAttribute('tie')).toBe('laissez-vibrer');
+    expect(noteElement.tie).toBe('laissez-vibrer');
+
+    noteElement.setAttribute('tie', 'lv');
+    expect(noteElement.tie).toBe('laissez-vibrer');
+
+    noteElement.lvLabel = true;
+    expect(noteElement.hasAttribute('lv-label')).toBe(true);
+    noteElement.lvLabel = false;
+    expect(noteElement.hasAttribute('lv-label')).toBe(false);
+  });
+
+  it('still accepts start/end and rejects junk', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    noteElement.setAttribute('tie', 'start');
+    expect(noteElement.tie).toBe('start');
+    noteElement.setAttribute('tie', 'sideways');
+    expect(noteElement.tie).toBeNull();
+  });
+});
+
+describe('arpeggio', () => {
+  it('round-trips the arpeggio slot between property and attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.arpeggio = 'up-arrow';
+    expect(noteElement.getAttribute('arpeggio')).toBe('up-arrow');
+    expect(noteElement.arpeggio).toBe('up-arrow');
+  });
+
+  it('ignores unrecognized arpeggio values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.setAttribute('arpeggio', 'sideways');
+    expect(noteElement.arpeggio).toBeNull();
+  });
+
+  it('clears the arpeggio slot when set to null', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.arpeggio = 'up';
+    noteElement.arpeggio = null;
+
+    expect(noteElement.arpeggio).toBeNull();
+    expect(noteElement.getAttribute('arpeggio')).toBeNull();
+  });
+
+  it('renders the wave group only when set', () => {
+    const plain = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(plain);
+    expect(plain.shadowRoot?.querySelector('.arpeggio')).toBeNull();
+
+    plain.arpeggio = 'up';
+    const sign = plain.shadowRoot?.querySelector('.arpeggio');
+    expect(sign).not.toBeNull();
+    expect(sign?.classList.contains('arpeggio-up')).toBe(true);
+    expect(sign?.querySelector('.arpeggio-wave')).not.toBeNull();
+    expect(sign?.querySelector('.arpeggio-arrowhead')).toBeNull();
+    expect(sign?.querySelector('.arpeggio-bracket')).toBeNull();
+  });
+
+  it('draws an arrowhead only for the arrow variants', () => {
+    const upArrow = document.createElement(MUSIC_NOTE) as NoteElementType;
+    upArrow.setAttribute('arpeggio', 'up-arrow');
+    document.body.appendChild(upArrow);
+    expect(
+      upArrow.shadowRoot?.querySelector('.arpeggio-arrowhead')
+    ).not.toBeNull();
+
+    const down = document.createElement(MUSIC_NOTE) as NoteElementType;
+    down.setAttribute('arpeggio', 'down');
+    document.body.appendChild(down);
+    expect(
+      down.shadowRoot?.querySelector('.arpeggio-arrowhead')
+    ).not.toBeNull();
+  });
+
+  it('draws a bracket (no wave, no arrow) for non-arpeggiate', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('arpeggio', 'non-arpeggiate');
+    document.body.appendChild(noteElement);
+
+    const sign = noteElement.shadowRoot?.querySelector('.arpeggio');
+    expect(sign?.querySelector('.arpeggio-bracket')).not.toBeNull();
+    expect(sign?.querySelector('.arpeggio-wave')).toBeNull();
+  });
+});
+
+describe('arpeggio-hairpin', () => {
+  function makeArpeggioNote(
+    attrs: Record<string, string> = {}
+  ): NoteElementType {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('arpeggio', 'up');
+    for (const [key, value] of Object.entries(attrs)) {
+      note.setAttribute(key, value);
+    }
+    document.body.appendChild(note);
+    return note;
+  }
+
+  it('round-trips arpeggio-hairpin between property and attribute', () => {
+    const note = makeArpeggioNote();
+    note.arpeggioHairpin = 'crescendo';
+    expect(note.getAttribute('arpeggio-hairpin')).toBe('crescendo');
+    expect(note.arpeggioHairpin).toBe('crescendo');
+  });
+
+  it('normalizes diminuendo to decrescendo', () => {
+    const note = makeArpeggioNote({ 'arpeggio-hairpin': 'diminuendo' });
+    expect(note.arpeggioHairpin).toBe('decrescendo');
+  });
+
+  it('ignores an unrecognized arpeggio-hairpin value', () => {
+    const note = makeArpeggioNote({ 'arpeggio-hairpin': 'swell' });
+    expect(note.arpeggioHairpin).toBeNull();
+  });
+
+  it('round-trips the from/to dynamic letters', () => {
+    const note = makeArpeggioNote({
+      'arpeggio-hairpin': 'crescendo',
+      'arpeggio-hairpin-from': 'p',
+      'arpeggio-hairpin-to': 'f',
+    });
+    expect(note.arpeggioHairpinFrom).toBe('p');
+    expect(note.arpeggioHairpinTo).toBe('f');
+  });
+
+  it('renders the wedge and both dynamic letters element-local', () => {
+    const note = makeArpeggioNote({
+      'arpeggio-hairpin': 'crescendo',
+      'arpeggio-hairpin-from': 'p',
+      'arpeggio-hairpin-to': 'f',
+    });
+    const wedge = note.shadowRoot?.querySelector('.arpeggio-hairpin');
+    expect(wedge).not.toBeNull();
+    expect(wedge?.querySelectorAll('path')).toHaveLength(2);
+    expect(note.shadowRoot?.querySelectorAll('.dynamic-marking')).toHaveLength(
+      2
+    );
+  });
+
+  it('does not render the wedge without a rolled arpeggio', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(note);
+    note.setAttribute('arpeggio-hairpin', 'crescendo');
+    expect(note.shadowRoot?.querySelector('.arpeggio-hairpin')).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('does not render the wedge for non-arpeggiate', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation();
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('arpeggio', 'non-arpeggiate');
+    document.body.appendChild(note);
+    note.setAttribute('arpeggio-hairpin', 'crescendo');
+    expect(note.shadowRoot?.querySelector('.arpeggio-hairpin')).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('flips the wedge point end between crescendo and diminuendo', () => {
+    const cresc = makeArpeggioNote({ 'arpeggio-hairpin': 'crescendo' });
+    const dim = makeArpeggioNote({ 'arpeggio-hairpin': 'diminuendo' });
+
+    const pointY = (note: NoteElementType): number => {
+      const d =
+        note.shadowRoot
+          ?.querySelector('.arpeggio-hairpin path')
+          ?.getAttribute('d') ?? '';
+      // "M <x> <pointY> L <x> <openY>"
+      return Number(d.split(/\s+/)[2]);
+    };
+    // Upward roll: crescendo narrows at the bottom (larger Y), diminuendo at
+    // the top (smaller Y).
+    expect(pointY(cresc)).toBeGreaterThan(pointY(dim));
+  });
+});
+
 const TREBLE_STAFF_Y: Record<string, number> = {
   C6: 10,
   B5: 15,
@@ -1220,6 +1413,43 @@ describe('staff integration', () => {
       const withGrace = minWidths[minWidths.length - 1];
 
       expect(withGrace).toBe(withoutGrace + 25);
+    });
+
+    it('grows the staff min-width when a note gains an arpeggio sign', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const note = makeQuarterNote('E', 4);
+      renderNotes(staff, [note]);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      note.setAttribute('arpeggio', 'up');
+      const withSign = minWidths[minWidths.length - 1];
+
+      expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
+    });
+
+    it('re-runs staff spacing when arpeggio-for is toggled on a connected note', () => {
+      const staff = makeStaff();
+      const minWidths: number[] = [];
+      staff.addEventListener('staff-min-width', (event) => {
+        minWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      const note = makeQuarterNote('E', 4);
+      renderNotes(staff, [note]);
+      const withoutSign = minWidths[minWidths.length - 1];
+
+      note.setAttribute('arpeggio-for', 'top');
+      const withSign = minWidths[minWidths.length - 1];
+      expect(withSign).toBeCloseTo(withoutSign + ARPEGGIO_FOOTPRINT_PX, 5);
+
+      note.removeAttribute('arpeggio-for');
+      const removed = minWidths[minWidths.length - 1];
+      expect(removed).toBeCloseTo(withoutSign, 5);
     });
 
     it('suppresses grace accidentals covered by the key signature and shows naturals', () => {

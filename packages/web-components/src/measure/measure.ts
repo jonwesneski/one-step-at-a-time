@@ -1,16 +1,32 @@
+import {
+  type ArpeggioEntry,
+  resolveArpeggioSpans,
+} from '../rules/arpeggioRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
-import type { StaffElementBaseType } from '../types/elements';
+import type {
+  NoteOrChordElementType,
+  StaffElementBaseType,
+} from '../types/elements';
+import type { HairpinKind } from '../types/theory';
 import {
+  appendArpeggioHairpin,
   COMMON_ATTRIBUTES,
+  createArpeggioSvg,
   createBraceSvg,
   createBracketSvg,
   isStaffNodeName,
+  MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
+  NOTE_EVENTS,
   STAFF_EVENTS,
+  SVG_NS,
 } from '../utils';
 import {
+  ARPEGGIO_CHORD_GAP_PX,
+  ARPEGGIO_WAVE_WIDTH_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
   BRACKET_EXTRA_HEIGHT_PX,
@@ -97,8 +113,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // can still shrink toward it before the row wraps.
       this.style.flex = measureFlexValue(maxNaturalWidth);
       this.style.minWidth = `${Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX)}px`;
+      // Staves have just (re)laid out their notes — refresh any continuous
+      // cross-staff arpeggio that spans them.
+      this.#redrawArpeggios();
     };
     #boundUpdateConnectorVisibility: () => void;
+    #boundRedrawArpeggios = () => this.#redrawArpeggios();
 
     constructor() {
       super();
@@ -166,6 +186,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
+      this.addEventListener(
+        NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE,
+        this.#boundRedrawArpeggios
+      );
     }
 
     disconnectedCallback(): void {
@@ -178,6 +202,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
+      this.removeEventListener(
+        NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE,
+        this.#boundRedrawArpeggios
+      );
       this.#staffWidths.clear();
     }
 
@@ -188,6 +216,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     ): void {
       if (oldValue !== newValue) {
         this.render();
+        // render() replaced the shadow DOM, so the connector overlays are now
+        // empty while the paired arpeggio endpoints stay locally suppressed.
+        // A `number` change triggers no staff relayout or arpeggio event, so
+        // nothing else redraws them — do it here.
+        if (this.isConnected) {
+          this.#updateConnectorVisibility();
+        }
       }
     }
 
@@ -236,10 +271,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           .group-connectors > * {
             position: absolute;
           }
+
+          .arpeggio-connectors {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div>
           <div class="staff-connector"></div>
           <div class="group-connectors"></div>
+          <!-- must be <svg>: holds <g> arpeggio-sign nodes that share this
+               element's coordinate space; inset:0 aligns that space 1:1 with
+               the measure box so #redrawArpeggios can position with raw px -->
+          <svg class="arpeggio-connectors"></svg>
           <span>${this.number}</span>
           <slot></slot>
         </div>
@@ -268,6 +315,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       this.#renderGroupConnectors(isFirstInRow);
       staffConnector.classList.toggle('hidden', !isFirstInRow);
+      this.#redrawArpeggios();
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -301,6 +349,146 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // behavior). `isFirstInRow` is computed once by the caller
     // (#updateConnectorVisibility) — when false, any glyph left over from a
     // previous layout pass is cleared and nothing new is resolved/drawn.
+    // An unbroken cross-staff arpeggio (one continuous wavy line through both
+    // staves of a grand staff) is drawn here rather than per-staff: the staff
+    // SVG can't reach across the inter-staff gap. Pairing/validation is the
+    // pure resolveArpeggioSpans (rules/arpeggioRules.ts); this method only
+    // measures the paired elements, suppresses their own per-staff signs, and
+    // draws the single spanning glyph. A "broken" arpeggio (each hand rolled
+    // independently) needs nothing here — it is just two per-staff signs.
+    #redrawArpeggios() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.arpeggio-connectors'
+      );
+      if (!overlay) {
+        return;
+      }
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+      // `:defined` skips not-yet-upgraded custom elements — writing our internal
+      // properties on those would create shadowing own data properties.
+      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
+      const perStaffElements = staves.map(
+        (staff) =>
+          Array.from(
+            staff.querySelectorAll(elementSelector)
+          ) as NoteOrChordElementType[]
+      );
+
+      const entries: ArpeggioEntry[] = [];
+      perStaffElements.forEach((elements, staffIndex) => {
+        elements.forEach((element, entryIndex) => {
+          if (element.arpeggio === null && element.arpeggioFor === null) {
+            return;
+          }
+          entries.push({
+            staffIndex,
+            entryIndex,
+            id: element.getAttribute('id'),
+            arpeggio: element.arpeggio,
+            arpeggioFor: element.arpeggioFor,
+          });
+        });
+      });
+
+      const { spans, warnings } = resolveArpeggioSpans(entries);
+      for (const warning of warnings) {
+        console.warn(`[music-measure] ${warning}`);
+      }
+
+      const spanned = new Set<NoteOrChordElementType>();
+      for (const span of spans) {
+        const upper =
+          perStaffElements[span.upper.staffIndex]?.[span.upper.entryIndex];
+        const lower =
+          perStaffElements[span.lower.staffIndex]?.[span.lower.entryIndex];
+        if (!upper || !lower) {
+          continue;
+        }
+        spanned.add(upper);
+        spanned.add(lower);
+        upper.renderArpeggioSign = false;
+        lower.renderArpeggioSign = false;
+
+        const measureRect = this.getBoundingClientRect();
+        const upperHeads = this.#headRects(upper);
+        const lowerHeads = this.#headRects(lower);
+        if (upperHeads.length === 0 || lowerHeads.length === 0) {
+          continue;
+        }
+        const topY =
+          Math.min(...upperHeads.map((r) => r.top + r.height / 2)) -
+          measureRect.top;
+        const bottomY =
+          Math.max(...lowerHeads.map((r) => r.top + r.height / 2)) -
+          measureRect.top;
+        const rightEdgeX =
+          Math.min(
+            ...upperHeads.map((r) => r.left),
+            ...lowerHeads.map((r) => r.left)
+          ) -
+          measureRect.left -
+          ARPEGGIO_CHORD_GAP_PX;
+
+        const sign = createArpeggioSvg({
+          arpeggio: span.arpeggio,
+          topY,
+          bottomY,
+          rightEdgeX,
+        });
+        if (sign) {
+          sign.classList.add('arpeggio-connector');
+          overlay.appendChild(sign);
+        }
+
+        // One continuous dynamic-change hairpin through both staves, left of
+        // the wave — read off whichever end carries `arpeggio-hairpin`.
+        const hairpinHost =
+          upper.arpeggioHairpin !== null
+            ? upper
+            : lower.arpeggioHairpin !== null
+            ? lower
+            : null;
+        if (hairpinHost !== null) {
+          const wrap = document.createElementNS(SVG_NS, 'g');
+          wrap.classList.add('arpeggio-hairpin-connector');
+          appendArpeggioHairpin(wrap, {
+            kind: hairpinHost.arpeggioHairpin as HairpinKind,
+            from: hairpinHost.arpeggioHairpinFrom,
+            to: hairpinHost.arpeggioHairpinTo,
+            arpeggio: span.arpeggio,
+            topY,
+            bottomY,
+            signLeftEdgeX: rightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+          });
+          overlay.appendChild(wrap);
+        }
+      }
+
+      // Restore the local sign on any arpeggio element no longer in a span
+      // (e.g. an `arpeggio-for` was removed).
+      for (const elements of perStaffElements) {
+        for (const element of elements) {
+          if (
+            (element.arpeggio !== null || element.arpeggioFor !== null) &&
+            !spanned.has(element)
+          ) {
+            element.renderArpeggioSign = true;
+          }
+        }
+      }
+    }
+
+    #headRects(element: NoteOrChordElementType): DOMRect[] {
+      const heads = element.shadowRoot?.querySelectorAll('.head');
+      return heads ? Array.from(heads, (h) => h.getBoundingClientRect()) : [];
+    }
+
     #renderGroupConnectors(isFirstInRow: boolean) {
       const container =
         this.shadowRoot?.querySelector<HTMLElement>('.group-connectors');

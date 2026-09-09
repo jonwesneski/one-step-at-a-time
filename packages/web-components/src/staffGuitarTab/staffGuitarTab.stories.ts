@@ -3,16 +3,15 @@ import { html } from 'lit';
 import '../index';
 
 const meta: Meta = {
-  title: 'Components/StaffGuitarTab',
+  title: 'Instruments/Guitar',
   component: 'music-staff-guitar-tab',
   tags: ['autodocs'],
-  render: () => html`<music-staff-guitar-tab> </music-staff-guitar-tab>`,
 };
 export default meta;
 
 type Story = StoryObj;
 
-export const Default: Story = {
+export const HammerOn: Story = {
   render: () => html`<music-composition>
     <music-measure>
       <music-staff-guitar-tab>
@@ -31,8 +30,4 @@ export const Default: Story = {
       </music-staff-guitar-tab>
     </music-measure>
   </music-composition>`,
-};
-
-export const WithChords: Story = {
-  render: () => html`<music-staff-guitar-tab> </music-staff-guitar-tab>`,
 };

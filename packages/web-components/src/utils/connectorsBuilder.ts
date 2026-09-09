@@ -1,20 +1,34 @@
+import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
 import {
+  ArpeggioElementType,
   ChordElementType,
   ConnectorRole,
   NoteElementType,
   NoteLikeElementType,
 } from '../types/elements';
 import {
+  MUSIC_ARPEGGIO,
   MUSIC_CHORD,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
 } from './consts';
-import { createCurveSvg, CurveBulge } from './svgCreator';
+import {
+  createCurveSvg,
+  createOpenTieSvg,
+  CurveBulge,
+  DEFAULT_BULGE_HEIGHT,
+} from './svgCreator';
 import {
   computeYHeadOffset,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
 } from './svgCreator/note';
+import {
+  ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
+  ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
+  ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+  LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+} from './notationDimensions';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -50,6 +64,19 @@ export type ConnectorPair = {
   start: NoteLikeElementType;
   end: NoteLikeElementType;
   nestingLevel: number;
+  // Set for a synthesized `<music-arpeggio>` run→chord tie: `start` is the run
+  // note, `end` is the target chord, anchored at tone `targetToneIndex`.
+  // `runNotes` is the whole run (for divided-tie obstacle detection).
+  arpeggioRun?: {
+    targetToneIndex: number;
+    runNotes: readonly NoteLikeElementType[];
+  };
+  // `tie="laissez-vibrer"` — an open-ended tie. `start === end`. For a chord,
+  // `lvToneIndex` picks the tone.
+  laissezVibrer?: boolean;
+  lvToneIndex?: number;
+  /** `l.v.` when the element sets `lv-label`. */
+  label?: string;
 };
 
 export const collectNoteLikeElements = (
@@ -60,6 +87,55 @@ export const collectNoteLikeElements = (
     .join(', ');
   const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
   return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
+};
+
+// Synthesizes the run→chord ties of every `<music-arpeggio>` under `root`.
+// These are not authored `tie` attributes, so `pairConnectors` never sees them;
+// callers concat this with `pairConnectors(collectNoteLikeElements(root))`.
+export const collectArpeggioTiePairs = (root: ParentNode): ConnectorPair[] => {
+  const pairs: ConnectorPair[] = [];
+  for (const element of Array.from(
+    root.querySelectorAll(MUSIC_ARPEGGIO)
+  ) as ArpeggioElementType[]) {
+    const runNotes = element.runElements;
+    const target = element.targetElement;
+    if (runNotes.length === 0 || target === null) {
+      continue;
+    }
+    const { pairings, warnings } = resolveArpeggioTiePairings(
+      runNotes,
+      target,
+      element.unmatched
+    );
+    for (const warning of warnings) {
+      console.warn(warning);
+    }
+    const lvLabel = element.lvLabel ? 'l.v.' : undefined;
+    for (const pairing of pairings) {
+      if (pairing.variant === 'laissez-vibrer') {
+        pairs.push({
+          kind: 'tie',
+          start: pairing.runNote as unknown as NoteLikeElementType,
+          end: pairing.runNote as unknown as NoteLikeElementType,
+          nestingLevel: 0,
+          laissezVibrer: true,
+          label: lvLabel,
+        });
+        continue;
+      }
+      pairs.push({
+        kind: 'tie',
+        start: pairing.runNote as unknown as NoteLikeElementType,
+        end: target as unknown as NoteLikeElementType,
+        nestingLevel: 0,
+        arpeggioRun: {
+          targetToneIndex: pairing.targetToneIndex,
+          runNotes: runNotes as unknown as readonly NoteLikeElementType[],
+        },
+      });
+    }
+  }
+  return pairs;
 };
 
 const readRole = (
@@ -109,6 +185,36 @@ export const pairConnectors = (
 
   notes.forEach((note, noteIndex) => {
     for (const kind of kinds) {
+      if (kind === 'tie') {
+        const raw = note.getAttribute('tie');
+        if (raw === 'laissez-vibrer' || raw === 'lv') {
+          const label = (note as { lvLabel?: boolean }).lvLabel
+            ? 'l.v.'
+            : undefined;
+          const isChord = note.tagName.toLowerCase() === MUSIC_CHORD;
+          const toneCount = isChord
+            ? Math.max(
+                1,
+                ((note as ChordElementType).staffYCoordinates ?? []).length
+              )
+            : 1;
+          for (let toneIndex = 0; toneIndex < toneCount; toneIndex++) {
+            indexedPairs.push({
+              kind: 'tie',
+              start: note,
+              end: note,
+              nestingLevel: 0,
+              startIndex: noteIndex,
+              endIndex: noteIndex,
+              laissezVibrer: true,
+              lvToneIndex: isChord ? toneIndex : undefined,
+              label,
+            });
+          }
+          continue;
+        }
+      }
+
       const role = readRole(note, CONNECTOR_ATTRS[kind]);
       if (role === null) {
         continue;
@@ -183,6 +289,9 @@ export const pairConnectors = (
     kind: pair.kind,
     start: pair.start,
     end: pair.end,
+    laissezVibrer: pair.laissezVibrer,
+    lvToneIndex: pair.lvToneIndex,
+    label: pair.label,
     nestingLevel: indexedPairs.filter(
       (other) =>
         other !== pair &&
@@ -311,8 +420,134 @@ const computeAnchor = (
   };
 };
 
+// Anchor on a specific tone of a chord, preferring the tone's real rendered
+// notehead x (so second-interval / clustered chords with displaced heads tie
+// correctly). Falls back to the chord bounding-box centre + staff Y when the
+// chord's shadow DOM is not populated (jsdom / standalone-degraded).
+const computeChordToneAnchor = (
+  chord: NoteLikeElementType,
+  toneIndex: number,
+  rootRect: DOMRect,
+  bulge: CurveBulge,
+  noteheadOffsetPx: number
+): Anchor => {
+  const chordRect = chord.getBoundingClientRect();
+  const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
+  const rowTop = getRowTop(chord, rootRect);
+
+  const heads = chord.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+    'svg.chord > svg .head'
+  );
+  const head = heads?.[toneIndex];
+  if (head) {
+    const rect = head.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      return {
+        x: rect.left + rect.width / 2 - rootRect.left,
+        y: rect.top + rect.height / 2 - rootRect.top + edgeOffset,
+        rowTop,
+      };
+    }
+  }
+
+  const yCoords = (chord as ChordElementType).staffYCoordinates;
+  if (yCoords && toneIndex >= 0 && toneIndex < yCoords.length) {
+    return {
+      x: chordRect.left + chordRect.width / 2 - rootRect.left,
+      y: chordRect.top - rootRect.top + yCoords[toneIndex] + edgeOffset,
+      rowTop,
+    };
+  }
+  return {
+    x: chordRect.left + chordRect.width / 2 - rootRect.left,
+    y: chordRect.top - rootRect.top + edgeOffset,
+    rowTop,
+  };
+};
+
 const sameRow = (a: Anchor, b: Anchor): boolean =>
   Math.abs(a.rowTop - b.rowTop) <= ROW_TOLERANCE_PX;
+
+// `createCurveSvg`'s control point is the horizontal midpoint, so x is linear
+// in t. Returns the tie curve's y at a given x, or null when x is outside the
+// span.
+const tieCurveYAt = (
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  bulge: CurveBulge,
+  x: number
+): number | null => {
+  const span = to.x - from.x;
+  if (span === 0) {
+    return null;
+  }
+  const t = (x - from.x) / span;
+  if (t <= 0 || t >= 1) {
+    return null;
+  }
+  const midY =
+    (from.y + to.y) / 2 + (bulge === 'above' ? -1 : 1) * DEFAULT_BULGE_HEIGHT;
+  const mt = 1 - t;
+  return mt * mt * from.y + 2 * mt * t * midY + t * t * to.y;
+};
+
+// True when a notehead centre in `obstacles` lies close enough to the tie curve
+// to be obscured — the tie should then be divided into two open stubs.
+const tieIsObscured = (
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  bulge: CurveBulge,
+  obstacles: readonly { x: number; y: number }[]
+): boolean =>
+  obstacles.some((obstacle) => {
+    const curveY = tieCurveYAt(from, to, bulge, obstacle.x);
+    return (
+      curveY !== null &&
+      Math.abs(curveY - obstacle.y) <= ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX
+    );
+  });
+
+// Notehead centre (root-rect space) of a note-like element, preferring the real
+// rendered `.head` rect over the element's own (tall) layout box.
+const noteheadCenter = (
+  element: NoteLikeElementType,
+  rootRect: DOMRect
+): { x: number; y: number } => {
+  const head = element.shadowRoot?.querySelector<SVGGraphicsElement>('.head');
+  const rect = (head ?? element).getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2 - rootRect.left,
+    y: rect.top + rect.height / 2 - rootRect.top,
+  };
+};
+
+// Notehead centres (root-rect space) of a chord's tones other than `exceptIndex`.
+const chordOtherToneCenters = (
+  chord: NoteLikeElementType,
+  exceptIndex: number,
+  rootRect: DOMRect
+): { x: number; y: number }[] => {
+  const heads = chord.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+    'svg.chord > svg .head'
+  );
+  if (!heads) {
+    return [];
+  }
+  const centers: { x: number; y: number }[] = [];
+  heads.forEach((head, index) => {
+    if (index === exceptIndex) {
+      return;
+    }
+    const rect = head.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      centers.push({
+        x: rect.left + rect.width / 2 - rootRect.left,
+        y: rect.top + rect.height / 2 - rootRect.top,
+      });
+    }
+  });
+  return centers;
+};
 
 const pickBulge = (note: NoteLikeElementType): CurveBulge => {
   // Stems up → notehead on the staff, bulge above (opposite side of stem tip? no,
@@ -374,6 +609,115 @@ export const buildConnectorSvgs = (
     const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
     const style = pair.kind === 'slide' ? 'straight' : 'smooth';
     const label = CONNECTOR_LABELS[pair.kind];
+
+    // Laissez-vibrer: an open-ended tie curving forward off the notehead.
+    if (pair.laissezVibrer) {
+      const isChord = pair.start.tagName.toLowerCase() === MUSIC_CHORD;
+      const coords =
+        (pair.start as unknown as ChordElementType).staffYCoordinates ?? [];
+      const lvBulge =
+        isChord && coords.length > 1 && pair.lvToneIndex !== undefined
+          ? pickChordNoteBulge(pair.start, coords, pair.lvToneIndex)
+          : startBulge;
+      const anchor =
+        isChord && pair.lvToneIndex !== undefined
+          ? computeChordToneAnchor(
+              pair.start,
+              pair.lvToneIndex,
+              rootRect,
+              lvBulge,
+              TIE_NOTEHEAD_OFFSET_PX
+            )
+          : computeAnchor(
+              pair.start,
+              rootRect,
+              lvBulge,
+              TIE_NOTEHEAD_OFFSET_PX
+            );
+      elements.push(
+        createOpenTieSvg({
+          anchor: { x: anchor.x, y: anchor.y },
+          direction: 1,
+          length: LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+          bulge: lvBulge,
+          label: pair.label,
+        })
+      );
+      continue;
+    }
+
+    // Synthesized `<music-arpeggio>` run→chord tie: run note (real box) to one
+    // tone of the target chord, fanned outward by tone position.
+    if (pair.arpeggioRun) {
+      const toneIndex = pair.arpeggioRun.targetToneIndex;
+      const endCoords =
+        (pair.end as unknown as ChordElementType).staffYCoordinates ?? [];
+      const toneBulge =
+        endCoords.length > 1
+          ? pickChordNoteBulge(pair.end, endCoords, toneIndex)
+          : startBulge;
+      const startAnchor = computeAnchor(
+        pair.start,
+        rootRect,
+        toneBulge,
+        TIE_NOTEHEAD_OFFSET_PX
+      );
+      const endAnchor = computeChordToneAnchor(
+        pair.end,
+        toneIndex,
+        rootRect,
+        toneBulge,
+        TIE_NOTEHEAD_OFFSET_PX
+      );
+      // A `<music-arpeggio>` group is one gesture at a single x position, so its
+      // ties never span a system break — always one curve (or two stubs).
+      const obstacles = [
+        ...chordOtherToneCenters(pair.end, toneIndex, rootRect),
+        ...pair.arpeggioRun.runNotes
+          .filter((runNote) => runNote !== pair.start)
+          .map((runNote) => noteheadCenter(runNote, rootRect)),
+      ];
+
+      if (tieIsObscured(startAnchor, endAnchor, toneBulge, obstacles)) {
+        const halfSpan = Math.abs(endAnchor.x - startAnchor.x) / 2;
+        const stubLength = Math.max(
+          2,
+          Math.min(
+            ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+            halfSpan - ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX
+          )
+        );
+        const forward = endAnchor.x >= startAnchor.x ? 1 : -1;
+        elements.push(
+          createOpenTieSvg({
+            anchor: startAnchor,
+            direction: forward === 1 ? 1 : -1,
+            length: stubLength,
+            bulge: toneBulge,
+          })
+        );
+        elements.push(
+          createOpenTieSvg({
+            anchor: endAnchor,
+            direction: forward === 1 ? -1 : 1,
+            length: stubLength,
+            bulge: toneBulge,
+          })
+        );
+        continue;
+      }
+
+      elements.push(
+        createCurveSvg({
+          from: { x: startAnchor.x, y: startAnchor.y },
+          to: { x: endAnchor.x, y: endAnchor.y },
+          bulge: toneBulge,
+          style,
+          nestingLevel: pair.nestingLevel,
+        })
+      );
+      continue;
+    }
 
     const isChordTie =
       pair.kind === 'tie' &&

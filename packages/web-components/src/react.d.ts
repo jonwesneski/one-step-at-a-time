@@ -5,6 +5,7 @@
  *   /// <reference types="@one-step-at-a-time/web-components/react" />
  */
 import type {
+  ArpeggioType,
   ArticulationType,
   Chord,
   ClefType,
@@ -18,12 +19,14 @@ import type {
   GraceSlur,
   GraceType,
   GuitarFret,
+  HairpinKind,
   HairpinRole,
   Mode,
   Note,
   Octave,
   StaffGroupType,
   StressType,
+  TieValue,
   TimeSignature,
   TupletRatio,
   Voice,
@@ -92,10 +95,16 @@ declare module 'react' {
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
       };
+      'music-arpeggio': WebComponentProps & {
+        'run-duration'?: DurationType;
+        unmatched?: 'lv' | 'skip';
+        'lv-label'?: boolean;
+      };
       'music-chord': WebComponentProps & {
         chord?: Chord;
         duration?: DurationType;
-        tie?: ConnectorRole;
+        tie?: TieValue;
+        'lv-label'?: boolean;
         slur?: ConnectorRole;
         for?: string;
         dynamic?: DynamicMarking;
@@ -104,6 +113,12 @@ declare module 'react' {
         diminuendo?: HairpinRole;
         articulation?: ArticulationType;
         stress?: StressType;
+        arpeggio?: ArpeggioType;
+        'arpeggio-for'?: string;
+        'arpeggio-hairpin'?: HairpinKind | 'diminuendo';
+        'arpeggio-hairpin-from'?: DynamicMarking;
+        'arpeggio-hairpin-to'?: DynamicMarking;
+        arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;
@@ -116,7 +131,8 @@ declare module 'react' {
         note?: Note;
         duration?: DurationType;
         octave?: Octave;
-        tie?: ConnectorRole;
+        tie?: TieValue;
+        'lv-label'?: boolean;
         slur?: ConnectorRole;
         for?: string;
         dynamic?: DynamicMarking;
@@ -125,6 +141,12 @@ declare module 'react' {
         diminuendo?: HairpinRole;
         articulation?: ArticulationType;
         stress?: StressType;
+        arpeggio?: ArpeggioType;
+        'arpeggio-for'?: string;
+        'arpeggio-hairpin'?: HairpinKind | 'diminuendo';
+        'arpeggio-hairpin-from'?: DynamicMarking;
+        'arpeggio-hairpin-to'?: DynamicMarking;
+        arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;

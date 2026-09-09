@@ -7,11 +7,13 @@ import {
 import { SVG_NS } from './utils';
 import {
   buildConnectorSvgs,
+  collectArpeggioTiePairs,
   collectNoteLikeElements,
   pairConnectors,
 } from './utils/connectorsBuilder';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_ARPEGGIO_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_TUPLET_NODE,
@@ -281,7 +283,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         continue;
       }
       customElements.upgrade(element);
-      if (element.nodeName === MUSIC_TUPLET_NODE) {
+      if (
+        element.nodeName === MUSIC_TUPLET_NODE ||
+        element.nodeName === MUSIC_ARPEGGIO_NODE
+      ) {
         this.upgradeAssignedElements(element.children);
       }
     }
@@ -298,12 +303,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       );
     }
 
-    const notes = collectNoteLikeElements(this as unknown as ParentNode);
-    if (notes.length === 0) {
-      return;
-    }
-
-    const pairs = pairConnectors(notes);
+    const root = this as unknown as ParentNode;
+    const pairs = [
+      ...pairConnectors(collectNoteLikeElements(root)),
+      ...collectArpeggioTiePairs(root),
+    ];
     if (pairs.length === 0) {
       return;
     }

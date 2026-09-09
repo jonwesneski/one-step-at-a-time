@@ -4,6 +4,173 @@
   "modules": [
     {
       "kind": "javascript-module",
+      "path": "src/arpeggio/arpeggio.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "The written-out arpeggiated chord (\"chord notated as consecutive pitches\"):\na beamed run of `<music-note>`s followed by the target `<music-chord>` (or a\nlone `<music-note>`). Each run note is tied to its matching-pitch chord tone;\nthe run does not consume beat duration.\n\nThis is the consecutive-pitch form. For the **wavy vertical line** use the\n`arpeggio` attribute on `<music-note>` / `<music-chord>` instead.\n\nThe wrapper is layout-only (no shadow DOM); the staff reads the group and\ndraws the ties. Run notes with no `duration` are given `run-duration`.",
+          "name": "ArpeggioElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#childObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#applyingDefaults",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#ownedDurations",
+              "privacy": "private",
+              "default": "new WeakSet<Element>()"
+            },
+            {
+              "kind": "field",
+              "name": "runDuration",
+              "type": {
+                "text": "DurationType"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unmatched",
+              "type": {
+                "text": "'lv' | 'skip'"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "flatElements",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "runElements",
+              "type": {
+                "text": "NoteElementType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "targetElement",
+              "type": {
+                "text": "NoteOrChordElementType | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "#elementChildren",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#onChildChange",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyDefaults",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#notify",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "run-duration",
+              "type": {
+                "text": "DurationType"
+              },
+              "description": "Note value drawn for run notes that set no `duration` of their own. Defaults to `thirtysecond`."
+            },
+            {
+              "name": "unmatched",
+              "type": {
+                "text": "'lv' | 'skip'"
+              },
+              "description": "A run note whose pitch is not in the target chord becomes a laissez-vibrer tie (`lv`, default) or is dropped (`skip`)."
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draw an `l.v.` label on the laissez-vibrer ties this group produces."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "music-arpeggio",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_ARPEGGIO",
+          "declaration": {
+            "name": "ArpeggioElement",
+            "module": "src/arpeggio/arpeggio.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/chord/chord.ts",
       "declarations": [
         {
@@ -55,6 +222,24 @@
                 "text": "boolean"
               },
               "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#renderArpeggioSign",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true"
+            },
+            {
+              "kind": "field",
+              "name": "#impliedArpeggio",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "default": "null"
             },
             {
               "kind": "field",
@@ -171,7 +356,14 @@
               "kind": "field",
               "name": "tie",
               "type": {
-                "text": "ConnectorRole | null"
+                "text": "TieValue | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -221,6 +413,72 @@
               "name": "stress",
               "type": {
                 "text": "StressType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpin",
+              "type": {
+                "text": "HairpinKind | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinFrom",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinTo",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#effectiveArpeggioHairpin",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinKind | null"
+                }
+              }
+            },
+            {
+              "kind": "field",
+              "name": "renderArpeggioSign",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggiate",
+              "type": {
+                "text": "ConnectorRole | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "impliedArpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
               }
             },
             {
@@ -373,9 +631,16 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end'"
+                "text": "'start' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Marks this chord as the start or end of a tie."
+              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draw an `l.v.` label on a `tie=\"laissez-vibrer\"` tie."
             },
             {
               "name": "slur",
@@ -425,6 +690,48 @@
                 "text": "'stressed' | 'unstressed'"
               },
               "description": "Schoenberg stress mark."
+            },
+            {
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType"
+              },
+              "description": "Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket)."
+            },
+            {
+              "name": "arpeggio-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from."
+            },
+            {
+              "name": "arpeggio-hairpin",
+              "type": {
+                "text": "'crescendo' | 'diminuendo'"
+              },
+              "description": "A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`)."
+            },
+            {
+              "name": "arpeggio-hairpin-from",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff."
+            },
+            {
+              "name": "arpeggio-hairpin-to",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff."
+            },
+            {
+              "name": "arpeggiate",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`)."
             },
             {
               "name": "grace",
@@ -1030,6 +1337,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawArpeggios",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "number",
               "type": {
                 "text": "number | null"
@@ -1091,6 +1403,29 @@
                   "name": "currentIndex",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawArpeggios",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#headRects",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DOMRect[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
                   }
                 }
               ]
@@ -1204,6 +1539,24 @@
             },
             {
               "kind": "field",
+              "name": "#renderArpeggioSign",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true"
+            },
+            {
+              "kind": "field",
+              "name": "#impliedArpeggio",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#showAccidental",
               "privacy": "private",
               "type": {
@@ -1300,7 +1653,14 @@
               "kind": "field",
               "name": "tie",
               "type": {
-                "text": "ConnectorRole | null"
+                "text": "TieValue | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -1364,6 +1724,72 @@
               "name": "stress",
               "type": {
                 "text": "StressType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpin",
+              "type": {
+                "text": "HairpinKind | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinFrom",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinTo",
+              "type": {
+                "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#effectiveArpeggioHairpin",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinKind | null"
+                }
+              }
+            },
+            {
+              "kind": "field",
+              "name": "renderArpeggioSign",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggiate",
+              "type": {
+                "text": "ConnectorRole | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "impliedArpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
               }
             },
             {
@@ -1516,9 +1942,16 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end'"
+                "text": "'start' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Marks this note as the start or end of a tie to the same pitch."
+              "description": "Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draw an `l.v.` label on a `tie=\"laissez-vibrer\"` tie."
             },
             {
               "name": "slur",
@@ -1568,6 +2001,48 @@
                 "text": "'stressed' | 'unstressed'"
               },
               "description": "Schoenberg stress mark."
+            },
+            {
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType"
+              },
+              "description": "Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket)."
+            },
+            {
+              "name": "arpeggio-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from."
+            },
+            {
+              "name": "arpeggio-hairpin",
+              "type": {
+                "text": "'crescendo' | 'diminuendo'"
+              },
+              "description": "A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`)."
+            },
+            {
+              "name": "arpeggio-hairpin-from",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff."
+            },
+            {
+              "name": "arpeggio-hairpin-to",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff."
+            },
+            {
+              "name": "arpeggiate",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`)."
             },
             {
               "name": "grace",
@@ -2004,6 +2479,19 @@
             },
             {
               "kind": "field",
+              "name": "#arpeggioGroups",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioGroupPlacement[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#noteXPositions",
               "privacy": "private",
               "type": {
@@ -2356,6 +2844,37 @@
             },
             {
               "kind": "method",
+              "name": "#reRenderFromCurrentSlot",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderFromSlot",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "slot",
+                  "type": {
+                    "text": "HTMLSlotElement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#renderNotes",
               "privacy": "private",
               "parameters": [
@@ -2517,6 +3036,49 @@
             {
               "kind": "method",
               "name": "#renderDynamics",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveArpeggiandoPassages",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "previousElements",
+                  "default": "[]",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderArpeggiandoText",
               "privacy": "private",
               "return": {
                 "type": {
@@ -4124,6 +4686,19 @@
             },
             {
               "kind": "field",
+              "name": "#arpeggioGroups",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioGroupPlacement[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#noteXPositions",
               "privacy": "private",
               "type": {
@@ -4454,6 +5029,37 @@
             },
             {
               "kind": "method",
+              "name": "#reRenderFromCurrentSlot",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderFromSlot",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "slot",
+                  "type": {
+                    "text": "HTMLSlotElement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#renderNotes",
               "privacy": "private",
               "parameters": [
@@ -4628,6 +5234,49 @@
             {
               "kind": "method",
               "name": "#renderDynamics",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveArpeggiandoPassages",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "previousElements",
+                  "default": "[]",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderArpeggiandoText",
               "privacy": "private",
               "return": {
                 "type": {
