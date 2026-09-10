@@ -1410,7 +1410,13 @@
             {
               "kind": "method",
               "name": "#redrawArpeggios",
-              "privacy": "private"
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "reReserveLowerEnds",
+                  "default": "false"
+                }
+              ]
             },
             {
               "kind": "method",
@@ -3017,6 +3023,32 @@
                   "type": {
                     "text": "number"
                   }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryLeftwardExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                },
+                {
+                  "name": "includeAccidental",
+                  "default": "true"
                 }
               ],
               "inheritedFrom": {
@@ -5215,6 +5247,32 @@
                   "type": {
                     "text": "number"
                   }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryLeftwardExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                },
+                {
+                  "name": "includeAccidental",
+                  "default": "true"
                 }
               ],
               "inheritedFrom": {

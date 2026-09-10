@@ -50,6 +50,15 @@ describe('computeArpeggioFootprintWidth', () => {
       computeArpeggioFootprintWidth('up', false)
     );
   });
+
+  it('reserves the full (non-inset) footprint for an overlay-drawn cross-staff sign', () => {
+    expect(computeArpeggioFootprintWidth('up', false, true)).toBe(
+      ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX
+    );
+    expect(computeArpeggioFootprintWidth('up', false, true)).toBeGreaterThan(
+      computeArpeggioFootprintWidth('up', false, false)
+    );
+  });
 });
 
 describe('computeArpeggioHairpinFootprintWidth', () => {
@@ -58,13 +67,33 @@ describe('computeArpeggioHairpinFootprintWidth', () => {
   });
 
   it.each(['crescendo', 'decrescendo'] as HairpinKind[])(
-    'reserves the hairpin footprint for "%s"',
+    'reserves the bare wedge footprint for "%s" with no dynamic letters',
     (kind) => {
       expect(computeArpeggioHairpinFootprintWidth(kind)).toBe(
         ARPEGGIO_HAIRPIN_FOOTPRINT_PX
       );
+      expect(computeArpeggioHairpinFootprintWidth(kind, null, null)).toBe(
+        ARPEGGIO_HAIRPIN_FOOTPRINT_PX
+      );
     }
   );
+
+  it('widens with the longer of the two dynamic markings', () => {
+    const oneChar = computeArpeggioHairpinFootprintWidth('crescendo', 'p', 'f');
+    const twoChar = computeArpeggioHairpinFootprintWidth(
+      'crescendo',
+      'p',
+      'mf'
+    );
+    const threeChar = computeArpeggioHairpinFootprintWidth(
+      'crescendo',
+      'sfz',
+      'p'
+    );
+    expect(oneChar).toBeGreaterThanOrEqual(ARPEGGIO_HAIRPIN_FOOTPRINT_PX);
+    expect(twoChar).toBeGreaterThan(oneChar);
+    expect(threeChar).toBeGreaterThan(twoChar);
+  });
 });
 
 describe('resolveArpeggioSpans', () => {

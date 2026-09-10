@@ -138,6 +138,63 @@ test('divides a tie into two stubs when a cluster target would obscure it', asyn
   expect(paths.length).toBeGreaterThan(3);
 });
 
+test('a cross-staff arpeggio + hairpin as the first entry clears the time signature on both staves', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-composition key-sig="Eb" mode="major" time="4/4">
+       <music-measure>
+         <music-staff clef="treble" group="grand" key-sig="Eb" time="4/4">
+           <music-chord
+             id="roll"
+             chord="Cmaj"
+             duration="whole"
+             arpeggio="up"
+             arpeggio-hairpin="crescendo"
+             arpeggio-hairpin-from="pp"
+             arpeggio-hairpin-to="ff"
+           ></music-chord>
+         </music-staff>
+         <music-staff clef="bass" key-sig="Eb" time="4/4">
+           <music-chord chord="Cmaj" duration="whole" arpeggio-for="roll">
+             <music-note note="C" octave="3"></music-note>
+             <music-note note="E" octave="3"></music-note>
+             <music-note note="G" octave="3"></music-note>
+           </music-chord>
+         </music-staff>
+       </music-measure>
+     </music-composition>`
+  );
+
+  const geometry = await page.evaluate(() => {
+    const measure = document.querySelector('music-measure')!;
+    const staves = Array.from(document.querySelectorAll('music-staff'));
+    const describeRight = Math.max(
+      ...staves.map(
+        (staff) =>
+          staff
+            .shadowRoot!.querySelector('.describe-container')!
+            .getBoundingClientRect().right
+      )
+    );
+    const hairpin = measure.shadowRoot!.querySelector(
+      '.arpeggio-hairpin-connector'
+    )!;
+    const wave = measure.shadowRoot!.querySelector('.arpeggio-connector')!;
+    return {
+      describeRight,
+      hairpinLeft: hairpin.getBoundingClientRect().left,
+      waveLeft: wave.getBoundingClientRect().left,
+    };
+  });
+
+  // The wave, and the hairpin wedge + its `pp` / `ff` letters, sit entirely
+  // right of the clef/key/time area — nothing bleeds onto the time signature.
+  expect(geometry.waveLeft).toBeGreaterThanOrEqual(geometry.describeRight);
+  expect(geometry.hairpinLeft).toBeGreaterThanOrEqual(geometry.describeRight);
+});
+
 test('an unmatched run pitch gets a laissez-vibrer tie with an l.v. label', async ({
   page,
 }) => {

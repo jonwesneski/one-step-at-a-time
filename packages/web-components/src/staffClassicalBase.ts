@@ -46,8 +46,10 @@ import type {
   YCoordinates,
 } from './types/elements';
 import type {
+  ArpeggioType,
   ClefType,
   DurationType,
+  DynamicMarking,
   HairpinKind,
   Mode,
   Note,
@@ -78,6 +80,7 @@ import {
   MUSIC_TUPLET_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
+  STAFF_TAGS,
   SVG_NS,
 } from './utils/consts';
 import {
@@ -130,19 +133,78 @@ function footprintArpeggio(element: NoteElementType | ChordElementType) {
   );
 }
 
-// The hairpin kind whose leftward footprint this element reserves — only when
-// it carries `arpeggioHairpin` alongside an effective rolled wave (own,
-// implied, or a cross-staff `arpeggio-for` continuation).
-function footprintArpeggioHairpin(
+const isArpeggioWave = (arpeggio: ArpeggioType | null): boolean =>
+  arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down';
+
+// The note/chord paired with this one in an unbroken cross-staff arpeggio: the
+// `id` target of this element's `arpeggio-for`, or — when this element has an
+// `id` — an element pointing back at it via `arpeggio-for`. Only a partner in a
+// *different* `<music-staff>` of the same `<music-measure>` counts: the measure
+// overlay, not this staff, then draws the span's wave + hairpin, off raw
+// notehead pixels. Partner attributes are readable synchronously here (sibling
+// staves and their entries connect before either staff spaces), so the initial
+// render needs no cross-staff propagation.
+function crossStaffArpeggioPartner(
   element: NoteElementType | ChordElementType
-): HairpinKind | null {
-  if (element.arpeggioHairpin === null) {
+): NoteElementType | ChordElementType | null {
+  const measure = element.closest(MUSIC_MEASURE);
+  if (measure === null) {
     return null;
   }
-  const arpeggio = footprintArpeggio(element);
-  return arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down'
-    ? element.arpeggioHairpin
-    : null;
+  let candidate: Element | null = null;
+  if (element.arpeggioFor !== null) {
+    const wantedId = element.arpeggioFor;
+    candidate =
+      Array.from(measure.querySelectorAll('[id]')).find(
+        (other) => other.id === wantedId
+      ) ?? null;
+  } else if (element.id !== '') {
+    candidate =
+      Array.from(measure.querySelectorAll('[arpeggio-for]')).find(
+        (other) => other.getAttribute('arpeggio-for') === element.id
+      ) ?? null;
+  }
+  if (
+    candidate === null ||
+    (candidate.nodeName !== MUSIC_NOTE_NODE &&
+      candidate.nodeName !== MUSIC_CHORD_NODE) ||
+    candidate.closest(STAFF_TAGS) === element.closest(STAFF_TAGS)
+  ) {
+    return null;
+  }
+  return candidate as NoteElementType | ChordElementType;
+}
+
+// The hairpin whose leftward footprint this element reserves — its own
+// `arpeggioHairpin` alongside an effective rolled wave, or the one authored on
+// its cross-staff partner (the continuous hairpin the measure draws spans both
+// ends and aligns to whichever sits further left, so both ends must reserve it).
+function footprintArpeggioHairpin(
+  element: NoteElementType | ChordElementType,
+  partner: NoteElementType | ChordElementType | null
+): {
+  kind: HairpinKind;
+  from: DynamicMarking | null;
+  to: DynamicMarking | null;
+} | null {
+  if (
+    element.arpeggioHairpin !== null &&
+    isArpeggioWave(footprintArpeggio(element))
+  ) {
+    return {
+      kind: element.arpeggioHairpin,
+      from: element.arpeggioHairpinFrom,
+      to: element.arpeggioHairpinTo,
+    };
+  }
+  if (partner !== null && partner.arpeggioHairpin !== null) {
+    return {
+      kind: partner.arpeggioHairpin,
+      from: partner.arpeggioHairpinFrom,
+      to: partner.arpeggioHairpinTo,
+    };
+  }
+  return null;
 }
 
 // A stem-down chord's adjacent second shifts its head left by
@@ -752,85 +814,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.drawConnectorsWhenStandalone();
 
     if (elements.length > 0) {
-      const firstElement = elements[0];
-      let firstElementLeftwardWidth = 0;
-      if (firstElement.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = firstElement as NoteElementType;
-        if (noteElement.showAccidental) {
-          firstElementLeftwardWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
-            ACCIDENTAL_NOTE_GAP;
-        }
-        firstElementLeftwardWidth += computeGraceFootprintWidth(
-          noteElement.grace,
-          noteElement.resolvedGraceAccidentals
-        );
-        firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(noteElement),
-          elementHasShownAccidental(noteElement)
-        );
-        firstElementLeftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(noteElement)
-        );
-      } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
-        const chordElement = firstElement as ChordElementType;
-        if (
-          chordElement.staffYCoordinates &&
-          chordElement.noteAccidentals.some((a) => a != null)
-        ) {
-          firstElementLeftwardWidth = totalChordAccidentalWidth(
-            chordElement.noteAccidentals,
-            chordElement.staffYCoordinates
-          );
-        }
-        firstElementLeftwardWidth += computeGraceFootprintWidth(
-          chordElement.grace,
-          chordElement.resolvedGraceAccidentals
-        );
-        firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(chordElement),
-          elementHasShownAccidental(chordElement)
-        );
-        firstElementLeftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(chordElement)
-        );
-        if (footprintArpeggio(chordElement) !== null) {
-          firstElementLeftwardWidth +=
-            chordLeftHeadDisplacementPx(chordElement);
-        }
-      }
-      // Grace overhangs of the remaining elements also consume horizontal
-      // room beyond the per-note minimum spacing.
+      // First entry: the full leftward stack sits between it and the describe
+      // area, so all of it (accidental included) adds to the measure width.
+      const firstElementLeftwardWidth = this.#entryLeftwardExtent(elements[0]);
+      // Later entries: only the decorations that inter-note spacing does not
+      // already absorb (accidental columns excluded — see #entryLeftwardExtent).
       let extraLeftwardWidth = 0;
       for (let i = 1; i < elements.length; i++) {
-        const element = elements[i];
-        if (
-          element.nodeName === MUSIC_NOTE_NODE ||
-          element.nodeName === MUSIC_CHORD_NODE
-        ) {
-          const noteOrChordElement = element as
-            | NoteElementType
-            | ChordElementType;
-          extraLeftwardWidth += computeGraceFootprintWidth(
-            noteOrChordElement.grace,
-            noteOrChordElement.resolvedGraceAccidentals
-          );
-          extraLeftwardWidth += computeArpeggioFootprintWidth(
-            footprintArpeggio(noteOrChordElement),
-            elementHasShownAccidental(noteOrChordElement)
-          );
-          extraLeftwardWidth += computeArpeggioHairpinFootprintWidth(
-            footprintArpeggioHairpin(noteOrChordElement)
-          );
-          if (
-            element.nodeName === MUSIC_CHORD_NODE &&
-            footprintArpeggio(noteOrChordElement) !== null
-          ) {
-            extraLeftwardWidth += chordLeftHeadDisplacementPx(
-              noteOrChordElement as ChordElementType
-            );
-          }
-        }
+        extraLeftwardWidth += this.#entryLeftwardExtent(elements[i], false);
       }
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
@@ -983,6 +974,84 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
+  // Total px an entry paints / needs left of its own SVG left edge (x = 0), from
+  // every decoration drawn before it — wherever the pass that draws it lives:
+  // this staff (accidental, grace run, element-local arpeggio sign + hairpin), or
+  // an ancestor <music-measure>'s cross-staff arpeggio overlay (the span's wave +
+  // continuous hairpin). Single source of truth for the "barline constraint" in
+  // #spaceElements() and the strut min width in #renderNotes(). Add any new
+  // left-of-entry decoration here, not at the call sites.
+  //
+  // Not included: an incoming tie/slur end curve, ledger-line extension, a
+  // tuplet bracket/numeral. Those are drawn by separate connector/overlay passes
+  // and extend only marginally past the notehead; no clef-area overlap has been
+  // reported. Add a term here if one is.
+  //
+  // `includeAccidental` is false only for the non-first entries of the strut
+  // min-width sum: their accidental column sits between two entries and is
+  // absorbed by inter-note spacing / the per-entry MIN_NOTE_WIDTH, so it needs
+  // no extra measure width. The first entry's column has only the describe area
+  // to its left, so it always counts.
+  #entryLeftwardExtent(
+    element: NoteChordOrRestElementType,
+    includeAccidental = true
+  ): number {
+    if (
+      element.nodeName !== MUSIC_NOTE_NODE &&
+      element.nodeName !== MUSIC_CHORD_NODE
+    ) {
+      return 0;
+    }
+    const el = element as NoteElementType | ChordElementType;
+    let extent = 0;
+
+    if (includeAccidental) {
+      if (el.nodeName === MUSIC_NOTE_NODE) {
+        const accidental = (el as NoteElementType).showAccidental;
+        if (accidental) {
+          extent += ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
+        }
+      } else {
+        const chord = el as ChordElementType;
+        if (
+          chord.staffYCoordinates &&
+          chord.noteAccidentals.some((a) => a != null)
+        ) {
+          extent += totalChordAccidentalWidth(
+            chord.noteAccidentals,
+            chord.staffYCoordinates
+          );
+        }
+      }
+    }
+
+    extent += computeGraceFootprintWidth(el.grace, el.resolvedGraceAccidentals);
+
+    const partner = crossStaffArpeggioPartner(el);
+    extent += computeArpeggioFootprintWidth(
+      footprintArpeggio(el),
+      elementHasShownAccidental(el),
+      partner !== null
+    );
+
+    const hairpin = footprintArpeggioHairpin(el, partner);
+    extent += computeArpeggioHairpinFootprintWidth(
+      hairpin?.kind ?? null,
+      hairpin?.from ?? null,
+      hairpin?.to ?? null
+    );
+
+    if (el.nodeName === MUSIC_CHORD_NODE && footprintArpeggio(el) !== null) {
+      // A cluster chord's leftward-displaced second head only clears the entry's
+      // SVG left edge once the arpeggio sign — positioned off that displaced
+      // head — is present; without a sign the displaced head stays inside the
+      // SVG's own left padding.
+      extent += chordLeftHeadDisplacementPx(el as ChordElementType);
+    }
+
+    return extent;
+  }
+
   #spaceElements() {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     if (typeof this.#describeContainer.getBBox === 'function') {
@@ -1081,53 +1150,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
 
-      // Compute this element's total leftward overhang: accidental footprint
-      // plus any grace-note group rendered before the note/chord.
-      let leftwardWidth = 0;
-      if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = element as NoteElementType;
-        if (noteElement.showAccidental) {
-          leftwardWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
-            ACCIDENTAL_NOTE_GAP;
-        }
-        leftwardWidth += computeGraceFootprintWidth(
-          noteElement.grace,
-          noteElement.resolvedGraceAccidentals
-        );
-        leftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(noteElement),
-          elementHasShownAccidental(noteElement)
-        );
-        leftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(noteElement)
-        );
-      } else if (element.nodeName === MUSIC_CHORD_NODE) {
-        const chordElement = element as ChordElementType;
-        if (
-          chordElement.staffYCoordinates &&
-          chordElement.noteAccidentals.some((a) => a != null)
-        ) {
-          leftwardWidth = totalChordAccidentalWidth(
-            chordElement.noteAccidentals,
-            chordElement.staffYCoordinates
-          );
-        }
-        leftwardWidth += computeGraceFootprintWidth(
-          chordElement.grace,
-          chordElement.resolvedGraceAccidentals
-        );
-        leftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(chordElement),
-          elementHasShownAccidental(chordElement)
-        );
-        leftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(chordElement)
-        );
-        if (footprintArpeggio(chordElement) !== null) {
-          leftwardWidth += chordLeftHeadDisplacementPx(chordElement);
-        }
-      }
+      // Everything drawn left of this entry — accidental / grace / arpeggio sign
+      // + dynamic-change hairpin / cross-staff span footprint (see
+      // #entryLeftwardExtent, the single source of truth).
+      const leftwardWidth = this.#entryLeftwardExtent(element);
 
       // Barline constraint: the overhang must not cross into the describe area
       if (leftwardWidth > 0) {
@@ -1481,7 +1507,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
       const el = element as NoteElementType | ChordElementType;
-      if (footprintArpeggioHairpin(el) === null) {
+      // Only this element's own hairpin sits above its own staff; a cross-staff
+      // partner's letters are drawn outside both staves by the measure overlay.
+      if (footprintArpeggioHairpin(el, null) === null) {
         continue;
       }
       const effective =

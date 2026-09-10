@@ -118,7 +118,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawArpeggios();
     };
     #boundUpdateConnectorVisibility: () => void;
-    #boundRedrawArpeggios = () => this.#redrawArpeggios();
+    #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
 
     constructor() {
       super();
@@ -356,7 +356,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // measures the paired elements, suppresses their own per-staff signs, and
     // draws the single spanning glyph. A "broken" arpeggio (each hand rolled
     // independently) needs nothing here — it is just two per-staff signs.
-    #redrawArpeggios() {
+    //
+    // `reReserveLowerEnds` is set only on the arpeggio-attribute-change path (not
+    // the per-render STAFF_MIN_WIDTH path, which would loop): a hairpin authored
+    // on the upper end changes the *lower* end's reserved left footprint, but the
+    // lower staff never saw that attribute change, so nudge it to re-space.
+    #redrawArpeggios(reReserveLowerEnds = false) {
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.arpeggio-connectors'
       );
@@ -402,6 +407,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       const spanned = new Set<NoteOrChordElementType>();
+      // Lower ends whose staff must re-space so it reserves room for a hairpin
+      // authored on the upper end (which its own footprint helper resolves from
+      // the partner). Nudged *after* the loop — a re-space synchronously re-runs
+      // this method, which would otherwise resolve/redraw the overlay mid-loop.
+      const lowerEndsToReReserve: NoteOrChordElementType[] = [];
       for (const span of spans) {
         const upper =
           perStaffElements[span.upper.staffIndex]?.[span.upper.entryIndex];
@@ -414,6 +424,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         spanned.add(lower);
         upper.renderArpeggioSign = false;
         lower.renderArpeggioSign = false;
+
+        if (reReserveLowerEnds && upper.arpeggioHairpin !== null) {
+          lowerEndsToReReserve.push(lower);
+        }
 
         const measureRect = this.getBoundingClientRect();
         const upperHeads = this.#headRects(upper);
@@ -481,6 +495,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             element.renderArpeggioSign = true;
           }
         }
+      }
+
+      // Now the overlay is fully drawn: nudge each lower end whose staff needs
+      // to reserve room for the partner's hairpin. Each re-space re-runs this
+      // method (without `reReserveLowerEnds`), which redraws the overlay at the
+      // corrected position and settles.
+      for (const lower of lowerEndsToReReserve) {
+        lower.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
       }
     }
 

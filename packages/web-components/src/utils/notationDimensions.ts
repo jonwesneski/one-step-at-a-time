@@ -634,8 +634,10 @@ export const ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
 export const ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX = STAFF_LINE_SPACING * 0.4;
 
 /**
- * Leftward footprint (px) the staff reserves for the vertical hairpin, stacked
- * in front of the arpeggio sign's own footprint.
+ * Leftward footprint (px) of the hairpin *wedge*, stacked in front of the
+ * arpeggio sign's own footprint. The centred `-from` / `-to` dynamic letters
+ * spill further left than this; `computeArpeggioHairpinFootprintWidth` adds that
+ * letter term on top (estimated per character, not measured).
  */
 export const ARPEGGIO_HAIRPIN_FOOTPRINT_PX =
   ARPEGGIO_HAIRPIN_GAP_PX + ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX;

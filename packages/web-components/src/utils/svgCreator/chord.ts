@@ -197,7 +197,11 @@ export const createChordSvg = ({
   const drawArpeggioHairpin =
     arpeggioHairpin !== null && isArpeggioWaveVariant(arpeggio);
   const arpeggioHairpinFootprint = drawArpeggioHairpin
-    ? computeArpeggioHairpinFootprintWidth(arpeggioHairpin)
+    ? computeArpeggioHairpinFootprintWidth(
+        arpeggioHairpin,
+        arpeggioHairpinFrom,
+        arpeggioHairpinTo
+      )
     : 0;
 
   // Absolute left edge (chord-SVG coords) of the chord's leftmost column.
