@@ -82,6 +82,24 @@ export const Secondary: Story = {
   `,
 };
 
+// Three beams: the stack must not crowd the noteheads (stem-up) and every stem
+// must reach the outer beam (stem-down).
+export const ThirtySecond: Story = {
+  render: () => html`
+    <music-staff clef="treble" key-sig="C" mode="major" time="4/4">
+      <music-note note="C" octave="4" duration="thirtysecond"></music-note>
+      <music-note note="E" octave="4" duration="thirtysecond"></music-note>
+      <music-note note="G" octave="4" duration="thirtysecond"></music-note>
+      <music-note note="C" octave="5" duration="thirtysecond"></music-note>
+
+      <music-note note="E" octave="5" duration="thirtysecond"></music-note>
+      <music-note note="C" octave="5" duration="thirtysecond"></music-note>
+      <music-note note="A" octave="4" duration="thirtysecond"></music-note>
+      <music-note note="E" octave="4" duration="thirtysecond"></music-note>
+    </music-staff>
+  `,
+};
+
 // Including fractionals and no slants
 export const Fractional: Story = {
   render: () => html`

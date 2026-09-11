@@ -1,5 +1,5 @@
 import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
-import {
+import type {
   ArpeggioElementType,
   ChordElementType,
   ConnectorRole,
@@ -12,7 +12,14 @@ import {
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  STAFF_TAGS,
 } from './consts';
+import {
+  ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
+  ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
+  ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+  LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+} from './notationDimensions';
 import {
   createCurveSvg,
   createOpenTieSvg,
@@ -23,12 +30,6 @@ import {
   computeYHeadOffset,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
 } from './svgCreator/note';
-import {
-  ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
-  ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
-  ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
-  LAISSEZ_VIBRER_CURVE_LENGTH_PX,
-} from './notationDimensions';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -312,10 +313,14 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
   // The note's own rect.top shifts with pitch (higher pitch → smaller top),
   // so it cannot be used for row detection. The containing <music-measure>
   // is what wraps in the composition's flex grid, so its top reflects the
-  // actual visual row.
-  const measure = note.closest(MUSIC_MEASURE) as HTMLElement | null;
-  const ref = measure ?? note;
-  return ref.getBoundingClientRect().top - rootRect.top;
+  // actual visual row. A standalone staff (no measure) never wraps, so its own
+  // box is the row reference — falling back to the note there would split every
+  // slur/tie wider than a 2nd into cross-row halves.
+  const rowReference =
+    (note.closest(MUSIC_MEASURE) as HTMLElement | null) ??
+    (note.closest(STAFF_TAGS) as HTMLElement | null) ??
+    note;
+  return rowReference.getBoundingClientRect().top - rootRect.top;
 };
 
 // Notehead visual radius ≈ 4.3px (rotated ellipse + stroke). 5px clears the

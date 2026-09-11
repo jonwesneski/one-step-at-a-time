@@ -73,6 +73,49 @@ async function readStandaloneConnectors(
   }, MUSIC_STAFF);
 }
 
+async function readSlurGeometry(page: Page): Promise<{
+  pathCount: number;
+  pathRects: { left: number; right: number; width: number }[];
+  noteCenters: number[];
+  staffLeft: number;
+  staffRight: number;
+}> {
+  return page.evaluate(
+    ({ staffTag, noteTag }) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        throw new Error('staff not ready');
+      }
+      const overlay = staff.shadowRoot.querySelector(
+        '.standalone-connectors-overlay'
+      );
+      if (overlay === null) {
+        throw new Error('standalone connectors overlay missing');
+      }
+      const paths = Array.from(
+        overlay.querySelectorAll('path')
+      ) as SVGPathElement[];
+      const staffRect = staff.getBoundingClientRect();
+      return {
+        pathCount: paths.length,
+        pathRects: paths.map((path) => {
+          const rect = path.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, width: rect.width };
+        }),
+        noteCenters: (
+          Array.from(staff.querySelectorAll(noteTag)) as HTMLElement[]
+        ).map((note) => {
+          const rect = note.getBoundingClientRect();
+          return rect.left + rect.width / 2;
+        }),
+        staffLeft: staffRect.left,
+        staffRight: staffRect.right,
+      };
+    },
+    { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+  );
+}
+
 test.describe(`${MUSIC_STAFF} responsive layout`, () => {
   test('note left-edges remain strictly monotonic across a resize', async ({
     page,
@@ -172,6 +215,90 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
       throw new Error('unreachable');
     }
     expect(narrowBeams.firstBBox.width).toBeGreaterThan(10);
+  });
+
+  // Max px any beamed note's stem beam-end misses the primary beam's edge at
+  // that note's x (screen space, via getScreenCTM). Non-uniform durations give
+  // the group non-uniform x-spacing, which is where index-fraction stem
+  // extension diverges from the true-X drawn beam.
+  async function worstStemToBeamGap(page: Page): Promise<number> {
+    return page.evaluate(() => {
+      const staff = document.querySelector('music-staff')!;
+      const container = staff.shadowRoot!.querySelector(
+        '.beams-container'
+      ) as SVGSVGElement;
+      const primary = container.querySelector(
+        'polygon.beam'
+      ) as SVGPolygonElement;
+      const ctm = container.getScreenCTM()!;
+      const toScreen = (p: { x: number; y: number }) => {
+        const q = container.createSVGPoint();
+        q.x = p.x;
+        q.y = p.y;
+        return q.matrixTransform(ctm);
+      };
+      // points[0]→points[3] is the outer edge (toward the stem tips).
+      const a = toScreen(primary.points[0]);
+      const b = toScreen(primary.points[3]);
+      const edgeYAt = (x: number) =>
+        a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x);
+
+      let worst = 0;
+      for (const note of Array.from(staff.querySelectorAll('music-note'))) {
+        const stem = note.shadowRoot?.querySelector('.stem') as SVGLineElement;
+        if (!stem) continue;
+        const r = stem.getBoundingClientRect();
+        const tipX = r.left + r.width / 2;
+        const stemUp = note.shadowRoot!.querySelector('svg')!.dataset.stemUp;
+        const tipY = stemUp === 'true' ? r.top : r.bottom;
+        worst = Math.max(worst, Math.abs(tipY - edgeYAt(tipX)));
+      }
+      return worst;
+    });
+  }
+
+  test('interior stems track the beam through a resize (non-uniform spacing)', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host')!;
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        staff.setAttribute('time', '4/4');
+        // Steep slant + mixed durations → the interior notes sit well off the
+        // even x-grid, so index-fraction stem extension diverges visibly from
+        // the true-X drawn beam.
+        const spec: [string, string][] = [
+          ['C4', 'eighth'],
+          ['E5', 'thirtysecond'],
+          ['G5', 'thirtysecond'],
+          ['B5', 'eighth'],
+        ];
+        for (const [value, duration] of spec) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', value);
+          n.setAttribute('duration', duration);
+          staff.appendChild(n);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    expect(await worstStemToBeamGap(page)).toBeLessThan(2);
+
+    const repositioned = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 480);
+    await repositioned.catch(() => undefined);
+    await waitForRedrawCycle(page);
+
+    expect(await worstStemToBeamGap(page)).toBeLessThan(2);
   });
 
   test('no beams for quarter notes, before or after resize', async ({
@@ -365,6 +492,100 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
 
     const narrow = await readStandaloneConnectors(page);
     expect(narrow.count).toBe(0);
+  });
+
+  test('slur across a pitch interval connects the two notes, not the staff edges', async ({
+    page,
+  }) => {
+    const positionedAtStart = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const pitches = ['C5', 'D5', 'E5', 'F5'];
+        pitches.forEach((pitch, index) => {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('duration', 'eighth');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === pitches.length - 1) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        });
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positionedAtStart;
+    await waitForRedrawCycle(page);
+
+    const geometry = await readSlurGeometry(page);
+
+    expect(geometry.pathCount).toBe(1);
+    const [slur] = geometry.pathRects;
+    const firstNoteCenter = geometry.noteCenters[0];
+    const lastNoteCenter =
+      geometry.noteCenters[geometry.noteCenters.length - 1];
+
+    expect(Math.abs(slur.left - firstNoteCenter)).toBeLessThan(20);
+    expect(Math.abs(slur.right - lastNoteCenter)).toBeLessThan(20);
+    // The cross-row split bug would run one half to the staff's right edge.
+    expect(geometry.staffRight - slur.right).toBeGreaterThan(40);
+  });
+
+  test('nested slurs each render as a single curve', async ({ page }) => {
+    const positionedAtStart = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const staff = document.createElement(staffTag);
+        const pitches = ['C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6'];
+        const slurRoles: Record<number, string> = {
+          0: 'start',
+          1: 'start',
+          3: 'end',
+          7: 'end',
+        };
+        pitches.forEach((pitch, index) => {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('duration', 'eighth');
+          if (slurRoles[index] !== undefined) {
+            note.setAttribute('slur', slurRoles[index]);
+          }
+          staff.appendChild(note);
+        });
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positionedAtStart;
+    await waitForRedrawCycle(page);
+
+    const geometry = await readSlurGeometry(page);
+
+    expect(geometry.pathCount).toBe(2);
+    for (const slur of geometry.pathRects) {
+      expect(geometry.staffRight - slur.right).toBeGreaterThan(40);
+      expect(slur.left - geometry.staffLeft).toBeGreaterThan(40);
+    }
+    const widths = geometry.pathRects
+      .map((rect) => rect.width)
+      .sort((a, b) => a - b);
+    expect(widths[1]).toBeGreaterThan(widths[0]);
   });
 });
 

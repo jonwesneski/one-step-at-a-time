@@ -72,15 +72,12 @@ export function buildBeamsRenderer(
 
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
-        const flagCount =
-          durationToFlagCountMap.get(noteElement.duration as DurationType) ?? 1;
         return {
           y:
             STAFF_Y_PADDING +
             (noteStaffYCoords.get(noteElement) ?? 0) -
             yHeadOffset,
           stemUp,
-          flagCount,
         };
       }
 
@@ -108,7 +105,6 @@ export function buildBeamsRenderer(
         y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
         stemUp,
         chordClearanceY,
-        flagCount: beamCount,
       };
     }
   );

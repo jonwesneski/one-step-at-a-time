@@ -74,6 +74,104 @@ test('draws one tie per run note, fanning into the chord, and does not overflow 
   expect(centers[1]).toBeLessThan(centers[2]);
 });
 
+// Per run note: the drawn stem length, and the gap between the stem's beam-end
+// and the primary beam's outer edge at that x (all screen px).
+async function runStemVsPrimaryBeam(
+  page: Page,
+  stemUp: boolean
+): Promise<{ stemLength: number; tipToPrimaryGap: number }[]> {
+  return page.evaluate((isStemUp) => {
+    const staff = document.querySelector('music-staff');
+    const beamsContainer = staff?.shadowRoot?.querySelector(
+      '.beams-container'
+    ) as SVGSVGElement;
+    // The primary (outer) beam is always the first polygon (render order is
+    // primary, then secondaries). Its outer edge — toward the stem tips — is
+    // points[0]→points[3] (points 1,2 are the inner edge).
+    const primary = beamsContainer.querySelector(
+      'polygon.beam'
+    ) as SVGPolygonElement;
+    const ctm = beamsContainer.getScreenCTM()!;
+    const toScreen = (pt: { x: number; y: number }) => {
+      const p = beamsContainer.createSVGPoint();
+      p.x = pt.x;
+      p.y = pt.y;
+      return p.matrixTransform(ctm);
+    };
+    const a = toScreen(primary.points[0]);
+    const b = toScreen(primary.points[3]);
+    const primaryOuterYAt = (x: number) =>
+      a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x);
+
+    const notes = Array.from(
+      document.querySelectorAll('music-arpeggio > music-note')
+    );
+    return notes.map((n) => {
+      const stem = n.shadowRoot?.querySelector('.stem') as SVGLineElement;
+      const stemRect = stem.getBoundingClientRect();
+      const tipX = stemRect.left + stemRect.width / 2;
+      const tipY = isStemUp ? stemRect.top : stemRect.bottom;
+      return {
+        stemLength: stemRect.height,
+        tipToPrimaryGap: Math.abs(tipY - primaryOuterYAt(tipX)),
+      };
+    });
+  }, stemUp);
+}
+
+test('written-out arpeggio run: stem-up stems lengthen for the beam stack and reach it', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-arpeggio>
+         <music-note note="C" octave="4"></music-note>
+         <music-note note="E" octave="4"></music-note>
+         <music-note note="G" octave="4"></music-note>
+         <music-note note="C" octave="5"></music-note>
+         <music-chord chord="Cmaj" duration="half"></music-chord>
+       </music-arpeggio>
+     </music-staff>`
+  );
+
+  const geometry = await runStemVsPrimaryBeam(page, true);
+  expect(geometry).toHaveLength(4);
+  for (const { stemLength, tipToPrimaryGap } of geometry) {
+    // A thirtysecond run stacks 3 beams toward the heads; the base 32px stem is
+    // too short — it must grow so the innermost beam still clears the notehead.
+    expect(stemLength).toBeGreaterThan(40);
+    expect(tipToPrimaryGap).toBeLessThan(4);
+  }
+});
+
+test('divided-ties arpeggio run: stem-down stems reach the outer beam', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-arpeggio>
+         <music-note note="C" octave="5"></music-note>
+         <music-note note="D" octave="5"></music-note>
+         <music-note note="E" octave="5"></music-note>
+         <music-chord duration="whole">
+           <music-note note="C" octave="5"></music-note>
+           <music-note note="D" octave="5"></music-note>
+           <music-note note="E" octave="5"></music-note>
+         </music-chord>
+       </music-arpeggio>
+     </music-staff>`
+  );
+
+  const geometry = await runStemVsPrimaryBeam(page, false);
+  expect(geometry).toHaveLength(3);
+  for (const { tipToPrimaryGap } of geometry) {
+    // The drawn stem tip must meet the primary beam, not float short of it.
+    expect(tipToPrimaryGap).toBeLessThan(4);
+  }
+});
+
 test('anchors each tie on the real chord-tone notehead (second-interval chord)', async ({
   page,
 }) => {

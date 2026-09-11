@@ -1240,6 +1240,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     this.#beamRenderer?.spaceAll();
 
+    // Reconcile each beamed stem to the beam line as actually drawn. #renderNotes()
+    // pushed an index-fraction estimate before X was known; now that setX + spaceAll
+    // have run, stemExtension(i) returns the true-X value. The equality guard in the
+    // note/chord setter makes this a no-op for the common evenly-spaced case, and
+    // it is the only stem-length pass that runs on a bare resize (onStaffResize →
+    // #spaceElements, never #renderNotes).
+    if (this.#beamRenderer !== null) {
+      for (let i = 0; i < this.#currentElements.length; i++) {
+        if (!this.#beamedIndicesSnapshot.has(i)) {
+          continue;
+        }
+        const element = this.#currentElements[i];
+        const extension = this.#beamRenderer.stemExtension(i);
+        if (element.nodeName === MUSIC_NOTE_NODE) {
+          (element as NoteElementType).stemExtension = extension;
+        } else if (element.nodeName === MUSIC_CHORD_NODE) {
+          (element as ChordElementType).stemExtension = extension;
+        }
+      }
+    }
+
     // Size the tuplet container to match the notes area (same as beams container)
     this.#tupletContainer.setAttribute('x', `${this.#describeEndX}`);
     this.#tupletContainer.setAttribute('width', `${remainingWidth}`);
@@ -1277,7 +1298,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
         null,
-        hasInnerGroups
+        hasInnerGroups,
+        (i) => this.#beamRenderer?.primaryBeamYForIndex(i) ?? null
       );
       if (geometry !== null) {
         innerGeometriesByGroup.set(group, geometry);
@@ -1318,7 +1340,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
         outerBaseY,
-        hasInnerGroups
+        hasInnerGroups,
+        (i) => this.#beamRenderer?.primaryBeamYForIndex(i) ?? null
       );
       if (geometry !== null) {
         allGeometries.push(geometry);

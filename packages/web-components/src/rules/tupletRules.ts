@@ -21,7 +21,6 @@ import {
   TUPLET_STAFF_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
-  flagStemExtensionPx,
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_STEM_TIP_Y_OFFSET,
@@ -30,7 +29,6 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
 } from '../utils/svgCreator/note';
-import { durationToFlagCountMap } from './theoryConsts';
 
 export type ParsedTupletRatio = {
   actual: number;
@@ -223,7 +221,13 @@ export function computeTupletBracketGeometry(
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
   outerBaseY: number | null,
-  hasInnerGroups: boolean
+  hasInnerGroups: boolean,
+  // The primary (outermost) beam's Y at note `index`, as the beam renderer
+  // actually drew it — null when that note is not beamed or no renderer exists.
+  // The numeral/bracket sits clear of the beam, so it reads the real beam line
+  // rather than re-deriving it from staff coords (which misses the beam's
+  // vertical offset). Defaults to the staff-coord derivation.
+  primaryBeamYForIndex: (index: number) => number | null = () => null
 ): TupletBracketGeometry | null {
   if (group.indices.length < 2) {
     return null;
@@ -308,6 +312,33 @@ export function computeTupletBracketGeometry(
       TUPLET_HOOK_LENGTH_PX;
   let baseY = outerBaseY ?? staffBaseY;
 
+  // The beam Y at note `idx`: the renderer's actual primary-beam line when
+  // available, else re-derived from the staff Y (which omits the beam's vertical
+  // offset — used only when there is no beam renderer, e.g. jsdom / standalone).
+  const beamTipYForIndex = (idx: number): number | null => {
+    const fromRenderer = primaryBeamYForIndex(idx);
+    if (fromRenderer !== null) {
+      return fromRenderer;
+    }
+    const staffY = getStaffYForIndex(
+      idx,
+      elements,
+      stemDirections,
+      noteStaffYCoords,
+      chordStaffYCoords
+    );
+    if (staffY === null) {
+      return null;
+    }
+    const yHeadOffset = stemUp
+      ? NOTE_Y_HEAD_OFFSET_STEM_UP
+      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const stemTipOffset = stemUp
+      ? NOTE_STEM_TIP_Y_OFFSET
+      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+  };
+
   // When notes are beamed, push baseY outward past the extreme stem tip so the
   // bracket never overlaps a stem or beam. Only applies when we are drawing a
   // bracket (omitBracket === false will be determined after, but we can check
@@ -318,27 +349,14 @@ export function computeTupletBracketGeometry(
     (i) => elements[i].nodeName !== MUSIC_REST_NODE
   );
   if (allBeamed && nonRestIndicesForClamping.length > 0) {
-    const yHeadOffset = stemUp
-      ? NOTE_Y_HEAD_OFFSET_STEM_UP
-      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-    const stemTipOffset = stemUp
-      ? NOTE_STEM_TIP_Y_OFFSET
-      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
     const gap = TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX;
 
     const extremeStemTipY = nonRestIndicesForClamping.reduce(
       (worst, i) => {
-        const staffY = getStaffYForIndex(
-          i,
-          elements,
-          stemDirections,
-          noteStaffYCoords,
-          chordStaffYCoords
-        );
-        if (staffY === null) {
+        const tipY = beamTipYForIndex(i);
+        if (tipY === null) {
           return worst;
         }
-        const tipY = STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
         return stemUp ? Math.min(worst, tipY) : Math.max(worst, tipY);
       },
       stemUp ? Infinity : -Infinity
@@ -374,61 +392,23 @@ export function computeTupletBracketGeometry(
 
   let numeralY: number;
   if (omitBracket) {
-    // Place numeral purely from beam geometry — outside the beam stack.
-    // Compute stem-tip Y for the first and last notes, then interpolate at numeralX.
+    // Place numeral purely from the drawn beam — outside the beam stack.
+    // Take the primary beam's Y at the first and last notes, interpolate at numeralX.
     const firstNonRest = nonRestIndices[0];
     const lastNonRest = nonRestIndices[nonRestIndices.length - 1];
-    const firstStaffY = getStaffYForIndex(
-      firstNonRest,
-      elements,
-      stemDirections,
-      noteStaffYCoords,
-      chordStaffYCoords
-    );
-    const lastStaffY = getStaffYForIndex(
-      lastNonRest,
-      elements,
-      stemDirections,
-      noteStaffYCoords,
-      chordStaffYCoords
-    );
     const firstNoteX = noteheadCentreX(firstNonRest);
     const lastNoteX = noteheadCentreX(lastNonRest);
-    const yHeadOffset = stemUp
-      ? NOTE_Y_HEAD_OFFSET_STEM_UP
-      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-    const stemTipOffset = stemUp
-      ? NOTE_STEM_TIP_Y_OFFSET
-      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    const flagCount =
-      durationToFlagCountMap.get(elements[firstNonRest].duration) ?? 1;
-    const flagExtension = stemUp ? 0 : flagStemExtensionPx(flagCount);
-    const firstBeamY =
-      firstStaffY !== null
-        ? STAFF_Y_PADDING +
-          firstStaffY -
-          yHeadOffset +
-          stemTipOffset +
-          flagExtension
-        : staffBaseY;
-    const lastBeamY =
-      lastStaffY !== null
-        ? STAFF_Y_PADDING +
-          lastStaffY -
-          yHeadOffset +
-          stemTipOffset +
-          flagExtension
-        : staffBaseY;
+    const firstBeamY = beamTipYForIndex(firstNonRest) ?? staffBaseY;
+    const lastBeamY = beamTipYForIndex(lastNonRest) ?? staffBaseY;
     const run = lastNoteX - firstNoteX;
     const beamYAtNumeralX =
       run > 0
         ? firstBeamY +
           ((numeralX - firstNoteX) / run) * (lastBeamY - firstBeamY)
         : firstBeamY;
-    // beamYAtNumeralX is at the inner face of the beam closest to the numeral:
-    // - stem-up: stem tip = primary beam inner face (secondary beams grow downward, away from numeral)
-    // - stem-down: flagExtension already moved the baseline to the outermost beam's inner face
-    // In both cases, clearing one beam thickness positions the numeral just outside that face.
+    // beamYAtNumeralX is the primary (outermost) beam line. Its secondary beams
+    // stack toward the noteheads, away from the numeral, so clearing one beam
+    // thickness plus the gap positions the numeral just outside the stack.
     const numeralOffset =
       TUPLET_NUMERAL_FONT_SIZE / 2 +
       TUPLET_NUMERAL_BEAM_GAP_PX +

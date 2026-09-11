@@ -213,6 +213,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return this.#stemExtension;
     }
     set stemExtension(v: number) {
+      if (v === this.#stemExtension) {
+        return;
+      }
       this.#stemExtension = v;
       this.#scheduleRender();
     }
