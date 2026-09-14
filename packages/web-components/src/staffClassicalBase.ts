@@ -64,6 +64,7 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  TrillStyle,
 } from './types/theory';
 import {
   BeamsBuilder,
@@ -97,6 +98,7 @@ import {
   SVG_NS,
 } from './utils/consts';
 import {
+  ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX,
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
@@ -119,7 +121,10 @@ import {
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
   TRILL_ABOVE_STAFF_GAP_PX,
+  TRILL_ACCIDENTAL_GAP_PX,
+  TRILL_ACCIDENTAL_SCALE,
   TRILL_LINE_END_GAP_PX,
+  TRILL_SIGN_HEIGHT_PX,
   TRILL_SIGN_LINE_GAP_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
   TUPLET_HOOK_LENGTH_PX,
@@ -138,6 +143,7 @@ import {
   createTrillLineSvg,
   createTrillNotchSvg,
   createWrittenTrillNoteSvg,
+  TRILL_ABBREVIATION_WIDTH_PX,
   TRILL_SIGN_WIDTH_PX,
 } from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
@@ -180,6 +186,17 @@ function footprintArpeggio(element: NoteElementType | ChordElementType) {
 
 const isArpeggioWave = (arpeggio: ArpeggioType | null): boolean =>
   arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down';
+
+// Width (px) actually reserved for a trill-marked entry's own sign, keyed to
+// which variant it renders — the SMuFL glyph (TRILL_SIGN_WIDTH_PX) or, for
+// trill-style="abbreviation", the "t.r." text's own estimated width. Using
+// the glyph's width unconditionally here would let the wavy line's start (and
+// anything else positioned off this) run through the abbreviation text
+// whenever it renders wider than the glyph.
+const trillSignReservedWidth = (trillStyle: TrillStyle): number =>
+  trillStyle === 'abbreviation'
+    ? TRILL_ABBREVIATION_WIDTH_PX
+    : TRILL_SIGN_WIDTH_PX;
 
 // A trill sign's/line's bottom edge sits at a fixed height above the staff
 // top line, independent of pitch (see svgCreator/note.ts's own
@@ -337,8 +354,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
   // Index of a span's writtenNoteAnchorIndex -> the rightward px footprint a
   // written trilling notehead (trill-note) reserves there. Recomputed once
-  // per #renderNotes()/TRILL_ATTRIBUTE_CHANGE pass — see
-  // #computeWrittenTrillFootprints().
+  // per #renderNotes() pass (also the target of both CONNECTOR_ATTRIBUTE_CHANGE
+  // and TRILL_ATTRIBUTE_CHANGE when trill-marked elements are present — a tied
+  // note's span endpoint and a written notehead's footprint both depend on
+  // more than the attribute that changed, so both routes need the full pass,
+  // not a narrower redraw) — see #computeWrittenTrillFootprints().
   #writtenTrillFootprints: Map<number, number> = new Map();
   // Index -> the rightward px footprint a trill's finishing grace note(s)
   // (trill-finish) reserve there — see #computeTrillFinishFootprints().
@@ -353,16 +373,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#reRenderFromCurrentSlot();
       return;
     }
+    // A trill span's own endpoint (rules/trillRules.ts's tie-chain walk) and a
+    // written trilling notehead's reserved footprint both depend on `tie`,
+    // but a `tie` change only ever dispatches CONNECTOR_ATTRIBUTE_CHANGE —
+    // when any current element is trill-marked, a plain connector redraw
+    // isn't enough, so fall through to the same full re-layout pass a trill
+    // attribute change itself now takes (see #boundNoteYChange).
+    if (this.#hasTrillMarkedElement()) {
+      this.#boundNoteYChange();
+      return;
+    }
     this.drawConnectorsWhenStandalone();
   };
   #boundRenderDynamics = () => {
     this.#dynamicsContainer.innerHTML = '';
     this.#renderDynamics();
-  };
-  #boundRedrawTrillLines = () => {
-    this.#resolveTrillPitches();
-    this.#trillLinesContainer.innerHTML = '';
-    this.#redrawTrillLines();
   };
   #boundNoteYChange = () => {
     if (this.#currentElements.length > 0) {
@@ -517,9 +542,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
       this.#boundRenderDynamics
     );
+    // A trill attribute change needs the same full re-layout NOTE_Y_CHANGE
+    // triggers, not a narrower redraw — toggling `trill` when `trill-note`
+    // is already set (or vice versa) changes the written notehead's own
+    // reserved rightward footprint, which only #renderNotes() recomputes.
     this.addEventListener(
       NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
-      this.#boundRedrawTrillLines
+      this.#boundNoteYChange
     );
     this.addEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
@@ -657,7 +686,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
     this.removeEventListener(
       NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
-      this.#boundRedrawTrillLines
+      this.#boundNoteYChange
     );
     this.removeEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
@@ -1749,44 +1778,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
   }
 
-  // Re-resolves resolvedTrillPitch on every current element without a full
-  // #renderNotes() — used by the TRILL_ATTRIBUTE_CHANGE listener, since
-  // toggling `trill` or `trill-accidental` on an already-rendered element
-  // needs its sign updated immediately, not just on the next full render.
-  #resolveTrillPitches(): void {
-    for (let i = 0; i < this.#currentElements.length; i++) {
-      const element = this.#currentElements[i];
+  // Whether any current element (note or chord) is trill-marked — used by
+  // #boundDrawConnectors to decide whether a `tie` change (which only
+  // dispatches CONNECTOR_ATTRIBUTE_CHANGE) needs the full trill re-layout
+  // pass too, since a trill span's own endpoint depends on the tie chain.
+  #hasTrillMarkedElement(): boolean {
+    return this.#currentElements.some((element) => {
       if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = element as NoteElementType;
-        noteElement.resolvedTrillPitch = noteElement.trill
-          ? resolveTrillPitch(
-              noteElement.note,
-              noteElement.octave ?? 4,
-              this.#effectiveKeySig,
-              this.#effectiveMode,
-              noteElement.trillAccidental,
-              noteElement.trillNote
-            )
-          : null;
-      } else if (element.nodeName === MUSIC_CHORD_NODE) {
-        const chordElement = element as ChordElementType;
-        chordElement.resolvedTrillPitch = chordElement.trill
-          ? this.#resolveChordTrillPitch(
-              chordElement,
-              this.#chordStaffYCoordsSnapshot.get(chordElement) ?? []
-            )
-          : null;
+        return (element as NoteElementType).trill;
       }
-    }
+      if (element.nodeName === MUSIC_CHORD_NODE) {
+        return (element as ChordElementType).trill;
+      }
+      return false;
+    });
   }
 
   // Draws the wavy trill line (+ end-notch) and, when in written mode, the
   // small parenthesized trilling notehead, for every `trill`-marked element
   // in the current note stream, same-measure only (a span never crosses into
   // a sibling <music-measure>'s own staff — see rules/trillRules.ts). Called
-  // from #spaceElements() (remainingWidth already known there) and, lightly,
-  // from the TRILL_ATTRIBUTE_CHANGE listener (recomputes it, matching
-  // #spaceElements()'s own formula).
+  // from #spaceElements() (remainingWidth already known there), itself part
+  // of the full #renderNotes() pass every trill/tie-affecting attribute
+  // change now routes through.
   #redrawTrillLines(remainingWidth?: number): void {
     const width =
       remainingWidth ??
@@ -1818,7 +1832,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const startX =
         startNoteX +
         signLeftOffset +
-        TRILL_SIGN_WIDTH_PX +
+        trillSignReservedWidth(startElement.trillStyle) +
         TRILL_SIGN_LINE_GAP_PX;
       const endX = this.#trillLineEndX(span, width);
 
@@ -2069,6 +2083,39 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         DYNAMICS_FONT_SIZE;
       if (textTopY < 0) {
         budget = Math.max(budget, Math.ceil(-textTopY) + 2);
+      }
+    }
+
+    // A trilling-note accidental (the accidental-only mode — no trill-note,
+    // so no written parenthesized notehead) sits above the trill sign itself,
+    // which already sits at a fixed height above the staff — reserve room
+    // when that combined height would otherwise poke past the SVG. Written
+    // mode's accidental renders inline inside the notehead instead and needs
+    // no extra vertical room, so it's excluded here.
+    const hasTrillAccidental = this.#currentElements.some((element) => {
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        return false;
+      }
+      const pitch = (element as NoteElementType | ChordElementType)
+        .resolvedTrillPitch;
+      return (
+        pitch !== null && pitch.written === false && pitch.accidental !== null
+      );
+    });
+    if (hasTrillAccidental) {
+      const tallestAccidentalHeight =
+        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
+        TRILL_ACCIDENTAL_SCALE;
+      const topY =
+        TRILL_ABOVE_STAFF_BOTTOM_Y -
+        TRILL_SIGN_HEIGHT_PX -
+        TRILL_ACCIDENTAL_GAP_PX -
+        tallestAccidentalHeight;
+      if (topY < 0) {
+        budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
     }
 

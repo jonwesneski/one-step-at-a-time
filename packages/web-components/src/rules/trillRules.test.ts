@@ -214,6 +214,31 @@ describe('resolveTrillContinuationSegments', () => {
     ).toEqual([]);
   });
 
+  it('returns nothing for an untied trill on a measure’s last element, even though the line itself runs into the next measure’s first note', () => {
+    // The tie chain never leaves the starting measure (lastTiedIndex === startIndex,
+    // untied), but endBeforeIndex (the next element the line stops short of) is
+    // the first note of the following measure — that alone must not trigger a
+    // continuation segment, since the trailing sliver of line is already drawn
+    // by the starting measure's own staff-local render.
+    const elements = [
+      note(), // measure 0
+      note(), // measure 0
+      note({ trill: true }), // measure 0, index 2 — last element of measure 0, untied
+      note(), // measure 1, index 3
+    ];
+    const boundaries = boundariesFor(3, 1);
+    const [span] = resolveTrillSpans(elements);
+    expect(span).toMatchObject({
+      startIndex: 2,
+      lastTiedIndex: 2,
+      stopped: false,
+      endBeforeIndex: 3,
+    });
+    expect(
+      resolveTrillContinuationSegments(elements, boundaries, span)
+    ).toEqual([]);
+  });
+
   it('adds one segment when the tie chain carries the span into the very next measure and stops there', () => {
     const elements = [
       note({ trill: true, tie: 'start' }), // measure 0, index 0

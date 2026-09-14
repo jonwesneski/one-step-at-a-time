@@ -213,22 +213,27 @@ export function resolveTrillContinuationSegments(
     measureBoundaries,
     span.startIndex
   );
-  const effectiveEndIndex = span.stopped
-    ? span.lastTiedIndex
-    : span.endBeforeIndex ?? elements.length - 1;
-  const endMeasure = measureIndexOfGlobalIndex(
+  // Whether continuation is needed at all is decided by the tie chain's own
+  // end (lastTiedIndex), not by endBeforeIndex — endBeforeIndex is the next
+  // element the *line* stops short of, which is always lastTiedIndex + 1 and
+  // so can land in the following measure even when the tie chain itself
+  // never left the starting measure (an untied trill on a measure's last
+  // element). That trailing sliver of line is already drawn by the starting
+  // measure's own staff-local render (it simply runs to the measure's own
+  // right edge), so it must not also trigger a continuation segment here.
+  const lastTiedMeasure = measureIndexOfGlobalIndex(
     measureBoundaries,
-    effectiveEndIndex
+    span.lastTiedIndex
   );
 
-  if (startMeasure === endMeasure) {
+  if (startMeasure === lastTiedMeasure) {
     return [];
   }
 
   const segments: TrillContinuationSegment[] = [];
-  for (let m = startMeasure + 1; m <= endMeasure; m++) {
+  for (let m = startMeasure + 1; m <= lastTiedMeasure; m++) {
     const { startIndex: measureStart } = measureBoundaries[m];
-    if (m < endMeasure) {
+    if (m < lastTiedMeasure) {
       segments.push({
         measureIndex: m,
         endBeforeLocalIndex: null,

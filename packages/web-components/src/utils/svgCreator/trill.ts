@@ -45,6 +45,16 @@ const ORNAMENT_TRILL_SCALE =
 export const TRILL_SIGN_WIDTH_PX =
   ORNAMENT_TRILL_NATURAL_WIDTH * ORNAMENT_TRILL_SCALE;
 
+/**
+ * Estimated rendered width (px) of the `t.r.` abbreviation text — the
+ * `trill-style="abbreviation"` counterpart to `TRILL_SIGN_WIDTH_PX`, since an
+ * SVG `<text>` element has no layout-time measured width of its own. Four
+ * characters (bold italic serif) run a little under 1.6x the font's own em
+ * size; callers position the wavy line and layout footprint off this instead
+ * of the glyph's fixed width whenever `trillStyle === 'abbreviation'`.
+ */
+export const TRILL_ABBREVIATION_WIDTH_PX = TRILL_ABBREVIATION_FONT_SIZE * 1.6;
+
 export type TrillSignProps = {
   /** Local-space X at which the sign's left edge sits, flush with the notehead's left edge. */
   leftX: number;
@@ -144,7 +154,7 @@ export function createTrillAbbreviationSvg({
       accidental,
       leftX,
       bottomY - TRILL_ABBREVIATION_FONT_SIZE,
-      TRILL_ABBREVIATION_FONT_SIZE * 1.6
+      TRILL_ABBREVIATION_WIDTH_PX
     );
   }
 

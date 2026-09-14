@@ -138,6 +138,80 @@ test('sits above the staff top line', async ({ page }) => {
   expect(lineTop).toBeLessThan(staffTopLine);
 });
 
+test('the wavy line starts clear of the abbreviation text’s own real rendered width', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-note
+         note="C"
+         octave="5"
+         duration="quarter"
+         trill
+         trill-style="abbreviation"
+       ></music-note>
+       <music-note note="D" octave="5" duration="quarter"></music-note>
+     </music-staff>`
+  );
+
+  const info = await page.evaluate(() => {
+    const note = document.querySelector('music-note');
+    const staff = document.querySelector('music-staff');
+    const text = note?.shadowRoot?.querySelector('.trill-abbreviation-glyph');
+    const line = staff?.shadowRoot?.querySelector(
+      '.trill-lines-container .trill-line'
+    );
+    return {
+      textRect: text?.getBoundingClientRect() ?? null,
+      lineRect: line?.getBoundingClientRect() ?? null,
+    };
+  });
+
+  expect(info.textRect).not.toBeNull();
+  expect(info.lineRect).not.toBeNull();
+  // The line's own left edge (its start) clears the abbreviation text's real
+  // rendered right edge — a fixed-glyph-width assumption here would place the
+  // line's start too far left, running it through the text.
+  expect(info.lineRect!.left).toBeGreaterThanOrEqual(info.textRect!.right - 1);
+});
+
+test('the abbreviation and sign variants reserve their own distinct widths for the line start, not a shared fixed one', async ({
+  page,
+}) => {
+  const lineLeftFor = async (trillStyle: 'sign' | 'abbreviation') => {
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+         <music-note
+           note="C"
+           octave="5"
+           duration="quarter"
+           trill
+           trill-style="${trillStyle}"
+         ></music-note>
+         <music-note note="D" octave="5" duration="quarter"></music-note>
+       </music-staff>`
+    );
+    return page.evaluate(() => {
+      const line = document
+        .querySelector('music-staff')
+        ?.shadowRoot?.querySelector('.trill-lines-container .trill-line');
+      return line?.getBoundingClientRect().left ?? null;
+    });
+  };
+
+  const signLineLeft = await lineLeftFor('sign');
+  const abbreviationLineLeft = await lineLeftFor('abbreviation');
+
+  // TRILL_SIGN_WIDTH_PX and TRILL_ABBREVIATION_WIDTH_PX are different
+  // constants — if the line-start math used one fixed width regardless of
+  // trillStyle, these two would come out identical.
+  expect(abbreviationLineLeft).not.toBeNull();
+  expect(signLineLeft).not.toBeNull();
+  expect(abbreviationLineLeft).not.toBeCloseTo(signLineLeft!, 1);
+});
+
 test('draws exactly one notch at an explicit trill-stop, even mid tie-chain', async ({
   page,
 }) => {
@@ -194,6 +268,66 @@ test('redraws the line when trill is toggled after the initial render', async ({
   expect(await trillLineRects(page)).toHaveLength(1);
 });
 
+test('adding a tie after the initial render extends the trill line to the newly tied note', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-note note="C" octave="5" duration="quarter" trill></music-note>
+       <music-note note="C" octave="5" duration="quarter"></music-note>
+       <music-note note="D" octave="5" duration="quarter"></music-note>
+     </music-staff>`
+  );
+
+  const beforeRects = await trillLineRects(page);
+  expect(beforeRects).toHaveLength(1);
+  const beforeWidth = beforeRects[0].width;
+
+  // Tying the trill-marked note forward only dispatches
+  // CONNECTOR_ATTRIBUTE_CHANGE — the trill span must still be re-resolved so
+  // the line extends to the newly tied note instead of staying stale at its
+  // old (shorter) untied extent.
+  await page.evaluate(() => {
+    const notes = document.querySelectorAll('music-note');
+    (notes[0] as HTMLElement & { tie: string }).tie = 'start';
+    (notes[1] as HTMLElement & { tie: string }).tie = 'end';
+  });
+  await waitForRedrawCycle(page);
+
+  const afterRects = await trillLineRects(page);
+  expect(afterRects).toHaveLength(1);
+  expect(afterRects[0].right).toBeGreaterThan(beforeRects[0].right);
+  expect(afterRects[0].width).toBeGreaterThan(beforeWidth);
+});
+
+test('removing a tie after the initial render pulls the trill line back to its shorter extent', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-note note="C" octave="5" duration="quarter" trill tie="start"></music-note>
+       <music-note note="C" octave="5" duration="quarter" tie="end"></music-note>
+       <music-note note="D" octave="5" duration="quarter"></music-note>
+     </music-staff>`
+  );
+
+  const beforeRects = await trillLineRects(page);
+  expect(beforeRects).toHaveLength(1);
+
+  await page.evaluate(() => {
+    const notes = document.querySelectorAll('music-note');
+    notes[0].removeAttribute('tie');
+    notes[1].removeAttribute('tie');
+  });
+  await waitForRedrawCycle(page);
+
+  const afterRects = await trillLineRects(page);
+  expect(afterRects).toHaveLength(1);
+  expect(afterRects[0].right).toBeLessThan(beforeRects[0].right);
+});
+
 test('draws the key-signature-implied accidental above the sign', async ({
   page,
 }) => {
@@ -221,6 +355,37 @@ test('draws the key-signature-implied accidental above the sign', async ({
   expect(signRect).not.toBeNull();
   // G major implies F# above E — the accidental sits above (smaller Y) the sign.
   expect(accidentalRect!.bottom).toBeLessThanOrEqual(signRect!.top);
+});
+
+test('reserves enough above-staff room that a trilling-note accidental never renders above the staff’s own SVG', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4" key-sig="G">
+       <music-note note="E" octave="5" duration="quarter" trill></music-note>
+       <music-note note="F" octave="5" duration="quarter"></music-note>
+     </music-staff>`
+  );
+
+  const info = await page.evaluate(() => {
+    const staff = document.querySelector('music-staff');
+    const note = document.querySelector('music-note');
+    const accidental = note?.shadowRoot?.querySelector('.trill-accidental');
+    const svg = staff?.shadowRoot?.querySelector('.transcribe-container');
+    return {
+      accidentalRect: accidental?.getBoundingClientRect() ?? null,
+      svgRect: svg?.getBoundingClientRect() ?? null,
+    };
+  });
+
+  expect(info.accidentalRect).not.toBeNull();
+  expect(info.svgRect).not.toBeNull();
+  // The accidental's own top edge stays within the staff's rendered SVG area
+  // — #estimateAboveStaffBudget() must reserve enough height that this
+  // never pokes above y=0 in the SVG's own coordinate space (which would
+  // otherwise overlap whatever content sits above this staff on the page).
+  expect(info.accidentalRect!.top).toBeGreaterThanOrEqual(info.svgRect!.top);
 });
 
 test('draws no accidental when the key signature already implies it unaltered', async ({
@@ -334,6 +499,52 @@ test('pushes the following note rightward to make room for the written trilling 
   // The following note starts clear of the written notehead's own right edge.
   expect(followingRect.left).toBeGreaterThanOrEqual(writtenRect!.right);
   expect(followingRect.left).toBeGreaterThan(trilledRect.right);
+});
+
+test('enabling trill after trill-note is already set reserves room for the written notehead immediately', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-note note="C" octave="5" duration="quarter" trill-note="F#"></music-note>
+       <music-note note="D" octave="5" duration="quarter"></music-note>
+     </music-staff>`
+  );
+
+  // No written notehead yet — trill-note alone (without trill) draws nothing.
+  const beforeWritten = await page.evaluate(
+    () =>
+      document
+        .querySelector('music-staff')
+        ?.shadowRoot?.querySelector('.trill-written-note') ?? null
+  );
+  expect(beforeWritten).toBeNull();
+
+  // The lightweight TRILL_ATTRIBUTE_CHANGE path must trigger a full re-layout
+  // here — resolvedTrillPitch.written flips to true and the written notehead
+  // starts rendering, but only a full #renderNotes() pass recomputes the
+  // rightward footprint that reserves room for it.
+  await page.evaluate(() => {
+    const note = document.querySelector('music-note') as HTMLElement & {
+      trill: boolean;
+    };
+    note.trill = true;
+  });
+  await waitForRedrawCycle(page);
+
+  const [followingRect, writtenRect] = await page.evaluate(() => {
+    const notes = document.querySelectorAll('music-note');
+    const staff = document.querySelector('music-staff');
+    const written = staff?.shadowRoot?.querySelector('.trill-written-note');
+    return [
+      notes[1].getBoundingClientRect(),
+      written?.getBoundingClientRect() ?? null,
+    ];
+  });
+
+  expect(writtenRect).not.toBeNull();
+  expect(followingRect.left).toBeGreaterThanOrEqual(writtenRect!.right);
 });
 
 test('a tie starting from a written-trilling-note note begins clear of the parenthesized notehead', async ({

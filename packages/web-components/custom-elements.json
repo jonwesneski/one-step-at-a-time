@@ -1618,7 +1618,7 @@
               "privacy": "private",
               "parameters": [
                 {
-                  "name": "reReserveLowerEnds",
+                  "name": "reReserveSpanEnds",
                   "default": "false"
                 }
               ]
