@@ -1,5 +1,6 @@
 import type { ConnectorRole, TieValue } from '../types/elements';
 import type {
+  AccidentalType,
   ArpeggioType,
   ArticulationType,
   ClefType,
@@ -13,8 +14,13 @@ import type {
   Octave,
   StaffGroupType,
   StressType,
+  TrillContinuationMode,
+  TrillFinishSlur,
+  TrillLineMode,
+  TrillStyle,
 } from '../types/theory';
 import {
+  ACCIDENTAL_TYPES,
   ARPEGGIOS,
   ARTICULATIONS,
   CLEFS,
@@ -25,8 +31,13 @@ import {
   OCTAVES,
   STAFF_GROUPS,
   STRESSES,
+  TRILL_CONTINUATION_MODES,
+  TRILL_FINISH_SLURS,
+  TRILL_LINE_MODES,
+  TRILL_STYLES,
 } from './consts';
 
+const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
 const VALID_ARTICULATIONS = new Set<string>(ARTICULATIONS);
 const VALID_STRESSES = new Set<string>(STRESSES);
@@ -37,6 +48,12 @@ const VALID_GRACE_SLURS = new Set<string>(GRACE_SLURS);
 const VALID_OCTAVES = new Set<number>(OCTAVES);
 const VALID_CLEFS = new Set<string>(CLEFS);
 const VALID_STAFF_GROUPS = new Set<string>(STAFF_GROUPS);
+const VALID_TRILL_STYLES = new Set<string>(TRILL_STYLES);
+const VALID_TRILL_LINE_MODES = new Set<string>(TRILL_LINE_MODES);
+const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
+  TRILL_CONTINUATION_MODES
+);
+const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
 const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
@@ -119,6 +136,45 @@ export const parseArpeggio = (value: string | null): ArpeggioType | null => {
     return value as ArpeggioType;
   }
   return null;
+};
+
+export const parseAccidentalType = (
+  value: string | null
+): AccidentalType | null => {
+  if (value !== null && VALID_ACCIDENTAL_TYPES.has(value)) {
+    return value as AccidentalType;
+  }
+  return null;
+};
+
+export const parseTrillStyle = (value: string | null): TrillStyle => {
+  if (value !== null && VALID_TRILL_STYLES.has(value)) {
+    return value as TrillStyle;
+  }
+  return 'sign';
+};
+
+export const parseTrillLineMode = (value: string | null): TrillLineMode => {
+  if (value !== null && VALID_TRILL_LINE_MODES.has(value)) {
+    return value as TrillLineMode;
+  }
+  return 'auto';
+};
+
+export const parseTrillContinuationMode = (
+  value: string | null
+): TrillContinuationMode => {
+  if (value !== null && VALID_TRILL_CONTINUATION_MODES.has(value)) {
+    return value as TrillContinuationMode;
+  }
+  return 'bracketed';
+};
+
+export const parseTrillFinishSlur = (value: string | null): TrillFinishSlur => {
+  if (value !== null && VALID_TRILL_FINISH_SLURS.has(value)) {
+    return value as TrillFinishSlur;
+  }
+  return 'to-main';
 };
 
 export const parseGraceType = (value: string | null): GraceType | null => {

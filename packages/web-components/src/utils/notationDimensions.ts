@@ -665,3 +665,67 @@ export const ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.7;
 
 /** Length (px) of an open-ended (laissez vibrer) tie curve. */
 export const LAISSEZ_VIBRER_CURVE_LENGTH_PX = STAFF_LINE_SPACING * 1.6;
+
+// ─── Trills ───────────────────────────────────────────────────────────────────
+// The sign is built from an engraved glyph outline (see
+// utils/svgCreator/trill.ts); the wavy extension line tiles a second engraved
+// segment horizontally, the same stretch-to-fit approach as the arpeggio wave
+// (see utils/svgCreator/arpeggio.ts) but running left-to-right instead of
+// top-to-bottom. Starting values — tune in Storybook.
+
+/** Rendered height (px) of the trill sign. */
+export const TRILL_SIGN_HEIGHT_PX = STAFF_LINE_SPACING * 1.4;
+
+/** Gap (px) between the sign's own bottom edge and the staff top line. */
+export const TRILL_ABOVE_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Rendered peak-to-peak vertical height (px) of the wavy line. */
+export const TRILL_WAVE_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Gap (px) between the sign's right edge and the wavy line's start. */
+export const TRILL_SIGN_LINE_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/** Gap (px) the wavy line stops short of a following (non-trilling) notehead. */
+export const TRILL_LINE_END_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Height (px) of the vertical notch that marks an explicit `trill-stop`. */
+export const TRILL_NOTCH_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Font size (px) of the `t.r.` abbreviation text (`trill-style="abbreviation"`). */
+export const TRILL_ABBREVIATION_FONT_SIZE = STAFF_LINE_SPACING * 1.3;
+
+/**
+ * Scale applied to a trilling-note accidental drawn above the trill sign —
+ * smaller than a full notehead accidental, matching the sign's own reduced
+ * scale relative to a normal notehead.
+ */
+export const TRILL_ACCIDENTAL_SCALE = 0.7;
+
+/** Gap (px) between the trilling-note accidental's bottom edge and the sign's top edge. */
+export const TRILL_ACCIDENTAL_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Scale applied to a written trilling notehead (`trill-note`) — a cue-note
+ * size (¾ scale), matching GRACE_SCALE's own note on cue-note sizing but
+ * slightly larger than a grace note, since it stands alone rather than
+ * grouped in a run.
+ */
+export const TRILL_WRITTEN_NOTE_SCALE = 0.75;
+
+/** Gap (px) between the anchor notehead's right edge and the written trilling notehead's left parenthesis. */
+export const TRILL_WRITTEN_NOTE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between each parenthesis and the notehead it encloses. */
+export const TRILL_PARENTHESIS_NOTE_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/** Stroke width (px) of each parenthesis around a written trilling notehead. */
+export const TRILL_PARENTHESIS_STROKE_WIDTH = 1.2;
+
+/**
+ * How far (px) each parenthesis extends past the notehead's own vertical
+ * extent, top and bottom.
+ */
+export const TRILL_PARENTHESIS_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.25;
+
+/** Horizontal bow depth (px) of each parenthesis curve. */
+export const TRILL_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;

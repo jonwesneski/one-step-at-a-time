@@ -46,7 +46,8 @@ export function calculateStaffMinWidth(
   noteCount: number,
   firstElementLeftwardWidth = 0,
   extraLeftwardWidth = 0,
-  clefChangeWidth = 0
+  clefChangeWidth = 0,
+  extraRightwardWidth = 0
 ): number {
   return (
     describeEndX +
@@ -54,7 +55,8 @@ export function calculateStaffMinWidth(
     firstElementLeftwardWidth +
     extraLeftwardWidth +
     noteCount * MIN_NOTE_WIDTH +
-    clefChangeWidth
+    clefChangeWidth +
+    extraRightwardWidth
   );
 }
 

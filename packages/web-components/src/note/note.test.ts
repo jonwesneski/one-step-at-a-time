@@ -282,8 +282,16 @@ describe('grace notes', () => {
     expect(noteElement.graceDuration).toBeNull();
     expect(noteElement.graceOctave).toBeNull();
 
-    noteElement.setAttribute('grace-type', 'trill');
+    noteElement.setAttribute('grace-type', 'not-a-real-type');
     expect(noteElement.graceType).toBe('acciaccatura');
+  });
+
+  it('accepts grace-type="trill" as a plain unslashed leading grace note', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    noteElement.setAttribute('grace-type', 'trill');
+    expect(noteElement.graceType).toBe('trill');
   });
 
   it('rejects the whole grace list when any note token is invalid', () => {
@@ -1253,6 +1261,269 @@ function renderNote(
   slot.dispatchEvent(new Event('slotchange'));
   return note;
 }
+
+describe('trill', () => {
+  it('round-trips trill / trill-stop as boolean presence attributes', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trill).toBe(false);
+    noteElement.trill = true;
+    expect(noteElement.getAttribute('trill')).toBe('');
+    expect(noteElement.trill).toBe(true);
+    noteElement.trill = false;
+    expect(noteElement.getAttribute('trill')).toBeNull();
+
+    noteElement.trillStop = true;
+    expect(noteElement.getAttribute('trill-stop')).toBe('');
+    expect(noteElement.trillStop).toBe(true);
+  });
+
+  it('round-trips trill-line and defaults to "auto"', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillLine).toBe('auto');
+    noteElement.trillLine = 'none';
+    expect(noteElement.getAttribute('trill-line')).toBe('none');
+    expect(noteElement.trillLine).toBe('none');
+  });
+
+  it('ignores an unrecognized trill-line value, falling back to "auto"', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('trill-line', 'sometimes');
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillLine).toBe('auto');
+  });
+
+  it('round-trips trill-style and defaults to "sign"', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillStyle).toBe('sign');
+    noteElement.trillStyle = 'abbreviation';
+    expect(noteElement.getAttribute('trill-style')).toBe('abbreviation');
+    expect(noteElement.trillStyle).toBe('abbreviation');
+  });
+
+  it('ignores an unrecognized trill-style value, falling back to "sign"', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('trill-style', 'squiggly');
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillStyle).toBe('sign');
+  });
+
+  it('round-trips trill-accidental and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillAccidental).toBeNull();
+    noteElement.trillAccidental = 'natural';
+    expect(noteElement.getAttribute('trill-accidental')).toBe('natural');
+    expect(noteElement.trillAccidental).toBe('natural');
+
+    noteElement.setAttribute('trill-accidental', 'nope');
+    expect(noteElement.trillAccidental).toBeNull();
+
+    noteElement.trillAccidental = 'sharp';
+    noteElement.trillAccidental = null;
+    expect(noteElement.getAttribute('trill-accidental')).toBeNull();
+  });
+
+  it('round-trips trill-note', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillNote).toBeNull();
+    noteElement.trillNote = 'F#';
+    expect(noteElement.getAttribute('trill-note')).toBe('F#');
+    expect(noteElement.trillNote).toBe('F#');
+
+    noteElement.trillNote = null;
+    expect(noteElement.getAttribute('trill-note')).toBeNull();
+  });
+
+  it('warns when trill-note and trill-accidental are both set', () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.trillAccidental = 'natural';
+    document.body.appendChild(noteElement);
+
+    noteElement.trillNote = 'G';
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('trill-accidental is ignored')
+    );
+
+    consoleSpy.mockClear();
+    const other = document.createElement(MUSIC_NOTE) as NoteElementType;
+    other.trillNote = 'G';
+    document.body.appendChild(other);
+
+    other.trillAccidental = 'natural';
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('trill-accidental is ignored')
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it('round-trips resolvedTrillPitch as an internal (non-attribute) property', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.resolvedTrillPitch).toBeNull();
+    noteElement.resolvedTrillPitch = {
+      letter: 'D',
+      accidental: 'sharp',
+      written: false,
+      octave: null,
+    };
+    expect(noteElement.resolvedTrillPitch).toEqual({
+      letter: 'D',
+      accidental: 'sharp',
+      written: false,
+      octave: null,
+    });
+    expect(noteElement.hasAttribute('resolved-trill-pitch')).toBe(false);
+  });
+
+  it('round-trips trill-finish and trill-finish-octave', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillFinish).toBeNull();
+    noteElement.trillFinish = ['F#', 'G'];
+    noteElement.trillFinishOctave = [4, 4];
+
+    expect(noteElement.getAttribute('trill-finish')).toBe('F#,G');
+    expect(noteElement.trillFinish).toEqual(['F#', 'G']);
+    expect(noteElement.getAttribute('trill-finish-octave')).toBe('4,4');
+    expect(noteElement.trillFinishOctave).toEqual([4, 4]);
+
+    noteElement.trillFinish = '';
+    expect(noteElement.hasAttribute('trill-finish')).toBe(false);
+    expect(noteElement.trillFinish).toBeNull();
+  });
+
+  it('defaults trill-finish-slur to to-main and rejects an invalid value', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.trillFinishSlur).toBe('to-main');
+
+    noteElement.trillFinishSlur = 'to-next';
+    expect(noteElement.trillFinishSlur).toBe('to-next');
+
+    noteElement.setAttribute('trill-finish-slur', 'not-a-real-value');
+    expect(noteElement.trillFinishSlur).toBe('to-main');
+  });
+
+  it('round-trips resolvedTrillFinishAccidentals as an internal (non-attribute) property', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.resolvedTrillFinishAccidentals).toBeNull();
+    noteElement.resolvedTrillFinishAccidentals = ['sharp', null];
+    expect(noteElement.resolvedTrillFinishAccidentals).toEqual(['sharp', null]);
+    expect(noteElement.hasAttribute('resolved-trill-finish-accidentals')).toBe(
+      false
+    );
+  });
+
+  // Trills are staff-only, deliberately: the wavy line needs sibling elements
+  // in the same staff to span into, so a sign with no possible line is not
+  // drawn either — see staffClassicalBase.test.ts for in-staff sign
+  // rendering coverage.
+  it('renders no sign (or abbreviation) on a standalone note, even when set', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.trill = true;
+    document.body.appendChild(noteElement);
+    expect(noteElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
+
+    noteElement.trillStyle = 'abbreviation';
+    expect(noteElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
+    expect(
+      noteElement.shadowRoot?.querySelector('.trill-abbreviation')
+    ).toBeNull();
+  });
+
+  describe('trill-finish (grace notes after the main note)', () => {
+    it('renders a single finishing note with a to-main slur by default', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('trill-finish', 'D');
+      noteElement.setAttribute('trill-finish-octave', '5');
+      document.body.appendChild(noteElement);
+
+      const group = noteElement.shadowRoot?.querySelector(
+        '.trill-finish-notes'
+      );
+      expect(group).not.toBeNull();
+      expect(group?.querySelectorAll('.trill-written-head')).toHaveLength(0);
+      expect(group?.querySelectorAll('.grace-head')).toHaveLength(1);
+      expect(group?.querySelector('.grace-slash')).toBeNull();
+      expect(group?.querySelector('.trill-finish-slur')).not.toBeNull();
+    });
+
+    it('renders a finishing group as beamed stemless heads', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('trill-finish', 'D,C');
+      document.body.appendChild(noteElement);
+
+      const group = noteElement.shadowRoot?.querySelector(
+        '.trill-finish-notes'
+      );
+      expect(group?.querySelectorAll('.grace-head')).toHaveLength(2);
+      expect(group?.querySelectorAll('.grace-beam').length).toBeGreaterThan(0);
+    });
+
+    it('draws no slur when trill-finish-slur is none', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('trill-finish', 'D');
+      noteElement.setAttribute('trill-finish-slur', 'none');
+      document.body.appendChild(noteElement);
+
+      const group = noteElement.shadowRoot?.querySelector(
+        '.trill-finish-notes'
+      );
+      expect(group?.querySelector('.trill-finish-slur')).toBeNull();
+    });
+
+    it('draws no local slur when trill-finish-slur is to-next (the ancestor staff draws that half)', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.setAttribute('trill-finish', 'D');
+      noteElement.setAttribute('trill-finish-slur', 'to-next');
+      document.body.appendChild(noteElement);
+
+      const group = noteElement.shadowRoot?.querySelector(
+        '.trill-finish-notes'
+      );
+      expect(group?.querySelector('.trill-finish-slur')).toBeNull();
+    });
+
+    it('renders trill-finish independently of the trill attribute', () => {
+      const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+      noteElement.setAttribute('note', 'C' satisfies Note);
+      noteElement.setAttribute('octave', '5');
+      noteElement.trill = true;
+      noteElement.setAttribute('trill-finish', 'D');
+      document.body.appendChild(noteElement);
+
+      expect(
+        noteElement.shadowRoot?.querySelector('.trill-finish-notes')
+      ).not.toBeNull();
+    });
+  });
+});
 
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {

@@ -1,10 +1,23 @@
 import { getClefRenderData } from '../rules/clefRules';
 import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
+import {
+  resolveTrillContinuationSegments,
+  resolveTrillSpans,
+  type TrillMeasureBoundary,
+} from '../rules/trillRules';
 import type {
+  ChordElementType,
   NoteChordOrRestElementType,
+  NoteElementType,
   StaffElementBaseType,
 } from '../types/elements';
-import { createHairpinSvg } from '../utils';
+import {
+  createHairpinSvg,
+  createTrillContinuationSignSvg,
+  createTrillLineSvg,
+  createTrillNotchSvg,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
+} from '../utils';
 import {
   buildConnectorSvgs,
   collectArpeggioTiePairs,
@@ -21,6 +34,7 @@ import {
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
+  NOTE_EVENTS,
   STAFF_EVENTS,
   STAFF_TAGS,
   SVG_NS,
@@ -31,7 +45,24 @@ import {
   COURTESY_CLEF_MARGIN_RIGHT_PX,
   COURTESY_CLEF_SCALE,
   DYNAMICS_BASELINE_Y,
+  STAFF_TOP_LINE_Y,
+  STAFF_Y_PADDING,
+  TRILL_ABOVE_STAFF_GAP_PX,
+  TRILL_LINE_END_GAP_PX,
+  TRILL_SIGN_LINE_GAP_PX,
 } from '../utils/notationDimensions';
+import { flattenSlotElements } from '../utils/slotElements';
+
+// The trill line's own local Y offset from the top of its staff (see
+// staffClassicalBase.ts#redrawTrillLines) — reused here so a cross-measure
+// continuation segment lines up exactly with the segment the staff itself
+// already drew, despite being computed in root rather than staff-local
+// coordinates.
+const TRILL_LINE_ROOT_Y_OFFSET =
+  STAFF_Y_PADDING +
+  STAFF_TOP_LINE_Y -
+  NOTE_HEAD_Y_OFFSET_CORRECTION -
+  TRILL_ABOVE_STAFF_GAP_PX;
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -144,6 +175,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener('connector-attribute-change', this.#boundRedraw);
       this.removeEventListener('dynamic-attribute-change', this.#boundRedraw);
       this.removeEventListener(
+        NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
+      this.removeEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
@@ -229,6 +264,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .trill-continuation-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div class="composition-wrapper">
           <div class="composition-grid">
@@ -236,6 +281,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           </div>
           <svg class="connectors-overlay"></svg>
           <svg class="courtesy-clef-overlay"></svg>
+          <svg class="trill-continuation-overlay"></svg>
         </div>
       `;
     }
@@ -250,6 +296,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener('staff-notes-positioned', this.#boundRedraw);
       this.addEventListener('connector-attribute-change', this.#boundRedraw);
       this.addEventListener('dynamic-attribute-change', this.#boundRedraw);
+      this.addEventListener(
+        NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
       this.addEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedraw
@@ -266,6 +316,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawScheduled = false;
         this.#redrawConnectors();
         this.#redrawHairpins();
+        this.#redrawTrills();
         this.#updateDescribeVisibility();
         this.#updateClefContinuity();
         this.#updateTimeSignatureContinuity();
@@ -467,6 +518,171 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               segment.openAtEnd
             )
           );
+        }
+      }
+    }
+
+    // Groups every measure's Nth staff (by ordinal position) into its own
+    // "track" across the whole composition, in row order — the same
+    // ordinal-matching assumption #updateClefContinuity already makes for
+    // adjacent pairs (consistent voice ordering across measures), extended
+    // here into full chains since a trill's tie chain can run through many
+    // measures, not just one adjacent pair.
+    #buildStaffTracks(): { staff: HTMLElement; rowIndex: number }[][] {
+      const rows = this.#computeMeasureRows();
+      const rowIndexByMeasure = new Map<HTMLElement, number>();
+      rows.forEach((row, rowIndex) => {
+        for (const measure of row) {
+          rowIndexByMeasure.set(measure, rowIndex);
+        }
+      });
+      const measures = rows.flat();
+
+      const stavesByMeasure = new Map<HTMLElement, HTMLElement[]>();
+      let maxStaffCount = 0;
+      for (const measure of measures) {
+        const staves = Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as HTMLElement[];
+        stavesByMeasure.set(measure, staves);
+        maxStaffCount = Math.max(maxStaffCount, staves.length);
+      }
+
+      const tracks: { staff: HTMLElement; rowIndex: number }[][] = [];
+      for (let staffIndex = 0; staffIndex < maxStaffCount; staffIndex++) {
+        const track: { staff: HTMLElement; rowIndex: number }[] = [];
+        for (const measure of measures) {
+          const staff = stavesByMeasure.get(measure)?.[staffIndex];
+          if (staff) {
+            track.push({
+              staff,
+              rowIndex: rowIndexByMeasure.get(measure) ?? 0,
+            });
+          }
+        }
+        tracks.push(track);
+      }
+      return tracks;
+    }
+
+    // Extends a trill's same-measure line (drawn by the staff itself, see
+    // staffClassicalBase.ts#redrawTrillLines) across measure boundaries: a
+    // span whose own tie chain runs past its starting measure's last element
+    // continues automatically here, with no repeated `trill` attribute.
+    // Reuses that same tie-chain walk (resolveTrillSpans) over each staff
+    // track's own elements concatenated across every measure it spans, since
+    // index-based tie-walking already crosses a concatenation boundary
+    // transparently — the only genuinely new work is splitting the result
+    // into one segment per measure, with real per-measure geometry, and
+    // restating the sign when a segment also happens to start a new row.
+    #redrawTrills() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.trill-continuation-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
+
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const rootRect = wrapper.getBoundingClientRect();
+
+      for (const track of this.#buildStaffTracks()) {
+        if (track.length < 2) {
+          continue;
+        }
+
+        const globalElements: NoteChordOrRestElementType[] = [];
+        const measureBoundaries: TrillMeasureBoundary[] = [];
+        for (const { staff } of track) {
+          const { flatElements } = flattenSlotElements(
+            Array.from(staff.children)
+          );
+          const startIndex = globalElements.length;
+          globalElements.push(...flatElements);
+          measureBoundaries.push({
+            startIndex,
+            endIndex: globalElements.length,
+          });
+        }
+
+        for (const span of resolveTrillSpans(globalElements)) {
+          if (!span.hasLine) {
+            continue;
+          }
+          const segments = resolveTrillContinuationSegments(
+            globalElements,
+            measureBoundaries,
+            span
+          );
+          if (segments.length === 0) {
+            continue;
+          }
+
+          const startElement = globalElements[span.startIndex] as
+            | NoteElementType
+            | ChordElementType;
+          const restatesSign = startElement.trillContinuation !== 'line-only';
+
+          for (const segment of segments) {
+            const { staff, rowIndex } = track[segment.measureIndex];
+            const isRowWrap =
+              rowIndex !== track[segment.measureIndex - 1].rowIndex;
+
+            const staffRect = staff.getBoundingClientRect();
+            const y = staffRect.top - rootRect.top + TRILL_LINE_ROOT_Y_OFFSET;
+            const notesAreaLeft = this.#computeNotesAreaLeftForStaff(
+              staff,
+              rootRect
+            );
+
+            let lineStartX = notesAreaLeft;
+            if (isRowWrap && restatesSign) {
+              const { element: sign, width: signWidth } =
+                createTrillContinuationSignSvg({
+                  leftX: notesAreaLeft,
+                  bottomY: y,
+                });
+              overlay.appendChild(sign);
+              lineStartX = notesAreaLeft + signWidth + TRILL_SIGN_LINE_GAP_PX;
+            }
+
+            const measureStart =
+              measureBoundaries[segment.measureIndex].startIndex;
+            let lineEndX: number;
+            if (segment.stopAtLocalIndex !== null) {
+              const stopElement =
+                globalElements[measureStart + segment.stopAtLocalIndex];
+              lineEndX =
+                stopElement.getBoundingClientRect().right - rootRect.left;
+            } else if (segment.endBeforeLocalIndex !== null) {
+              const nextElement =
+                globalElements[measureStart + segment.endBeforeLocalIndex];
+              lineEndX =
+                nextElement.getBoundingClientRect().left -
+                rootRect.left -
+                TRILL_LINE_END_GAP_PX;
+            } else {
+              lineEndX = staffRect.right - rootRect.left;
+            }
+
+            const line = createTrillLineSvg({
+              startX: lineStartX,
+              endX: lineEndX,
+              bottomY: y,
+            });
+            if (line) {
+              overlay.appendChild(line);
+            }
+            if (segment.stopAtLocalIndex !== null) {
+              overlay.appendChild(createTrillNotchSvg(lineEndX, y));
+            }
+          }
         }
       }
     }

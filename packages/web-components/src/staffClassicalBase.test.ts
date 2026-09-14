@@ -332,4 +332,388 @@ describe('staffClassicalBase', () => {
       ).toBeGreaterThan(0);
     });
   });
+
+  describe('trill lines', () => {
+    function makeTrillStaff(): any {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+      return staff;
+    }
+
+    function makeQuarterNote(tie?: 'start' | 'end'): any {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      if (tie) {
+        note.setAttribute('tie', tie);
+      }
+      return note;
+    }
+
+    // jsdom's transcribeContainer.getBoundingClientRect() is always a zero
+    // rect, so the wavy line itself (which needs real pixel geometry) never
+    // actually draws here regardless of hasLine — see trill.browser-test.ts
+    // for real default-line-drawn coverage. This only confirms the sign
+    // renders and nothing throws.
+    it('renders the sign for an untied single trill note without error', () => {
+      const staff = makeTrillStaff();
+      const note = makeQuarterNote();
+      note.setAttribute('trill', '');
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(note.shadowRoot.querySelector('.trill-sign')).not.toBeNull();
+    });
+
+    // The wavy line itself needs real pixel geometry (remainingWidth traces
+    // back to transcribeContainer.getBoundingClientRect(), always a zero rect
+    // in jsdom) — see trill.browser-test.ts for line-presence/geometry
+    // coverage. What's reliable here: the sign still renders on the tied
+    // pair's own notes (element-local, no staff geometry needed), and the
+    // pass runs without throwing.
+    it('renders the trill sign on a tied pair without a matching notch', () => {
+      const staff = makeTrillStaff();
+      const start = makeQuarterNote('start');
+      start.setAttribute('trill', '');
+      const end = makeQuarterNote('end');
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [start, end];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(start.shadowRoot.querySelector('.trill-sign')).not.toBeNull();
+      expect(
+        staff.shadowRoot.querySelector('.trill-lines-container .trill-notch')
+      ).toBeNull();
+    });
+
+    it('draws a notch at an explicit trill-stop, even mid tie-chain', () => {
+      const staff = makeTrillStaff();
+      const start = makeQuarterNote('start');
+      start.setAttribute('trill', '');
+      const stop = makeQuarterNote('start');
+      stop.setAttribute('trill-stop', '');
+      const end = makeQuarterNote('end');
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [start, stop, end];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(
+        staff.shadowRoot.querySelectorAll('.trill-lines-container .trill-notch')
+          .length
+      ).toBe(1);
+    });
+
+    it('redraws the trill sign when trill is toggled after the initial render, without a full re-render', () => {
+      const staff = makeTrillStaff();
+      const start = makeQuarterNote('start');
+      const end = makeQuarterNote('end');
+      staff.appendChild(start);
+      staff.appendChild(end);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [start, end];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(start.shadowRoot.querySelector('.trill-sign')).toBeNull();
+
+      start.trill = true;
+
+      expect(start.shadowRoot.querySelector('.trill-sign')).not.toBeNull();
+      // A light TRILL_ATTRIBUTE_CHANGE redraw, not a full #renderNotes() —
+      // the untouched second note keeps its own tie attribute intact.
+      expect(end.tie).toBe('end');
+    });
+
+    it('resolves the trilling pitch as the diatonic upper neighbor, modified by the key signature', () => {
+      const staff = makeTrillStaff();
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'E');
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      note.setAttribute('trill', '');
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      // G major (F# in the signature): trill on E implies F#, not F natural.
+      expect(note.resolvedTrillPitch).toMatchObject({
+        letter: 'F',
+        accidental: 'sharp',
+        written: false,
+      });
+    });
+
+    it('an explicit trill-accidental overrides only the accidental, not the letter', () => {
+      const staff = makeTrillStaff();
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'E');
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      note.setAttribute('trill', '');
+      note.setAttribute('trill-accidental', 'natural');
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(note.resolvedTrillPitch).toMatchObject({
+        letter: 'F',
+        accidental: 'natural',
+        written: false,
+      });
+    });
+
+    it('re-resolves the trilling pitch when trill-accidental is toggled after the initial render', () => {
+      const staff = makeTrillStaff();
+      const note = makeQuarterNote();
+      note.setAttribute('trill', '');
+      staff.appendChild(note);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [note];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      // C major: trill on C implies D, unaltered.
+      expect(note.resolvedTrillPitch).toMatchObject({
+        letter: 'D',
+        accidental: null,
+      });
+
+      note.trillAccidental = 'double-sharp';
+
+      expect(note.resolvedTrillPitch).toMatchObject({
+        letter: 'D',
+        accidental: 'double-sharp',
+      });
+    });
+
+    it('resolves a chord’s trilling pitch from its topmost note', () => {
+      const staff = makeTrillStaff();
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'F');
+      const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+      chord.setAttribute('duration', 'quarter');
+      chord.trill = true;
+      const low = document.createElement(MUSIC_NOTE) as any;
+      low.setAttribute('note', 'C');
+      low.setAttribute('octave', '4');
+      const high = document.createElement(MUSIC_NOTE) as any;
+      high.setAttribute('note', 'A');
+      high.setAttribute('octave', '4');
+      chord.append(low, high);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [chord];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      // F major (Bb in the signature): the chord's topmost note is A4, whose
+      // upper neighbor B is flatted by the key signature.
+      expect(chord.resolvedTrillPitch).toMatchObject({
+        letter: 'B',
+        accidental: 'flat',
+        written: false,
+      });
+    });
+
+    describe('trill-note (written trilling notehead)', () => {
+      it('resolves in written mode with the named letter/accidental', () => {
+        const staff = makeTrillStaff();
+        const note = makeQuarterNote();
+        note.setAttribute('trill', '');
+        note.setAttribute('trill-note', 'F#');
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [note];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        expect(note.resolvedTrillPitch).toMatchObject({
+          letter: 'F',
+          accidental: 'sharp',
+          written: true,
+          octave: 4,
+        });
+      });
+
+      it('renders the written notehead in the trill-lines overlay', () => {
+        const staff = makeTrillStaff();
+        const note = makeQuarterNote();
+        note.setAttribute('trill', '');
+        note.setAttribute('trill-note', 'F#');
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [note];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        expect(
+          staff.shadowRoot.querySelector(
+            '.trill-lines-container .trill-written-note'
+          )
+        ).not.toBeNull();
+      });
+
+      it('pushes the next entry rightward to make room for the written notehead', () => {
+        const staff = makeTrillStaff();
+        const trilled = makeQuarterNote();
+        trilled.setAttribute('trill', '');
+        trilled.setAttribute('trill-note', 'F#');
+        const plain = makeQuarterNote();
+        const withTrillNote = [trilled, plain];
+
+        const withoutTrillStaff = makeTrillStaff();
+        const untrilled = makeQuarterNote();
+        const plainToo = makeQuarterNote();
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => withTrillNote;
+        slot.dispatchEvent(new Event('slotchange'));
+
+        const otherSlot = withoutTrillStaff.shadowRoot.querySelector('slot');
+        otherSlot.assignedElements = () => [untrilled, plainToo];
+        otherSlot.dispatchEvent(new Event('slotchange'));
+
+        const trilledX = parseFloat(trilled.style.left);
+        const plainX = parseFloat(plain.style.left);
+        const untrilledX = parseFloat(untrilled.style.left);
+        const plainTooX = parseFloat(plainToo.style.left);
+
+        // Both staves start their first note at the same X (same describe
+        // area); only the trill-note staff needs extra room before its
+        // second entry.
+        expect(trilledX).toBeCloseTo(untrilledX, 5);
+        expect(plainX - trilledX).toBeGreaterThan(plainTooX - untrilledX);
+      });
+
+      it('warns when trill-note and trill-accidental are both set, and trill-note wins', () => {
+        const consoleSpy = jest
+          .spyOn(console, 'warn')
+          .mockImplementation(() => {});
+        const staff = makeTrillStaff();
+        const note = makeQuarterNote();
+        note.setAttribute('trill', '');
+        note.setAttribute('trill-accidental', 'natural');
+        // attributeChangedCallback's warning check requires the element to be
+        // connected — append before the second (conflicting) attribute.
+        staff.appendChild(note);
+        note.setAttribute('trill-note', 'G');
+
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('trill-accidental is ignored')
+        );
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [note];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        expect(note.resolvedTrillPitch).toMatchObject({
+          letter: 'G',
+          written: true,
+        });
+
+        consoleSpy.mockRestore();
+      });
+    });
+
+    describe('trill-finish (grace notes after the main note)', () => {
+      it('pushes the next entry rightward to make room for the finishing grace note(s)', () => {
+        const staff = makeTrillStaff();
+        const finishing = makeQuarterNote();
+        finishing.setAttribute('trill-finish', 'D');
+        const plain = makeQuarterNote();
+
+        const plainStaff = makeTrillStaff();
+        const untrilled = makeQuarterNote();
+        const plainToo = makeQuarterNote();
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [finishing, plain];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        const otherSlot = plainStaff.shadowRoot.querySelector('slot');
+        otherSlot.assignedElements = () => [untrilled, plainToo];
+        otherSlot.dispatchEvent(new Event('slotchange'));
+
+        const finishingX = parseFloat(finishing.style.left);
+        const plainX = parseFloat(plain.style.left);
+        const untrilledX = parseFloat(untrilled.style.left);
+        const plainTooX = parseFloat(plainToo.style.left);
+
+        expect(finishingX).toBeCloseTo(untrilledX, 5);
+        expect(plainX - finishingX).toBeGreaterThan(plainTooX - untrilledX);
+      });
+
+      it('resolves resolvedTrillFinishAccidentals against the key signature', () => {
+        const staff = makeTrillStaff();
+        staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
+        const note = makeQuarterNote();
+        note.setAttribute('trill-finish', 'F');
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [note];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        // G major implies F#; a plain F cancels it with a natural.
+        expect(note.resolvedTrillFinishAccidentals).toEqual(['natural']);
+      });
+
+      it('draws a to-next slur in the trill-lines overlay when trill-finish-slur is to-next', () => {
+        const staff = makeTrillStaff();
+        const finishing = makeQuarterNote();
+        finishing.setAttribute('trill-finish', 'D');
+        finishing.setAttribute('trill-finish-slur', 'to-next');
+        const next = makeQuarterNote();
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [finishing, next];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        expect(
+          staff.shadowRoot.querySelector(
+            '.trill-lines-container .trill-finish-slur'
+          )
+        ).not.toBeNull();
+      });
+
+      it('draws no to-next slur when trill-finish-slur is to-main (the default)', () => {
+        const staff = makeTrillStaff();
+        const finishing = makeQuarterNote();
+        finishing.setAttribute('trill-finish', 'D');
+        const next = makeQuarterNote();
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [finishing, next];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        expect(
+          staff.shadowRoot.querySelector(
+            '.trill-lines-container .trill-finish-slur'
+          )
+        ).toBeNull();
+      });
+
+      it('draws no to-next slur when there is no following entry', () => {
+        const staff = makeTrillStaff();
+        const finishing = makeQuarterNote();
+        finishing.setAttribute('trill-finish', 'D');
+        finishing.setAttribute('trill-finish-slur', 'to-next');
+
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [finishing];
+        slot.dispatchEvent(new Event('slotchange'));
+
+        expect(
+          staff.shadowRoot.querySelector(
+            '.trill-lines-container .trill-finish-slur'
+          )
+        ).toBeNull();
+      });
+    });
+  });
 });

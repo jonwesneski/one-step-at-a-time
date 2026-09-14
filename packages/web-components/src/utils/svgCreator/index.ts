@@ -30,7 +30,15 @@ export {
   createVerticalHairpinSvg,
 } from './dynamics';
 export { createFlatSvg } from './flat';
-export { createGraceNotesSvg, type GraceNotesProps } from './graceNotes';
+export {
+  createGraceNotesSvg,
+  createOrnamentConnectorSlur,
+  createTrillFinishNotesSvg,
+  TRILL_FINISH_HEAD_RY,
+  type GraceNotesProps,
+  type TrillFinishNotesProps,
+  type TrillFinishNotesResult,
+} from './graceNotes';
 export { addLedgerLines, createLedgerLineElements } from './ledgerLines';
 export { createNaturalSvg } from './natural';
 export {
@@ -47,9 +55,26 @@ export {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   noteHeadCenter,
   stemUpTipYPx,
+  trillSignLeftX,
 } from './note';
 export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
 export { createSharpSvg } from './sharp';
 export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';
+export {
+  computeWrittenTrillNoteWidth,
+  createTrillAbbreviationSvg,
+  createTrillContinuationSignSvg,
+  createTrillLineSvg,
+  createTrillNotchSvg,
+  createTrillSignSvg,
+  createWrittenTrillNoteSvg,
+  TRILL_SIGN_WIDTH_PX,
+  type TrillContinuationSignProps,
+  type TrillContinuationSignResult,
+  type TrillLineProps,
+  type TrillSignProps,
+  type WrittenTrillNoteProps,
+  type WrittenTrillNoteResult,
+} from './trill';
 export { createTupletBracketSvg } from './tuplet';

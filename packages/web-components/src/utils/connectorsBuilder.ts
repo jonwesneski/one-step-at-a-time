@@ -1,4 +1,5 @@
 import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
+import { computeGraceFootprintWidth } from '../rules/graceRules';
 import type {
   ArpeggioElementType,
   ChordElementType,
@@ -19,8 +20,10 @@ import {
   ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
   ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
   LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+  TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
 import {
+  computeWrittenTrillNoteWidth,
   createCurveSvg,
   createOpenTieSvg,
   CurveBulge,
@@ -29,6 +32,7 @@ import {
 import {
   computeYHeadOffset,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  NOTE_SVG_WIDTH,
 } from './svgCreator/note';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
@@ -554,6 +558,61 @@ const chordOtherToneCenters = (
   return centers;
 };
 
+// A tie must not run through a written trilling notehead (trill-note) or a
+// trill's finishing grace note(s) (trill-finish) — nudge the tie's start
+// point past whichever (or both — summed, harmless in that rare combination
+// since the two decorations aren't laid out to coexist cleanly anyway)
+// reserve space there, computed analytically (matching
+// computeWrittenTrillNoteWidth's/computeGraceFootprintWidth's own math)
+// rather than queried from the DOM. The written notehead is drawn by the
+// staff's own overlay; the finishing grace note(s) are drawn locally inside
+// the note/chord's own shadow DOM — neither is reachable via
+// getBoundingClientRect() from here. Approximation: when a short main note
+// defers its written notehead to the second tied note (see
+// rules/trillRules.ts's writtenNoteAnchorIndex), this still nudges from the
+// first note's own position — a harmless overshoot in that rare
+// combination, not a visual bug.
+const tieStartTrillNudgePx = (note: NoteLikeElementType): number => {
+  const tag = note.tagName.toLowerCase();
+  if (tag !== MUSIC_NOTE && tag !== MUSIC_CHORD) {
+    return 0;
+  }
+  const trillCapableNote = note as NoteElementType | ChordElementType;
+  let nudge = 0;
+  if (trillCapableNote.resolvedTrillPitch?.written === true) {
+    // computeAnchor's startAnchor.x is the note's own rendered *center*
+    // (rect.left + rect.width / 2), but the written notehead's own leftX
+    // (see staffClassicalBase.ts#drawWrittenTrillNote) starts a full
+    // NOTE_SVG_WIDTH past the note's *left* edge — half a notehead further
+    // right than the center. Add that half-width back in, or the nudge
+    // lands short.
+    nudge +=
+      NOTE_SVG_WIDTH / 2 +
+      TRILL_WRITTEN_NOTE_GAP_PX +
+      computeWrittenTrillNoteWidth(
+        trillCapableNote.resolvedTrillPitch.accidental
+      );
+  }
+  const trillFinish = trillCapableNote.trillFinish;
+  if (trillFinish !== null && trillFinish.length > 0) {
+    // Same center-to-left-edge correction as above; the finishing group's
+    // own anchor (see svgCreator/graceNotes.ts#createTrillFinishNotesSvg)
+    // starts at that same NOTE_SVG_WIDTH point, and
+    // computeGraceFootprintWidth already includes the gap before it. A
+    // single (non-group) finishing note also has its own stem, extending a
+    // couple more px right of this reserved width — clearing the notehead
+    // itself (the real collision risk) is what this targets; grazing a thin
+    // stem line is a minor cosmetic gap, not pursued further here.
+    nudge +=
+      NOTE_SVG_WIDTH / 2 +
+      computeGraceFootprintWidth(
+        trillFinish,
+        trillCapableNote.resolvedTrillFinishAccidentals
+      );
+  }
+  return nudge;
+};
+
 const pickBulge = (note: NoteLikeElementType): CurveBulge => {
   // Stems up → notehead on the staff, bulge above (opposite side of stem tip? no,
   // ties/slurs bulge AWAY from the stem — stems up = curve below; stems down = curve above).
@@ -796,6 +855,9 @@ export const buildConnectorSvgs = (
       startBulge,
       noteheadOffsetPx
     );
+    if (pair.kind === 'tie') {
+      startAnchor.x += tieStartTrillNudgePx(pair.start);
+    }
     const endAnchor = computeAnchor(
       pair.end,
       rootRect,

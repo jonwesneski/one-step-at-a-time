@@ -187,6 +187,216 @@ describe(MUSIC_CHORD, () => {
     });
   });
 
+  describe('trill', () => {
+    function makeChord(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'C' satisfies Chord);
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips trill / trill-stop as boolean presence attributes', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.trill).toBe(false);
+      chordElement.trill = true;
+      expect(chordElement.getAttribute('trill')).toBe('');
+      expect(chordElement.trill).toBe(true);
+      chordElement.trill = false;
+      expect(chordElement.getAttribute('trill')).toBeNull();
+
+      chordElement.trillStop = true;
+      expect(chordElement.trillStop).toBe(true);
+    });
+
+    it('round-trips trill-line and defaults to "auto"', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.trillLine).toBe('auto');
+      chordElement.trillLine = 'none';
+      expect(chordElement.getAttribute('trill-line')).toBe('none');
+      expect(chordElement.trillLine).toBe('none');
+    });
+
+    it('round-trips trill-style and defaults to "sign"', () => {
+      const chordElement = makeChord();
+      expect(chordElement.trillStyle).toBe('sign');
+      chordElement.trillStyle = 'abbreviation';
+      expect(chordElement.getAttribute('trill-style')).toBe('abbreviation');
+      expect(chordElement.trillStyle).toBe('abbreviation');
+    });
+
+    it('round-trips trill-accidental and rejects unknown values', () => {
+      const chordElement = makeChord();
+      expect(chordElement.trillAccidental).toBeNull();
+
+      chordElement.trillAccidental = 'flat';
+      expect(chordElement.getAttribute('trill-accidental')).toBe('flat');
+      expect(chordElement.trillAccidental).toBe('flat');
+
+      chordElement.setAttribute('trill-accidental', 'nope');
+      expect(chordElement.trillAccidental).toBeNull();
+
+      chordElement.trillAccidental = 'sharp';
+      chordElement.trillAccidental = null;
+      expect(chordElement.getAttribute('trill-accidental')).toBeNull();
+    });
+
+    it('round-trips trill-note', () => {
+      const chordElement = makeChord();
+      expect(chordElement.trillNote).toBeNull();
+
+      chordElement.trillNote = 'F#';
+      expect(chordElement.getAttribute('trill-note')).toBe('F#');
+      expect(chordElement.trillNote).toBe('F#');
+
+      chordElement.trillNote = null;
+      expect(chordElement.getAttribute('trill-note')).toBeNull();
+    });
+
+    it('warns when trill-note and trill-accidental are both set', () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const chordElement = makeChord();
+      chordElement.trillAccidental = 'natural';
+
+      chordElement.trillNote = 'G';
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('trill-accidental is ignored')
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('round-trips resolvedTrillPitch as an internal (non-attribute) property', () => {
+      const chordElement = makeChord();
+      expect(chordElement.resolvedTrillPitch).toBeNull();
+
+      chordElement.resolvedTrillPitch = {
+        letter: 'B',
+        accidental: 'flat',
+        written: false,
+        octave: null,
+      };
+      expect(chordElement.resolvedTrillPitch).toEqual({
+        letter: 'B',
+        accidental: 'flat',
+        written: false,
+        octave: null,
+      });
+      expect(chordElement.hasAttribute('resolved-trill-pitch')).toBe(false);
+    });
+
+    it('round-trips trill-finish and trill-finish-octave', () => {
+      const chordElement = makeChord();
+      expect(chordElement.trillFinish).toBeNull();
+
+      chordElement.trillFinish = ['F#', 'G'];
+      chordElement.trillFinishOctave = [4, 4];
+
+      expect(chordElement.getAttribute('trill-finish')).toBe('F#,G');
+      expect(chordElement.trillFinish).toEqual(['F#', 'G']);
+      expect(chordElement.getAttribute('trill-finish-octave')).toBe('4,4');
+      expect(chordElement.trillFinishOctave).toEqual([4, 4]);
+
+      chordElement.trillFinish = '';
+      expect(chordElement.hasAttribute('trill-finish')).toBe(false);
+      expect(chordElement.trillFinish).toBeNull();
+    });
+
+    it('defaults trill-finish-slur to to-main and rejects an invalid value', () => {
+      const chordElement = makeChord();
+      expect(chordElement.trillFinishSlur).toBe('to-main');
+
+      chordElement.trillFinishSlur = 'both';
+      expect(chordElement.trillFinishSlur).toBe('both');
+
+      chordElement.setAttribute('trill-finish-slur', 'not-a-real-value');
+      expect(chordElement.trillFinishSlur).toBe('to-main');
+    });
+
+    it('round-trips resolvedTrillFinishAccidentals as an internal (non-attribute) property', () => {
+      const chordElement = makeChord();
+      expect(chordElement.resolvedTrillFinishAccidentals).toBeNull();
+
+      chordElement.resolvedTrillFinishAccidentals = ['sharp', null];
+      expect(chordElement.resolvedTrillFinishAccidentals).toEqual([
+        'sharp',
+        null,
+      ]);
+      expect(
+        chordElement.hasAttribute('resolved-trill-finish-accidentals')
+      ).toBe(false);
+    });
+
+    // Trills are staff-only, deliberately: the wavy line needs sibling
+    // elements in the same staff to span into, so a sign with no possible
+    // line is not drawn either — see staffClassicalBase.test.ts for in-staff
+    // sign rendering coverage.
+    it('renders no sign (or abbreviation) on a standalone chord, even when set', () => {
+      const chordElement = makeChord();
+      chordElement.trill = true;
+      expect(chordElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
+
+      chordElement.trillStyle = 'abbreviation';
+      expect(chordElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
+      expect(
+        chordElement.shadowRoot?.querySelector('.trill-abbreviation')
+      ).toBeNull();
+    });
+
+    describe('trill-finish (grace notes after the chord)', () => {
+      it('renders a single finishing note with a to-main slur by default', () => {
+        const chordElement = makeChord();
+        chordElement.setAttribute('trill-finish', 'D');
+
+        const group = chordElement.shadowRoot?.querySelector(
+          '.trill-finish-notes'
+        );
+        expect(group).not.toBeNull();
+        expect(group?.querySelectorAll('.grace-head')).toHaveLength(1);
+        expect(group?.querySelector('.grace-slash')).toBeNull();
+        expect(group?.querySelector('.trill-finish-slur')).not.toBeNull();
+      });
+
+      it('renders a finishing group as beamed stemless heads', () => {
+        const chordElement = makeChord();
+        chordElement.setAttribute('trill-finish', 'D,E');
+
+        const group = chordElement.shadowRoot?.querySelector(
+          '.trill-finish-notes'
+        );
+        expect(group?.querySelectorAll('.grace-head')).toHaveLength(2);
+        expect(group?.querySelectorAll('.grace-beam').length).toBeGreaterThan(
+          0
+        );
+      });
+
+      it('draws no slur when trill-finish-slur is none', () => {
+        const chordElement = makeChord();
+        chordElement.setAttribute('trill-finish', 'D');
+        chordElement.setAttribute('trill-finish-slur', 'none');
+
+        const group = chordElement.shadowRoot?.querySelector(
+          '.trill-finish-notes'
+        );
+        expect(group?.querySelector('.trill-finish-slur')).toBeNull();
+      });
+
+      it('draws no local slur when trill-finish-slur is to-next (the ancestor staff draws that half)', () => {
+        const chordElement = makeChord();
+        chordElement.setAttribute('trill-finish', 'D');
+        chordElement.setAttribute('trill-finish-slur', 'to-next');
+
+        const group = chordElement.shadowRoot?.querySelector(
+          '.trill-finish-notes'
+        );
+        expect(group?.querySelector('.trill-finish-slur')).toBeNull();
+      });
+    });
+  });
+
   describe('articulations', () => {
     function makeChordWithNotes(): ChordElementType {
       const chordElement = document.createElement(

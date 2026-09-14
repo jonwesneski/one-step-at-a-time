@@ -17,6 +17,8 @@ import type {
   GraceSlur,
   GraceType,
   HairpinKind,
+  TrillFinishSlur,
+  TrillStyle,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -26,7 +28,9 @@ import {
   ARPEGGIO_WAVE_WIDTH_PX,
   BASE_STEM_LENGTH_PX,
   GRACE_MAIN_GAP_PX,
+  STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
+  TRILL_ABOVE_STAFF_GAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import {
@@ -35,16 +39,18 @@ import {
   isArpeggioWaveVariant,
 } from './arpeggio';
 import { createArticulationMarks } from './articulations';
-import { createGraceNotesSvg } from './graceNotes';
+import { createGraceNotesSvg, createTrillFinishNotesSvg } from './graceNotes';
 import {
   createNoteSvg,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
+  NOTE_SVG_WIDTH,
   noteHeadCenter,
   type NoteProps,
 } from './note';
+import { createTrillAbbreviationSvg, createTrillSignSvg } from './trill';
 
 type ChordProps = NoteProps & {
   staffYCoordinates: number[];
@@ -52,6 +58,8 @@ type ChordProps = NoteProps & {
   arpeggioHairpin?: HairpinKind | null;
   arpeggioHairpinFrom?: DynamicMarking | null;
   arpeggioHairpinTo?: DynamicMarking | null;
+  trill?: boolean;
+  trillStyle?: TrillStyle;
   noteAccidentals?: (AccidentalType | null | undefined)[];
   // Grace notes are placed relative to the chord's reference note (notes[0],
   // which is staffYCoordinates[0] by index parity).
@@ -62,6 +70,10 @@ type ChordProps = NoteProps & {
   // Staff Y of the reference note when ledger lines should render (in-staff
   // mode); null in standalone mode, matching the chord's own ledger behavior.
   graceLedgerStaffY?: number | null;
+  // A trill's finishing grace note(s), placed after the chord — same
+  // reference-note relationship as graceNotes.
+  trillFinishNotes?: GraceNoteDescriptor[] | null;
+  trillFinishSlur?: TrillFinishSlur;
 };
 
 export const createChordSvg = ({
@@ -71,6 +83,9 @@ export const createChordSvg = ({
   arpeggioHairpin = null,
   arpeggioHairpinFrom = null,
   arpeggioHairpinTo = null,
+  trill = false,
+  trillStyle = 'sign',
+  trillAccidental = null,
   noFlags = false,
   stemUp = true,
   stemExtension = 0,
@@ -82,6 +97,8 @@ export const createChordSvg = ({
   graceDuration = null,
   graceSlur = 'auto',
   graceLedgerStaffY = null,
+  trillFinishNotes,
+  trillFinishSlur = 'to-main',
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -286,6 +303,28 @@ export const createChordSvg = ({
     svg.appendChild(graceGroup);
   }
 
+  // Finishing grace note(s) — placed after the chord's own notehead column.
+  // Chords reserve no rightward decoration today, so (unlike the leading
+  // side) the anchor is the fixed per-entry SVG width every note/chord
+  // shares (NOTE_SVG_WIDTH), not a chord-specific right edge.
+  if (trillFinishNotes && trillFinishNotes.length > 0) {
+    const referenceHeadCenterYPx =
+      STAFF_Y_PADDING + staffYCoordinates[0] - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const referenceHeadCenterXPx =
+      noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
+      (displacementMap.get(0) ?? 0);
+    const { element: trillFinishGroup } = createTrillFinishNotesSvg({
+      trillFinishNotes,
+      trillFinishSlur,
+      mainHeadCenterXPx: referenceHeadCenterXPx,
+      mainHeadCenterYPx: referenceHeadCenterYPx,
+      anchorLeftXPx: NOTE_SVG_WIDTH + GRACE_MAIN_GAP_PX,
+      mainStaffY: graceLedgerStaffY,
+    });
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(trillFinishGroup);
+  }
+
   // Arpeggio sign — left of the accidental column / displaced heads (or just
   // left of the noteheads when there is neither), spanning the chord's
   // notehead range. staffYCoordinates is declaration order, not pitch order,
@@ -323,6 +362,33 @@ export const createChordSvg = ({
         staffRelative: true,
       });
     }
+  }
+
+  // Trill sign — a fixed gap above the staff top line, flush with the
+  // notehead's own left edge (not shifted for an accidental column — the
+  // sign sits well clear of the accidental's height, above the staff). A
+  // constant staff-relative Y (not adjusted for the chord's own pitch) keeps
+  // it aligned with the staff-level trill line drawn off the same notes.
+  if (trill && staffYCoordinates.length > 0) {
+    const bottomY =
+      STAFF_Y_PADDING +
+      STAFF_TOP_LINE_Y -
+      NOTE_HEAD_Y_OFFSET_CORRECTION -
+      TRILL_ABOVE_STAFF_GAP_PX;
+    const sign =
+      trillStyle === 'abbreviation'
+        ? createTrillAbbreviationSvg({
+            leftX: normalHeadLeftX,
+            bottomY,
+            accidental: trillAccidental,
+          })
+        : createTrillSignSvg({
+            leftX: normalHeadLeftX,
+            bottomY,
+            accidental: trillAccidental,
+          });
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(sign);
   }
 
   // Chord-level articulation — drawn once, over the extremal (stem-side outer)

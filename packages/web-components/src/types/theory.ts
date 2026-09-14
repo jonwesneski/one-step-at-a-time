@@ -231,8 +231,13 @@ export type StressType = 'stressed' | 'unstressed';
  */
 export type ArpeggioType = 'up' | 'up-arrow' | 'down' | 'non-arpeggiate';
 
-/** Grace-note style. Grace notes never consume beat budget. */
-export type GraceType = 'acciaccatura' | 'appoggiatura';
+/**
+ * Grace-note style. Grace notes never consume beat budget. `'trill'` is a
+ * plain unslashed notehead, distinct from `'acciaccatura'`'s crossed-through
+ * slash — used for a leading grace note that introduces a trill rather than
+ * ornamenting a main pitch.
+ */
+export type GraceType = 'acciaccatura' | 'appoggiatura' | 'trill';
 
 /** Note value a grace note is drawn with. */
 export type GraceDuration = Extract<
@@ -242,6 +247,35 @@ export type GraceDuration = Extract<
 
 /** Whether the slur from a grace group to its main note is drawn (`auto`) or not (`none`). */
 export type GraceSlur = 'auto' | 'none';
+
+/** `'sign'` draws the stylized trill glyph; `'abbreviation'` draws plain italic `t.r.` text instead. */
+export type TrillStyle = 'sign' | 'abbreviation';
+
+/**
+ * `'auto'` (default) draws the wavy extension line, matching standard
+ * engraving practice; `'none'` suppresses it for the rare case an engraver
+ * wants the bare sign only on an isolated, untied note-value.
+ */
+export type TrillLineMode = 'auto' | 'none';
+
+/**
+ * Controls how a trill's line restates itself after a system break, once its
+ * tie chain has already carried it into the new row: `'bracketed'` (default)
+ * redraws the sign in parentheses at the start of the new row; `'line-only'`
+ * lets the line resume with no restated sign. Meaningless (ignored) at an
+ * ordinary same-row barline, where the line always resumes with no restated
+ * sign regardless of this value.
+ */
+export type TrillContinuationMode = 'bracketed' | 'line-only';
+
+/**
+ * Controls the slur(s) drawn from a trill's finishing grace note(s)
+ * (`trill-finish`) — grace notes placed *after* the main note rather than
+ * before it. `'to-main'` (default) slurs back to the note they finish;
+ * `'to-next'` slurs forward to the following note/chord instead; `'both'`
+ * draws both; `'none'` draws neither.
+ */
+export type TrillFinishSlur = 'none' | 'to-main' | 'to-next' | 'both';
 
 /**
  * Tuplet ratio: either a bare actual count (`'3'` → triplet) or a full

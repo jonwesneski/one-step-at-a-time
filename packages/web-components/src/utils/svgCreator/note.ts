@@ -9,6 +9,7 @@ import type {
   DynamicMarking,
   HairpinKind,
   StressType,
+  TrillStyle,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -17,6 +18,8 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  STAFF_TOP_LINE_Y,
+  TRILL_ABOVE_STAFF_GAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import {
@@ -25,6 +28,7 @@ import {
   isArpeggioWaveVariant,
 } from './arpeggio';
 import { createArticulationMarks } from './articulations';
+import { createTrillAbbreviationSvg, createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
 export const NOTE_SVG_WIDTH = 32;
@@ -96,7 +100,45 @@ export type NoteProps = {
   arpeggioHairpin?: HairpinKind | null;
   arpeggioHairpinFrom?: DynamicMarking | null;
   arpeggioHairpinTo?: DynamicMarking | null;
+  trill?: boolean;
+  trillStyle?: TrillStyle;
+  // Accidental to draw on the trilling (auxiliary) pitch, above the sign —
+  // the resolved value (staff-computed default, or the `trill-accidental`
+  // override), not the raw attribute.
+  trillAccidental?: AccidentalType | null;
+  // Staff-absolute Y of the notehead (same value as the `staffY` property) —
+  // lets the trill sign sit a fixed gap above the staff top line. Trills
+  // require a staff (the wavy line needs sibling elements in the same note
+  // stream to span into, so a sign with no possible line is not drawn
+  // either): null (standalone, no staff) suppresses the sign entirely.
+  staffY?: number | null;
 };
+
+// Local-space X at which a note's trill sign's left edge sits, flush with the
+// notehead's own left edge. Exported so the staff-level trill-line pass can
+// recompute the same X without reaching into a note's shadow DOM.
+export function trillSignLeftX(stemUp: boolean): number {
+  return (
+    (stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX) -
+    NOTE_HEAD_RADIUS_PX
+  );
+}
+
+// Local-space Y at which a note's trill sign's bottom edge sits — a fixed gap
+// above the staff top line, converted from the shared staff-absolute
+// coordinate space into this note's own translated SVG.
+function trillSignBottomY(stemUp: boolean, staffY: number): number {
+  const headCenterY = stemUp
+    ? NOTE_Y_HEAD_OFFSET_STEM_UP
+    : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  return (
+    headCenterY -
+    NOTE_HEAD_Y_OFFSET_CORRECTION -
+    staffY +
+    (STAFF_TOP_LINE_Y - TRILL_ABOVE_STAFF_GAP_PX)
+  );
+}
+
 export const createNoteSvg = ({
   duration,
   noFlags = false,
@@ -111,6 +153,10 @@ export const createNoteSvg = ({
   arpeggioHairpin = null,
   arpeggioHairpinFrom = null,
   arpeggioHairpinTo = null,
+  trill = false,
+  trillStyle = 'sign',
+  trillAccidental = null,
+  staffY = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -366,6 +412,21 @@ export const createNoteSvg = ({
         signLeftEdgeX: signRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
       });
     }
+  }
+
+  if (trill && qualifiedElementName === 'svg' && staffY !== null) {
+    const leftX = trillSignLeftX(stemUp);
+    const bottomY = trillSignBottomY(stemUp, staffY);
+    const sign =
+      trillStyle === 'abbreviation'
+        ? createTrillAbbreviationSvg({
+            leftX,
+            bottomY,
+            accidental: trillAccidental,
+          })
+        : createTrillSignSvg({ leftX, bottomY, accidental: trillAccidental });
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(sign);
   }
 
   const yHeadOffset = computeYHeadOffset(stemUp, duration, noFlags);

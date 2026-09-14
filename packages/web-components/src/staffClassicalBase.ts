@@ -12,8 +12,11 @@ import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import {
+  applyResolvedGraceAccidentals,
+  buildGraceNoteDescriptors,
   computeFirstGraceHeadX,
   computeGraceFootprintWidth,
+  computeGraceLayout,
 } from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
 import { restToYCoordinate } from './rules/restRules';
@@ -22,6 +25,11 @@ import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
 } from './rules/staffWidth';
+import {
+  resolveTrillPitch,
+  resolveTrillSpans,
+  type TrillLineSpan,
+} from './rules/trillRules';
 import {
   buildTupletGroups,
   computeOuterBracketBaseY,
@@ -46,6 +54,7 @@ import type {
   YCoordinates,
 } from './types/elements';
 import type {
+  AccidentalType,
   ArpeggioType,
   ClefType,
   DurationType,
@@ -53,6 +62,7 @@ import type {
   HairpinKind,
   Mode,
   Note,
+  NoteLetter,
   Octave,
 } from './types/theory';
 import {
@@ -61,10 +71,13 @@ import {
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
+  createOrnamentConnectorSlur,
   createSempreArpeggiandoText,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  TRILL_FINISH_HEAD_RY,
 } from './utils';
 import {
   CLEF_EVENTS,
@@ -92,6 +105,7 @@ import {
   CLEF_X_OFFSET,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
+  GRACE_MAIN_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
@@ -104,6 +118,10 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
+  TRILL_ABOVE_STAFF_GAP_PX,
+  TRILL_LINE_END_GAP_PX,
+  TRILL_SIGN_LINE_GAP_PX,
+  TRILL_WRITTEN_NOTE_GAP_PX,
   TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
@@ -113,8 +131,35 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
+  trillSignLeftX,
 } from './utils/svgCreator/note';
+import {
+  computeWrittenTrillNoteWidth,
+  createTrillLineSvg,
+  createTrillNotchSvg,
+  createWrittenTrillNoteSvg,
+  TRILL_SIGN_WIDTH_PX,
+} from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+
+// The `Note` suffix for an accidental — the inverse of
+// rules/accidentalRules.ts's parseAccidentalSuffix/suffixToType, needed to
+// rebuild a resolved trilling pitch (letter + AccidentalType) into a `Note`
+// string for noteToYCoordinate.
+function accidentalSuffix(accidental: AccidentalType | null): string {
+  switch (accidental) {
+    case 'sharp':
+      return '#';
+    case 'flat':
+      return 'b';
+    case 'double-sharp':
+      return '##';
+    case 'double-flat':
+      return 'bb';
+    default:
+      return '';
+  }
+}
 
 // The arpeggio sign a note/chord actually draws — its own `arpeggio` if set,
 // otherwise a `sempre arpeggiando` passage's implied one.
@@ -135,6 +180,17 @@ function footprintArpeggio(element: NoteElementType | ChordElementType) {
 
 const isArpeggioWave = (arpeggio: ArpeggioType | null): boolean =>
   arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down';
+
+// A trill sign's/line's bottom edge sits at a fixed height above the staff
+// top line, independent of pitch (see svgCreator/note.ts's own
+// trillSignBottomY, which pre-cancels the note's own external Y-positioning
+// to land here too) — shared by every trill decoration this staff draws in
+// its own overlay.
+const TRILL_ABOVE_STAFF_BOTTOM_Y =
+  STAFF_Y_PADDING +
+  STAFF_TOP_LINE_Y -
+  NOTE_HEAD_Y_OFFSET_CORRECTION -
+  TRILL_ABOVE_STAFF_GAP_PX;
 
 // The note/chord paired with this one in an unbroken cross-staff arpeggio: the
 // `id` target of this element's `arpeggio-for`, or — when this element has an
@@ -257,6 +313,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamsContainer: SVGSVGElement;
   #tupletContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
   #dynamicsContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
+  #trillLinesContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteChordOrRestElementType[] = [];
   #describeEndX = 0;
@@ -278,6 +335,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamedIndicesSnapshot: Set<number> = new Set();
   #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
   #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
+  // Index of a span's writtenNoteAnchorIndex -> the rightward px footprint a
+  // written trilling notehead (trill-note) reserves there. Recomputed once
+  // per #renderNotes()/TRILL_ATTRIBUTE_CHANGE pass — see
+  // #computeWrittenTrillFootprints().
+  #writtenTrillFootprints: Map<number, number> = new Map();
+  // Index -> the rightward px footprint a trill's finishing grace note(s)
+  // (trill-finish) reserve there — see #computeTrillFinishFootprints().
+  #trillFinishFootprints: Map<number, number> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -293,6 +358,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #boundRenderDynamics = () => {
     this.#dynamicsContainer.innerHTML = '';
     this.#renderDynamics();
+  };
+  #boundRedrawTrillLines = () => {
+    this.#resolveTrillPitches();
+    this.#trillLinesContainer.innerHTML = '';
+    this.#redrawTrillLines();
   };
   #boundNoteYChange = () => {
     if (this.#currentElements.length > 0) {
@@ -448,6 +518,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#boundRenderDynamics
     );
     this.addEventListener(
+      NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+      this.#boundRedrawTrillLines
+    );
+    this.addEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundClefMarkerChange
     );
@@ -484,6 +558,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#dynamicsContainer.style.overflow = 'visible';
     this.#dynamicsContainer.style.pointerEvents = 'none';
     this.transcribeContainer.appendChild(this.#dynamicsContainer);
+
+    this.#trillLinesContainer.classList.add('trill-lines-container');
+    this.#trillLinesContainer.style.overflow = 'visible';
+    this.#trillLinesContainer.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(this.#trillLinesContainer);
   }
 
   #refreshDescribe() {
@@ -575,6 +654,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.removeEventListener(
       NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
       this.#boundRenderDynamics
+    );
+    this.removeEventListener(
+      NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+      this.#boundRedrawTrillLines
     );
     this.removeEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
@@ -674,10 +757,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #renderNotes(elements: NoteChordOrRestElementType[]) {
-    // Clear previously rendered beams, tuplet brackets, and dynamics
+    // Clear previously rendered beams, tuplet brackets, dynamics, and trill lines
     this.#beamsContainer.innerHTML = '';
     this.#tupletContainer.innerHTML = '';
     this.#dynamicsContainer.innerHTML = '';
+    this.#trillLinesContainer.innerHTML = '';
 
     const { allowedElementCount, error } = computeAllowedElementCount(
       elements,
@@ -751,12 +835,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#chordStaffYCoordsSnapshot = new Map(chordStaffYCoords);
     this.#tupletGroups = buildTupletGroups(elements, this.#tupletsByIndex);
 
-    const { noteShowAccidentals, chordNoteAccidentals, graceShowAccidentals } =
-      computeNoteAccidentals(
-        elements,
-        this.#effectiveKeySig,
-        this.#effectiveMode
-      );
+    const {
+      noteShowAccidentals,
+      chordNoteAccidentals,
+      graceShowAccidentals,
+      trillFinishShowAccidentals,
+    } = computeNoteAccidentals(
+      elements,
+      this.#effectiveKeySig,
+      this.#effectiveMode
+    );
 
     // Set rendering properties on each element
     // (triggers their self-render via requestAnimationFrame)
@@ -778,6 +866,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.staffY = noteStaffYCoords.get(noteElement) ?? null;
           noteElement.resolvedGraceAccidentals =
             graceShowAccidentals.get(noteElement) ?? null;
+          noteElement.resolvedTrillFinishAccidentals =
+            trillFinishShowAccidentals.get(noteElement) ?? null;
+          noteElement.resolvedTrillPitch = noteElement.trill
+            ? resolveTrillPitch(
+                noteElement.note,
+                noteElement.octave ?? 4,
+                this.#effectiveKeySig,
+                this.#effectiveMode,
+                noteElement.trillAccidental,
+                noteElement.trillNote
+              )
+            : null;
         });
       } else {
         const chordElement = element as ChordElementType;
@@ -791,12 +891,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.noteAccidentals = accidentals;
           chordElement.resolvedGraceAccidentals =
             graceShowAccidentals.get(chordElement) ?? null;
+          chordElement.resolvedTrillFinishAccidentals =
+            trillFinishShowAccidentals.get(chordElement) ?? null;
+          chordElement.resolvedTrillPitch = chordElement.trill
+            ? this.#resolveChordTrillPitch(chordElement, staffYCoordinates)
+            : null;
         });
       }
     }
 
     const previousElements = this.#currentElements;
     this.#currentElements = elements;
+    // #spaceElements() (below) reads these to push a following entry clear
+    // of a rightward-reserving decoration's footprint, so they must be
+    // resolved before that call, not after.
+    this.#writtenTrillFootprints = this.#computeWrittenTrillFootprints();
+    this.#trillFinishFootprints = this.#computeTrillFinishFootprints();
     this.#resolveArpeggiandoPassages(elements, previousElements);
     this.#spaceElements();
 
@@ -823,12 +933,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       for (let i = 1; i < elements.length; i++) {
         extraLeftwardWidth += this.#entryLeftwardExtent(elements[i], false);
       }
+      let extraRightwardWidth = 0;
+      for (let i = 0; i < elements.length; i++) {
+        extraRightwardWidth += this.#rightwardFootprint(i);
+      }
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
         computeTupletScaledNoteCount(elements, this.#tupletsByIndex),
         firstElementLeftwardWidth,
         extraLeftwardWidth,
-        this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
+        this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX,
+        extraRightwardWidth
       );
       const { totalWeight } = computeSpacingWeights(
         elements,
@@ -972,6 +1087,78 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     return 0;
+  }
+
+  // Rightward layout footprint (px) per writtenNoteAnchorIndex — the mirror
+  // of #entryLeftwardExtent for a written trilling notehead (trill-note),
+  // the first rightward-reserving decoration in this codebase. Spans whose
+  // resolved pitch isn't in written mode (the common case: no trill-note, or
+  // the accidental-only override) contribute nothing. Recomputed from
+  // #currentElements, so call after resolvedTrillPitch has been pushed onto
+  // every element for this pass.
+  #computeWrittenTrillFootprints(): Map<number, number> {
+    const footprints = new Map<number, number>();
+    for (const span of resolveTrillSpans(this.#currentElements)) {
+      const startElement = this.#currentElements[span.startIndex];
+      if (
+        startElement.nodeName !== MUSIC_NOTE_NODE &&
+        startElement.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const resolvedTrillPitch = (
+        startElement as NoteElementType | ChordElementType
+      ).resolvedTrillPitch;
+      if (resolvedTrillPitch?.written !== true) {
+        continue;
+      }
+      const width = computeWrittenTrillNoteWidth(resolvedTrillPitch.accidental);
+      footprints.set(
+        span.writtenNoteAnchorIndex,
+        (footprints.get(span.writtenNoteAnchorIndex) ?? 0) + width
+      );
+    }
+    return footprints;
+  }
+
+  // Rightward footprint (px) per index for a trill's finishing grace
+  // note(s) (`trill-finish`) — the second rightward-reserving decoration in
+  // this codebase, alongside the written trilling notehead above. Unlike
+  // that one, this always anchors at its own host index (no tie-chain-based
+  // deferral — a finishing figure trails the current note directly).
+  #computeTrillFinishFootprints(): Map<number, number> {
+    const footprints = new Map<number, number>();
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const hostElement = element as NoteElementType | ChordElementType;
+      const trillFinish = hostElement.trillFinish;
+      if (trillFinish === null || trillFinish.length === 0) {
+        continue;
+      }
+      const width = computeGraceFootprintWidth(
+        trillFinish,
+        hostElement.resolvedTrillFinishAccidentals
+      );
+      footprints.set(i, width);
+    }
+    return footprints;
+  }
+
+  // Combined rightward footprint (px) at `index` — every decoration that
+  // reserves space after an entry's own right edge sums here, so
+  // #spaceElements() and the strut min-width only need one call site
+  // regardless of how many such decorations exist.
+  #rightwardFootprint(index: number): number {
+    return (
+      (this.#writtenTrillFootprints.get(index) ?? 0) +
+      (this.#trillFinishFootprints.get(index) ?? 0)
+    );
   }
 
   // Total px an entry paints / needs left of its own SVG left edge (x = 0), from
@@ -1169,6 +1356,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         previousRightEdge
       );
 
+      // A rightward-reserving decoration (a written trilling notehead, a
+      // trill's finishing grace note(s), or both) on the previous entry
+      // reserves real space regardless of whether *this* entry has any
+      // leftward decorations of its own — computeInterNoteSpacing only
+      // enforces previousRightEdge when leftwardWidth is positive (the
+      // leftward-only case every other decoration in this codebase
+      // reserves), so apply it unconditionally here for that case.
+      if (i > 0 && this.#rightwardFootprint(i - 1) > 0) {
+        xInWrapper = Math.max(xInWrapper, previousRightEdge);
+      }
+
       // Notify beam renderer of final position after any accidental shift, so beam
       // endpoints stay in sync with the DOM positions of the chord elements.
       const xInBeamsContainer = xInWrapper - this.#describeEndX;
@@ -1198,7 +1396,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       element.style.position = 'absolute';
       element.style.left = `${xInWrapper}px`;
-      previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
+      previousRightEdge =
+        xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(i);
 
       if (element.nodeName === MUSIC_REST_NODE) {
         element.style.top = `${restToYCoordinate(element.duration)}px`;
@@ -1365,6 +1564,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
     this.#dynamicsContainer.innerHTML = '';
     this.#renderDynamics();
+
+    this.#trillLinesContainer.setAttribute('x', `${this.#describeEndX}`);
+    this.#trillLinesContainer.setAttribute('width', `${remainingWidth}`);
+    this.#trillLinesContainer.setAttribute(
+      'viewBox',
+      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#trillLinesContainer.setAttribute(
+      'height',
+      `${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#trillLinesContainer.innerHTML = '';
+    this.#redrawTrillLines(remainingWidth);
   }
 
   #renderDynamics(): void {
@@ -1497,6 +1709,293 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         )
       );
     }
+  }
+
+  // The chord's own reference pitch for trill-pitch resolution: its topmost
+  // (highest-pitch) note — staffYCoordinates is declaration order, not pitch
+  // order, hence the Math.min lookup, mirroring the same pattern used for the
+  // grace-slur's top-note anchoring in svgCreator/chord.ts.
+  #resolveChordTrillPitch(
+    chordElement: ChordElementType,
+    staffYCoordinates: number[]
+  ) {
+    const notes = chordElement.notes;
+    if (notes.length === 0 || staffYCoordinates.length === 0) {
+      return null;
+    }
+    const topNoteIndex = staffYCoordinates.indexOf(
+      Math.min(...staffYCoordinates)
+    );
+    return resolveTrillPitch(
+      notes[topNoteIndex].value,
+      notes[topNoteIndex].octave ?? 4,
+      this.#effectiveKeySig,
+      this.#effectiveMode,
+      chordElement.trillAccidental,
+      chordElement.trillNote
+    );
+  }
+
+  // Re-resolves resolvedTrillPitch on every current element without a full
+  // #renderNotes() — used by the TRILL_ATTRIBUTE_CHANGE listener, since
+  // toggling `trill` or `trill-accidental` on an already-rendered element
+  // needs its sign updated immediately, not just on the next full render.
+  #resolveTrillPitches(): void {
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteElement = element as NoteElementType;
+        noteElement.resolvedTrillPitch = noteElement.trill
+          ? resolveTrillPitch(
+              noteElement.note,
+              noteElement.octave ?? 4,
+              this.#effectiveKeySig,
+              this.#effectiveMode,
+              noteElement.trillAccidental,
+              noteElement.trillNote
+            )
+          : null;
+      } else if (element.nodeName === MUSIC_CHORD_NODE) {
+        const chordElement = element as ChordElementType;
+        chordElement.resolvedTrillPitch = chordElement.trill
+          ? this.#resolveChordTrillPitch(
+              chordElement,
+              this.#chordStaffYCoordsSnapshot.get(chordElement) ?? []
+            )
+          : null;
+      }
+    }
+  }
+
+  // Draws the wavy trill line (+ end-notch) and, when in written mode, the
+  // small parenthesized trilling notehead, for every `trill`-marked element
+  // in the current note stream, same-measure only (a span never crosses into
+  // a sibling <music-measure>'s own staff — see rules/trillRules.ts). Called
+  // from #spaceElements() (remainingWidth already known there) and, lightly,
+  // from the TRILL_ATTRIBUTE_CHANGE listener (recomputes it, matching
+  // #spaceElements()'s own formula).
+  #redrawTrillLines(remainingWidth?: number): void {
+    const width =
+      remainingWidth ??
+      this.transcribeContainer.getBoundingClientRect().width -
+        this.#describeEndX;
+
+    for (const span of resolveTrillSpans(this.#currentElements)) {
+      const startElement = this.#currentElements[span.startIndex] as
+        | NoteElementType
+        | ChordElementType;
+      const resolvedTrillPitch = startElement.resolvedTrillPitch;
+
+      if (resolvedTrillPitch?.written === true) {
+        this.#drawWrittenTrillNote(
+          span.startIndex,
+          span.writtenNoteAnchorIndex,
+          resolvedTrillPitch
+        );
+      }
+
+      if (!span.hasLine) {
+        continue;
+      }
+
+      const y = TRILL_ABOVE_STAFF_BOTTOM_Y;
+      const stemUp = this.#stemDirections[span.startIndex] ?? true;
+      const startNoteX = this.#noteXPositions.get(span.startIndex) ?? 0;
+      const signLeftOffset = trillSignLeftX(stemUp);
+      const startX =
+        startNoteX +
+        signLeftOffset +
+        TRILL_SIGN_WIDTH_PX +
+        TRILL_SIGN_LINE_GAP_PX;
+      const endX = this.#trillLineEndX(span, width);
+
+      const line = createTrillLineSvg({ startX, endX, bottomY: y });
+      if (line) {
+        this.#trillLinesContainer.appendChild(line);
+      }
+      if (span.stopped) {
+        this.#trillLinesContainer.appendChild(createTrillNotchSvg(endX, y));
+      }
+    }
+
+    this.#drawTrillFinishSlurs();
+  }
+
+  // Where the line/notch ends, given a resolved trill span.
+  #trillLineEndX(span: TrillLineSpan, width: number): number {
+    if (span.stopped) {
+      // Cut short rather than running to the next notehead — stop just past
+      // this trill's own last tied note.
+      const lastNoteX = this.#noteXPositions.get(span.lastTiedIndex) ?? width;
+      return lastNoteX + NOTE_SVG_WIDTH;
+    }
+    if (span.endBeforeIndex !== null) {
+      return (
+        (this.#noteXPositions.get(span.endBeforeIndex) ?? width) -
+        TRILL_LINE_END_GAP_PX
+      );
+    }
+    return width;
+  }
+
+  // Approximate rendered center X and precise head Y (staff space) of the
+  // note/chord at `index` — the "to-next" trill-finish slur's far endpoint
+  // (see #drawTrillFinishSlurs). Returns null for a rest (nothing to slur
+  // to) or an out-of-range index.
+  #referenceHeadPosition(index: number): { xCenter: number; y: number } | null {
+    const element = this.#currentElements[index];
+    if (element === undefined || element.nodeName === MUSIC_REST_NODE) {
+      return null;
+    }
+    const noteX = this.#noteXPositions.get(index) ?? 0;
+    const xCenter = noteX + NOTE_SVG_WIDTH / 2;
+    if (element.nodeName === MUSIC_NOTE_NODE) {
+      const noteElement = element as NoteElementType;
+      const rawY = this.noteToYCoordinate(
+        noteElement.note,
+        noteElement.octave ?? 4,
+        index
+      );
+      return {
+        xCenter,
+        y: STAFF_Y_PADDING + rawY - NOTE_HEAD_Y_OFFSET_CORRECTION,
+      };
+    }
+    const chordElement = element as ChordElementType;
+    const staffYCoords =
+      this.#chordStaffYCoordsSnapshot.get(chordElement) ?? [];
+    if (staffYCoords.length === 0) {
+      return null;
+    }
+    return {
+      xCenter,
+      y: STAFF_Y_PADDING + staffYCoords[0] - NOTE_HEAD_Y_OFFSET_CORRECTION,
+    };
+  }
+
+  // Draws the "to-next" half of a trill's finishing-grace slur(s) —
+  // the self-contained "to-main" half is drawn locally by the note/chord
+  // itself (see svgCreator/graceNotes.ts#createTrillFinishNotesSvg); this
+  // half reaches a sibling element only this staff can position, so only the
+  // staff can draw it. Independently recomputes the same local layout math
+  // the host element's own render used (mirrors
+  // #computeWrittenTrillFootprints/#drawWrittenTrillNote) rather than
+  // reading it back from rendered DOM.
+  #drawTrillFinishSlurs(): void {
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const hostElement = element as NoteElementType | ChordElementType;
+      const trillFinish = hostElement.trillFinish;
+      if (trillFinish === null || trillFinish.length === 0) {
+        continue;
+      }
+      if (
+        hostElement.trillFinishSlur !== 'to-next' &&
+        hostElement.trillFinishSlur !== 'both'
+      ) {
+        continue;
+      }
+      const nextIndex = i + 1;
+      if (nextIndex >= this.#currentElements.length) {
+        continue;
+      }
+      const targetPosition = this.#referenceHeadPosition(nextIndex);
+      if (targetPosition === null) {
+        continue;
+      }
+
+      let referenceLetter: NoteLetter;
+      let referenceOctave: Octave;
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteElement = element as NoteElementType;
+        referenceLetter = noteElement.note[0] as NoteLetter;
+        referenceOctave = noteElement.octave ?? 4;
+      } else {
+        const chordElement = element as ChordElementType;
+        if (chordElement.notes.length === 0) {
+          continue;
+        }
+        referenceLetter = chordElement.notes[0].value[0] as NoteLetter;
+        referenceOctave = chordElement.notes[0].octave ?? 4;
+      }
+
+      const descriptors = buildGraceNoteDescriptors(
+        trillFinish,
+        hostElement.trillFinishOctave ?? [],
+        referenceLetter,
+        referenceOctave
+      );
+      applyResolvedGraceAccidentals(
+        descriptors,
+        hostElement.resolvedTrillFinishAccidentals
+      );
+      const layout = computeGraceLayout(descriptors);
+      const lastLocalIndex = descriptors.length - 1;
+      const hostX = this.#noteXPositions.get(i) ?? 0;
+      const lastHeadX =
+        hostX +
+        NOTE_SVG_WIDTH +
+        GRACE_MAIN_GAP_PX +
+        layout.headXCenters[lastLocalIndex];
+
+      const lastPitch = trillFinish[lastLocalIndex];
+      const lastOctave =
+        (hostElement.trillFinishOctave ?? [])[lastLocalIndex] ??
+        referenceOctave;
+      const lastRawY = this.noteToYCoordinate(lastPitch, lastOctave, i);
+      const lastHeadY =
+        STAFF_Y_PADDING + lastRawY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+      const slur = createOrnamentConnectorSlur(
+        lastHeadX,
+        lastHeadY,
+        TRILL_FINISH_HEAD_RY,
+        targetPosition.xCenter,
+        targetPosition.y,
+        NOTE_HEAD_RADIUS_PX * 0.75
+      );
+      this.#trillLinesContainer.appendChild(slur);
+    }
+  }
+
+  // Draws the small written trilling notehead — positioned after the anchor
+  // note's own right edge (see rules/trillRules.ts's writtenNoteAnchorIndex
+  // for why this can differ from the trill's own starting note), at the
+  // resolved pitch's real staff Y.
+  #drawWrittenTrillNote(
+    startIndex: number,
+    anchorIndex: number,
+    resolvedTrillPitch: {
+      letter: NoteLetter;
+      accidental: AccidentalType | null;
+      octave: Octave | null;
+    }
+  ): void {
+    if (resolvedTrillPitch.octave === null) {
+      return;
+    }
+    const anchorNoteX = this.#noteXPositions.get(anchorIndex) ?? 0;
+    const leftX = anchorNoteX + NOTE_SVG_WIDTH + TRILL_WRITTEN_NOTE_GAP_PX;
+    const rawY = this.noteToYCoordinate(
+      `${resolvedTrillPitch.letter}${accidentalSuffix(
+        resolvedTrillPitch.accidental
+      )}` as Note,
+      resolvedTrillPitch.octave,
+      startIndex
+    );
+    const centerY = STAFF_Y_PADDING + rawY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const { element } = createWrittenTrillNoteSvg({
+      leftX,
+      centerY,
+      accidental: resolvedTrillPitch.accidental,
+    });
+    this.#trillLinesContainer.appendChild(element);
   }
 
   // Conservative above-staff budget estimate using staff-referenced positions.

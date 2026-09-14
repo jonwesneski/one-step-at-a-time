@@ -52,7 +52,7 @@ Short melodic decorations applied to a note.
 
 |          | Name                            | Symbol / Notation            | Description                                                                                                                                                                                                                                                          |
 | -------- | ------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| &#x2610; | Trill                           | `tr` or `tr~~~`              | Rapid alternation between the note and the one above                                                                                                                                                                                                                 |
+| &#x2611; | Trill                           | `tr` or `tr~~~`              | Rapid alternation between the note and the one above                                                                                                                                                                                                                 |
 | &#x2610; | Trill with ending               | `tr` + turn                  | Trill that resolves with a turn figure                                                                                                                                                                                                                               |
 | &#x2610; | Mordent (Lower)                 | `ð†©`                        | Quick lower-neighbor figure (note â†’ below â†’ note)                                                                                                                                                                                                                |
 | &#x2610; | Inverted Mordent (Upper)        | `ð†ª`                        | Quick upper-neighbor figure (note â†’ above â†’ note)                                                                                                                                                                                                                |
@@ -434,10 +434,10 @@ Text and lines that extend above the staff.
 
 |          | Marking    | Description                                |
 | -------- | ---------- | ------------------------------------------ |
-| &#x2610; | `tr`       | Trill â€” placed above the note            |
-| &#x2610; | `tr~~~~`   | Trill with wavy extension line             |
-| &#x2610; | `tr (â™¯)` | Trill with an accidental on the upper note |
-| &#x2610; | `t.r.`     | Trill abbreviation                         |
+| &#x2611; | `tr`       | Trill â€” placed above the note            |
+| &#x2611; | `tr~~~~`   | Trill with wavy extension line             |
+| &#x2611; | `tr (â™¯)` | Trill with an accidental on the upper note |
+| &#x2611; | `t.r.`     | Trill abbreviation                         |
 
 ---
 

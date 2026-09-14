@@ -51,6 +51,16 @@ const CODEPOINTS = {
   wiggleArpeggiatoDown: 0xeaa1,
   wiggleArpeggiatoUpArrow: 0xeaa2,
   wiggleArpeggiatoDownArrow: 0xeaa3,
+  ornamentTrill: 0xe566,
+  wiggleTrill: 0xeaa4,
+  wiggleTrillFast: 0xeaa3,
+  wiggleTrillFaster: 0xeaa2,
+  wiggleTrillFasterStill: 0xeaa1,
+  wiggleTrillFastest: 0xeaa0,
+  wiggleTrillSlow: 0xeaa5,
+  wiggleTrillSlower: 0xeaa6,
+  wiggleTrillSlowerStill: 0xeaa7,
+  wiggleTrillSlowest: 0xeaa8,
 };
 
 const args = process.argv.slice(2);
