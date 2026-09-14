@@ -1170,9 +1170,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // left-of-entry decoration here, not at the call sites.
   //
   // Not included: an incoming tie/slur end curve, ledger-line extension, a
-  // tuplet bracket/numeral. Those are drawn by separate connector/overlay passes
-  // and extend only marginally past the notehead; no clef-area overlap has been
-  // reported. Add a term here if one is.
+  // tuplet bracket/numeral. Each is geometrically bounded to not need one: a
+  // tie/slur curve's x is monotonic between the two noteheads it connects, so
+  // it never reaches past the previous entry; a ledger line's left extent is a
+  // small fixed offset from the notehead centre, well inside this entry's own
+  // SVG box; a tuplet bracket's left edge is clamped to never go negative past
+  // its first note's own box.
   //
   // `includeAccidental` is false only for the non-first entries of the strut
   // min-width sum: their accidental column sits between two entries and is
@@ -1215,8 +1218,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     extent += computeGraceFootprintWidth(el.grace, el.resolvedGraceAccidentals);
 
     const partner = crossStaffArpeggioPartner(el);
+    // A span's wave variant may be authored solely on the partner end (the
+    // lower end of a span is the only one that can carry `arpeggio-for`, so
+    // the upper end has neither its own `arpeggio` nor `arpeggioFor` when the
+    // wave lives on the lower end) — the measure overlay still draws the wave
+    // reaching this end, so fall back to the partner's variant to reserve for
+    // it. Every wave variant reserves the same width (see footprintArpeggio's
+    // own comment), so which one is used past non-null doesn't matter.
+    const ownArpeggio = footprintArpeggio(el);
+    const resolvedArpeggio =
+      ownArpeggio ?? (partner !== null ? footprintArpeggio(partner) : null);
     extent += computeArpeggioFootprintWidth(
-      footprintArpeggio(el),
+      resolvedArpeggio,
       elementHasShownAccidental(el),
       partner !== null
     );

@@ -1067,7 +1067,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           this.arpeggio ?? this.#impliedArpeggio,
           accidental !== undefined
         ) +
-        computeArpeggioHairpinFootprintWidth(this.#effectiveArpeggioHairpin());
+        computeArpeggioHairpinFootprintWidth(
+          this.#effectiveArpeggioHairpin(),
+          this.arpeggioHairpinFrom,
+          this.arpeggioHairpinTo
+        );
       const { cx, cy } = noteHeadCenter(
         this.#stemUp,
         this.duration,

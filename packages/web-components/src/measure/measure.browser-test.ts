@@ -966,3 +966,219 @@ test.describe(`${MUSIC_MEASURE} cross-staff arpeggio persistence`, () => {
     expect(afterRenumber.endpointsSuppressed).toBe(true);
   });
 });
+
+test.describe(`${MUSIC_MEASURE} cross-staff arpeggio hairpin re-reservation`, () => {
+  async function buildGrandStaffSpan(
+    page: Page,
+    {
+      upperHairpin,
+      lowerHairpin,
+    }: { upperHairpin: boolean; lowerHairpin: boolean }
+  ): Promise<void> {
+    await page.evaluate(
+      ({
+        compositionTag,
+        measureTag,
+        staffTag,
+        upperHairpin,
+        lowerHairpin,
+      }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        composition.setAttribute('time', '4/4');
+
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        treble.setAttribute('time', '4/4');
+        treble.innerHTML =
+          `<music-chord id="top" chord="Cmaj" duration="whole" arpeggio="up"` +
+          (upperHairpin
+            ? ' arpeggio-hairpin="crescendo" arpeggio-hairpin-to="mf"'
+            : '') +
+          `></music-chord>`;
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('time', '4/4');
+        bass.innerHTML =
+          `<music-chord chord="Cmaj" duration="whole" arpeggio-for="top"` +
+          (lowerHairpin
+            ? ' arpeggio-hairpin="crescendo" arpeggio-hairpin-to="mf"'
+            : '') +
+          `>` +
+          '<music-note note="C" octave="3"></music-note>' +
+          '<music-note note="E" octave="3"></music-note>' +
+          '<music-note note="G" octave="3"></music-note></music-chord>';
+        measure.append(treble, bass);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        upperHairpin,
+        lowerHairpin,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readStaffLeftEdges(
+    page: Page
+  ): Promise<{ trebleLeft: number; bassLeft: number }> {
+    return page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const treble = staves.find((s) => s.getAttribute('clef') === 'treble');
+      const bass = staves.find((s) => s.getAttribute('clef') === 'bass');
+      const trebleChord = treble?.querySelector('music-chord');
+      const bassChord = bass?.querySelector('music-chord');
+      return {
+        trebleLeft: trebleChord?.getBoundingClientRect().left ?? 0,
+        bassLeft: bassChord?.getBoundingClientRect().left ?? 0,
+      };
+    });
+  }
+
+  test('removing the upper endpoint’s hairpin re-spaces the lower staff back down', async ({
+    page,
+  }) => {
+    await buildGrandStaffSpan(page, {
+      upperHairpin: true,
+      lowerHairpin: false,
+    });
+    const withHairpin = await readStaffLeftEdges(page);
+
+    await page.evaluate(() => {
+      document
+        .querySelector('music-staff[clef="treble"] music-chord')
+        ?.removeAttribute('arpeggio-hairpin');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const afterRemoval = await readStaffLeftEdges(page);
+
+    // The lower staff's chord reserved extra leftward room for the upper
+    // end's hairpin letters; removing that hairpin should shrink it back,
+    // moving the lower chord's own left edge leftward (closer to the
+    // describe area) again.
+    expect(afterRemoval.bassLeft).toBeLessThan(withHairpin.bassLeft);
+  });
+
+  test('authoring a hairpin on the lower endpoint re-spaces the upper staff', async ({
+    page,
+  }) => {
+    await buildGrandStaffSpan(page, {
+      upperHairpin: false,
+      lowerHairpin: false,
+    });
+    const withoutHairpin = await readStaffLeftEdges(page);
+
+    await page.evaluate(() => {
+      const bassChord = document.querySelector(
+        'music-staff[clef="bass"] music-chord'
+      );
+      bassChord?.setAttribute('arpeggio-hairpin', 'crescendo');
+      bassChord?.setAttribute('arpeggio-hairpin-to', 'mf');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const withHairpin = await readStaffLeftEdges(page);
+
+    // The upper staff never received the attribute change directly, but its
+    // own footprint helper resolves the hairpin from the lower (partner) end
+    // — its chord should reserve more room and shift rightward.
+    expect(withHairpin.trebleLeft).toBeGreaterThan(withoutHairpin.trebleLeft);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} cross-staff arpeggio wave footprint (partner-only wave)`, () => {
+  // Only the LOWER end carries `arpeggio-for`/a real wave variant — per
+  // resolveArpeggioSpans, `arpeggio-for` is only ever set on the lower end of
+  // a span, so the upper end here has neither its own `arpeggio` nor
+  // `arpeggio-for`. The measure overlay still draws the shared wave reaching
+  // this upper end; its own staff must still reserve room for it.
+  async function buildLowerAuthoredSpan(
+    page: Page,
+    withSpan: boolean
+  ): Promise<void> {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, withSpan }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        composition.setAttribute('time', '4/4');
+
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        treble.setAttribute('time', '4/4');
+        treble.innerHTML =
+          '<music-chord id="top" chord="Cmaj" duration="whole"></music-chord>';
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('time', '4/4');
+        bass.innerHTML = withSpan
+          ? '<music-chord chord="Cmaj" duration="whole" arpeggio="up" arpeggio-for="top">' +
+            '<music-note note="C" octave="3"></music-note>' +
+            '<music-note note="E" octave="3"></music-note>' +
+            '<music-note note="G" octave="3"></music-note></music-chord>'
+          : '<music-chord chord="Cmaj" duration="whole">' +
+            '<music-note note="C" octave="3"></music-note>' +
+            '<music-note note="E" octave="3"></music-note>' +
+            '<music-note note="G" octave="3"></music-note></music-chord>';
+        measure.append(treble, bass);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        withSpan,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readTrebleChordLeft(page: Page): Promise<number> {
+    return page.evaluate(() => {
+      const treble = Array.from(document.querySelectorAll('music-staff')).find(
+        (s) => s.getAttribute('clef') === 'treble'
+      );
+      const chord = treble?.querySelector('music-chord');
+      return chord?.getBoundingClientRect().left ?? 0;
+    });
+  }
+
+  test('the upper endpoint reserves room for a wave authored solely on the lower endpoint', async ({
+    page,
+  }) => {
+    await buildLowerAuthoredSpan(page, false);
+    const withoutSpan = await readTrebleChordLeft(page);
+
+    await buildLowerAuthoredSpan(page, true);
+    const withSpan = await readTrebleChordLeft(page);
+
+    // The upper chord has no local arpeggio/arpeggio-for of its own — before
+    // the fix, its reserved leftward extent came out to 0 regardless of the
+    // span, so its own left edge would be identical (or further left,
+    // overlapping the describe area) with vs. without the lower-authored
+    // wave. With the fix, it reserves the same room a locally-authored wave
+    // would, shifting rightward.
+    expect(withSpan).toBeGreaterThan(withoutSpan);
+  });
+});
