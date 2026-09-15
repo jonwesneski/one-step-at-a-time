@@ -1,43 +1,15 @@
 import { DurationType } from '../types/theory';
+import { MIN_NOTE_WIDTH, PIXELS_PER_BEAT } from '../utils/notationDimensions';
 import {
-  SPACING_LOG_INCREMENT_PX,
-  SPACING_SHORTEST_SLACK_PX,
-} from '../utils/notationDimensions';
-import {
+  computeMeasureProportionalOffsets,
   computeSpacingWeights,
-  distributeSlack,
-  spacingSlackWeight,
 } from './spacingRules';
+import { durationToFactor } from './theoryConsts';
 
 const entries = (...durations: DurationType[]): { duration: DurationType }[] =>
   durations.map((duration) => ({ duration }));
 
-describe('spacingSlackWeight', () => {
-  it('is the floor when the note is the measure shortest', () => {
-    expect(spacingSlackWeight(0.25, 0.25)).toBe(SPACING_SHORTEST_SLACK_PX);
-  });
-
-  it('adds one increment per doubling of duration', () => {
-    // quarter (0.25) is two doublings above a sixteenth (0.0625)
-    expect(spacingSlackWeight(0.25, 0.0625)).toBeCloseTo(
-      SPACING_SHORTEST_SLACK_PX + 2 * SPACING_LOG_INCREMENT_PX
-    );
-  });
-
-  it('never drops below the floor for a note shorter than the reference', () => {
-    expect(spacingSlackWeight(0.03125, 0.25)).toBe(SPACING_SHORTEST_SLACK_PX);
-  });
-
-  it('is finite and positive across the whole duration range', () => {
-    for (const factor of [2, 1, 0.5, 0.25, 0.0078125]) {
-      const weight = spacingSlackWeight(factor, 0.0078125);
-      expect(Number.isFinite(weight)).toBe(true);
-      expect(weight).toBeGreaterThan(0);
-    }
-  });
-});
-
-describe('computeSpacingWeights', () => {
+describe('computeSpacingWeights (sizing preference)', () => {
   it('returns empty results for no entries', () => {
     expect(computeSpacingWeights([])).toEqual({ weights: [], totalWeight: 0 });
   });
@@ -46,15 +18,13 @@ describe('computeSpacingWeights', () => {
     const { weights, totalWeight } = computeSpacingWeights(
       entries('quarter', 'quarter', 'quarter')
     );
-    expect(weights).toEqual([
-      SPACING_SHORTEST_SLACK_PX,
-      SPACING_SHORTEST_SLACK_PX,
-      SPACING_SHORTEST_SLACK_PX,
-    ]);
-    expect(totalWeight).toBe(3 * SPACING_SHORTEST_SLACK_PX);
+    const expectedWeight =
+      durationToFactor.quarter * PIXELS_PER_BEAT - MIN_NOTE_WIDTH;
+    expect(weights).toEqual([expectedWeight, expectedWeight, expectedWeight]);
+    expect(totalWeight).toBeCloseTo(3 * expectedWeight);
   });
 
-  it('weights a longer note above the measure shortest', () => {
+  it('a whole note gets more slack than an eighth note', () => {
     const { weights } = computeSpacingWeights(entries('eighth', 'whole'));
     expect(weights[1]).toBeGreaterThan(weights[0]);
   });
@@ -72,46 +42,89 @@ describe('computeSpacingWeights', () => {
       [1, 2 / 3],
       [2, 2 / 3],
     ]);
-    const plain = computeSpacingWeights(entries('eighth', 'eighth'));
+    const plain = computeSpacingWeights(entries('quarter', 'quarter'));
     const tripled = computeSpacingWeights(
-      entries('eighth', 'eighth', 'eighth'),
+      entries('quarter', 'quarter', 'quarter'),
       triplet
     );
-    // three triplet eighths occupy the slack of two straight eighths
+    // three triplet quarters occupy the slack of two straight quarters
     expect(tripled.totalWeight).toBeCloseTo(plain.totalWeight);
+  });
+
+  it('floors slack at 0 for durations shorter than MIN_NOTE_WIDTH worth of beats', () => {
+    const { weights } = computeSpacingWeights(
+      entries('hundredtwentyeighth', 'sixtyfourth')
+    );
+    expect(weights[0]).toBe(0);
+    expect(weights[1]).toBe(0);
+  });
+
+  it('an entry weight is independent of how many other entries exist', () => {
+    const alone = computeSpacingWeights(entries('quarter'));
+    const withMore = computeSpacingWeights(
+      entries('quarter', 'sixteenth', 'whole')
+    );
+    expect(withMore.weights[0]).toBeCloseTo(alone.weights[0]);
   });
 });
 
-describe('distributeSlack', () => {
+describe('computeMeasureProportionalOffsets (position)', () => {
   it('starts the first entry at zero offset', () => {
-    const offsets = distributeSlack([20, 20, 20], 60, 300);
+    const offsets = computeMeasureProportionalOffsets([0, 0.25, 0.5], 1, 800);
     expect(offsets[0]).toBe(0);
   });
 
-  it('is monotonically non-decreasing', () => {
-    const offsets = distributeSlack([10, 40, 20, 30], 100, 500);
-    for (let i = 1; i < offsets.length; i++) {
-      expect(offsets[i]).toBeGreaterThanOrEqual(offsets[i - 1]);
+  it('positions an entry as its fraction of the fixed measure capacity, scaled by available width', () => {
+    // 2 quarter notes in 4/4 (capacity = 1.0 whole note): note 2 starts at
+    // beat 1 of 4, i.e. beatOffset 0.25 of capacity 1.0 -> 25% of the width
+    const beatOffsets = [0, 0.25];
+    const offsets = computeMeasureProportionalOffsets(beatOffsets, 1, 800);
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBeCloseTo(0.25 * 800);
+  });
+
+  it('a full measure spreads its entries across the entire available width', () => {
+    // 4 quarter notes exactly filling a 4/4 measure: beats 0, 0.25, 0.5, 0.75
+    const beatOffsets = [0, 0.25, 0.5, 0.75];
+    const offsets = computeMeasureProportionalOffsets(beatOffsets, 1, 2000);
+    expect(offsets).toEqual([0, 500, 1000, 1500]);
+  });
+
+  it('scales proportionally with available width (resize reflows)', () => {
+    const beatOffsets = [0, 0.25, 0.5, 0.75];
+    const wide = computeMeasureProportionalOffsets(beatOffsets, 1, 2000);
+    const narrow = computeMeasureProportionalOffsets(beatOffsets, 1, 800);
+    for (let i = 1; i < wide.length; i++) {
+      expect(narrow[i] / wide[i]).toBeCloseTo(800 / 2000);
     }
   });
 
-  it('leaves the last entry its own weight share as trailing space', () => {
-    const weights = [10, 40, 20, 30];
-    const total = 100;
-    const proportionalWidth = 500;
-    const offsets = distributeSlack(weights, total, proportionalWidth);
-    const trailing = proportionalWidth - offsets[offsets.length - 1];
-    expect(trailing).toBeCloseTo(
-      (weights[weights.length - 1] / total) * proportionalWidth
-    );
+  it('is append-only: earlier offsets never change when a new entry is added, holding capacity and width fixed', () => {
+    const before = computeMeasureProportionalOffsets([0, 0.25], 1, 800);
+    const after = computeMeasureProportionalOffsets([0, 0.25, 0.5], 1, 800);
+    expect(after.slice(0, before.length)).toEqual(before);
   });
 
-  it('collapses to all-zero offsets when there is no spare width', () => {
-    expect(distributeSlack([20, 20], 40, 0)).toEqual([0, 0]);
-    expect(distributeSlack([20, 20], 40, -50)).toEqual([0, 0]);
+  it('is independent of how many other entries exist, unlike distributing among current entries', () => {
+    // the core original bug: 2 quarter notes should land at 25%, not 50%
+    const offsets = computeMeasureProportionalOffsets([0, 0.25], 1, 800);
+    expect(offsets[1]).toBeCloseTo(0.25 * 800);
+    expect(offsets[1]).not.toBeCloseTo(0.5 * 800);
   });
 
-  it('returns a single zero offset for one entry', () => {
-    expect(distributeSlack([25], 25, 400)).toEqual([0]);
+  it('returns all zeros when measure capacity is zero (degenerate guard)', () => {
+    expect(computeMeasureProportionalOffsets([0, 0.25], 0, 800)).toEqual([
+      0, 0,
+    ]);
+  });
+
+  it('returns an empty array for no entries', () => {
+    expect(computeMeasureProportionalOffsets([], 1, 800)).toEqual([]);
+  });
+
+  it('floors a negative available width at 0 (e.g. before real layout settles)', () => {
+    expect(computeMeasureProportionalOffsets([0, 0.25], 1, -50)).toEqual([
+      0, 0,
+    ]);
   });
 });

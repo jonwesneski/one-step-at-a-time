@@ -59,11 +59,11 @@ one-step-at-a-time/
 │           │   ├── beamRules.ts
 │           │   ├── clefRules.ts           # Per-clef Y-coord/octave/key-sig data + SVG glyph (CLEF_DEFINITIONS, getClefRenderData)
 │           │   ├── staffGroupRules.ts     # Brace/bracket pairing + validation (resolveStaffGroupPairs) — pure, unit-testable
-│           │   ├── spacingRules.ts        # Horizontal entry spacing — logarithmic duration weight + slack distribution
+│           │   ├── spacingRules.ts        # Horizontal entry spacing — fixed beat-proportional advance per entry
 │           │   ├── staffWidth.ts          # Measure strut-min + duration-weighted natural width; flex value
 │           │   ├── theoryConsts.ts        # Duration/semitone lookup maps
 │           │   ├── theoryHelpers.ts       # Chord/note computation
-│           │   └── …                      # also chordRules, restRules, staffHeightRules, staffNoteRules, tupletRules, dynamicsRules
+│           │   └── …                      # also beatRules, chordRules, restRules, staffHeightRules, staffNoteRules, tupletRules, dynamicsRules
 │           ├── types/
 │           │   ├── theory.ts  # Core music theory types
 │           │   └── elements.ts
@@ -238,14 +238,29 @@ All components use shadow DOM (`attachShadow({ mode: 'open' })`). Style encapsul
 
 - Y-coordinates are looked up from static maps keyed by note name + octave (e.g., `'C4'`, `'G5'`)
 - Each staff subclass defines its own `noteYCoordinateMap` for its clef range
-- X-spacing: entries are justified to fill the measure width. Beyond a fixed
-  `MIN_NOTE_WIDTH` collision strut per entry, spare width is shared out by a
-  **logarithmic** function of duration — halving a note's value costs roughly a
-  quarter of its space, not half — so long notes are not over-spaced and short
-  notes are not starved. The math is `rules/spacingRules.ts`
-  (`spacingSlackWeight` / `computeSpacingWeights` / `distributeSlack`).
-  `durationToFactor` is a **separate** linear map used only for bar-fit and
-  beam-grouping, never for spacing.
+- X-spacing: an entry's x is its cumulative beat-offset (tuplet-ratio-scaled,
+  arpeggio-run-note zeroed — `durationContribution` in `rules/beatRules.ts`,
+  shared with bar-fit and beam-grouping) as a **fraction of the measure's
+  fixed beat capacity** (`beatsInMeasure / beatType` from the staff's
+  effective time signature — a constant, independent of how many entries
+  currently exist), scaled by the staff's real available width
+  (`rules/spacingRules.ts`'s `computeMeasureProportionalOffsets`). This is
+  what makes a full measure fill the staff at any width, what makes resizing
+  reflow every entry together (like conventional notation software), and
+  what keeps appending an entry from ever moving an already-placed one:
+  neither the capacity nor the available width it's scaled against depends
+  on entry count. A `MIN_NOTE_WIDTH` floor is layered on top against only the
+  _previous_ entry (never looking ahead, so append-only still holds) since
+  the proportional formula has no built-in per-entry minimum. Same-beat
+  entries naturally align across sibling staves with no explicit
+  coordination code, since every staff runs the identical formula. A
+  tupleted entry's _true_ (ratio-compressed) beat-time drives where whatever
+  follows it lands; no special-casing is needed for how the tuplet's own
+  notes space out _within_ that compressed span — they fall out evenly by
+  the same formula. `computeSpacingWeights`/`PIXELS_PER_BEAT` (also in
+  `rules/spacingRules.ts`) are a **separate** concern — they feed only the
+  measure's sizing _preference_ (see Measure Width below), not entry
+  position.
 - SVG rendering lives entirely in `utils/svgCreator/` (a directory, not a single file)
 
 ### Semitone System
@@ -259,8 +274,9 @@ Each staff reports **two** widths, both computed in `rules/staffWidth.ts`:
 - **strut min width** — the collision floor:
   `describeEndX + LEADING_NOTE_GAP_PX + noteCount × MIN_NOTE_WIDTH + leftward-overhangs + clefChangeWidth`
   (vocal takes `max(noteCount × MIN_NOTE_WIDTH, lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)`).
-- **natural width** — the strut plus the total logarithmic spacing slack the
-  entries want beyond it (`Σ` of `computeSpacingWeights` from `rules/spacingRules.ts`).
+- **natural width** — the strut plus the total beat-proportional spacing
+  slack the entries want beyond it (`Σ` of `computeSpacingWeights` from
+  `rules/spacingRules.ts`).
 
 `describeEndX` is the x-offset where the clef/key-signature/time-signature area ends (stored as `#describeEndX`, updated every `#spaceElements()` run).
 
@@ -286,7 +302,7 @@ Because grow == basis, the measures on a row end up distributed as `naturalWidth
 
 On each redraw cycle the following happen in order:
 
-1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-justifies the entries across the new container width (logarithmic duration weight, see SVG Coordinate System above) and re-emits `STAFF_EVENTS.NOTES_POSITIONED`.
+1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-runs `#spaceElements()` and re-emits `STAFF_EVENTS.NOTES_POSITIONED`. Since spacing is proportional to the staff's real available width (see SVG Coordinate System above), a resize reflows every entry together — the same way conventional notation software fills whatever width it's given.
 2. **Beams** — redrawn as part of `#renderNotes()` / `onStaffResize()` inside each staff.
 3. **Connectors** — `#redrawConnectors()` in `composition.ts` redraws the vertical bar lines that group staves in a measure.
 4. **Describe (clef/key/time) visibility** — `#updateDescribeVisibility()` in `composition.ts` runs in the **same `requestAnimationFrame`** as connectors, immediately after. It groups measures into visual rows (`#computeMeasureRows()`, tolerance 5 px on `getBoundingClientRect().top`, snapshotted in one pass before any DOM writes) and sets `showDescribe` (a JS property, not an HTML attribute) on each child staff — `true` for the first measure in each row, `false` otherwise. Connectors are absolutely-positioned SVG and do not affect document flow, so no layout settling is needed between the two operations. Staves default to `showDescribe = true`, so standalone staves always show the clef.
@@ -340,16 +356,16 @@ type VoiceType = 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
 
 ## Key Utility Maps (`rules/theoryConsts.ts`)
 
-| Map                       | Purpose                                                                                                                    |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `durationToFlagCountMap`  | Duration → flag count (eighth=1, sixteenth=2, …)                                                                           |
-| `noteSemitoneMap`         | Note name → semitone (0–11)                                                                                                |
-| `semitoneNoteMap`         | Semitone → note name array (handles enharmonics)                                                                           |
-| `ChordSemitoneMap`        | Chord type string → interval array                                                                                         |
-| `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`)                                                                      |
-| `durationToFactor`        | Duration → linear whole-note fraction. Bar-fit (`measureRules`) and beam grouping (`beams.ts`) only — **not** note spacing |
+| Map                       | Purpose                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `durationToFlagCountMap`  | Duration → flag count (eighth=1, sixteenth=2, …)                                                                                                                                               |
+| `noteSemitoneMap`         | Note name → semitone (0–11)                                                                                                                                                                    |
+| `semitoneNoteMap`         | Semitone → note name array (handles enharmonics)                                                                                                                                               |
+| `ChordSemitoneMap`        | Chord type string → interval array                                                                                                                                                             |
+| `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`)                                                                                                                                          |
+| `durationToFactor`        | Duration → linear whole-note fraction. Shared by bar-fit (`measureRules`), beam grouping (`beams.ts`), and note spacing (`spacingRules.ts`) via `durationContribution` in `rules/beatRules.ts` |
 
-Horizontal note spacing uses `rules/spacingRules.ts` (`spacingSlackWeight`, `computeSpacingWeights`, `distributeSlack`), a logarithmic curve, not `durationToFactor`.
+Horizontal note **position** (`rules/spacingRules.ts`'s `computeMeasureProportionalOffsets`, fed by `computeBeatOffsets` in `rules/beatRules.ts`) is an entry's cumulative beat-offset as a fraction of the measure's fixed beat capacity (from the time signature), scaled by the staff's available width — see SVG Coordinate System above. A separate function in the same file, `computeSpacingWeights` (`durationToFactor[duration] × PIXELS_PER_BEAT`, floored at `MIN_NOTE_WIDTH`, tuplet-scaled via `computeTupletScaleByIndex`), feeds only the measure's sizing _preference_ (see Measure Width) — not position.
 
 `utils/consts.ts` holds custom element tag name constants and event name constants (e.g., `STAFF_EVENTS`).
 
@@ -386,7 +402,7 @@ Rendering flow (classical staves):
 2. `connectedCallback()` (in `StaffElementBase`) builds staff lines, appends `staffContainer` and `transcribeContainer`, wires `slotchange`, starts `staffResizeObserver`
 3. `onConnectedCallback()` (in `StaffClassicalElementBase`) calls `#buildDescribe()`: injects clef SVG, key signature, and time signature into `transcribeContainer`
 4. `slotchange` fires → `onHandleSlotChange()` → `#renderNotes()` converts notes/chords to SVG
-5. Entries justified to fill the measure; each entry's share of the free space is a logarithmic function of its duration (`rules/spacingRules.ts`)
+5. Each entry is positioned at its cumulative beat-offset as a fraction of the measure's fixed beat capacity, scaled by the staff's available width — floored at `MIN_NOTE_WIDTH` against the previous entry (`rules/spacingRules.ts`)
 6. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
 7. Staff dispatches a `STAFF_EVENTS.STAFF_MIN_WIDTH` event after each render with `detail: { minWidth, naturalWidth }` — the collision-floor width and the duration-weighted preferred width (see Measure Width above)
 

@@ -439,10 +439,11 @@ describe('beams', () => {
     });
 
     it('interior stem tips reach the primary beam when the group is unevenly spaced', () => {
-      // An accidental on an interior note shoves it right, off the even grid
-      // (independent of layout width, so it reproduces in jsdom). The primary
-      // beam is drawn by true-X interpolation; the stem extension must match it,
-      // not an index-fraction estimate.
+      // A grace note on an interior note reserves leftward layout space and
+      // shoves it right, off the even grid (independent of layout width, so
+      // it reproduces in jsdom). The primary beam is drawn by true-X
+      // interpolation; the stem extension must match it, not an
+      // index-fraction estimate.
       const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
       staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
       staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
@@ -455,6 +456,7 @@ describe('beams', () => {
         makeNote({ note: 'A', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'C', octave: 5, duration: 'eighth' }),
       ];
+      notes[1].setAttribute('grace', 'F#,G#,A#');
       triggerSlotChange(staff, notes);
 
       // Interior notes must actually be off the even grid, or the test is moot.

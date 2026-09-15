@@ -6,9 +6,13 @@
 //
 // Two independent axes exist:
 //   1. Vertical / sizing  — everything here, rooted at STAFF_LINE_SPACING
-//   2. Horizontal / spacing — entry x-spacing is driven by a logarithmic duration
-//      weight (rules/spacingRules.ts) distributed across the available container
-//      width, which is dynamic and cannot be derived from a fixed base.
+//   2. Horizontal / spacing — entry x-*position* (rules/spacingRules.ts's
+//      computeMeasureProportionalOffsets) is an entry's beat-offset as a
+//      fraction of the measure's fixed beat capacity (from the time
+//      signature), scaled by the staff's real available width — not derived
+//      from anything here. PIXELS_PER_BEAT below feeds a separate concern,
+//      the measure's sizing *preference* (computeSpacingWeights), not
+//      position.
 //
 // Note SVG internals (COORD_WIDTH, NOTE_SCALE, etc.) live in svgCreator/note.ts
 // because they belong to that rendering subsystem's coordinate math, not to the
@@ -253,27 +257,24 @@ export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
  */
 export const NOTES_AREA_LEFT_MARGIN = 2;
 
-// ─── Note spacing (horizontal) ────────────────────────────────────────────────
+// ─── Note spacing — sizing preference (horizontal) ────────────────────────────
 //
-// Entries are justified to fill the measure. Beyond a fixed MIN_NOTE_WIDTH strut
-// per entry, spare width is shared out by a logarithmic function of duration:
-// halving a note's value costs roughly a quarter of its space, not half, so long
-// notes are not over-spaced and short notes are not starved. Starting values —
-// tune visually in Storybook.
+// PIXELS_PER_BEAT feeds only computeSpacingWeights, which answers "how wide
+// would this measure's box like to be, given how busy it is" for
+// staffWidth.ts's natural-width/flex-basis calculation — a measure sizing
+// *preference* that legitimately grows with entry count. It is unrelated to
+// where an entry actually sits (that's computeMeasureProportionalOffsets,
+// proportional to the measure's fixed beat capacity from the time signature —
+// see this file's header comment). Starting value — tune visually in
+// Storybook.
 
 /**
- * Slack (px) beyond the MIN_NOTE_WIDTH strut given to the measure's shortest
- * entry when there is room to spare — the floor of the logarithmic curve.
- * = 2 × STAFF_LINE_SPACING
+ * Slack (px) per whole-note's worth of duration, beyond the MIN_NOTE_WIDTH
+ * strut, for the sizing-preference calculation. A quarter note's slack is
+ * PIXELS_PER_BEAT × 0.25; an eighth note's is PIXELS_PER_BEAT × 0.125.
+ * = 16 × STAFF_LINE_SPACING
  */
-export const SPACING_SHORTEST_SLACK_PX = STAFF_LINE_SPACING * 2;
-
-/**
- * Additional slack (px) per doubling of an entry's duration relative to the
- * measure's shortest entry.
- * = 1.4 × STAFF_LINE_SPACING
- */
-export const SPACING_LOG_INCREMENT_PX = STAFF_LINE_SPACING * 1.4;
+export const PIXELS_PER_BEAT = STAFF_LINE_SPACING * 16;
 
 /**
  * Gap (px) between the end of the clef/key/time area and the first entry, so a

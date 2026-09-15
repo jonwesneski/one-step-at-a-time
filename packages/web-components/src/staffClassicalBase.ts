@@ -8,6 +8,7 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from './rules/arpeggioRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { computeBeatOffsets } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
@@ -20,7 +21,10 @@ import {
 } from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
 import { restToYCoordinate } from './rules/restRules';
-import { computeSpacingWeights, distributeSlack } from './rules/spacingRules';
+import {
+  computeMeasureProportionalOffsets,
+  computeSpacingWeights,
+} from './rules/spacingRules';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
@@ -1312,28 +1316,36 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#currentElements,
       this.#tupletsByIndex
     );
-    const scaledNoteCount = computeTupletScaledNoteCount(
-      this.#currentElements,
-      this.#tupletsByIndex
-    );
-    const { weights, totalWeight } = computeSpacingWeights(
+    const { totalWeight } = computeSpacingWeights(
       this.#currentElements,
       tupletScaleByIndex
     );
     this.#currentSpacingSlackWeight = totalWeight;
 
-    // Entries are justified to fill the notes area: every entry keeps a fixed
-    // MIN_NOTE_WIDTH strut, and the width left over is shared out by each entry's
-    // logarithmic duration weight — including the trailing space after the last
-    // entry, so an underfull bar spreads rather than bunching to the left.
+    // Each entry is positioned as a fraction of the measure's fixed beat
+    // capacity (from the time signature — constant regardless of how many
+    // entries currently exist), scaled by the staff's real available width.
+    // This is what makes a full measure fill the staff, what makes a resize
+    // reflow every entry together, and what keeps appending an entry from
+    // ever moving an already-placed one: neither the capacity nor the
+    // available width it's scaled against depends on entry count.
+    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
+    const measureCapacity = beatsInMeasure / beatType;
+    const arpeggioRunIndices = new Set<number>(
+      this.#arpeggioGroups.flatMap((group) => group.runIndices)
+    );
+    const beatOffsets = computeBeatOffsets(
+      this.#currentElements,
+      this.#tupletsByIndex,
+      arpeggioRunIndices
+    );
     const proportionalWidth =
       remainingWidth -
       LEADING_NOTE_GAP_PX -
-      scaledNoteCount * MIN_NOTE_WIDTH -
       this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
-    const slackOffsets = distributeSlack(
-      weights,
-      totalWeight,
+    const measureOffsets = computeMeasureProportionalOffsets(
+      beatOffsets,
+      measureCapacity,
       proportionalWidth
     );
 
@@ -1341,8 +1353,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#clefMarkers.map((marker) => [marker.afterElementIndex, marker])
     );
 
-    let minWidthAccumulator = 0;
+    let clefMarkerReservedWidth = 0;
     let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
+    let previousNoteX: number | null = null;
 
     // A marker before the first note/chord/rest (afterElementIndex === -1)
     // is positioned here, ahead of the loop, since there's no element index
@@ -1354,17 +1367,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       leadingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
       leadingClefMarker.element.style.display = '';
       previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-      minWidthAccumulator += CLEF_CHANGE_RESERVED_WIDTH_PX;
+      clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
     }
 
     for (let i = 0; i < this.#currentElements.length; i++) {
       const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
       const xOffsetInNotesSpace =
-        LEADING_NOTE_GAP_PX + minWidthAccumulator + slackOffsets[i];
+        LEADING_NOTE_GAP_PX + clefMarkerReservedWidth + measureOffsets[i];
 
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
+
+      // Collision floor: the proportional position above has no built-in
+      // minimum gap (unlike a per-entry strut), so enforce one against the
+      // *previous* entry alone — never looking ahead, so appending a new
+      // entry can never move an already-placed one.
+      if (previousNoteX !== null) {
+        xInWrapper = Math.max(xInWrapper, previousNoteX + MIN_NOTE_WIDTH);
+      }
 
       // Everything drawn left of this entry — accidental / grace / arpeggio sign
       // + dynamic-change hairpin / cross-staff span footprint (see
@@ -1425,6 +1446,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       element.style.position = 'absolute';
       element.style.left = `${xInWrapper}px`;
+      previousNoteX = xInWrapper;
       previousRightEdge =
         xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(i);
 
@@ -1451,8 +1473,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         element.style.top = '0px';
       }
 
-      minWidthAccumulator += MIN_NOTE_WIDTH * (tupletScaleByIndex.get(i) ?? 1);
-
       // A marker following this element (afterElementIndex === i) is
       // zero-duration — it does not consume spacing slack — but does reserve
       // horizontal space, same as MIN_NOTE_WIDTH does for a real note.
@@ -1463,7 +1483,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
         trailingClefMarker.element.style.display = '';
         previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-        minWidthAccumulator += CLEF_CHANGE_RESERVED_WIDTH_PX;
+        clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
       }
     }
     this.#beamRenderer?.spaceAll();

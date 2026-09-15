@@ -3,13 +3,9 @@ import {
   NoteChordOrRestElementType,
   TupletElementType,
 } from '../types/elements';
-import {
-  BeatsInMeasure,
-  BeatTypeInMeasure,
-  DurationType,
-} from '../types/theory';
-import { durationToFactor, factorToDuration } from './theoryConsts';
-import { parseTupletRatio, resolveInnermostTuplet } from './tupletRules';
+import { BeatsInMeasure, BeatTypeInMeasure } from '../types/theory';
+import { durationContribution } from './beatRules';
+import { factorToDuration } from './theoryConsts';
 
 export type MeasureFitResult = {
   allowedElementCount: number;
@@ -48,29 +44,25 @@ export function computeAllowedElementCount(
   let beatOffset = 0;
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i];
-    const duration = element.duration as DurationType;
-    const innermostTuplet = resolveInnermostTuplet(tupletsByIndex, i);
-    const durationContribution = runIndexSet.has(i)
-      ? 0
-      : innermostTuplet !== undefined
-      ? (() => {
-          const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-          return durationToFactor[duration] * (normal / actual);
-        })()
-      : durationToFactor[duration];
+    const contribution = durationContribution(
+      element,
+      i,
+      tupletsByIndex,
+      runIndexSet
+    );
 
-    if (beatOffset + durationContribution > measureDuration) {
+    if (beatOffset + contribution > measureDuration) {
       const error = `no more room for note(s); remaining duration is "${
         factorToDuration.get(measureDuration - beatOffset) ??
         measureDuration - beatOffset
-      }", tried to add "${duration}"`;
+      }", tried to add "${element.duration}"`;
       return {
         allowedElementCount: groupFirstIndexByMember.get(i) ?? i,
         error,
       };
     }
 
-    beatOffset += durationContribution;
+    beatOffset += contribution;
   }
 
   return { allowedElementCount: elements.length, error: null };

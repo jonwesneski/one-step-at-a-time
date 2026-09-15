@@ -13,6 +13,7 @@ import {
   TRILL_PARENTHESIS_STROKE_WIDTH,
   TRILL_SIGN_HEIGHT_PX,
   TRILL_WAVE_HEIGHT_PX,
+  TRILL_WRITTEN_NOTE_GAP_PX,
   TRILL_WRITTEN_NOTE_SCALE,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
@@ -294,6 +295,7 @@ export function computeWrittenTrillNoteWidth(
   accidental: AccidentalType | null
 ): number {
   let width =
+    TRILL_WRITTEN_NOTE_GAP_PX +
     2 * (TRILL_PARENTHESIS_STROKE_WIDTH + TRILL_PARENTHESIS_NOTE_GAP_PX) +
     writtenNoteHeadWidthPx();
   if (accidental !== null) {

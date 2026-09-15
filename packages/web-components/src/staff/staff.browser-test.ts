@@ -174,6 +174,9 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
       narrowDeltas.push(narrow[i] - narrow[i - 1]);
     }
 
+    // 8 eighth notes exactly fill a 4/4 measure, so resizing the staff
+    // reflows every entry together by the same proportional ratio (this is
+    // what makes a full measure fill the staff at any width)
     expect(wideDeltas.length).toBe(narrowDeltas.length);
     for (let i = 0; i < wideDeltas.length; i++) {
       expect(narrowDeltas[i]).toBeLessThan(wideDeltas[i]);
@@ -291,14 +294,16 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
     await positioned;
     await waitForRedrawCycle(page);
 
-    expect(await worstStemToBeamGap(page)).toBeLessThan(2);
+    // 2px tolerance plus a hair of floating-point slop from the
+    // beat-proportional division (x = beatOffset/measureCapacity*width)
+    expect(await worstStemToBeamGap(page)).toBeLessThan(2.001);
 
     const repositioned = waitForStaffNotesPositioned(page);
     await resizeHost(page, 480);
     await repositioned.catch(() => undefined);
     await waitForRedrawCycle(page);
 
-    expect(await worstStemToBeamGap(page)).toBeLessThan(2);
+    expect(await worstStemToBeamGap(page)).toBeLessThan(2.001);
   });
 
   test('no beams for quarter notes, before or after resize', async ({
@@ -1165,7 +1170,7 @@ test.describe('staves authored as parsed HTML markup', () => {
   });
 });
 
-test.describe(`${MUSIC_STAFF} justified spacing`, () => {
+test.describe(`${MUSIC_STAFF} beat-proportional spacing`, () => {
   async function buildStaffWithDurations(
     page: Page,
     durations: DurationType[]
@@ -1212,35 +1217,147 @@ test.describe(`${MUSIC_STAFF} justified spacing`, () => {
     }, MUSIC_STAFF);
   }
 
-  test('an underfull bar spreads its notes across the full width', async ({
+  test('an underfull bar leaves trailing space rather than spreading its notes', async ({
     page,
   }) => {
-    // two quarter notes in a nominal 4/4 bar — rhythmically half-full
+    // two quarter notes in a nominal 4/4 bar — rhythmically half-full.
+    // Position is the entry's beat-offset as a fraction of the measure's
+    // FIXED capacity (4 beats), not a fraction of "however many entries
+    // exist" — note 2 starts at beat 1 of 4, i.e. 25% of the notes area,
+    // not 50% (the original bug: stretching to fill regardless of how much
+    // of the measure is actually used).
     await buildStaffWithDurations(page, ['quarter', 'quarter']);
 
     const lefts = await readNoteLefts(page);
     const { left, right } = await readNotesAreaBounds(page);
     const notesAreaWidth = right - left;
 
-    // the second note sits well past the first quarter of the notes area, and
-    // there is real trailing space after it (not bunched against the left)
-    expect(lefts[1] - left).toBeGreaterThan(notesAreaWidth * 0.35);
-    expect(right - lefts[1]).toBeGreaterThan(notesAreaWidth * 0.25);
+    expect((lefts[1] - left) / notesAreaWidth).toBeCloseTo(0.25, 1);
+    // genuine blank staff after the last note, not stretched to fill 100%
+    expect(right - lefts[1]).toBeGreaterThan(notesAreaWidth * 0.5);
   });
 
-  test('a longer final note leaves more trailing space than a shorter one', async ({
+  test('a full measure spreads its entries across the entire available width', async ({
     page,
   }) => {
+    // 4 quarter notes exactly fill a 4/4 measure: beats 0, 1, 2, 3 of 4 ->
+    // 0%, 25%, 50%, 75% of the notes area — the direct regression case for
+    // "4 quarter notes bunch near the start of a wide staff instead of
+    // filling it."
+    await buildStaffWithDurations(page, [
+      'quarter',
+      'quarter',
+      'quarter',
+      'quarter',
+    ]);
+
+    const lefts = await readNoteLefts(page);
+    const { left, right } = await readNotesAreaBounds(page);
+    const notesAreaWidth = right - left;
+    const fractions = lefts.map((x) => (x - left) / notesAreaWidth);
+
+    expect(fractions[0]).toBeCloseTo(0, 1);
+    expect(fractions[1]).toBeCloseTo(0.25, 1);
+    expect(fractions[2]).toBeCloseTo(0.5, 1);
+    expect(fractions[3]).toBeCloseTo(0.75, 1);
+  });
+
+  test("the last entry's own duration does not affect its position — only the entries before it do", async ({
+    page,
+  }) => {
+    // Beat-proportional, append-only spacing means an entry's x depends only
+    // on what comes before it, never on its own duration or what (if
+    // anything) follows — the last note's x here should be identical whether
+    // it is a half note or an eighth note.
     await buildStaffWithDurations(page, ['quarter', 'quarter', 'half']);
     let lefts = await readNoteLefts(page);
-    let bounds = await readNotesAreaBounds(page);
-    const trailingWithHalf = bounds.right - lefts[lefts.length - 1];
+    const lastXWithHalf = lefts[lefts.length - 1];
 
     await buildStaffWithDurations(page, ['quarter', 'quarter', 'eighth']);
     lefts = await readNoteLefts(page);
-    bounds = await readNotesAreaBounds(page);
-    const trailingWithEighth = bounds.right - lefts[lefts.length - 1];
+    const lastXWithEighth = lefts[lefts.length - 1];
 
-    expect(trailingWithHalf).toBeGreaterThan(trailingWithEighth);
+    expect(lastXWithEighth).toBeCloseTo(lastXWithHalf, 0);
+  });
+
+  test('resizing reflows an underfull measure proportionally too', async ({
+    page,
+  }) => {
+    await buildStaffWithDurations(page, ['quarter', 'quarter', 'eighth']);
+    const wideLefts = await readNoteLefts(page);
+    const { left: wideLeft } = await readNotesAreaBounds(page);
+    const wideFractions = wideLefts.map((x) => x - wideLeft);
+
+    const repositioned = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 400);
+    await repositioned;
+    await waitForRedrawCycle(page);
+
+    const narrowLefts = await readNoteLefts(page);
+    const { left: narrowLeft } = await readNotesAreaBounds(page);
+    const narrowFractions = narrowLefts.map((x) => x - narrowLeft);
+
+    // same beat-offsets, same fixed 4/4 capacity, smaller available width ->
+    // every entry (after the first, which is always 0) scales down together
+    for (let i = 1; i < wideFractions.length; i++) {
+      expect(narrowFractions[i]).toBeLessThan(wideFractions[i]);
+    }
+  });
+
+  test('appending a new entry never moves an already-positioned entry', async ({
+    page,
+  }) => {
+    await buildStaffWithDurations(page, ['quarter']);
+    const firstNoteLeftBefore = (await readNoteLefts(page))[0];
+
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ noteTag }) => {
+        const staff = document.querySelector('music-staff');
+        if (staff === null) {
+          throw new Error('staff not found');
+        }
+        const note = document.createElement(noteTag);
+        note.setAttribute('note', 'D');
+        note.setAttribute('octave', '4');
+        note.setAttribute('duration', 'quarter');
+        staff.appendChild(note);
+      },
+      { noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const [firstNoteLeftAfter] = await readNoteLefts(page);
+    expect(firstNoteLeftAfter).toBe(firstNoteLeftBefore);
+  });
+
+  test('appending notes one at a time never moves earlier ones (direct regression for the reported bug)', async ({
+    page,
+  }) => {
+    await buildStaffWithDurations(page, ['quarter', 'quarter']);
+    const lefts1And2 = await readNoteLefts(page);
+
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ noteTag }) => {
+        const staff = document.querySelector('music-staff');
+        if (staff === null) {
+          throw new Error('staff not found');
+        }
+        const note = document.createElement(noteTag);
+        note.setAttribute('note', 'E');
+        note.setAttribute('octave', '4');
+        note.setAttribute('duration', 'quarter');
+        staff.appendChild(note);
+      },
+      { noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const leftsAfterThird = await readNoteLefts(page);
+    expect(leftsAfterThird[0]).toBe(lefts1And2[0]);
+    expect(leftsAfterThird[1]).toBe(lefts1And2[1]);
   });
 });

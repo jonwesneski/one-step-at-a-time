@@ -1295,6 +1295,9 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     // treble+bass) inside a flex justify-center parent with no explicit width on the
     // composition. Before :host { width: 100% }, the composition sized to the max-content
     // of its widest measure (~389px), causing each measure to wrap to its own row.
+    // max-width is raised to match the host so the test isn't coupled to the exact
+    // natural-width formula — the default 900px cap is narrower than these three
+    // measures' combined beat-proportional natural width.
     await page.evaluate(
       ({
         compositionTag,
@@ -1320,6 +1323,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
         composition.setAttribute(keySigAttr, 'D');
         composition.setAttribute(modeAttr, 'major');
         composition.setAttribute(timeSigAttr, '4/4');
+        composition.setAttribute('max-width', '1200');
 
         // Measure 1: treble (4 quarter notes) + bass (1 note)
         const m1 = document.createElement(measureTag);
@@ -1435,15 +1439,14 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     }, MUSIC_MEASURE);
 
     expect(measureTops).toHaveLength(3);
-    // Total minWidth across all measures (≈ 769px) is less than the 900px composition
-    // grid, so all three should land on the same row.
+    // Combined natural width across all measures fits under the 1200px cap,
+    // so all three should land on the same row.
     const [top0, top1, top2] = measureTops;
     expect(Math.abs(top1 - top0)).toBeLessThanOrEqual(5);
     expect(Math.abs(top2 - top0)).toBeLessThanOrEqual(5);
 
-    // Shrink the host so measures must reflow to multiple rows.
-    // At 500px the combined flex-basis of any two adjacent measures (≥ 579px)
-    // exceeds the container, so each measure wraps to its own row.
+    // Shrink the host so measures must reflow to multiple rows — well below
+    // the combined natural width, so at least the last measure must wrap.
     await resizeHost(page, 500);
     await waitForRedrawCycle(page);
 
@@ -2338,11 +2341,11 @@ test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
         const sparse = document.createElement(measureTag);
         const sparseStaff = document.createElement(staffTag);
         sparseStaff.setAttribute('clef', 'treble');
-        const wholeNote = document.createElement(noteTag);
-        wholeNote.setAttribute('note', 'C');
-        wholeNote.setAttribute('octave', '4');
-        wholeNote.setAttribute('duration', 'whole');
-        sparseStaff.appendChild(wholeNote);
+        const quarterNote = document.createElement(noteTag);
+        quarterNote.setAttribute('note', 'C');
+        quarterNote.setAttribute('octave', '4');
+        quarterNote.setAttribute('duration', 'quarter');
+        sparseStaff.appendChild(quarterNote);
         sparse.appendChild(sparseStaff);
 
         const dense = document.createElement(measureTag);
@@ -2352,7 +2355,7 @@ test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
           const note = document.createElement(noteTag);
           note.setAttribute('note', 'CDEFGABC'[i]);
           note.setAttribute('octave', '4');
-          note.setAttribute('duration', 'sixteenth');
+          note.setAttribute('duration', 'eighth');
           denseStaff.appendChild(note);
         }
         dense.appendChild(denseStaff);

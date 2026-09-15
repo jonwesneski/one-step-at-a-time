@@ -560,8 +560,14 @@ describe('staffClassicalBase', () => {
       });
 
       it('pushes the next entry rightward to make room for the written notehead', () => {
+        // A short duration keeps the natural beat-proportional gap after the
+        // trilled note small, so the written notehead's fixed rightward
+        // footprint is guaranteed to exceed it and force the clamp — a long
+        // duration's much larger natural gap can already fit the footprint
+        // without needing to push anything.
         const staff = makeTrillStaff();
         const trilled = makeQuarterNote();
+        trilled.setAttribute('duration', 'sixtyfourth');
         trilled.setAttribute('trill', '');
         trilled.setAttribute('trill-note', 'F#');
         const plain = makeQuarterNote();
@@ -569,6 +575,7 @@ describe('staffClassicalBase', () => {
 
         const withoutTrillStaff = makeTrillStaff();
         const untrilled = makeQuarterNote();
+        untrilled.setAttribute('duration', 'sixtyfourth');
         const plainToo = makeQuarterNote();
 
         const slot = staff.shadowRoot.querySelector('slot');
@@ -623,13 +630,18 @@ describe('staffClassicalBase', () => {
 
     describe('trill-finish (grace notes after the main note)', () => {
       it('pushes the next entry rightward to make room for the finishing grace note(s)', () => {
+        // A short duration keeps the natural beat-proportional gap after the
+        // finishing note small, so the grace note(s)' fixed rightward
+        // footprint is guaranteed to exceed it and force the clamp.
         const staff = makeTrillStaff();
         const finishing = makeQuarterNote();
+        finishing.setAttribute('duration', 'sixtyfourth');
         finishing.setAttribute('trill-finish', 'D');
         const plain = makeQuarterNote();
 
         const plainStaff = makeTrillStaff();
         const untrilled = makeQuarterNote();
+        untrilled.setAttribute('duration', 'sixtyfourth');
         const plainToo = makeQuarterNote();
 
         const slot = staff.shadowRoot.querySelector('slot');
