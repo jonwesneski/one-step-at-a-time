@@ -1,11 +1,11 @@
+import { NavBar } from '@/components/NavBar';
+import appCss from '@/globals.css?url';
 import {
   HeadContent,
   Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router';
-import { NavBar } from '@/components/NavBar';
-import appCss from '@/globals.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -39,6 +39,7 @@ function Root() {
           <input
             type="text"
             placeholder="Search..."
+            disabled
             className="border border-zinc-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
           />
         </header>

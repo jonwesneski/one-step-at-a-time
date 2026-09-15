@@ -34,7 +34,6 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
-  TrillStyle,
 } from '../types/theory';
 import {
   addLedgerLines,
@@ -59,7 +58,6 @@ import {
   parseTrillContinuationMode,
   parseTrillFinishSlur,
   parseTrillLineMode,
-  parseTrillStyle,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -112,7 +110,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord.
    * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
    * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
-   * @attr {'sign' | 'abbreviation'} trill-style - `sign` (default) draws the stylized trill glyph; `abbreviation` draws plain italic `t.r.` text instead.
    * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
    * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
    * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the trill.
@@ -159,7 +156,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'trill',
         'trill-line',
         'trill-stop',
-        'trill-style',
         'trill-accidental',
         'trill-note',
         'trill-continuation',
@@ -520,13 +516,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    get trillStyle(): TrillStyle {
-      return parseTrillStyle(this.getAttribute('trill-style'));
-    }
-    set trillStyle(value: TrillStyle) {
-      this.setAttribute('trill-style', value);
-    }
-
     // Overrides only the accidental of the trilling (auxiliary) pitch —
     // normally the diatonic upper neighbor as modified by the key signature.
     // Ignored (with a warning) when trill-note is also set.
@@ -841,7 +830,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill' ||
         name === 'trill-line' ||
         name === 'trill-stop' ||
-        name === 'trill-style' ||
         name === 'trill-accidental' ||
         name === 'trill-continuation'
       ) {
@@ -939,7 +927,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           arpeggioHairpinFrom: this.arpeggioHairpinFrom,
           arpeggioHairpinTo: this.arpeggioHairpinTo,
           trill: this.trill,
-          trillStyle: this.trillStyle,
           // A written trilling note (small notehead after the chord, drawn
           // by the staff overlay) carries its own accidental — the sign
           // itself shows one only for the accidental-only override form.

@@ -4,7 +4,6 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
   STAFF_LINE_SPACING,
-  TRILL_ABBREVIATION_FONT_SIZE,
   TRILL_ACCIDENTAL_GAP_PX,
   TRILL_ACCIDENTAL_SCALE,
   TRILL_NOTCH_HEIGHT_PX,
@@ -45,16 +44,6 @@ const ORNAMENT_TRILL_SCALE =
 export const TRILL_SIGN_WIDTH_PX =
   ORNAMENT_TRILL_NATURAL_WIDTH * ORNAMENT_TRILL_SCALE;
 
-/**
- * Estimated rendered width (px) of the `t.r.` abbreviation text — the
- * `trill-style="abbreviation"` counterpart to `TRILL_SIGN_WIDTH_PX`, since an
- * SVG `<text>` element has no layout-time measured width of its own. Four
- * characters (bold italic serif) run a little under 1.6x the font's own em
- * size; callers position the wavy line and layout footprint off this instead
- * of the glyph's fixed width whenever `trillStyle === 'abbreviation'`.
- */
-export const TRILL_ABBREVIATION_WIDTH_PX = TRILL_ABBREVIATION_FONT_SIZE * 1.6;
-
 export type TrillSignProps = {
   /** Local-space X at which the sign's left edge sits, flush with the notehead's left edge. */
   leftX: number;
@@ -70,8 +59,7 @@ export type TrillSignProps = {
 };
 
 // Centers a small accidental symbol above [leftX, leftX + signWidth] x
-// bottomY - signHeight, with a fixed gap. Shared by the sign and the
-// abbreviation-text variants.
+// bottomY - signHeight, with a fixed gap.
 function appendTrillAccidental(
   group: SVGGElement,
   accidental: AccidentalType,
@@ -120,41 +108,6 @@ export function createTrillSignSvg({
       leftX,
       bottomY - TRILL_SIGN_HEIGHT_PX,
       TRILL_SIGN_WIDTH_PX
-    );
-  }
-
-  return wrapper;
-}
-
-/** Plain italic `t.r.` text (+ optional trilling-note accidental above it), the `trill-style="abbreviation"` alternative to the sign. */
-export function createTrillAbbreviationSvg({
-  leftX,
-  bottomY,
-  accidental = null,
-}: TrillSignProps): SVGGElement {
-  const wrapper = document.createElementNS(SVG_NS, 'g');
-  wrapper.classList.add('trill-abbreviation');
-
-  const text = document.createElementNS(SVG_NS, 'text');
-  text.classList.add('trill-abbreviation-glyph');
-  text.setAttribute('x', `${leftX}`);
-  text.setAttribute('y', `${bottomY}`);
-  text.setAttribute('text-anchor', 'start');
-  text.setAttribute('font-style', 'italic');
-  text.setAttribute('font-weight', 'bold');
-  text.setAttribute('font-family', 'serif');
-  text.setAttribute('font-size', `${TRILL_ABBREVIATION_FONT_SIZE}`);
-  text.setAttribute('fill', 'currentColor');
-  text.textContent = 't.r.';
-  wrapper.appendChild(text);
-
-  if (accidental !== null) {
-    appendTrillAccidental(
-      wrapper,
-      accidental,
-      leftX,
-      bottomY - TRILL_ABBREVIATION_FONT_SIZE,
-      TRILL_ABBREVIATION_WIDTH_PX
     );
   }
 

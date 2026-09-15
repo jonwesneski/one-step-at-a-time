@@ -437,7 +437,7 @@ Text and lines that extend above the staff.
 | &#x2611; | `tr`       | Trill â€” placed above the note            |
 | &#x2611; | `tr~~~~`   | Trill with wavy extension line             |
 | &#x2611; | `tr (â™¯)` | Trill with an accidental on the upper note |
-| &#x2611; | `t.r.`     | Trill abbreviation                         |
+| &#x2610; | `t.r.`     | Trill abbreviation                         |
 
 ---
 

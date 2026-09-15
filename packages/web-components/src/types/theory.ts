@@ -248,9 +248,6 @@ export type GraceDuration = Extract<
 /** Whether the slur from a grace group to its main note is drawn (`auto`) or not (`none`). */
 export type GraceSlur = 'auto' | 'none';
 
-/** `'sign'` draws the stylized trill glyph; `'abbreviation'` draws plain italic `t.r.` text instead. */
-export type TrillStyle = 'sign' | 'abbreviation';
-
 /**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver

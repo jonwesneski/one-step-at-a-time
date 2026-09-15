@@ -21,7 +21,6 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
-  TrillStyle,
   TupletRatio,
 } from './theory';
 
@@ -102,9 +101,6 @@ export interface INoteElement {
   // Draws a vertical end-notch here instead of letting the line run to the
   // next notehead.
   trillStop: boolean;
-  // 'sign' (default) draws the stylized trill glyph; 'abbreviation' draws
-  // plain italic `t.r.` text instead.
-  trillStyle: TrillStyle;
   // Overrides only the accidental of the trilling (auxiliary) pitch —
   // normally the diatonic upper neighbor as modified by the key signature.
   // Never changes the letter itself. Ignored (with a warning) when
@@ -238,9 +234,6 @@ export interface IChordElement {
   // Draws a vertical end-notch here instead of letting the line run to the
   // next notehead.
   trillStop: boolean;
-  // 'sign' (default) draws the stylized trill glyph; 'abbreviation' draws
-  // plain italic `t.r.` text instead.
-  trillStyle: TrillStyle;
   // Overrides only the accidental of the trilling (auxiliary) pitch —
   // normally the diatonic upper neighbor as modified by the key signature.
   // Never changes the letter itself. Ignored (with a warning) when

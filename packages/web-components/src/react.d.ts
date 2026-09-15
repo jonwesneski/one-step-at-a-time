@@ -32,7 +32,6 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
-  TrillStyle,
   TupletRatio,
   Voice,
 } from '@one-step-at-a-time/web-components';
@@ -134,7 +133,6 @@ declare module 'react' {
         trill?: boolean;
         'trill-line'?: TrillLineMode;
         'trill-stop'?: boolean;
-        'trill-style'?: TrillStyle;
         'trill-accidental'?: AccidentalType;
         'trill-note'?: Note;
         'trill-continuation'?: TrillContinuationMode;
@@ -172,7 +170,6 @@ declare module 'react' {
         trill?: boolean;
         'trill-line'?: TrillLineMode;
         'trill-stop'?: boolean;
-        'trill-style'?: TrillStyle;
         'trill-accidental'?: AccidentalType;
         'trill-note'?: Note;
         'trill-continuation'?: TrillContinuationMode;

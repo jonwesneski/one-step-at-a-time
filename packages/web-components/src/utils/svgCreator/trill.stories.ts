@@ -9,7 +9,6 @@ import {
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
-  TRILL_STYLES,
 } from '../../utils';
 
 const meta: Meta = {
@@ -29,14 +28,12 @@ export const SingleNote: Story = {
     note: 'C',
     octave: 5,
     duration: 'quarter',
-    trillStyle: 'sign',
     trillLine: 'auto',
   },
   argTypes: {
     note: { control: 'select', options: NOTES },
     octave: { control: 'select', options: OCTAVES },
     duration: { control: 'select', options: DURATIONS },
-    trillStyle: { control: 'select', options: TRILL_STYLES },
     trillLine: { control: 'select', options: TRILL_LINE_MODES },
   },
   render: (args) => html`
@@ -46,7 +43,6 @@ export const SingleNote: Story = {
         octave=${args.octave}
         duration=${args.duration}
         trill
-        trill-style=${args.trillStyle}
         trill-line=${args.trillLine}
       ></music-note>
       <music-note note="D" octave="5" duration="quarter"></music-note>
@@ -101,23 +97,6 @@ export const ReArticulated: Story = {
       <music-note note="D" octave="5" duration="quarter" trill></music-note>
       <music-note note="E" octave="5" duration="quarter" trill></music-note>
       <music-note note="F" octave="5" duration="quarter" trill></music-note>
-    </music-staff>
-  `,
-};
-
-export const Abbreviation: Story = {
-  render: () => html`
-    <music-staff clef="treble" time="4/4">
-      <music-note
-        note="C"
-        octave="5"
-        duration="quarter"
-        trill
-        trill-style="abbreviation"
-      ></music-note>
-      <music-note note="D" octave="5" duration="quarter"></music-note>
-      <music-note note="E" octave="5" duration="quarter"></music-note>
-      <music-note note="F" octave="5" duration="quarter"></music-note>
     </music-staff>
   `,
 };

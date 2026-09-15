@@ -9,7 +9,6 @@ import type {
   DynamicMarking,
   HairpinKind,
   StressType,
-  TrillStyle,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -28,7 +27,7 @@ import {
   isArpeggioWaveVariant,
 } from './arpeggio';
 import { createArticulationMarks } from './articulations';
-import { createTrillAbbreviationSvg, createTrillSignSvg } from './trill';
+import { createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
 export const NOTE_SVG_WIDTH = 32;
@@ -101,7 +100,6 @@ export type NoteProps = {
   arpeggioHairpinFrom?: DynamicMarking | null;
   arpeggioHairpinTo?: DynamicMarking | null;
   trill?: boolean;
-  trillStyle?: TrillStyle;
   // Accidental to draw on the trilling (auxiliary) pitch, above the sign —
   // the resolved value (staff-computed default, or the `trill-accidental`
   // override), not the raw attribute.
@@ -154,7 +152,6 @@ export const createNoteSvg = ({
   arpeggioHairpinFrom = null,
   arpeggioHairpinTo = null,
   trill = false,
-  trillStyle = 'sign',
   trillAccidental = null,
   staffY = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
@@ -417,14 +414,11 @@ export const createNoteSvg = ({
   if (trill && qualifiedElementName === 'svg' && staffY !== null) {
     const leftX = trillSignLeftX(stemUp);
     const bottomY = trillSignBottomY(stemUp, staffY);
-    const sign =
-      trillStyle === 'abbreviation'
-        ? createTrillAbbreviationSvg({
-            leftX,
-            bottomY,
-            accidental: trillAccidental,
-          })
-        : createTrillSignSvg({ leftX, bottomY, accidental: trillAccidental });
+    const sign = createTrillSignSvg({
+      leftX,
+      bottomY,
+      accidental: trillAccidental,
+    });
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(sign);
   }

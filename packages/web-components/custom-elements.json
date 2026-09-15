@@ -522,13 +522,6 @@
             },
             {
               "kind": "field",
-              "name": "trillStyle",
-              "type": {
-                "text": "TrillStyle"
-              }
-            },
-            {
-              "kind": "field",
               "name": "trillAccidental",
               "type": {
                 "text": "AccidentalType | null"
@@ -922,13 +915,6 @@
                 "text": "boolean"
               },
               "description": "Draws a vertical end-notch here instead of letting the line run to the next notehead."
-            },
-            {
-              "name": "trill-style",
-              "type": {
-                "text": "'sign' | 'abbreviation'"
-              },
-              "description": "`sign` (default) draws the stylized trill glyph; `abbreviation` draws plain italic `t.r.` text instead."
             },
             {
               "name": "trill-accidental",
@@ -2044,13 +2030,6 @@
             },
             {
               "kind": "field",
-              "name": "trillStyle",
-              "type": {
-                "text": "TrillStyle"
-              }
-            },
-            {
-              "kind": "field",
               "name": "trillAccidental",
               "type": {
                 "text": "AccidentalType | null"
@@ -2444,13 +2423,6 @@
                 "text": "boolean"
               },
               "description": "Draws a vertical end-notch here instead of letting the line run to the next notehead."
-            },
-            {
-              "name": "trill-style",
-              "type": {
-                "text": "'sign' | 'abbreviation'"
-              },
-              "description": "`sign` (default) draws the stylized trill glyph; `abbreviation` draws plain italic `t.r.` text instead."
             },
             {
               "name": "trill-accidental",
@@ -3019,15 +2991,6 @@
             {
               "kind": "field",
               "name": "#boundRenderDynamics",
-              "privacy": "private",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#boundRedrawTrillLines",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -3639,11 +3602,11 @@
             },
             {
               "kind": "method",
-              "name": "#resolveTrillPitches",
+              "name": "#hasTrillMarkedElement",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "void"
+                  "text": "boolean"
                 }
               },
               "inheritedFrom": {
@@ -5515,15 +5478,6 @@
             },
             {
               "kind": "field",
-              "name": "#boundRedrawTrillLines",
-              "privacy": "private",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#boundNoteYChange",
               "privacy": "private",
               "inheritedFrom": {
@@ -6118,11 +6072,11 @@
             },
             {
               "kind": "method",
-              "name": "#resolveTrillPitches",
+              "name": "#hasTrillMarkedElement",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "void"
+                  "text": "boolean"
                 }
               },
               "inheritedFrom": {

@@ -86,7 +86,7 @@ one-step-at-a-time/
 │                   ├── doubleSharp.ts
 │                   ├── doubleFlat.ts
 │                   ├── curve.ts
-│                   ├── trill.ts             # sign, wavy extension line, end-notch, abbreviation
+│                   ├── trill.ts             # sign, wavy extension line, end-notch
 │                   └── arpeggio.ts          # …also articulations, dynamics, graceNotes, ledgerLines, rest, staffGroup, tuplet
 ├── scripts/
 │   └── extract-glyphs.mjs   # author-time-only: extract engraved glyph outlines → paste PATH_D consts into svgCreator/*

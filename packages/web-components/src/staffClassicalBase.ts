@@ -64,7 +64,6 @@ import type {
   Note,
   NoteLetter,
   Octave,
-  TrillStyle,
 } from './types/theory';
 import {
   BeamsBuilder,
@@ -143,7 +142,6 @@ import {
   createTrillLineSvg,
   createTrillNotchSvg,
   createWrittenTrillNoteSvg,
-  TRILL_ABBREVIATION_WIDTH_PX,
   TRILL_SIGN_WIDTH_PX,
 } from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
@@ -186,17 +184,6 @@ function footprintArpeggio(element: NoteElementType | ChordElementType) {
 
 const isArpeggioWave = (arpeggio: ArpeggioType | null): boolean =>
   arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down';
-
-// Width (px) actually reserved for a trill-marked entry's own sign, keyed to
-// which variant it renders — the SMuFL glyph (TRILL_SIGN_WIDTH_PX) or, for
-// trill-style="abbreviation", the "t.r." text's own estimated width. Using
-// the glyph's width unconditionally here would let the wavy line's start (and
-// anything else positioned off this) run through the abbreviation text
-// whenever it renders wider than the glyph.
-const trillSignReservedWidth = (trillStyle: TrillStyle): number =>
-  trillStyle === 'abbreviation'
-    ? TRILL_ABBREVIATION_WIDTH_PX
-    : TRILL_SIGN_WIDTH_PX;
 
 // A trill sign's/line's bottom edge sits at a fixed height above the staff
 // top line, independent of pitch (see svgCreator/note.ts's own
@@ -1832,7 +1819,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const startX =
         startNoteX +
         signLeftOffset +
-        trillSignReservedWidth(startElement.trillStyle) +
+        TRILL_SIGN_WIDTH_PX +
         TRILL_SIGN_LINE_GAP_PX;
       const endX = this.#trillLineEndX(span, width);
 

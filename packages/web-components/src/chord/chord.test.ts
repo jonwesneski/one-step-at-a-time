@@ -220,14 +220,6 @@ describe(MUSIC_CHORD, () => {
       expect(chordElement.trillLine).toBe('none');
     });
 
-    it('round-trips trill-style and defaults to "sign"', () => {
-      const chordElement = makeChord();
-      expect(chordElement.trillStyle).toBe('sign');
-      chordElement.trillStyle = 'abbreviation';
-      expect(chordElement.getAttribute('trill-style')).toBe('abbreviation');
-      expect(chordElement.trillStyle).toBe('abbreviation');
-    });
-
     it('round-trips trill-accidental and rejects unknown values', () => {
       const chordElement = makeChord();
       expect(chordElement.trillAccidental).toBeNull();
@@ -334,16 +326,10 @@ describe(MUSIC_CHORD, () => {
     // elements in the same staff to span into, so a sign with no possible
     // line is not drawn either — see staffClassicalBase.test.ts for in-staff
     // sign rendering coverage.
-    it('renders no sign (or abbreviation) on a standalone chord, even when set', () => {
+    it('renders no sign on a standalone chord, even when trill is set', () => {
       const chordElement = makeChord();
       chordElement.trill = true;
       expect(chordElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
-
-      chordElement.trillStyle = 'abbreviation';
-      expect(chordElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
-      expect(
-        chordElement.shadowRoot?.querySelector('.trill-abbreviation')
-      ).toBeNull();
     });
 
     describe('trill-finish (grace notes after the chord)', () => {

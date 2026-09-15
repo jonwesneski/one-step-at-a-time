@@ -17,7 +17,6 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
-  TrillStyle,
 } from '../types/theory';
 import {
   ACCIDENTAL_TYPES,
@@ -34,7 +33,6 @@ import {
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
-  TRILL_STYLES,
 } from './consts';
 
 const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
@@ -48,7 +46,6 @@ const VALID_GRACE_SLURS = new Set<string>(GRACE_SLURS);
 const VALID_OCTAVES = new Set<number>(OCTAVES);
 const VALID_CLEFS = new Set<string>(CLEFS);
 const VALID_STAFF_GROUPS = new Set<string>(STAFF_GROUPS);
-const VALID_TRILL_STYLES = new Set<string>(TRILL_STYLES);
 const VALID_TRILL_LINE_MODES = new Set<string>(TRILL_LINE_MODES);
 const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
   TRILL_CONTINUATION_MODES
@@ -145,13 +142,6 @@ export const parseAccidentalType = (
     return value as AccidentalType;
   }
   return null;
-};
-
-export const parseTrillStyle = (value: string | null): TrillStyle => {
-  if (value !== null && VALID_TRILL_STYLES.has(value)) {
-    return value as TrillStyle;
-  }
-  return 'sign';
 };
 
 export const parseTrillLineMode = (value: string | null): TrillLineMode => {

@@ -17,7 +17,10 @@ export function NavBar() {
 
   return (
     <nav ref={ref} className="relative z-0">
-      <button onClick={() => setOpen((o) => !o)} className="relative z-10">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative z-10 cursor-pointer"
+      >
         <span className="flex items-center justify-center h-7 w-7 rounded-full border border-zinc-900">
           <img src="/logo.svg" alt="One Step at a Time" className="h-5 w-5" />
         </span>

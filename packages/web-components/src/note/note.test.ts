@@ -1297,24 +1297,6 @@ describe('trill', () => {
     expect(noteElement.trillLine).toBe('auto');
   });
 
-  it('round-trips trill-style and defaults to "sign"', () => {
-    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
-    document.body.appendChild(noteElement);
-
-    expect(noteElement.trillStyle).toBe('sign');
-    noteElement.trillStyle = 'abbreviation';
-    expect(noteElement.getAttribute('trill-style')).toBe('abbreviation');
-    expect(noteElement.trillStyle).toBe('abbreviation');
-  });
-
-  it('ignores an unrecognized trill-style value, falling back to "sign"', () => {
-    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
-    noteElement.setAttribute('trill-style', 'squiggly');
-    document.body.appendChild(noteElement);
-
-    expect(noteElement.trillStyle).toBe('sign');
-  });
-
   it('round-trips trill-accidental and rejects unknown values', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(noteElement);
@@ -1436,17 +1418,11 @@ describe('trill', () => {
   // in the same staff to span into, so a sign with no possible line is not
   // drawn either — see staffClassicalBase.test.ts for in-staff sign
   // rendering coverage.
-  it('renders no sign (or abbreviation) on a standalone note, even when set', () => {
+  it('renders no sign on a standalone note, even when trill is set', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     noteElement.trill = true;
     document.body.appendChild(noteElement);
     expect(noteElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
-
-    noteElement.trillStyle = 'abbreviation';
-    expect(noteElement.shadowRoot?.querySelector('.trill-sign')).toBeNull();
-    expect(
-      noteElement.shadowRoot?.querySelector('.trill-abbreviation')
-    ).toBeNull();
   });
 
   describe('trill-finish (grace notes after the main note)', () => {

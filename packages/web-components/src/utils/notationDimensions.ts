@@ -691,9 +691,6 @@ export const TRILL_LINE_END_GAP_PX = STAFF_LINE_SPACING * 0.4;
 /** Height (px) of the vertical notch that marks an explicit `trill-stop`. */
 export const TRILL_NOTCH_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
 
-/** Font size (px) of the `t.r.` abbreviation text (`trill-style="abbreviation"`). */
-export const TRILL_ABBREVIATION_FONT_SIZE = STAFF_LINE_SPACING * 1.3;
-
 /**
  * Scale applied to a trilling-note accidental drawn above the trill sign —
  * smaller than a full notehead accidental, matching the sign's own reduced

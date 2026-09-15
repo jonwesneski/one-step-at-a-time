@@ -63,7 +63,6 @@ export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';
 export {
   computeWrittenTrillNoteWidth,
-  createTrillAbbreviationSvg,
   createTrillContinuationSignSvg,
   createTrillLineSvg,
   createTrillNotchSvg,

@@ -18,7 +18,6 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
-  TrillStyle,
   TupletRatio,
   Voice,
 } from '../types/theory';
@@ -246,8 +245,6 @@ export const GRACE_DURATIONS: GraceDuration[] = [
 ];
 
 export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
-
-export const TRILL_STYLES: TrillStyle[] = ['sign', 'abbreviation'];
 
 export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
 

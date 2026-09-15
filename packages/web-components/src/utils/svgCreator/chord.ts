@@ -18,7 +18,6 @@ import type {
   GraceType,
   HairpinKind,
   TrillFinishSlur,
-  TrillStyle,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -50,7 +49,7 @@ import {
   noteHeadCenter,
   type NoteProps,
 } from './note';
-import { createTrillAbbreviationSvg, createTrillSignSvg } from './trill';
+import { createTrillSignSvg } from './trill';
 
 type ChordProps = NoteProps & {
   staffYCoordinates: number[];
@@ -59,7 +58,6 @@ type ChordProps = NoteProps & {
   arpeggioHairpinFrom?: DynamicMarking | null;
   arpeggioHairpinTo?: DynamicMarking | null;
   trill?: boolean;
-  trillStyle?: TrillStyle;
   noteAccidentals?: (AccidentalType | null | undefined)[];
   // Grace notes are placed relative to the chord's reference note (notes[0],
   // which is staffYCoordinates[0] by index parity).
@@ -84,7 +82,6 @@ export const createChordSvg = ({
   arpeggioHairpinFrom = null,
   arpeggioHairpinTo = null,
   trill = false,
-  trillStyle = 'sign',
   trillAccidental = null,
   noFlags = false,
   stemUp = true,
@@ -375,18 +372,11 @@ export const createChordSvg = ({
       STAFF_TOP_LINE_Y -
       NOTE_HEAD_Y_OFFSET_CORRECTION -
       TRILL_ABOVE_STAFF_GAP_PX;
-    const sign =
-      trillStyle === 'abbreviation'
-        ? createTrillAbbreviationSvg({
-            leftX: normalHeadLeftX,
-            bottomY,
-            accidental: trillAccidental,
-          })
-        : createTrillSignSvg({
-            leftX: normalHeadLeftX,
-            bottomY,
-            accidental: trillAccidental,
-          });
+    const sign = createTrillSignSvg({
+      leftX: normalHeadLeftX,
+      bottomY,
+      accidental: trillAccidental,
+    });
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(sign);
   }
