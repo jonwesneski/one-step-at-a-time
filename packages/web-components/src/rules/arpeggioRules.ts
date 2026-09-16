@@ -2,12 +2,20 @@ import type {
   NoteElementType,
   NoteOrChordElementType,
 } from '../types/elements';
-import type { ArpeggioType, HairpinKind, Note, Octave } from '../types/theory';
+import type {
+  ArpeggioType,
+  DynamicMarking,
+  HairpinKind,
+  Note,
+  Octave,
+} from '../types/theory';
 import { MUSIC_CHORD } from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
   ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
+  ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX,
+  DYNAMICS_CHAR_WIDTH_PX,
 } from '../utils/notationDimensions';
 import { noteSemitoneMap } from './theoryConsts';
 
@@ -143,20 +151,26 @@ export function resolveArpeggioSpans(
 /**
  * Leftward horizontal footprint (px) the staff reserves for an arpeggio sign,
  * in front of the element's own accidental footprint (and behind any grace
- * group). When the element shows an accidental the sign clears the whole
- * accidental column, so the reservation is larger and is added on top of the
- * accidental footprint the caller computes separately. Every variant reserves
- * the same width — the arrowhead extends only vertically, and the
- * non-arpeggiate bracket is the wave width by construction.
+ * group). Every variant reserves the same width — the arrowhead extends only
+ * vertically, and the non-arpeggiate bracket is the wave width by construction.
+ *
+ * The full `ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX` is reserved when either:
+ * - the element shows an accidental (the sign clears the whole accidental
+ *   column, and this is added on top of the accidental footprint the caller
+ *   computes separately); or
+ * - `signDrawnInMeasureOverlay` — the sign belongs to a cross-staff span and is
+ *   drawn by the ancestor `<music-measure>` off raw notehead pixels, so it
+ *   cannot claim the notehead-inset discount `ARPEGGIO_FOOTPRINT_PX` assumes.
  */
 export function computeArpeggioFootprintWidth(
   arpeggio: ArpeggioType | null,
-  hasShownAccidental: boolean
+  hasShownAccidental: boolean,
+  signDrawnInMeasureOverlay = false
 ): number {
   if (arpeggio === null) {
     return 0;
   }
-  return hasShownAccidental
+  return hasShownAccidental || signDrawnInMeasureOverlay
     ? ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX
     : ARPEGGIO_FOOTPRINT_PX;
 }
@@ -164,11 +178,31 @@ export function computeArpeggioFootprintWidth(
 /**
  * Extra leftward footprint (px) for the vertical dynamic-change hairpin, stacked
  * in front of the arpeggio sign's own footprint. Zero when there is no hairpin.
+ *
+ * `ARPEGGIO_HAIRPIN_FOOTPRINT_PX` covers the wedge itself; the `-from` / `-to`
+ * dynamic letters are centred on the wedge spine, so roughly half a letter's
+ * width spills past the wedge's open side. Width is estimated per character
+ * (`DYNAMICS_CHAR_WIDTH_PX`), not measured — matching the vertical letter budget
+ * in `#estimateAboveStaffBudget`.
  */
 export function computeArpeggioHairpinFootprintWidth(
-  arpeggioHairpin: HairpinKind | null
+  arpeggioHairpin: HairpinKind | null,
+  from: DynamicMarking | null = null,
+  to: DynamicMarking | null = null
 ): number {
-  return arpeggioHairpin === null ? 0 : ARPEGGIO_HAIRPIN_FOOTPRINT_PX;
+  if (arpeggioHairpin === null) {
+    return 0;
+  }
+  const letterChars = Math.max(from?.length ?? 0, to?.length ?? 0);
+  const letterOverhang =
+    letterChars === 0
+      ? 0
+      : Math.max(
+          0,
+          (letterChars * DYNAMICS_CHAR_WIDTH_PX) / 2 -
+            ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX / 2
+        );
+  return ARPEGGIO_HAIRPIN_FOOTPRINT_PX + letterOverhang;
 }
 
 // ─── Written-out arpeggio (`<music-arpeggio>`: consecutive pitches tied to a chord) ───

@@ -154,5 +154,54 @@ describe(MUSIC_MEASURE, () => {
       expect(upper.renderArpeggioSign).toBe(false);
       expect(lower.renderArpeggioSign).toBe(false);
     });
+
+    it('grows the lower staff min-width for a hairpin authored only on the upper end', () => {
+      const measure = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      const treble = document.createElement(MUSIC_STAFF);
+      treble.setAttribute('group', 'grand');
+      treble.setAttribute('clef', 'treble');
+      treble.setAttribute('time', '4/4');
+      const bass = document.createElement(MUSIC_STAFF);
+      bass.setAttribute('clef', 'bass');
+      bass.setAttribute('time', '4/4');
+      measure.append(treble, bass);
+      document.body.appendChild(measure);
+
+      const upper = document.createElement(MUSIC_CHORD) as ChordElementType;
+      upper.setAttribute('chord', 'Cmaj' satisfies Chord);
+      upper.id = 'upperSpan';
+      upper.setAttribute('arpeggio', 'up');
+      const lower = document.createElement(MUSIC_CHORD) as ChordElementType;
+      lower.setAttribute('chord', 'Cmaj' satisfies Chord);
+      lower.setAttribute('arpeggio', 'up');
+      lower.setAttribute('arpeggio-for', 'upperSpan');
+      treble.appendChild(upper);
+      bass.appendChild(lower);
+
+      const bassMinWidths: number[] = [];
+      bass.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event) => {
+        bassMinWidths.push((event as CustomEvent).detail.minWidth);
+      });
+
+      for (const [staff, chord] of [
+        [treble, upper],
+        [bass, lower],
+      ] as const) {
+        const slot = staff.shadowRoot!.querySelector('slot')!;
+        (
+          slot as unknown as { assignedElements: () => Element[] }
+        ).assignedElements = () => [chord];
+        slot.dispatchEvent(new Event('slotchange'));
+      }
+      const withoutHairpin = bassMinWidths[bassMinWidths.length - 1];
+
+      upper.setAttribute('arpeggio-hairpin', 'crescendo');
+      upper.setAttribute('arpeggio-hairpin-from', 'p');
+      upper.setAttribute('arpeggio-hairpin-to', 'mf');
+      const withHairpin = bassMinWidths[bassMinWidths.length - 1];
+
+      expect(withoutHairpin).toBeGreaterThan(0);
+      expect(withHairpin).toBeGreaterThan(withoutHairpin);
+    });
   });
 });

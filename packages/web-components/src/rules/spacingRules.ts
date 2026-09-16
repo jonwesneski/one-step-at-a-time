@@ -1,91 +1,94 @@
 import { DurationType } from '../types/theory';
-import {
-  SPACING_LOG_INCREMENT_PX,
-  SPACING_SHORTEST_SLACK_PX,
-} from '../utils/notationDimensions';
+import { MIN_NOTE_WIDTH, PIXELS_PER_BEAT } from '../utils/notationDimensions';
 import { durationToFactor } from './theoryConsts';
 
 /**
- * Horizontal spacing of a staff's entries (notes/chords/rests) within the notes
- * area. Separate from staffWidth.ts, which sizes the staff/measure box itself:
- * these functions answer "given an available width, where does each entry sit".
+ * Two independent concerns live here, both about a staff's entries
+ * (notes/chords/rests):
  *
- * Pure — the caller supplies a tuplet scale map so this module stays free of the
- * tuplet/SVG dependency chain.
+ * 1. **Position** — `computeMeasureProportionalOffsets` answers "where does
+ *    each entry sit within the notes area". An entry's x is its cumulative
+ *    beat-offset (from rules/beatRules.ts) as a *fraction of the measure's
+ *    fixed beat capacity* (from the time signature — a constant, independent
+ *    of how many entries currently exist), scaled by the staff's real
+ *    available width. This is what makes a full measure fill the staff,
+ *    what makes resizing reflow every entry together (like conventional
+ *    notation software), and what makes appending an entry never move an
+ *    already-placed one — the fraction's denominator (beat capacity) and the
+ *    available width it's scaled by are both untouched by adding a note.
+ *
+ * 2. **Sizing preference** — `computeSpacingWeights` answers a different
+ *    question entirely: "how wide would this measure's box *like* to be,
+ *    given how busy it is" — feeding staffWidth.ts's natural-width/flex-basis
+ *    calculation (see CLAUDE.md's "Measure Width"). This legitimately scales
+ *    with the current entry count/mix (a busier measure should ask for a
+ *    wider box) and is unrelated to where an entry is actually drawn.
+ *
+ * Pure — callers supply a tuplet scale/offset map so this module stays free
+ * of the tuplet/SVG dependency chain.
  */
+
+// ─── Position ───────────────────────────────────────────────────────────────
 
 /**
- * Slack (px) beyond the fixed MIN_NOTE_WIDTH strut that one entry should receive
- * when the measure has width to spare. Grows logarithmically: each doubling of
- * duration relative to the measure's shortest entry adds SPACING_LOG_INCREMENT_PX,
- * so a whole note is only a little wider than a quarter rather than four times.
- *
- * `durationFactor` / `shortestFactor` are linear whole-note fractions
- * (durationToFactor values).
+ * Per-entry x-offset (px) within the notes area: `beatOffsets[i] /
+ * measureCapacity` (the entry's fraction of the measure's fixed beat
+ * capacity) times `availableWidth`. `measureCapacity` and `availableWidth`
+ * are both independent of how many entries exist, so an entry's offset is
+ * stable once computed — appending a new entry never changes an earlier
+ * entry's offset. Callers still layer collision clamps (a MIN_NOTE_WIDTH
+ * floor against the previous entry, leftward/rightward decoration footprints)
+ * on top of this base position.
  */
-export function spacingSlackWeight(
-  durationFactor: number,
-  shortestFactor: number
-): number {
-  const doublings = Math.max(0, Math.log2(durationFactor / shortestFactor));
-  return SPACING_SHORTEST_SLACK_PX + SPACING_LOG_INCREMENT_PX * doublings;
+export function computeMeasureProportionalOffsets(
+  beatOffsets: readonly number[],
+  measureCapacity: number,
+  availableWidth: number
+): number[] {
+  if (measureCapacity <= 0) {
+    return beatOffsets.map(() => 0);
+  }
+  const width = Math.max(0, availableWidth);
+  return beatOffsets.map(
+    (beatOffset) => (beatOffset / measureCapacity) * width
+  );
 }
 
+// ─── Sizing preference ──────────────────────────────────────────────────────
+
 export interface SpacingWeights {
-  /** Per-entry slack weight, parallel to `entries`. */
-  weights: number[];
   /**
-   * Σ of `weights`. The last entry's weight is the trailing space it gets before
-   * the barline.
+   * Per-entry slack (px) beyond the MIN_NOTE_WIDTH strut, parallel to
+   * `entries` — floored at 0 (a duration shorter than MIN_NOTE_WIDTH's worth
+   * of beats wants no extra slack, not negative slack). Kept separate from
+   * the strut because staffWidth.ts's natural-width calculation adds its own
+   * noteCount × MIN_NOTE_WIDTH strut term — folding the strut in here would
+   * double-count it there.
    */
+  weights: number[];
+  /** Σ of `weights` — the measure's total slack beyond its strut. */
   totalWeight: number;
 }
 
 /**
- * Slack weight for every entry. A tupleted entry's weight is scaled by
- * `tupletScaleByIndex.get(i)` (normal/actual) — the same reduction applied to its
- * MIN_NOTE_WIDTH strut — so N tuplet notes occupy the slack of their `normal`
- * count. The shortest-duration reference uses the unscaled linear factors.
+ * Slack (px) beyond the MIN_NOTE_WIDTH strut for every entry: its own
+ * duration × PIXELS_PER_BEAT minus the strut, scaled by
+ * `tupletScaleByIndex.get(i)` (normal/actual) when tupleted, floored at 0.
+ * Feeds only the measure's sizing *preference* (staffWidth.ts) — not entry
+ * position, which is computeMeasureProportionalOffsets above.
  */
 export function computeSpacingWeights(
   entries: ReadonlyArray<{ readonly duration: DurationType }>,
   tupletScaleByIndex: ReadonlyMap<number, number> = new Map()
 ): SpacingWeights {
-  if (entries.length === 0) {
-    return { weights: [], totalWeight: 0 };
-  }
-  const factors = entries.map((entry) => durationToFactor[entry.duration]);
-  const shortestFactor = Math.min(...factors);
   let totalWeight = 0;
-  const weights = factors.map((factor, i) => {
+  const weights = entries.map((entry, i) => {
+    const factor = durationToFactor[entry.duration];
+    const scale = tupletScaleByIndex.get(i) ?? 1;
     const weight =
-      spacingSlackWeight(factor, shortestFactor) *
-      (tupletScaleByIndex.get(i) ?? 1);
+      Math.max(0, factor * PIXELS_PER_BEAT - MIN_NOTE_WIDTH) * scale;
     totalWeight += weight;
     return weight;
   });
   return { weights, totalWeight };
-}
-
-/**
- * Cumulative x-offset into the spare width (`proportionalWidth`, clamped to ≥ 0)
- * for each entry: `offsets[0]` is 0, and each subsequent offset adds the previous
- * entry's share of the spare width. The width left after the last entry — its own
- * share — is the trailing space before the barline.
- */
-export function distributeSlack(
-  weights: readonly number[],
-  totalWeight: number,
-  proportionalWidth: number
-): number[] {
-  const spare = Math.max(0, proportionalWidth);
-  const offsets: number[] = [];
-  let cumulativeWeight = 0;
-  for (const weight of weights) {
-    offsets.push(
-      totalWeight > 0 ? (cumulativeWeight / totalWeight) * spare : 0
-    );
-    cumulativeWeight += weight;
-  }
-  return offsets;
 }

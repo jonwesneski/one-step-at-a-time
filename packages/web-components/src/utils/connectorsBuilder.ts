@@ -1,5 +1,6 @@
 import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
-import {
+import { computeGraceFootprintWidth } from '../rules/graceRules';
+import type {
   ArpeggioElementType,
   ChordElementType,
   ConnectorRole,
@@ -12,8 +13,17 @@ import {
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  STAFF_TAGS,
 } from './consts';
 import {
+  ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
+  ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
+  ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+  LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+  TRILL_WRITTEN_NOTE_GAP_PX,
+} from './notationDimensions';
+import {
+  computeWrittenTrillNoteWidth,
   createCurveSvg,
   createOpenTieSvg,
   CurveBulge,
@@ -22,13 +32,8 @@ import {
 import {
   computeYHeadOffset,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  NOTE_SVG_WIDTH,
 } from './svgCreator/note';
-import {
-  ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
-  ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
-  ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
-  LAISSEZ_VIBRER_CURVE_LENGTH_PX,
-} from './notationDimensions';
 
 export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
 
@@ -312,10 +317,14 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
   // The note's own rect.top shifts with pitch (higher pitch → smaller top),
   // so it cannot be used for row detection. The containing <music-measure>
   // is what wraps in the composition's flex grid, so its top reflects the
-  // actual visual row.
-  const measure = note.closest(MUSIC_MEASURE) as HTMLElement | null;
-  const ref = measure ?? note;
-  return ref.getBoundingClientRect().top - rootRect.top;
+  // actual visual row. A standalone staff (no measure) never wraps, so its own
+  // box is the row reference — falling back to the note there would split every
+  // slur/tie wider than a 2nd into cross-row halves.
+  const rowReference =
+    (note.closest(MUSIC_MEASURE) as HTMLElement | null) ??
+    (note.closest(STAFF_TAGS) as HTMLElement | null) ??
+    note;
+  return rowReference.getBoundingClientRect().top - rootRect.top;
 };
 
 // Notehead visual radius ≈ 4.3px (rotated ellipse + stroke). 5px clears the
@@ -547,6 +556,61 @@ const chordOtherToneCenters = (
     }
   });
   return centers;
+};
+
+// A tie must not run through a written trilling notehead (trill-note) or a
+// trill's finishing grace note(s) (trill-finish) — nudge the tie's start
+// point past whichever (or both — summed, harmless in that rare combination
+// since the two decorations aren't laid out to coexist cleanly anyway)
+// reserve space there, computed analytically (matching
+// computeWrittenTrillNoteWidth's/computeGraceFootprintWidth's own math)
+// rather than queried from the DOM. The written notehead is drawn by the
+// staff's own overlay; the finishing grace note(s) are drawn locally inside
+// the note/chord's own shadow DOM — neither is reachable via
+// getBoundingClientRect() from here. Approximation: when a short main note
+// defers its written notehead to the second tied note (see
+// rules/trillRules.ts's writtenNoteAnchorIndex), this still nudges from the
+// first note's own position — a harmless overshoot in that rare
+// combination, not a visual bug.
+const tieStartTrillNudgePx = (note: NoteLikeElementType): number => {
+  const tag = note.tagName.toLowerCase();
+  if (tag !== MUSIC_NOTE && tag !== MUSIC_CHORD) {
+    return 0;
+  }
+  const trillCapableNote = note as NoteElementType | ChordElementType;
+  let nudge = 0;
+  if (trillCapableNote.resolvedTrillPitch?.written === true) {
+    // computeAnchor's startAnchor.x is the note's own rendered *center*
+    // (rect.left + rect.width / 2), but the written notehead's own leftX
+    // (see staffClassicalBase.ts#drawWrittenTrillNote) starts a full
+    // NOTE_SVG_WIDTH past the note's *left* edge — half a notehead further
+    // right than the center. Add that half-width back in, or the nudge
+    // lands short.
+    nudge +=
+      NOTE_SVG_WIDTH / 2 +
+      TRILL_WRITTEN_NOTE_GAP_PX +
+      computeWrittenTrillNoteWidth(
+        trillCapableNote.resolvedTrillPitch.accidental
+      );
+  }
+  const trillFinish = trillCapableNote.trillFinish;
+  if (trillFinish !== null && trillFinish.length > 0) {
+    // Same center-to-left-edge correction as above; the finishing group's
+    // own anchor (see svgCreator/graceNotes.ts#createTrillFinishNotesSvg)
+    // starts at that same NOTE_SVG_WIDTH point, and
+    // computeGraceFootprintWidth already includes the gap before it. A
+    // single (non-group) finishing note also has its own stem, extending a
+    // couple more px right of this reserved width — clearing the notehead
+    // itself (the real collision risk) is what this targets; grazing a thin
+    // stem line is a minor cosmetic gap, not pursued further here.
+    nudge +=
+      NOTE_SVG_WIDTH / 2 +
+      computeGraceFootprintWidth(
+        trillFinish,
+        trillCapableNote.resolvedTrillFinishAccidentals
+      );
+  }
+  return nudge;
 };
 
 const pickBulge = (note: NoteLikeElementType): CurveBulge => {
@@ -791,6 +855,9 @@ export const buildConnectorSvgs = (
       startBulge,
       noteheadOffsetPx
     );
+    if (pair.kind === 'tie') {
+      startAnchor.x += tieStartTrillNudgePx(pair.start);
+    }
     const endAnchor = computeAnchor(
       pair.end,
       rootRect,

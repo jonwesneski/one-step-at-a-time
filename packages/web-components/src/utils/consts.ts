@@ -1,4 +1,5 @@
 import type {
+  AccidentalType,
   ArpeggioType,
   ArticulationType,
   ClefType,
@@ -14,6 +15,9 @@ import type {
   StaffGroupType,
   StressType,
   TimeSignature,
+  TrillContinuationMode,
+  TrillFinishSlur,
+  TrillLineMode,
   TupletRatio,
   Voice,
 } from '../types/theory';
@@ -65,6 +69,7 @@ export const NOTE_EVENTS = {
   NOTE_Y_CHANGE: 'note-y-change',
   DYNAMIC_ATTRIBUTE_CHANGE: 'dynamic-attribute-change',
   ARPEGGIO_ATTRIBUTE_CHANGE: 'arpeggio-attribute-change',
+  TRILL_ATTRIBUTE_CHANGE: 'trill-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',
@@ -224,7 +229,11 @@ export const ARPEGGIO_RUN_DEFAULT_DURATION: DurationType = 'thirtysecond';
 /** Accepted values of the `tie` attribute on `<music-note>` / `<music-chord>`. */
 export const TIE_VALUES = ['start', 'end', 'laissez-vibrer'] as const;
 
-export const GRACE_TYPES: GraceType[] = ['acciaccatura', 'appoggiatura'];
+export const GRACE_TYPES: GraceType[] = [
+  'acciaccatura',
+  'appoggiatura',
+  'trill',
+];
 
 export const GRACE_DURATIONS: GraceDuration[] = [
   'half',
@@ -236,6 +245,28 @@ export const GRACE_DURATIONS: GraceDuration[] = [
 ];
 
 export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
+
+export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
+
+export const TRILL_CONTINUATION_MODES: TrillContinuationMode[] = [
+  'bracketed',
+  'line-only',
+];
+
+export const TRILL_FINISH_SLURS: TrillFinishSlur[] = [
+  'none',
+  'to-main',
+  'to-next',
+  'both',
+];
+
+export const ACCIDENTAL_TYPES: AccidentalType[] = [
+  'sharp',
+  'flat',
+  'natural',
+  'double-sharp',
+  'double-flat',
+];
 
 export const CLEFS: ClefType[] = ['treble', 'bass'];
 

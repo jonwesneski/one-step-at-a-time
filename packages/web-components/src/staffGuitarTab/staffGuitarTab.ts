@@ -1,4 +1,8 @@
-import { computeSpacingWeights, distributeSlack } from '../rules/spacingRules';
+import { computeBeatOffsets } from '../rules/beatRules';
+import {
+  computeMeasureProportionalOffsets,
+  computeSpacingWeights,
+} from '../rules/spacingRules';
 import {
   calculateGuitarTabMinWidth,
   calculateStaffNaturalWidth,
@@ -195,22 +199,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const describeRect = this.#describeContainer.getBoundingClientRect();
       this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
       const remainingWidth = transcribeRect.width - this.#describeEndX;
-      const { weights, totalWeight } = computeSpacingWeights(assignedElements);
-      const proportionalWidth =
-        remainingWidth -
-        LEADING_NOTE_GAP_PX -
-        assignedElements.length * MIN_NOTE_WIDTH;
-      const slackOffsets = distributeSlack(
-        weights,
-        totalWeight,
+
+      // Same fixed measure-capacity-proportional model as the classical
+      // staff (see rules/spacingRules.ts) — guitar tab has no tuplets or
+      // arpeggios, so the beat-offset accounting is plain duration only.
+      const [beatsInMeasure, beatType] = this.effectiveTimeSig;
+      const measureCapacity = beatsInMeasure / beatType;
+      const beatOffsets = computeBeatOffsets(assignedElements, new Map());
+      const proportionalWidth = remainingWidth - LEADING_NOTE_GAP_PX;
+      const measureOffsets = computeMeasureProportionalOffsets(
+        beatOffsets,
+        measureCapacity,
         proportionalWidth
       );
 
+      let previousNoteX: number | null = null;
       for (let i = 0; i < assignedElements.length; i++) {
         const element = assignedElements[i];
-        const xOffsetInNotesSpace =
-          LEADING_NOTE_GAP_PX + i * MIN_NOTE_WIDTH + slackOffsets[i];
-        element.style.left = `${this.#describeEndX + xOffsetInNotesSpace}px`;
+        const xOffsetInNotesSpace = LEADING_NOTE_GAP_PX + measureOffsets[i];
+        let x = this.#describeEndX + xOffsetInNotesSpace;
+        if (previousNoteX !== null) {
+          x = Math.max(x, previousNoteX + MIN_NOTE_WIDTH);
+        }
+        previousNoteX = x;
+        element.style.left = `${x}px`;
         element.style.top = `${
           this.#yCoordinates[element.string] ?? STAFF_LINE_START
         }px`;

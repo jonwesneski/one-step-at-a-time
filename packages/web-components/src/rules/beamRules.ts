@@ -17,9 +17,9 @@ import {
 } from '../utils';
 import { MUSIC_NOTE_NODE } from '../utils/consts';
 import { STAFF_Y_PADDING } from '../utils/notationDimensions';
+import { durationContribution } from './beatRules';
 import { determineStemDirections } from './staffNoteRules';
-import { durationToFactor, durationToFlagCountMap } from './theoryConsts';
-import { parseTupletRatio } from './tupletRules';
+import { durationToFlagCountMap } from './theoryConsts';
 
 export function buildBeamsRenderer(
   elements: NoteChordOrRestElementType[],
@@ -33,21 +33,11 @@ export function buildBeamsRenderer(
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
   stemDirections: boolean[];
 } {
-  const elementDurationFactors = elements.map((element, i) => {
-    const dur = element.duration as DurationType;
-    // A `<music-arpeggio>` run note consumes no beat time — a zero factor keeps
-    // the whole run inside one beat-group window (it cannot straddle an edge).
-    if (arpeggioRunIndices.has(i)) {
-      return 0;
-    }
-    const ancestors = tupletsByIndex.get(i);
-    if (ancestors !== undefined) {
-      const innermostTuplet = ancestors[ancestors.length - 1];
-      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-      return durationToFactor[dur] * (normal / actual);
-    }
-    return durationToFactor[dur];
-  });
+  // A `<music-arpeggio>` run note's zero contribution keeps the whole run
+  // inside one beat-group window (it cannot straddle an edge).
+  const elementDurationFactors = elements.map((element, i) =>
+    durationContribution(element, i, tupletsByIndex, arpeggioRunIndices)
+  );
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
@@ -72,15 +62,12 @@ export function buildBeamsRenderer(
 
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
-        const flagCount =
-          durationToFlagCountMap.get(noteElement.duration as DurationType) ?? 1;
         return {
           y:
             STAFF_Y_PADDING +
             (noteStaffYCoords.get(noteElement) ?? 0) -
             yHeadOffset,
           stemUp,
-          flagCount,
         };
       }
 
@@ -108,7 +95,6 @@ export function buildBeamsRenderer(
         y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
         stemUp,
         chordClearanceY,
-        flagCount: beamCount,
       };
     }
   );

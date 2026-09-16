@@ -18,6 +18,9 @@ import type {
   StaffGroupType,
   StressType,
   TimeSignature,
+  TrillContinuationMode,
+  TrillFinishSlur,
+  TrillLineMode,
   TupletRatio,
 } from './theory';
 
@@ -87,6 +90,45 @@ export interface INoteElement {
   // Set by the staff to `'up'` for elements inside a `sempre arpeggiando`
   // passage that carry no explicit `arpeggio`; null otherwise. Not an attribute.
   impliedArpeggio: ArpeggioType | null;
+  // Marks a trill start. The "tr" sign renders above the stave (or, standalone,
+  // above the notehead). The trill line spans forward through this element's
+  // own `tie` chain — no attribute is needed on the notes it continues into.
+  trill: boolean;
+  // 'auto' (default) draws the wavy extension line, matching standard
+  // engraving practice; 'none' suppresses it (e.g. for a bare-sign-only
+  // isolated, untied note-value).
+  trillLine: TrillLineMode;
+  // Draws a vertical end-notch here instead of letting the line run to the
+  // next notehead.
+  trillStop: boolean;
+  // Overrides only the accidental of the trilling (auxiliary) pitch —
+  // normally the diatonic upper neighbor as modified by the key signature.
+  // Never changes the letter itself. Ignored (with a warning) when
+  // `trillNote` is also set.
+  trillAccidental: AccidentalType | null;
+  // Full override of the trilling (auxiliary) pitch — letter and accidental
+  // — rendered as a small written notehead in parentheses after the main
+  // notehead rather than an accidental-only symbol above the sign. Required
+  // whenever the trilling pitch shares the main note's own letter (a
+  // chromatic/semitone trill) or otherwise isn't the plain diatonic
+  // neighbor. Wins over `trillAccidental` when both are set.
+  trillNote: Note | null;
+  // Controls how a trill's line restates itself after a system break, once
+  // the tie chain has carried it into the new row: 'bracketed' (default)
+  // redraws the sign in parentheses there; 'line-only' resumes the line with
+  // no restated sign. Ignored at an ordinary same-row barline, where the line
+  // always resumes silently regardless of this value. Meaningful only on the
+  // element that started the trill.
+  trillContinuation: TrillContinuationMode;
+  // Set by the staff to the resolved trilling pitch for a trill-marked
+  // element. null when not trilling, or in standalone mode (trills render
+  // nothing without a staff). Not an attribute.
+  resolvedTrillPitch: {
+    letter: NoteLetter;
+    accidental: AccidentalType | null;
+    written: boolean;
+    octave: Octave | null;
+  } | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -106,6 +148,23 @@ export interface INoteElement {
   // A single dynamic for the whole grace group, independent of the host
   // note's own `dynamic`. Rendered by the staff under the first grace note.
   graceDynamic: DynamicMarking | null;
+  // Grace note(s) placed *after* this element (a trill's finishing/closing
+  // figure) rather than before it — same comma-separated-or-array shape as
+  // `grace`. Always rendered as plain unslashed noteheads (no `grace-type`
+  // equivalent) at a fixed eighth-note-or-group written value.
+  get trillFinish(): Note[] | null;
+  set trillFinish(value: GraceNotesType);
+  // Per-trill-finish-note octave, aligned by index with `trillFinish` — same
+  // shape and fallback behavior as `graceOctave`.
+  get trillFinishOctave(): (Octave | null)[] | null;
+  set trillFinishOctave(value: GraceOctavesType);
+  // Which slur(s) a trill's finishing grace note(s) draw: back to this
+  // element ('to-main', default), forward to the next element ('to-next'),
+  // 'both', or 'none'.
+  trillFinishSlur: TrillFinishSlur;
+  // Key-signature-resolved accidentals for the trill-finish pitches, set by
+  // the staff — same fallback shape as `resolvedGraceAccidentals`.
+  resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
@@ -164,6 +223,45 @@ export interface IChordElement {
   // Set by the staff to `'up'` for elements inside a `sempre arpeggiando`
   // passage that carry no explicit `arpeggio`; null otherwise. Not an attribute.
   impliedArpeggio: ArpeggioType | null;
+  // Marks a trill start. The "tr" sign renders above the stave (or, standalone,
+  // above the notehead). The trill line spans forward through this element's
+  // own `tie` chain — no attribute is needed on the notes it continues into.
+  trill: boolean;
+  // 'auto' (default) draws the wavy extension line, matching standard
+  // engraving practice; 'none' suppresses it (e.g. for a bare-sign-only
+  // isolated, untied note-value).
+  trillLine: TrillLineMode;
+  // Draws a vertical end-notch here instead of letting the line run to the
+  // next notehead.
+  trillStop: boolean;
+  // Overrides only the accidental of the trilling (auxiliary) pitch —
+  // normally the diatonic upper neighbor as modified by the key signature.
+  // Never changes the letter itself. Ignored (with a warning) when
+  // `trillNote` is also set.
+  trillAccidental: AccidentalType | null;
+  // Full override of the trilling (auxiliary) pitch — letter and accidental
+  // — rendered as a small written notehead in parentheses after the main
+  // notehead rather than an accidental-only symbol above the sign. Required
+  // whenever the trilling pitch shares the main note's own letter (a
+  // chromatic/semitone trill) or otherwise isn't the plain diatonic
+  // neighbor. Wins over `trillAccidental` when both are set.
+  trillNote: Note | null;
+  // Controls how a trill's line restates itself after a system break, once
+  // the tie chain has carried it into the new row: 'bracketed' (default)
+  // redraws the sign in parentheses there; 'line-only' resumes the line with
+  // no restated sign. Ignored at an ordinary same-row barline, where the line
+  // always resumes silently regardless of this value. Meaningful only on the
+  // element that started the trill.
+  trillContinuation: TrillContinuationMode;
+  // Set by the staff to the resolved trilling pitch for a trill-marked
+  // element. null when not trilling, or in standalone mode (trills render
+  // nothing without a staff). Not an attribute.
+  resolvedTrillPitch: {
+    letter: NoteLetter;
+    accidental: AccidentalType | null;
+    written: boolean;
+    octave: Octave | null;
+  } | null;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -183,6 +281,23 @@ export interface IChordElement {
   // A single dynamic for the whole grace group, independent of the host
   // note's own `dynamic`. Rendered by the staff under the first grace note.
   graceDynamic: DynamicMarking | null;
+  // Grace note(s) placed *after* this element (a trill's finishing/closing
+  // figure) rather than before it — same comma-separated-or-array shape as
+  // `grace`. Always rendered as plain unslashed noteheads (no `grace-type`
+  // equivalent) at a fixed eighth-note-or-group written value.
+  get trillFinish(): Note[] | null;
+  set trillFinish(value: GraceNotesType);
+  // Per-trill-finish-note octave, aligned by index with `trillFinish` — same
+  // shape and fallback behavior as `graceOctave`.
+  get trillFinishOctave(): (Octave | null)[] | null;
+  set trillFinishOctave(value: GraceOctavesType);
+  // Which slur(s) a trill's finishing grace note(s) draw: back to this
+  // element ('to-main', default), forward to the next element ('to-next'),
+  // 'both', or 'none'.
+  trillFinishSlur: TrillFinishSlur;
+  // Key-signature-resolved accidentals for the trill-finish pitches, set by
+  // the staff — same fallback shape as `resolvedGraceAccidentals`.
+  resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null;
   batchUpdate(fn: () => void): void;
 }
 

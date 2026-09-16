@@ -1295,6 +1295,9 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     // treble+bass) inside a flex justify-center parent with no explicit width on the
     // composition. Before :host { width: 100% }, the composition sized to the max-content
     // of its widest measure (~389px), causing each measure to wrap to its own row.
+    // max-width is raised to match the host so the test isn't coupled to the exact
+    // natural-width formula — the default 900px cap is narrower than these three
+    // measures' combined beat-proportional natural width.
     await page.evaluate(
       ({
         compositionTag,
@@ -1320,6 +1323,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
         composition.setAttribute(keySigAttr, 'D');
         composition.setAttribute(modeAttr, 'major');
         composition.setAttribute(timeSigAttr, '4/4');
+        composition.setAttribute('max-width', '1200');
 
         // Measure 1: treble (4 quarter notes) + bass (1 note)
         const m1 = document.createElement(measureTag);
@@ -1435,15 +1439,14 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     }, MUSIC_MEASURE);
 
     expect(measureTops).toHaveLength(3);
-    // Total minWidth across all measures (≈ 769px) is less than the 900px composition
-    // grid, so all three should land on the same row.
+    // Combined natural width across all measures fits under the 1200px cap,
+    // so all three should land on the same row.
     const [top0, top1, top2] = measureTops;
     expect(Math.abs(top1 - top0)).toBeLessThanOrEqual(5);
     expect(Math.abs(top2 - top0)).toBeLessThanOrEqual(5);
 
-    // Shrink the host so measures must reflow to multiple rows.
-    // At 500px the combined flex-basis of any two adjacent measures (≥ 579px)
-    // exceeds the container, so each measure wraps to its own row.
+    // Shrink the host so measures must reflow to multiple rows — well below
+    // the combined natural width, so at least the last measure must wrap.
     await resizeHost(page, 500);
     await waitForRedrawCycle(page);
 
@@ -2072,6 +2075,186 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     // a two-segment cross-system split.
     expect(await countHairpins()).toBe(2);
   });
+
+  test.describe('trill continuation across measures', () => {
+    // Measure 1: 3 quarter fillers + a trill+tie=start quarter (4 beats).
+    // Measure 2: a tie=end half (continuing the tie, no `trill` attribute of
+    // its own) + 2 quarter fillers (4 beats). The trill's own tie chain
+    // carries the line across the barline with no repeated `trill`.
+    async function buildTiedTrillAcrossMeasures(
+      page: Page,
+      hostWidth: number,
+      trillContinuation?: 'bracketed' | 'line-only'
+    ): Promise<void> {
+      await page.evaluate(
+        ({
+          compositionTag,
+          measureTag,
+          staffTag,
+          noteTag,
+          continuation,
+          hostWidthPx,
+        }) => {
+          const host = document.getElementById('host');
+          if (host === null) {
+            throw new Error('host missing');
+          }
+          host.innerHTML = '';
+          host.style.width = `${hostWidthPx}px`;
+
+          const composition = document.createElement(compositionTag);
+
+          const measure1 = document.createElement(measureTag);
+          const staff1 = document.createElement(staffTag);
+          for (const [note, octave] of [
+            ['C', '5'],
+            ['D', '5'],
+            ['E', '5'],
+          ] as const) {
+            const n = document.createElement(noteTag);
+            n.setAttribute('note', note);
+            n.setAttribute('octave', octave);
+            n.setAttribute('duration', 'quarter');
+            staff1.appendChild(n);
+          }
+          const trillStart = document.createElement(noteTag);
+          trillStart.setAttribute('note', 'F');
+          trillStart.setAttribute('octave', '5');
+          trillStart.setAttribute('duration', 'quarter');
+          trillStart.setAttribute('trill', '');
+          trillStart.setAttribute('tie', 'start');
+          if (continuation) {
+            trillStart.setAttribute('trill-continuation', continuation);
+          }
+          staff1.appendChild(trillStart);
+          measure1.appendChild(staff1);
+
+          const measure2 = document.createElement(measureTag);
+          const staff2 = document.createElement(staffTag);
+          const tieEnd = document.createElement(noteTag);
+          tieEnd.setAttribute('note', 'F');
+          tieEnd.setAttribute('octave', '5');
+          tieEnd.setAttribute('duration', 'half');
+          tieEnd.setAttribute('tie', 'end');
+          staff2.appendChild(tieEnd);
+          for (const [note, octave] of [
+            ['G', '5'],
+            ['A', '5'],
+          ] as const) {
+            const n = document.createElement(noteTag);
+            n.setAttribute('note', note);
+            n.setAttribute('octave', octave);
+            n.setAttribute('duration', 'quarter');
+            staff2.appendChild(n);
+          }
+          measure2.appendChild(staff2);
+
+          composition.appendChild(measure1);
+          composition.appendChild(measure2);
+          host.appendChild(composition);
+        },
+        {
+          compositionTag: MUSIC_COMPOSITION,
+          measureTag: MUSIC_MEASURE,
+          staffTag: MUSIC_STAFF,
+          noteTag: MUSIC_NOTE,
+          continuation: trillContinuation,
+          hostWidthPx: hostWidth,
+        }
+      );
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+    }
+
+    async function readTrillContinuationOverlay(page: Page) {
+      return page.evaluate((compositionTag) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const overlay = composition.shadowRoot.querySelector(
+          '.trill-continuation-overlay'
+        );
+        const wrapper = composition.shadowRoot.querySelector(
+          '.composition-wrapper'
+        );
+        if (overlay === null || wrapper === null) {
+          throw new Error('overlay or wrapper missing');
+        }
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const lines = Array.from(
+          overlay.querySelectorAll('g.trill-line')
+        ) as SVGGElement[];
+        const signs = Array.from(
+          overlay.querySelectorAll('g.trill-continuation-sign')
+        ) as SVGGElement[];
+        const staves = Array.from(
+          composition.querySelectorAll('music-staff')
+        ) as HTMLElement[];
+        const secondStaffRect = staves[1].getBoundingClientRect();
+        return {
+          lineCount: lines.length,
+          signCount: signs.length,
+          parenthesisCountInSign:
+            signs[0]?.querySelectorAll('.trill-parenthesis').length ?? 0,
+          signGlyphCount:
+            signs[0]?.querySelectorAll('.trill-sign-glyph').length ?? 0,
+          signRight: signs[0]
+            ? signs[0].getBoundingClientRect().right - wrapperRect.left
+            : null,
+          lineLeft: lines[0]
+            ? lines[0].getBoundingClientRect().left - wrapperRect.left
+            : null,
+          secondStaffLeft: secondStaffRect.left - wrapperRect.left,
+        };
+      }, MUSIC_COMPOSITION);
+    }
+
+    test('resumes on the same row with no restated sign', async ({ page }) => {
+      await buildTiedTrillAcrossMeasures(page, 1200);
+      const result = await readTrillContinuationOverlay(page);
+      expect(result.lineCount).toBe(1);
+      expect(result.signCount).toBe(0);
+      // The resumed line starts at or after the second measure's own left
+      // edge (it begins inside that measure's notes area, past the barline).
+      expect(result.lineLeft).not.toBeNull();
+      expect(result.lineLeft as number).toBeGreaterThanOrEqual(
+        result.secondStaffLeft - 1
+      );
+    });
+
+    test('restates a bracketed sign at the start of a new row (default)', async ({
+      page,
+    }) => {
+      await buildTiedTrillAcrossMeasures(page, 220);
+      const result = await readTrillContinuationOverlay(page);
+      expect(result.lineCount).toBe(1);
+      expect(result.signCount).toBe(1);
+      expect(result.parenthesisCountInSign).toBe(2);
+      expect(result.signGlyphCount).toBe(1);
+      // The line resumes clear of the restated sign's own right edge.
+      expect(result.lineLeft).not.toBeNull();
+      expect(result.signRight).not.toBeNull();
+      expect(result.lineLeft as number).toBeGreaterThan(
+        result.signRight as number
+      );
+    });
+
+    test('`trill-continuation="line-only"` suppresses the restated sign at a row wrap', async ({
+      page,
+    }) => {
+      await buildTiedTrillAcrossMeasures(page, 220, 'line-only');
+      const result = await readTrillContinuationOverlay(page);
+      expect(result.lineCount).toBe(1);
+      expect(result.signCount).toBe(0);
+      // With no sign to clear, the line starts right at the new row's own
+      // notes area, same as the same-row case.
+      expect(result.lineLeft).not.toBeNull();
+      expect(result.lineLeft as number).toBeGreaterThanOrEqual(
+        result.secondStaffLeft - 1
+      );
+    });
+  });
 });
 
 test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
@@ -2158,11 +2341,11 @@ test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
         const sparse = document.createElement(measureTag);
         const sparseStaff = document.createElement(staffTag);
         sparseStaff.setAttribute('clef', 'treble');
-        const wholeNote = document.createElement(noteTag);
-        wholeNote.setAttribute('note', 'C');
-        wholeNote.setAttribute('octave', '4');
-        wholeNote.setAttribute('duration', 'whole');
-        sparseStaff.appendChild(wholeNote);
+        const quarterNote = document.createElement(noteTag);
+        quarterNote.setAttribute('note', 'C');
+        quarterNote.setAttribute('octave', '4');
+        quarterNote.setAttribute('duration', 'quarter');
+        sparseStaff.appendChild(quarterNote);
         sparse.appendChild(sparseStaff);
 
         const dense = document.createElement(measureTag);
@@ -2172,7 +2355,7 @@ test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
           const note = document.createElement(noteTag);
           note.setAttribute('note', 'CDEFGABC'[i]);
           note.setAttribute('octave', '4');
-          note.setAttribute('duration', 'sixteenth');
+          note.setAttribute('duration', 'eighth');
           denseStaff.appendChild(note);
         }
         dense.appendChild(denseStaff);

@@ -59,11 +59,11 @@ one-step-at-a-time/
 │           │   ├── beamRules.ts
 │           │   ├── clefRules.ts           # Per-clef Y-coord/octave/key-sig data + SVG glyph (CLEF_DEFINITIONS, getClefRenderData)
 │           │   ├── staffGroupRules.ts     # Brace/bracket pairing + validation (resolveStaffGroupPairs) — pure, unit-testable
-│           │   ├── spacingRules.ts        # Horizontal entry spacing — logarithmic duration weight + slack distribution
+│           │   ├── spacingRules.ts        # Horizontal entry spacing — fixed beat-proportional advance per entry
 │           │   ├── staffWidth.ts          # Measure strut-min + duration-weighted natural width; flex value
 │           │   ├── theoryConsts.ts        # Duration/semitone lookup maps
 │           │   ├── theoryHelpers.ts       # Chord/note computation
-│           │   └── …                      # also chordRules, restRules, staffHeightRules, staffNoteRules, tupletRules, dynamicsRules
+│           │   └── …                      # also beatRules, chordRules, restRules, staffHeightRules, staffNoteRules, tupletRules, dynamicsRules
 │           ├── types/
 │           │   ├── theory.ts  # Core music theory types
 │           │   └── elements.ts
@@ -86,6 +86,7 @@ one-step-at-a-time/
 │                   ├── doubleSharp.ts
 │                   ├── doubleFlat.ts
 │                   ├── curve.ts
+│                   ├── trill.ts             # sign, wavy extension line, end-notch
 │                   └── arpeggio.ts          # …also articulations, dynamics, graceNotes, ledgerLines, rest, staffGroup, tuplet
 ├── scripts/
 │   └── extract-glyphs.mjs   # author-time-only: extract engraved glyph outlines → paste PATH_D consts into svgCreator/*
@@ -237,14 +238,29 @@ All components use shadow DOM (`attachShadow({ mode: 'open' })`). Style encapsul
 
 - Y-coordinates are looked up from static maps keyed by note name + octave (e.g., `'C4'`, `'G5'`)
 - Each staff subclass defines its own `noteYCoordinateMap` for its clef range
-- X-spacing: entries are justified to fill the measure width. Beyond a fixed
-  `MIN_NOTE_WIDTH` collision strut per entry, spare width is shared out by a
-  **logarithmic** function of duration — halving a note's value costs roughly a
-  quarter of its space, not half — so long notes are not over-spaced and short
-  notes are not starved. The math is `rules/spacingRules.ts`
-  (`spacingSlackWeight` / `computeSpacingWeights` / `distributeSlack`).
-  `durationToFactor` is a **separate** linear map used only for bar-fit and
-  beam-grouping, never for spacing.
+- X-spacing: an entry's x is its cumulative beat-offset (tuplet-ratio-scaled,
+  arpeggio-run-note zeroed — `durationContribution` in `rules/beatRules.ts`,
+  shared with bar-fit and beam-grouping) as a **fraction of the measure's
+  fixed beat capacity** (`beatsInMeasure / beatType` from the staff's
+  effective time signature — a constant, independent of how many entries
+  currently exist), scaled by the staff's real available width
+  (`rules/spacingRules.ts`'s `computeMeasureProportionalOffsets`). This is
+  what makes a full measure fill the staff at any width, what makes resizing
+  reflow every entry together (like conventional notation software), and
+  what keeps appending an entry from ever moving an already-placed one:
+  neither the capacity nor the available width it's scaled against depends
+  on entry count. A `MIN_NOTE_WIDTH` floor is layered on top against only the
+  _previous_ entry (never looking ahead, so append-only still holds) since
+  the proportional formula has no built-in per-entry minimum. Same-beat
+  entries naturally align across sibling staves with no explicit
+  coordination code, since every staff runs the identical formula. A
+  tupleted entry's _true_ (ratio-compressed) beat-time drives where whatever
+  follows it lands; no special-casing is needed for how the tuplet's own
+  notes space out _within_ that compressed span — they fall out evenly by
+  the same formula. `computeSpacingWeights`/`PIXELS_PER_BEAT` (also in
+  `rules/spacingRules.ts`) are a **separate** concern — they feed only the
+  measure's sizing _preference_ (see Measure Width below), not entry
+  position.
 - SVG rendering lives entirely in `utils/svgCreator/` (a directory, not a single file)
 
 ### Semitone System
@@ -258,10 +274,20 @@ Each staff reports **two** widths, both computed in `rules/staffWidth.ts`:
 - **strut min width** — the collision floor:
   `describeEndX + LEADING_NOTE_GAP_PX + noteCount × MIN_NOTE_WIDTH + leftward-overhangs + clefChangeWidth`
   (vocal takes `max(noteCount × MIN_NOTE_WIDTH, lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)`).
-- **natural width** — the strut plus the total logarithmic spacing slack the
-  entries want beyond it (`Σ` of `computeSpacingWeights` from `rules/spacingRules.ts`).
+- **natural width** — the strut plus the total beat-proportional spacing
+  slack the entries want beyond it (`Σ` of `computeSpacingWeights` from
+  `rules/spacingRules.ts`).
 
 `describeEndX` is the x-offset where the clef/key-signature/time-signature area ends (stored as `#describeEndX`, updated every `#spaceElements()` run).
+
+**`leftward-overhangs`** — everything painted left of an entry's own SVG left edge
+(accidental / accidental column, grace-note run, arpeggio sign, arpeggio dynamic-change
+hairpin + its `-from`/`-to` letters, a cluster chord's displaced head, a cross-staff
+arpeggio span's overlay-drawn wave/hairpin) — is summed in one place:
+`StaffClassicalElementBase#entryLeftwardExtent(element)`. Both the strut min-width in
+`#renderNotes()` and the "barline constraint" (`x ≥ describeEndX + NOTES_AREA_LEFT_MARGIN +
+extent`) in `#spaceElements()` call it. **Add any new left-of-entry decoration there**, not at
+the call sites.
 
 Both are dispatched upward on one `STAFF_EVENTS.STAFF_MIN_WIDTH` event, `detail: { minWidth, naturalWidth }`. `<music-measure>` keeps the per-staff max of each and sets:
 
@@ -276,7 +302,7 @@ Because grow == basis, the measures on a row end up distributed as `naturalWidth
 
 On each redraw cycle the following happen in order:
 
-1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-justifies the entries across the new container width (logarithmic duration weight, see SVG Coordinate System above) and re-emits `STAFF_EVENTS.NOTES_POSITIONED`.
+1. **Note x-spacing** — each staff's `StaffResizeObserver` (on the staff container element) calls `onStaffResize()`, which re-runs `#spaceElements()` and re-emits `STAFF_EVENTS.NOTES_POSITIONED`. Since spacing is proportional to the staff's real available width (see SVG Coordinate System above), a resize reflows every entry together — the same way conventional notation software fills whatever width it's given.
 2. **Beams** — redrawn as part of `#renderNotes()` / `onStaffResize()` inside each staff.
 3. **Connectors** — `#redrawConnectors()` in `composition.ts` redraws the vertical bar lines that group staves in a measure.
 4. **Describe (clef/key/time) visibility** — `#updateDescribeVisibility()` in `composition.ts` runs in the **same `requestAnimationFrame`** as connectors, immediately after. It groups measures into visual rows (`#computeMeasureRows()`, tolerance 5 px on `getBoundingClientRect().top`, snapshotted in one pass before any DOM writes) and sets `showDescribe` (a JS property, not an HTML attribute) on each child staff — `true` for the first measure in each row, `false` otherwise. Connectors are absolutely-positioned SVG and do not affect document flow, so no layout settling is needed between the two operations. Staves default to `showDescribe = true`, so standalone staves always show the clef.
@@ -330,16 +356,16 @@ type VoiceType = 'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass';
 
 ## Key Utility Maps (`rules/theoryConsts.ts`)
 
-| Map                       | Purpose                                                                                                                    |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `durationToFlagCountMap`  | Duration → flag count (eighth=1, sixteenth=2, …)                                                                           |
-| `noteSemitoneMap`         | Note name → semitone (0–11)                                                                                                |
-| `semitoneNoteMap`         | Semitone → note name array (handles enharmonics)                                                                           |
-| `ChordSemitoneMap`        | Chord type string → interval array                                                                                         |
-| `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`)                                                                      |
-| `durationToFactor`        | Duration → linear whole-note fraction. Bar-fit (`measureRules`) and beam grouping (`beams.ts`) only — **not** note spacing |
+| Map                       | Purpose                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `durationToFlagCountMap`  | Duration → flag count (eighth=1, sixteenth=2, …)                                                                                                                                               |
+| `noteSemitoneMap`         | Note name → semitone (0–11)                                                                                                                                                                    |
+| `semitoneNoteMap`         | Semitone → note name array (handles enharmonics)                                                                                                                                               |
+| `ChordSemitoneMap`        | Chord type string → interval array                                                                                                                                                             |
+| `ChordSemitoneMapAliases` | Alias normalization (`'m'` → `'min'`, `''` → `'maj'`)                                                                                                                                          |
+| `durationToFactor`        | Duration → linear whole-note fraction. Shared by bar-fit (`measureRules`), beam grouping (`beams.ts`), and note spacing (`spacingRules.ts`) via `durationContribution` in `rules/beatRules.ts` |
 
-Horizontal note spacing uses `rules/spacingRules.ts` (`spacingSlackWeight`, `computeSpacingWeights`, `distributeSlack`), a logarithmic curve, not `durationToFactor`.
+Horizontal note **position** (`rules/spacingRules.ts`'s `computeMeasureProportionalOffsets`, fed by `computeBeatOffsets` in `rules/beatRules.ts`) is an entry's cumulative beat-offset as a fraction of the measure's fixed beat capacity (from the time signature), scaled by the staff's available width — see SVG Coordinate System above. A separate function in the same file, `computeSpacingWeights` (`durationToFactor[duration] × PIXELS_PER_BEAT`, floored at `MIN_NOTE_WIDTH`, tuplet-scaled via `computeTupletScaleByIndex`), feeds only the measure's sizing _preference_ (see Measure Width) — not position.
 
 `utils/consts.ts` holds custom element tag name constants and event name constants (e.g., `STAFF_EVENTS`).
 
@@ -376,7 +402,7 @@ Rendering flow (classical staves):
 2. `connectedCallback()` (in `StaffElementBase`) builds staff lines, appends `staffContainer` and `transcribeContainer`, wires `slotchange`, starts `staffResizeObserver`
 3. `onConnectedCallback()` (in `StaffClassicalElementBase`) calls `#buildDescribe()`: injects clef SVG, key signature, and time signature into `transcribeContainer`
 4. `slotchange` fires → `onHandleSlotChange()` → `#renderNotes()` converts notes/chords to SVG
-5. Entries justified to fill the measure; each entry's share of the free space is a logarithmic function of its duration (`rules/spacingRules.ts`)
+5. Each entry is positioned at its cumulative beat-offset as a fraction of the measure's fixed beat capacity, scaled by the staff's available width — floored at `MIN_NOTE_WIDTH` against the previous entry (`rules/spacingRules.ts`)
 6. `BeamCreator` connects beamed note groups (eighths, sixteenths, etc.)
 7. Staff dispatches a `STAFF_EVENTS.STAFF_MIN_WIDTH` event after each render with `detail: { minWidth, naturalWidth }` — the collision-floor width and the duration-weighted preferred width (see Measure Width above)
 
@@ -418,7 +444,7 @@ A brace or bracket is an **additional** decoration, drawn further left, spanning
 
 - **`staffGuitarTab.ts`**: `onDisconnectedCallback` is still an empty stub
 - **Chord value parsing**: Parsing a chord name from the `value` attribute into constituent notes is partially implemented
-- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation. Ledger lines (both main-note and grace-note) require a staff-provided Y position, and grace-note accidentals fall back to suffix-driven rendering (no key-signature suppression) outside a staff. An arpeggio sign renders standalone but reserves no leftward layout space (like grace notes); the `sempre arpeggiando` passage instruction renders its own text next to a standalone element but does not propagate implied signs to the elements that follow it. The `arpeggio-hairpin` vertical dynamic-change hairpin (wedge + both `-from` / `-to` letters) renders element-local on a standalone `<music-chord>`, like the sign; its continuous cross-staff form still needs a `<music-measure>` ancestor, and on a lone `<music-note>` the letters stay at the wedge ends rather than being pushed clear of a staff. A `<music-arpeggio>` (written-out arpeggio) used with no `<music-staff>` renders its run notes and target chord as plain elements — no auto-beam, no synthesized ties, no bar-fit exemption; inside a bare staff it is fully supported. A `tie="laissez-vibrer"` renders its notehead standalone but the l.v. curve is only drawn by a staff/composition connector pass
+- **Standalone degraded features**: Some capabilities (minimum-width-driven flex layout, attribute inheritance) require a parent `<music-measure>` or `<music-composition>` and will be silently absent when elements are used in isolation. Ledger lines (both main-note and grace-note) require a staff-provided Y position, and grace-note accidentals fall back to suffix-driven rendering (no key-signature suppression) outside a staff. An arpeggio sign renders standalone but reserves no leftward layout space (like grace notes); the `sempre arpeggiando` passage instruction renders its own text next to a standalone element but does not propagate implied signs to the elements that follow it. The `arpeggio-hairpin` vertical dynamic-change hairpin (wedge + both `-from` / `-to` letters) renders element-local on a standalone `<music-chord>`, like the sign; its continuous cross-staff form still needs a `<music-measure>` ancestor, and on a lone `<music-note>` the letters stay at the wedge ends rather than being pushed clear of a staff. Inside a measure the hairpin's leftward footprint (wedge + the estimated letter width) is reserved on **both** ends of a cross-staff span — the `arpeggio-for` end resolves it from its partner in `#entryLeftwardExtent` — so it never lands on the clef/key/time area of the first entry. A `<music-arpeggio>` (written-out arpeggio) used with no `<music-staff>` renders its run notes and target chord as plain elements — no auto-beam, no synthesized ties, no bar-fit exemption; inside a bare staff it is fully supported. A `tie="laissez-vibrer"` renders its notehead standalone but the l.v. curve is only drawn by a staff/composition connector pass. **Trills are staff-only, deliberately, not degraded-standalone**: `trill` renders nothing at all on a standalone note/chord (no sign, no line) — unlike arpeggio/grace notes, there is no meaningful partial rendering with no staff to draw the wavy line's sibling-spanning span into, so the feature is absent rather than degraded outside a staff. The trill line's own-measure span resolution (`rules/trillRules.ts`) is staff-local (used by the standalone case and by each staff's own same-measure render pass); cross-measure and system-break continuation is a separate, additive pass in `composition.ts#redrawTrills()`, which concatenates one staff-track's elements across every measure it spans (via `flattenSlotElements`) and reuses the same tie-chain walk transparently across that concatenation, splitting the result into one segment per measure with real per-measure geometry (`rules/trillRules.ts#resolveTrillContinuationSegments`) — so it is absent, not degraded, outside a `<music-composition>` ancestor (no measure boundaries to cross). At an ordinary same-row barline the line resumes with no restated sign; at a system break it additionally restates the sign in parentheses by default, controlled by `trill-continuation` (`'bracketed'` | `'line-only'`) on the trill-starting element. Staff tracks are matched by ordinal position across measures (same assumption `#updateClefContinuity` already makes for adjacent pairs, extended into full chains), so an inconsistent staff count across measures is not supported. Double-stemmed/multi-voice trill placement (a second independent voice's sign below the stave) depends on a general multi-voice notation model this library does not have yet. A trilling-note accidental override (`trill-accidental`) is always drawn above the sign — the horizontal-priority layout (accidental beside the sign, chosen by available space) is not implemented. A full pitch override (`trill-note`) renders as a small parenthesized notehead after the main note — the first feature in this library to reserve **rightward** layout space (`StaffClassicalElementBase#computeWrittenTrillFootprints()`, pushing the next entry over, mirroring the leftward `#entryLeftwardExtent` every other decoration uses) — and the tie-start anchor in `connectorsBuilder.ts` nudges past it so a tie visibly begins clear of the parentheses. When the main note is a short value, the written notehead's anchor defers to the second note of its tie chain (`writtenNoteAnchorIndex` in `trillRules.ts`) rather than cramping it against the first — an approximation of the reference engraving rule, not a full solution for arbitrarily short chains. `grace-type="trill"` is a plain unslashed leading grace note (distinct from `acciaccatura`'s slash) — a trill's _starting_ pitch; a _finishing_ figure uses the separate `trill-finish`/`trill-finish-octave`/`trill-finish-slur` attributes instead (grace note(s) placed after the main note, always plain/unslashed, no `grace-type` equivalent of their own). Rendering reuses `svgCreator/graceNotes.ts`'s shared `renderOrnamentNoteGroup()` (heads/stems/beams/ledger lines, factored out of the original leading-grace-only `createGraceNotesSvg` specifically so this could reuse it) but a _simpler_ slur than the leading grace's own `buildGraceSlur`: `createOrnamentConnectorSlur()` always bulges below, always notehead-to-notehead, with no accidental-clearance flip and no descending-group flip — documented v1 simplifications, not silently dropped. `trill-finish-slur="to-main"` (default) draws its slur locally inside the note/chord's own render (self-contained, back to the main note); `"to-next"`/`"both"` need the _following_ element's real position, which only the staff has, so that half is drawn separately by `StaffClassicalElementBase#drawTrillFinishSlurs()` in the trill-lines overlay, independently recomputing the same local layout math (mirroring `#computeWrittenTrillFootprints`/`#drawWrittenTrillNote`'s "recompute, don't read back from DOM" pattern) rather than sharing state with the note's own render. The finishing group is this library's second rightward-reserving decoration (`StaffClassicalElementBase#computeTrillFinishFootprints()`, combined with the written-trilling-notehead footprint via `#rightwardFootprint()`), and the tie-start nudge in `connectorsBuilder.ts` accounts for it too — though only against the notehead itself, not a single (non-group) finishing note's own stem, which can extend a couple of px further right than the reserved footprint; a tie starting there may graze the thin stem line, a minor cosmetic gap not pursued further. `trill-note` and `trill-finish` are not designed to combine on one element (they represent two different notations for the same idea — a named static auxiliary pitch vs. a finishing turn figure) — both render, but their rightward layout footprints and starting anchors overlap rather than stacking. TODO: chord double-trill (two tones of one chord trilling independently, each with its own sign spread to opposite sides of the stem) was implemented once and then reverted — revisit when picked back up. A first attempt spread the signs horizontally and had every trilling tone's line start after the group's rightmost sign so no line crossed a sibling tone's sign; a vertical-stacking alternative was also tried and rejected, since it needs more headroom above the staff than a typical page reserves there (the above-staff budget mechanism grows the staff's own internal SVG, but nothing grows the host element's own margin to match, so a tall reservation would render above the visible page with nothing to scroll to).
 - **Clef support**: only `treble` and `bass` have data in `rules/clefRules.ts`'s `CLEF_DEFINITIONS` today (`ClefType` is intentionally kept to those two rather than a wider, partially-backed union — see the `// TODO` above its declaration in `types/theory.ts`). Adding alto/tenor is a two-part change: a `ClefDefinition` entry plus a new clef glyph in `utils/svgCreator/clefs.ts`.
 - **SMuFL glyph extraction (transition in progress)**: the repo carries SMuFL infrastructure for deriving notation glyphs from a real engraving font instead of hand-computing bezier shapes — the "Drawing / SMuFL glyphs" section of `README.md`, `download-smufl-font.sh`, and the downloaded `smufl/Bravura.otf` + `smufl/bravura_metadata.json` assets. The brace and bracket glyphs (`createBraceSvg()` / `createBracketSvg()` in `utils/svgCreator/staffGroup.ts`) were pulled by hand via a discarded one-off script; the arpeggio wiggle (`utils/svgCreator/arpeggio.ts`) was the first glyph extracted through the now-checked-in `scripts/extract-glyphs.mjs` (a generic, argument-driven extractor — `pnpm --filter @one-step-at-a-time/web-components extract-glyphs -- <glyphName>[:rotate90] ...`). That script is author-time-only — never run by the build, tests, CI, or the bundle; `opentype.js` is a dev-only dependency; the committed `*_PATH_D` string constants in `svgCreator/` are the source of truth and the only thing that ships. Every other `svgCreator/` glyph (clefs, accidentals, noteheads, etc.) is still hand-drawn. Prefer extracting via `scripts/extract-glyphs.mjs` over hand-computing new glyphs going forward, adding the glyph's codepoint to that script's table. Note: the checked-in `bravura_metadata.json` has drifted from the checked-in `.otf` (bounding boxes no longer match), so the extractor reads geometry from the font outline directly. Per convention, `svgCreator/` source comments deliberately avoid naming SMuFL/Bravura — this entry is the canonical place for that context.
 
@@ -443,27 +469,27 @@ accidentals) stays in that element's file.
 
 **Sidebar leaves → files** (this is also the `storySort` order):
 
-| Leaf                                                                                    | File                                                                                                                                          |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Note`                                                                                  | `src/note/note.stories.ts`                                                                                                                    |
-| `Chord`                                                                                 | `src/chord/chord.stories.ts`                                                                                                                  |
-| `Rest`                                                                                  | `src/rest/rest.stories.ts`                                                                                                                    |
-| `Clef`                                                                                  | `src/clef/clef.stories.ts` (standalone glyph)                                                                                                 |
-| `Staff`                                                                                 | `src/staff/staff.stories.ts` (staff basics, ledger lines, key-sig accidentals)                                                                |
-| `Measure`                                                                               | `src/measure/measure.stories.ts`                                                                                                              |
-| `Composition`                                                                           | `src/composition/composition.stories.ts`                                                                                                      |
-| `Composition/Staff Groups`                                                              | `src/composition/staffGroups.stories.ts` (grand staff, brace, bracket)                                                                        |
-| `Universal Notations/Ties`                                                              | `src/utils/svgCreator/ties.stories.ts`                                                                                                        |
-| `Universal Notations/Slurs`                                                             | `src/utils/svgCreator/slurs.stories.ts`                                                                                                       |
-| `Universal Notations/Dynamics & Hairpins`                                               | `src/utils/svgCreator/dynamics.stories.ts`                                                                                                    |
-| `Universal Notations/Tuplets`                                                           | `src/tuplet/tuplet.stories.ts`                                                                                                                |
-| `Universal Notations/Arpeggio`                                                          | `src/arpeggio/arpeggio.stories.ts` (`<music-arpeggio>` **and** the `arpeggio`/`arpeggiate` attribute, incl. cross-staff)                      |
-| `Universal Notations/Grace Notes`                                                       | `src/utils/svgCreator/graceNotes.stories.ts`                                                                                                  |
-| `Universal Notations/Clef Changes`                                                      | `src/clef/clefChanges.stories.ts`                                                                                                             |
-| `Universal Notations/Beams`                                                             | `src/utils/svgCreator/beams.stories.ts`                                                                                                       |
-| `Instruments/Voice`                                                                     | `src/staffVocal/staffVocal.stories.ts`                                                                                                        |
-| `Instruments/Guitar`                                                                    | `src/staffGuitarTab/staffGuitarTab.stories.ts`                                                                                                |
-| `Instruments/Strings`, `Instruments/Winds & Brass`, `Instruments/Percussion & Keyboard` | `src/{strings,windsBrass,percussionKeyboard}.stories.ts` — placeholders (`tags: ['!autodocs']`, one `Planned` story) until the notations land |
+| Leaf                                                                                    | File                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Note`                                                                                  | `src/note/note.stories.ts`                                                                                                                                                                                                                                                    |
+| `Chord`                                                                                 | `src/chord/chord.stories.ts`                                                                                                                                                                                                                                                  |
+| `Rest`                                                                                  | `src/rest/rest.stories.ts`                                                                                                                                                                                                                                                    |
+| `Clef`                                                                                  | `src/clef/clef.stories.ts` (standalone glyph)                                                                                                                                                                                                                                 |
+| `Staff`                                                                                 | `src/staff/staff.stories.ts` (staff basics, ledger lines, key-sig accidentals)                                                                                                                                                                                                |
+| `Measure`                                                                               | `src/measure/measure.stories.ts`                                                                                                                                                                                                                                              |
+| `Composition`                                                                           | `src/composition/composition.stories.ts` (multi-measure layout, grand staff / brace / bracket, plus the row/system-break stories — kept a flat leaf, no `Composition/…` sub-path; the cross-system stories cluster via a `Cross System - ` name prefix, not a hierarchy node) |
+| `Universal Notations/Ties`                                                              | `src/utils/svgCreator/ties.stories.ts`                                                                                                                                                                                                                                        |
+| `Universal Notations/Slurs`                                                             | `src/utils/svgCreator/slurs.stories.ts`                                                                                                                                                                                                                                       |
+| `Universal Notations/Dynamics & Hairpins`                                               | `src/utils/svgCreator/dynamics.stories.ts`                                                                                                                                                                                                                                    |
+| `Universal Notations/Tuplets`                                                           | `src/tuplet/tuplet.stories.ts`                                                                                                                                                                                                                                                |
+| `Universal Notations/Arpeggio`                                                          | `src/arpeggio/arpeggio.stories.ts` (`<music-arpeggio>` **and** the `arpeggio`/`arpeggiate` attribute, incl. cross-staff)                                                                                                                                                      |
+| `Universal Notations/Grace Notes`                                                       | `src/utils/svgCreator/graceNotes.stories.ts`                                                                                                                                                                                                                                  |
+| `Universal Notations/Trills`                                                            | `src/utils/svgCreator/trill.stories.ts`                                                                                                                                                                                                                                       |
+| `Universal Notations/Clef Changes`                                                      | `src/clef/clefChanges.stories.ts`                                                                                                                                                                                                                                             |
+| `Universal Notations/Beams`                                                             | `src/utils/svgCreator/beams.stories.ts`                                                                                                                                                                                                                                       |
+| `Instruments/Voice`                                                                     | `src/staffVocal/staffVocal.stories.ts`                                                                                                                                                                                                                                        |
+| `Instruments/Guitar`                                                                    | `src/staffGuitarTab/staffGuitarTab.stories.ts`                                                                                                                                                                                                                                |
+| `Instruments/Strings`, `Instruments/Winds & Brass`, `Instruments/Percussion & Keyboard` | `src/{strings,windsBrass,percussionKeyboard}.stories.ts` — placeholders (`tags: ['!autodocs']`, one `Planned` story) until the notations land                                                                                                                                 |
 
 **Standard imports:**
 

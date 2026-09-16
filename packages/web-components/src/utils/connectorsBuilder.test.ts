@@ -3,15 +3,15 @@
  */
 import '@/src/index';
 
-import { NoteElementType, NoteLikeElementType } from '../types/elements';
+import type { NoteElementType, NoteLikeElementType } from '../types/elements';
+import type { DurationType } from '../types/theory';
 import {
   buildConnectorSvgs,
   collectNoteLikeElements,
   ConnectorPair,
   pairConnectors,
 } from './connectorsBuilder';
-import { MUSIC_GUITAR_NOTE, MUSIC_NOTE } from './consts';
-import { DurationType } from '../types/theory';
+import { MUSIC_GUITAR_NOTE, MUSIC_NOTE, MUSIC_STAFF } from './consts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -351,6 +351,39 @@ describe('buildConnectorSvgs', () => {
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
     const { fromY, cy, toY } = parsePath(d);
     expect(cy).toBeGreaterThan((fromY + toY) / 2);
+  });
+
+  it('slur across a pitch interval on a standalone staff renders one curve, not a split pair', () => {
+    // Start/end noteheads sit at different rect.top (different pitch). Row
+    // detection must resolve to the shared <music-staff>, which never wraps —
+    // otherwise the >5px top delta trips the cross-row split and the curve runs
+    // to the staff edges instead of the end note.
+    // Detached staff: gives the notes a shared ancestor for row detection
+    // without triggering the staff's slot-render pass (which fights the mocks).
+    const staff = document.createElement(MUSIC_STAFF);
+    const startNote = makeLayoutNote({ stemUp: false, left: 50, top: 100 });
+    const endNote = makeLayoutNote({ stemUp: false, left: 150, top: 145 });
+    staff.append(startNote as unknown as Node, endNote as unknown as Node);
+
+    const pair: ConnectorPair = {
+      kind: 'slur',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+    };
+
+    const groups = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    expect(groups).toHaveLength(1);
+    const { fromX, toX } = parsePath(
+      groups[0].querySelector('path')!.getAttribute('d')!
+    );
+    expect(fromX).toBeCloseTo(60);
+    expect(toX).toBeCloseTo(160);
   });
 
   it('draws one fanned tie per run-to-chord pair for a music-arpeggio', () => {

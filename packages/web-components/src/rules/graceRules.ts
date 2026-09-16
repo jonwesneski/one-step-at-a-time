@@ -33,7 +33,7 @@ export type GraceLayout = {
   totalWidth: number;
 };
 
-const LETTER_ORDER: NoteLetter[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+export const LETTER_ORDER: NoteLetter[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
 export function diatonicStepsBetween(
   referenceLetter: NoteLetter,

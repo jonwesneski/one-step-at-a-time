@@ -197,6 +197,10 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     wrapper.appendChild(this.transcribeContainer);
 
     this.#standaloneConnectorsOverlay.setAttribute(
+      'class',
+      'standalone-connectors-overlay'
+    );
+    this.#standaloneConnectorsOverlay.setAttribute(
       'style',
       'position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; color: currentColor;'
     );

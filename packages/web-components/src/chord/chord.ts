@@ -31,6 +31,9 @@ import type {
   NoteLetter,
   Octave,
   StressType,
+  TrillContinuationMode,
+  TrillFinishSlur,
+  TrillLineMode,
 } from '../types/theory';
 import {
   addLedgerLines,
@@ -38,6 +41,7 @@ import {
   createSempreArpeggiandoText,
   graceListToAttr,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  parseAccidentalType,
   parseArpeggio,
   parseArticulation,
   parseConnectorRole,
@@ -51,6 +55,9 @@ import {
   parseHairpinKind,
   parseStress,
   parseTieValue,
+  parseTrillContinuationMode,
+  parseTrillFinishSlur,
+  parseTrillLineMode,
 } from '../utils';
 import {
   CHORD_EVENTS,
@@ -96,10 +103,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} grace - Comma-separated grace-note pitches preceding the chord, e.g. `"F#,G"`. The property also accepts a `Note[]`.
    * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.
    * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`. The property also accepts an `(ArticulationType | null)[]`.
-   * @attr {'acciaccatura' | 'appoggiatura'} grace-type - Grace-note style. Defaults to `acciaccatura`.
+   * @attr {'acciaccatura' | 'appoggiatura' | 'trill'} grace-type - Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.
    * @attr {GraceDuration} grace-duration - Note value drawn for the grace notes.
    * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the chord. Defaults to `auto`.
    * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group.
+   * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord.
+   * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
+   * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
+   * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
+   * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
+   * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the trill.
+   * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this chord (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
+   * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`.
+   * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -137,6 +153,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'grace-duration',
         'grace-slur',
         'grace-dynamic',
+        'trill',
+        'trill-line',
+        'trill-stop',
+        'trill-accidental',
+        'trill-note',
+        'trill-continuation',
+        'trill-finish',
+        'trill-finish-octave',
+        'trill-finish-slur',
       ];
     }
 
@@ -151,6 +176,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #staffYCoordinates: number[] | null = null;
     #noteAccidentals: (AccidentalType | null | undefined)[] = [];
     #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
+    #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
+    #resolvedTrillPitch: {
+      letter: NoteLetter;
+      accidental: AccidentalType | null;
+      written: boolean;
+      octave: Octave | null;
+    } | null = null;
     #batchDepth = 0;
     #renderPending = false;
     #childObserver: MutationObserver | null = null;
@@ -213,6 +245,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return this.#stemExtension;
     }
     set stemExtension(v: number) {
+      if (v === this.#stemExtension) {
+        return;
+      }
       this.#stemExtension = v;
       this.#scheduleRender();
     }
@@ -449,6 +484,99 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    // Marks a trill start. The line spans forward through this chord's own
+    // `tie` chain — see NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE in
+    // attributeChangedCallback.
+    get trill(): boolean {
+      return this.hasAttribute('trill');
+    }
+    set trill(value: boolean) {
+      if (value) {
+        this.setAttribute('trill', '');
+      } else {
+        this.removeAttribute('trill');
+      }
+    }
+
+    get trillLine(): TrillLineMode {
+      return parseTrillLineMode(this.getAttribute('trill-line'));
+    }
+    set trillLine(value: TrillLineMode) {
+      this.setAttribute('trill-line', value);
+    }
+
+    get trillStop(): boolean {
+      return this.hasAttribute('trill-stop');
+    }
+    set trillStop(value: boolean) {
+      if (value) {
+        this.setAttribute('trill-stop', '');
+      } else {
+        this.removeAttribute('trill-stop');
+      }
+    }
+
+    // Overrides only the accidental of the trilling (auxiliary) pitch —
+    // normally the diatonic upper neighbor as modified by the key signature.
+    // Ignored (with a warning) when trill-note is also set.
+    get trillAccidental(): AccidentalType | null {
+      return parseAccidentalType(this.getAttribute('trill-accidental'));
+    }
+    set trillAccidental(value: AccidentalType | null) {
+      if (value === null) {
+        this.removeAttribute('trill-accidental');
+      } else {
+        this.setAttribute('trill-accidental', value);
+      }
+    }
+
+    // Full override of the trilling pitch — letter and accidental — rendered
+    // as a small written notehead in parentheses after the chord's own
+    // notehead column. Wins over trill-accidental when both are set.
+    get trillNote(): Note | null {
+      return (this.getAttribute('trill-note') as Note) ?? null;
+    }
+    set trillNote(value: Note | null) {
+      if (value === null) {
+        this.removeAttribute('trill-note');
+      } else {
+        this.setAttribute('trill-note', value);
+      }
+    }
+
+    // Meaningful only on the trill-starting element — controls the
+    // system-break restatement, resolved by the ancestor composition.
+    get trillContinuation(): TrillContinuationMode {
+      return parseTrillContinuationMode(
+        this.getAttribute('trill-continuation')
+      );
+    }
+    set trillContinuation(value: TrillContinuationMode) {
+      this.setAttribute('trill-continuation', value);
+    }
+
+    // Set by the staff to the resolved trilling pitch. null when not
+    // trilling, or in standalone mode.
+    get resolvedTrillPitch(): {
+      letter: NoteLetter;
+      accidental: AccidentalType | null;
+      written: boolean;
+      octave: Octave | null;
+    } | null {
+      return this.#resolvedTrillPitch;
+    }
+    set resolvedTrillPitch(
+      value: {
+        letter: NoteLetter;
+        accidental: AccidentalType | null;
+        written: boolean;
+        octave: Octave | null;
+      } | null
+    ) {
+      this.#resolvedTrillPitch = value;
+      this.#scheduleRender();
+    }
+
     get grace(): Note[] | null {
       return parseGraceNotes(this.getAttribute('grace'));
     }
@@ -537,6 +665,49 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('grace-dynamic', value);
       }
+    }
+
+    // Grace note(s) placed after this chord (a trill's finishing figure) —
+    // same shape and fallback rules as `grace`/`graceOctave`.
+    get trillFinish(): Note[] | null {
+      return parseGraceNotes(this.getAttribute('trill-finish'));
+    }
+    set trillFinish(value: GraceNotesType) {
+      const attr = graceListToAttr(value, parseGraceNotes);
+      if (attr === null) {
+        this.removeAttribute('trill-finish');
+      } else {
+        this.setAttribute('trill-finish', attr);
+      }
+    }
+
+    get trillFinishOctave(): (Octave | null)[] | null {
+      return parseGraceOctaves(this.getAttribute('trill-finish-octave'));
+    }
+    set trillFinishOctave(value: GraceOctavesType) {
+      const attr = graceListToAttr(value, parseGraceOctaves);
+      if (attr === null) {
+        this.removeAttribute('trill-finish-octave');
+      } else {
+        this.setAttribute('trill-finish-octave', attr);
+      }
+    }
+
+    get trillFinishSlur(): TrillFinishSlur {
+      return parseTrillFinishSlur(this.getAttribute('trill-finish-slur'));
+    }
+    set trillFinishSlur(value: TrillFinishSlur) {
+      this.setAttribute('trill-finish-slur', value);
+    }
+
+    get resolvedTrillFinishAccidentals(): (AccidentalType | null)[] | null {
+      return this.#resolvedTrillFinishAccidentals;
+    }
+    set resolvedTrillFinishAccidentals(
+      value: (AccidentalType | null)[] | null
+    ) {
+      this.#resolvedTrillFinishAccidentals = value;
+      this.#scheduleRender();
     }
 
     batchUpdate(fn: () => void): void {
@@ -656,6 +827,42 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'trill' ||
+        name === 'trill-line' ||
+        name === 'trill-stop' ||
+        name === 'trill-accidental' ||
+        name === 'trill-continuation'
+      ) {
+        // The ancestor staff resolves the trill line span (walking this
+        // chord's own tie chain), re-resolves the key-signature-aware
+        // trilling pitch, and redraws the line in its own overlay — both
+        // synchronously within this dispatchEvent call, so the render()
+        // below already sees the fresh resolvedTrillPitch. No staff-driven
+        // layout/footprint dependency otherwise — re-render locally
+        // unconditionally, standalone or not. `trill-continuation` affects
+        // none of that (it only controls a system-break restatement an
+        // ancestor <music-composition> draws), but shares the same dispatch
+        // so that pass re-runs too.
+        if (
+          name === 'trill-accidental' &&
+          newValue !== null &&
+          this.trillNote !== null
+        ) {
+          console.warn(
+            `[music-chord] trill-accidental is ignored when trill-note is also set`
+          );
+        }
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        this.render();
+        return;
+      }
+
+      if (
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
         name === 'arpeggio-hairpin' ||
@@ -667,12 +874,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace-articulation' ||
         name === 'grace-type' ||
         name === 'grace-duration' ||
-        name === 'grace-slur'
+        name === 'grace-slur' ||
+        name === 'trill-note' ||
+        name === 'trill-finish' ||
+        name === 'trill-finish-octave' ||
+        name === 'trill-finish-slur'
       ) {
-        // arpeggio changes the chord's leftward footprint the same way a grace
-        // change does, so it takes the same path. `arpeggio-for` reserves the
-        // same footprint for the lower end of a cross-staff span, whose wave the
-        // ancestor measure draws.
+        // arpeggio/grace changes the chord's leftward footprint, and
+        // trill-note/trill-finish the rightward one, the same way: it takes
+        // the same path. `arpeggio-for` reserves the same footprint for the
+        // lower end of a cross-staff span, whose wave the ancestor measure
+        // draws. `trill-finish-slur` never changes the footprint itself but
+        // shares this dispatch since the ancestor staff's cross-element
+        // "slur to next" pass depends on it too.
+        if (
+          name === 'trill-note' &&
+          newValue !== null &&
+          this.trillAccidental !== null
+        ) {
+          console.warn(
+            `[music-chord] trill-accidental is ignored when trill-note is also set`
+          );
+        }
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -703,6 +926,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             : null,
           arpeggioHairpinFrom: this.arpeggioHairpinFrom,
           arpeggioHairpinTo: this.arpeggioHairpinTo,
+          trill: this.trill,
+          // A written trilling note (small notehead after the chord, drawn
+          // by the staff overlay) carries its own accidental — the sign
+          // itself shows one only for the accidental-only override form.
+          trillAccidental:
+            this.#resolvedTrillPitch?.written === false
+              ? this.#resolvedTrillPitch.accidental
+              : null,
           noFlags: this.#noFlags,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
@@ -715,6 +946,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           graceDuration: this.graceDuration,
           graceSlur: this.graceSlur,
           graceLedgerStaffY: this.#staffYCoordinates[0] ?? null,
+          trillFinishNotes: this.#buildTrillFinishDescriptors(this.notes),
+          trillFinishSlur: this.trillFinishSlur,
         });
         chordSvg.setAttribute('overflow', 'visible');
         addLedgerLines(
@@ -814,6 +1047,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           graceType: this.graceType,
           graceDuration: this.graceDuration,
           graceSlur: this.graceSlur,
+          trillFinishNotes: this.#buildTrillFinishDescriptors(notes),
+          trillFinishSlur: this.trillFinishSlur,
         });
         chordSvg.setAttribute('overflow', 'visible');
 
@@ -854,6 +1089,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
       return graceNotes;
+    }
+
+    // Trill-finish descriptors are relative to the chord's reference note
+    // (notes[0]) — same relationship as #buildGraceDescriptors.
+    #buildTrillFinishDescriptors(
+      notes: ChordNote[]
+    ): GraceNoteDescriptor[] | null {
+      const trillFinishLetters = this.trillFinish;
+      if (trillFinishLetters === null || notes.length === 0) {
+        return null;
+      }
+      const trillFinishNotes = buildGraceNoteDescriptors(
+        trillFinishLetters,
+        this.trillFinishOctave ?? [],
+        notes[0].value[0] as NoteLetter,
+        notes[0].octave ?? 4
+      );
+      applyResolvedGraceAccidentals(
+        trillFinishNotes,
+        this.#resolvedTrillFinishAccidentals
+      );
+      return trillFinishNotes;
     }
 
     #resolveStandaloneYCoordinates(): number[] {

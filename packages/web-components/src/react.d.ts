@@ -5,6 +5,7 @@
  *   /// <reference types="@one-step-at-a-time/web-components/react" />
  */
 import type {
+  AccidentalType,
   ArpeggioType,
   ArticulationType,
   Chord,
@@ -28,6 +29,9 @@ import type {
   StressType,
   TieValue,
   TimeSignature,
+  TrillContinuationMode,
+  TrillFinishSlur,
+  TrillLineMode,
   TupletRatio,
   Voice,
 } from '@one-step-at-a-time/web-components';
@@ -126,6 +130,15 @@ declare module 'react' {
         'grace-duration'?: GraceDuration;
         'grace-slur'?: GraceSlur;
         'grace-dynamic'?: DynamicMarking;
+        trill?: boolean;
+        'trill-line'?: TrillLineMode;
+        'trill-stop'?: boolean;
+        'trill-accidental'?: AccidentalType;
+        'trill-note'?: Note;
+        'trill-continuation'?: TrillContinuationMode;
+        'trill-finish'?: GraceNotesType;
+        'trill-finish-octave'?: GraceOctavesType;
+        'trill-finish-slur'?: TrillFinishSlur;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -154,6 +167,15 @@ declare module 'react' {
         'grace-duration'?: GraceDuration;
         'grace-slur'?: GraceSlur;
         'grace-dynamic'?: DynamicMarking;
+        trill?: boolean;
+        'trill-line'?: TrillLineMode;
+        'trill-stop'?: boolean;
+        'trill-accidental'?: AccidentalType;
+        'trill-note'?: Note;
+        'trill-continuation'?: TrillContinuationMode;
+        'trill-finish'?: GraceNotesType;
+        'trill-finish-octave'?: GraceOctavesType;
+        'trill-finish-slur'?: TrillFinishSlur;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

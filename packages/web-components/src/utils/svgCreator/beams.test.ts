@@ -353,6 +353,133 @@ describe('beams', () => {
     });
   });
 
+  describe('multi-beam groups keep a stem gap and reach the outer beam', () => {
+    // Inner beams stack toward the noteheads; the innermost must stay clear of
+    // the heads, and every drawn stem must still reach the primary (outer) beam.
+    const MIN_INNER_BEAM_HEAD_GAP_PX = 12;
+
+    function innermostBeam(staff: StaffElementType): Element {
+      const beams = Array.from(
+        staff.shadowRoot!.querySelectorAll('.beam-group .beam')
+      );
+      // Primary + full-span secondaries render in level order; the last full
+      // span is the innermost. Fractionals never appear in a uniform group.
+      return beams[beams.length - 1];
+    }
+
+    function assertStemsReachPrimaryAndClearHeads(
+      staff: StaffElementType,
+      notes: HTMLElement[],
+      stemUp: boolean
+    ) {
+      const primaryBeam = staff.shadowRoot!.querySelector('.beam-group .beam')!;
+      const innerBeam = innermostBeam(staff);
+      for (const note of notes) {
+        const noteY = getNoteY(note);
+        const noteX = getNoteX(note);
+        const stem = getNoteStem(note)!;
+        expect(stem).not.toBeNull();
+
+        const tipAttr = stemUp ? 'y1' : 'y2';
+        const headAttr = stemUp ? 'y2' : 'y1';
+        const tipY =
+          noteY + parseFloat(stem.getAttribute(tipAttr)!) * NOTE_SCALE;
+        const headY =
+          noteY + parseFloat(stem.getAttribute(headAttr)!) * NOTE_SCALE;
+        const tipX = noteX + parseFloat(stem.getAttribute('x1')!) * NOTE_SCALE;
+
+        // Stem tip lands inside the primary polygon.
+        const outer = outerEdgeY(primaryBeam, tipX);
+        const inner = innerEdgeY(primaryBeam, tipX);
+        expect(tipY).toBeGreaterThanOrEqual(Math.min(outer, inner) - 1);
+        expect(tipY).toBeLessThanOrEqual(Math.max(outer, inner) + 1);
+
+        // Innermost beam edge nearest the head stays off the notehead.
+        const innerBeamHeadEdgeY = innerEdgeY(innerBeam, tipX);
+        expect(Math.abs(headY - innerBeamHeadEdgeY)).toBeGreaterThanOrEqual(
+          MIN_INNER_BEAM_HEAD_GAP_PX
+        );
+      }
+    }
+
+    it('stem-up thirtysecond run', () => {
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'thirtysecond' }),
+        makeNote({ note: 'E', octave: 4, duration: 'thirtysecond' }),
+        makeNote({ note: 'G', octave: 4, duration: 'thirtysecond' }),
+        makeNote({ note: 'C', octave: 5, duration: 'thirtysecond' }),
+      ];
+      triggerSlotChange(staff, notes);
+
+      assertStemsReachPrimaryAndClearHeads(staff, notes, true);
+    });
+
+    it('stem-down thirtysecond run', () => {
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const notes = [
+        makeNote({ note: 'E', octave: 5, duration: 'thirtysecond' }),
+        makeNote({ note: 'D', octave: 5, duration: 'thirtysecond' }),
+        makeNote({ note: 'C', octave: 5, duration: 'thirtysecond' }),
+        makeNote({ note: 'B', octave: 4, duration: 'thirtysecond' }),
+      ];
+      triggerSlotChange(staff, notes);
+
+      assertStemsReachPrimaryAndClearHeads(staff, notes, false);
+    });
+
+    it('interior stem tips reach the primary beam when the group is unevenly spaced', () => {
+      // A grace note on an interior note reserves leftward layout space and
+      // shoves it right, off the even grid (independent of layout width, so
+      // it reproduces in jsdom). The primary beam is drawn by true-X
+      // interpolation; the stem extension must match it, not an
+      // index-fraction estimate.
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+      staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const notes = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'F#', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'A', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'C', octave: 5, duration: 'eighth' }),
+      ];
+      notes[1].setAttribute('grace', 'F#,G#,A#');
+      triggerSlotChange(staff, notes);
+
+      // Interior notes must actually be off the even grid, or the test is moot.
+      const xs = notes.map(getNoteX);
+      const evenMidX = (xs[0] + xs[3]) / 2;
+      expect(Math.abs((xs[1] + xs[2]) / 2 - evenMidX)).toBeGreaterThan(3);
+
+      const primaryBeam = staff.shadowRoot!.querySelector('.beam-group .beam')!;
+      for (const note of notes) {
+        const stem = getNoteStem(note)!;
+        expect(stem).not.toBeNull();
+        const tipY =
+          getNoteY(note) + parseFloat(stem.getAttribute('y1')!) * NOTE_SCALE;
+        const tipX =
+          getNoteX(note) + parseFloat(stem.getAttribute('x1')!) * NOTE_SCALE;
+        const outer = outerEdgeY(primaryBeam, tipX);
+        const inner = innerEdgeY(primaryBeam, tipX);
+        expect(tipY).toBeGreaterThanOrEqual(Math.min(outer, inner) - 1);
+        expect(tipY).toBeLessThanOrEqual(Math.max(outer, inner) + 1);
+      }
+    });
+  });
+
   describe('beam slant follows pitch contour', () => {
     it('beam ascends when the first note is lower than the last', () => {
       const staff = document.createElement(MUSIC_STAFF) as StaffElementType;

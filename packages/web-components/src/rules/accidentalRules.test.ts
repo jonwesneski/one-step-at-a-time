@@ -212,6 +212,78 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
     expect(accidentals).toBeDefined();
     expect(accidentals?.every((a) => a === null)).toBe(true);
   });
+});
+
+describe('computeNoteAccidentals — trill-finish accidentals', () => {
+  it('resolves a finishing grace note against the key signature, sounding after the host note', () => {
+    // G major implies F#; a finishing grace of plain F should show a natural
+    // since it cancels the key signature.
+    const host = makeNote({ note: 'G', octave: 4, duration: 'quarter' });
+    host.trillFinish = ['F'];
+    const { trillFinishShowAccidentals } = computeNoteAccidentals(
+      [host],
+      'G',
+      'major'
+    );
+    expect(trillFinishShowAccidentals.get(host)).toEqual(['natural']);
+  });
+
+  it('a finishing accidental carries into in-measure state for the following note', () => {
+    const host = makeNote({ note: 'C', octave: 4, duration: 'quarter' });
+    host.trillFinish = ['F#'];
+    const next = makeNote({ note: 'F', octave: 4, duration: 'quarter' });
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [host, next],
+      'C',
+      'major'
+    );
+    // The finishing F# already raised F within the measure, so the
+    // following plain F needs an explicit natural to cancel it.
+    expect(noteShowAccidentals.get(next)).toBe('natural');
+  });
+
+  it('still resolves on a tied="end" host, since finishing notes are independent of whether the host re-sounds', () => {
+    const host = makeNote({
+      note: 'C',
+      octave: 4,
+      duration: 'quarter',
+      tie: 'end',
+    });
+    host.trillFinish = ['F#'];
+    const { trillFinishShowAccidentals } = computeNoteAccidentals(
+      [host],
+      'C',
+      'major'
+    );
+    expect(trillFinishShowAccidentals.get(host)).toEqual(['sharp']);
+  });
+
+  it('resolves per-tone on a chord host', () => {
+    const host = makeChord({
+      notes: [
+        { note: 'C', octave: 4 },
+        { note: 'E', octave: 4 },
+      ],
+      duration: 'quarter',
+    });
+    host.trillFinish = ['F#', 'G'];
+    const { trillFinishShowAccidentals } = computeNoteAccidentals(
+      [host],
+      'C',
+      'major'
+    );
+    expect(trillFinishShowAccidentals.get(host)).toEqual(['sharp', null]);
+  });
+
+  it('is absent from the map when trillFinish is unset', () => {
+    const host = makeNote({ note: 'C', octave: 4, duration: 'quarter' });
+    const { trillFinishShowAccidentals } = computeNoteAccidentals(
+      [host],
+      'C',
+      'major'
+    );
+    expect(trillFinishShowAccidentals.has(host)).toBe(false);
+  });
 
   it('normal note without tie still shows accidental', () => {
     const note = makeNote({ note: 'F#', octave: 4, duration: 'quarter' });

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import '../index';
 
 const meta: Meta = {
@@ -77,21 +78,32 @@ export default meta;
 
 type Story = StoryObj;
 
-export const MultipleMeasures: Story = {
-  args: { keySig: 'C', mode: 'major', time: '4/4' },
+const MAX_WIDTH_ARG_TYPE = {
+  name: 'max-width',
+  description:
+    'Caps .composition-wrapper width. Presets: a px cap, "none" (fill the container), or unset (falls back to the 900px default).',
+  control: {
+    type: 'radio' as const,
+    labels: {
+      '320': '320px — one measure per row',
+      '520': '520px — default',
+      none: 'none — fill container',
+      unset: 'unset — 900px default',
+    },
+  },
+  options: ['320', '520', 'none', 'unset'],
+  mapping: { unset: undefined },
 };
 
-export const MaxWidth: Story = {
+export const MultipleMeasuresSingleStaff: Story = {
   args: { keySig: 'C', mode: 'major', time: '4/4', maxWidth: '520' },
-  argTypes: {
-    maxWidth: { control: 'text' },
-  },
+  argTypes: { maxWidth: MAX_WIDTH_ARG_TYPE },
   render: (args) => html`
     <music-composition
       key-sig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
-      max-width=${args.maxWidth}
+      max-width=${ifDefined(args.maxWidth)}
     >
       ${[0, 1, 2, 3, 4].map(
         () => html`
@@ -114,7 +126,48 @@ export const MaxWidth: Story = {
   `,
 };
 
-export const WithCrossMeasureTie: Story = {
+export const MultipleMeasuresTwoStaves: Story = {
+  args: { keySig: 'C', mode: 'major', time: '4/4', maxWidth: '520' },
+  argTypes: { maxWidth: MAX_WIDTH_ARG_TYPE },
+  render: (args) => html`
+    <music-composition
+      key-sig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+      max-width=${ifDefined(args.maxWidth)}
+    >
+      ${[0, 1, 2, 3, 4].map(
+        () => html`
+          <music-measure>
+            <music-staff
+              clef="treble"
+              key-sig=${args.keySig}
+              mode=${args.mode}
+              time=${args.time}
+            >
+              <music-note note="C" octave="5" duration="quarter"></music-note>
+              <music-note note="E" octave="5" duration="quarter"></music-note>
+              <music-note note="G" octave="5" duration="quarter"></music-note>
+              <music-note note="E" octave="5" duration="quarter"></music-note>
+            </music-staff>
+            <music-staff
+              clef="bass"
+              key-sig=${args.keySig}
+              mode=${args.mode}
+              time=${args.time}
+            >
+              <music-note note="C" octave="3" duration="half"></music-note>
+              <music-note note="G" octave="3" duration="half"></music-note>
+            </music-staff>
+          </music-measure>
+        `
+      )}
+    </music-composition>
+  `,
+};
+
+export const CrossMeasureTie: Story = {
+  name: 'Cross Measure - Tie',
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
     <music-composition
@@ -161,10 +214,11 @@ export const WithCrossMeasureTie: Story = {
   `,
 };
 
-export const WithCrossRowTie: Story = {
+export const CrossSystemTie: Story = {
+  name: 'Cross System - Tie',
   args: { keySig: 'C', mode: 'major', time: '4/4' },
   render: (args) => html`
-    <div style="max-width: 420px;">
+    <div style="max-width: 200px;">
       <music-composition
         key-sig=${args.keySig}
         mode=${args.mode}
@@ -209,7 +263,8 @@ export const WithCrossRowTie: Story = {
   `,
 };
 
-export const WithCrossSystemHairpin: Story = {
+export const CrossSystemHairpin: Story = {
+  name: 'Cross System - Hairpin',
   render: () => html`
     <div style="max-width: 200px;">
       <music-composition key-sig="C" mode="major" time="4/4">
@@ -246,7 +301,8 @@ export const WithCrossSystemHairpin: Story = {
   `,
 };
 
-export const CourtesyClefAtRowWrap: Story = {
+export const CrossSystemCourtesyClef: Story = {
+  name: 'Cross System - Courtesy Clef',
   render: () => html`
     <div style="max-width: 150px;">
       <music-composition key-sig="C" mode="major" time="4/4">
@@ -262,5 +318,299 @@ export const CourtesyClefAtRowWrap: Story = {
         </music-measure>
       </music-composition>
     </div>
+  `,
+};
+
+export const GrandStaff: Story = {
+  args: { keySig: 'G', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-composition
+      key-sig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="G" duration="quarter"></music-note>
+          <music-note note="B" duration="quarter"></music-note>
+          <music-note note="D" duration="quarter"></music-note>
+          <music-note note="G" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff
+          clef="bass"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="G" duration="half"></music-note>
+          <music-note note="D" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="A" duration="quarter"></music-note>
+          <music-note note="C" duration="quarter"></music-note>
+          <music-note note="E" duration="quarter"></music-note>
+          <music-note note="A" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff
+          clef="bass"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="A" duration="half"></music-note>
+          <music-note note="E" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="B" duration="quarter"></music-note>
+          <music-note note="D" duration="quarter"></music-note>
+          <music-note note="F#" duration="quarter"></music-note>
+          <music-note note="B" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff
+          clef="bass"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="B" duration="half"></music-note>
+          <music-note note="F#" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+          <music-note note="G" octave="5" duration="quarter"></music-note>
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff
+          clef="bass"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="C" duration="half"></music-note>
+          <music-note note="G" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="D" octave="5" duration="quarter"></music-note>
+          <music-note note="F#" octave="5" duration="quarter"></music-note>
+          <music-note note="A" octave="5" duration="quarter"></music-note>
+          <music-note note="D" octave="5" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff
+          clef="bass"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="D" duration="half"></music-note>
+          <music-note note="A" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+          <music-note note="G" octave="5" duration="quarter"></music-note>
+          <music-note note="B" octave="5" duration="quarter"></music-note>
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff
+          clef="bass"
+          key-sig=${args.keySig}
+          mode=${args.mode}
+          time=${args.time}
+        >
+          <music-note note="E" duration="half"></music-note>
+          <music-note note="B" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const GrandStavesInOneMeasure: Story = {
+  render: () => html`
+    <music-measure number="1" key-sig="C" mode="major" time="4/4">
+      <music-staff
+        clef="treble"
+        group="grand"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="C" duration="whole"></music-note>
+      </music-staff>
+      <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+        <music-note note="C" duration="whole"></music-note>
+      </music-staff>
+      <music-staff
+        clef="treble"
+        group="grand"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="G" duration="whole"></music-note>
+      </music-staff>
+      <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+        <music-note note="G" duration="whole"></music-note>
+      </music-staff>
+    </music-measure>
+  `,
+};
+
+export const BracketWithoutGroupId: Story = {
+  render: () => html`
+    <music-measure number="1" key-sig="C" mode="major" time="4/4">
+      <music-staff
+        clef="treble"
+        group="bracket"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="C" octave="5" duration="whole"></music-note>
+      </music-staff>
+      <music-staff clef="treble" key-sig="C" mode="major" time="4/4">
+        <music-note note="G" octave="4" duration="whole"></music-note>
+      </music-staff>
+    </music-measure>
+  `,
+};
+
+export const Bracket: Story = {
+  render: () => html`
+    <music-measure number="1" key-sig="C" mode="major" time="4/4">
+      <music-staff
+        clef="treble"
+        group="bracket"
+        group-id="choir"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="C" octave="5" duration="whole"></music-note>
+      </music-staff>
+      <music-staff
+        clef="treble"
+        group="bracket"
+        group-id="choir"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="G" octave="4" duration="whole"></music-note>
+      </music-staff>
+      <music-staff
+        clef="bass"
+        group="bracket"
+        group-id="choir"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="E" octave="4" duration="whole"></music-note>
+      </music-staff>
+      <music-staff
+        clef="bass"
+        group="bracket"
+        group-id="choir"
+        key-sig="C"
+        mode="major"
+        time="4/4"
+      >
+        <music-note note="C" octave="3" duration="whole"></music-note>
+      </music-staff>
+    </music-measure>
+  `,
+};
+
+export const BracketWithGuitarTab: Story = {
+  args: { number: 1, keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <music-measure
+      number=${args.number}
+      key-sig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-staff
+        clef="treble"
+        group="bracket"
+        key-sig=${args.keySig}
+        mode=${args.mode}
+        time=${args.time}
+      >
+        <music-note note="E" duration="quarter"></music-note>
+        <music-note note="G" duration="quarter"></music-note>
+        <music-note note="B" duration="quarter"></music-note>
+        <music-note note="E" duration="quarter"></music-note>
+      </music-staff>
+      <music-staff-guitar-tab>
+        <music-guitar-note
+          fret="0"
+          string="1"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="3"
+          string="2"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="2"
+          string="3"
+          duration="quarter"
+        ></music-guitar-note>
+        <music-guitar-note
+          fret="0"
+          string="4"
+          duration="quarter"
+        ></music-guitar-note>
+      </music-staff-guitar-tab>
+    </music-measure>
   `,
 };

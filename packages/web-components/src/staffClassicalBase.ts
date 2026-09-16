@@ -8,20 +8,32 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from './rules/arpeggioRules';
 import { buildBeamsRenderer } from './rules/beamRules';
+import { computeBeatOffsets } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import {
+  applyResolvedGraceAccidentals,
+  buildGraceNoteDescriptors,
   computeFirstGraceHeadX,
   computeGraceFootprintWidth,
+  computeGraceLayout,
 } from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
 import { restToYCoordinate } from './rules/restRules';
-import { computeSpacingWeights, distributeSlack } from './rules/spacingRules';
+import {
+  computeMeasureProportionalOffsets,
+  computeSpacingWeights,
+} from './rules/spacingRules';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
 } from './rules/staffWidth';
+import {
+  resolveTrillPitch,
+  resolveTrillSpans,
+  type TrillLineSpan,
+} from './rules/trillRules';
 import {
   buildTupletGroups,
   computeOuterBracketBaseY,
@@ -46,11 +58,15 @@ import type {
   YCoordinates,
 } from './types/elements';
 import type {
+  AccidentalType,
+  ArpeggioType,
   ClefType,
   DurationType,
+  DynamicMarking,
   HairpinKind,
   Mode,
   Note,
+  NoteLetter,
   Octave,
 } from './types/theory';
 import {
@@ -59,10 +75,13 @@ import {
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
+  createOrnamentConnectorSlur,
   createSempreArpeggiandoText,
   createSharpSvg,
   createTimeSignatureSvg,
+  NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  TRILL_FINISH_HEAD_RY,
 } from './utils';
 import {
   CLEF_EVENTS,
@@ -78,9 +97,11 @@ import {
   MUSIC_TUPLET_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
+  STAFF_TAGS,
   SVG_NS,
 } from './utils/consts';
 import {
+  ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX,
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
@@ -89,6 +110,7 @@ import {
   CLEF_X_OFFSET,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
+  GRACE_MAIN_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
@@ -101,6 +123,13 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
+  TRILL_ABOVE_STAFF_GAP_PX,
+  TRILL_ACCIDENTAL_GAP_PX,
+  TRILL_ACCIDENTAL_SCALE,
+  TRILL_LINE_END_GAP_PX,
+  TRILL_SIGN_HEIGHT_PX,
+  TRILL_SIGN_LINE_GAP_PX,
+  TRILL_WRITTEN_NOTE_GAP_PX,
   TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
@@ -110,8 +139,35 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   NOTE_SVG_WIDTH,
+  trillSignLeftX,
 } from './utils/svgCreator/note';
+import {
+  computeWrittenTrillNoteWidth,
+  createTrillLineSvg,
+  createTrillNotchSvg,
+  createWrittenTrillNoteSvg,
+  TRILL_SIGN_WIDTH_PX,
+} from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+
+// The `Note` suffix for an accidental — the inverse of
+// rules/accidentalRules.ts's parseAccidentalSuffix/suffixToType, needed to
+// rebuild a resolved trilling pitch (letter + AccidentalType) into a `Note`
+// string for noteToYCoordinate.
+function accidentalSuffix(accidental: AccidentalType | null): string {
+  switch (accidental) {
+    case 'sharp':
+      return '#';
+    case 'flat':
+      return 'b';
+    case 'double-sharp':
+      return '##';
+    case 'double-flat':
+      return 'bb';
+    default:
+      return '';
+  }
+}
 
 // The arpeggio sign a note/chord actually draws — its own `arpeggio` if set,
 // otherwise a `sempre arpeggiando` passage's implied one.
@@ -130,19 +186,89 @@ function footprintArpeggio(element: NoteElementType | ChordElementType) {
   );
 }
 
-// The hairpin kind whose leftward footprint this element reserves — only when
-// it carries `arpeggioHairpin` alongside an effective rolled wave (own,
-// implied, or a cross-staff `arpeggio-for` continuation).
-function footprintArpeggioHairpin(
+const isArpeggioWave = (arpeggio: ArpeggioType | null): boolean =>
+  arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down';
+
+// A trill sign's/line's bottom edge sits at a fixed height above the staff
+// top line, independent of pitch (see svgCreator/note.ts's own
+// trillSignBottomY, which pre-cancels the note's own external Y-positioning
+// to land here too) — shared by every trill decoration this staff draws in
+// its own overlay.
+const TRILL_ABOVE_STAFF_BOTTOM_Y =
+  STAFF_Y_PADDING +
+  STAFF_TOP_LINE_Y -
+  NOTE_HEAD_Y_OFFSET_CORRECTION -
+  TRILL_ABOVE_STAFF_GAP_PX;
+
+// The note/chord paired with this one in an unbroken cross-staff arpeggio: the
+// `id` target of this element's `arpeggio-for`, or — when this element has an
+// `id` — an element pointing back at it via `arpeggio-for`. Only a partner in a
+// *different* `<music-staff>` of the same `<music-measure>` counts: the measure
+// overlay, not this staff, then draws the span's wave + hairpin, off raw
+// notehead pixels. Partner attributes are readable synchronously here (sibling
+// staves and their entries connect before either staff spaces), so the initial
+// render needs no cross-staff propagation.
+function crossStaffArpeggioPartner(
   element: NoteElementType | ChordElementType
-): HairpinKind | null {
-  if (element.arpeggioHairpin === null) {
+): NoteElementType | ChordElementType | null {
+  const measure = element.closest(MUSIC_MEASURE);
+  if (measure === null) {
     return null;
   }
-  const arpeggio = footprintArpeggio(element);
-  return arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down'
-    ? element.arpeggioHairpin
-    : null;
+  let candidate: Element | null = null;
+  if (element.arpeggioFor !== null) {
+    const wantedId = element.arpeggioFor;
+    candidate =
+      Array.from(measure.querySelectorAll('[id]')).find(
+        (other) => other.id === wantedId
+      ) ?? null;
+  } else if (element.id !== '') {
+    candidate =
+      Array.from(measure.querySelectorAll('[arpeggio-for]')).find(
+        (other) => other.getAttribute('arpeggio-for') === element.id
+      ) ?? null;
+  }
+  if (
+    candidate === null ||
+    (candidate.nodeName !== MUSIC_NOTE_NODE &&
+      candidate.nodeName !== MUSIC_CHORD_NODE) ||
+    candidate.closest(STAFF_TAGS) === element.closest(STAFF_TAGS)
+  ) {
+    return null;
+  }
+  return candidate as NoteElementType | ChordElementType;
+}
+
+// The hairpin whose leftward footprint this element reserves — its own
+// `arpeggioHairpin` alongside an effective rolled wave, or the one authored on
+// its cross-staff partner (the continuous hairpin the measure draws spans both
+// ends and aligns to whichever sits further left, so both ends must reserve it).
+function footprintArpeggioHairpin(
+  element: NoteElementType | ChordElementType,
+  partner: NoteElementType | ChordElementType | null
+): {
+  kind: HairpinKind;
+  from: DynamicMarking | null;
+  to: DynamicMarking | null;
+} | null {
+  if (
+    element.arpeggioHairpin !== null &&
+    isArpeggioWave(footprintArpeggio(element))
+  ) {
+    return {
+      kind: element.arpeggioHairpin,
+      from: element.arpeggioHairpinFrom,
+      to: element.arpeggioHairpinTo,
+    };
+  }
+  if (partner !== null && partner.arpeggioHairpin !== null) {
+    return {
+      kind: partner.arpeggioHairpin,
+      from: partner.arpeggioHairpinFrom,
+      to: partner.arpeggioHairpinTo,
+    };
+  }
+  return null;
 }
 
 // A stem-down chord's adjacent second shifts its head left by
@@ -195,6 +321,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamsContainer: SVGSVGElement;
   #tupletContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
   #dynamicsContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
+  #trillLinesContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
   #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
   #currentElements: NoteChordOrRestElementType[] = [];
   #describeEndX = 0;
@@ -216,6 +343,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #beamedIndicesSnapshot: Set<number> = new Set();
   #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
   #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
+  // Index of a span's writtenNoteAnchorIndex -> the rightward px footprint a
+  // written trilling notehead (trill-note) reserves there. Recomputed once
+  // per #renderNotes() pass (also the target of both CONNECTOR_ATTRIBUTE_CHANGE
+  // and TRILL_ATTRIBUTE_CHANGE when trill-marked elements are present — a tied
+  // note's span endpoint and a written notehead's footprint both depend on
+  // more than the attribute that changed, so both routes need the full pass,
+  // not a narrower redraw) — see #computeWrittenTrillFootprints().
+  #writtenTrillFootprints: Map<number, number> = new Map();
+  // Index -> the rightward px footprint a trill's finishing grace note(s)
+  // (trill-finish) reserve there — see #computeTrillFinishFootprints().
+  #trillFinishFootprints: Map<number, number> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -224,6 +362,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // A <music-arpeggio> changed — re-flatten so bar-fit / beams / the
       // written-in run durations re-resolve, then the tie overlay redraws too.
       this.#reRenderFromCurrentSlot();
+      return;
+    }
+    // A trill span's own endpoint (rules/trillRules.ts's tie-chain walk) and a
+    // written trilling notehead's reserved footprint both depend on `tie`,
+    // but a `tie` change only ever dispatches CONNECTOR_ATTRIBUTE_CHANGE —
+    // when any current element is trill-marked, a plain connector redraw
+    // isn't enough, so fall through to the same full re-layout pass a trill
+    // attribute change itself now takes (see #boundNoteYChange).
+    if (this.#hasTrillMarkedElement()) {
+      this.#boundNoteYChange();
       return;
     }
     this.drawConnectorsWhenStandalone();
@@ -385,6 +533,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
       this.#boundRenderDynamics
     );
+    // A trill attribute change needs the same full re-layout NOTE_Y_CHANGE
+    // triggers, not a narrower redraw — toggling `trill` when `trill-note`
+    // is already set (or vice versa) changes the written notehead's own
+    // reserved rightward footprint, which only #renderNotes() recomputes.
+    this.addEventListener(
+      NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+      this.#boundNoteYChange
+    );
     this.addEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundClefMarkerChange
@@ -422,6 +578,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#dynamicsContainer.style.overflow = 'visible';
     this.#dynamicsContainer.style.pointerEvents = 'none';
     this.transcribeContainer.appendChild(this.#dynamicsContainer);
+
+    this.#trillLinesContainer.classList.add('trill-lines-container');
+    this.#trillLinesContainer.style.overflow = 'visible';
+    this.#trillLinesContainer.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(this.#trillLinesContainer);
   }
 
   #refreshDescribe() {
@@ -513,6 +674,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.removeEventListener(
       NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
       this.#boundRenderDynamics
+    );
+    this.removeEventListener(
+      NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+      this.#boundNoteYChange
     );
     this.removeEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
@@ -612,10 +777,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #renderNotes(elements: NoteChordOrRestElementType[]) {
-    // Clear previously rendered beams, tuplet brackets, and dynamics
+    // Clear previously rendered beams, tuplet brackets, dynamics, and trill lines
     this.#beamsContainer.innerHTML = '';
     this.#tupletContainer.innerHTML = '';
     this.#dynamicsContainer.innerHTML = '';
+    this.#trillLinesContainer.innerHTML = '';
 
     const { allowedElementCount, error } = computeAllowedElementCount(
       elements,
@@ -689,12 +855,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#chordStaffYCoordsSnapshot = new Map(chordStaffYCoords);
     this.#tupletGroups = buildTupletGroups(elements, this.#tupletsByIndex);
 
-    const { noteShowAccidentals, chordNoteAccidentals, graceShowAccidentals } =
-      computeNoteAccidentals(
-        elements,
-        this.#effectiveKeySig,
-        this.#effectiveMode
-      );
+    const {
+      noteShowAccidentals,
+      chordNoteAccidentals,
+      graceShowAccidentals,
+      trillFinishShowAccidentals,
+    } = computeNoteAccidentals(
+      elements,
+      this.#effectiveKeySig,
+      this.#effectiveMode
+    );
 
     // Set rendering properties on each element
     // (triggers their self-render via requestAnimationFrame)
@@ -716,6 +886,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.staffY = noteStaffYCoords.get(noteElement) ?? null;
           noteElement.resolvedGraceAccidentals =
             graceShowAccidentals.get(noteElement) ?? null;
+          noteElement.resolvedTrillFinishAccidentals =
+            trillFinishShowAccidentals.get(noteElement) ?? null;
+          noteElement.resolvedTrillPitch = noteElement.trill
+            ? resolveTrillPitch(
+                noteElement.note,
+                noteElement.octave ?? 4,
+                this.#effectiveKeySig,
+                this.#effectiveMode,
+                noteElement.trillAccidental,
+                noteElement.trillNote
+              )
+            : null;
         });
       } else {
         const chordElement = element as ChordElementType;
@@ -729,12 +911,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.noteAccidentals = accidentals;
           chordElement.resolvedGraceAccidentals =
             graceShowAccidentals.get(chordElement) ?? null;
+          chordElement.resolvedTrillFinishAccidentals =
+            trillFinishShowAccidentals.get(chordElement) ?? null;
+          chordElement.resolvedTrillPitch = chordElement.trill
+            ? this.#resolveChordTrillPitch(chordElement, staffYCoordinates)
+            : null;
         });
       }
     }
 
     const previousElements = this.#currentElements;
     this.#currentElements = elements;
+    // #spaceElements() (below) reads these to push a following entry clear
+    // of a rightward-reserving decoration's footprint, so they must be
+    // resolved before that call, not after.
+    this.#writtenTrillFootprints = this.#computeWrittenTrillFootprints();
+    this.#trillFinishFootprints = this.#computeTrillFinishFootprints();
     this.#resolveArpeggiandoPassages(elements, previousElements);
     this.#spaceElements();
 
@@ -752,92 +944,26 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.drawConnectorsWhenStandalone();
 
     if (elements.length > 0) {
-      const firstElement = elements[0];
-      let firstElementLeftwardWidth = 0;
-      if (firstElement.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = firstElement as NoteElementType;
-        if (noteElement.showAccidental) {
-          firstElementLeftwardWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
-            ACCIDENTAL_NOTE_GAP;
-        }
-        firstElementLeftwardWidth += computeGraceFootprintWidth(
-          noteElement.grace,
-          noteElement.resolvedGraceAccidentals
-        );
-        firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(noteElement),
-          elementHasShownAccidental(noteElement)
-        );
-        firstElementLeftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(noteElement)
-        );
-      } else if (firstElement.nodeName === MUSIC_CHORD_NODE) {
-        const chordElement = firstElement as ChordElementType;
-        if (
-          chordElement.staffYCoordinates &&
-          chordElement.noteAccidentals.some((a) => a != null)
-        ) {
-          firstElementLeftwardWidth = totalChordAccidentalWidth(
-            chordElement.noteAccidentals,
-            chordElement.staffYCoordinates
-          );
-        }
-        firstElementLeftwardWidth += computeGraceFootprintWidth(
-          chordElement.grace,
-          chordElement.resolvedGraceAccidentals
-        );
-        firstElementLeftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(chordElement),
-          elementHasShownAccidental(chordElement)
-        );
-        firstElementLeftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(chordElement)
-        );
-        if (footprintArpeggio(chordElement) !== null) {
-          firstElementLeftwardWidth +=
-            chordLeftHeadDisplacementPx(chordElement);
-        }
-      }
-      // Grace overhangs of the remaining elements also consume horizontal
-      // room beyond the per-note minimum spacing.
+      // First entry: the full leftward stack sits between it and the describe
+      // area, so all of it (accidental included) adds to the measure width.
+      const firstElementLeftwardWidth = this.#entryLeftwardExtent(elements[0]);
+      // Later entries: only the decorations that inter-note spacing does not
+      // already absorb (accidental columns excluded — see #entryLeftwardExtent).
       let extraLeftwardWidth = 0;
       for (let i = 1; i < elements.length; i++) {
-        const element = elements[i];
-        if (
-          element.nodeName === MUSIC_NOTE_NODE ||
-          element.nodeName === MUSIC_CHORD_NODE
-        ) {
-          const noteOrChordElement = element as
-            | NoteElementType
-            | ChordElementType;
-          extraLeftwardWidth += computeGraceFootprintWidth(
-            noteOrChordElement.grace,
-            noteOrChordElement.resolvedGraceAccidentals
-          );
-          extraLeftwardWidth += computeArpeggioFootprintWidth(
-            footprintArpeggio(noteOrChordElement),
-            elementHasShownAccidental(noteOrChordElement)
-          );
-          extraLeftwardWidth += computeArpeggioHairpinFootprintWidth(
-            footprintArpeggioHairpin(noteOrChordElement)
-          );
-          if (
-            element.nodeName === MUSIC_CHORD_NODE &&
-            footprintArpeggio(noteOrChordElement) !== null
-          ) {
-            extraLeftwardWidth += chordLeftHeadDisplacementPx(
-              noteOrChordElement as ChordElementType
-            );
-          }
-        }
+        extraLeftwardWidth += this.#entryLeftwardExtent(elements[i], false);
+      }
+      let extraRightwardWidth = 0;
+      for (let i = 0; i < elements.length; i++) {
+        extraRightwardWidth += this.#rightwardFootprint(i);
       }
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
         computeTupletScaledNoteCount(elements, this.#tupletsByIndex),
         firstElementLeftwardWidth,
         extraLeftwardWidth,
-        this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
+        this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX,
+        extraRightwardWidth
       );
       const { totalWeight } = computeSpacingWeights(
         elements,
@@ -983,6 +1109,169 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return 0;
   }
 
+  // Rightward layout footprint (px) per writtenNoteAnchorIndex — the mirror
+  // of #entryLeftwardExtent for a written trilling notehead (trill-note),
+  // the first rightward-reserving decoration in this codebase. Spans whose
+  // resolved pitch isn't in written mode (the common case: no trill-note, or
+  // the accidental-only override) contribute nothing. Recomputed from
+  // #currentElements, so call after resolvedTrillPitch has been pushed onto
+  // every element for this pass.
+  #computeWrittenTrillFootprints(): Map<number, number> {
+    const footprints = new Map<number, number>();
+    for (const span of resolveTrillSpans(this.#currentElements)) {
+      const startElement = this.#currentElements[span.startIndex];
+      if (
+        startElement.nodeName !== MUSIC_NOTE_NODE &&
+        startElement.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const resolvedTrillPitch = (
+        startElement as NoteElementType | ChordElementType
+      ).resolvedTrillPitch;
+      if (resolvedTrillPitch?.written !== true) {
+        continue;
+      }
+      const width = computeWrittenTrillNoteWidth(resolvedTrillPitch.accidental);
+      footprints.set(
+        span.writtenNoteAnchorIndex,
+        (footprints.get(span.writtenNoteAnchorIndex) ?? 0) + width
+      );
+    }
+    return footprints;
+  }
+
+  // Rightward footprint (px) per index for a trill's finishing grace
+  // note(s) (`trill-finish`) — the second rightward-reserving decoration in
+  // this codebase, alongside the written trilling notehead above. Unlike
+  // that one, this always anchors at its own host index (no tie-chain-based
+  // deferral — a finishing figure trails the current note directly).
+  #computeTrillFinishFootprints(): Map<number, number> {
+    const footprints = new Map<number, number>();
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const hostElement = element as NoteElementType | ChordElementType;
+      const trillFinish = hostElement.trillFinish;
+      if (trillFinish === null || trillFinish.length === 0) {
+        continue;
+      }
+      const width = computeGraceFootprintWidth(
+        trillFinish,
+        hostElement.resolvedTrillFinishAccidentals
+      );
+      footprints.set(i, width);
+    }
+    return footprints;
+  }
+
+  // Combined rightward footprint (px) at `index` — every decoration that
+  // reserves space after an entry's own right edge sums here, so
+  // #spaceElements() and the strut min-width only need one call site
+  // regardless of how many such decorations exist.
+  #rightwardFootprint(index: number): number {
+    return (
+      (this.#writtenTrillFootprints.get(index) ?? 0) +
+      (this.#trillFinishFootprints.get(index) ?? 0)
+    );
+  }
+
+  // Total px an entry paints / needs left of its own SVG left edge (x = 0), from
+  // every decoration drawn before it — wherever the pass that draws it lives:
+  // this staff (accidental, grace run, element-local arpeggio sign + hairpin), or
+  // an ancestor <music-measure>'s cross-staff arpeggio overlay (the span's wave +
+  // continuous hairpin). Single source of truth for the "barline constraint" in
+  // #spaceElements() and the strut min width in #renderNotes(). Add any new
+  // left-of-entry decoration here, not at the call sites.
+  //
+  // Not included: an incoming tie/slur end curve, ledger-line extension, a
+  // tuplet bracket/numeral. Each is geometrically bounded to not need one: a
+  // tie/slur curve's x is monotonic between the two noteheads it connects, so
+  // it never reaches past the previous entry; a ledger line's left extent is a
+  // small fixed offset from the notehead centre, well inside this entry's own
+  // SVG box; a tuplet bracket's left edge is clamped to never go negative past
+  // its first note's own box.
+  //
+  // `includeAccidental` is false only for the non-first entries of the strut
+  // min-width sum: their accidental column sits between two entries and is
+  // absorbed by inter-note spacing / the per-entry MIN_NOTE_WIDTH, so it needs
+  // no extra measure width. The first entry's column has only the describe area
+  // to its left, so it always counts.
+  #entryLeftwardExtent(
+    element: NoteChordOrRestElementType,
+    includeAccidental = true
+  ): number {
+    if (
+      element.nodeName !== MUSIC_NOTE_NODE &&
+      element.nodeName !== MUSIC_CHORD_NODE
+    ) {
+      return 0;
+    }
+    const el = element as NoteElementType | ChordElementType;
+    let extent = 0;
+
+    if (includeAccidental) {
+      if (el.nodeName === MUSIC_NOTE_NODE) {
+        const accidental = (el as NoteElementType).showAccidental;
+        if (accidental) {
+          extent += ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
+        }
+      } else {
+        const chord = el as ChordElementType;
+        if (
+          chord.staffYCoordinates &&
+          chord.noteAccidentals.some((a) => a != null)
+        ) {
+          extent += totalChordAccidentalWidth(
+            chord.noteAccidentals,
+            chord.staffYCoordinates
+          );
+        }
+      }
+    }
+
+    extent += computeGraceFootprintWidth(el.grace, el.resolvedGraceAccidentals);
+
+    const partner = crossStaffArpeggioPartner(el);
+    // A span's wave variant may be authored solely on the partner end (the
+    // lower end of a span is the only one that can carry `arpeggio-for`, so
+    // the upper end has neither its own `arpeggio` nor `arpeggioFor` when the
+    // wave lives on the lower end) — the measure overlay still draws the wave
+    // reaching this end, so fall back to the partner's variant to reserve for
+    // it. Every wave variant reserves the same width (see footprintArpeggio's
+    // own comment), so which one is used past non-null doesn't matter.
+    const ownArpeggio = footprintArpeggio(el);
+    const resolvedArpeggio =
+      ownArpeggio ?? (partner !== null ? footprintArpeggio(partner) : null);
+    extent += computeArpeggioFootprintWidth(
+      resolvedArpeggio,
+      elementHasShownAccidental(el),
+      partner !== null
+    );
+
+    const hairpin = footprintArpeggioHairpin(el, partner);
+    extent += computeArpeggioHairpinFootprintWidth(
+      hairpin?.kind ?? null,
+      hairpin?.from ?? null,
+      hairpin?.to ?? null
+    );
+
+    if (el.nodeName === MUSIC_CHORD_NODE && footprintArpeggio(el) !== null) {
+      // A cluster chord's leftward-displaced second head only clears the entry's
+      // SVG left edge once the arpeggio sign — positioned off that displaced
+      // head — is present; without a sign the displaced head stays inside the
+      // SVG's own left padding.
+      extent += chordLeftHeadDisplacementPx(el as ChordElementType);
+    }
+
+    return extent;
+  }
+
   #spaceElements() {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     if (typeof this.#describeContainer.getBBox === 'function') {
@@ -1027,28 +1316,36 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#currentElements,
       this.#tupletsByIndex
     );
-    const scaledNoteCount = computeTupletScaledNoteCount(
-      this.#currentElements,
-      this.#tupletsByIndex
-    );
-    const { weights, totalWeight } = computeSpacingWeights(
+    const { totalWeight } = computeSpacingWeights(
       this.#currentElements,
       tupletScaleByIndex
     );
     this.#currentSpacingSlackWeight = totalWeight;
 
-    // Entries are justified to fill the notes area: every entry keeps a fixed
-    // MIN_NOTE_WIDTH strut, and the width left over is shared out by each entry's
-    // logarithmic duration weight — including the trailing space after the last
-    // entry, so an underfull bar spreads rather than bunching to the left.
+    // Each entry is positioned as a fraction of the measure's fixed beat
+    // capacity (from the time signature — constant regardless of how many
+    // entries currently exist), scaled by the staff's real available width.
+    // This is what makes a full measure fill the staff, what makes a resize
+    // reflow every entry together, and what keeps appending an entry from
+    // ever moving an already-placed one: neither the capacity nor the
+    // available width it's scaled against depends on entry count.
+    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
+    const measureCapacity = beatsInMeasure / beatType;
+    const arpeggioRunIndices = new Set<number>(
+      this.#arpeggioGroups.flatMap((group) => group.runIndices)
+    );
+    const beatOffsets = computeBeatOffsets(
+      this.#currentElements,
+      this.#tupletsByIndex,
+      arpeggioRunIndices
+    );
     const proportionalWidth =
       remainingWidth -
       LEADING_NOTE_GAP_PX -
-      scaledNoteCount * MIN_NOTE_WIDTH -
       this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
-    const slackOffsets = distributeSlack(
-      weights,
-      totalWeight,
+    const measureOffsets = computeMeasureProportionalOffsets(
+      beatOffsets,
+      measureCapacity,
       proportionalWidth
     );
 
@@ -1056,8 +1353,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#clefMarkers.map((marker) => [marker.afterElementIndex, marker])
     );
 
-    let minWidthAccumulator = 0;
+    let clefMarkerReservedWidth = 0;
     let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
+    let previousNoteX: number | null = null;
 
     // A marker before the first note/chord/rest (afterElementIndex === -1)
     // is positioned here, ahead of the loop, since there's no element index
@@ -1069,65 +1367,30 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       leadingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
       leadingClefMarker.element.style.display = '';
       previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-      minWidthAccumulator += CLEF_CHANGE_RESERVED_WIDTH_PX;
+      clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
     }
 
     for (let i = 0; i < this.#currentElements.length; i++) {
       const element = this.#currentElements[i];
       const duration = element.duration as DurationType;
       const xOffsetInNotesSpace =
-        LEADING_NOTE_GAP_PX + minWidthAccumulator + slackOffsets[i];
+        LEADING_NOTE_GAP_PX + clefMarkerReservedWidth + measureOffsets[i];
 
       // Position the light DOM element via inline styles
       let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
 
-      // Compute this element's total leftward overhang: accidental footprint
-      // plus any grace-note group rendered before the note/chord.
-      let leftwardWidth = 0;
-      if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = element as NoteElementType;
-        if (noteElement.showAccidental) {
-          leftwardWidth =
-            ACCIDENTAL_SYMBOL_WIDTH[noteElement.showAccidental] +
-            ACCIDENTAL_NOTE_GAP;
-        }
-        leftwardWidth += computeGraceFootprintWidth(
-          noteElement.grace,
-          noteElement.resolvedGraceAccidentals
-        );
-        leftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(noteElement),
-          elementHasShownAccidental(noteElement)
-        );
-        leftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(noteElement)
-        );
-      } else if (element.nodeName === MUSIC_CHORD_NODE) {
-        const chordElement = element as ChordElementType;
-        if (
-          chordElement.staffYCoordinates &&
-          chordElement.noteAccidentals.some((a) => a != null)
-        ) {
-          leftwardWidth = totalChordAccidentalWidth(
-            chordElement.noteAccidentals,
-            chordElement.staffYCoordinates
-          );
-        }
-        leftwardWidth += computeGraceFootprintWidth(
-          chordElement.grace,
-          chordElement.resolvedGraceAccidentals
-        );
-        leftwardWidth += computeArpeggioFootprintWidth(
-          footprintArpeggio(chordElement),
-          elementHasShownAccidental(chordElement)
-        );
-        leftwardWidth += computeArpeggioHairpinFootprintWidth(
-          footprintArpeggioHairpin(chordElement)
-        );
-        if (footprintArpeggio(chordElement) !== null) {
-          leftwardWidth += chordLeftHeadDisplacementPx(chordElement);
-        }
+      // Collision floor: the proportional position above has no built-in
+      // minimum gap (unlike a per-entry strut), so enforce one against the
+      // *previous* entry alone — never looking ahead, so appending a new
+      // entry can never move an already-placed one.
+      if (previousNoteX !== null) {
+        xInWrapper = Math.max(xInWrapper, previousNoteX + MIN_NOTE_WIDTH);
       }
+
+      // Everything drawn left of this entry — accidental / grace / arpeggio sign
+      // + dynamic-change hairpin / cross-staff span footprint (see
+      // #entryLeftwardExtent, the single source of truth).
+      const leftwardWidth = this.#entryLeftwardExtent(element);
 
       // Barline constraint: the overhang must not cross into the describe area
       if (leftwardWidth > 0) {
@@ -1142,6 +1405,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         leftwardWidth,
         previousRightEdge
       );
+
+      // A rightward-reserving decoration (a written trilling notehead, a
+      // trill's finishing grace note(s), or both) on the previous entry
+      // reserves real space regardless of whether *this* entry has any
+      // leftward decorations of its own — computeInterNoteSpacing only
+      // enforces previousRightEdge when leftwardWidth is positive (the
+      // leftward-only case every other decoration in this codebase
+      // reserves), so apply it unconditionally here for that case.
+      if (i > 0 && this.#rightwardFootprint(i - 1) > 0) {
+        xInWrapper = Math.max(xInWrapper, previousRightEdge);
+      }
 
       // Notify beam renderer of final position after any accidental shift, so beam
       // endpoints stay in sync with the DOM positions of the chord elements.
@@ -1172,7 +1446,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       element.style.position = 'absolute';
       element.style.left = `${xInWrapper}px`;
-      previousRightEdge = xInWrapper + NOTE_SVG_WIDTH;
+      previousNoteX = xInWrapper;
+      previousRightEdge =
+        xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(i);
 
       if (element.nodeName === MUSIC_REST_NODE) {
         element.style.top = `${restToYCoordinate(element.duration)}px`;
@@ -1197,8 +1473,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         element.style.top = '0px';
       }
 
-      minWidthAccumulator += MIN_NOTE_WIDTH * (tupletScaleByIndex.get(i) ?? 1);
-
       // A marker following this element (afterElementIndex === i) is
       // zero-duration — it does not consume spacing slack — but does reserve
       // horizontal space, same as MIN_NOTE_WIDTH does for a real note.
@@ -1209,10 +1483,31 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
         trailingClefMarker.element.style.display = '';
         previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-        minWidthAccumulator += CLEF_CHANGE_RESERVED_WIDTH_PX;
+        clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
       }
     }
     this.#beamRenderer?.spaceAll();
+
+    // Reconcile each beamed stem to the beam line as actually drawn. #renderNotes()
+    // pushed an index-fraction estimate before X was known; now that setX + spaceAll
+    // have run, stemExtension(i) returns the true-X value. The equality guard in the
+    // note/chord setter makes this a no-op for the common evenly-spaced case, and
+    // it is the only stem-length pass that runs on a bare resize (onStaffResize →
+    // #spaceElements, never #renderNotes).
+    if (this.#beamRenderer !== null) {
+      for (let i = 0; i < this.#currentElements.length; i++) {
+        if (!this.#beamedIndicesSnapshot.has(i)) {
+          continue;
+        }
+        const element = this.#currentElements[i];
+        const extension = this.#beamRenderer.stemExtension(i);
+        if (element.nodeName === MUSIC_NOTE_NODE) {
+          (element as NoteElementType).stemExtension = extension;
+        } else if (element.nodeName === MUSIC_CHORD_NODE) {
+          (element as ChordElementType).stemExtension = extension;
+        }
+      }
+    }
 
     // Size the tuplet container to match the notes area (same as beams container)
     this.#tupletContainer.setAttribute('x', `${this.#describeEndX}`);
@@ -1251,7 +1546,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
         null,
-        hasInnerGroups
+        hasInnerGroups,
+        (i) => this.#beamRenderer?.primaryBeamYForIndex(i) ?? null
       );
       if (geometry !== null) {
         innerGeometriesByGroup.set(group, geometry);
@@ -1292,7 +1588,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#noteStaffYCoordsSnapshot,
         this.#chordStaffYCoordsSnapshot,
         outerBaseY,
-        hasInnerGroups
+        hasInnerGroups,
+        (i) => this.#beamRenderer?.primaryBeamYForIndex(i) ?? null
       );
       if (geometry !== null) {
         allGeometries.push(geometry);
@@ -1316,6 +1613,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
     this.#dynamicsContainer.innerHTML = '';
     this.#renderDynamics();
+
+    this.#trillLinesContainer.setAttribute('x', `${this.#describeEndX}`);
+    this.#trillLinesContainer.setAttribute('width', `${remainingWidth}`);
+    this.#trillLinesContainer.setAttribute(
+      'viewBox',
+      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#trillLinesContainer.setAttribute(
+      'height',
+      `${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    this.#trillLinesContainer.innerHTML = '';
+    this.#redrawTrillLines(remainingWidth);
   }
 
   #renderDynamics(): void {
@@ -1450,6 +1760,278 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   }
 
+  // The chord's own reference pitch for trill-pitch resolution: its topmost
+  // (highest-pitch) note — staffYCoordinates is declaration order, not pitch
+  // order, hence the Math.min lookup, mirroring the same pattern used for the
+  // grace-slur's top-note anchoring in svgCreator/chord.ts.
+  #resolveChordTrillPitch(
+    chordElement: ChordElementType,
+    staffYCoordinates: number[]
+  ) {
+    const notes = chordElement.notes;
+    if (notes.length === 0 || staffYCoordinates.length === 0) {
+      return null;
+    }
+    const topNoteIndex = staffYCoordinates.indexOf(
+      Math.min(...staffYCoordinates)
+    );
+    return resolveTrillPitch(
+      notes[topNoteIndex].value,
+      notes[topNoteIndex].octave ?? 4,
+      this.#effectiveKeySig,
+      this.#effectiveMode,
+      chordElement.trillAccidental,
+      chordElement.trillNote
+    );
+  }
+
+  // Whether any current element (note or chord) is trill-marked — used by
+  // #boundDrawConnectors to decide whether a `tie` change (which only
+  // dispatches CONNECTOR_ATTRIBUTE_CHANGE) needs the full trill re-layout
+  // pass too, since a trill span's own endpoint depends on the tie chain.
+  #hasTrillMarkedElement(): boolean {
+    return this.#currentElements.some((element) => {
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        return (element as NoteElementType).trill;
+      }
+      if (element.nodeName === MUSIC_CHORD_NODE) {
+        return (element as ChordElementType).trill;
+      }
+      return false;
+    });
+  }
+
+  // Draws the wavy trill line (+ end-notch) and, when in written mode, the
+  // small parenthesized trilling notehead, for every `trill`-marked element
+  // in the current note stream, same-measure only (a span never crosses into
+  // a sibling <music-measure>'s own staff — see rules/trillRules.ts). Called
+  // from #spaceElements() (remainingWidth already known there), itself part
+  // of the full #renderNotes() pass every trill/tie-affecting attribute
+  // change now routes through.
+  #redrawTrillLines(remainingWidth?: number): void {
+    const width =
+      remainingWidth ??
+      this.transcribeContainer.getBoundingClientRect().width -
+        this.#describeEndX;
+
+    for (const span of resolveTrillSpans(this.#currentElements)) {
+      const startElement = this.#currentElements[span.startIndex] as
+        | NoteElementType
+        | ChordElementType;
+      const resolvedTrillPitch = startElement.resolvedTrillPitch;
+
+      if (resolvedTrillPitch?.written === true) {
+        this.#drawWrittenTrillNote(
+          span.startIndex,
+          span.writtenNoteAnchorIndex,
+          resolvedTrillPitch
+        );
+      }
+
+      if (!span.hasLine) {
+        continue;
+      }
+
+      const y = TRILL_ABOVE_STAFF_BOTTOM_Y;
+      const stemUp = this.#stemDirections[span.startIndex] ?? true;
+      const startNoteX = this.#noteXPositions.get(span.startIndex) ?? 0;
+      const signLeftOffset = trillSignLeftX(stemUp);
+      const startX =
+        startNoteX +
+        signLeftOffset +
+        TRILL_SIGN_WIDTH_PX +
+        TRILL_SIGN_LINE_GAP_PX;
+      const endX = this.#trillLineEndX(span, width);
+
+      const line = createTrillLineSvg({ startX, endX, bottomY: y });
+      if (line) {
+        this.#trillLinesContainer.appendChild(line);
+      }
+      if (span.stopped) {
+        this.#trillLinesContainer.appendChild(createTrillNotchSvg(endX, y));
+      }
+    }
+
+    this.#drawTrillFinishSlurs();
+  }
+
+  // Where the line/notch ends, given a resolved trill span.
+  #trillLineEndX(span: TrillLineSpan, width: number): number {
+    if (span.stopped) {
+      // Cut short rather than running to the next notehead — stop just past
+      // this trill's own last tied note.
+      const lastNoteX = this.#noteXPositions.get(span.lastTiedIndex) ?? width;
+      return lastNoteX + NOTE_SVG_WIDTH;
+    }
+    if (span.endBeforeIndex !== null) {
+      return (
+        (this.#noteXPositions.get(span.endBeforeIndex) ?? width) -
+        TRILL_LINE_END_GAP_PX
+      );
+    }
+    return width;
+  }
+
+  // Approximate rendered center X and precise head Y (staff space) of the
+  // note/chord at `index` — the "to-next" trill-finish slur's far endpoint
+  // (see #drawTrillFinishSlurs). Returns null for a rest (nothing to slur
+  // to) or an out-of-range index.
+  #referenceHeadPosition(index: number): { xCenter: number; y: number } | null {
+    const element = this.#currentElements[index];
+    if (element === undefined || element.nodeName === MUSIC_REST_NODE) {
+      return null;
+    }
+    const noteX = this.#noteXPositions.get(index) ?? 0;
+    const xCenter = noteX + NOTE_SVG_WIDTH / 2;
+    if (element.nodeName === MUSIC_NOTE_NODE) {
+      const noteElement = element as NoteElementType;
+      const rawY = this.noteToYCoordinate(
+        noteElement.note,
+        noteElement.octave ?? 4,
+        index
+      );
+      return {
+        xCenter,
+        y: STAFF_Y_PADDING + rawY - NOTE_HEAD_Y_OFFSET_CORRECTION,
+      };
+    }
+    const chordElement = element as ChordElementType;
+    const staffYCoords =
+      this.#chordStaffYCoordsSnapshot.get(chordElement) ?? [];
+    if (staffYCoords.length === 0) {
+      return null;
+    }
+    return {
+      xCenter,
+      y: STAFF_Y_PADDING + staffYCoords[0] - NOTE_HEAD_Y_OFFSET_CORRECTION,
+    };
+  }
+
+  // Draws the "to-next" half of a trill's finishing-grace slur(s) —
+  // the self-contained "to-main" half is drawn locally by the note/chord
+  // itself (see svgCreator/graceNotes.ts#createTrillFinishNotesSvg); this
+  // half reaches a sibling element only this staff can position, so only the
+  // staff can draw it. Independently recomputes the same local layout math
+  // the host element's own render used (mirrors
+  // #computeWrittenTrillFootprints/#drawWrittenTrillNote) rather than
+  // reading it back from rendered DOM.
+  #drawTrillFinishSlurs(): void {
+    for (let i = 0; i < this.#currentElements.length; i++) {
+      const element = this.#currentElements[i];
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const hostElement = element as NoteElementType | ChordElementType;
+      const trillFinish = hostElement.trillFinish;
+      if (trillFinish === null || trillFinish.length === 0) {
+        continue;
+      }
+      if (
+        hostElement.trillFinishSlur !== 'to-next' &&
+        hostElement.trillFinishSlur !== 'both'
+      ) {
+        continue;
+      }
+      const nextIndex = i + 1;
+      if (nextIndex >= this.#currentElements.length) {
+        continue;
+      }
+      const targetPosition = this.#referenceHeadPosition(nextIndex);
+      if (targetPosition === null) {
+        continue;
+      }
+
+      let referenceLetter: NoteLetter;
+      let referenceOctave: Octave;
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteElement = element as NoteElementType;
+        referenceLetter = noteElement.note[0] as NoteLetter;
+        referenceOctave = noteElement.octave ?? 4;
+      } else {
+        const chordElement = element as ChordElementType;
+        if (chordElement.notes.length === 0) {
+          continue;
+        }
+        referenceLetter = chordElement.notes[0].value[0] as NoteLetter;
+        referenceOctave = chordElement.notes[0].octave ?? 4;
+      }
+
+      const descriptors = buildGraceNoteDescriptors(
+        trillFinish,
+        hostElement.trillFinishOctave ?? [],
+        referenceLetter,
+        referenceOctave
+      );
+      applyResolvedGraceAccidentals(
+        descriptors,
+        hostElement.resolvedTrillFinishAccidentals
+      );
+      const layout = computeGraceLayout(descriptors);
+      const lastLocalIndex = descriptors.length - 1;
+      const hostX = this.#noteXPositions.get(i) ?? 0;
+      const lastHeadX =
+        hostX +
+        NOTE_SVG_WIDTH +
+        GRACE_MAIN_GAP_PX +
+        layout.headXCenters[lastLocalIndex];
+
+      const lastPitch = trillFinish[lastLocalIndex];
+      const lastOctave =
+        (hostElement.trillFinishOctave ?? [])[lastLocalIndex] ??
+        referenceOctave;
+      const lastRawY = this.noteToYCoordinate(lastPitch, lastOctave, i);
+      const lastHeadY =
+        STAFF_Y_PADDING + lastRawY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+      const slur = createOrnamentConnectorSlur(
+        lastHeadX,
+        lastHeadY,
+        TRILL_FINISH_HEAD_RY,
+        targetPosition.xCenter,
+        targetPosition.y,
+        NOTE_HEAD_RADIUS_PX * 0.75
+      );
+      this.#trillLinesContainer.appendChild(slur);
+    }
+  }
+
+  // Draws the small written trilling notehead — positioned after the anchor
+  // note's own right edge (see rules/trillRules.ts's writtenNoteAnchorIndex
+  // for why this can differ from the trill's own starting note), at the
+  // resolved pitch's real staff Y.
+  #drawWrittenTrillNote(
+    startIndex: number,
+    anchorIndex: number,
+    resolvedTrillPitch: {
+      letter: NoteLetter;
+      accidental: AccidentalType | null;
+      octave: Octave | null;
+    }
+  ): void {
+    if (resolvedTrillPitch.octave === null) {
+      return;
+    }
+    const anchorNoteX = this.#noteXPositions.get(anchorIndex) ?? 0;
+    const leftX = anchorNoteX + NOTE_SVG_WIDTH + TRILL_WRITTEN_NOTE_GAP_PX;
+    const rawY = this.noteToYCoordinate(
+      `${resolvedTrillPitch.letter}${accidentalSuffix(
+        resolvedTrillPitch.accidental
+      )}` as Note,
+      resolvedTrillPitch.octave,
+      startIndex
+    );
+    const centerY = STAFF_Y_PADDING + rawY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const { element } = createWrittenTrillNoteSvg({
+      leftX,
+      centerY,
+      accidental: resolvedTrillPitch.accidental,
+    });
+    this.#trillLinesContainer.appendChild(element);
+  }
+
   // Conservative above-staff budget estimate using staff-referenced positions.
   // Used before note x-positions are set; the actual rendering uses real geometry.
   #estimateAboveStaffBudget(): number {
@@ -1481,7 +2063,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
       const el = element as NoteElementType | ChordElementType;
-      if (footprintArpeggioHairpin(el) === null) {
+      // Only this element's own hairpin sits above its own staff; a cross-staff
+      // partner's letters are drawn outside both staves by the measure overlay.
+      if (footprintArpeggioHairpin(el, null) === null) {
         continue;
       }
       const effective =
@@ -1506,6 +2090,39 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         DYNAMICS_FONT_SIZE;
       if (textTopY < 0) {
         budget = Math.max(budget, Math.ceil(-textTopY) + 2);
+      }
+    }
+
+    // A trilling-note accidental (the accidental-only mode — no trill-note,
+    // so no written parenthesized notehead) sits above the trill sign itself,
+    // which already sits at a fixed height above the staff — reserve room
+    // when that combined height would otherwise poke past the SVG. Written
+    // mode's accidental renders inline inside the notehead instead and needs
+    // no extra vertical room, so it's excluded here.
+    const hasTrillAccidental = this.#currentElements.some((element) => {
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        return false;
+      }
+      const pitch = (element as NoteElementType | ChordElementType)
+        .resolvedTrillPitch;
+      return (
+        pitch !== null && pitch.written === false && pitch.accidental !== null
+      );
+    });
+    if (hasTrillAccidental) {
+      const tallestAccidentalHeight =
+        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
+        TRILL_ACCIDENTAL_SCALE;
+      const topY =
+        TRILL_ABOVE_STAFF_BOTTOM_Y -
+        TRILL_SIGN_HEIGHT_PX -
+        TRILL_ACCIDENTAL_GAP_PX -
+        tallestAccidentalHeight;
+      if (topY < 0) {
+        budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
     }
 

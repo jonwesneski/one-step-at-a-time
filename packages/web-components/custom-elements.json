@@ -270,6 +270,24 @@
             },
             {
               "kind": "field",
+              "name": "#resolvedTrillFinishAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillPitch",
+              "privacy": "private",
+              "type": {
+                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#batchDepth",
               "privacy": "private",
               "type": {
@@ -483,6 +501,55 @@
             },
             {
               "kind": "field",
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillLine",
+              "type": {
+                "text": "TrillLineMode"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillStop",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillAccidental",
+              "type": {
+                "text": "AccidentalType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillNote",
+              "type": {
+                "text": "Note | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillContinuation",
+              "type": {
+                "text": "TrillContinuationMode"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillPitch",
+              "type": {
+                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "grace",
               "type": {
                 "text": "Note[] | null"
@@ -538,6 +605,34 @@
               }
             },
             {
+              "kind": "field",
+              "name": "trillFinish",
+              "type": {
+                "text": "Note[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishOctave",
+              "type": {
+                "text": "(Octave | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishSlur",
+              "type": {
+                "text": "TrillFinishSlur"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillFinishAccidentals",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              }
+            },
+            {
               "kind": "method",
               "name": "batchUpdate",
               "return": {
@@ -577,6 +672,24 @@
             {
               "kind": "method",
               "name": "#buildGraceDescriptors",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "GraceNoteDescriptor[] | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "notes",
+                  "type": {
+                    "text": "ChordNote[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#buildTrillFinishDescriptors",
               "privacy": "private",
               "return": {
                 "type": {
@@ -757,9 +870,9 @@
             {
               "name": "grace-type",
               "type": {
-                "text": "'acciaccatura' | 'appoggiatura'"
+                "text": "'acciaccatura' | 'appoggiatura' | 'trill'"
               },
-              "description": "Grace-note style. Defaults to `acciaccatura`."
+              "description": "Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`."
             },
             {
               "name": "grace-duration",
@@ -781,6 +894,69 @@
                 "text": "DynamicMarking"
               },
               "description": "A single dynamic for the whole grace group."
+            },
+            {
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Marks a trill start: draws the \"tr\" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord."
+            },
+            {
+              "name": "trill-line",
+              "type": {
+                "text": "'auto' | 'none'"
+              },
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value)."
+            },
+            {
+              "name": "trill-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws a vertical end-notch here instead of letting the line run to the next notehead."
+            },
+            {
+              "name": "trill-accidental",
+              "type": {
+                "text": "AccidentalType"
+              },
+              "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set."
+            },
+            {
+              "name": "trill-note",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set."
+            },
+            {
+              "name": "trill-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the trill."
+            },
+            {
+              "name": "trill-finish",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated grace-note pitch(es) placed *after* this chord (a trill's finishing/closing figure), e.g. `\"F#,G\"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent)."
+            },
+            {
+              "name": "trill-finish-octave",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`."
+            },
+            {
+              "name": "trill-finish-slur",
+              "type": {
+                "text": "'none' | 'to-main' | 'to-next' | 'both'"
+              },
+              "description": "Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`."
             },
             {
               "type": {
@@ -1063,6 +1239,21 @@
             {
               "kind": "method",
               "name": "#redrawHairpins",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#buildStaffTracks",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ staff: HTMLElement; rowIndex: number }[][]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#redrawTrills",
               "privacy": "private"
             },
             {
@@ -1410,7 +1601,13 @@
             {
               "kind": "method",
               "name": "#redrawArpeggios",
-              "privacy": "private"
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "reReserveSpanEnds",
+                  "default": "false"
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1579,6 +1776,24 @@
               "privacy": "private",
               "type": {
                 "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillFinishAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillPitch",
+              "privacy": "private",
+              "type": {
+                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
               },
               "default": "null"
             },
@@ -1794,6 +2009,55 @@
             },
             {
               "kind": "field",
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillLine",
+              "type": {
+                "text": "TrillLineMode"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillStop",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillAccidental",
+              "type": {
+                "text": "AccidentalType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillNote",
+              "type": {
+                "text": "Note | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillContinuation",
+              "type": {
+                "text": "TrillContinuationMode"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillPitch",
+              "type": {
+                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "grace",
               "type": {
                 "text": "Note[] | null"
@@ -1846,6 +2110,34 @@
               "name": "graceDynamic",
               "type": {
                 "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinish",
+              "type": {
+                "text": "Note[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishOctave",
+              "type": {
+                "text": "(Octave | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishSlur",
+              "type": {
+                "text": "TrillFinishSlur"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillFinishAccidentals",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
               }
             },
             {
@@ -1905,6 +2197,24 @@
                   "name": "accidental",
                   "type": {
                     "text": "AccidentalType | undefined"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#appendTrillFinishNotes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "noteSvg",
+                  "type": {
+                    "text": "SVGElement"
                   }
                 }
               ]
@@ -2068,9 +2378,9 @@
             {
               "name": "grace-type",
               "type": {
-                "text": "'acciaccatura' | 'appoggiatura'"
+                "text": "'acciaccatura' | 'appoggiatura' | 'trill'"
               },
-              "description": "Grace-note style. Defaults to `acciaccatura`."
+              "description": "Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`."
             },
             {
               "name": "grace-duration",
@@ -2092,6 +2402,69 @@
                 "text": "DynamicMarking"
               },
               "description": "A single dynamic for the whole grace group, independent of `dynamic`."
+            },
+            {
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Marks a trill start: draws the \"tr\" sign above the stave. Requires a staff (absent on a standalone note). The wavy line spans forward through this note's own `tie` chain — set `trill` once, not on every tied note."
+            },
+            {
+              "name": "trill-line",
+              "type": {
+                "text": "'auto' | 'none'"
+              },
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value)."
+            },
+            {
+              "name": "trill-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws a vertical end-notch here instead of letting the line run to the next notehead."
+            },
+            {
+              "name": "trill-accidental",
+              "type": {
+                "text": "AccidentalType"
+              },
+              "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set."
+            },
+            {
+              "name": "trill-note",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set."
+            },
+            {
+              "name": "trill-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the trill."
+            },
+            {
+              "name": "trill-finish",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated grace-note pitch(es) placed *after* this note (a trill's finishing/closing figure), e.g. `\"F#,G\"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent)."
+            },
+            {
+              "name": "trill-finish-octave",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`."
+            },
+            {
+              "name": "trill-finish-slur",
+              "type": {
+                "text": "'none' | 'to-main' | 'to-next' | 'both'"
+              },
+              "description": "Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`."
             },
             {
               "type": {
@@ -2349,6 +2722,18 @@
             },
             {
               "kind": "field",
+              "name": "#trillLinesContainer",
+              "privacy": "private",
+              "type": {
+                "text": "SVGSVGElement"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#beamRenderer",
               "privacy": "private",
               "type": {
@@ -2561,6 +2946,32 @@
               "privacy": "private",
               "type": {
                 "text": "Map<ChordElementType, number[]>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#writtenTrillFootprints",
+              "privacy": "private",
+              "type": {
+                "text": "Map<number, number>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#trillFinishFootprints",
+              "privacy": "private",
+              "type": {
+                "text": "Map<number, number>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -3026,6 +3437,82 @@
             },
             {
               "kind": "method",
+              "name": "#computeWrittenTrillFootprints",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<number, number>"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#computeTrillFinishFootprints",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<number, number>"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rightwardFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryLeftwardExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                },
+                {
+                  "name": "includeAccidental",
+                  "default": "true"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#spaceElements",
               "privacy": "private",
               "inheritedFrom": {
@@ -3085,6 +3572,164 @@
                   "text": "void"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveChordTrillPitch",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "chordElement",
+                  "type": {
+                    "text": "ChordElementType"
+                  }
+                },
+                {
+                  "name": "staffYCoordinates",
+                  "type": {
+                    "text": "number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hasTrillMarkedElement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#redrawTrillLines",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "optional": true,
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#trillLineEndX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "TrillLineSpan"
+                  }
+                },
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#referenceHeadPosition",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ xCenter: number; y: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawTrillFinishSlurs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawWrittenTrillNote",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "startIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "anchorIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "resolvedTrillPitch",
+                  "type": {
+                    "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      octave: Octave | null;\n    }"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -4556,6 +5201,18 @@
             },
             {
               "kind": "field",
+              "name": "#trillLinesContainer",
+              "privacy": "private",
+              "type": {
+                "text": "SVGSVGElement"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#beamRenderer",
               "privacy": "private",
               "type": {
@@ -4768,6 +5425,32 @@
               "privacy": "private",
               "type": {
                 "text": "Map<ChordElementType, number[]>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#writtenTrillFootprints",
+              "privacy": "private",
+              "type": {
+                "text": "Map<number, number>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#trillFinishFootprints",
+              "privacy": "private",
+              "type": {
+                "text": "Map<number, number>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5224,6 +5907,82 @@
             },
             {
               "kind": "method",
+              "name": "#computeWrittenTrillFootprints",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<number, number>"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#computeTrillFinishFootprints",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<number, number>"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rightwardFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryLeftwardExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                },
+                {
+                  "name": "includeAccidental",
+                  "default": "true"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#spaceElements",
               "privacy": "private",
               "inheritedFrom": {
@@ -5283,6 +6042,164 @@
                   "text": "void"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveChordTrillPitch",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "chordElement",
+                  "type": {
+                    "text": "ChordElementType"
+                  }
+                },
+                {
+                  "name": "staffYCoordinates",
+                  "type": {
+                    "text": "number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hasTrillMarkedElement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#redrawTrillLines",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "optional": true,
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#trillLineEndX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "TrillLineSpan"
+                  }
+                },
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#referenceHeadPosition",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ xCenter: number; y: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawTrillFinishSlurs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawWrittenTrillNote",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "startIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "anchorIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "resolvedTrillPitch",
+                  "type": {
+                    "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      octave: Octave | null;\n    }"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"

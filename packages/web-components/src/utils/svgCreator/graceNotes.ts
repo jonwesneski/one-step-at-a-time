@@ -10,6 +10,7 @@ import type {
   GraceDuration,
   GraceSlur,
   GraceType,
+  TrillFinishSlur,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -119,35 +120,44 @@ export type GraceNotesProps = {
   mainStaffY: number | null;
 };
 
-export function createGraceNotesSvg({
-  graceNotes,
-  graceType,
-  graceDuration,
-  graceSlur,
-  mainHeadCenterXPx,
-  mainHeadCenterYPx,
-  mainTopNoteXPx,
-  mainTopNoteYPx,
-  mainSlurTargetXPx,
-  mainSlurTargetYPx,
-  anchorRightXPx,
-  mainAccidentalShown,
-  mainStemUp,
-  mainStaffY,
-}: GraceNotesProps): SVGGElement {
-  const group = document.createElementNS(SVG_NS, 'g');
-  group.classList.add('grace-notes');
+type OrnamentNoteGroupResult = {
+  group: SVGGElement;
+  // Y of the first note's stem/beam tip — the leading grace slur's alternate
+  // start anchor (see buildGraceSlur), and a trill-finish slur's "to-main"
+  // anchor.
+  firstStemTipY: number;
+  // Y of the last note's stem/beam tip — a trill-finish slur's "to-next"
+  // anchor. Equal to firstStemTipY for a single (non-group) ornament.
+  lastStemTipY: number;
+};
 
+// Heads, stems, beams, ledger lines, and (leading-only) articulation marks
+// and the acciaccatura slash — shared by a leading grace group
+// (createGraceNotesSvg) and a trill's finishing grace note(s)
+// (createTrillFinishNotesSvg). Slurs and accidentals are each caller's own
+// concern (a leading grace has one slur target and a uniform accidental
+// placement rule; a finishing group can slur to either or both neighbors).
+function renderOrnamentNoteGroup(
+  graceNotes: GraceNoteDescriptor[],
+  writtenDuration: GraceDuration,
+  // The *unresolved* explicit duration attribute (null when unset) — kept
+  // separate from writtenDuration (which always defaults to 'eighth' for
+  // rendering the notehead/flag shape) because an unset duration resolves to
+  // a distinct GRACE_BEAM_COUNT beam count for a group, not "eighth"'s own
+  // 1-flag count (resolveGroupBeamCount's null branch).
+  explicitGroupDuration: GraceDuration | null,
+  headXCenters: number[],
+  headYCenters: number[],
+  mainStaffY: number | null,
+  mainHeadCenterYPx: number,
+  // Acciaccatura's crossed-through slash and per-note articulation marks are
+  // leading-grace-only concepts — a trill's finishing notes have no
+  // grace-type/articulation attribute of their own.
+  allowSlashAndArticulation: boolean,
+  graceType: GraceType
+): OrnamentNoteGroupResult {
+  const group = document.createElementNS(SVG_NS, 'g');
   const isGroup = graceNotes.length > 1;
-  const writtenDuration = graceDuration ?? 'eighth';
-  const layout = computeGraceLayout(graceNotes);
-  const headXCenters = layout.headXCenters.map(
-    (headXCenter) => anchorRightXPx - layout.totalWidth + headXCenter
-  );
-  const headYCenters = graceNotes.map(
-    (graceNote) =>
-      mainHeadCenterYPx - graceNote.relativeStaffSteps * STAFF_Y_STEP
-  );
 
   appendLedgerLines(
     group,
@@ -162,10 +172,8 @@ export function createGraceNotesSvg({
     (headXCenter) => headXCenter + GRACE_STEM_X_FROM_HEAD_CENTER
   );
 
-  // Y of the first grace note's stem/beam tip — an alternate slur-start
-  // anchor to the notehead, used when the slur must bulge above to clear a
-  // main-element accidental (see buildGraceSlur).
-  let firstGraceStemTipY: number;
+  let firstStemTipY: number;
+  let lastStemTipY: number;
 
   if (isGroup) {
     for (let i = 0; i < graceNotes.length; i++) {
@@ -179,7 +187,7 @@ export function createGraceNotesSvg({
         )
       );
       const articulation = graceNotes[i].articulation;
-      if (articulation !== null) {
+      if (allowSlashAndArticulation && articulation !== null) {
         const marks = buildGraceArticulation(
           articulation,
           writtenDuration,
@@ -196,9 +204,10 @@ export function createGraceNotesSvg({
     const beamYs = computeGraceBeamYs(stemXs, headYCenters);
     // The beam's topmost point, not just note 0's — on an ascending beam
     // (pitch rising left to right) beamYs[0] is the beam's lowest point, so
-    // clearing only against it lets the slur graze the beam further along
-    // its rise.
-    firstGraceStemTipY = Math.min(...beamYs);
+    // clearing only against it lets a slur graze the beam further along its
+    // rise.
+    firstStemTipY = Math.min(...beamYs);
+    lastStemTipY = beamYs[beamYs.length - 1];
     for (let i = 0; i < graceNotes.length; i++) {
       const stem = document.createElementNS(SVG_NS, 'line');
       stem.classList.add('grace-stem');
@@ -211,7 +220,7 @@ export function createGraceNotesSvg({
       group.appendChild(stem);
     }
 
-    const beamCount = resolveGroupBeamCount(graceDuration);
+    const beamCount = resolveGroupBeamCount(explicitGroupDuration);
     const firstStemX = stemXs[0];
     const lastStemX = stemXs[stemXs.length - 1];
     const firstBeamY = beamYs[0];
@@ -235,7 +244,7 @@ export function createGraceNotesSvg({
       group.appendChild(beam);
     }
 
-    if (graceType === 'acciaccatura') {
+    if (allowSlashAndArticulation && graceType === 'acciaccatura') {
       const beamStackHeight =
         beamCount * GRACE_BEAM_THICKNESS_PX +
         (beamCount - 1) * GRACE_BEAM_GAP_PX;
@@ -254,7 +263,7 @@ export function createGraceNotesSvg({
       )
     );
     const articulation = graceNotes[0].articulation;
-    if (articulation !== null) {
+    if (allowSlashAndArticulation && articulation !== null) {
       const marks = buildGraceArticulation(
         articulation,
         writtenDuration,
@@ -269,18 +278,65 @@ export function createGraceNotesSvg({
 
     // Grace notes are always stem-up, and a stem-up tip position doesn't
     // move with flag count (extra flags stack down toward the head, not up
-    // past the tip), so this holds regardless of the grace duration's flag
-    // count.
+    // past the tip), so this holds regardless of the written duration's
+    // flag count.
     const stemTipY = headYCenters[0] - GRACE_SCALE * BASE_STEM_LENGTH_PX;
-    firstGraceStemTipY = stemTipY;
+    firstStemTipY = stemTipY;
+    lastStemTipY = stemTipY;
 
-    if (graceType === 'acciaccatura') {
+    if (allowSlashAndArticulation && graceType === 'acciaccatura') {
       // The slash crosses a little below the stem tip.
       group.appendChild(
         buildSlash(stemXs[0], stemTipY + GRACE_SLASH_TIP_INSET_PX)
       );
     }
   }
+
+  return { group, firstStemTipY, lastStemTipY };
+}
+
+export function createGraceNotesSvg({
+  graceNotes,
+  graceType,
+  graceDuration,
+  graceSlur,
+  mainHeadCenterXPx,
+  mainHeadCenterYPx,
+  mainTopNoteXPx,
+  mainTopNoteYPx,
+  mainSlurTargetXPx,
+  mainSlurTargetYPx,
+  anchorRightXPx,
+  mainAccidentalShown,
+  mainStemUp,
+  mainStaffY,
+}: GraceNotesProps): SVGGElement {
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('grace-notes');
+
+  const writtenDuration = graceDuration ?? 'eighth';
+  const layout = computeGraceLayout(graceNotes);
+  const headXCenters = layout.headXCenters.map(
+    (headXCenter) => anchorRightXPx - layout.totalWidth + headXCenter
+  );
+  const headYCenters = graceNotes.map(
+    (graceNote) =>
+      mainHeadCenterYPx - graceNote.relativeStaffSteps * STAFF_Y_STEP
+  );
+
+  const { group: noteGroup, firstStemTipY: firstGraceStemTipY } =
+    renderOrnamentNoteGroup(
+      graceNotes,
+      writtenDuration,
+      graceDuration,
+      headXCenters,
+      headYCenters,
+      mainStaffY,
+      mainHeadCenterYPx,
+      true,
+      graceType
+    );
+  group.appendChild(noteGroup);
 
   if (graceSlur === 'auto') {
     // Same first-vs-last comparison as computeGraceBeamYs' own slant — Y
@@ -310,6 +366,132 @@ export function createGraceNotesSvg({
 
   return group;
 }
+
+export type TrillFinishNotesProps = {
+  trillFinishNotes: GraceNoteDescriptor[];
+  trillFinishSlur: TrillFinishSlur;
+  // Main notehead center in the host SVG's pixel space — same role as
+  // GraceNotesProps' mainHeadCenterXPx/YPx, but the finishing group's own
+  // anchor is its LEFT edge (it grows rightward, away from the main note)
+  // rather than a right edge.
+  mainHeadCenterXPx: number;
+  mainHeadCenterYPx: number;
+  // Left edge available to the finishing group — already right of the main
+  // element's own notehead, including the main-to-finishing gap.
+  anchorLeftXPx: number;
+  // Staff Y of the main notehead — enables ledger lines, same as
+  // GraceNotesProps.mainStaffY.
+  mainStaffY: number | null;
+};
+
+export type TrillFinishNotesResult = {
+  element: SVGGElement;
+  /** Total rendered width (px) — callers reserve rightward layout footprint off this (mirrors computeGraceFootprintWidth). */
+  width: number;
+};
+
+/**
+ * Builds a trill's finishing grace note(s): plain unslashed notehead(s)
+ * after the main note, optionally slurred back to it ('to-main' — drawn
+ * here, self-contained). A 'to-next'/'both' slur reaches a different
+ * element entirely, so it isn't drawn here — the ancestor staff draws it in
+ * its own overlay, independently recomputing this same layout math (see
+ * staffClassicalBase.ts's trill-finish handling) rather than reading it back
+ * from this rendered group.
+ */
+export function createTrillFinishNotesSvg({
+  trillFinishNotes,
+  trillFinishSlur,
+  mainHeadCenterXPx,
+  mainHeadCenterYPx,
+  anchorLeftXPx,
+  mainStaffY,
+}: TrillFinishNotesProps): TrillFinishNotesResult {
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('trill-finish-notes');
+
+  const writtenDuration: GraceDuration = 'eighth';
+  const layout = computeGraceLayout(trillFinishNotes);
+  const headXCenters = layout.headXCenters.map(
+    (headXCenter) => anchorLeftXPx + headXCenter
+  );
+  const headYCenters = trillFinishNotes.map(
+    (note) => mainHeadCenterYPx - note.relativeStaffSteps * STAFF_Y_STEP
+  );
+
+  const { group: noteGroup } = renderOrnamentNoteGroup(
+    trillFinishNotes,
+    writtenDuration,
+    null,
+    headXCenters,
+    headYCenters,
+    mainStaffY,
+    mainHeadCenterYPx,
+    false,
+    'appoggiatura'
+  );
+  group.appendChild(noteGroup);
+
+  if (trillFinishSlur === 'to-main' || trillFinishSlur === 'both') {
+    group.appendChild(
+      createOrnamentConnectorSlur(
+        mainHeadCenterXPx,
+        mainHeadCenterYPx,
+        NOTE_HEAD_RADIUS_PX * 0.75,
+        headXCenters[0],
+        headYCenters[0],
+        TRILL_FINISH_HEAD_RY
+      )
+    );
+  }
+
+  appendGraceAccidentals(group, trillFinishNotes, headXCenters, headYCenters);
+
+  return { element: group, width: layout.totalWidth };
+}
+
+// A simpler slur than the leading grace's buildGraceSlur: always bulges
+// below, always notehead-to-notehead, no main-stem clearance — no
+// accidental-clearance flip, no descending-group flip (documented v1
+// simplification, see CLAUDE.md's Known Incomplete Areas). Reusable for both
+// halves of a trill-finish slur (main→first-finishing-note, locally here;
+// last-finishing-note→next-element, from staffClassicalBase.ts, which has no
+// other reason to import graceNotes.ts internals) since both are just "two
+// head centers, left one connects to right one, bulging below."
+export function createOrnamentConnectorSlur(
+  fromXCenter: number,
+  fromYCenter: number,
+  fromHeadRy: number,
+  toXCenter: number,
+  toYCenter: number,
+  toHeadRy: number
+): SVGGElement {
+  const fromY = fromYCenter + fromHeadRy + SLUR_HEAD_CLEARANCE_PX;
+  const toY = toYCenter + toHeadRy + SLUR_HEAD_CLEARANCE_PX;
+  const bulgeHeight = Math.max(
+    DEFAULT_BULGE_HEIGHT,
+    Math.abs(fromY - toY) / 2 + SLUR_HEAD_CLEARANCE_PX
+  );
+  const slur = createCurveSvg({
+    from: {
+      x: fromXCenter + fromHeadRy + SLUR_HEAD_CLEARANCE_PX,
+      y: fromY,
+    },
+    to: {
+      x: toXCenter - toHeadRy - SLUR_HEAD_CLEARANCE_PX,
+      y: toY,
+    },
+    bulgeHeight,
+    bulge: 'below',
+  });
+  slur.classList.add('trill-finish-slur');
+  return slur;
+}
+
+// Grace-note-head radius at GRACE_SCALE — the "from" or "to" head-radius arg
+// for createOrnamentConnectorSlur when one endpoint is a finishing grace
+// note (as opposed to a full-size main notehead, NOTE_HEAD_RADIUS_PX * 0.75).
+export const TRILL_FINISH_HEAD_RY = GRACE_SCALE * NOTE_HEAD_RADIUS_PX * 0.75;
 
 // A grace head reuses the full note renderer at reduced scale. The wrapper
 // transform places the scaled head center at (xCenter, yCenter). Group heads

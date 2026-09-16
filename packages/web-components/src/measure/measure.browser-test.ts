@@ -11,11 +11,25 @@ import {
 
 const MIN_NOTE_WIDTH = 20;
 const LEADING_NOTE_GAP = 10;
-const SPACING_SHORTEST_SLACK = 20;
+const PIXELS_PER_BEAT = 160;
 const MEASURE_MIN_WIDTH = 100;
-// Natural-width contribution of one entry when every entry in the measure shares
-// the shortest duration (so each gets exactly the slack floor).
-const UNIFORM_ENTRY_NATURAL = MIN_NOTE_WIDTH + SPACING_SHORTEST_SLACK;
+// Whole-note-fraction duration factors, mirroring rules/theoryConsts.ts.
+const DURATION_FACTOR: Record<DurationType, number> = {
+  'double-whole': 2,
+  whole: 1,
+  half: 0.5,
+  quarter: 0.25,
+  eighth: 0.125,
+  sixteenth: 0.0625,
+  thirtysecond: 0.03125,
+  sixtyfourth: 0.015625,
+  hundredtwentyeighth: 0.0078125,
+};
+// Natural-width contribution (advance) of one entry of the given duration:
+// its beat-proportional weight, floored at MIN_NOTE_WIDTH.
+function entryNatural(duration: DurationType): number {
+  return Math.max(MIN_NOTE_WIDTH, DURATION_FACTOR[duration] * PIXELS_PER_BEAT);
+}
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -189,7 +203,7 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
 
     expect(
       Math.abs(
-        flex.basis - (describeEndX + LEADING_NOTE_GAP + UNIFORM_ENTRY_NATURAL)
+        flex.basis - (describeEndX + LEADING_NOTE_GAP + entryNatural('whole'))
       )
     ).toBeLessThanOrEqual(1);
     // uniform-stretch invariant: grow and basis are kept equal
@@ -217,7 +231,10 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     await waitForRedrawCycle(page);
     const flex8 = await readMeasureFlex(page);
 
-    expect(flex8.basis - flex1.basis).toBeCloseTo(7 * UNIFORM_ENTRY_NATURAL, 0);
+    expect(flex8.basis - flex1.basis).toBeCloseTo(
+      7 * entryNatural('eighth'),
+      0
+    );
   });
 
   test('16 hundredtwentyeighth notes — basis exceeds old 300px cap (regression)', async ({
@@ -233,12 +250,14 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     expect(
       Math.abs(
         flex.basis -
-          (describeEndX + LEADING_NOTE_GAP + 16 * UNIFORM_ENTRY_NATURAL)
+          (describeEndX +
+            LEADING_NOTE_GAP +
+            16 * entryNatural('hundredtwentyeighth'))
       )
     ).toBeLessThanOrEqual(1);
   });
 
-  test('notes do not bleed — proportionalWidth is non-negative for 15 hundredtwentyeighth notes', async ({
+  test('notes do not bleed — the staff is wide enough for 15 hundredtwentyeighth notes', async ({
     page,
   }) => {
     await buildMeasureWithNotes(page, 'hundredtwentyeighth', FIFTEEN_NOTES);
@@ -257,9 +276,10 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
       };
     }, MUSIC_STAFF);
 
-    const proportionalWidth =
-      staffWidth - describeEndX - LEADING_NOTE_GAP - 15 * MIN_NOTE_WIDTH;
-    expect(proportionalWidth).toBeGreaterThanOrEqual(0);
+    // beat-proportional spacing is never negative — the staff always renders
+    // at least its natural width, so there is no "spare width" to run out of
+    const remainingWidth = staffWidth - describeEndX - LEADING_NOTE_GAP;
+    expect(remainingWidth).toBeGreaterThanOrEqual(15 * MIN_NOTE_WIDTH);
   });
 
   test('two staves — measure uses the larger natural width and the larger strut', async ({
@@ -284,7 +304,7 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
         slowStaff.appendChild(wholeNote);
 
         const fastStaff = document.createElement(staffTag);
-        for (const value of [
+        const fastPitches: NoteLetterOctave[] = [
           'C4',
           'D4',
           'E4',
@@ -293,11 +313,13 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
           'A4',
           'B4',
           'C5',
-        ] as NoteLetterOctave[]) {
+        ];
+        for (let i = 0; i < 16; i++) {
+          const value = fastPitches[i % fastPitches.length];
           const note = document.createElement(noteTag);
           note.setAttribute('note', value[0]);
           note.setAttribute('octave', value[1]);
-          note.setAttribute('duration', 'eighth' satisfies DurationType);
+          note.setAttribute('duration', 'sixteenth' satisfies DurationType);
           fastStaff.appendChild(note);
         }
 
@@ -319,18 +341,94 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     const minWidth = await readMeasureMinWidth(page);
     const describeEndX = await readDescribeEndX(page);
 
-    // fast staff (8 eighths) drives both values
-    const naturalFor8Notes =
-      describeEndX + LEADING_NOTE_GAP + 8 * UNIFORM_ENTRY_NATURAL;
-    const strutFor8Notes = describeEndX + LEADING_NOTE_GAP + 8 * MIN_NOTE_WIDTH;
-    const naturalFor1Note =
-      describeEndX + LEADING_NOTE_GAP + UNIFORM_ENTRY_NATURAL;
+    // fast staff (16 sixteenths, each entry floored at MIN_NOTE_WIDTH) drives
+    // the natural width via its entry count; slow staff (1 whole note) has
+    // the larger single-entry natural width, but the sixteenths staff's
+    // total still wins
+    const naturalFor16Sixteenths =
+      describeEndX + LEADING_NOTE_GAP + 16 * entryNatural('sixteenth');
+    const naturalFor1Whole =
+      describeEndX + LEADING_NOTE_GAP + entryNatural('whole');
+    const strutFor16Notes =
+      describeEndX + LEADING_NOTE_GAP + 16 * MIN_NOTE_WIDTH;
 
-    expect(Math.abs(flex.basis - naturalFor8Notes)).toBeLessThanOrEqual(1);
+    expect(naturalFor16Sixteenths).toBeGreaterThan(naturalFor1Whole);
+    expect(Math.abs(flex.basis - naturalFor16Sixteenths)).toBeLessThanOrEqual(
+      1
+    );
     expect(
-      Math.abs(minWidth - Math.max(strutFor8Notes, MEASURE_MIN_WIDTH))
+      Math.abs(minWidth - Math.max(strutFor16Notes, MEASURE_MIN_WIDTH))
     ).toBeLessThanOrEqual(1);
-    expect(flex.basis).toBeGreaterThan(naturalFor1Note);
+    expect(flex.basis).toBeGreaterThan(naturalFor1Whole);
+  });
+
+  test('two staves — same-beat entries land at the same X across the grand staff', async ({
+    page,
+  }) => {
+    // Beat-proportional spacing uses the same fixed formula on every staff,
+    // so entries on the same beat should align across sibling staves with no
+    // explicit coordination code — this is the direct verification of that.
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+
+        // treble: two half notes (beats 0 and 2)
+        const trebleStaff = document.createElement(staffTag);
+        trebleStaff.setAttribute('clef', 'treble');
+        for (const value of ['C4', 'E4'] as NoteLetterOctave[]) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', value[0]);
+          note.setAttribute('octave', value[1]);
+          note.setAttribute('duration', 'half' satisfies DurationType);
+          trebleStaff.appendChild(note);
+        }
+
+        // bass: four quarter notes (beats 0, 1, 2, 3) — beats 0 and 2 are
+        // shared with the treble staff's two half notes
+        const bassStaff = document.createElement(staffTag);
+        bassStaff.setAttribute('clef', 'bass');
+        for (const value of ['C3', 'D3', 'E3', 'F3'] as NoteLetterOctave[]) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', value[0]);
+          note.setAttribute('octave', value[1]);
+          note.setAttribute('duration', 'quarter' satisfies DurationType);
+          bassStaff.appendChild(note);
+        }
+
+        measure.appendChild(trebleStaff);
+        measure.appendChild(bassStaff);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+
+    const [trebleLefts, bassLefts] = await page.evaluate((staffTag) => {
+      const staves = Array.from(document.querySelectorAll(staffTag));
+      return staves.map((staff) =>
+        Array.from(staff.querySelectorAll('music-note')).map(
+          (note) => note.getBoundingClientRect().left
+        )
+      );
+    }, MUSIC_STAFF);
+
+    // beat 0: treble[0] and bass[0]
+    expect(trebleLefts[0]).toBeCloseTo(bassLefts[0], 0);
+    // beat 2: treble[1] and bass[2]
+    expect(trebleLefts[1]).toBeCloseTo(bassLefts[2], 0);
   });
 
   test('flex-grow increases monotonically as note count grows', async ({
@@ -964,5 +1062,221 @@ test.describe(`${MUSIC_MEASURE} cross-staff arpeggio persistence`, () => {
     const afterRenumber = await arpeggioConnectorState(page);
     expect(afterRenumber.connectors).toBe(1);
     expect(afterRenumber.endpointsSuppressed).toBe(true);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} cross-staff arpeggio hairpin re-reservation`, () => {
+  async function buildGrandStaffSpan(
+    page: Page,
+    {
+      upperHairpin,
+      lowerHairpin,
+    }: { upperHairpin: boolean; lowerHairpin: boolean }
+  ): Promise<void> {
+    await page.evaluate(
+      ({
+        compositionTag,
+        measureTag,
+        staffTag,
+        upperHairpin,
+        lowerHairpin,
+      }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        composition.setAttribute('time', '4/4');
+
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        treble.setAttribute('time', '4/4');
+        treble.innerHTML =
+          `<music-chord id="top" chord="Cmaj" duration="whole" arpeggio="up"` +
+          (upperHairpin
+            ? ' arpeggio-hairpin="crescendo" arpeggio-hairpin-to="mf"'
+            : '') +
+          `></music-chord>`;
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('time', '4/4');
+        bass.innerHTML =
+          `<music-chord chord="Cmaj" duration="whole" arpeggio-for="top"` +
+          (lowerHairpin
+            ? ' arpeggio-hairpin="crescendo" arpeggio-hairpin-to="mf"'
+            : '') +
+          `>` +
+          '<music-note note="C" octave="3"></music-note>' +
+          '<music-note note="E" octave="3"></music-note>' +
+          '<music-note note="G" octave="3"></music-note></music-chord>';
+        measure.append(treble, bass);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        upperHairpin,
+        lowerHairpin,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readStaffLeftEdges(
+    page: Page
+  ): Promise<{ trebleLeft: number; bassLeft: number }> {
+    return page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const treble = staves.find((s) => s.getAttribute('clef') === 'treble');
+      const bass = staves.find((s) => s.getAttribute('clef') === 'bass');
+      const trebleChord = treble?.querySelector('music-chord');
+      const bassChord = bass?.querySelector('music-chord');
+      return {
+        trebleLeft: trebleChord?.getBoundingClientRect().left ?? 0,
+        bassLeft: bassChord?.getBoundingClientRect().left ?? 0,
+      };
+    });
+  }
+
+  test('removing the upper endpoint’s hairpin re-spaces the lower staff back down', async ({
+    page,
+  }) => {
+    await buildGrandStaffSpan(page, {
+      upperHairpin: true,
+      lowerHairpin: false,
+    });
+    const withHairpin = await readStaffLeftEdges(page);
+
+    await page.evaluate(() => {
+      document
+        .querySelector('music-staff[clef="treble"] music-chord')
+        ?.removeAttribute('arpeggio-hairpin');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const afterRemoval = await readStaffLeftEdges(page);
+
+    // The lower staff's chord reserved extra leftward room for the upper
+    // end's hairpin letters; removing that hairpin should shrink it back,
+    // moving the lower chord's own left edge leftward (closer to the
+    // describe area) again.
+    expect(afterRemoval.bassLeft).toBeLessThan(withHairpin.bassLeft);
+  });
+
+  test('authoring a hairpin on the lower endpoint re-spaces the upper staff', async ({
+    page,
+  }) => {
+    await buildGrandStaffSpan(page, {
+      upperHairpin: false,
+      lowerHairpin: false,
+    });
+    const withoutHairpin = await readStaffLeftEdges(page);
+
+    await page.evaluate(() => {
+      const bassChord = document.querySelector(
+        'music-staff[clef="bass"] music-chord'
+      );
+      bassChord?.setAttribute('arpeggio-hairpin', 'crescendo');
+      bassChord?.setAttribute('arpeggio-hairpin-to', 'mf');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const withHairpin = await readStaffLeftEdges(page);
+
+    // The upper staff never received the attribute change directly, but its
+    // own footprint helper resolves the hairpin from the lower (partner) end
+    // — its chord should reserve more room and shift rightward.
+    expect(withHairpin.trebleLeft).toBeGreaterThan(withoutHairpin.trebleLeft);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} cross-staff arpeggio wave footprint (partner-only wave)`, () => {
+  // Only the LOWER end carries `arpeggio-for`/a real wave variant — per
+  // resolveArpeggioSpans, `arpeggio-for` is only ever set on the lower end of
+  // a span, so the upper end here has neither its own `arpeggio` nor
+  // `arpeggio-for`. The measure overlay still draws the shared wave reaching
+  // this upper end; its own staff must still reserve room for it.
+  async function buildLowerAuthoredSpan(
+    page: Page,
+    withSpan: boolean
+  ): Promise<void> {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, withSpan }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const composition = document.createElement(compositionTag);
+        composition.setAttribute('time', '4/4');
+
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        treble.setAttribute('time', '4/4');
+        treble.innerHTML =
+          '<music-chord id="top" chord="Cmaj" duration="whole"></music-chord>';
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('time', '4/4');
+        bass.innerHTML = withSpan
+          ? '<music-chord chord="Cmaj" duration="whole" arpeggio="up" arpeggio-for="top">' +
+            '<music-note note="C" octave="3"></music-note>' +
+            '<music-note note="E" octave="3"></music-note>' +
+            '<music-note note="G" octave="3"></music-note></music-chord>'
+          : '<music-chord chord="Cmaj" duration="whole">' +
+            '<music-note note="C" octave="3"></music-note>' +
+            '<music-note note="E" octave="3"></music-note>' +
+            '<music-note note="G" octave="3"></music-note></music-chord>';
+        measure.append(treble, bass);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        withSpan,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readTrebleChordLeft(page: Page): Promise<number> {
+    return page.evaluate(() => {
+      const treble = Array.from(document.querySelectorAll('music-staff')).find(
+        (s) => s.getAttribute('clef') === 'treble'
+      );
+      const chord = treble?.querySelector('music-chord');
+      return chord?.getBoundingClientRect().left ?? 0;
+    });
+  }
+
+  test('the upper endpoint reserves room for a wave authored solely on the lower endpoint', async ({
+    page,
+  }) => {
+    await buildLowerAuthoredSpan(page, false);
+    const withoutSpan = await readTrebleChordLeft(page);
+
+    await buildLowerAuthoredSpan(page, true);
+    const withSpan = await readTrebleChordLeft(page);
+
+    // The upper chord has no local arpeggio/arpeggio-for of its own — before
+    // the fix, its reserved leftward extent came out to 0 regardless of the
+    // span, so its own left edge would be identical (or further left,
+    // overlapping the describe area) with vs. without the lower-authored
+    // wave. With the fix, it reserves the same room a locally-authored wave
+    // would, shifting rightward.
+    expect(withSpan).toBeGreaterThan(withoutSpan);
   });
 });

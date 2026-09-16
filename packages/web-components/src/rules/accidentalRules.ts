@@ -86,6 +86,10 @@ export function computeNoteAccidentals(
     NoteElementType | ChordElementType,
     (AccidentalType | null)[]
   >;
+  trillFinishShowAccidentals: Map<
+    NoteElementType | ChordElementType,
+    (AccidentalType | null)[]
+  >;
 } {
   const keySigAccidentals = getKeySignatureAccidentals(keySig, mode);
   const inMeasureState = new Map<string, AccidentalType | null>();
@@ -99,34 +103,53 @@ export function computeNoteAccidentals(
     NoteElementType | ChordElementType,
     (AccidentalType | null)[]
   >();
+  const trillFinishShowAccidentals = new Map<
+    NoteElementType | ChordElementType,
+    (AccidentalType | null)[]
+  >();
 
-  // Grace notes sound before their host element, so their accidentals are
-  // resolved first and carry through the measure like any other accidental.
-  const resolveGraceAccidentals = (
+  // Shared by both ornament kinds (a leading grace group and a trill's
+  // finishing grace note(s)) — same suffix-vs-in-measure-state resolution as
+  // a plain note, just keyed by a pitch list instead of one pitch.
+  const resolveOrnamentAccidentals = (
+    pitches: Note[] | null,
+    target: Map<NoteElementType | ChordElementType, (AccidentalType | null)[]>,
     hostElement: NoteElementType | ChordElementType
   ): void => {
-    const graceNotes = hostElement.grace;
-    if (graceNotes == null || graceNotes.length === 0) {
+    if (pitches == null || pitches.length === 0) {
       return;
     }
-    const resolved = graceNotes.map((graceNote) => {
-      const letter = graceNote[0].toUpperCase();
-      const graceAccidental = suffixToType(parseAccidentalSuffix(graceNote));
+    const resolved = pitches.map((pitch) => {
+      const letter = pitch[0].toUpperCase();
+      const pitchAccidental = suffixToType(parseAccidentalSuffix(pitch));
       const effectiveState =
         inMeasureState.get(letter) ?? keySigAccidentals.get(letter) ?? null;
-      const showAccidental = resolveAccidental(graceAccidental, effectiveState);
-      inMeasureState.set(letter, graceAccidental);
+      const showAccidental = resolveAccidental(pitchAccidental, effectiveState);
+      inMeasureState.set(letter, pitchAccidental);
       return showAccidental;
     });
-    graceShowAccidentals.set(hostElement, resolved);
+    target.set(hostElement, resolved);
   };
 
   for (const element of elements) {
     if (element.nodeName === MUSIC_NOTE_NODE) {
       const noteElement = element as NoteElementType;
-      resolveGraceAccidentals(noteElement);
+      // A leading grace group sounds before the host note, a trill's
+      // finishing grace note(s) sound after it — both fold into
+      // inMeasureState in that chronological order, independent of whether
+      // the host note itself re-sounds (tie="end" below).
+      resolveOrnamentAccidentals(
+        noteElement.grace,
+        graceShowAccidentals,
+        noteElement
+      );
       if (noteElement.tie === 'end') {
         noteShowAccidentals.set(noteElement, null);
+        resolveOrnamentAccidentals(
+          noteElement.trillFinish,
+          trillFinishShowAccidentals,
+          noteElement
+        );
         continue;
       }
       const letter = noteElement.note[0].toUpperCase();
@@ -137,13 +160,27 @@ export function computeNoteAccidentals(
       const showAccidental = resolveAccidental(noteAccidental, effectiveState);
       noteShowAccidentals.set(noteElement, showAccidental);
       inMeasureState.set(letter, noteAccidental);
+      resolveOrnamentAccidentals(
+        noteElement.trillFinish,
+        trillFinishShowAccidentals,
+        noteElement
+      );
     } else if (element.nodeName === MUSIC_CHORD_NODE) {
       const chordElement = element as ChordElementType;
-      resolveGraceAccidentals(chordElement);
+      resolveOrnamentAccidentals(
+        chordElement.grace,
+        graceShowAccidentals,
+        chordElement
+      );
       if (chordElement.tie === 'end') {
         chordNoteAccidentals.set(
           chordElement,
           chordElement.notes.map(() => null)
+        );
+        resolveOrnamentAccidentals(
+          chordElement.trillFinish,
+          trillFinishShowAccidentals,
+          chordElement
         );
         continue;
       }
@@ -158,10 +195,20 @@ export function computeNoteAccidentals(
         inMeasureState.set(letter, noteAccidental);
       }
       chordNoteAccidentals.set(chordElement, accidentals);
+      resolveOrnamentAccidentals(
+        chordElement.trillFinish,
+        trillFinishShowAccidentals,
+        chordElement
+      );
     }
   }
 
-  return { noteShowAccidentals, chordNoteAccidentals, graceShowAccidentals };
+  return {
+    noteShowAccidentals,
+    chordNoteAccidentals,
+    graceShowAccidentals,
+    trillFinishShowAccidentals,
+  };
 }
 
 // Key signature accidentals are always single sharp or flat — never double accidentals.

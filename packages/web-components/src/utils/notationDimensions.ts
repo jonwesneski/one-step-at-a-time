@@ -6,9 +6,13 @@
 //
 // Two independent axes exist:
 //   1. Vertical / sizing  — everything here, rooted at STAFF_LINE_SPACING
-//   2. Horizontal / spacing — entry x-spacing is driven by a logarithmic duration
-//      weight (rules/spacingRules.ts) distributed across the available container
-//      width, which is dynamic and cannot be derived from a fixed base.
+//   2. Horizontal / spacing — entry x-*position* (rules/spacingRules.ts's
+//      computeMeasureProportionalOffsets) is an entry's beat-offset as a
+//      fraction of the measure's fixed beat capacity (from the time
+//      signature), scaled by the staff's real available width — not derived
+//      from anything here. PIXELS_PER_BEAT below feeds a separate concern,
+//      the measure's sizing *preference* (computeSpacingWeights), not
+//      position.
 //
 // Note SVG internals (COORD_WIDTH, NOTE_SCALE, etc.) live in svgCreator/note.ts
 // because they belong to that rendering subsystem's coordinate math, not to the
@@ -253,27 +257,24 @@ export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
  */
 export const NOTES_AREA_LEFT_MARGIN = 2;
 
-// ─── Note spacing (horizontal) ────────────────────────────────────────────────
+// ─── Note spacing — sizing preference (horizontal) ────────────────────────────
 //
-// Entries are justified to fill the measure. Beyond a fixed MIN_NOTE_WIDTH strut
-// per entry, spare width is shared out by a logarithmic function of duration:
-// halving a note's value costs roughly a quarter of its space, not half, so long
-// notes are not over-spaced and short notes are not starved. Starting values —
-// tune visually in Storybook.
+// PIXELS_PER_BEAT feeds only computeSpacingWeights, which answers "how wide
+// would this measure's box like to be, given how busy it is" for
+// staffWidth.ts's natural-width/flex-basis calculation — a measure sizing
+// *preference* that legitimately grows with entry count. It is unrelated to
+// where an entry actually sits (that's computeMeasureProportionalOffsets,
+// proportional to the measure's fixed beat capacity from the time signature —
+// see this file's header comment). Starting value — tune visually in
+// Storybook.
 
 /**
- * Slack (px) beyond the MIN_NOTE_WIDTH strut given to the measure's shortest
- * entry when there is room to spare — the floor of the logarithmic curve.
- * = 2 × STAFF_LINE_SPACING
+ * Slack (px) per whole-note's worth of duration, beyond the MIN_NOTE_WIDTH
+ * strut, for the sizing-preference calculation. A quarter note's slack is
+ * PIXELS_PER_BEAT × 0.25; an eighth note's is PIXELS_PER_BEAT × 0.125.
+ * = 16 × STAFF_LINE_SPACING
  */
-export const SPACING_SHORTEST_SLACK_PX = STAFF_LINE_SPACING * 2;
-
-/**
- * Additional slack (px) per doubling of an entry's duration relative to the
- * measure's shortest entry.
- * = 1.4 × STAFF_LINE_SPACING
- */
-export const SPACING_LOG_INCREMENT_PX = STAFF_LINE_SPACING * 1.4;
+export const PIXELS_PER_BEAT = STAFF_LINE_SPACING * 16;
 
 /**
  * Gap (px) between the end of the clef/key/time area and the first entry, so a
@@ -634,8 +635,10 @@ export const ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
 export const ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX = STAFF_LINE_SPACING * 0.4;
 
 /**
- * Leftward footprint (px) the staff reserves for the vertical hairpin, stacked
- * in front of the arpeggio sign's own footprint.
+ * Leftward footprint (px) of the hairpin *wedge*, stacked in front of the
+ * arpeggio sign's own footprint. The centred `-from` / `-to` dynamic letters
+ * spill further left than this; `computeArpeggioHairpinFootprintWidth` adds that
+ * letter term on top (estimated per character, not measured).
  */
 export const ARPEGGIO_HAIRPIN_FOOTPRINT_PX =
   ARPEGGIO_HAIRPIN_GAP_PX + ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX;
@@ -663,3 +666,64 @@ export const ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.7;
 
 /** Length (px) of an open-ended (laissez vibrer) tie curve. */
 export const LAISSEZ_VIBRER_CURVE_LENGTH_PX = STAFF_LINE_SPACING * 1.6;
+
+// ─── Trills ───────────────────────────────────────────────────────────────────
+// The sign is built from an engraved glyph outline (see
+// utils/svgCreator/trill.ts); the wavy extension line tiles a second engraved
+// segment horizontally, the same stretch-to-fit approach as the arpeggio wave
+// (see utils/svgCreator/arpeggio.ts) but running left-to-right instead of
+// top-to-bottom. Starting values — tune in Storybook.
+
+/** Rendered height (px) of the trill sign. */
+export const TRILL_SIGN_HEIGHT_PX = STAFF_LINE_SPACING * 1.4;
+
+/** Gap (px) between the sign's own bottom edge and the staff top line. */
+export const TRILL_ABOVE_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Rendered peak-to-peak vertical height (px) of the wavy line. */
+export const TRILL_WAVE_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Gap (px) between the sign's right edge and the wavy line's start. */
+export const TRILL_SIGN_LINE_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/** Gap (px) the wavy line stops short of a following (non-trilling) notehead. */
+export const TRILL_LINE_END_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Height (px) of the vertical notch that marks an explicit `trill-stop`. */
+export const TRILL_NOTCH_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Scale applied to a trilling-note accidental drawn above the trill sign —
+ * smaller than a full notehead accidental, matching the sign's own reduced
+ * scale relative to a normal notehead.
+ */
+export const TRILL_ACCIDENTAL_SCALE = 0.7;
+
+/** Gap (px) between the trilling-note accidental's bottom edge and the sign's top edge. */
+export const TRILL_ACCIDENTAL_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Scale applied to a written trilling notehead (`trill-note`) — a cue-note
+ * size (¾ scale), matching GRACE_SCALE's own note on cue-note sizing but
+ * slightly larger than a grace note, since it stands alone rather than
+ * grouped in a run.
+ */
+export const TRILL_WRITTEN_NOTE_SCALE = 0.75;
+
+/** Gap (px) between the anchor notehead's right edge and the written trilling notehead's left parenthesis. */
+export const TRILL_WRITTEN_NOTE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between each parenthesis and the notehead it encloses. */
+export const TRILL_PARENTHESIS_NOTE_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/** Stroke width (px) of each parenthesis around a written trilling notehead. */
+export const TRILL_PARENTHESIS_STROKE_WIDTH = 1.2;
+
+/**
+ * How far (px) each parenthesis extends past the notehead's own vertical
+ * extent, top and bottom.
+ */
+export const TRILL_PARENTHESIS_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.25;
+
+/** Horizontal bow depth (px) of each parenthesis curve. */
+export const TRILL_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;

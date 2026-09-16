@@ -1551,9 +1551,9 @@ describe('computeTupletBracketGeometry', () => {
     expect(downResult.numeralY - downBeamY).toBeCloseTo(numeralOffset, 5);
   });
 
-  // ─── flag extension effect on numeralY ───────────────────────────────────
+  // ─── numeralY tracks the real beam, independent of flag count ─────────────
 
-  it('stem-down numeralY is further down for thirtysecond notes than eighth notes due to longer stems', () => {
+  it('stem-down numeralY is the same gap from the beam regardless of flag count', () => {
     const eighthInputs = makeGeometryInputs(3, false, 'eighth');
     const thirtySecondInputs = makeGeometryInputs(3, false, 'thirtysecond');
     const eighthResult = computeTupletBracketGeometry(
@@ -1578,9 +1578,47 @@ describe('computeTupletBracketGeometry', () => {
       null,
       false
     )!;
-    // stem-down: flagExtension moves the beam baseline further down for more flags,
-    // so the numeral is further below even though beamStackOffset is the same (BEAM_THICKNESS_PX).
-    expect(thirtySecondResult.numeralY).toBeGreaterThan(eighthResult.numeralY);
+    // The numeral is placed from the primary beam line; flag count does not move
+    // that line (inner beams stack toward the noteheads, away from the numeral).
+    expect(thirtySecondResult.numeralY).toBeCloseTo(eighthResult.numeralY);
+  });
+
+  it('omitBracket numeralY follows the primary-beam Y reported by the renderer', () => {
+    const inputs = makeGeometryInputs(3, false, 'thirtysecond');
+    const SHIFT = 17;
+    const shifted = computeTupletBracketGeometry(
+      inputs.group,
+      inputs.elements,
+      inputs.noteXPositions,
+      inputs.stemDirections,
+      inputs.beamedIndices,
+      inputs.noteStaffYCoords,
+      inputs.chordStaffYCoords,
+      null,
+      false,
+      () => null
+    )!;
+    const withRenderer = computeTupletBracketGeometry(
+      inputs.group,
+      inputs.elements,
+      inputs.noteXPositions,
+      inputs.stemDirections,
+      inputs.beamedIndices,
+      inputs.noteStaffYCoords,
+      inputs.chordStaffYCoords,
+      null,
+      false,
+      // Report the beam pushed SHIFT px further from the noteheads than the
+      // staff-coord fallback would derive (stem-down → larger Y).
+      (i) =>
+        STAFF_Y_PADDING +
+        (inputs.noteStaffYCoords.get(inputs.elements[i] as NoteElementType) ??
+          0) -
+        NOTE_Y_HEAD_OFFSET_STEM_DOWN +
+        NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN +
+        SHIFT
+    )!;
+    expect(withRenderer.numeralY - shifted.numeralY).toBeCloseTo(SHIFT, 5);
   });
 
   it('stem-up numeralY sits at the same gap from the primary beam face regardless of flag count', () => {
