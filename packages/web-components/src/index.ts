@@ -7,6 +7,7 @@ import './staffGuitarTab';
 import './staffVocal';
 import './tuplet';
 import './arpeggio';
+import './voice';
 
 import './guitarNote';
 import './note';

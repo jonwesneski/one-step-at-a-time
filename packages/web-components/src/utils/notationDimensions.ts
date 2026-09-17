@@ -133,6 +133,16 @@ export const STAFF_Y_STEP = STAFF_LINE_SPACING / 2; // = 5
  */
 export const MIN_NOTE_WIDTH = STAFF_LINE_SPACING * 2;
 
+// ─── Voices ───────────────────────────────────────────────────────────────────
+
+/**
+ * Vertical displacement (px) applied to a rest's normal duration-keyed Y
+ * position when it belongs to one of 2-3 independent voices sharing a
+ * staff — voice 1's rests shift up, voice 2's shift down, clearly avoiding
+ * the other voice's notes. = STAFF_LINE_SPACING (one full line-space).
+ */
+export const VOICE_REST_DISPLACEMENT_PX = STAFF_LINE_SPACING;
+
 // ─── Beams ────────────────────────────────────────────────────────────────────
 
 /**

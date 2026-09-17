@@ -484,12 +484,14 @@ export class BeamsBuilder {
   constructor(
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
-    elementDurationFactors?: number[]
+    elementDurationFactors?: number[],
+    elementBeatOffsets?: number[]
   ) {
     const { groups, beamedIndices } = BeamsBuilder.#scan(
       elements,
       time,
-      elementDurationFactors
+      elementDurationFactors,
+      elementBeatOffsets
     );
     this.#groups = groups;
     this.#beamedIndices = beamedIndices;
@@ -512,7 +514,8 @@ export class BeamsBuilder {
   static #scan(
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
-    elementDurationFactors?: number[]
+    elementDurationFactors?: number[],
+    elementBeatOffsets?: number[]
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
     const [beats, beatType] = time;
     const measureDuration = beats / beatType;
@@ -523,17 +526,28 @@ export class BeamsBuilder {
     const groups: BeamGroup[] = [];
     const beamedIndices = new Set<number>();
 
-    // Whole-note-fraction offset at which each element starts.
-    // elementDurationFactors, when provided, supplies tuplet-scaled durations so
-    // that notes inside a tuplet are assigned to the correct beat window.
-    const elementOffsets: number[] = [];
-    let offset = 0;
-    for (let i = 0; i < elements.length; i++) {
-      elementOffsets.push(offset);
-      const dur = (elements[i].dataset.duration ??
-        elements[i].getAttribute('duration')) as DurationType;
-      offset += elementDurationFactors?.[i] ?? durationToFactor[dur] ?? 0;
-    }
+    // Whole-note-fraction offset at which each element starts. When
+    // elementBeatOffsets is supplied (the v1-scoped auto-combine track's
+    // sparse, non-contiguous beat positions — see rules/voiceCombineRules.ts),
+    // it's used directly instead of accumulating sequentially: a combined
+    // track's own array indices are still 0..N-1, but its real beat-time
+    // gaps between entries can be wider than its own durations would sum to
+    // (other voices' non-combined material occupies the space between).
+    // Otherwise elementDurationFactors, when provided, supplies tuplet-scaled
+    // durations so notes inside a tuplet are assigned to the correct window.
+    const elementOffsets: number[] =
+      elementBeatOffsets ??
+      (() => {
+        const offsets: number[] = [];
+        let offset = 0;
+        for (let i = 0; i < elements.length; i++) {
+          offsets.push(offset);
+          const dur = (elements[i].dataset.duration ??
+            elements[i].getAttribute('duration')) as DurationType;
+          offset += elementDurationFactors?.[i] ?? durationToFactor[dur] ?? 0;
+        }
+        return offsets;
+      })();
 
     // Flushes a completed consecutive run; creates a BeamGroup only when the run
     // has ≥ 2 notes (lone beamable notes fall back to flags).

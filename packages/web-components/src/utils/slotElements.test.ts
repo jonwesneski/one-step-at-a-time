@@ -4,10 +4,13 @@
 import {
   MUSIC_ARPEGGIO,
   MUSIC_CHORD,
+  MUSIC_CLEF,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_TUPLET,
+  MUSIC_VOICE,
 } from './consts';
-import { flattenSlotElements } from './slotElements';
+import { flattenSlotElements, flattenStaffSlotElements } from './slotElements';
 
 function note(pitch: string): HTMLElement {
   const el = document.createElement(MUSIC_NOTE);
@@ -23,6 +26,16 @@ function chord(name: string): HTMLElement {
 }
 function arpeggio(children: HTMLElement[]): HTMLElement {
   const el = document.createElement(MUSIC_ARPEGGIO);
+  el.append(...children);
+  return el;
+}
+function rest(): HTMLElement {
+  const el = document.createElement(MUSIC_REST);
+  el.setAttribute('duration', 'quarter');
+  return el;
+}
+function voice(children: HTMLElement[]): HTMLElement {
+  const el = document.createElement(MUSIC_VOICE);
   el.append(...children);
   return el;
 }
@@ -82,6 +95,88 @@ describe('flattenSlotElements — arpeggioGroups', () => {
     const { arpeggioGroups, tupletsByIndex } = flattenSlotElements([tuplet]);
     expect(arpeggioGroups).toHaveLength(0);
     expect(tupletsByIndex.size).toBeGreaterThan(0);
+    warn.mockRestore();
+  });
+});
+
+describe('flattenStaffSlotElements', () => {
+  it('behaves byte-identical to flattenSlotElements when there are zero <music-voice> siblings', () => {
+    const assigned = [note('C'), note('D'), rest()];
+    const direct = flattenSlotElements(assigned);
+    const { voices, clefMarkers } = flattenStaffSlotElements(assigned);
+
+    expect(voices.size).toBe(1);
+    expect(voices.get(1)?.flatElements).toEqual(direct.flatElements);
+    expect(clefMarkers).toEqual(direct.clefMarkers);
+  });
+
+  it('numbers voices by sibling order among <music-voice> children', () => {
+    const v1 = voice([note('C'), note('D')]);
+    const v2 = voice([note('E')]);
+    const { voices } = flattenStaffSlotElements([v1, v2]);
+
+    expect(voices.size).toBe(2);
+    expect(voices.get(1)?.flatElements).toHaveLength(2);
+    expect(voices.get(2)?.flatElements).toHaveLength(1);
+  });
+
+  it('supports 3 voices', () => {
+    const { voices } = flattenStaffSlotElements([
+      voice([note('C')]),
+      voice([note('D')]),
+      voice([note('E')]),
+    ]);
+
+    expect(voices.size).toBe(3);
+    expect([...voices.keys()]).toEqual([1, 2, 3]);
+  });
+
+  it('warns and ignores a 4th <music-voice> sibling', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { voices } = flattenStaffSlotElements([
+      voice([note('C')]),
+      voice([note('D')]),
+      voice([note('E')]),
+      voice([note('F')]),
+    ]);
+
+    expect(voices.size).toBe(3);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('at most 3 <music-voice> siblings')
+    );
+    warn.mockRestore();
+  });
+
+  it('warns and discards a bare top-level note alongside <music-voice> siblings, rather than folding it into voice 1', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const bareNote = note('G');
+    const { voices } = flattenStaffSlotElements([
+      voice([note('C')]),
+      voice([note('D')]),
+      bareNote,
+    ]);
+
+    expect(voices.get(1)?.flatElements).toHaveLength(1);
+    expect(voices.get(1)?.flatElements).not.toContain(bareNote);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('cannot appear alongside <music-voice> siblings')
+    );
+    warn.mockRestore();
+  });
+
+  it('keeps a <music-clef> valid alongside <music-voice> siblings without warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const clef = document.createElement(MUSIC_CLEF);
+    const { voices, clefMarkers } = flattenStaffSlotElements([
+      voice([note('C')]),
+      clef,
+      voice([note('D')]),
+    ]);
+
+    expect(voices.size).toBe(2);
+    expect(clefMarkers).toHaveLength(1);
+    expect(clefMarkers[0].element).toBe(clef);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 });

@@ -12,6 +12,7 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF,
 } from '../consts';
+import { BeamsBuilder } from './beams';
 import { NOTE_SCALE } from './note';
 
 const NOTE_STEM_X_OFFSET_PX = 365 * NOTE_SCALE;
@@ -782,6 +783,44 @@ describe('beams', () => {
 
         expect(stemLengthPx).toBeGreaterThanOrEqual(24);
       }
+    });
+  });
+
+  describe('elementBeatOffsets (sparse combined-track positions)', () => {
+    it('groups elements by their supplied offsets, not by sequential accumulation', () => {
+      // Two eighth notes whose OWN durations would only span 1/4 total, but
+      // whose real beat-time positions (as a combined-voice track sparsely
+      // interspersed among other, unlisted material) are a full beat apart —
+      // sequential accumulation would wrongly beam them together; the
+      // supplied offsets keep them in separate beat windows (4/4 groups by
+      // half-measure, so 0 and 0.5 fall in different windows).
+      const elements = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
+      ];
+      const builder = new BeamsBuilder(elements, [4, 4], undefined, [0, 0.5]);
+      expect(builder.isBeamed(0)).toBe(false);
+      expect(builder.isBeamed(1)).toBe(false);
+    });
+
+    it('still beams elements whose supplied offsets land in the same window', () => {
+      const elements = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
+      ];
+      const builder = new BeamsBuilder(elements, [4, 4], undefined, [0, 1 / 8]);
+      expect(builder.isBeamed(0)).toBe(true);
+      expect(builder.isBeamed(1)).toBe(true);
+    });
+
+    it('omitting elementBeatOffsets falls back to sequential accumulation (unchanged existing behavior)', () => {
+      const elements = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
+      ];
+      const builder = new BeamsBuilder(elements, [4, 4]);
+      expect(builder.isBeamed(0)).toBe(true);
+      expect(builder.isBeamed(1)).toBe(true);
     });
   });
 });

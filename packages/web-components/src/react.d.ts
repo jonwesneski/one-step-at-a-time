@@ -96,6 +96,7 @@ declare module 'react' {
       'music-rest': WebComponentNoChildrenProps & {
         duration?: DurationType;
       };
+      'music-voice': WebComponentProps;
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
       };

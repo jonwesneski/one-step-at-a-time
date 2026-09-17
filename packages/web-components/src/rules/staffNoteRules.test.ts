@@ -1,7 +1,11 @@
 /**
  * @jest-environment jsdom
  */
-import { computeLedgerLines } from './staffNoteRules';
+import { NoteChordOrRestElementType } from '../types/elements';
+import {
+  computeLedgerLines,
+  determineVoiceStemDirections,
+} from './staffNoteRules';
 
 describe('computeLedgerLines', () => {
   describe('no ledger lines needed', () => {
@@ -114,5 +118,30 @@ describe('computeLedgerLines', () => {
         { staffY: 80, widthType: 'single' },
       ]);
     });
+  });
+});
+
+describe('determineVoiceStemDirections', () => {
+  const elements = [{}, {}, {}] as NoteChordOrRestElementType[];
+
+  it('fills every element with up (true) for voice direction "up"', () => {
+    expect(determineVoiceStemDirections(elements, 'up')).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it('fills every element with down (false) for voice direction "down"', () => {
+    expect(determineVoiceStemDirections(elements, 'down')).toEqual([
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it('never varies within the array, regardless of pitch — this is what distinguishes it from pitch-driven determineStemDirections', () => {
+    const result = determineVoiceStemDirections(elements, 'up');
+    expect(new Set(result).size).toBe(1);
   });
 });

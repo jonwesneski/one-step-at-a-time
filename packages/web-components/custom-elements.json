@@ -2877,6 +2877,19 @@
             },
             {
               "kind": "field",
+              "name": "#voices",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceNumber, VoiceFlattenResult>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#noteXPositions",
               "privacy": "private",
               "type": {
@@ -3022,6 +3035,20 @@
                 "text": "number"
               },
               "privacy": "protected",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "voices",
+              "type": {
+                "text": "ReadonlyMap<VoiceNumber, VoiceFlattenResult>"
+              },
+              "privacy": "protected",
+              "description": "The staff's voice-partitioned flattening result (always >=1 entry — see\nflattenStaffSlotElements()). Exposed for the per-voice rendering\npipeline to build on; the render pipeline itself still only consumes\nvoice 1's own flatElements for now (see the #voices field comment).",
               "readonly": true,
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5356,6 +5383,19 @@
             },
             {
               "kind": "field",
+              "name": "#voices",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceNumber, VoiceFlattenResult>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#noteXPositions",
               "privacy": "private",
               "type": {
@@ -5501,6 +5541,20 @@
                 "text": "number"
               },
               "privacy": "protected",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "voices",
+              "type": {
+                "text": "ReadonlyMap<VoiceNumber, VoiceFlattenResult>"
+              },
+              "privacy": "protected",
+              "description": "The staff's voice-partitioned flattening result (always >=1 entry — see\nflattenStaffSlotElements()). Exposed for the per-voice rendering\npipeline to build on; the render pipeline itself still only consumes\nvoice 1's own flatElements for now (see the #voices field comment).",
               "readonly": true,
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -6635,6 +6689,107 @@
           "declaration": {
             "name": "TupletElement",
             "module": "src/tuplet/tuplet.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/voice/voice.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nreads each voice's `flatElements` independently.",
+          "name": "VoiceElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#childObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#applyingDefaults",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "flatElements",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "#elementChildren",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#onChildChange",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyDefaults",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#notify",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "music-voice",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_VOICE",
+          "declaration": {
+            "name": "VoiceElement",
+            "module": "src/voice/voice.ts"
           }
         }
       ]

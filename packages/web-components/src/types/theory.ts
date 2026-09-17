@@ -140,6 +140,17 @@ export type Voice =
   | 'bass';
 
 /**
+ * Which contrapuntal voice (independent rhythmic/melodic line sharing one
+ * staff) a note/chord/rest belongs to — NOT the vocal-range `Voice` type
+ * above. 1 = top voice (always stems up), 2 = bottom voice (always stems
+ * down), 3 = middle voice (only valid alongside both 1 and 2; contextual
+ * stem direction — see rules/voiceRules.ts). Never authored directly —
+ * derived from a note's position among `<music-voice>` siblings, see
+ * utils/slotElements.ts.
+ */
+export type VoiceNumber = 1 | 2 | 3;
+
+/**
  * Clef available on a staff.
  *
  * TODO: extend with 'alto' | 'tenor' | ... once CLEF_DEFINITIONS in

@@ -5,6 +5,7 @@ import {
 } from '../types/elements';
 import { BeamsBuilder } from '../utils';
 import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
+import { VoiceDirection } from './voiceRules';
 import {
   MIDDLE_STAFF_Y,
   STAFF_BOTTOM_LINE_Y,
@@ -149,6 +150,20 @@ export function determineStemDirections(
   }
 
   return stemDirections;
+}
+
+/**
+ * Multi-voice stem direction: every note/chord in a voice gets the same
+ * fixed direction (voice 1 always up, voice 2 always down — see
+ * voiceRules.ts#resolveVoiceDirections), never pitch-driven. Unlike
+ * determineStemDirections above, direction never varies within one voice's
+ * whole stream, so this is a flat fill — no beam-group resolution needed.
+ */
+export function determineVoiceStemDirections(
+  elements: NoteChordOrRestElementType[],
+  voiceDirection: VoiceDirection
+): boolean[] {
+  return new Array(elements.length).fill(voiceDirection === 'up');
 }
 
 const getStaffYs = (
