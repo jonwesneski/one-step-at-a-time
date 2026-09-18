@@ -7,24 +7,26 @@ import { isPitchedEntry } from './types';
 // entryEditsHelpers.ts): this app is the sole writer of the composition data, so
 // only well-formed input is handled.
 //
-// `toIndex` is the desired final position in the staff's `entryIds` (0..length),
-// as produced by `reorderTargetIndex`.
-export function moveEntryInStaff(
+// `toIndex` is the desired final position in the voice's `entryIds`
+// (0..length), as produced by `reorderTargetIndex`.
+export function moveEntryInVoice(
   structure: CompositionStructure,
   staffId: string,
+  voiceId: string,
   entryId: string,
   toIndex: number
 ): CompositionStructure {
   const staff = structure.stavesById[staffId];
-  if (!staff) {
+  const voice = staff?.voicesById[voiceId];
+  if (!staff || !voice) {
     return structure;
   }
-  const from = staff.entryIds.indexOf(entryId);
+  const from = voice.entryIds.indexOf(entryId);
   if (from === -1) {
     return structure;
   }
 
-  const without = staff.entryIds.filter((id) => id !== entryId);
+  const without = voice.entryIds.filter((id) => id !== entryId);
   const insertAt = Math.max(
     0,
     Math.min(without.length, toIndex > from ? toIndex - 1 : toIndex)
@@ -42,30 +44,37 @@ export function moveEntryInStaff(
     ...structure,
     stavesById: {
       ...structure.stavesById,
-      [staffId]: { ...staff, entryIds },
+      [staffId]: {
+        ...staff,
+        voicesById: {
+          ...staff.voicesById,
+          [voiceId]: { ...voice, entryIds },
+        },
+      },
     },
   };
 
-  next = dissolveDiscontiguousTuplets(next, staffId);
+  next = dissolveDiscontiguousTuplets(next, staffId, voiceId);
   next = normalizeConnectorEndpointOrder(next);
   next = pruneBrokenTies(next);
   return next;
 }
 
-// A tuplet must be a single uninterrupted run of 2+ entries in one staff (the
+// A tuplet must be a single uninterrupted run of 2+ entries in one voice (the
 // library renders it as one `<music-tuplet>` wrapper). A reorder can pull a
 // member out of the run or drop a non-member into it; dissolve any tuplet that
 // is no longer contiguous rather than trying to guess a new grouping.
 function dissolveDiscontiguousTuplets(
   structure: CompositionStructure,
-  staffId: string
+  staffId: string,
+  voiceId: string
 ): CompositionStructure {
-  const staff = structure.stavesById[staffId];
+  const entryIds = structure.stavesById[staffId].voicesById[voiceId].entryIds;
   const runs = new Map<
     string,
     { first: number; last: number; count: number }
   >();
-  staff.entryIds.forEach((id, index) => {
+  entryIds.forEach((id, index) => {
     const entry = structure.entriesById[id];
     if (!entry || !isPitchedEntry(entry) || !entry.tupletId) {
       return;

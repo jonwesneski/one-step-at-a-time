@@ -1,7 +1,13 @@
 import type { Note } from '@one-step-at-a-time/web-components';
 import { describe, expect, it } from 'vitest';
-import { moveEntryInStaff } from './reorderHelpers';
+import { moveEntryInVoice } from './reorderHelpers';
+import {
+  buildMultiVoiceStaff,
+  buildSingleVoiceStaff,
+} from './test-fixtures/voiceFixtures';
 import type { CompositionStructure, MusicEntry, NoteEntry } from './types';
+
+const voiceId = 's1-v1';
 
 function structure(
   entryIds: string[],
@@ -13,7 +19,7 @@ function structure(
     measureOrder: ['m1'],
     measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
     stavesById: {
-      s1: { id: 's1', type: 'treble', entryIds, group: null, groupId: null },
+      s1: buildSingleVoiceStaff('s1', entryIds),
     },
     entriesById,
     connectorsById: {},
@@ -30,33 +36,43 @@ const note = (id: string, value: Note = 'C'): NoteEntry => ({
   duration: 'quarter',
 });
 
-describe('moveEntryInStaff', () => {
+describe('moveEntryInVoice', () => {
   it('splices the entry to its new position', () => {
-    const next = moveEntryInStaff(
+    const next = moveEntryInVoice(
       structure(['a', 'b', 'c'], {
         a: note('a'),
         b: note('b'),
         c: note('c'),
       }),
       's1',
+      voiceId,
       'a',
       2
     );
-    expect(next.stavesById.s1.entryIds).toEqual(['b', 'a', 'c']);
+    expect(next.stavesById.s1.voicesById[voiceId].entryIds).toEqual([
+      'b',
+      'a',
+      'c',
+    ]);
   });
 
   it('moves an entry to the end', () => {
-    const next = moveEntryInStaff(
+    const next = moveEntryInVoice(
       structure(['a', 'b', 'c'], {
         a: note('a'),
         b: note('b'),
         c: note('c'),
       }),
       's1',
+      voiceId,
       'a',
       3
     );
-    expect(next.stavesById.s1.entryIds).toEqual(['b', 'c', 'a']);
+    expect(next.stavesById.s1.voicesById[voiceId].entryIds).toEqual([
+      'b',
+      'c',
+      'a',
+    ]);
   });
 
   it('returns the same structure reference for a no-op move', () => {
@@ -65,12 +81,12 @@ describe('moveEntryInStaff', () => {
       b: note('b'),
       c: note('c'),
     });
-    expect(moveEntryInStaff(s, 's1', 'a', 1)).toBe(s);
-    expect(moveEntryInStaff(s, 's1', 'missing', 2)).toBe(s);
+    expect(moveEntryInVoice(s, 's1', voiceId, 'a', 1)).toBe(s);
+    expect(moveEntryInVoice(s, 's1', voiceId, 'missing', 2)).toBe(s);
   });
 
   it('keeps a tuplet whose run stays contiguous', () => {
-    const next = moveEntryInStaff(
+    const next = moveEntryInVoice(
       structure(
         ['a', 'b', 'c', 'd'],
         {
@@ -82,16 +98,22 @@ describe('moveEntryInStaff', () => {
         { tupletsById: { t: { id: 't', ratio: '3:2' } } }
       ),
       's1',
+      voiceId,
       'a',
       4
     );
-    expect(next.stavesById.s1.entryIds).toEqual(['b', 'c', 'd', 'a']);
+    expect(next.stavesById.s1.voicesById[voiceId].entryIds).toEqual([
+      'b',
+      'c',
+      'd',
+      'a',
+    ]);
     expect(next.tupletsById.t).toBeDefined();
     expect(next.entriesById.b).toMatchObject({ tupletId: 't' });
   });
 
   it('dissolves a tuplet when the move breaks its run', () => {
-    const next = moveEntryInStaff(
+    const next = moveEntryInVoice(
       structure(
         ['a', 'b', 'c', 'd'],
         {
@@ -103,17 +125,23 @@ describe('moveEntryInStaff', () => {
         { tupletsById: { t: { id: 't', ratio: '3:2' } } }
       ),
       's1',
+      voiceId,
       'd',
       2
     );
-    expect(next.stavesById.s1.entryIds).toEqual(['a', 'b', 'd', 'c']);
+    expect(next.stavesById.s1.voicesById[voiceId].entryIds).toEqual([
+      'a',
+      'b',
+      'd',
+      'c',
+    ]);
     expect(next.tupletsById.t).toBeUndefined();
     expect(next.entriesById.b).toMatchObject({ tupletId: null });
     expect(next.entriesById.c).toMatchObject({ tupletId: null });
   });
 
   it('swaps a connector’s endpoints when the move inverts their order', () => {
-    const next = moveEntryInStaff(
+    const next = moveEntryInVoice(
       structure(
         ['a', 'b'],
         { a: note('a'), b: note('b') },
@@ -125,10 +153,11 @@ describe('moveEntryInStaff', () => {
         }
       ),
       's1',
+      voiceId,
       'a',
       2
     );
-    expect(next.stavesById.s1.entryIds).toEqual(['b', 'a']);
+    expect(next.stavesById.s1.voicesById[voiceId].entryIds).toEqual(['b', 'a']);
     expect(next.connectorsById.t1).toMatchObject({
       startEntryId: 'b',
       endEntryId: 'a',
@@ -136,7 +165,7 @@ describe('moveEntryInStaff', () => {
   });
 
   it('prunes a tie whose endpoints are no longer adjacent', () => {
-    const next = moveEntryInStaff(
+    const next = moveEntryInVoice(
       structure(
         ['a', 'b', 'c'],
         { a: note('a'), b: note('b'), c: note('c') },
@@ -148,10 +177,46 @@ describe('moveEntryInStaff', () => {
         }
       ),
       's1',
+      voiceId,
       'c',
       1
     );
-    expect(next.stavesById.s1.entryIds).toEqual(['a', 'c', 'b']);
+    expect(next.stavesById.s1.voicesById[voiceId].entryIds).toEqual([
+      'a',
+      'c',
+      'b',
+    ]);
     expect(next.connectorOrder).toEqual([]);
+  });
+
+  it('reordering one voice never touches another voice in the same staff', () => {
+    const s: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [
+          ['a', 'b', 'c'],
+          ['x', 'y'],
+        ]),
+      },
+      entriesById: {
+        a: note('a'),
+        b: note('b'),
+        c: note('c'),
+        x: note('x'),
+        y: note('y'),
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+    const next = moveEntryInVoice(s, 's1', 's1-v1', 'a', 2);
+    expect(next.stavesById.s1.voicesById['s1-v1'].entryIds).toEqual([
+      'b',
+      'a',
+      'c',
+    ]);
+    expect(next.stavesById.s1.voicesById['s1-v2'].entryIds).toEqual(['x', 'y']);
   });
 });

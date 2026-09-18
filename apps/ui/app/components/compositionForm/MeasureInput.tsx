@@ -23,6 +23,7 @@ import {
   useCompositionStructure,
   useMeasureTimeSignatures,
 } from './useCompositionStructure';
+import { staffEntryIds } from './voiceHelpers';
 
 interface MeasureInputProps {
   measureId: string;
@@ -38,15 +39,22 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
     useMeasureTimeSignatures().get(measureId) ?? structure.timeSig;
 
   const isMeasureSelected = session.selection.measureIds.includes(measureId);
+  // Overfull is checked per voice, not per staff — each voice has its own
+  // independent capacity budget (see measureCapacityHelpers.ts), so summing
+  // across voices before comparing would wrongly flag a staff whose voices
+  // each individually fit. This still can't happen with today's UI (every
+  // staff has exactly one voice), but stays correct once Phase 5 adds more.
   const isOverfull = measure.staffIds.some((sid) => {
     const staff = structure.stavesById[sid];
-    return (
-      staff !== undefined &&
-      remainingDuration(
-        staff.entryIds.map((id) => structure.entriesById[id]),
-        timeSignature,
-        structure.tupletsById
-      ) < -1e-9
+    return staff?.voiceOrder.some(
+      (voiceId) =>
+        remainingDuration(
+          staff.voicesById[voiceId].entryIds.map(
+            (id) => structure.entriesById[id]
+          ),
+          timeSignature,
+          structure.tupletsById
+        ) < -1e-9
     );
   });
   const containsSelectedStaff = measure.staffIds.some((id) =>
@@ -68,11 +76,13 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
   );
   const connectorEndpoints =
     selectionEndpoints &&
-    measure.staffIds.some((sid) =>
-      structure.stavesById[sid]?.entryIds.includes(
-        selectionEndpoints.startEntryId
-      )
-    )
+    measure.staffIds.some((sid) => {
+      const staff = structure.stavesById[sid];
+      return (
+        staff !== undefined &&
+        staffEntryIds(staff).includes(selectionEndpoints.startEntryId)
+      );
+    })
       ? selectionEndpoints
       : null;
 
@@ -83,9 +93,12 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
     : null;
   const editableEntry =
     selectedEntryId &&
-    measure.staffIds.some((sid) =>
-      structure.stavesById[sid]?.entryIds.includes(selectedEntryId)
-    )
+    measure.staffIds.some((sid) => {
+      const staff = structure.stavesById[sid];
+      return (
+        staff !== undefined && staffEntryIds(staff).includes(selectedEntryId)
+      );
+    })
       ? structure.entriesById[selectedEntryId]
       : null;
 

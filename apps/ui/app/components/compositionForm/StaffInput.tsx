@@ -52,7 +52,14 @@ export function StaffInput({
 
   const isSelected = session.selection.staffIds.includes(staffId);
 
-  const entries = staff.entryIds.map((eid) => entriesById[eid]);
+  // The "Staff Entries" add-panel and overfull indicator stay scoped to
+  // voice 1 this phase — every staff has exactly one voice until Phase 5
+  // adds a way to create more, and a real target-voice selector is explicit
+  // Phase 5 scope.
+  const firstVoiceId = staff.voiceOrder[0];
+  const entries = staff.voicesById[firstVoiceId].entryIds.map(
+    (eid) => entriesById[eid]
+  );
 
   const remainingBeats = remainingDuration(
     entries,
@@ -65,7 +72,7 @@ export function StaffInput({
     isSelected ? 'rainbow-selected' : ''
   }`;
 
-  const renderEntry = (entry: MusicEntry) => {
+  const renderEntry = (voiceId: string, entry: MusicEntry) => {
     const isEntrySelected = session.selection.entryIds.includes(entry.id);
     const isDraggable = entry.type !== 'clef';
     const entryClass = `${isEntrySelected ? 'rainbow-selected' : ''} ${
@@ -80,8 +87,9 @@ export function StaffInput({
       onEntryPointerDown(e, {
         entry,
         staffId,
+        voiceId,
         clef: effectiveClefOfEntry(structure, entry.id),
-        entryIds: staff.entryIds,
+        entryIds: staff.voicesById[voiceId].entryIds,
       });
     };
 
@@ -152,20 +160,28 @@ export function StaffInput({
   };
 
   // A tuplet run renders as a <music-tuplet> wrapper (a direct child of
-  // <music-staff>, as the library's slot walker requires); loose runs render
-  // their entries inline.
-  const runs = resolveTupletRuns(staff.entryIds, entriesById);
-  const entryNodes = runs.map((run) => {
-    const nodes = run.entries.map(renderEntry);
-    if (run.tupletId === null) {
-      return nodes;
-    }
-    const ratio = structure.tupletsById[run.tupletId]?.ratio;
-    return (
-      <music-tuplet key={run.tupletId} ratio={ratio}>
-        {nodes}
-      </music-tuplet>
-    );
+  // <music-voice>, as the library's slot walker requires); loose runs render
+  // their entries inline. Each voice renders as its own <music-voice> —
+  // wrapping even a single implicit voice this way is byte-identical to no
+  // wrapper at all (the library's own direction/stem-policy resolution keys
+  // off how many <music-voice> children exist, not whether the tag is
+  // present), so this needs no rework once Phase 5 lets a staff carry 2-3.
+  const voiceNodes = staff.voiceOrder.map((voiceId) => {
+    const voice = staff.voicesById[voiceId];
+    const runs = resolveTupletRuns(voice.entryIds, entriesById);
+    const nodes = runs.map((run) => {
+      const runNodes = run.entries.map((entry) => renderEntry(voiceId, entry));
+      if (run.tupletId === null) {
+        return runNodes;
+      }
+      const ratio = structure.tupletsById[run.tupletId]?.ratio;
+      return (
+        <music-tuplet key={run.tupletId} ratio={ratio}>
+          {runNodes}
+        </music-tuplet>
+      );
+    });
+    return <music-voice key={voiceId}>{nodes}</music-voice>;
   });
 
   return (
@@ -181,7 +197,7 @@ export function StaffInput({
         time={timeSignature}
         onClick={(e) => selectStaff(measureId, staffId, e)}
       >
-        {entryNodes}
+        {voiceNodes}
       </music-staff>
       {isSelected && (
         <AnchoredTabPanel

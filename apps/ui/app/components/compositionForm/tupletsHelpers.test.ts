@@ -4,6 +4,10 @@ import {
   setTuplet,
   tupletCandidate,
 } from './tupletsHelpers';
+import {
+  buildMultiVoiceStaff,
+  buildSingleVoiceStaff,
+} from './test-fixtures/voiceFixtures';
 import type { CompositionStructure, MusicEntry, Selection } from './types';
 import { isPitchedEntry } from './types';
 
@@ -29,20 +33,8 @@ function buildStructure(): CompositionStructure {
     measureOrder: ['m1'],
     measuresById: { m1: { id: 'm1', staffIds: ['s1', 's2'] } },
     stavesById: {
-      s1: {
-        id: 's1',
-        type: 'treble',
-        entryIds: ['e1', 'e2', 'e3', 'e4'],
-        group: null,
-        groupId: null,
-      },
-      s2: {
-        id: 's2',
-        type: 'bass',
-        entryIds: ['e5', 'e6'],
-        group: null,
-        groupId: null,
-      },
+      s1: buildSingleVoiceStaff('s1', ['e1', 'e2', 'e3', 'e4']),
+      s2: buildSingleVoiceStaff('s2', ['e5', 'e6'], { type: 'bass' }),
     },
     entriesById: {
       e1: note('e1'),
@@ -96,6 +88,7 @@ describe('tupletCandidate', () => {
   it('accepts 2+ contiguous entries in one staff', () => {
     expect(tupletCandidate(sel(['e2', 'e3']), buildStructure())).toEqual({
       staffId: 's1',
+      voiceId: 's1-v1',
       entryIds: ['e2', 'e3'],
     });
   });
@@ -116,6 +109,36 @@ describe('tupletCandidate', () => {
         buildStructure()
       )
     ).toBeNull();
+  });
+
+  it('rejects a contiguous run split across two voices of the same staff', () => {
+    const structure: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [
+          ['e1', 'e2'],
+          ['e3', 'e4'],
+        ]),
+      },
+      entriesById: {
+        e1: note('e1'),
+        e2: note('e2'),
+        e3: note('e3'),
+        e4: note('e4'),
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+    expect(tupletCandidate(sel(['e2', 'e3']), structure)).toBeNull();
+    // The genuinely contiguous run within one voice still works.
+    expect(tupletCandidate(sel(['e1', 'e2']), structure)).toEqual({
+      staffId: 's1',
+      voiceId: 's1-v1',
+      entryIds: ['e1', 'e2'],
+    });
   });
 });
 

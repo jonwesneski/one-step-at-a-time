@@ -1,6 +1,7 @@
 import type { TimeSignature } from '@one-step-at-a-time/web-components';
 import { describe, expect, it } from 'vitest';
 import { applyEntryUpdate } from './entryEditsHelpers';
+import { buildSingleVoiceStaff } from './test-fixtures/voiceFixtures';
 import type { CompositionStructure } from './types';
 
 function buildStructure(timeSig: TimeSignature = '4/4'): CompositionStructure {
@@ -9,13 +10,7 @@ function buildStructure(timeSig: TimeSignature = '4/4'): CompositionStructure {
     measureOrder: ['m1'],
     measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
     stavesById: {
-      s1: {
-        id: 's1',
-        type: 'treble',
-        entryIds: ['e1', 'e2'],
-        group: null,
-        groupId: null,
-      },
+      s1: buildSingleVoiceStaff('s1', ['e1', 'e2']),
     },
     entriesById: {
       e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },

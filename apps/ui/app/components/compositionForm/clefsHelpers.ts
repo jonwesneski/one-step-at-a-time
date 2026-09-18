@@ -44,21 +44,37 @@ export const CLEF_RANGES: Record<ClefType, ClefRange> = {
   bass: { octaves: [2, 3, 4], lowStep: step('E', 2), highStep: step('E', 4) },
 };
 
-// The clef in effect at `entryId`: the containing staff's base clef, overridden
-// by any `ClefEntry` earlier in that staff's entry stream.
+// The clef in effect at `entryId`: the containing staff's base clef,
+// overridden by any `ClefEntry` earlier in that staff's stream. A clef
+// change is staff-wide but only ever authored in voice 1 (see
+// NormalizedStaff's own doc comment), so this always walks voice 1's own
+// entryIds looking for the last clef marker before `entryId`'s position.
+//
+// When `entryId` itself is in voice 1, this is exact — array position in
+// voice 1's own stream is a real ordering. When it's in a different voice
+// (unreachable this phase — nothing in the UI can create a 2nd voice yet),
+// comparing array positions across two different voices' streams isn't
+// meaningful without a real beat-offset (the same problem the library's own
+// Phase 3 solved with computeBeatOffsets); rather than build that now for an
+// unreachable case, this falls back to "the last clef anywhere in voice 1" —
+// a known, documented gap for Phase 5, not a silent wrong answer.
 export function effectiveClefOfEntry(
   structure: CompositionStructure,
   entryId: string
 ): ClefType {
   const staff = Object.values(structure.stavesById).find((s) =>
-    s.entryIds.includes(entryId)
+    s.voiceOrder.some((voiceId) =>
+      s.voicesById[voiceId].entryIds.includes(entryId)
+    )
   );
   if (!staff) {
     return 'treble';
   }
+  const firstVoice = staff.voicesById[staff.voiceOrder[0]];
+  const inFirstVoice = firstVoice.entryIds.includes(entryId);
   let clef: ClefType = staff.type;
-  for (const id of staff.entryIds) {
-    if (id === entryId) {
+  for (const id of firstVoice.entryIds) {
+    if (inFirstVoice && id === entryId) {
       break;
     }
     const entry = structure.entriesById[id];

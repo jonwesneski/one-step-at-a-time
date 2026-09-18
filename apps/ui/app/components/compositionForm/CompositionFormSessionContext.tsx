@@ -75,10 +75,16 @@ type CompositionFormSessionContextValue = {
   addEntry: (
     measureId: string,
     staffId: string,
-    entry: DraftMusicEntry
+    entry: DraftMusicEntry,
+    voiceId?: string
   ) => void;
   updateEntry: (entry: MusicEntry) => void;
-  reorderEntry: (staffId: string, entryId: string, toIndex: number) => void;
+  reorderEntry: (
+    staffId: string,
+    voiceId: string,
+    entryId: string,
+    toIndex: number
+  ) => void;
   setConnector: (
     startEntryId: string,
     endEntryId: string,
@@ -107,10 +113,16 @@ type CompositionFormSessionProviderProps = {
   onAddEntry: (
     measureId: string,
     staffId: string,
-    entry: DraftMusicEntry
+    entry: DraftMusicEntry,
+    voiceId?: string
   ) => void;
   onUpdateEntry: (entry: MusicEntry) => void;
-  onReorderEntry: (staffId: string, entryId: string, toIndex: number) => void;
+  onReorderEntry: (
+    staffId: string,
+    voiceId: string,
+    entryId: string,
+    toIndex: number
+  ) => void;
   onSetConnector: (
     startEntryId: string,
     endEntryId: string,

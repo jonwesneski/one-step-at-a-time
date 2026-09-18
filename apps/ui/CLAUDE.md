@@ -93,8 +93,21 @@ nodes, every id a `crypto.randomUUID()`.
 timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef)
 measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin, by entry id)
 measuresById: Record<id, { staffIds, time? }>   connectorOrder: string[]
-stavesById:   Record<id, { type, entryIds, group, groupId }>   tupletsById: Record<id, { ratio }>
+stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tupletsById: Record<id, { ratio }>
 ```
+
+A staff's entries are one level deeper than the diagram above shows:
+`voiceOrder: string[]` (ascending = voice 1..3, position IS the voice number,
+mirrors the library's `<music-voice>` model) + `voicesById: Record<id, {
+id, entryIds }>`. Every staff has exactly one voice today — there's no control
+yet to create a second (`voiceHelpers.ts`'s `addVoiceToStaff`/
+`removeVoiceFromStaff` exist and are tested, just not wired to UI). A
+`ClefEntry` always lives in `voiceOrder[0]`'s own `entryIds` — a clef change
+is staff-wide, but the library only honors a mid-stream `<music-clef>` nested
+in the first `<music-voice>`. Use `voiceHelpers.ts`'s `staffEntryIds(staff)`
+for anything that genuinely needs "every entry in this staff regardless of
+voice" (deletion cascades, staff-wide search, marquee hit-testing) rather
+than reading `voicesById` directly.
 
 `keySig` / `mode` inheritance is **not** stored per node — it lives on the root
 form values, passed straight to `<music-composition>`, and the library flows it
@@ -248,9 +261,10 @@ machine, wired onto every note/chord/rest via `onPointerDown` in `StaffInput`.
   from `clefsHelpers.ts`, and skips a chord's other notes. Live preview writes the
   `note`/`octave` attribute straight onto the light-DOM element — the library
   re-renders in place via its `note-y-change` event. Commit reuses `updateEntry`.
-- **Reorder** computes a drop index by geometry over the staff's `entryElements`
-  rects (`reorderTargetIndex`), then `reorderEntry` → `moveEntryInStaff`
-  (`reorderHelpers.ts`), which splices `entryIds` and repairs the fallout:
+- **Reorder** computes a drop index by geometry over the entry's own voice's
+  `entryElements` rects (`reorderTargetIndex`), then `reorderEntry` →
+  `moveEntryInVoice` (`reorderHelpers.ts`), which splices that voice's
+  `entryIds` and repairs the fallout:
   dissolves a tuplet whose run is no longer contiguous, swaps inverted connector
   endpoints, prunes now-invalid ties.
 - Overlays (drop clone, drop indicator, `D4 → F4` tooltip) are appended to

@@ -54,9 +54,9 @@ export type EntryMarkings = {
 };
 
 // A note/chord/rest belongs to at most one tuplet, referenced by id. The
-// tuplet's member order and position come from `staff.entryIds` — there is no
-// separate order array. Nested tuplets are not modelled (one tupletId per
-// entry), though the library renderer does support them.
+// tuplet's member order and position come from its own voice's `entryIds` —
+// there is no separate order array. Nested tuplets are not modelled (one
+// tupletId per entry), though the library renderer does support them.
 export type TupletMembership = { tupletId?: string | null };
 
 export type NoteEntry = EntryMarkings &
@@ -79,8 +79,9 @@ export type RestEntry = TupletMembership & {
   type: 'rest';
   duration: DurationType;
 };
-// A mid-stream clef change. Lives in `staff.entryIds` like any entry, but
-// carries no beat duration and cannot belong to a tuplet.
+// A mid-stream clef change. Lives in a voice's `entryIds` like any entry
+// (always voice 1's — see NormalizedStaff's own doc comment), but carries no
+// beat duration and cannot belong to a tuplet.
 export type ClefEntry = {
   id: string;
   type: 'clef';
@@ -112,10 +113,19 @@ export type NormalizedMeasure = {
   staffIds: string[];
   time?: TimeSignature | null;
 };
+// Structural nesting mirrors <music-voice> directly (see the library's
+// polyphonic-notation design) — position in voiceOrder IS the voice number.
+// A ClefEntry always lives in voiceOrder[0] (voice 1) — a clef change is
+// staff-wide, but the library only honors a mid-stream <music-clef> nested
+// in the first <music-voice> (voice 1 is the canonical timeline every other
+// voice's position is judged against).
+export type NormalizedVoice = { id: string; entryIds: string[] };
+
 export type NormalizedStaff = {
   id: string;
   type: StaffType;
-  entryIds: string[];
+  voiceOrder: string[]; // ascending = voice 1..3, always >=1 entry
+  voicesById: Record<string, NormalizedVoice>;
   group: StaffGroupType | null;
   groupId: string | null;
 };
@@ -137,8 +147,9 @@ export type NormalizedConnector = {
   endEntryId: string;
 };
 
-// A tuplet grouping a contiguous run of entries in one staff. Which entries and
-// in what order is derived from the entries carrying this id in `staff.entryIds`.
+// A tuplet grouping a contiguous run of entries in one voice. Which entries and
+// in what order is derived from the entries carrying this id in that voice's
+// `entryIds`.
 export type NormalizedTuplet = { id: string; ratio: TupletRatio };
 
 // The undoable structural slice. `timeSig` lives here (not just on the root form
