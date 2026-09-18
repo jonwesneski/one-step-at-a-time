@@ -25,7 +25,10 @@ import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
 } from './rules/spacingRules';
-import { determineVoiceStemDirections } from './rules/staffNoteRules';
+import {
+  determineVoiceStemDirections,
+  getStaffYs,
+} from './rules/staffNoteRules';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
@@ -60,6 +63,7 @@ import {
   computeCrossVoiceDisplacements,
   resolveVoiceDirections,
   VoiceDirection,
+  VoiceDirectionInput,
   VoiceNoteheadPlacement,
 } from './rules/voiceRules';
 import { StaffElementBase } from './staffBase';
@@ -343,6 +347,14 @@ function elementHasShownAccidental(
 // rest (rules/voiceRestRules.ts). Internal to this file — never exported.
 type VoiceKey = VoiceNumber | 'combined' | 'shared-rest';
 
+// One real voice's resolved Y-coordinates — the shared shape Pass 1.5
+// precomputes per voice (for resolveVoiceDirections' 3-voice heuristic) and
+// hands to #buildVoiceRenderState so it isn't recomputed there too.
+type VoiceStaffYCoords = {
+  noteStaffYCoords: Map<NoteElementType, number>;
+  chordStaffYCoords: Map<ChordElementType, number[]>;
+};
+
 // Bundles every per-pass snapshot a single voice's own render pass produces
 // — the generalization of what used to be a dozen separate singular fields
 // (#currentElements, #noteXPositions, #stemDirections, #beamRenderer, …),
@@ -445,6 +457,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
   #clefMarkers: ClefMarkerPlacement[] = [];
+  // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
+  // #renderNotes() pass — the shared coordinate space #clefMarkers'
+  // index-based anchors convert into (#clefMarkerBeatOffset) and that the
+  // public noteToYCoordinate()'s `elementIndex` argument (always meaning
+  // "index into voice 1") converts into as well.
+  #voice1BeatOffsets: number[] = [];
   // Voice-partitioned flattening result (always >=1 entry — see
   // flattenStaffSlotElements()).
   #voices: Map<VoiceNumber, VoiceFlattenResult> = new Map();
@@ -1001,6 +1019,43 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return rest;
   }
 
+  // One voice's real staff-Y coordinates from its own elements/beatOffsets
+  // (each element's own beat-offset drives its clef-segment lookup — see
+  // #noteToYCoordinateAtBeatOffset — so this resolves correctly regardless
+  // of which voice it's called for). Shared by Pass 1.5 (direction
+  // resolution) and #buildVoiceRenderState (falls back to this when no
+  // precomputed result is handed in, e.g. the 'combined'/'shared-rest'
+  // synthetic tracks, which don't exist yet during Pass 1.5).
+  #resolveVoiceStaffYCoords(
+    elements: NoteChordOrRestElementType[],
+    beatOffsets: number[]
+  ): VoiceStaffYCoords {
+    const noteStaffYCoords = new Map<NoteElementType, number>();
+    const chordStaffYCoords = new Map<ChordElementType, number[]>();
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
+      const beatOffset = beatOffsets[i];
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const noteElement = element as NoteElementType;
+        noteStaffYCoords.set(
+          noteElement,
+          this.#noteToYCoordinateAtBeatOffset(
+            noteElement.note,
+            noteElement.octave ?? undefined,
+            beatOffset
+          )
+        );
+      } else if (element.nodeName === MUSIC_CHORD_NODE) {
+        const chordElement = element as ChordElementType;
+        chordStaffYCoords.set(
+          chordElement,
+          this.#resolveChordStaffYCoordinates(chordElement.notes, beatOffset)
+        );
+      }
+    }
+    return { noteStaffYCoords, chordStaffYCoords };
+  }
+
   // Builds one voice key's full VoiceRenderState: Y-coordinate resolution,
   // beam/stem resolution (policy-driven for a real multi-voice track,
   // pitch-driven for the single-voice case and the 'combined' track — see
@@ -1016,30 +1071,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     arpeggioGroups: ArpeggioGroupPlacement[],
     direction: VoiceDirection,
     pitchDriven: boolean,
-    accidentals: ReturnType<typeof computeNoteAccidentals>
+    accidentals: ReturnType<typeof computeNoteAccidentals>,
+    precomputedYCoords?: VoiceStaffYCoords
   ): VoiceRenderState {
-    const noteStaffYCoords = new Map<NoteElementType, number>();
-    const chordStaffYCoords = new Map<ChordElementType, number[]>();
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
-      if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = element as NoteElementType;
-        noteStaffYCoords.set(
-          noteElement,
-          this.noteToYCoordinate(
-            noteElement.note,
-            noteElement.octave ?? undefined,
-            i
-          )
-        );
-      } else if (element.nodeName === MUSIC_CHORD_NODE) {
-        const chordElement = element as ChordElementType;
-        chordStaffYCoords.set(
-          chordElement,
-          this.#resolveChordStaffYCoordinates(chordElement.notes, i)
-        );
-      }
-    }
+    const { noteStaffYCoords, chordStaffYCoords } =
+      precomputedYCoords ??
+      this.#resolveVoiceStaffYCoords(elements, beatOffsets);
 
     const arpeggioRunIndices = new Set<number>(
       arpeggioGroups.flatMap((group) => group.runIndices)
@@ -1201,33 +1238,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       });
     }
 
-    // Clef markers are staff-wide but only meaningful for a single voice —
-    // see VoiceKey's own doc comment / Phase 1's documented boundary. Phase
-    // 3 re-anchors them by beat-offset so they work at any voice count;
-    // until then a multi-voice staff simply hides them.
-    if (isMultiVoice) {
-      if (this.#clefMarkers.length > 0) {
-        console.warn(
-          '[staffClassicalBase] mid-stream <music-clef> changes are not yet supported on a multi-voice staff; ignoring'
-        );
-      }
-      for (const marker of this.#clefMarkers) {
+    // Clef markers are always relative to voice 1's own array (see
+    // ClefMarkerPlacement's doc comment) — this survival filter is the same
+    // whether the staff is single- or multi-voice. #voice1BeatOffsets is
+    // snapshotted here too: it's what lets #activeClefAt (via
+    // #clefMarkerBeatOffset) and the public noteToYCoordinate() convert an
+    // index-based marker/argument into the shared beat-offset space every
+    // voice's own Y-coordinate resolution reads from below.
+    const voice1 = pass1ByVoice.get(1);
+    const allowedElementCount = voice1?.elements.length ?? 0;
+    this.#voice1BeatOffsets = voice1?.beatOffsets ?? [];
+    const survivingClefMarkers: ClefMarkerPlacement[] = [];
+    for (const marker of this.#clefMarkers) {
+      if (marker.afterElementIndex < allowedElementCount) {
+        survivingClefMarkers.push(marker);
+      } else {
         marker.element.style.display = 'none';
       }
-      this.#clefMarkers = [];
-    } else {
-      const voice1 = pass1ByVoice.get(1);
-      const allowedElementCount = voice1?.elements.length ?? 0;
-      const survivingClefMarkers: ClefMarkerPlacement[] = [];
-      for (const marker of this.#clefMarkers) {
-        if (marker.afterElementIndex < allowedElementCount) {
-          survivingClefMarkers.push(marker);
-        } else {
-          marker.element.style.display = 'none';
-        }
-      }
-      this.#clefMarkers = survivingClefMarkers;
     }
+    this.#clefMarkers = survivingClefMarkers;
 
     // Cross-voice pre-pass: shared-rest detection (v1-scoped, only ever
     // considered once 2+ voices are active), then — only if it didn't fire
@@ -1349,9 +1378,42 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#effectiveMode
     );
 
+    // Pass 1.5: precompute each real voice's own Y-coordinates from its
+    // Pass-1 elements/beatOffsets. Needed before resolveVoiceDirections can
+    // contextually place voice 3 (3-voice case only — see
+    // rules/voiceRules.ts#resolveMiddleVoiceDirection), and reused directly
+    // by Pass 2 below so every real voice's Y-coordinates are computed once,
+    // not twice ('combined'/'shared-rest' don't exist yet at this point —
+    // they're a byproduct of the compaction pass above — so they still
+    // compute their own inline in #buildVoiceRenderState).
+    const yCoordsByVoice = new Map<VoiceNumber, VoiceStaffYCoords>();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      yCoordsByVoice.set(
+        voiceNumber,
+        this.#resolveVoiceStaffYCoords(p.elements, p.beatOffsets)
+      );
+    }
+    const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      const y = yCoordsByVoice.get(voiceNumber);
+      if (!y) {
+        continue;
+      }
+      staffYsByVoice.set(
+        voiceNumber,
+        p.elements.map((element, i) => ({
+          staffYs: getStaffYs(element, y.noteStaffYCoords, y.chordStaffYCoords),
+          beatOffset: p.beatOffsets[i],
+        }))
+      );
+    }
+
     // Pass 2: per active voice key — Y-resolution, beams/stems, rest-Y
     // context, per-element property writes, tuplet groups, trill footprints.
-    const directionsByVoice = resolveVoiceDirections(voiceNumbers);
+    const directionsByVoice = resolveVoiceDirections(
+      voiceNumbers,
+      staffYsByVoice
+    );
     const newRenderStates = new Map<VoiceKey, VoiceRenderState>();
     const activeKeys = new Set<VoiceKey>(trackInputs.keys());
 
@@ -1369,7 +1431,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         input.arpeggioGroups,
         direction,
         pitchDriven,
-        accidentals
+        accidentals,
+        typeof voiceKey === 'number' ? yCoordsByVoice.get(voiceKey) : undefined
       );
       newRenderStates.set(voiceKey, state);
     }
@@ -1489,18 +1552,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #resolveChordStaffYCoordinates(
     notes: ChordNote[],
-    elementIndex: number
+    beatOffset: number
   ): number[] {
     const result: number[] = [];
     let previousY = Infinity;
-    const { octaves } = this.#renderDataForIndex(elementIndex);
+    const { octaves } = this.#renderDataForBeatOffset(beatOffset);
 
     for (const note of notes) {
       if (note.octave !== null) {
-        const y = this.noteToYCoordinate(
+        const y = this.#noteToYCoordinateAtBeatOffset(
           note.value,
           note.octave ?? undefined,
-          elementIndex
+          beatOffset
         );
         result.push(y);
         previousY = y;
@@ -1510,7 +1573,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // pitch (root-position close voicing).
         const candidates: number[] = [];
         for (const octave of octaves) {
-          const y = this.noteToYCoordinate(note.value, octave, elementIndex);
+          const y = this.#noteToYCoordinateAtBeatOffset(
+            note.value,
+            octave,
+            beatOffset
+          );
           if (y > 0 && y < previousY) {
             candidates.push(y);
           }
@@ -1518,7 +1585,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const resolved =
           candidates.length > 0
             ? Math.max(...candidates)
-            : this.noteToYCoordinate(note.value, undefined, elementIndex);
+            : this.#noteToYCoordinateAtBeatOffset(
+                note.value,
+                undefined,
+                beatOffset
+              );
         result.push(resolved);
         previousY = resolved;
       }
@@ -1527,36 +1598,47 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return result;
   }
 
-  // Finds the clef marker active at `elementIndex` — the latest marker whose
-  // `afterElementIndex` is strictly less than it — or null if segment 0 (the
-  // staff's own clef, via the abstract yCoordinates/octaves getters) applies.
-  // Always null for staves with no <music-clef> markers (e.g. StaffVocalElement),
-  // which is exactly what keeps this mechanism a no-op for them.
-  #activeClefAt(elementIndex: number): ClefType | null {
-    // Clef markers are staff-wide but only meaningful for a single voice —
-    // see #renderNotes()'s clef-marker handling / VoiceKey's doc comment.
-    // #clefMarkers is already emptied whenever #voices.size > 1, so this
-    // guard is a fast-path, not load-bearing on its own.
-    if (this.#voices.size > 1) {
-      return null;
-    }
+  // Finds the clef marker active at `beatOffset` (whole-note-fraction, the
+  // shared coordinate space every voice's positions already align on) — the
+  // latest marker whose own beat-offset is strictly less than it — or null if
+  // segment 0 (the staff's own clef, via the abstract yCoordinates/octaves
+  // getters) applies. Always null for staves with no <music-clef> markers
+  // (e.g. StaffVocalElement), which is exactly what keeps this a no-op for
+  // them. Beat-offset-anchored (not index-anchored) so it resolves correctly
+  // for every voice on a multi-voice staff, not just voice 1 — see
+  // #clefMarkers' own doc comment for how a marker's index converts here.
+  #activeClefAt(beatOffset: number): ClefType | null {
     let active: ClefMarkerPlacement | null = null;
+    let activeBeatOffset = -Infinity;
     for (const marker of this.#clefMarkers) {
+      const markerBeatOffset = this.#clefMarkerBeatOffset(marker);
       if (
-        marker.afterElementIndex < elementIndex &&
-        (active === null || marker.afterElementIndex > active.afterElementIndex)
+        markerBeatOffset < beatOffset &&
+        markerBeatOffset > activeBeatOffset
       ) {
         active = marker;
+        activeBeatOffset = markerBeatOffset;
       }
     }
     return active ? active.element.clef : null;
   }
 
-  #renderDataForIndex(elementIndex: number): {
+  // #clefMarkers stores each marker's `afterElementIndex` relative to voice
+  // 1's own flat array (see ClefMarkerPlacement's doc comment) — converts
+  // that into the shared beat-offset coordinate space via #voice1BeatOffsets
+  // (populated once per #renderNotes() pass), so #activeClefAt can compare it
+  // against any voice's own beat-offset, not just voice 1's index.
+  #clefMarkerBeatOffset(marker: ClefMarkerPlacement): number {
+    return marker.afterElementIndex === -1
+      ? -1
+      : this.#voice1BeatOffsets[marker.afterElementIndex] ?? -1;
+  }
+
+  #renderDataForBeatOffset(beatOffset: number): {
     yCoordinates: YCoordinates;
     octaves: Octave[];
   } {
-    const clef = this.#activeClefAt(elementIndex);
+    const clef = this.#activeClefAt(beatOffset);
     if (clef === null) {
       return { yCoordinates: this.yCoordinates, octaves: this.octaves };
     }
@@ -1574,10 +1656,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // The clef in effect at the very start of the staff's note stream — the
-  // staff's own clef (via `ownClef`), unless a <music-clef> marker sits at
-  // afterElementIndex === -1. Backs composition-level courtesy-clef logic.
+  // staff's own clef (via `ownClef`), unless a <music-clef> marker sits
+  // before the first element (beat-offset -1). Queried with -0.5 (any value
+  // strictly between -1 and 0, the smallest real beat-offset, works) so only
+  // that leading marker — never a real, >=0 one — can be "active" here.
+  // Backs composition-level courtesy-clef logic.
   public get effectiveStartClef(): ClefType | null {
-    return this.#activeClefAt(0) ?? this.ownClef;
+    return this.#activeClefAt(-0.5) ?? this.ownClef;
   }
 
   // The clef in effect after the last note/chord/rest — the last marker's
@@ -1588,11 +1673,38 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   // Return the y-coordinate for a given note and octave.
   // Accidentals are ignored for vertical placement — C# and C natural occupy
-  // the same staff line/space.
+  // the same staff line/space. `elementIndex`, when given, is always an
+  // index into voice 1's own array (documented host-app-facing contract, see
+  // this method's class-level usage in apps/ui's drag interactions) —
+  // converted internally to a beat-offset via #voice1BeatOffsets: no index at
+  // all skips clef-segment resolution entirely (same as before beat-offset
+  // anchoring existed — the caller has no note to anchor against, so this
+  // resolves against the staff's own base clef only), and an index at or
+  // past the known array's end resolves as "after everything" — the same
+  // convention effectiveEndClef already uses — rather than as "unknown."
+  // Internal per-voice callers elsewhere in this file use
+  // #noteToYCoordinateAtBeatOffset directly with their own voice's real beat-
+  // offset instead, since a plain element index only ever means "voice 1"
+  // here.
   public noteToYCoordinate(
     note: Note,
     octave?: Octave,
     elementIndex?: number
+  ): number {
+    let beatOffset = Number.NEGATIVE_INFINITY;
+    if (elementIndex !== undefined) {
+      beatOffset =
+        elementIndex < this.#voice1BeatOffsets.length
+          ? this.#voice1BeatOffsets[elementIndex]
+          : Number.POSITIVE_INFINITY;
+    }
+    return this.#noteToYCoordinateAtBeatOffset(note, octave, beatOffset);
+  }
+
+  #noteToYCoordinateAtBeatOffset(
+    note: Note,
+    octave: Octave | undefined,
+    beatOffset: number
   ): number {
     if (!note) {
       return 0;
@@ -1600,10 +1712,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     // Strip accidentals: take the first character (always the letter A-G).
     const letter = note[0].toUpperCase();
-    const { yCoordinates, octaves } =
-      elementIndex !== undefined
-        ? this.#renderDataForIndex(elementIndex)
-        : { yCoordinates: this.yCoordinates, octaves: this.octaves };
+    const { yCoordinates, octaves } = this.#renderDataForBeatOffset(beatOffset);
 
     if (octave !== undefined) {
       const yCoordinate =
@@ -2049,13 +2158,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             duration,
             noteElement.noFlags
           );
+          // Read back Pass 2's already-resolved value instead of calling the
+          // public noteToYCoordinate() again here — that method's own
+          // `elementIndex` argument always means "index into voice 1", so
+          // passing this loop's local `i` for voice 2/3 would silently
+          // resolve against the wrong voice's clef segment on a staff with a
+          // mid-stream <music-clef> marker.
           const noteY =
             STAFF_Y_PADDING +
-            this.noteToYCoordinate(
-              noteElement.note,
-              noteElement.octave ?? undefined,
-              i
-            ) -
+            (state.noteStaffYCoords.get(noteElement) ?? 0) -
             yHeadOffset;
           element.style.top = `${noteY}px`;
         } else {

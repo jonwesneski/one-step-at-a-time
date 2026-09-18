@@ -65,17 +65,13 @@ describe(MUSIC_VOICE, () => {
     expect(element.flatElements).toHaveLength(3);
   });
 
-  it('warns when a <music-clef> is nested inside <music-voice>', () => {
+  it('does not warn for a <music-clef> nested inside <music-voice> (a mid-stream clef change is authored in the first voice)', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const element = document.createElement(MUSIC_VOICE) as VoiceElementType;
     element.appendChild(document.createElement(MUSIC_CLEF));
     document.body.appendChild(element);
 
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '<music-clef> is not allowed inside <music-voice>'
-      )
-    );
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
@@ -97,13 +93,11 @@ describe(MUSIC_VOICE, () => {
     document.body.appendChild(element);
     warn.mockClear();
 
-    element.appendChild(document.createElement(MUSIC_CLEF));
+    element.appendChild(document.createElement(MUSIC_VOICE));
 
     return Promise.resolve().then(() => {
       expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '<music-clef> is not allowed inside <music-voice>'
-        )
+        expect.stringContaining('cannot nest inside another <music-voice>')
       );
       warn.mockRestore();
     });

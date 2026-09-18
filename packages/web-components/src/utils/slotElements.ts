@@ -154,9 +154,10 @@ export type StaffFlattenResult = {
 // voice 2, the 3rd is voice 3). Mixing bare top-level notes/chords/rests with
 // one or more <music-voice> siblings is invalid — the bare content is
 // discarded (not silently folded into voice 1) so a real authoring mistake
-// doesn't render silently wrong. <music-clef> is exempt from that rule: a
-// clef change is staff-wide, so it stays valid alongside <music-voice>
-// siblings and is collected separately, never partitioned into a voice.
+// doesn't render silently wrong. <music-clef> is a special case of this: a
+// clef change is staff-wide, but it's authored nested inside the first
+// <music-voice> (voice 1's own timeline is its canonical anchor point) —
+// never as a bare top-level sibling, and never inside voice 2/3.
 export function flattenStaffSlotElements(
   assigned: Element[]
 ): StaffFlattenResult {
@@ -179,50 +180,57 @@ export function flattenStaffSlotElements(
     );
   }
 
+  // <music-clef> is no longer exempt here: once voice 1 can carry its own
+  // nested markers (see below), a bare top-level sibling clef has no way to
+  // express a real anchor point (its DOM position among <music-voice>
+  // siblings can only ever mean "before all voice content" or "after all of
+  // it", never a genuine mid-measure point) — nest it inside the first
+  // <music-voice> instead.
   for (const element of assigned) {
-    if (
-      element.nodeName !== MUSIC_VOICE_NODE &&
-      element.nodeName !== MUSIC_CLEF_NODE
-    ) {
-      console.warn(
-        `[flattenStaffSlotElements] a bare <${element.nodeName.toLowerCase()}> cannot appear alongside <music-voice> siblings; ignoring it — wrap every active voice, including voice 1, in its own <music-voice>`
-      );
+    if (element.nodeName !== MUSIC_VOICE_NODE) {
+      if (element.nodeName === MUSIC_CLEF_NODE) {
+        console.warn(
+          '[flattenStaffSlotElements] a <music-clef> directly under <music-staff> alongside <music-voice> siblings is not supported; nest it inside the first <music-voice> instead'
+        );
+        (element as ClefElementType).style.display = 'none';
+      } else {
+        console.warn(
+          `[flattenStaffSlotElements] a bare <${element.nodeName.toLowerCase()}> cannot appear alongside <music-voice> siblings; ignoring it — wrap every active voice, including voice 1, in its own <music-voice>`
+        );
+      }
     }
   }
 
   const voices = new Map<VoiceNumber, VoiceFlattenResult>();
+  let clefMarkers: ClefMarkerPlacement[] = [];
   voiceElements.slice(0, MAX_VOICES).forEach((voiceElement, i) => {
-    const { flatElements, tupletsByIndex, arpeggioGroups } =
-      flattenSlotElements(Array.from(voiceElement.children));
+    const {
+      flatElements,
+      tupletsByIndex,
+      clefMarkers: voiceClefMarkers,
+      arpeggioGroups,
+    } = flattenSlotElements(Array.from(voiceElement.children));
     voices.set((i + 1) as VoiceNumber, {
       flatElements,
       tupletsByIndex,
       arpeggioGroups,
     });
-  });
-
-  // A <music-voice> block is one contiguous unit in document order — it
-  // can't be interleaved with a <music-clef> sibling the way individual
-  // notes could be, so a real "this many voice-1 notes came before it"
-  // index isn't expressible yet from top-level sibling position alone.
-  // Every marker found here gets the "before any element" sentinel as a
-  // placeholder: `#activeClefAt` still finds *a* clef (the last one
-  // encountered wins as active throughout, which is wrong for more than
-  // one distinct mid-stream change but never crashes), and Phase 3's
-  // beat-offset anchoring replaces this with voice 1's real timeline
-  // position. The consecutive-marker collision guard is skipped here since
-  // every marker already shares this placeholder — applying it would
-  // discard genuinely distinct markers rather than test anything real.
-  const clefMarkers: ClefMarkerPlacement[] = [];
-  for (const element of assigned) {
-    if (element.nodeName === MUSIC_CLEF_NODE) {
-      (element as ClefElementType).style.display = '';
-      clefMarkers.push({
-        afterElementIndex: -1,
-        element: element as ClefElementType,
-      });
+    if (i === 0) {
+      // A clef change is staff-wide, but voice 1 is its canonical anchor —
+      // flattenSlotElements() already collected these with a real,
+      // index-based `afterElementIndex` relative to voice 1's own array,
+      // exactly like the single-voice case. staffClassicalBase.ts converts
+      // that index into a beat-offset to apply the change to every voice.
+      clefMarkers = voiceClefMarkers;
+    } else if (voiceClefMarkers.length > 0) {
+      console.warn(
+        '[flattenStaffSlotElements] <music-clef> is only supported inside the first <music-voice>; ignoring'
+      );
+      for (const marker of voiceClefMarkers) {
+        marker.element.style.display = 'none';
+      }
     }
-  }
+  });
 
   return { voices, clefMarkers };
 }

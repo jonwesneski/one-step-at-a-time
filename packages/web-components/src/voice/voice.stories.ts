@@ -245,3 +245,171 @@ export const TwoVoicesWithTrillInLowerVoice: Story = {
     </music-staff>
   `,
 };
+
+export const ThreeVoicesContextualMiddle: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>
+        <music-note
+          note="G"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="E"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="C" octave="3" duration="quarter"></music-note>
+        <music-note note="D" octave="3" duration="quarter"></music-note>
+        <music-note note="E" octave="3" duration="quarter"></music-note>
+        <music-note note="F" octave="3" duration="quarter"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note
+          note="E"
+          octave="3"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="3"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+        <music-note
+          note="G"
+          octave="3"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+        <music-note
+          note="A"
+          octave="3"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+      </music-voice>
+    </music-staff>
+  `,
+};
+
+export const ThreeVoicesCollision: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>
+        <music-note
+          note="G"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="E"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="C" octave="3" duration="quarter"></music-note>
+        <music-note note="D" octave="3" duration="quarter"></music-note>
+        <music-note note="E" octave="3" duration="quarter"></music-note>
+        <music-note note="F" octave="3" duration="quarter"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note
+          note="E"
+          octave="5"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+        <music-note
+          note="C"
+          octave="5"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+        <music-note
+          note="G"
+          octave="3"
+          duration="quarter"
+          articulation="tenuto"
+        ></music-note>
+      </music-voice>
+    </music-staff>
+  `,
+};
+
+export const TwoVoicesMidStreamClefChange: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>
+        <music-note
+          note="C"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-clef clef="bass"></music-clef>
+        <music-note
+          note="C"
+          octave="4"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+        <music-note
+          note="B"
+          octave="3"
+          duration="quarter"
+          articulation="accent"
+        ></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="C" octave="4" duration="half"></music-note>
+        <music-note note="C" octave="3" duration="half"></music-note>
+      </music-voice>
+    </music-staff>
+  `,
+};

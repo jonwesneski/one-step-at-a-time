@@ -1,9 +1,11 @@
 import { VoiceNumber } from '../types/theory';
-import { ADJACENT_NOTE_X_DISPLACEMENT_PX } from '../utils/svgCreator/note';
 import { STAFF_Y_STEP } from '../utils/notationDimensions';
+import { ADJACENT_NOTE_X_DISPLACEMENT_PX } from '../utils/svgCreator/note';
 import {
   computeCrossVoiceDisplacements,
+  resolveMiddleVoiceDirection,
   resolveVoiceDirections,
+  VoiceDirectionInput,
   VoiceNoteheadPlacement,
 } from './voiceRules';
 
@@ -14,7 +16,7 @@ describe('resolveVoiceDirections', () => {
     expect(result.get(2)).toBe('down');
   });
 
-  it('resolves voice 3 to down as the Phase 2 placeholder (Phase 3 makes it contextual)', () => {
+  it("resolves voice 3 to down when no staff-Y data is supplied (matches resolveMiddleVoiceDirection's own no-data tie-break)", () => {
     const result = resolveVoiceDirections([1, 2, 3]);
     expect(result.get(3)).toBe('down');
   });
@@ -22,6 +24,69 @@ describe('resolveVoiceDirections', () => {
   it('handles a single voice', () => {
     const result = resolveVoiceDirections([1]);
     expect(result.get(1)).toBe('up');
+  });
+
+  it('resolves voice 3 contextually when staff-Y data is supplied for all three voices', () => {
+    const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>([
+      [1, [{ staffYs: [20], beatOffset: 0 }]], // high, up top
+      [2, [{ staffYs: [90], beatOffset: 0 }]], // low, down bottom
+      [3, [{ staffYs: [30], beatOffset: 0 }]], // crowds voice 1
+    ]);
+    const result = resolveVoiceDirections([1, 2, 3], staffYsByVoice);
+    expect(result.get(3)).toBe('down');
+  });
+});
+
+describe('resolveMiddleVoiceDirection', () => {
+  function entry(staffY: number, beatOffset = 0): VoiceDirectionInput {
+    return { staffYs: [staffY], beatOffset };
+  }
+
+  it('leans down when voice 3 crowds voice 1 (above)', () => {
+    const direction = resolveMiddleVoiceDirection(
+      [entry(25)],
+      [entry(20)], // voice 1, 5 away
+      [entry(90)] // voice 2, 65 away
+    );
+    expect(direction).toBe('down');
+  });
+
+  it('leans up when voice 3 crowds voice 2 (below)', () => {
+    const direction = resolveMiddleVoiceDirection(
+      [entry(85)],
+      [entry(20)], // voice 1, 65 away
+      [entry(90)] // voice 2, 5 away
+    );
+    expect(direction).toBe('up');
+  });
+
+  it('holds one direction for the whole measure via majority vote, not per-note', () => {
+    const direction = resolveMiddleVoiceDirection(
+      [entry(25, 0), entry(25, 0.25), entry(85, 0.5)],
+      [entry(20, 0), entry(20, 0.25), entry(20, 0.5)],
+      [entry(90, 0), entry(90, 0.25), entry(90, 0.5)]
+    );
+    // 2 of 3 elements crowd voice 1 -> majority is 'down'.
+    expect(direction).toBe('down');
+  });
+
+  it('finds the concurrently-sounding voice-1/voice-2 element by nearest beat-offset, not array position', () => {
+    const direction = resolveMiddleVoiceDirection(
+      [entry(85, 0.5)],
+      [entry(20, 0), entry(20, 0.75)], // nearest to 0.5 is still far (65 away)
+      [entry(90, 0), entry(90, 0.5)] // exact match at 0.5, 5 away
+    );
+    expect(direction).toBe('up');
+  });
+
+  it('ties break toward down, both per-element and overall', () => {
+    expect(
+      resolveMiddleVoiceDirection([entry(55)], [entry(20)], [entry(90)])
+    ).toBe('down');
+    // no voice-3 content at all
+    expect(resolveMiddleVoiceDirection([], [entry(20)], [entry(90)])).toBe(
+      'down'
+    );
   });
 });
 

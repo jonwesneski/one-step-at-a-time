@@ -166,7 +166,7 @@ export function determineVoiceStemDirections(
   return new Array(elements.length).fill(voiceDirection === 'up');
 }
 
-const getStaffYs = (
+export const getStaffYs = (
   element: NoteChordOrRestElementType,
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>

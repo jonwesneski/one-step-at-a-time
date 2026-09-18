@@ -407,7 +407,11 @@ export type NoteLikeElementType =
 // A <music-clef> encountered in a staff's slotted content, marking a
 // mid-stream clef change. `afterElementIndex` is the index (into the
 // resulting flatElements array) of the note/chord/rest this marker follows;
-// -1 means the marker appears before any note/chord/rest.
+// -1 means the marker appears before any note/chord/rest. On a multi-voice
+// staff this is always relative to voice 1's own flatElements array — a
+// clef change is staff-wide, so it's only ever authored inside the first
+// <music-voice> (voice.ts rejects it elsewhere) — staffClassicalBase.ts
+// converts the index into a beat-offset to apply it to every other voice.
 export type ClefMarkerPlacement = {
   afterElementIndex: number;
   element: ClefElementType;

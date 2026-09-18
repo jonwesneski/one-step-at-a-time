@@ -216,6 +216,15 @@
             },
             {
               "kind": "field",
+              "name": "#trillSignExtraLift",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -345,6 +354,13 @@
             {
               "kind": "field",
               "name": "stemExtension",
+              "type": {
+                "text": "number"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillSignExtraLift",
               "type": {
                 "text": "number"
               }
@@ -1718,6 +1734,15 @@
             },
             {
               "kind": "field",
+              "name": "#trillSignExtraLift",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -1846,6 +1871,13 @@
             {
               "kind": "field",
               "name": "stemExtension",
+              "type": {
+                "text": "number"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillSignExtraLift",
               "type": {
                 "text": "number"
               }
@@ -2686,80 +2718,6 @@
             },
             {
               "kind": "field",
-              "name": "#beamsContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#tupletContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#dynamicsContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#trillLinesContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#beamRenderer",
-              "privacy": "private",
-              "type": {
-                "text": "ReturnType<BeamsBuilder['buildRenderer']> | null"
-              },
-              "default": "null",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#currentElements",
-              "privacy": "private",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#describeEndX",
               "privacy": "private",
               "type": {
@@ -2825,32 +2783,6 @@
             },
             {
               "kind": "field",
-              "name": "#tupletGroups",
-              "privacy": "private",
-              "type": {
-                "text": "TupletGroup[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#tupletsByIndex",
-              "privacy": "private",
-              "type": {
-                "text": "Map<number, TupletElementType[]>"
-              },
-              "default": "new Map()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -2864,10 +2796,10 @@
             },
             {
               "kind": "field",
-              "name": "#arpeggioGroups",
+              "name": "#voice1BeatOffsets",
               "privacy": "private",
               "type": {
-                "text": "ArpeggioGroupPlacement[]"
+                "text": "number[]"
               },
               "default": "[]",
               "inheritedFrom": {
@@ -2890,10 +2822,10 @@
             },
             {
               "kind": "field",
-              "name": "#noteXPositions",
+              "name": "#voiceRenderStates",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, VoiceRenderState>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -2903,10 +2835,10 @@
             },
             {
               "kind": "field",
-              "name": "#firstGraceHeadXPositions",
+              "name": "#previousElementsByVoice",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, NoteChordOrRestElementType[]>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -2916,36 +2848,10 @@
             },
             {
               "kind": "field",
-              "name": "#stemDirections",
+              "name": "#beamsContainers",
               "privacy": "private",
               "type": {
-                "text": "boolean[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#beamedIndicesSnapshot",
-              "privacy": "private",
-              "type": {
-                "text": "Set<number>"
-              },
-              "default": "new Set()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#noteStaffYCoordsSnapshot",
-              "privacy": "private",
-              "type": {
-                "text": "Map<NoteElementType, number>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -2955,10 +2861,10 @@
             },
             {
               "kind": "field",
-              "name": "#chordStaffYCoordsSnapshot",
+              "name": "#tupletContainers",
               "privacy": "private",
               "type": {
-                "text": "Map<ChordElementType, number[]>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -2968,10 +2874,10 @@
             },
             {
               "kind": "field",
-              "name": "#writtenTrillFootprints",
+              "name": "#dynamicsContainers",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -2981,10 +2887,10 @@
             },
             {
               "kind": "field",
-              "name": "#trillFinishFootprints",
+              "name": "#trillLinesContainers",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -3048,8 +2954,83 @@
                 "text": "ReadonlyMap<VoiceNumber, VoiceFlattenResult>"
               },
               "privacy": "protected",
-              "description": "The staff's voice-partitioned flattening result (always >=1 entry — see\nflattenStaffSlotElements()). Exposed for the per-voice rendering\npipeline to build on; the render pipeline itself still only consumes\nvoice 1's own flatElements for now (see the #voices field comment).",
+              "description": "The staff's voice-partitioned flattening result (always >=1 entry — see\nflattenStaffSlotElements()).",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#allElements",
+              "privacy": "private",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#containerFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "SVGSVGElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "containers",
+                  "type": {
+                    "text": "Map<VoiceKey, SVGSVGElement>"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "cssClass",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#prepareVoiceContainers",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "containers",
+                  "type": {
+                    "text": "Map<VoiceKey, SVGSVGElement>"
+                  }
+                },
+                {
+                  "name": "activeKeys",
+                  "type": {
+                    "text": "ReadonlySet<VoiceKey>"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3312,17 +3293,184 @@
               }
             },
             {
-              "kind": "method",
-              "name": "#renderNotes",
+              "kind": "field",
+              "name": "#syntheticElements",
               "privacy": "private",
+              "type": {
+                "text": "HTMLElement[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clearSyntheticElements",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#synthesizeCombinedChord",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ChordElementType"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "CombinedGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#synthesizeSharedRest",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "RestElementType"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "duration",
+                  "type": {
+                    "text": "DurationType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveVoiceStaffYCoords",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoiceStaffYCoords"
+                }
+              },
               "parameters": [
                 {
                   "name": "elements",
                   "type": {
                     "text": "NoteChordOrRestElementType[]"
                   }
+                },
+                {
+                  "name": "beatOffsets",
+                  "type": {
+                    "text": "number[]"
+                  }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#buildVoiceRenderState",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoiceRenderState"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "beatOffsets",
+                  "type": {
+                    "text": "number[]"
+                  }
+                },
+                {
+                  "name": "tupletsByIndex",
+                  "type": {
+                    "text": "Map<number, TupletElementType[]>"
+                  }
+                },
+                {
+                  "name": "arpeggioGroups",
+                  "type": {
+                    "text": "ArpeggioGroupPlacement[]"
+                  }
+                },
+                {
+                  "name": "direction",
+                  "type": {
+                    "text": "VoiceDirection"
+                  }
+                },
+                {
+                  "name": "pitchDriven",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "accidentals",
+                  "type": {
+                    "text": "ReturnType<typeof computeNoteAccidentals>"
+                  }
+                },
+                {
+                  "name": "precomputedYCoords",
+                  "optional": true,
+                  "type": {
+                    "text": "VoiceStaffYCoords"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderNotes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3345,7 +3493,7 @@
                   }
                 },
                 {
-                  "name": "elementIndex",
+                  "name": "beatOffset",
                   "type": {
                     "text": "number"
                   }
@@ -3367,7 +3515,7 @@
               },
               "parameters": [
                 {
-                  "name": "elementIndex",
+                  "name": "beatOffset",
                   "type": {
                     "text": "number"
                   }
@@ -3380,7 +3528,29 @@
             },
             {
               "kind": "method",
-              "name": "#renderDataForIndex",
+              "name": "#clefMarkerBeatOffset",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "marker",
+                  "type": {
+                    "text": "ClefMarkerPlacement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderDataForBeatOffset",
               "privacy": "private",
               "return": {
                 "type": {
@@ -3389,7 +3559,7 @@
               },
               "parameters": [
                 {
-                  "name": "elementIndex",
+                  "name": "beatOffset",
                   "type": {
                     "text": "number"
                   }
@@ -3464,6 +3634,40 @@
             },
             {
               "kind": "method",
+              "name": "#noteToYCoordinateAtBeatOffset",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "note",
+                  "type": {
+                    "text": "Note"
+                  }
+                },
+                {
+                  "name": "octave",
+                  "type": {
+                    "text": "Octave | undefined"
+                  }
+                },
+                {
+                  "name": "beatOffset",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#computeWrittenTrillFootprints",
               "privacy": "private",
               "return": {
@@ -3471,6 +3675,14 @@
                   "text": "Map<number, number>"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3485,6 +3697,14 @@
                   "text": "Map<number, number>"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3500,6 +3720,12 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "index",
                   "type": {
@@ -3540,8 +3766,41 @@
             },
             {
               "kind": "method",
+              "name": "#sizeVoiceContainer",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "container",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#spaceElements",
               "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3556,6 +3815,14 @@
                   "text": "void"
                 }
               },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3599,6 +3866,14 @@
                   "text": "void"
                 }
               },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3643,6 +3918,40 @@
             },
             {
               "kind": "method",
+              "name": "#trillLineLiftClearingOtherVoices",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "ownVoiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "startX",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "endX",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#redrawTrillLines",
               "privacy": "private",
               "return": {
@@ -3651,6 +3960,12 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "remainingWidth",
                   "optional": true,
@@ -3674,6 +3989,12 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
                 {
                   "name": "span",
                   "type": {
@@ -3703,6 +4024,12 @@
               },
               "parameters": [
                 {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
                   "name": "index",
                   "type": {
                     "text": "number"
@@ -3723,6 +4050,20 @@
                   "text": "void"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "container",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3738,6 +4079,18 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "container",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                },
                 {
                   "name": "startIndex",
                   "type": {
@@ -3771,6 +4124,188 @@
                   "text": "number"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#estimateAboveStaffBudgetForVoice",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hasDynamicsContent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#estimateBelowStaffBudget",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#extremeStemTipY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "indices",
+                  "type": {
+                    "text": "Iterable<number>"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsPlacedAbove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineForVoice",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3812,6 +4347,19 @@
               "privacy": "protected",
               "readonly": true,
               "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "wrapperElement",
+              "type": {
+                "text": "HTMLDivElement | null"
+              },
+              "privacy": "protected",
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -4385,6 +4933,19 @@
               "privacy": "protected",
               "readonly": true,
               "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "wrapperElement",
+              "type": {
+                "text": "HTMLDivElement | null"
+              },
+              "privacy": "protected",
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -5192,80 +5753,6 @@
             },
             {
               "kind": "field",
-              "name": "#beamsContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#tupletContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#dynamicsContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#trillLinesContainer",
-              "privacy": "private",
-              "type": {
-                "text": "SVGSVGElement"
-              },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#beamRenderer",
-              "privacy": "private",
-              "type": {
-                "text": "ReturnType<BeamsBuilder['buildRenderer']> | null"
-              },
-              "default": "null",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#currentElements",
-              "privacy": "private",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#describeEndX",
               "privacy": "private",
               "type": {
@@ -5331,32 +5818,6 @@
             },
             {
               "kind": "field",
-              "name": "#tupletGroups",
-              "privacy": "private",
-              "type": {
-                "text": "TupletGroup[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#tupletsByIndex",
-              "privacy": "private",
-              "type": {
-                "text": "Map<number, TupletElementType[]>"
-              },
-              "default": "new Map()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -5370,10 +5831,10 @@
             },
             {
               "kind": "field",
-              "name": "#arpeggioGroups",
+              "name": "#voice1BeatOffsets",
               "privacy": "private",
               "type": {
-                "text": "ArpeggioGroupPlacement[]"
+                "text": "number[]"
               },
               "default": "[]",
               "inheritedFrom": {
@@ -5396,10 +5857,10 @@
             },
             {
               "kind": "field",
-              "name": "#noteXPositions",
+              "name": "#voiceRenderStates",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, VoiceRenderState>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5409,10 +5870,10 @@
             },
             {
               "kind": "field",
-              "name": "#firstGraceHeadXPositions",
+              "name": "#previousElementsByVoice",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, NoteChordOrRestElementType[]>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5422,36 +5883,10 @@
             },
             {
               "kind": "field",
-              "name": "#stemDirections",
+              "name": "#beamsContainers",
               "privacy": "private",
               "type": {
-                "text": "boolean[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#beamedIndicesSnapshot",
-              "privacy": "private",
-              "type": {
-                "text": "Set<number>"
-              },
-              "default": "new Set()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#noteStaffYCoordsSnapshot",
-              "privacy": "private",
-              "type": {
-                "text": "Map<NoteElementType, number>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5461,10 +5896,10 @@
             },
             {
               "kind": "field",
-              "name": "#chordStaffYCoordsSnapshot",
+              "name": "#tupletContainers",
               "privacy": "private",
               "type": {
-                "text": "Map<ChordElementType, number[]>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5474,10 +5909,10 @@
             },
             {
               "kind": "field",
-              "name": "#writtenTrillFootprints",
+              "name": "#dynamicsContainers",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5487,10 +5922,10 @@
             },
             {
               "kind": "field",
-              "name": "#trillFinishFootprints",
+              "name": "#trillLinesContainers",
               "privacy": "private",
               "type": {
-                "text": "Map<number, number>"
+                "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5554,8 +5989,83 @@
                 "text": "ReadonlyMap<VoiceNumber, VoiceFlattenResult>"
               },
               "privacy": "protected",
-              "description": "The staff's voice-partitioned flattening result (always >=1 entry — see\nflattenStaffSlotElements()). Exposed for the per-voice rendering\npipeline to build on; the render pipeline itself still only consumes\nvoice 1's own flatElements for now (see the #voices field comment).",
+              "description": "The staff's voice-partitioned flattening result (always >=1 entry — see\nflattenStaffSlotElements()).",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#allElements",
+              "privacy": "private",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#containerFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "SVGSVGElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "containers",
+                  "type": {
+                    "text": "Map<VoiceKey, SVGSVGElement>"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "cssClass",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#prepareVoiceContainers",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "containers",
+                  "type": {
+                    "text": "Map<VoiceKey, SVGSVGElement>"
+                  }
+                },
+                {
+                  "name": "activeKeys",
+                  "type": {
+                    "text": "ReadonlySet<VoiceKey>"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5796,17 +6306,184 @@
               }
             },
             {
-              "kind": "method",
-              "name": "#renderNotes",
+              "kind": "field",
+              "name": "#syntheticElements",
               "privacy": "private",
+              "type": {
+                "text": "HTMLElement[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clearSyntheticElements",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#synthesizeCombinedChord",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ChordElementType"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "CombinedGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#synthesizeSharedRest",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "RestElementType"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "duration",
+                  "type": {
+                    "text": "DurationType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveVoiceStaffYCoords",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoiceStaffYCoords"
+                }
+              },
               "parameters": [
                 {
                   "name": "elements",
                   "type": {
                     "text": "NoteChordOrRestElementType[]"
                   }
+                },
+                {
+                  "name": "beatOffsets",
+                  "type": {
+                    "text": "number[]"
+                  }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#buildVoiceRenderState",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoiceRenderState"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "beatOffsets",
+                  "type": {
+                    "text": "number[]"
+                  }
+                },
+                {
+                  "name": "tupletsByIndex",
+                  "type": {
+                    "text": "Map<number, TupletElementType[]>"
+                  }
+                },
+                {
+                  "name": "arpeggioGroups",
+                  "type": {
+                    "text": "ArpeggioGroupPlacement[]"
+                  }
+                },
+                {
+                  "name": "direction",
+                  "type": {
+                    "text": "VoiceDirection"
+                  }
+                },
+                {
+                  "name": "pitchDriven",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "accidentals",
+                  "type": {
+                    "text": "ReturnType<typeof computeNoteAccidentals>"
+                  }
+                },
+                {
+                  "name": "precomputedYCoords",
+                  "optional": true,
+                  "type": {
+                    "text": "VoiceStaffYCoords"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderNotes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5829,7 +6506,7 @@
                   }
                 },
                 {
-                  "name": "elementIndex",
+                  "name": "beatOffset",
                   "type": {
                     "text": "number"
                   }
@@ -5851,7 +6528,7 @@
               },
               "parameters": [
                 {
-                  "name": "elementIndex",
+                  "name": "beatOffset",
                   "type": {
                     "text": "number"
                   }
@@ -5864,7 +6541,29 @@
             },
             {
               "kind": "method",
-              "name": "#renderDataForIndex",
+              "name": "#clefMarkerBeatOffset",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "marker",
+                  "type": {
+                    "text": "ClefMarkerPlacement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderDataForBeatOffset",
               "privacy": "private",
               "return": {
                 "type": {
@@ -5873,7 +6572,7 @@
               },
               "parameters": [
                 {
-                  "name": "elementIndex",
+                  "name": "beatOffset",
                   "type": {
                     "text": "number"
                   }
@@ -5961,6 +6660,40 @@
             },
             {
               "kind": "method",
+              "name": "#noteToYCoordinateAtBeatOffset",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "note",
+                  "type": {
+                    "text": "Note"
+                  }
+                },
+                {
+                  "name": "octave",
+                  "type": {
+                    "text": "Octave | undefined"
+                  }
+                },
+                {
+                  "name": "beatOffset",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#computeWrittenTrillFootprints",
               "privacy": "private",
               "return": {
@@ -5968,6 +6701,14 @@
                   "text": "Map<number, number>"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5982,6 +6723,14 @@
                   "text": "Map<number, number>"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5997,6 +6746,12 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "index",
                   "type": {
@@ -6037,8 +6792,41 @@
             },
             {
               "kind": "method",
+              "name": "#sizeVoiceContainer",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "container",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#spaceElements",
               "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -6053,6 +6841,14 @@
                   "text": "void"
                 }
               },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -6096,6 +6892,14 @@
                   "text": "void"
                 }
               },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -6140,6 +6944,40 @@
             },
             {
               "kind": "method",
+              "name": "#trillLineLiftClearingOtherVoices",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "ownVoiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "startX",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "endX",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#redrawTrillLines",
               "privacy": "private",
               "return": {
@@ -6148,6 +6986,12 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "remainingWidth",
                   "optional": true,
@@ -6171,6 +7015,12 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
                 {
                   "name": "span",
                   "type": {
@@ -6200,6 +7050,12 @@
               },
               "parameters": [
                 {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
                   "name": "index",
                   "type": {
                     "text": "number"
@@ -6220,6 +7076,20 @@
                   "text": "void"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "container",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -6235,6 +7105,18 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "container",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                },
                 {
                   "name": "startIndex",
                   "type": {
@@ -6274,6 +7156,188 @@
               }
             },
             {
+              "kind": "method",
+              "name": "#estimateAboveStaffBudgetForVoice",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hasDynamicsContent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#estimateBelowStaffBudget",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#extremeStemTipY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "indices",
+                  "type": {
+                    "text": "Iterable<number>"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsPlacedAbove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineForVoice",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
               "kind": "field",
               "name": "staffContainer",
               "type": {
@@ -6295,6 +7359,19 @@
               "privacy": "protected",
               "readonly": true,
               "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "wrapperElement",
+              "type": {
+                "text": "HTMLDivElement | null"
+              },
+              "privacy": "protected",
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"

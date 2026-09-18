@@ -10,6 +10,12 @@ import {
   MUSIC_VOICE_NODE,
   NOTE_EVENTS,
 } from '../utils/consts';
+// A <music-clef> is a valid <music-voice> child (see #applyDefaults below) —
+// only meaningfully honored inside the *first* <music-voice> sibling
+// (voice 1), since a clef change is staff-wide and voice 1 is the canonical
+// timeline every other voice's beat-offsets are compared against. This
+// element can't know its own sibling position, so it can't enforce that
+// restriction itself — flattenStaffSlotElements() does, at the staff level.
 import { flattenSlotElements } from '../utils/slotElements';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -77,18 +83,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#notify();
     }
 
-    // Validate the structure: a clef change is staff-wide, never voice-scoped
-    // (it belongs as a direct <music-staff> child instead), and voices don't
-    // nest.
+    // Validate the structure: voices don't nest. <music-clef> is allowed
+    // structurally (a clef change is staff-wide, but voice 1 is its
+    // canonical anchor point — see the class-level comment above); only the
+    // staff itself (flattenStaffSlotElements) can tell whether this
+    // <music-voice> is actually voice 1, so it enforces that part.
     #applyDefaults(): void {
       this.#applyingDefaults = true;
       try {
         for (const child of this.#elementChildren()) {
-          if (child.nodeName === MUSIC_CLEF_NODE) {
-            console.warn(
-              '[music-voice] <music-clef> is not allowed inside <music-voice> — a clef change is staff-wide, place it as a direct <music-staff> child instead'
-            );
-          } else if (child.nodeName === MUSIC_VOICE_NODE) {
+          if (child.nodeName === MUSIC_VOICE_NODE) {
             console.warn(
               '[music-voice] <music-voice> cannot nest inside another <music-voice>'
             );
@@ -97,7 +101,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             child.nodeName !== MUSIC_CHORD_NODE &&
             child.nodeName !== MUSIC_REST_NODE &&
             child.nodeName !== MUSIC_TUPLET_NODE &&
-            child.nodeName !== MUSIC_ARPEGGIO_NODE
+            child.nodeName !== MUSIC_ARPEGGIO_NODE &&
+            child.nodeName !== MUSIC_CLEF_NODE
           ) {
             console.warn(
               `[music-voice] <${child.nodeName.toLowerCase()}> is not allowed inside <music-voice>`

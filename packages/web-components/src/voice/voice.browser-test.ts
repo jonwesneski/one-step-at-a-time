@@ -1,5 +1,32 @@
 import { expect, type Page, test } from '@playwright/test';
 import { resizeHost, waitForRedrawCycle } from '../../test-fixtures/helpers';
+import { generateYCoordinates } from '../rules/theoryHelpers';
+import type { NoteLetterOctave } from '../types/elements';
+import type { ClefType } from '../types/theory';
+import {
+  ADJACENT_NOTE_X_DISPLACEMENT_PX,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+} from '../utils/svgCreator/note';
+
+const CLEF_RANGES: Record<ClefType, [NoteLetterOctave, NoteLetterOctave]> = {
+  treble: ['C6', 'C4'],
+  bass: ['E4', 'E2'],
+};
+const STAFF_Y_PADDING = 8;
+
+// Expected `style.top` for a voice-2 (always down-stem) note — mirrors
+// staff.test.ts's own expectedNoteTop helper, forced down-stem since voice 2
+// is policy-driven, not pitch-driven.
+function expectedDownStemNoteTop(
+  clef: ClefType,
+  value: NoteLetterOctave
+): string {
+  const [highest, lowest] = CLEF_RANGES[clef];
+  const yCoordinates = generateYCoordinates(highest, lowest);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test fixture values are always in range
+  const staffY = yCoordinates[value]!;
+  return `${STAFF_Y_PADDING + staffY - NOTE_Y_HEAD_OFFSET_STEM_DOWN}px`;
+}
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -47,6 +74,22 @@ async function beamWidths(page: Page): Promise<number[]> {
 function rectsOverlap(a: DOMRect, b: DOMRect): boolean {
   return (
     a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+  );
+}
+
+// Derives each <music-note>'s rendered stem direction from real geometry
+// (rather than reading back an internal property) — the stem's bounding box
+// extends above the notehead for an up-stem note, below it for a down-stem
+// one. Order matches document order (voice 1's notes, then voice 2's, etc.).
+async function stemDirections(page: Page): Promise<boolean[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('music-note')).map((note) => {
+      const head = note.shadowRoot?.querySelector('.head');
+      const stem = note.shadowRoot?.querySelector('.stem');
+      const headRect = (head as SVGGraphicsElement).getBoundingClientRect();
+      const stemRect = (stem as SVGGraphicsElement).getBoundingClientRect();
+      return stemRect.top < headRect.top;
+    })
   );
 }
 
@@ -579,5 +622,186 @@ test.describe('multi-voice staff', () => {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       expect(rectsOverlap(result.lineRect!, noteRect)).toBe(false);
     }
+  });
+
+  test('voice 3 resolves up when it crowds voice 2 (the lower voice)', async ({
+    page,
+  }) => {
+    // Voice 1/2/3 each get a distinct articulation — otherwise these plain,
+    // rhythmically-identical quarter notes would auto-combine onto one
+    // shared stem (rules/voiceCombineRules.ts's combineKey deliberately
+    // ignores pitch), which isn't what this test means to exercise.
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+         <music-voice>
+           <music-note note="G" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="F" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="E" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="D" octave="5" duration="quarter" articulation="accent"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="C" octave="3" duration="quarter"></music-note>
+           <music-note note="D" octave="3" duration="quarter"></music-note>
+           <music-note note="E" octave="3" duration="quarter"></music-note>
+           <music-note note="F" octave="3" duration="quarter"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="E" octave="3" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="F" octave="3" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="G" octave="3" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="A" octave="3" duration="quarter" articulation="tenuto"></music-note>
+         </music-voice>
+       </music-staff>`
+    );
+
+    const directions = await stemDirections(page);
+    expect(directions.length).toBe(12);
+    const [voice1, voice2, voice3] = [
+      directions.slice(0, 4),
+      directions.slice(4, 8),
+      directions.slice(8, 12),
+    ];
+    expect(voice1.every((up) => up)).toBe(true);
+    expect(voice2.every((up) => !up)).toBe(true);
+    // Voice 3 sits right above voice 2 throughout, far from voice 1 — it
+    // should stem up (away from voice 2), matching voice 1.
+    expect(voice3.every((up) => up)).toBe(true);
+  });
+
+  test('voice 3 resolves down when it crowds voice 1 (the upper voice)', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+         <music-voice>
+           <music-note note="G" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="F" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="E" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="D" octave="5" duration="quarter" articulation="accent"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="C" octave="3" duration="quarter"></music-note>
+           <music-note note="D" octave="3" duration="quarter"></music-note>
+           <music-note note="E" octave="3" duration="quarter"></music-note>
+           <music-note note="F" octave="3" duration="quarter"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="F" octave="5" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="E" octave="5" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="D" octave="5" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="C" octave="5" duration="quarter" articulation="tenuto"></music-note>
+         </music-voice>
+       </music-staff>`
+    );
+
+    const directions = await stemDirections(page);
+    expect(directions.length).toBe(12);
+    const voice3 = directions.slice(8, 12);
+    // Voice 3 sits right below voice 1 throughout, far from voice 2 — it
+    // should stem down (away from voice 1), matching voice 2.
+    expect(voice3.every((up) => !up)).toBe(true);
+  });
+
+  test('a same-direction collision between two voices displaces the physically lower notehead right', async ({
+    page,
+  }) => {
+    // Voice 3 crowds voice 1 for 3 of its 4 notes (resolves 'down' overall,
+    // same as voice 2), but its last note dips down a diatonic second above
+    // voice 2's own last note — a same-direction collision only reachable
+    // once voice 3's direction is contextual (rules/voiceRules.ts#
+    // computeCrossVoiceDisplacements' same-direction branch, previously
+    // unexercised by any real rendered data).
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+         <music-voice>
+           <music-note note="G" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="F" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="E" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="D" octave="5" duration="quarter" articulation="accent"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="C" octave="3" duration="quarter"></music-note>
+           <music-note note="D" octave="3" duration="quarter"></music-note>
+           <music-note note="E" octave="3" duration="quarter"></music-note>
+           <music-note note="F" octave="3" duration="quarter"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="E" octave="5" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="D" octave="5" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="C" octave="5" duration="quarter" articulation="tenuto"></music-note>
+           <music-note note="G" octave="3" duration="quarter" articulation="tenuto"></music-note>
+         </music-voice>
+       </music-staff>`
+    );
+
+    const directions = await stemDirections(page);
+    expect(directions.slice(8, 12).every((up) => !up)).toBe(true); // voice 3 resolved down
+
+    const lefts = await noteLefts(page);
+    const [beat4Voice1, beat4Voice2, beat4Voice3] = [
+      lefts[3],
+      lefts[7],
+      lefts[11],
+    ];
+    // Voice 1 and voice 3 are unaffected — same x, matching every other beat.
+    expect(Math.abs(beat4Voice1 - beat4Voice3)).toBeLessThan(1);
+    // Voice 2's F3 is physically lower (larger staffY) than voice 3's G3, a
+    // diatonic second apart, both resolved 'down' — it displaces right.
+    expect(beat4Voice2 - beat4Voice1).toBeGreaterThan(
+      ADJACENT_NOTE_X_DISPLACEMENT_PX - 1
+    );
+    expect(beat4Voice2 - beat4Voice1).toBeLessThan(
+      ADJACENT_NOTE_X_DISPLACEMENT_PX + 1
+    );
+  });
+
+  test('a <music-clef> nested in the first voice re-anchors every voice past its beat-offset, not just voice 1', async ({
+    page,
+  }) => {
+    // Voice 1 gets a distinct articulation from voice 2 — otherwise these
+    // rhythmically-identical quarter notes would auto-combine onto one
+    // shared stem (see the same note on the contextual-direction tests
+    // above), which isn't what this test means to exercise.
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+         <music-voice>
+           <music-note note="C" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-note note="D" octave="5" duration="quarter" articulation="accent"></music-note>
+           <music-clef clef="bass"></music-clef>
+           <music-note note="C" octave="4" duration="quarter" articulation="accent"></music-note>
+           <music-note note="B" octave="3" duration="quarter" articulation="accent"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note note="C" octave="4" duration="quarter"></music-note>
+           <music-note note="C" octave="4" duration="quarter"></music-note>
+           <music-note note="C" octave="4" duration="quarter"></music-note>
+           <music-note note="C" octave="4" duration="quarter"></music-note>
+         </music-voice>
+       </music-staff>`
+    );
+
+    const tops = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('music-note')).map(
+        (note) => (note as HTMLElement).style.top
+      )
+    );
+    expect(tops.length).toBe(8);
+    const [v2C4A, v2C4B, v2C4C, v2C4D] = tops.slice(4, 8);
+    // Voice 2's first two C4s (beat-offset 0, 0.25) sound before the clef
+    // marker's own anchor point (beat-offset 0.25) — still treble.
+    expect(v2C4A).toBe(v2C4B);
+    // Voice 2's last two C4s (beat-offset 0.5, 0.75) sound after it — bass.
+    expect(v2C4C).toBe(v2C4D);
+    // Confirms it's a genuine clef re-resolution, not just any difference —
+    // voice 2 is always down-stem (unlike voice 1's up-stem C4 in this same
+    // markup, which uses a different head-offset and so isn't directly
+    // comparable), so the expected value is derived independently here
+    // rather than compared against voice 1's own reading.
+    expect(v2C4A).toBe(expectedDownStemNoteTop('treble', 'C4'));
+    expect(v2C4C).toBe(expectedDownStemNoteTop('bass', 'C4'));
   });
 });

@@ -164,9 +164,45 @@ describe('flattenStaffSlotElements', () => {
     warn.mockRestore();
   });
 
-  it('keeps a <music-clef> valid alongside <music-voice> siblings without warning', () => {
+  it('collects a <music-clef> nested inside the first <music-voice> as the staff-wide marker list, without warning', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const clef = document.createElement(MUSIC_CLEF);
+    const { voices, clefMarkers } = flattenStaffSlotElements([
+      voice([note('C'), clef, note('D')]),
+      voice([note('E')]),
+    ]);
+
+    expect(voices.size).toBe(2);
+    expect(voices.get(1)?.flatElements).toHaveLength(2);
+    expect(clefMarkers).toHaveLength(1);
+    expect(clefMarkers[0].element).toBe(clef);
+    expect(clefMarkers[0].afterElementIndex).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('warns and hides a <music-clef> nested inside voice 2 or voice 3', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const clef = document.createElement(MUSIC_CLEF) as HTMLElement;
+    const { voices, clefMarkers } = flattenStaffSlotElements([
+      voice([note('C')]),
+      voice([note('D'), clef]),
+    ]);
+
+    expect(voices.size).toBe(2);
+    expect(clefMarkers).toHaveLength(0);
+    expect(clef.style.display).toBe('none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '<music-clef> is only supported inside the first <music-voice>'
+      )
+    );
+    warn.mockRestore();
+  });
+
+  it('warns and hides a bare top-level <music-clef> sibling alongside <music-voice> siblings', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const clef = document.createElement(MUSIC_CLEF) as HTMLElement;
     const { voices, clefMarkers } = flattenStaffSlotElements([
       voice([note('C')]),
       clef,
@@ -174,9 +210,11 @@ describe('flattenStaffSlotElements', () => {
     ]);
 
     expect(voices.size).toBe(2);
-    expect(clefMarkers).toHaveLength(1);
-    expect(clefMarkers[0].element).toBe(clef);
-    expect(warn).not.toHaveBeenCalled();
+    expect(clefMarkers).toHaveLength(0);
+    expect(clef.style.display).toBe('none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('nest it inside the first <music-voice>')
+    );
     warn.mockRestore();
   });
 });
