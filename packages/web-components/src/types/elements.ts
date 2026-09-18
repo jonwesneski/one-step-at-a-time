@@ -129,6 +129,11 @@ export interface INoteElement {
     written: boolean;
     octave: Octave | null;
   } | null;
+  // Staff-written px to raise the trill sign glyph above its own nominal
+  // position, when another voice's own content occupies that territory in
+  // a multi-voice staff. Not an attribute; mirrors stemExtension's own
+  // staff-internal, non-author-set pattern.
+  trillSignExtraLift: number;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -262,6 +267,11 @@ export interface IChordElement {
     written: boolean;
     octave: Octave | null;
   } | null;
+  // Staff-written px to raise the trill sign glyph above its own nominal
+  // position, when another voice's own content occupies that territory in
+  // a multi-voice staff. Not an attribute; mirrors stemExtension's own
+  // staff-internal, non-author-set pattern.
+  trillSignExtraLift: number;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a

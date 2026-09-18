@@ -26,11 +26,12 @@ import {
   computeSpacingWeights,
 } from './rules/spacingRules';
 import { determineVoiceStemDirections } from './rules/staffNoteRules';
-import { durationToFlagCountMap } from './rules/theoryConsts';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
 } from './rules/staffWidth';
+import { durationToFlagCountMap } from './rules/theoryConsts';
+import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
   resolveTrillPitch,
   resolveTrillSpans,
@@ -42,6 +43,7 @@ import {
   computeTupletBracketGeometry,
   computeTupletScaleByIndex,
   computeTupletScaledNoteCount,
+  getStaffYForIndex,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -129,8 +131,10 @@ import {
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
   ARPEGGIO_TEXT_FONT_SIZE,
+  BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
+  DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
   GRACE_MAIN_GAP_PX,
@@ -142,6 +146,8 @@ import {
   MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
@@ -154,6 +160,7 @@ import {
   TRILL_SIGN_LINE_GAP_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
   TUPLET_HOOK_LENGTH_PX,
+  TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
 } from './utils/notationDimensions';
@@ -164,7 +171,11 @@ import {
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  NOTE_STEM_TIP_Y_OFFSET,
+  NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
   trillSignLeftX,
 } from './utils/svgCreator/note';
 import {
@@ -1600,16 +1611,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (yCoordinate !== undefined) {
         return yCoordinate;
       }
-    } else {
-      for (const n of octaves) {
-        const yCoordinate = yCoordinates[`${letter}${n}` as NoteLetterOctave];
-        if (yCoordinate !== undefined) {
-          return yCoordinate;
-        }
-      }
+      return extrapolateYCoordinate(letter, octave, yCoordinates);
     }
 
-    return 0;
+    for (const n of octaves) {
+      const yCoordinate = yCoordinates[`${letter}${n}` as NoteLetterOctave];
+      if (yCoordinate !== undefined) {
+        return yCoordinate;
+      }
+    }
+    return extrapolateYCoordinate(letter, octaves[0] ?? 4, yCoordinates);
   }
 
   // Rightward layout footprint (px) per writtenNoteAnchorIndex — the mirror
@@ -1803,12 +1814,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
-    // Estimate above-staff budget using stem directions and staff-referenced positions.
-    // This is a conservative estimate computed before notes are positioned; the actual
-    // tuplet bracket geometries are computed after note positions are set (below).
+    // Estimate above/below-staff budget using stem directions and staff-referenced
+    // positions. This is a conservative estimate computed before notes are
+    // positioned; the actual tuplet bracket geometries are computed after note
+    // positions are set (below).
     const aboveStaffBudget = this.#estimateAboveStaffBudget();
+    const belowStaffBudget = this.#estimateBelowStaffBudget();
     const containerWidth = Math.round(transcribeRect.width);
-    const totalHeight = STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget;
+    const totalHeight =
+      STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget + belowStaffBudget;
     this.transcribeContainer.style.top =
       aboveStaffBudget > 0 ? `-${aboveStaffBudget}px` : '0px';
     this.transcribeContainer.style.height = `${totalHeight}px`;
@@ -1816,6 +1830,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       'viewBox',
       `0 -${aboveStaffBudget} ${containerWidth} ${totalHeight}`
     );
+
+    // transcribeContainer's own height/viewBox growth above only expands
+    // its own SVG coordinate space — staffContainer/transcribeContainer are
+    // both `position: absolute` inside `.staff-wrapper` (staffBase.ts),
+    // which has a fixed min-height and never grows to match, so the extra
+    // room doesn't reserve any real space in the surrounding page (a
+    // Storybook canvas, a composition, any host page). Mirroring the
+    // budgets onto this host element's own margin makes them participate
+    // in real page layout instead, pushing surrounding content out of the
+    // way like a real engraving program growing the space between systems.
+    this.style.marginTop = aboveStaffBudget > 0 ? `${aboveStaffBudget}px` : '';
+    this.style.marginBottom =
+      belowStaffBudget > 0 ? `${belowStaffBudget}px` : '';
 
     // Each entry is positioned as a fraction of the measure's fixed beat
     // capacity (from the time signature — constant regardless of how many
@@ -2277,6 +2304,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // set of markings/hairpins alongside the stale ones instead of
     // replacing them.
     container.innerHTML = '';
+    const baselineY = this.#dynamicsBaselineForVoice(voiceKey, state);
     for (let i = 0; i < state.elements.length; i++) {
       const element = state.elements[i];
       if (element.nodeName === MUSIC_REST_NODE) {
@@ -2287,11 +2315,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const noteX = state.noteXPositions.get(i) ?? 0;
         const centerX = noteX + NOTE_SVG_WIDTH / 2;
         container.appendChild(
-          createDynamicMarkingSvg(
-            noteOrChord.dynamic,
-            centerX,
-            DYNAMICS_BASELINE_Y
-          )
+          createDynamicMarkingSvg(noteOrChord.dynamic, centerX, baselineY)
         );
       }
 
@@ -2306,7 +2330,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             createDynamicMarkingSvg(
               noteOrChord.graceDynamic,
               firstGraceHeadX,
-              DYNAMICS_BASELINE_Y
+              baselineY
             )
           );
         }
@@ -2323,7 +2347,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           pair.kind,
           pair.startX,
           pair.endX,
-          DYNAMICS_BASELINE_Y,
+          baselineY,
           HAIRPIN_OPEN_HEIGHT
         )
       );
@@ -2458,6 +2482,52 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     });
   }
 
+  // A trill's on-staff decoration is drawn by two independent code paths
+  // that are meant to move as one visual unit: the line/notch (this staff's
+  // own trill-lines-container overlay) and the sign glyph (drawn inside the
+  // trilling note/chord's own shadow DOM, via NoteProps/ChordProps'
+  // trillSignExtraLift — a note has no visibility into sibling voices'
+  // geometry on its own). Both sit at a fixed height above the staff,
+  // independent of pitch — correct engraving for a single voice, but voice
+  // 1 is always the up-stem voice under the multi-voice policy, so its own
+  // noteheads can occupy the exact territory a lower voice's trill is fixed
+  // to use. Returns the px to raise BOTH past any OTHER active voice's own
+  // up-stem content that horizontally overlaps [startX, endX] — down-stem
+  // content is excluded outright since it never competes for the
+  // above-staff territory. 0 when no other voice has anything in the span,
+  // so this only ever raises the line/sign, never lowers them.
+  #trillLineLiftClearingOtherVoices(
+    ownVoiceKey: VoiceKey,
+    startX: number,
+    endX: number
+  ): number {
+    let lift = 0;
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      if (otherKey === ownVoiceKey) {
+        continue;
+      }
+      const upStemOverlapping = otherState.elements
+        .map((_, i) => i)
+        .filter((i) => {
+          if (!otherState.stemDirections[i]) {
+            return false;
+          }
+          const x = otherState.noteXPositions.get(i);
+          return x !== undefined && x + NOTE_SVG_WIDTH >= startX && x <= endX;
+        });
+      const extreme = this.#extremeStemTipY(
+        otherState,
+        upStemOverlapping,
+        true
+      );
+      if (extreme !== null) {
+        const requiredY = extreme - TRILL_ABOVE_STAFF_GAP_PX;
+        lift = Math.max(lift, TRILL_ABOVE_STAFF_BOTTOM_Y - requiredY);
+      }
+    }
+    return lift;
+  }
+
   // Draws the wavy trill line (+ end-notch) and, when in written mode, the
   // small parenthesized trilling notehead, for every `trill`-marked element
   // in the current note stream, same-measure only (a span never crosses into
@@ -2491,6 +2561,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         | ChordElementType;
       const resolvedTrillPitch = startElement.resolvedTrillPitch;
 
+      // The sign glyph's own footprint (drawn inside the note/chord's own
+      // shadow DOM) sits left of where the line begins — check overlap from
+      // there, not just the line's own span, so a collision purely against
+      // the sign (no line at all, or a line that starts further right)
+      // still raises it. Computed unconditionally (not gated behind
+      // span.hasLine) since the sign itself renders whenever `trill` is
+      // set, independent of whether a line does.
+      const stemUp = state.stemDirections[span.startIndex] ?? true;
+      const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
+      const signLeftOffset = trillSignLeftX(stemUp);
+      const signStartX = startNoteX + signLeftOffset;
+      const endX = span.hasLine
+        ? this.#trillLineEndX(state, span, width)
+        : signStartX + TRILL_SIGN_WIDTH_PX;
+      const lift = this.#trillLineLiftClearingOtherVoices(
+        voiceKey,
+        signStartX,
+        endX
+      );
+      startElement.trillSignExtraLift = lift;
+
       if (resolvedTrillPitch?.written === true) {
         this.#drawWrittenTrillNote(
           state,
@@ -2505,16 +2596,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
 
-      const y = TRILL_ABOVE_STAFF_BOTTOM_Y;
-      const stemUp = state.stemDirections[span.startIndex] ?? true;
-      const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
-      const signLeftOffset = trillSignLeftX(stemUp);
-      const startX =
-        startNoteX +
-        signLeftOffset +
-        TRILL_SIGN_WIDTH_PX +
-        TRILL_SIGN_LINE_GAP_PX;
-      const endX = this.#trillLineEndX(state, span, width);
+      const startX = signStartX + TRILL_SIGN_WIDTH_PX + TRILL_SIGN_LINE_GAP_PX;
+      const y = TRILL_ABOVE_STAFF_BOTTOM_Y - lift;
 
       const line = createTrillLineSvg({ startX, endX, bottomY: y });
       if (line) {
@@ -2724,13 +2807,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // about cross-voice above-staff overlap) is a safe, minor simplification.
   #estimateAboveStaffBudget(): number {
     let budget = 0;
-    for (const state of this.#voiceRenderStates.values()) {
-      budget = Math.max(budget, this.#estimateAboveStaffBudgetForVoice(state));
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      budget = Math.max(
+        budget,
+        this.#estimateAboveStaffBudgetForVoice(voiceKey, state)
+      );
     }
     return budget;
   }
 
-  #estimateAboveStaffBudgetForVoice(state: VoiceRenderState): number {
+  #estimateAboveStaffBudgetForVoice(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number {
     let budget = 0;
 
     const hasArpeggiandoText = state.elements.some(
@@ -2822,25 +2911,277 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    const hasStemUpTuplet = state.tupletGroups.some((group) => {
-      const upVotes = group.indices.filter(
-        (i) => state.stemDirections[i] === true
-      ).length;
-      return upVotes >= group.indices.length / 2;
-    });
-    if (hasStemUpTuplet) {
+    // A trill's line and sign can both be pushed above their own nominal
+    // above-staff Y to clear another voice's up-stem content in their span
+    // (see #trillLineLiftClearingOtherVoices, used by the actual draw pass
+    // in #redrawTrillLines). x-positions aren't resolved yet at this point
+    // in #spaceElements(), so this can't narrow to the trill's own
+    // horizontal span the way the draw pass does — conservatively checks
+    // every OTHER voice's overall up-stem reach instead, whenever this
+    // voice has any trill span at all (sign-only or with a line — the sign
+    // alone needs the same room). Reserving slightly more room than
+    // strictly necessary is harmless; reserving too little is not.
+    const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
+    if (hasTrillSpan) {
+      for (const [otherKey, otherState] of this.#voiceRenderStates) {
+        if (otherKey === voiceKey) {
+          continue;
+        }
+        const upStemIndices = otherState.elements
+          .map((_, i) => i)
+          .filter((i) => otherState.stemDirections[i]);
+        const extreme = this.#extremeStemTipY(otherState, upStemIndices, true);
+        if (extreme === null) {
+          continue;
+        }
+        const topY = extreme - TRILL_ABOVE_STAFF_GAP_PX - TRILL_SIGN_HEIGHT_PX;
+        if (topY < 0) {
+          budget = Math.max(budget, Math.ceil(-topY) + 2);
+        }
+      }
+    }
+
+    budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
+
+    // Mirrors the below-staff dynamics check in #estimateBelowStaffBudget —
+    // an up-stem voice's dynamics row (see #dynamicsPlacedAbove) needs
+    // above-staff canvas room reserved for it too. Unlike the below case
+    // (whose nominal baseline sits comfortably inside the fixed canvas),
+    // DYNAMICS_ABOVE_BASELINE_Y sits close to the top edge even with no
+    // cross-voice clamping at all — the glyph's own ascent (DYNAMICS_FONT_SIZE,
+    // same approximation #dynamicsBaselineForVoice itself uses) has to be
+    // subtracted here too, or an ordinary up-voice dynamic would poke past
+    // y=0 by default.
+    if (
+      this.#hasDynamicsContent(state) &&
+      this.#dynamicsPlacedAbove(voiceKey, state)
+    ) {
       const topY =
-        STAFF_TOP_LINE_Y -
-        STAFF_Y_PADDING -
-        TUPLET_STAFF_CLEARANCE_PX -
-        TUPLET_HOOK_LENGTH_PX -
-        TUPLET_NUMERAL_FONT_SIZE;
+        this.#dynamicsBaselineForVoice(voiceKey, state) - DYNAMICS_FONT_SIZE;
       if (topY < 0) {
         budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
     }
 
     return budget;
+  }
+
+  // Cheap attribute-presence check, not geometry — noteXPositions (what
+  // pairHairpins needs to actually pair a hairpin) aren't resolved yet at
+  // the point in #spaceElements() the budget estimators run, but
+  // crescendo/decrescendo presence alone is enough to know a hairpin will
+  // draw for this voice. Shared by both the above- and below-staff budget
+  // estimates.
+  #hasDynamicsContent(state: VoiceRenderState): boolean {
+    return state.elements.some((element) => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return false;
+      }
+      const noteOrChord = element as INoteElement | IChordElement;
+      return (
+        noteOrChord.dynamic !== null ||
+        noteOrChord.graceDynamic !== null ||
+        noteOrChord.crescendo !== null ||
+        noteOrChord.decrescendo !== null
+      );
+    });
+  }
+
+  // Below-staff mirror of #estimateAboveStaffBudget — a down-stem tuplet
+  // numeral or a voice's own dynamics/hairpin row can push past the fixed
+  // transcription height; other below-staff decorations (e.g. an
+  // arpeggio-hairpin's lower letter) aren't checked yet, following the
+  // above-budget's own scope today.
+  #estimateBelowStaffBudget(): number {
+    let budget = 0;
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      budget = Math.max(budget, this.#tupletVerticalOverflow(state, false));
+
+      if (
+        this.#hasDynamicsContent(state) &&
+        !this.#dynamicsPlacedAbove(voiceKey, state)
+      ) {
+        const overflow =
+          this.#dynamicsBaselineForVoice(voiceKey, state) -
+          STAFF_TRANSCRIPTION_HEIGHT;
+        if (overflow > 0) {
+          budget = Math.max(budget, Math.ceil(overflow) + 2);
+        }
+      }
+    }
+    return budget;
+  }
+
+  // Worst-case Y a tuplet group whose majority stem direction matches
+  // `stemUp` could need for its numeral, past the staff's own fixed edge (0
+  // above, STAFF_TRANSCRIPTION_HEIGHT below) — used by both the above- and
+  // below-staff budget estimates. Compares the nominal fixed-clearance
+  // formula (baseY when there's no outer/beam context — see
+  // tupletRules.ts#computeTupletBracketGeometry's staffBaseY) against the
+  // real stem-tip extension for a beamed group (whose bracket is omitted and
+  // whose numeral instead clears the actual beam stack, mirroring
+  // beamTipYForIndex's own staff-coord fallback formula there) — a beamed
+  // tuplet on a very high/low voice can extend well past the nominal
+  // clearance alone.
+  #tupletVerticalOverflow(state: VoiceRenderState, stemUp: boolean): number {
+    let overflow = 0;
+
+    for (const group of state.tupletGroups) {
+      const upVotes = group.indices.filter(
+        (i) => state.stemDirections[i] === true
+      ).length;
+      const groupStemUp = upVotes >= group.indices.length / 2;
+      if (groupStemUp !== stemUp) {
+        continue;
+      }
+
+      const nominalY = stemUp
+        ? STAFF_TOP_LINE_Y -
+          STAFF_Y_PADDING -
+          TUPLET_STAFF_CLEARANCE_PX -
+          TUPLET_HOOK_LENGTH_PX -
+          TUPLET_NUMERAL_FONT_SIZE
+        : STAFF_BOTTOM_LINE_Y +
+          STAFF_Y_PADDING +
+          TUPLET_STAFF_CLEARANCE_PX +
+          TUPLET_HOOK_LENGTH_PX +
+          TUPLET_NUMERAL_FONT_SIZE;
+
+      const extremeStemTipY = this.#extremeStemTipY(
+        state,
+        group.indices,
+        stemUp
+      );
+
+      const numeralOffset =
+        TUPLET_NUMERAL_FONT_SIZE / 2 +
+        TUPLET_NUMERAL_BEAM_GAP_PX +
+        BEAM_THICKNESS_PX;
+      const beamDerivedY =
+        extremeStemTipY !== null
+          ? stemUp
+            ? extremeStemTipY - numeralOffset
+            : extremeStemTipY + numeralOffset
+          : nominalY;
+
+      const worstY = stemUp
+        ? Math.min(nominalY, beamDerivedY)
+        : Math.max(nominalY, beamDerivedY);
+
+      const edgeOverflow = stemUp
+        ? worstY < 0
+          ? Math.ceil(-worstY) + 2
+          : 0
+        : worstY > STAFF_TRANSCRIPTION_HEIGHT
+        ? Math.ceil(worstY - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        : 0;
+
+      overflow = Math.max(overflow, edgeOverflow);
+    }
+
+    return overflow;
+  }
+
+  // The extreme (min for stemUp, max for !stemUp) real stem-tip Y across
+  // `indices` in `state` — the actual notehead+stem extent, not a nominal
+  // staff-relative offset. Returns null when none of the indices resolve to
+  // a real Y (e.g. all rests). Shared by #tupletVerticalOverflow and
+  // #dynamicsBaselineForVoice.
+  #extremeStemTipY(
+    state: VoiceRenderState,
+    indices: Iterable<number>,
+    stemUp: boolean
+  ): number | null {
+    let extreme = stemUp ? Infinity : -Infinity;
+    let anyResolved = false;
+    for (const i of indices) {
+      if (state.elements[i].nodeName === MUSIC_REST_NODE) {
+        continue;
+      }
+      const staffY = getStaffYForIndex(
+        i,
+        state.elements,
+        state.stemDirections,
+        state.noteStaffYCoords,
+        state.chordStaffYCoords
+      );
+      if (staffY === null) {
+        continue;
+      }
+      const yHeadOffset = stemUp
+        ? NOTE_Y_HEAD_OFFSET_STEM_UP
+        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+      const stemTipOffset = stemUp
+        ? NOTE_STEM_TIP_Y_OFFSET
+        : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+      const tipY = STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+      extreme = stemUp ? Math.min(extreme, tipY) : Math.max(extreme, tipY);
+      anyResolved = true;
+    }
+    return anyResolved ? extreme : null;
+  }
+
+  // On a genuinely multi-voice staff, each voice's dynamics/hairpins sit on
+  // its OWN side of the staff, matching its stem direction — the up-stem
+  // voice above, the down-stem voice below — standard multi-voice-on-one-
+  // staff notation convention, so two voices' rows never compete for the
+  // same territory. A single-voice staff (direction otherwise irrelevant)
+  // and the 'combined'/'shared-rest' synthetic tracks (whose `direction` is
+  // an unused placeholder, not a real per-voice-policy value) always stay
+  // below, matching today's byte-for-byte behavior.
+  #dynamicsPlacedAbove(voiceKey: VoiceKey, state: VoiceRenderState): boolean {
+    return (
+      this.#voices.size > 1 &&
+      typeof voiceKey === 'number' &&
+      state.direction === 'up'
+    );
+  }
+
+  // DYNAMICS_BASELINE_Y/DYNAMICS_ABOVE_BASELINE_Y alone are only a safe
+  // default when the voice's notes sit close to the staff. Clamps past the
+  // voice's own worst real stem-tip extent on that side — computed
+  // unconditionally as if every note had that side's stem direction, a
+  // conservative simplification (a note whose own stem happens to go the
+  // other way gets slightly more clearance than strictly needed, never
+  // less) rather than tracking each element's real stem direction
+  // separately. Computed once per voice, not per-marking, so a passage
+  // with several dynamics keeps one visually consistent row.
+  #dynamicsBaselineForVoice(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number {
+    const placeAbove = this.#dynamicsPlacedAbove(voiceKey, state);
+    const extremeStemTipY = this.#extremeStemTipY(
+      state,
+      state.elements.keys(),
+      placeAbove
+    );
+
+    // `extremeStemTipY` is where the stem tip ends, but the value fed into
+    // createDynamicMarkingSvg is the text's own BASELINE, not its edge —
+    // the glyph itself extends past that baseline (ascent when below the
+    // staff, reaching back up toward the stem; descent when above,
+    // reaching back down) unless accounted for. DYNAMICS_FONT_SIZE
+    // approximates that reach, the same way
+    // #estimateAboveStaffBudgetForVoice's arpeggio-hairpin check already
+    // does for its own text placement.
+    if (placeAbove) {
+      if (extremeStemTipY === null) {
+        return DYNAMICS_ABOVE_BASELINE_Y;
+      }
+      return Math.min(
+        DYNAMICS_ABOVE_BASELINE_Y,
+        extremeStemTipY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING
+      );
+    }
+
+    if (extremeStemTipY === null) {
+      return DYNAMICS_BASELINE_Y;
+    }
+    return Math.max(
+      DYNAMICS_BASELINE_Y,
+      extremeStemTipY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING
+    );
   }
 
   // Respace notes on resize. Runs even when there are no notes/chords, since

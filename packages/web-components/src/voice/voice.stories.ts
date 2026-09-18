@@ -21,10 +21,10 @@ export const TwoVoicesBasic: Story = {
         <music-note note="F" octave="5" duration="quarter"></music-note>
       </music-voice>
       <music-voice>
-        <music-note note="C" octave="4" duration="quarter"></music-note>
         <music-note note="B" octave="3" duration="quarter"></music-note>
         <music-note note="A" octave="3" duration="quarter"></music-note>
         <music-note note="G" octave="3" duration="quarter"></music-note>
+        <music-note note="F" octave="3" duration="quarter"></music-note>
       </music-voice>
     </music-staff>
   `,
@@ -42,8 +42,8 @@ export const TwoVoicesIndependentRhythm: Story = {
         <music-note note="E" octave="5" duration="quarter"></music-note>
       </music-voice>
       <music-voice>
-        <music-note note="C" octave="4" duration="half"></music-note>
-        <music-note note="G" octave="3" duration="half"></music-note>
+        <music-note note="B" octave="3" duration="half"></music-note>
+        <music-note note="F" octave="3" duration="half"></music-note>
       </music-voice>
     </music-staff>
   `,
@@ -107,9 +107,9 @@ export const TwoVoicesUnisonNote: Story = {
       </music-voice>
       <music-voice>
         <music-note note="C" octave="5" duration="quarter"></music-note>
-        <music-note note="B" octave="4" duration="quarter"></music-note>
-        <music-note note="A" octave="4" duration="quarter"></music-note>
-        <music-note note="G" octave="4" duration="quarter"></music-note>
+        <music-note note="E" octave="5" duration="quarter"></music-note>
+        <music-note note="G" octave="5" duration="quarter"></music-note>
+        <music-note note="B" octave="5" duration="quarter"></music-note>
       </music-voice>
     </music-staff>
   `,
@@ -141,7 +141,7 @@ export const TwoVoicesSharedRest: Story = {
         <music-rest duration="half"></music-rest>
       </music-voice>
       <music-voice>
-        <music-note note="C" octave="4" duration="quarter"></music-note>
+        <music-note note="B" octave="3" duration="quarter"></music-note>
         <music-note note="G" octave="3" duration="quarter"></music-note>
         <music-rest duration="half"></music-rest>
       </music-voice>
@@ -162,15 +162,20 @@ export const TwoVoicesWithTupletInLowerVoice: Story = {
     <music-staff clef="treble" time="4/4">
       <music-voice>
         <music-note note="E" octave="5" duration="half"></music-note>
-        <music-note note="D" octave="5" duration="half"></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="half"
+          articulation="staccato"
+        ></music-note>
       </music-voice>
       <music-voice>
         <music-tuplet ratio="3">
-          <music-note note="C" octave="4" duration="quarter"></music-note>
           <music-note note="B" octave="3" duration="quarter"></music-note>
           <music-note note="A" octave="3" duration="quarter"></music-note>
+          <music-note note="G" octave="3" duration="quarter"></music-note>
         </music-tuplet>
-        <music-note note="G" octave="3" duration="half"></music-note>
+        <music-note note="F" octave="3" duration="half"></music-note>
       </music-voice>
     </music-staff>
   `,
@@ -185,21 +190,37 @@ export const TwoVoicesWithDynamicsInBothVoices: Story = {
           octave="5"
           duration="quarter"
           dynamic="f"
+          articulation="staccato"
         ></music-note>
-        <music-note note="D" octave="5" duration="quarter"></music-note>
-        <music-note note="E" octave="5" duration="quarter"></music-note>
-        <music-note note="F" octave="5" duration="quarter"></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="quarter"
+          articulation="staccato"
+        ></music-note>
+        <music-note
+          note="E"
+          octave="5"
+          duration="quarter"
+          articulation="staccato"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="5"
+          duration="quarter"
+          articulation="staccato"
+        ></music-note>
       </music-voice>
       <music-voice>
         <music-note
-          note="C"
-          octave="4"
+          note="B"
+          octave="3"
           duration="quarter"
           dynamic="pp"
         ></music-note>
-        <music-note note="B" octave="3" duration="quarter"></music-note>
         <music-note note="A" octave="3" duration="quarter"></music-note>
         <music-note note="G" octave="3" duration="quarter"></music-note>
+        <music-note note="F" octave="3" duration="quarter"></music-note>
       </music-voice>
     </music-staff>
   `,
@@ -210,11 +231,16 @@ export const TwoVoicesWithTrillInLowerVoice: Story = {
     <music-staff clef="treble" time="4/4">
       <music-voice>
         <music-note note="E" octave="5" duration="half"></music-note>
-        <music-note note="D" octave="5" duration="half"></music-note>
+        <music-note
+          note="D"
+          octave="5"
+          duration="half"
+          articulation="staccato"
+        ></music-note>
       </music-voice>
       <music-voice>
-        <music-note note="C" octave="4" duration="half" trill></music-note>
-        <music-note note="G" octave="3" duration="half"></music-note>
+        <music-note note="B" octave="3" duration="half" trill></music-note>
+        <music-note note="F" octave="3" duration="half"></music-note>
       </music-voice>
     </music-staff>
   `,

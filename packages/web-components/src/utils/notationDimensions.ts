@@ -324,6 +324,16 @@ export const ACCIDENTAL_NOTE_GAP = -7;
 export const DYNAMICS_BASELINE_Y = STAFF_BOTTOM_LINE_Y + STAFF_LINE_SPACING * 2;
 
 /**
+ * Y position (px, in note-coordinate space) of the dynamics baseline above the
+ * staff — mirrors DYNAMICS_BASELINE_Y for a multi-voice staff's up-stem voice,
+ * whose dynamics sit above the staff (its own side) rather than below, matching
+ * standard multi-voice-on-one-staff notation convention.
+ * = STAFF_TOP_LINE_Y - 2 × STAFF_LINE_SPACING  (= 30 - 20 = 10)
+ */
+export const DYNAMICS_ABOVE_BASELINE_Y =
+  STAFF_TOP_LINE_Y - STAFF_LINE_SPACING * 2;
+
+/**
  * Half-height (px) of the open end of a hairpin wedge.
  * The full open span is 2 × HAIRPIN_OPEN_HEIGHT, matching 2 staff spaces (20 px).
  * = STAFF_LINE_SPACING  (= 10)

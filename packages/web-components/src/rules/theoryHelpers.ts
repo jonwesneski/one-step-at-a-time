@@ -15,6 +15,9 @@ import {
 
 const Y_COORDINATE_INCREMENT = STAFF_LINE_SPACING / 2;
 
+// Shared by generateYCoordinates and extrapolateYCoordinate.
+const NOTE_LETTER_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
 export const getChordNotes = (chord: Chord) => {
   const isSlash = chord[1] === '/';
   let root = isSlash ? chord[2] : chord[0];
@@ -95,7 +98,6 @@ export const generateYCoordinates = (
   const lowest = parseNote(lowestNote);
 
   // Build note sequence from highest to lowest in natural note order
-  const noteOrder = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
   const sequence: Array<{ note: string; octave: number }> = [];
 
   let currentNote = highest.letter;
@@ -105,14 +107,14 @@ export const generateYCoordinates = (
     sequence.push({ note: currentNote, octave: currentOctave });
 
     // Move down one diatonic step
-    const currentIndex = noteOrder.indexOf(currentNote);
+    const currentIndex = NOTE_LETTER_ORDER.indexOf(currentNote);
     if (currentIndex === 0) {
       // C → B of previous octave
       currentNote = 'B';
       currentOctave--;
     } else {
       // Move to previous note in sequence
-      currentNote = noteOrder[currentIndex - 1];
+      currentNote = NOTE_LETTER_ORDER[currentIndex - 1];
     }
   }
 
@@ -128,6 +130,39 @@ export const generateYCoordinates = (
   }
 
   return result;
+};
+
+// Extends generateYCoordinates' own diatonic-step pattern past the edges of
+// an already-generated table, for a note/octave the table has no entry for
+// (any pitch outside a clef's usual 3-octave window — still a legal `Octave`
+// value, e.g. a low ledger-line note on a treble staff). Anchors off the
+// table's own topmost (smallest-Y) entry, so every existing in-range Y value
+// is untouched — this only ever adds new values, never shifts old ones.
+export const extrapolateYCoordinate = (
+  letter: string,
+  octave: number,
+  yCoordinates: YCoordinates
+): number => {
+  let anchorKey: string | null = null;
+  let anchorY = Infinity;
+  for (const [key, y] of Object.entries(yCoordinates)) {
+    if (y !== undefined && y < anchorY) {
+      anchorY = y;
+      anchorKey = key;
+    }
+  }
+  if (anchorKey === null) {
+    return 0;
+  }
+  const match = anchorKey.match(/^([A-G])(\d)$/);
+  if (!match) {
+    return 0;
+  }
+  const diatonicIndex = (l: string, o: number) =>
+    o * 7 + NOTE_LETTER_ORDER.indexOf(l);
+  const steps =
+    diatonicIndex(match[1], Number(match[2])) - diatonicIndex(letter, octave);
+  return anchorY + steps * Y_COORDINATE_INCREMENT;
 };
 
 export const generateKeySignatureYCoordinates = (
