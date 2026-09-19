@@ -72,6 +72,14 @@ type CompositionFormSessionContextValue = {
     staffIds: string[],
     groupType: StaffGroupType | null
   ) => void;
+  addVoice: (staffId: string) => void;
+  removeVoice: (staffId: string, voiceId: string) => void;
+  moveEntryToVoice: (
+    staffId: string,
+    entryId: string,
+    fromVoiceId: string,
+    toVoiceId: string
+  ) => void;
   addEntry: (
     measureId: string,
     staffId: string,
@@ -109,6 +117,14 @@ type CompositionFormSessionProviderProps = {
     measureId: string,
     staffIds: string[],
     groupType: StaffGroupType | null
+  ) => void;
+  onAddVoice: (staffId: string) => void;
+  onRemoveVoice: (staffId: string, voiceId: string) => void;
+  onMoveEntryToVoice: (
+    staffId: string,
+    entryId: string,
+    fromVoiceId: string,
+    toVoiceId: string
   ) => void;
   onAddEntry: (
     measureId: string,
@@ -149,6 +165,9 @@ export function CompositionFormSessionProvider({
   onAddMeasure,
   onAddStaff,
   onSetStaffGroup,
+  onAddVoice,
+  onRemoveVoice,
+  onMoveEntryToVoice,
   onAddEntry,
   onUpdateEntry,
   onReorderEntry,
@@ -266,6 +285,26 @@ export function CompositionFormSessionProvider({
     setSession({ selection: EMPTY_SELECTION });
   }, [session.selection, getStructure, recordStructure, setSession]);
 
+  // Removing a voice deletes its own entries outright (unlike reorder/move,
+  // which never delete anything) — drop any now-dangling id from the
+  // selection afterward, mirroring confirmTimeSignatureChange's own
+  // "mutation can invalidate the selection" handling below.
+  const removeVoice = useCallback(
+    (staffId: string, voiceId: string) => {
+      onRemoveVoice(staffId, voiceId);
+      const nextEntriesById = getStructure().entriesById;
+      setSessionState((prev) => {
+        const entryIds = prev.selection.entryIds.filter(
+          (id) => nextEntriesById[id] !== undefined
+        );
+        return entryIds.length === prev.selection.entryIds.length
+          ? prev
+          : { ...prev, selection: { ...prev.selection, entryIds } };
+      });
+    },
+    [onRemoveVoice, getStructure]
+  );
+
   const requestTimeSignatureChange = useCallback(
     (request: PendingTimeSignatureChange) =>
       setSession({ pendingTimeSignatureChange: request }),
@@ -318,6 +357,9 @@ export function CompositionFormSessionProvider({
         addMeasure: onAddMeasure,
         addStaff: onAddStaff,
         setStaffGroup: onSetStaffGroup,
+        addVoice: onAddVoice,
+        removeVoice,
+        moveEntryToVoice: onMoveEntryToVoice,
         addEntry: onAddEntry,
         updateEntry: onUpdateEntry,
         reorderEntry: onReorderEntry,

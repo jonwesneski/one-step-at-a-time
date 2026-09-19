@@ -159,7 +159,9 @@ export function isConnectableSelection(
     return null;
   }
 
-  const sameStaff = startContext.staffId === endContext.staffId;
+  const sameStaff =
+    startContext.staffId === endContext.staffId &&
+    startContext.voiceIndex === endContext.voiceIndex;
   const sameVoiceAcrossMeasures =
     startContext.staffIndex === endContext.staffIndex &&
     startContext.staffType === endContext.staffType &&

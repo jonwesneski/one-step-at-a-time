@@ -1,6 +1,6 @@
 import type { Note } from '@one-step-at-a-time/web-components';
 import { describe, expect, it } from 'vitest';
-import { moveEntryInVoice } from './reorderHelpers';
+import { moveEntryInVoice, moveEntryToVoice } from './reorderHelpers';
 import {
   buildMultiVoiceStaff,
   buildSingleVoiceStaff,
@@ -218,5 +218,115 @@ describe('moveEntryInVoice', () => {
       'c',
     ]);
     expect(next.stavesById.s1.voicesById['s1-v2'].entryIds).toEqual(['x', 'y']);
+  });
+});
+
+describe('moveEntryToVoice', () => {
+  function twoVoiceStructure(
+    voiceEntryIds: string[][],
+    entriesById: Record<string, MusicEntry>,
+    extra: Partial<CompositionStructure> = {}
+  ): CompositionStructure {
+    return {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: { s1: buildMultiVoiceStaff('s1', voiceEntryIds) },
+      entriesById,
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+      ...extra,
+    };
+  }
+
+  it('moves an entry from one voice to the end of another', () => {
+    const s = twoVoiceStructure([['a', 'b'], ['x']], {
+      a: note('a'),
+      b: note('b'),
+      x: note('x'),
+    });
+    const next = moveEntryToVoice(s, 's1', 'a', 's1-v1', 's1-v2');
+    expect(next.stavesById.s1.voicesById['s1-v1'].entryIds).toEqual(['b']);
+    expect(next.stavesById.s1.voicesById['s1-v2'].entryIds).toEqual(['x', 'a']);
+  });
+
+  it('clears the moved entry’s tupletId', () => {
+    const s = twoVoiceStructure(
+      [['a', 'b'], ['x']],
+      {
+        a: { ...note('a'), tupletId: 't' },
+        b: { ...note('b'), tupletId: 't' },
+        x: note('x'),
+      },
+      { tupletsById: { t: { id: 't', ratio: '3' } } }
+    );
+    const next = moveEntryToVoice(s, 's1', 'a', 's1-v1', 's1-v2');
+    expect(next.entriesById.a).toMatchObject({ tupletId: null });
+  });
+
+  it('dissolves a tuplet run broken in the source voice by the move', () => {
+    const s = twoVoiceStructure(
+      [['a', 'b', 'c'], ['x']],
+      {
+        a: note('a'),
+        b: { ...note('b'), tupletId: 't' },
+        c: { ...note('c'), tupletId: 't' },
+        x: note('x'),
+      },
+      { tupletsById: { t: { id: 't', ratio: '3' } } }
+    );
+    const next = moveEntryToVoice(s, 's1', 'b', 's1-v1', 's1-v2');
+    expect(next.tupletsById.t).toBeUndefined();
+    expect(next.entriesById.c).toMatchObject({ tupletId: null });
+  });
+
+  it('drops the source voice when the move leaves it empty (and it is not voice 1)', () => {
+    const s = twoVoiceStructure([['a'], ['x']], {
+      a: note('a'),
+      x: note('x'),
+    });
+    const next = moveEntryToVoice(s, 's1', 'x', 's1-v2', 's1-v1');
+    expect(next.stavesById.s1.voiceOrder).toEqual(['s1-v1']);
+    expect(next.stavesById.s1.voicesById).not.toHaveProperty('s1-v2');
+    expect(next.stavesById.s1.voicesById['s1-v1'].entryIds).toEqual(['a', 'x']);
+  });
+
+  it('never drops voice 1 even when emptied by the move', () => {
+    const s = twoVoiceStructure([['a'], ['x']], {
+      a: note('a'),
+      x: note('x'),
+    });
+    const next = moveEntryToVoice(s, 's1', 'a', 's1-v1', 's1-v2');
+    expect(next.stavesById.s1.voiceOrder).toEqual(['s1-v1', 's1-v2']);
+    expect(next.stavesById.s1.voicesById['s1-v1'].entryIds).toEqual([]);
+  });
+
+  it('prunes a tie that is no longer same-voice-adjacent after the move', () => {
+    const s = twoVoiceStructure(
+      [['a', 'b'], ['x']],
+      { a: note('a'), b: note('b'), x: note('x') },
+      {
+        connectorsById: {
+          t1: { id: 't1', kind: 'tie', startEntryId: 'a', endEntryId: 'b' },
+        },
+        connectorOrder: ['t1'],
+      }
+    );
+    const next = moveEntryToVoice(s, 's1', 'b', 's1-v1', 's1-v2');
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
+  it('is a no-op when the entry is not in the source voice, the voices are the same, or either is unknown', () => {
+    const s = twoVoiceStructure([['a', 'b'], ['x']], {
+      a: note('a'),
+      b: note('b'),
+      x: note('x'),
+    });
+    expect(moveEntryToVoice(s, 's1', 'a', 's1-v1', 's1-v1')).toBe(s);
+    expect(moveEntryToVoice(s, 's1', 'missing', 's1-v1', 's1-v2')).toBe(s);
+    expect(moveEntryToVoice(s, 's1', 'a', 's1-v2', 's1-v1')).toBe(s);
+    expect(moveEntryToVoice(s, 's1', 'a', 's1-v1', 'missing')).toBe(s);
   });
 });

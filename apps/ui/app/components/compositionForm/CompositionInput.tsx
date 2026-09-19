@@ -27,7 +27,10 @@ import { DragSelectOverlay } from './DragSelectOverlay';
 import { applyEntryUpdate } from './entryEditsHelpers';
 import { MeasureInput } from './MeasureInput';
 import { rebar } from './rebarHelpers';
-import { moveEntryInVoice } from './reorderHelpers';
+import {
+  moveEntryInVoice,
+  moveEntryToVoice as moveEntryToVoiceInStructure,
+} from './reorderHelpers';
 import { findGroupMembers } from './staffGroupsHelpers';
 import { TimeSignatureChangeDialog } from './TimeSignatureChangeDialog';
 import { setTuplet as setTupletInStructure } from './tupletsHelpers';
@@ -40,7 +43,11 @@ import type {
   StaffType,
 } from './types';
 import { isSelectionEmpty } from './types';
-import { createDefaultVoice } from './voiceHelpers';
+import {
+  addVoiceToStaff,
+  createDefaultVoice,
+  removeVoiceFromStaff,
+} from './voiceHelpers';
 
 const firstMeasureId = crypto.randomUUID();
 
@@ -313,6 +320,33 @@ export function CompositionInput() {
     record({ ...s, stavesById });
   }
 
+  function addVoice(staffId: string) {
+    record(addVoiceToStaff(getStructure(), staffId));
+  }
+
+  function removeVoice(staffId: string, voiceId: string) {
+    record(removeVoiceFromStaff(getStructure(), staffId, voiceId));
+  }
+
+  function moveEntryToVoice(
+    staffId: string,
+    entryId: string,
+    fromVoiceId: string,
+    toVoiceId: string
+  ) {
+    const s = getStructure();
+    const next = moveEntryToVoiceInStructure(
+      s,
+      staffId,
+      entryId,
+      fromVoiceId,
+      toVoiceId
+    );
+    if (next !== s) {
+      record(next);
+    }
+  }
+
   function addEntry(
     measureId: string,
     staffId: string,
@@ -440,6 +474,9 @@ export function CompositionInput() {
       onAddMeasure={addMeasure}
       onAddStaff={addStaff}
       onSetStaffGroup={setStaffGroup}
+      onAddVoice={addVoice}
+      onRemoveVoice={removeVoice}
+      onMoveEntryToVoice={moveEntryToVoice}
       onAddEntry={addEntry}
       onUpdateEntry={updateEntry}
       onReorderEntry={reorderEntry}

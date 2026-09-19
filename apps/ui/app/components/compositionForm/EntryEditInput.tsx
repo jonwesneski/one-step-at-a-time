@@ -1,3 +1,4 @@
+import { Select } from '@/design-system';
 import type {
   DurationType,
   Note,
@@ -16,6 +17,12 @@ import type { PitchedEntry } from './types';
 interface EntryEditInputProps {
   entry: PitchedEntry;
   durationOptions: readonly DurationType[];
+  // Voice context for the "Move to Voice" control — null/empty when it
+  // couldn't be resolved (shouldn't happen for a real entry, but keeps this
+  // component from assuming its caller always finds one).
+  staffId: string | null;
+  voiceOrder: readonly string[];
+  currentVoiceId: string | null;
 }
 
 const labelClass = 'text-xs font-medium text-zinc-500';
@@ -23,8 +30,11 @@ const labelClass = 'text-xs font-medium text-zinc-500';
 export function EntryEditInput({
   entry,
   durationOptions,
+  staffId,
+  voiceOrder,
+  currentVoiceId,
 }: EntryEditInputProps) {
-  const { updateEntry } = useCompositionFormSession();
+  const { updateEntry, moveEntryToVoice } = useCompositionFormSession();
 
   return (
     <div
@@ -78,6 +88,29 @@ export function EntryEditInput({
           markings={entry}
           onChange={(patch) => updateEntry({ ...entry, ...patch })}
         />
+      )}
+
+      {staffId && currentVoiceId && voiceOrder.length > 1 && (
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Voice</span>
+          <Select
+            value={currentVoiceId}
+            onChange={(e) =>
+              moveEntryToVoice(
+                staffId,
+                entry.id,
+                currentVoiceId,
+                e.target.value
+              )
+            }
+          >
+            {voiceOrder.map((voiceId, index) => (
+              <option key={voiceId} value={voiceId}>
+                Voice {index + 1}
+              </option>
+            ))}
+          </Select>
+        </label>
       )}
     </div>
   );

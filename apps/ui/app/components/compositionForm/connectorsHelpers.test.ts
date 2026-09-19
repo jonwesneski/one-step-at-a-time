@@ -100,6 +100,27 @@ describe('isConnectableSelection', () => {
       )
     ).toBeNull();
   });
+
+  it('rejects two entries in different voices of the same staff', () => {
+    const structure: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [['e1'], ['e2']]),
+      },
+      entriesById: {
+        e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },
+        e2: { id: 'e2', type: 'note', value: 'C', duration: 'quarter' },
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+    expect(
+      isConnectableSelection(selection(['e1', 'e2']), structure)
+    ).toBeNull();
+  });
 });
 
 describe('canTie', () => {

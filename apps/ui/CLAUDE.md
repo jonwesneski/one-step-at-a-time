@@ -99,14 +99,22 @@ stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tup
 A staff's entries are one level deeper than the diagram above shows:
 `voiceOrder: string[]` (ascending = voice 1..3, position IS the voice number,
 mirrors the library's `<music-voice>` model) + `voicesById: Record<id, {
-id, entryIds }>`. Every staff has exactly one voice today — there's no control
-yet to create a second (`voiceHelpers.ts`'s `addVoiceToStaff`/
-`removeVoiceFromStaff` exist and are tested, just not wired to UI). A
-`ClefEntry` always lives in `voiceOrder[0]`'s own `entryIds` — a clef change
-is staff-wide, but the library only honors a mid-stream `<music-clef>` nested
-in the first `<music-voice>`. Use `voiceHelpers.ts`'s `staffEntryIds(staff)`
-for anything that genuinely needs "every entry in this staff regardless of
-voice" (deletion cascades, staff-wide search, marquee hit-testing) rather
+id, entryIds }>`. A staff's "Voices" tab (`VoiceInput.tsx`, mounted from
+`StaffInput.tsx` alongside "Staff Entries") adds/removes a voice
+(`addVoice`/`removeVoice` mutators, wrapping `voiceHelpers.ts`'s
+`addVoiceToStaff`/`removeVoiceFromStaff`, capped at 3 like the library); the
+"Staff Entries" add-panel gets a Voice selector once a staff has 2+ (hidden
+for the common single-voice case); an existing entry can be relocated to a
+different voice via a "Voice" selector in its own Edit panel
+(`moveEntryToVoice` mutator) — real drag-to-another-voice is not implemented
+(today's reorder-drag is single-voice by construction; moving voices is a
+plain control, not drag). A `ClefEntry` always lives in `voiceOrder[0]`'s own
+`entryIds` — a clef change is staff-wide, but the library only honors a
+mid-stream `<music-clef>` nested in the first `<music-voice>` — so the
+add-panel's Voice selector never appears on the Clef Change tab. Use
+`voiceHelpers.ts`'s `staffEntryIds(staff)` for anything that genuinely needs
+"every entry in this staff regardless of voice" (deletion cascades,
+staff-wide search, marquee hit-testing) rather
 than reading `voicesById` directly.
 
 `keySig` / `mode` inheritance is **not** stored per node — it lives on the root
@@ -124,10 +132,16 @@ Editing an existing entry goes through `updateEntry` → `applyEntryUpdate`
 undo stack, then writes the new one. Never call `methods.setValue` on a structural
 field directly — you'd skip undo history.
 
-- Mutators (`addMeasure`, `addStaff`, `setStaffGroup`, `addEntry`, `setConnector`,
-  …) are defined in `CompositionInput.tsx`, passed into
-  `CompositionFormSessionProvider` as `on*` props, and re-exposed through
-  `useCompositionFormSession()`. Add a new mutator the same way.
+- Mutators (`addMeasure`, `addStaff`, `setStaffGroup`, `addVoice`, `removeVoice`,
+  `moveEntryToVoice`, `addEntry`, `setConnector`, …) are defined in
+  `CompositionInput.tsx`, passed into `CompositionFormSessionProvider` as `on*`
+  props, and re-exposed through `useCompositionFormSession()`. Add a new mutator
+  the same way. A mutator whose effect can invalidate the current selection
+  (deletes/moves ids the selection references) gets a small wrapper defined
+  _inside_ the provider instead of a raw pass-through — see `removeVoice`
+  (drops now-dangling entry ids from `session.selection` after the delete) and
+  `confirmTimeSignatureChange` (clears the selection outright after a rebar
+  mints fresh ids).
 - `getStructure` / `setStructure` in `CompositionInput.tsx` bridge the form store
   and `useUndoRedo`. If you add a field to `CompositionStructure`, add it in **four
   places**: the type, `defaultValues`, `getStructure`, `setStructure`.

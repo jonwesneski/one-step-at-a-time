@@ -1,5 +1,5 @@
 import { flattenEntryOrder, pruneBrokenTies } from './connectorsHelpers';
-import type { CompositionStructure } from './types';
+import type { CompositionStructure, NormalizedVoice } from './types';
 import { isPitchedEntry } from './types';
 
 // Moves one entry within its staff's entry stream and repairs what the move can
@@ -55,6 +55,75 @@ export function moveEntryInVoice(
   };
 
   next = dissolveDiscontiguousTuplets(next, staffId, voiceId);
+  next = normalizeConnectorEndpointOrder(next);
+  next = pruneBrokenTies(next);
+  return next;
+}
+
+// Moves an entry to a different voice of the same staff — a genuinely
+// different structural operation from moveEntryInVoice above, not a variant
+// call of it (that one only ever reorders within a single voice's own
+// entryIds). Always appends at the end of the target voice; the entry's
+// exact position within its new voice can be fixed up afterward with the
+// existing single-voice reorder-drag. A tuplet run can't span voices, so the
+// moved entry's own tupletId is cleared rather than carried over.
+export function moveEntryToVoice(
+  structure: CompositionStructure,
+  staffId: string,
+  entryId: string,
+  fromVoiceId: string,
+  toVoiceId: string
+): CompositionStructure {
+  const staff = structure.stavesById[staffId];
+  const fromVoice = staff?.voicesById[fromVoiceId];
+  const toVoice = staff?.voicesById[toVoiceId];
+  if (
+    !staff ||
+    !fromVoice ||
+    !toVoice ||
+    fromVoiceId === toVoiceId ||
+    !fromVoice.entryIds.includes(entryId)
+  ) {
+    return structure;
+  }
+
+  const voicesById: Record<string, NormalizedVoice> = {
+    ...staff.voicesById,
+    [fromVoiceId]: {
+      ...fromVoice,
+      entryIds: fromVoice.entryIds.filter((id) => id !== entryId),
+    },
+    [toVoiceId]: { ...toVoice, entryIds: [...toVoice.entryIds, entryId] },
+  };
+
+  const entry = structure.entriesById[entryId];
+  const entriesById =
+    isPitchedEntry(entry) && entry.tupletId
+      ? { ...structure.entriesById, [entryId]: { ...entry, tupletId: null } }
+      : structure.entriesById;
+
+  // A voice left with zero entries is dropped, mirroring
+  // deleteSelectionHelpers.ts's own repair — but the staff always keeps at
+  // least its first voice, even if empty.
+  const voiceOrder = staff.voiceOrder.filter(
+    (voiceId, index) => index === 0 || voicesById[voiceId].entryIds.length > 0
+  );
+  const survivingVoicesById = Object.fromEntries(
+    voiceOrder.map((voiceId) => [voiceId, voicesById[voiceId]])
+  );
+
+  let next: CompositionStructure = {
+    ...structure,
+    entriesById,
+    stavesById: {
+      ...structure.stavesById,
+      [staffId]: { ...staff, voiceOrder, voicesById: survivingVoicesById },
+    },
+  };
+
+  if (survivingVoicesById[fromVoiceId]) {
+    next = dissolveDiscontiguousTuplets(next, staffId, fromVoiceId);
+  }
   next = normalizeConnectorEndpointOrder(next);
   next = pruneBrokenTies(next);
   return next;

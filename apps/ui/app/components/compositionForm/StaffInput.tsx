@@ -1,5 +1,7 @@
+import { Select } from '@/design-system';
 import '@one-step-at-a-time/web-components';
 import type { TimeSignature } from '@one-step-at-a-time/web-components';
+import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { AddChordInput } from './AddChordInput';
 import { AddClefInput } from './AddClefInput';
@@ -21,6 +23,7 @@ import {
   useConnectorAttributes,
 } from './useCompositionStructure';
 import { useEntryDrag } from './useEntryDrag';
+import { VoiceInput } from './VoiceInput';
 
 interface StaffInputProps {
   staffId: string;
@@ -52,12 +55,16 @@ export function StaffInput({
 
   const isSelected = session.selection.staffIds.includes(staffId);
 
-  // The "Staff Entries" add-panel and overfull indicator stay scoped to
-  // voice 1 this phase — every staff has exactly one voice until Phase 5
-  // adds a way to create more, and a real target-voice selector is explicit
-  // Phase 5 scope.
-  const firstVoiceId = staff.voiceOrder[0];
-  const entries = staff.voicesById[firstVoiceId].entryIds.map(
+  // Which voice the "Staff Entries" add-panel targets. Plain local state —
+  // nothing else needs this value, and StaffInput already remounts per staff
+  // via the parent's own .map, so it's naturally staff-scoped. Falls back to
+  // voice 1 if the stored id no longer exists (its voice was removed).
+  const [targetVoiceId, setTargetVoiceId] = useState(staff.voiceOrder[0]);
+  const effectiveTargetVoiceId = staff.voicesById[targetVoiceId]
+    ? targetVoiceId
+    : staff.voiceOrder[0];
+
+  const entries = staff.voicesById[effectiveTargetVoiceId].entryIds.map(
     (eid) => entriesById[eid]
   );
 
@@ -66,7 +73,26 @@ export function StaffInput({
     timeSignature,
     structure.tupletsById
   );
-  const add = (entry: DraftMusicEntry) => addEntry(measureId, staffId, entry);
+  const add = (entry: DraftMusicEntry) =>
+    addEntry(measureId, staffId, entry, effectiveTargetVoiceId);
+
+  // Hidden entirely for the common single-voice case — no added friction.
+  const voiceSelector =
+    staff.voiceOrder.length > 1 ? (
+      <label className="flex items-center gap-2 px-3 pt-2 text-xs font-medium text-zinc-500">
+        Voice
+        <Select
+          value={effectiveTargetVoiceId}
+          onChange={(e) => setTargetVoiceId(e.target.value)}
+        >
+          {staff.voiceOrder.map((voiceId, index) => (
+            <option key={voiceId} value={voiceId}>
+              Voice {index + 1}
+            </option>
+          ))}
+        </Select>
+      </label>
+    ) : null;
 
   const staffClass = `cursor-pointer rounded transition-shadow ${
     isSelected ? 'rainbow-selected' : ''
@@ -205,24 +231,40 @@ export function StaffInput({
             {
               label: 'Note',
               content: (
-                <AddNoteInput onAdd={add} remainingBeats={remainingBeats} />
+                <>
+                  {voiceSelector}
+                  <AddNoteInput onAdd={add} remainingBeats={remainingBeats} />
+                </>
               ),
             },
             {
               label: 'Chord',
               content: (
-                <AddChordInput onAdd={add} remainingBeats={remainingBeats} />
+                <>
+                  {voiceSelector}
+                  <AddChordInput onAdd={add} remainingBeats={remainingBeats} />
+                </>
               ),
             },
             {
               label: 'Rest',
               content: (
-                <AddRestInput onAdd={add} remainingBeats={remainingBeats} />
+                <>
+                  {voiceSelector}
+                  <AddRestInput onAdd={add} remainingBeats={remainingBeats} />
+                </>
               ),
             },
             {
+              // No voice selector here — a clef change always targets voice
+              // 1 regardless (addEntry enforces this; a clef change is
+              // staff-wide, not voice-scoped), so a selector would mislead.
               label: 'Clef Change',
               content: <AddClefInput onAdd={add} />,
+            },
+            {
+              label: 'Voices',
+              content: <VoiceInput staffId={staffId} />,
             },
           ]}
         />

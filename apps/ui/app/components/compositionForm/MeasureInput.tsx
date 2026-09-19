@@ -12,6 +12,7 @@ import {
   availableForDuration,
   fittingDurations,
   remainingDuration,
+  staffOfEntryId,
 } from './measureCapacityHelpers';
 import { StaffGroupInput } from './StaffGroupInput';
 import { StaffInput } from './StaffInput';
@@ -101,6 +102,12 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
     })
       ? structure.entriesById[selectedEntryId]
       : null;
+  // For the "Move to Voice" control — which staff/voice the editable entry
+  // currently lives in (entry ids are globally unique, so a plain global
+  // lookup is fine; no need to re-derive this measure-scoped).
+  const editableEntryVoiceContext = editableEntry
+    ? staffOfEntryId(structure, editableEntry.id)
+    : null;
 
   // A tuplet groups entries within one staff — offered by the measure holding
   // that staff.
@@ -161,6 +168,9 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
             availableForDuration(structure, timeSignature, editableEntry.id),
             editableEntry.duration
           )}
+          staffId={editableEntryVoiceContext?.staff.id ?? null}
+          voiceOrder={editableEntryVoiceContext?.staff.voiceOrder ?? []}
+          currentVoiceId={editableEntryVoiceContext?.voiceId ?? null}
         />
       ),
     });
