@@ -754,6 +754,52 @@ describe('computeTupletBracketGeometry', () => {
     expect(result.baseY).toBeCloseTo(expectedBaseY);
   });
 
+  it('clamps baseY below stem tips even when the group is not beamed at all (e.g. a quarter-note triplet reaching well past the staff)', () => {
+    const tupletElement = makeTuplet('3');
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote({ note: 'C', duration: 'quarter' })
+    );
+    // staffY = 50: below staff center — same scenario as the beamed test
+    // above, but with an empty beamedIndices set (quarter notes never beam).
+    const staffY = 50;
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((el) => [el as NoteElementType, staffY])
+    );
+    const tupletsByIndex = new Map<number, TupletElementType[]>(
+      elements.map((_, i) => [i, [tupletElement]])
+    );
+    const [group] = buildTupletGroups(elements, tupletsByIndex);
+
+    const result = computeTupletBracketGeometry(
+      group,
+      elements,
+      new Map(elements.map((_, i) => [i, i * 30 + 10])),
+      elements.map(() => false),
+      new Set(), // no notes beamed
+      noteStaffYCoords,
+      new Map(),
+      null,
+      true // hasInnerGroups → omitBracket=false
+    )!;
+
+    const stemTipY =
+      STAFF_Y_PADDING +
+      staffY -
+      NOTE_Y_HEAD_OFFSET_STEM_DOWN +
+      NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+    const expectedBaseY =
+      stemTipY + (TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX);
+    const staffBaseY =
+      STAFF_BOTTOM_LINE_Y +
+      STAFF_Y_PADDING +
+      TUPLET_STAFF_CLEARANCE_PX +
+      TUPLET_HOOK_LENGTH_PX;
+
+    expect(result.baseY).toBeGreaterThan(staffBaseY);
+    expect(result.baseY).toBeCloseTo(expectedBaseY);
+  });
+
   it('does not clamp baseY when stem-up beamed notes have stems that stay within the bracket zone', () => {
     const tupletElement = makeTuplet('3');
     const elements: NoteChordOrRestElementType[] = Array.from(

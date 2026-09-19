@@ -10,8 +10,14 @@ import {
   collectNoteLikeElements,
   ConnectorPair,
   pairConnectors,
+  partitionByVoice,
 } from './connectorsBuilder';
-import { MUSIC_GUITAR_NOTE, MUSIC_NOTE, MUSIC_STAFF } from './consts';
+import {
+  MUSIC_GUITAR_NOTE,
+  MUSIC_NOTE,
+  MUSIC_STAFF,
+  MUSIC_VOICE,
+} from './consts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -41,6 +47,83 @@ describe('collectNoteLikeElements', () => {
     expect(notes).toHaveLength(2);
     expect(notes[0].tagName.toLowerCase()).toBe(MUSIC_NOTE);
     expect(notes[1].tagName.toLowerCase()).toBe(MUSIC_GUITAR_NOTE);
+  });
+});
+
+describe('partitionByVoice', () => {
+  it('puts a bare note (no <music-voice> ancestor) into voice 1', () => {
+    const note = makeNote({ note: 'C', octave: '4' });
+    document.body.appendChild(note);
+
+    const byVoice = partitionByVoice([note]);
+    expect(byVoice.get(1)).toEqual([note]);
+    expect(byVoice.size).toBe(1);
+  });
+
+  it('numbers voices by <music-voice> sibling position', () => {
+    const voice1 = document.createElement(MUSIC_VOICE);
+    const voice2 = document.createElement(MUSIC_VOICE);
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteInVoice1 = makeNote({ note: 'C', octave: '4' });
+    const noteInVoice2 = makeNote({ note: 'D', octave: '4' });
+    voice1.appendChild(noteInVoice1);
+    voice2.appendChild(noteInVoice2);
+    staff.appendChild(voice1);
+    staff.appendChild(voice2);
+    document.body.appendChild(staff);
+
+    const byVoice = partitionByVoice([noteInVoice1, noteInVoice2]);
+    expect(byVoice.get(1)).toEqual([noteInVoice1]);
+    expect(byVoice.get(2)).toEqual([noteInVoice2]);
+  });
+
+  it('regression: two voices both sustaining an open (for-less) tie across a measure boundary — partitioning prevents the LIFO stack from mispairing them', () => {
+    // Realistic failure shape: measure 1's staff has voice 1 then voice 2
+    // (document order), each ending with an open `tie="start"` (both parts
+    // held across the barline — a common musical situation). Measure 2's
+    // staff again has voice 1 then voice 2, each starting with `tie="end"`.
+    // In one flat, unpartitioned document-order walk, by the time
+    // measure-2-voice-1's `end` is reached, the LIFO stack top is
+    // measure-1-VOICE-2's start (pushed after voice 1's), not voice 1's —
+    // a real cross-voice mispairing, not a hypothetical one.
+    const m1Voice1 = document.createElement(MUSIC_VOICE);
+    const m1Voice2 = document.createElement(MUSIC_VOICE);
+    const m1Staff = document.createElement(MUSIC_STAFF);
+    const m2Voice1 = document.createElement(MUSIC_VOICE);
+    const m2Voice2 = document.createElement(MUSIC_VOICE);
+    const m2Staff = document.createElement(MUSIC_STAFF);
+    const root = document.createElement('div');
+
+    const v1Start = makeNote({ note: 'C', octave: '4', tie: 'start' });
+    const v2Start = makeNote({ note: 'E', octave: '4', tie: 'start' });
+    const v1End = makeNote({ note: 'C', octave: '4', tie: 'end' });
+    const v2End = makeNote({ note: 'E', octave: '4', tie: 'end' });
+
+    m1Voice1.append(v1Start);
+    m1Voice2.append(v2Start);
+    m1Staff.append(m1Voice1, m1Voice2);
+    m2Voice1.append(v1End);
+    m2Voice2.append(v2End);
+    m2Staff.append(m2Voice1, m2Voice2);
+    root.append(m1Staff, m2Staff);
+    document.body.appendChild(root);
+
+    // Without partitioning, pairing the flat document-order list directly
+    // mispairs voice 1's end with voice 2's start (LIFO stack top).
+    const unpartitionedPairs = pairConnectors(collectNoteLikeElements(root));
+    expect(unpartitionedPairs).toHaveLength(2);
+    expect(unpartitionedPairs.find((p) => p.end === v1End)?.start).toBe(
+      v2Start
+    ); // the bug, demonstrated
+
+    // With partitioning, each voice pairs independently and correctly.
+    const byVoice = partitionByVoice(collectNoteLikeElements(root));
+    const partitionedPairs = [...byVoice.values()].flatMap((notes) =>
+      pairConnectors(notes)
+    );
+    expect(partitionedPairs).toHaveLength(2);
+    expect(partitionedPairs.find((p) => p.start === v1Start)?.end).toBe(v1End);
+    expect(partitionedPairs.find((p) => p.start === v2Start)?.end).toBe(v2End);
   });
 });
 

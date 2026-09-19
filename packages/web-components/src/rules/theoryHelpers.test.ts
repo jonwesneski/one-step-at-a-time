@@ -1,4 +1,9 @@
-import { getChordNotes, getNotes } from './theoryHelpers';
+import {
+  extrapolateYCoordinate,
+  generateYCoordinates,
+  getChordNotes,
+  getNotes,
+} from './theoryHelpers';
 
 describe('Theory Helpers', () => {
   describe('getNotes', () => {
@@ -81,6 +86,45 @@ describe('Theory Helpers', () => {
 
     it('Cb minor', () => {
       expect(getChordNotes('Cbmin')).toEqual(['Cb', 'Ebb', 'Gb']);
+    });
+  });
+
+  describe('extrapolateYCoordinate', () => {
+    const trebleTable = generateYCoordinates('C6', 'C4');
+    const c4 = trebleTable.C4 ?? 0;
+    const d4 = trebleTable.D4 ?? 0;
+    const c6 = trebleTable.C6 ?? 0;
+    // One diatonic step's worth of Y — C4 and D4 are truly adjacent (unlike
+    // B4/C4, which are 6 steps apart despite the similar-looking octave
+    // labels, since the octave number increments at C).
+    const stepIncrement = c4 - d4;
+
+    it("extrapolates below the table's lowest entry, continuing the same diatonic step increment", () => {
+      expect(extrapolateYCoordinate('B', 3, trebleTable)).toBe(
+        c4 + stepIncrement
+      );
+      expect(extrapolateYCoordinate('A', 3, trebleTable)).toBe(
+        c4 + stepIncrement * 2
+      );
+      expect(extrapolateYCoordinate('G', 3, trebleTable)).toBe(
+        c4 + stepIncrement * 3
+      );
+    });
+
+    it("extrapolates above the table's highest entry, continuing the same diatonic step increment", () => {
+      expect(extrapolateYCoordinate('D', 6, trebleTable)).toBe(
+        c6 - stepIncrement
+      );
+    });
+
+    it('does not alter any existing entry in the table passed in', () => {
+      const before = { ...trebleTable };
+      extrapolateYCoordinate('B', 3, trebleTable);
+      expect(trebleTable).toEqual(before);
+    });
+
+    it('returns 0 for an empty table', () => {
+      expect(extrapolateYCoordinate('C', 4, {})).toBe(0);
     });
   });
 });

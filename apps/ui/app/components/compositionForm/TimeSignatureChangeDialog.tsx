@@ -5,6 +5,7 @@ import { remainingDuration } from './measureCapacityHelpers';
 import { effectiveTimeSignatures } from './timeSignaturesHelpers';
 import type { CompositionStructure } from './types';
 import { useCompositionStructure } from './useCompositionStructure';
+import { staffEntryIds } from './voiceHelpers';
 
 // The Sibelius-style prompt shown after the user picks a new time signature:
 // rewrite the music to fit, apply the signature only, or cancel. Rendered by
@@ -98,7 +99,7 @@ function signatureOnlyOverflowCount(
       return (
         staff !== undefined &&
         remainingDuration(
-          staff.entryIds.map((eid) => next.entriesById[eid]),
+          staffEntryIds(staff).map((eid) => next.entriesById[eid]),
           timeSignatures[index],
           next.tupletsById
         ) < -1e-9

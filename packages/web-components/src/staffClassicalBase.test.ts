@@ -9,7 +9,9 @@ import {
   MUSIC_CHORD,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
+  MUSIC_TUPLET,
 } from './utils/consts';
 
 afterEach(() => {
@@ -330,6 +332,270 @@ describe('staffClassicalBase', () => {
       expect(
         staff.shadowRoot.querySelectorAll('.beams-container .beam').length
       ).toBeGreaterThan(0);
+    });
+  });
+
+  describe('<music-voice>', () => {
+    function makeQuarterNote(pitch: string): HTMLElement {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', pitch);
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      return note;
+    }
+
+    it('wrapping every note in a single <music-voice> renders byte-identical to leaving them unwrapped', () => {
+      const unwrappedStaff = document.createElement(MUSIC_STAFF) as any;
+      unwrappedStaff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(unwrappedStaff);
+      const unwrappedNotes = ['C', 'D', 'E', 'F'].map(makeQuarterNote);
+      const unwrappedSlot = unwrappedStaff.shadowRoot.querySelector('slot');
+      unwrappedSlot.assignedElements = () => unwrappedNotes;
+      unwrappedSlot.dispatchEvent(new Event('slotchange'));
+
+      const wrappedStaff = document.createElement(MUSIC_STAFF) as any;
+      wrappedStaff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(wrappedStaff);
+      const wrappedNotes = ['C', 'D', 'E', 'F'].map(makeQuarterNote);
+      const voice = document.createElement('music-voice');
+      voice.append(...wrappedNotes);
+      const wrappedSlot = wrappedStaff.shadowRoot.querySelector('slot');
+      wrappedSlot.assignedElements = () => [voice];
+      wrappedSlot.dispatchEvent(new Event('slotchange'));
+
+      for (let i = 0; i < unwrappedNotes.length; i++) {
+        expect((wrappedNotes[i] as any).staffY).toBe(
+          (unwrappedNotes[i] as any).staffY
+        );
+        expect(wrappedNotes[i].style.left).toBe(unwrappedNotes[i].style.left);
+        expect((wrappedNotes[i] as any).stemUp).toBe(
+          (unwrappedNotes[i] as any).stemUp
+        );
+      }
+    });
+
+    it('renders both voices when a staff has multiple <music-voice> siblings, voice 1 stems up and voice 2 stems down', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      // Voice 2 uses a different duration than voice 1 so these notes are
+      // never auto-combine-eligible (see rules/voiceCombineRules.ts) — this
+      // test is about independent per-voice rendering, not the v1-scoped
+      // combine optimization (covered separately in voiceCombineRules.test.ts).
+      const voice1Notes = ['C', 'D'].map(makeQuarterNote);
+      const voice2Notes = ['E', 'F'].map((pitch) => {
+        const note = document.createElement(MUSIC_NOTE) as any;
+        note.setAttribute('duration', 'half');
+        note.setAttribute('note', pitch);
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        return note;
+      });
+      const voice1 = document.createElement('music-voice');
+      voice1.append(...voice1Notes);
+      const voice2 = document.createElement('music-voice');
+      voice2.append(...voice2Notes);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      for (const note of [...voice1Notes, ...voice2Notes]) {
+        expect((note as any).staffY).not.toBeNull();
+      }
+      // Voice-policy stem direction, not pitch-driven: voice 1 always up,
+      // voice 2 always down, regardless of the actual pitches chosen above.
+      for (const note of voice1Notes) {
+        expect((note as any).stemUp).toBe(true);
+      }
+      for (const note of voice2Notes) {
+        expect((note as any).stemUp).toBe(false);
+      }
+      // Same-beat notes across voices land at the same x (shared beat-offset
+      // formula) — voice1Notes[0]/voice2Notes[0] are both the first entry in
+      // their own voice.
+      expect(voice1Notes[0].style.left).toBe(voice2Notes[0].style.left);
+    });
+
+    it("gives each voice its own beam group, so a rest in one voice does not break the other voice's beam", () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const eighth = (pitch: string) => {
+        const note = document.createElement(MUSIC_NOTE) as any;
+        note.setAttribute('duration', 'eighth');
+        note.setAttribute('note', pitch);
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        return note;
+      };
+      const voice1Notes = ['C', 'D'].map(eighth); // two beamable eighths, no rest
+      const voice1 = document.createElement('music-voice');
+      voice1.append(...voice1Notes);
+
+      const rest = document.createElement('music-rest') as any;
+      rest.setAttribute('duration', 'eighth');
+      const voice2Note = eighth('E');
+      // A distinguishing dynamic keeps this note out of the v1-scoped
+      // auto-combine optimization (rules/voiceCombineRules.ts), which would
+      // otherwise merge it with voice1Notes[1] (same beat offset, same
+      // duration, no other markings on either) — this test is specifically
+      // about beam-group independence, covered separately from combine.
+      voice2Note.setAttribute('dynamic', 'mf');
+      const voice2 = document.createElement('music-voice');
+      voice2.append(rest, voice2Note); // a rest between two notes in voice 2
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect((voice1Notes[0] as any).noFlags).toBe(true);
+      expect((voice1Notes[1] as any).noFlags).toBe(true);
+    });
+
+    it('renders a tuplet bracket for a tuplet in voice 2 without disturbing voice 1', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1Notes = ['C', 'D'].map(makeQuarterNote);
+      const voice1 = document.createElement('music-voice');
+      voice1.append(...voice1Notes);
+
+      const tuplet = document.createElement(MUSIC_TUPLET);
+      tuplet.setAttribute('ratio', '3');
+      const tripletNotes = ['E', 'F', 'G'].map((pitch) => {
+        const note = document.createElement(MUSIC_NOTE) as any;
+        note.setAttribute('duration', 'eighth');
+        note.setAttribute('note', pitch);
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        return note;
+      });
+      tuplet.append(...tripletNotes);
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(tuplet);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      for (const note of voice1Notes) {
+        expect((note as any).staffY).not.toBeNull();
+      }
+      const tupletGroups = staff.shadowRoot.querySelectorAll('.tuplet-group');
+      expect(tupletGroups.length).toBeGreaterThan(0);
+    });
+
+    it('renders dynamics in both voices, not just voice 1', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1Note = makeQuarterNote('C');
+      voice1Note.setAttribute('dynamic', 'f');
+      const voice1 = document.createElement('music-voice');
+      voice1.appendChild(voice1Note);
+
+      const voice2Note = document.createElement(MUSIC_NOTE) as any;
+      voice2Note.setAttribute('duration', 'half');
+      voice2Note.setAttribute('note', 'E');
+      voice2Note.setAttribute('octave', `${4 satisfies Octave}`);
+      voice2Note.setAttribute('dynamic', 'pp');
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(voice2Note);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      const dynamicsContainers = staff.shadowRoot.querySelectorAll(
+        '.dynamics-container'
+      );
+      const totalDynamicMarks = Array.from(dynamicsContainers).reduce(
+        (sum: number, container: any) =>
+          sum + container.querySelectorAll('.dynamic-marking').length,
+        0
+      );
+      expect(totalDynamicMarks).toBe(2);
+    });
+
+    it('renders a trill line/sign for a trill in voice 2 without needing a trill in voice 1', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1 = document.createElement('music-voice');
+      voice1.appendChild(makeQuarterNote('C'));
+
+      const voice2Note = document.createElement(MUSIC_NOTE) as any;
+      voice2Note.setAttribute('duration', 'half');
+      voice2Note.setAttribute('note', 'E');
+      voice2Note.setAttribute('octave', `${4 satisfies Octave}`);
+      voice2Note.setAttribute('trill', '');
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(voice2Note);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect((voice2Note as any).resolvedTrillPitch).not.toBeNull();
+      expect(voice2Note.shadowRoot.querySelector('.trill-sign')).not.toBeNull();
+    });
+
+    it('combines two rhythmically-identical voices onto one synthetic chord (v1-scoped auto-combine)', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1Note = makeQuarterNote('C');
+      const voice1 = document.createElement('music-voice');
+      voice1.appendChild(voice1Note);
+
+      const voice2Note = makeQuarterNote('E');
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(voice2Note);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      // Source notes are hidden, not removed — combination is re-derived
+      // fresh every render pass, never authored.
+      expect(voice1Note.style.display).toBe('none');
+      expect(voice2Note.style.display).toBe('none');
+      const synthesizedChord = staff.shadowRoot.querySelector(MUSIC_CHORD);
+      expect(synthesizedChord).not.toBeNull();
+      expect(synthesizedChord.notes.map((n: any) => n.value).sort()).toEqual([
+        'C',
+        'E',
+      ]);
+    });
+
+    it('renders one centered shared rest when every voice is silent for the whole measure (v1-scoped shared rest)', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1Rest = document.createElement(MUSIC_REST) as any;
+      voice1Rest.setAttribute('duration', 'whole');
+      const voice1 = document.createElement('music-voice');
+      voice1.appendChild(voice1Rest);
+
+      const voice2Rest = document.createElement(MUSIC_REST) as any;
+      voice2Rest.setAttribute('duration', 'whole');
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(voice2Rest);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(voice1Rest.style.display).toBe('none');
+      expect(voice2Rest.style.display).toBe('none');
+      const synthesizedRest = staff.shadowRoot.querySelector(MUSIC_REST);
+      expect(synthesizedRest).not.toBeNull();
+      expect(synthesizedRest.style.display).not.toBe('none');
     });
   });
 

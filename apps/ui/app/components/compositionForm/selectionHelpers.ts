@@ -1,5 +1,6 @@
 import type { CompositionStructure, Selection } from './types';
 import { EMPTY_SELECTION } from './types';
+import { staffEntryIds } from './voiceHelpers';
 
 // Fraction of an element's own area that must fall inside the drag rect to
 // count as "covered" by it.
@@ -75,7 +76,7 @@ export function computeBoxSelection(
         continue;
       }
 
-      for (const entryId of staff.entryIds) {
+      for (const entryId of staffEntryIds(staff)) {
         const entryRect = refs.entries.get(entryId)?.getBoundingClientRect();
         if (!entryRect || !intersects(dragRect, entryRect)) {
           continue;

@@ -53,12 +53,12 @@ export function resolveTupletRuns(
 }
 
 // True when the selection is a valid tuplet target: 2+ entries, all in one
-// staff, forming a contiguous run in that staff's entryIds, none of them clef
-// markers. Returns the ordered entry ids, or null.
+// staff's one voice, forming a contiguous run in that voice's entryIds, none
+// of them clef markers. Returns the ordered entry ids, or null.
 export function tupletCandidate(
   selection: Selection,
   structure: CompositionStructure
-): { staffId: string; entryIds: string[] } | null {
+): { staffId: string; voiceId: string; entryIds: string[] } | null {
   if (selection.measureIds.length > 0 || selection.staffIds.length > 0) {
     return null;
   }
@@ -68,26 +68,29 @@ export function tupletCandidate(
   const selected = new Set(selection.entryIds);
 
   for (const staff of Object.values(structure.stavesById)) {
-    const indices = staff.entryIds
-      .map((id, index) => ({ id, index }))
-      .filter((item) => selected.has(item.id));
-    if (indices.length === 0) {
-      continue;
+    for (const voiceId of staff.voiceOrder) {
+      const voice = staff.voicesById[voiceId];
+      const indices = voice.entryIds
+        .map((id, index) => ({ id, index }))
+        .filter((item) => selected.has(item.id));
+      if (indices.length === 0) {
+        continue;
+      }
+      if (indices.length !== selected.size) {
+        return null;
+      }
+      const contiguous =
+        indices[indices.length - 1].index - indices[0].index ===
+        indices.length - 1;
+      if (!contiguous) {
+        return null;
+      }
+      const entryIds = indices.map((item) => item.id);
+      if (entryIds.some((id) => !isPitchedEntry(structure.entriesById[id]))) {
+        return null;
+      }
+      return { staffId: staff.id, voiceId, entryIds };
     }
-    if (indices.length !== selected.size) {
-      return null;
-    }
-    const contiguous =
-      indices[indices.length - 1].index - indices[0].index ===
-      indices.length - 1;
-    if (!contiguous) {
-      return null;
-    }
-    const entryIds = indices.map((item) => item.id);
-    if (entryIds.some((id) => !isPitchedEntry(structure.entriesById[id]))) {
-      return null;
-    }
-    return { staffId: staff.id, entryIds };
   }
 
   return null;

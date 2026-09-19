@@ -83,6 +83,7 @@ export const createChordSvg = ({
   arpeggioHairpinTo = null,
   trill = false,
   trillAccidental = null,
+  trillSignExtraLift = 0,
   noFlags = false,
   stemUp = true,
   stemExtension = 0,
@@ -371,7 +372,8 @@ export const createChordSvg = ({
       STAFF_Y_PADDING +
       STAFF_TOP_LINE_Y -
       NOTE_HEAD_Y_OFFSET_CORRECTION -
-      TRILL_ABOVE_STAFF_GAP_PX;
+      TRILL_ABOVE_STAFF_GAP_PX -
+      trillSignExtraLift;
     const sign = createTrillSignSvg({
       leftX: normalHeadLeftX,
       bottomY,

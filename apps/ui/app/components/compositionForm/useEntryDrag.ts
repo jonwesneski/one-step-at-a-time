@@ -24,9 +24,10 @@ const OVERLAY_Z_INDEX = 60;
 export type EntryDragContext = {
   entry: MusicEntry;
   staffId: string;
+  voiceId: string;
   clef: ClefType;
-  // The staff's entry ids in document order, for mapping a drop position back to
-  // a structural index.
+  // The entry's own voice's entry ids in document order, for mapping a drop
+  // position back to a structural index.
   entryIds: string[];
 };
 
@@ -322,6 +323,7 @@ export function useEntryDrag() {
               : state.ctx.entryIds.indexOf(state.siblings[state.dropIndex].id);
           commitRef.current.reorderEntry(
             state.ctx.staffId,
+            state.ctx.voiceId,
             state.ctx.entry.id,
             toIndex
           );

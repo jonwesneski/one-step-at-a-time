@@ -6,6 +6,10 @@ import {
   intersects,
   type ElementRefMaps,
 } from './selectionHelpers';
+import {
+  buildMultiVoiceStaff,
+  buildSingleVoiceStaff,
+} from './test-fixtures/voiceFixtures';
 import type { CompositionStructure } from './types';
 
 function rect(
@@ -86,13 +90,7 @@ describe('computeBoxSelection', () => {
       ['m1'],
       { m1: { id: 'm1', staffIds: ['s1'] } },
       {
-        s1: {
-          id: 's1',
-          type: 'treble',
-          entryIds: ['e1'],
-          group: null,
-          groupId: null,
-        },
+        s1: buildSingleVoiceStaff('s1', ['e1']),
       }
     );
     const refs = emptyRefs();
@@ -134,20 +132,8 @@ describe('computeBoxSelection', () => {
       ['m1'],
       { m1: { id: 'm1', staffIds: ['s1', 's2'] } },
       {
-        s1: {
-          id: 's1',
-          type: 'treble',
-          entryIds: [],
-          group: null,
-          groupId: null,
-        },
-        s2: {
-          id: 's2',
-          type: 'bass',
-          entryIds: [],
-          group: null,
-          groupId: null,
-        },
+        s1: buildSingleVoiceStaff('s1', []),
+        s2: buildSingleVoiceStaff('s2', [], { type: 'bass' }),
       }
     );
     const refs = emptyRefs();
@@ -169,13 +155,7 @@ describe('computeBoxSelection', () => {
       ['m1'],
       { m1: { id: 'm1', staffIds: ['s1'] } },
       {
-        s1: {
-          id: 's1',
-          type: 'treble',
-          entryIds: ['e1', 'e2', 'e3', 'e4', 'e5'],
-          group: null,
-          groupId: null,
-        },
+        s1: buildSingleVoiceStaff('s1', ['e1', 'e2', 'e3', 'e4', 'e5']),
       }
     );
     const refs = emptyRefs();
@@ -194,6 +174,25 @@ describe('computeBoxSelection', () => {
       staffIds: [],
       entryIds: ['e2', 'e3'],
     });
+  });
+
+  it('marquee-selects notes from every voice in a staff, not just the first', () => {
+    const structure = buildStructure(
+      ['m1'],
+      { m1: { id: 'm1', staffIds: ['s1'] } },
+      {
+        s1: buildMultiVoiceStaff('s1', [['e1'], ['e2']]),
+      }
+    );
+    const refs = emptyRefs();
+    refs.measures.set('m1', fakeElement(rect(0, 0, 40, 60)));
+    refs.staves.set('s1', fakeElement(rect(0, 0, 40, 60)));
+    refs.entries.set('e1', fakeElement(rect(0, 0, 15, 20)));
+    refs.entries.set('e2', fakeElement(rect(0, 30, 15, 20)));
+
+    const result = computeBoxSelection(rect(0, 0, 15, 50), structure, refs);
+
+    expect(result.entryIds.sort()).toEqual(['e1', 'e2']);
   });
 
   it('returns an empty selection when the drag box intersects nothing', () => {

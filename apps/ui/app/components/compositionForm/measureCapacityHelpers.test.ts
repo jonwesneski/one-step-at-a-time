@@ -10,6 +10,10 @@ import {
   tupletRatioFits,
   usedDuration,
 } from './measureCapacityHelpers';
+import {
+  buildMultiVoiceStaff,
+  buildSingleVoiceStaff,
+} from './test-fixtures/voiceFixtures';
 import type {
   CompositionStructure,
   MusicEntry,
@@ -40,13 +44,7 @@ function buildStructure(
     measureOrder: ['m1'],
     measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
     stavesById: {
-      s1: {
-        id: 's1',
-        type: 'treble',
-        entryIds: Object.keys(entriesById),
-        group: null,
-        groupId: null,
-      },
+      s1: buildSingleVoiceStaff('s1', Object.keys(entriesById)),
     },
     entriesById,
     connectorsById: {},
@@ -121,7 +119,7 @@ describe('staffOfEntryId', () => {
       e1: note('e1', 'quarter'),
       e2: note('e2', 'quarter'),
     });
-    expect(staffOfEntryId(structure, 'e2')?.id).toBe('s1');
+    expect(staffOfEntryId(structure, 'e2')?.staff.id).toBe('s1');
     expect(staffOfEntryId(structure, 'nope')).toBeNull();
   });
 });
@@ -141,6 +139,27 @@ describe('availableForDuration', () => {
   it('falls back to the whole-measure budget for an unknown entry', () => {
     const structure = buildStructure({ e1: note('e1', 'quarter') });
     expect(availableForDuration(structure, '3/4', 'missing')).toBeCloseTo(0.75);
+  });
+
+  it('budgets each voice independently — a full voice 1 does not shrink voice 2’s own budget', () => {
+    const structure: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [['e1'], ['e2']]),
+      },
+      entriesById: {
+        e1: note('e1', 'whole'), // voice 1 is already full
+        e2: note('e2', 'quarter'), // voice 2 has plenty of room
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+    // Freeing e2 (0.25) in its own voice leaves 1 - 0 = 1 available to it —
+    // voice 1's own full measure must not leak into voice 2's budget.
+    expect(availableForDuration(structure, '4/4', 'e2')).toBeCloseTo(1);
   });
 
   it('frees a tuplet member’s scaled duration, not its nominal one', () => {

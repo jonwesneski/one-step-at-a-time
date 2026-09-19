@@ -23,6 +23,7 @@ import {
   collectArpeggioTiePairs,
   collectNoteLikeElements,
   pairConnectors,
+  partitionByVoice,
 } from '../utils/connectorsBuilder';
 import {
   COMMON_ATTRIBUTES,
@@ -369,8 +370,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
+      const byVoice = partitionByVoice(collectNoteLikeElements(this));
       const pairs = [
-        ...pairConnectors(collectNoteLikeElements(this)),
+        ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
         ...collectArpeggioTiePairs(this),
       ];
       if (pairs.length === 0) {

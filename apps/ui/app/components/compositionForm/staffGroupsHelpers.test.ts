@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findGroupMembers } from './staffGroupsHelpers';
+import { buildSingleVoiceStaff } from './test-fixtures/voiceFixtures';
 import type { NormalizedStaff } from './types';
 
 function staff(
@@ -7,7 +8,7 @@ function staff(
   group: NormalizedStaff['group'] = null,
   groupId: NormalizedStaff['groupId'] = null
 ): NormalizedStaff {
-  return { id, type: 'treble', entryIds: [], group, groupId };
+  return buildSingleVoiceStaff(id, [], { group, groupId });
 }
 
 describe('findGroupMembers', () => {

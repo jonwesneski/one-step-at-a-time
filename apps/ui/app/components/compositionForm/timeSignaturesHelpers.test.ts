@@ -6,6 +6,7 @@ import {
   timeSignatureOfEntry,
   timeSignatureRegionAt,
 } from './timeSignaturesHelpers';
+import { buildSingleVoiceStaff } from './test-fixtures/voiceFixtures';
 import type { CompositionStructure, NormalizedMeasure } from './types';
 
 function structureOf(
@@ -86,20 +87,8 @@ describe('timeSignatureOfEntry', () => {
         m1: { id: 'm1', staffIds: ['s1'], time: '3/4' },
       },
       stavesById: {
-        s0: {
-          id: 's0',
-          type: 'treble',
-          entryIds: ['a'],
-          group: null,
-          groupId: null,
-        },
-        s1: {
-          id: 's1',
-          type: 'treble',
-          entryIds: ['b'],
-          group: null,
-          groupId: null,
-        },
+        s0: buildSingleVoiceStaff('s0', ['a']),
+        s1: buildSingleVoiceStaff('s1', ['b']),
       },
       entriesById: {
         a: { id: 'a', type: 'rest', duration: 'quarter' },

@@ -7,12 +7,15 @@ import type {
   NoteElementType,
   NoteLikeElementType,
 } from '../types/elements';
+import { VoiceNumber } from '../types/theory';
 import {
   MUSIC_ARPEGGIO,
   MUSIC_CHORD,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_VOICE,
+  MUSIC_VOICE_NODE,
   STAFF_TAGS,
 } from './consts';
 import {
@@ -93,6 +96,46 @@ export const collectNoteLikeElements = (
   const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
   return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
 };
+
+// Resolves a note-like element's voice number from its nearest <music-voice>
+// ancestor's sibling position (1st <music-voice> sibling = voice 1, 2nd =
+// voice 2, 3rd = voice 3) — falls back to voice 1 when there is no
+// <music-voice> ancestor at all (the ordinary single-voice case).
+function resolveVoiceNumber(note: NoteLikeElementType): VoiceNumber {
+  const voiceElement = note.closest(MUSIC_VOICE);
+  if (voiceElement === null || voiceElement.parentElement === null) {
+    return 1;
+  }
+  const siblingVoices = Array.from(voiceElement.parentElement.children).filter(
+    (child) => child.nodeName === MUSIC_VOICE_NODE
+  );
+  const position = siblingVoices.indexOf(voiceElement);
+  return ((position === -1 ? 0 : position) + 1) as VoiceNumber;
+}
+
+// Groups note-like elements by voice — the fix for cross-voice tie/slur
+// mispairing: today's LIFO stack-top fallback in pairConnectors (used
+// whenever a tie/slur has no explicit `for="id"`) would incorrectly let a
+// voice-2 note with no `for` pop a voice-1 tie's stack entry when voices
+// interleave in document order. Callers partition first, then pair each
+// voice's own notes independently:
+//   const byVoice = partitionByVoice(collectNoteLikeElements(root));
+//   const pairs = [...byVoice.values()].flatMap((notes) => pairConnectors(notes));
+export function partitionByVoice(
+  notes: readonly NoteLikeElementType[]
+): Map<VoiceNumber, NoteLikeElementType[]> {
+  const result = new Map<VoiceNumber, NoteLikeElementType[]>();
+  for (const note of notes) {
+    const voiceNumber = resolveVoiceNumber(note);
+    const bucket = result.get(voiceNumber);
+    if (bucket) {
+      bucket.push(note);
+    } else {
+      result.set(voiceNumber, [note]);
+    }
+  }
+  return result;
+}
 
 // Synthesizes the run→chord ties of every `<music-arpeggio>` under `root`.
 // These are not authored `tie` attributes, so `pairConnectors` never sees them;

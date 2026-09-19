@@ -10,6 +10,7 @@ import {
   collectArpeggioTiePairs,
   collectNoteLikeElements,
   pairConnectors,
+  partitionByVoice,
 } from './utils/connectorsBuilder';
 import {
   COMMON_ATTRIBUTES,
@@ -17,6 +18,7 @@ import {
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_TUPLET_NODE,
+  MUSIC_VOICE_NODE,
   STAFF_EVENTS,
 } from './utils/consts';
 import {
@@ -39,6 +41,17 @@ export const _MaybeHTMLElement: any =
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
   protected readonly staffResizeObserver: ResizeObserver;
+  // The `.staff-wrapper` div — the `position: relative` containing block
+  // shared by the <slot> (and therefore every slotted note/chord/rest,
+  // which resolve `position: absolute` against it via the flat tree) and
+  // `staffContainer`/`transcribeContainer` (its `position: absolute;
+  // inset: 0` siblings). Exposed so a subclass can append a DOM element
+  // that needs pixel-identical positioning to a slotted note without
+  // actually being slotted — e.g. a synthesized combined-voice chord or
+  // shared whole-measure rest (see staffClassicalBase.ts's voice
+  // auto-combine / shared-rest passes), which isn't a light-DOM child of
+  // the host element and so can't go through the <slot> at all.
+  protected wrapperElement: HTMLDivElement | null = null;
   #lastStaffWidth: number;
 
   protected readonly transcribeContainer: SVGSVGElement;
@@ -188,10 +201,13 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     `;
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- shadowRoot was just written to above in this method
-    const wrapper = this.shadowRoot!.querySelector('.staff-wrapper');
+    const wrapper = this.shadowRoot!.querySelector(
+      '.staff-wrapper'
+    ) as HTMLDivElement | null;
     if (!wrapper) {
       return;
     }
+    this.wrapperElement = wrapper;
 
     wrapper.appendChild(this.staffContainer);
     wrapper.appendChild(this.transcribeContainer);
@@ -289,7 +305,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       customElements.upgrade(element);
       if (
         element.nodeName === MUSIC_TUPLET_NODE ||
-        element.nodeName === MUSIC_ARPEGGIO_NODE
+        element.nodeName === MUSIC_ARPEGGIO_NODE ||
+        element.nodeName === MUSIC_VOICE_NODE
       ) {
         this.upgradeAssignedElements(element.children);
       }
@@ -308,8 +325,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     const root = this as unknown as ParentNode;
+    const byVoice = partitionByVoice(collectNoteLikeElements(root));
     const pairs = [
-      ...pairConnectors(collectNoteLikeElements(root)),
+      ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
       ...collectArpeggioTiePairs(root),
     ];
     if (pairs.length === 0) {

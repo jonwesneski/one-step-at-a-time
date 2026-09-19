@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { removeSelectionFromStructure } from './deleteSelectionHelpers';
+import {
+  buildMultiVoiceStaff,
+  buildSingleVoiceStaff,
+} from './test-fixtures/voiceFixtures';
 import type { CompositionStructure, NoteEntry } from './types';
 
 const tupleted = (id: string, tupletId: string): NoteEntry => ({
@@ -19,27 +23,9 @@ function buildStructure(): CompositionStructure {
       m2: { id: 'm2', staffIds: ['s3'] },
     },
     stavesById: {
-      s1: {
-        id: 's1',
-        type: 'treble',
-        entryIds: ['e1', 'e2'],
-        group: null,
-        groupId: null,
-      },
-      s2: {
-        id: 's2',
-        type: 'bass',
-        entryIds: ['e3'],
-        group: null,
-        groupId: null,
-      },
-      s3: {
-        id: 's3',
-        type: 'treble',
-        entryIds: ['e4', 'e5', 'e6'],
-        group: null,
-        groupId: null,
-      },
+      s1: buildSingleVoiceStaff('s1', ['e1', 'e2']),
+      s2: buildSingleVoiceStaff('s2', ['e3'], { type: 'bass' }),
+      s3: buildSingleVoiceStaff('s3', ['e4', 'e5', 'e6']),
     },
     entriesById: {
       e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },
@@ -100,7 +86,10 @@ describe('removeSelectionFromStructure', () => {
       entryIds: ['e5'],
     });
 
-    expect(result.stavesById.s3.entryIds).toEqual(['e4', 'e6']);
+    expect(result.stavesById.s3.voicesById['s3-v1'].entryIds).toEqual([
+      'e4',
+      'e6',
+    ]);
     expect(result.entriesById).not.toHaveProperty('e5');
     expect(result.entriesById).toHaveProperty('e4');
     expect(result.entriesById).toHaveProperty('e6');
@@ -212,7 +201,7 @@ describe('removeSelectionFromStructure', () => {
       ...base,
       stavesById: {
         ...base.stavesById,
-        s3: { ...base.stavesById.s3, entryIds: ['e4', 'cl1', 'e5', 'e6'] },
+        s3: buildSingleVoiceStaff('s3', ['e4', 'cl1', 'e5', 'e6']),
       },
       entriesById: {
         ...base.entriesById,
@@ -227,8 +216,45 @@ describe('removeSelectionFromStructure', () => {
     });
 
     expect(result.entriesById).not.toHaveProperty('cl1');
-    expect(result.stavesById.s3.entryIds).toEqual(['e4', 'e5', 'e6']);
+    expect(result.stavesById.s3.voicesById['s3-v1'].entryIds).toEqual([
+      'e4',
+      'e5',
+      'e6',
+    ]);
     expect(result.connectorsById).toHaveProperty('c2');
+  });
+
+  it('deleting all of voice 2 drops voice 2 but keeps voice 1 intact', () => {
+    const structure: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [['e1', 'e2'], ['e3']]),
+      },
+      entriesById: {
+        e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },
+        e2: { id: 'e2', type: 'note', value: 'D', duration: 'quarter' },
+        e3: { id: 'e3', type: 'note', value: 'E', duration: 'quarter' },
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+
+    const result = removeSelectionFromStructure(structure, {
+      measureIds: [],
+      staffIds: [],
+      entryIds: ['e3'],
+    });
+
+    expect(result.stavesById.s1.voiceOrder).toEqual(['s1-v1']);
+    expect(result.stavesById.s1.voicesById).not.toHaveProperty('s1-v2');
+    expect(result.stavesById.s1.voicesById['s1-v1'].entryIds).toEqual([
+      'e1',
+      'e2',
+    ]);
+    expect(result.entriesById).not.toHaveProperty('e3');
   });
 
   it('leaves one fresh empty measure behind when every measure is deleted', () => {

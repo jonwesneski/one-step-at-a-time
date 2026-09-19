@@ -20,15 +20,21 @@ import {
   computeGraceLayout,
 } from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
-import { restToYCoordinate } from './rules/restRules';
+import { restToYCoordinate, VoiceRestContext } from './rules/restRules';
 import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
 } from './rules/spacingRules';
 import {
+  determineVoiceStemDirections,
+  getStaffYs,
+} from './rules/staffNoteRules';
+import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
 } from './rules/staffWidth';
+import { durationToFlagCountMap } from './rules/theoryConsts';
+import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
   resolveTrillPitch,
   resolveTrillSpans,
@@ -40,9 +46,26 @@ import {
   computeTupletBracketGeometry,
   computeTupletScaleByIndex,
   computeTupletScaledNoteCount,
+  getStaffYForIndex,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
+import {
+  CombinedGroup,
+  detectCombinableGroups,
+  VoiceCombineInput,
+} from './rules/voiceCombineRules';
+import {
+  detectSharedWholeMeasureRest,
+  sharedRestGlyphX,
+} from './rules/voiceRestRules';
+import {
+  computeCrossVoiceDisplacements,
+  resolveVoiceDirections,
+  VoiceDirection,
+  VoiceDirectionInput,
+  VoiceNoteheadPlacement,
+} from './rules/voiceRules';
 import { StaffElementBase } from './staffBase';
 import type {
   ArpeggioGroupPlacement,
@@ -54,6 +77,7 @@ import type {
   NoteChordOrRestElementType,
   NoteElementType,
   NoteLetterOctave,
+  RestElementType,
   TupletElementType,
   YCoordinates,
 } from './types/elements';
@@ -68,6 +92,7 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  VoiceNumber,
 } from './types/theory';
 import {
   BeamsBuilder,
@@ -88,13 +113,17 @@ import {
   COMMON_ATTRIBUTES,
   isStaffNodeName,
   MUSIC_ARPEGGIO_NODE,
+  MUSIC_CHORD,
   MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
   MUSIC_NOTE_NODE,
+  MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_TUPLET_NODE,
+  MUSIC_VOICE_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   STAFF_TAGS,
@@ -106,8 +135,10 @@ import {
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
   ARPEGGIO_TEXT_FONT_SIZE,
+  BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
+  DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
   GRACE_MAIN_GAP_PX,
@@ -119,6 +150,8 @@ import {
   MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
@@ -131,14 +164,22 @@ import {
   TRILL_SIGN_LINE_GAP_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
   TUPLET_HOOK_LENGTH_PX,
+  TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
 } from './utils/notationDimensions';
-import { flattenSlotElements } from './utils/slotElements';
+import {
+  flattenStaffSlotElements,
+  VoiceFlattenResult,
+} from './utils/slotElements';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  NOTE_STEM_TIP_Y_OFFSET,
+  NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
   trillSignLeftX,
 } from './utils/svgCreator/note';
 import {
@@ -301,6 +342,98 @@ function elementHasShownAccidental(
   );
 }
 
+// A real voice number, or one of the two synthetic v1-scoped tracks: a
+// combined-voices stem (rules/voiceCombineRules.ts) or the shared whole-bar
+// rest (rules/voiceRestRules.ts). Internal to this file — never exported.
+type VoiceKey = VoiceNumber | 'combined' | 'shared-rest';
+
+// One real voice's resolved Y-coordinates — the shared shape Pass 1.5
+// precomputes per voice (for resolveVoiceDirections' 3-voice heuristic) and
+// hands to #buildVoiceRenderState so it isn't recomputed there too.
+type VoiceStaffYCoords = {
+  noteStaffYCoords: Map<NoteElementType, number>;
+  chordStaffYCoords: Map<ChordElementType, number[]>;
+};
+
+// Bundles every per-pass snapshot a single voice's own render pass produces
+// — the generalization of what used to be a dozen separate singular fields
+// (#currentElements, #noteXPositions, #stemDirections, #beamRenderer, …),
+// each populated once per #renderNotes()/#spaceElements() call from voice
+// 1's array alone. One of these exists per active VoiceKey.
+type VoiceRenderState = {
+  elements: NoteChordOrRestElementType[];
+  beatOffsets: number[];
+  tupletsByIndex: Map<number, TupletElementType[]>;
+  arpeggioGroups: ArpeggioGroupPlacement[];
+  tupletGroups: TupletGroup[];
+  beamsBuilder: BeamsBuilder | null;
+  beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null;
+  stemDirections: boolean[];
+  beamedIndices: Set<number>;
+  noteStaffYCoords: Map<NoteElementType, number>;
+  chordStaffYCoords: Map<ChordElementType, number[]>;
+  noteXPositions: Map<number, number>;
+  firstGraceHeadXPositions: Map<number, number>;
+  writtenTrillFootprints: Map<number, number>;
+  trillFinishFootprints: Map<number, number>;
+  // Unused (kept 'up') for the 'combined'/'shared-rest' synthetic tracks —
+  // the combined track is pitch-driven (see rules/voiceCombineRules.ts) and
+  // the shared rest is direction-agnostic by definition.
+  direction: VoiceDirection;
+  // Set only for a real, multi-voice-policy-driven voice (undefined for the
+  // single-voice case and for the 'combined'/'shared-rest' tracks) — read
+  // by #spaceElements() when positioning this voice's own rests.
+  restContext: VoiceRestContext | undefined;
+};
+
+// How far `oldIndex` shifts down once every index in `removedIndices` has
+// been spliced out of the array — used to re-anchor a voice's own
+// tupletsByIndex/arpeggioGroups after the v1-scoped auto-combine pass
+// splices matched (never-tupleted, never-arpeggio-member, by combine
+// eligibility) entries out of that voice's array.
+function remapIndexAfterRemoval(
+  oldIndex: number,
+  removedIndices: ReadonlySet<number>
+): number {
+  let shift = 0;
+  for (const removed of removedIndices) {
+    if (removed < oldIndex) {
+      shift++;
+    }
+  }
+  return oldIndex - shift;
+}
+
+function reindexTupletsByIndex(
+  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
+  removedIndices: ReadonlySet<number>
+): Map<number, TupletElementType[]> {
+  const result = new Map<number, TupletElementType[]>();
+  for (const [oldIndex, tuplets] of tupletsByIndex) {
+    // A combine-eligible entry is never a tuplet member (see
+    // rules/voiceCombineRules.ts), so a tupleted index is never itself
+    // removed — this is a defensive skip, not an expected path.
+    if (removedIndices.has(oldIndex)) {
+      continue;
+    }
+    result.set(remapIndexAfterRemoval(oldIndex, removedIndices), tuplets);
+  }
+  return result;
+}
+
+function reindexArpeggioGroups(
+  groups: readonly ArpeggioGroupPlacement[],
+  removedIndices: ReadonlySet<number>
+): ArpeggioGroupPlacement[] {
+  return groups.map((group) => ({
+    ...group,
+    runIndices: group.runIndices.map((i) =>
+      remapIndexAfterRemoval(i, removedIndices)
+    ),
+    targetIndex: remapIndexAfterRemoval(group.targetIndex, removedIndices),
+  }));
+}
+
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
@@ -318,49 +451,52 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveMode: Mode;
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
-  #beamsContainer: SVGSVGElement;
-  #tupletContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
-  #dynamicsContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
-  #trillLinesContainer: SVGSVGElement = document.createElementNS(SVG_NS, 'svg');
-  #beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null = null;
-  #currentElements: NoteChordOrRestElementType[] = [];
   #describeEndX = 0;
   #currentSpacingSlackWeight = 0;
   #showDescribe = true;
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
-  #tupletGroups: TupletGroup[] = [];
-  #tupletsByIndex: Map<number, TupletElementType[]> = new Map();
   #clefMarkers: ClefMarkerPlacement[] = [];
-  #arpeggioGroups: ArpeggioGroupPlacement[] = [];
-  #noteXPositions: Map<number, number> = new Map();
-  // X (beams-container space) of the first grace note's head, for elements
-  // that have both a grace group and a grace-dynamic. Populated alongside
-  // #noteXPositions during #spaceElements(), since only that pass has the
-  // leftward-overhang math (main accidental + grace footprint) in scope.
-  #firstGraceHeadXPositions: Map<number, number> = new Map();
-  #stemDirections: boolean[] = [];
-  #beamedIndicesSnapshot: Set<number> = new Set();
-  #noteStaffYCoordsSnapshot: Map<NoteElementType, number> = new Map();
-  #chordStaffYCoordsSnapshot: Map<ChordElementType, number[]> = new Map();
-  // Index of a span's writtenNoteAnchorIndex -> the rightward px footprint a
-  // written trilling notehead (trill-note) reserves there. Recomputed once
-  // per #renderNotes() pass (also the target of both CONNECTOR_ATTRIBUTE_CHANGE
-  // and TRILL_ATTRIBUTE_CHANGE when trill-marked elements are present — a tied
-  // note's span endpoint and a written notehead's footprint both depend on
-  // more than the attribute that changed, so both routes need the full pass,
-  // not a narrower redraw) — see #computeWrittenTrillFootprints().
-  #writtenTrillFootprints: Map<number, number> = new Map();
-  // Index -> the rightward px footprint a trill's finishing grace note(s)
-  // (trill-finish) reserve there — see #computeTrillFinishFootprints().
-  #trillFinishFootprints: Map<number, number> = new Map();
+  // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
+  // #renderNotes() pass — the shared coordinate space #clefMarkers'
+  // index-based anchors convert into (#clefMarkerBeatOffset) and that the
+  // public noteToYCoordinate()'s `elementIndex` argument (always meaning
+  // "index into voice 1") converts into as well.
+  #voice1BeatOffsets: number[] = [];
+  // Voice-partitioned flattening result (always >=1 entry — see
+  // flattenStaffSlotElements()).
+  #voices: Map<VoiceNumber, VoiceFlattenResult> = new Map();
+  // One VoiceRenderState per active voice key (every real voice present,
+  // plus 'combined'/'shared-rest' when either v1-scoped optimization fires
+  // for the current measure) — see the type's own doc comment above.
+  #voiceRenderStates: Map<VoiceKey, VoiceRenderState> = new Map();
+  // Previous pass's elements per voice key, for #resolveArpeggiandoPassages'
+  // dropped-element cleanup — one array per voice instead of one shared
+  // array, so a dropped element's impliedArpeggio is cleared regardless of
+  // which voice it came from.
+  #previousElementsByVoice: Map<VoiceKey, NoteChordOrRestElementType[]> =
+    new Map();
+  // One instance per active voice key, created lazily on first use (see
+  // #containerFor), hidden (not removed) when a voice key becomes inactive
+  // — avoids DOM churn on a transient edit that temporarily reduces the
+  // voice count.
+  #beamsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #tupletContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #dynamicsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #trillLinesContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
       ([] as EventTarget[]);
-    if (path.some((node) => (node as Node)?.nodeName === MUSIC_ARPEGGIO_NODE)) {
-      // A <music-arpeggio> changed — re-flatten so bar-fit / beams / the
-      // written-in run durations re-resolve, then the tie overlay redraws too.
+    if (
+      path.some(
+        (node) =>
+          (node as Node)?.nodeName === MUSIC_ARPEGGIO_NODE ||
+          (node as Node)?.nodeName === MUSIC_VOICE_NODE
+      )
+    ) {
+      // A <music-arpeggio> or <music-voice> changed — re-flatten so bar-fit /
+      // beams / voice partitioning re-resolve, then the tie overlay redraws too.
       this.#reRenderFromCurrentSlot();
       return;
     }
@@ -377,22 +513,81 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.drawConnectorsWhenStandalone();
   };
   #boundRenderDynamics = () => {
-    this.#dynamicsContainer.innerHTML = '';
-    this.#renderDynamics();
+    for (const [voiceKey, container] of this.#dynamicsContainers) {
+      container.innerHTML = '';
+      this.#renderDynamics(voiceKey);
+    }
   };
   #boundNoteYChange = () => {
-    if (this.#currentElements.length > 0) {
-      this.#renderNotes(this.#currentElements);
+    if (this.#voices.size > 0) {
+      this.#renderNotes();
     }
   };
   #boundClefMarkerChange = () => {
-    if (this.#currentElements.length > 0) {
-      this.#renderNotes(this.#currentElements);
+    if (this.#voices.size > 0) {
+      this.#renderNotes();
     }
   };
 
   protected get describeEndX(): number {
     return this.#describeEndX;
+  }
+
+  /**
+   * The staff's voice-partitioned flattening result (always >=1 entry — see
+   * flattenStaffSlotElements()).
+   */
+  protected get voices(): ReadonlyMap<VoiceNumber, VoiceFlattenResult> {
+    return this.#voices;
+  }
+
+  // Every active voice key's own elements, concatenated in ascending key
+  // order — for the handful of call sites that only ever needed "is there
+  // any content at all" or "does any element anywhere satisfy X" (as
+  // opposed to the per-voice-keyed reads everywhere else in this file).
+  get #allElements(): NoteChordOrRestElementType[] {
+    return [...this.#voiceRenderStates.values()].flatMap((s) => s.elements);
+  }
+
+  // Lazily creates (and appends into transcribeContainer) the container of
+  // `kind` for `voiceKey` if it doesn't exist yet; returns the existing one
+  // otherwise. This is what makes "one container per voice, always" cheap
+  // for the overwhelmingly common single-voice case (exactly one container
+  // of each kind, same as before this feature existed) while still scaling
+  // to 2-3 voices without any one container's clear-and-rebuild step
+  // clobbering another voice's already-drawn decorations.
+  #containerFor(
+    containers: Map<VoiceKey, SVGSVGElement>,
+    voiceKey: VoiceKey,
+    cssClass: string
+  ): SVGSVGElement {
+    const existing = containers.get(voiceKey);
+    if (existing) {
+      return existing;
+    }
+    const container = document.createElementNS(SVG_NS, 'svg');
+    container.classList.add(cssClass);
+    container.style.overflow = 'visible';
+    container.style.pointerEvents = 'none';
+    this.transcribeContainer.appendChild(container);
+    containers.set(voiceKey, container);
+    return container;
+  }
+
+  // Clears every existing container (ready for this pass's fresh content)
+  // and shows/hides it based on `activeKeys` — hidden, not removed (see the
+  // container-map field comments), so a voice that disappears on a later
+  // edit doesn't leave stale decorations visible without any DOM churn. A
+  // brand-new key's container doesn't exist yet here — #containerFor
+  // creates it fresh (and therefore already empty) on first use.
+  #prepareVoiceContainers(
+    containers: Map<VoiceKey, SVGSVGElement>,
+    activeKeys: ReadonlySet<VoiceKey>
+  ): void {
+    for (const [voiceKey, container] of containers) {
+      container.innerHTML = '';
+      container.style.display = activeKeys.has(voiceKey) ? '' : 'none';
+    }
   }
 
   /**
@@ -461,7 +656,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     ) as Note;
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
-    this.#beamsContainer = document.createElementNS(SVG_NS, 'svg');
   }
 
   get staffLineCount(): number {
@@ -564,25 +758,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       xOffsetOfKeySignature + 5
     );
 
-    this.#beamsContainer.classList.add('beams-container');
-    this.#beamsContainer.style.overflow = 'visible';
-    this.#beamsContainer.style.pointerEvents = 'none';
-    this.transcribeContainer.appendChild(this.#beamsContainer);
-
-    this.#tupletContainer.classList.add('tuplets-container');
-    this.#tupletContainer.style.overflow = 'visible';
-    this.#tupletContainer.style.pointerEvents = 'none';
-    this.transcribeContainer.appendChild(this.#tupletContainer);
-
-    this.#dynamicsContainer.classList.add('dynamics-container');
-    this.#dynamicsContainer.style.overflow = 'visible';
-    this.#dynamicsContainer.style.pointerEvents = 'none';
-    this.transcribeContainer.appendChild(this.#dynamicsContainer);
-
-    this.#trillLinesContainer.classList.add('trill-lines-container');
-    this.#trillLinesContainer.style.overflow = 'visible';
-    this.#trillLinesContainer.style.pointerEvents = 'none';
-    this.transcribeContainer.appendChild(this.#trillLinesContainer);
+    // Voice 1's four overlay containers are created up front so a
+    // single-voice staff (the overwhelmingly common case) matches today's
+    // exact DOM shape; 2nd/3rd-voice containers (and the 'combined'/
+    // 'shared-rest' synthetic tracks') are created lazily on first use by
+    // #containerFor.
+    this.#containerFor(this.#beamsContainers, 1, 'beams-container');
+    this.#containerFor(this.#tupletContainers, 1, 'tuplets-container');
+    this.#containerFor(this.#dynamicsContainers, 1, 'dynamics-container');
+    this.#containerFor(this.#trillLinesContainers, 1, 'trill-lines-container');
   }
 
   #refreshDescribe() {
@@ -596,8 +780,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#describeContainer,
       xOffsetOfKeySignature + 5
     );
-    if (this.#currentElements.length > 0) {
-      this.#renderNotes(this.#currentElements);
+    if (this.#voices.size > 0) {
+      this.#renderNotes();
     }
   }
 
@@ -728,7 +912,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   // Re-run the full slot pipeline (flatten → bar-fit → beams → render). Needed
   // when a `<music-arpeggio>` mutates: its run notes gain a `duration` and the
-  // groups must be re-flattened, which the cached #currentElements can't do.
+  // groups must be re-flattened, which the cached per-voice state can't do.
   #reRenderFromCurrentSlot(): void {
     const slot = this.shadowRoot?.querySelector('slot');
     if (slot) {
@@ -746,15 +930,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         e.nodeName === MUSIC_REST_NODE ||
         e.nodeName === MUSIC_TUPLET_NODE ||
         e.nodeName === MUSIC_ARPEGGIO_NODE ||
-        e.nodeName === MUSIC_CLEF_NODE
+        e.nodeName === MUSIC_CLEF_NODE ||
+        e.nodeName === MUSIC_VOICE_NODE
     );
 
-    const { flatElements, tupletsByIndex, clefMarkers, arpeggioGroups } =
-      flattenSlotElements(assigned);
-    this.#tupletsByIndex = tupletsByIndex;
+    const { voices, clefMarkers } = flattenStaffSlotElements(assigned);
+    this.#voices = voices;
     this.#clefMarkers = clefMarkers;
-    this.#arpeggioGroups = arpeggioGroups;
-    this.#renderNotes(flatElements);
+    this.#renderNotes();
 
     /*
      * todo: I may not need this, but I am keeping an example for now.
@@ -776,118 +959,176 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // });
   }
 
-  #renderNotes(elements: NoteChordOrRestElementType[]) {
-    // Clear previously rendered beams, tuplet brackets, dynamics, and trill lines
-    this.#beamsContainer.innerHTML = '';
-    this.#tupletContainer.innerHTML = '';
-    this.#dynamicsContainer.innerHTML = '';
-    this.#trillLinesContainer.innerHTML = '';
-
-    const { allowedElementCount, error } = computeAllowedElementCount(
-      elements,
-      this.effectiveTimeSig,
-      this.#tupletsByIndex,
-      this.#arpeggioGroups
-    );
-    if (error !== null) {
-      console.warn(error);
+  // Removes every synthetic element (a v1-scoped combined-voices chord or
+  // shared whole-measure rest) created by the previous pass. Combination
+  // state is fully re-derived every render pass, never authored, so the
+  // simplest correct lifecycle is remove-all-then-recreate rather than
+  // tracking and diffing individual synthetic elements across passes.
+  #syntheticElements: HTMLElement[] = [];
+  #clearSyntheticElements(): void {
+    for (const element of this.#syntheticElements) {
+      element.remove();
     }
-    for (let i = 0; i < elements.length; i++) {
-      elements[i].style.display = i < allowedElementCount ? '' : 'none';
-    }
-    elements = elements.slice(0, allowedElementCount);
+    this.#syntheticElements = [];
+  }
 
-    // Clef markers anchored to a note/chord/rest that got truncated above
-    // dangle — drop and hide them rather than positioning against an index
-    // that no longer exists in the rendered elements array.
-    const survivingClefMarkers: ClefMarkerPlacement[] = [];
-    for (const marker of this.#clefMarkers) {
-      if (marker.afterElementIndex < allowedElementCount) {
-        survivingClefMarkers.push(marker);
-      } else {
-        marker.element.style.display = 'none';
+  // Builds a synthetic <music-chord> for a v1-scoped auto-combine group
+  // (rules/voiceCombineRules.ts) — one synthetic <music-note> child per
+  // deduplicated tone, plus the shared articulation/dynamic/hairpin
+  // attributes the combine condition already guarantees are equal across
+  // every member. Constructed fully (children + attributes) before being
+  // connected to the document, so its own `.notes` getter (a live query
+  // over its children) sees the complete tone list from the start.
+  #synthesizeCombinedChord(group: CombinedGroup): ChordElementType {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('duration', group.duration);
+    const reference = group.members[0].element;
+    if (reference.articulation !== null) {
+      chord.setAttribute('articulation', reference.articulation);
+    }
+    if (reference.dynamic !== null) {
+      chord.setAttribute('dynamic', reference.dynamic);
+    }
+    if (reference.crescendo !== null) {
+      chord.setAttribute('crescendo', reference.crescendo);
+    }
+    if (reference.decrescendo !== null) {
+      chord.setAttribute('decrescendo', reference.decrescendo);
+    }
+    for (const tone of group.tones) {
+      const note = document.createElement(MUSIC_NOTE);
+      note.setAttribute('note', tone.value);
+      if (tone.octave !== null) {
+        note.setAttribute('octave', `${tone.octave}`);
       }
+      chord.appendChild(note);
     }
-    this.#clefMarkers = survivingClefMarkers;
+    (this.wrapperElement ?? this.staffContainer).appendChild(chord);
+    this.#syntheticElements.push(chord);
+    return chord;
+  }
 
+  // Builds the synthetic <music-rest> for a v1-scoped shared whole-measure
+  // rest (rules/voiceRestRules.ts) — represents every voice's silence at
+  // once, so it carries no voice-specific state at all.
+  #synthesizeSharedRest(duration: DurationType): RestElementType {
+    const rest = document.createElement(MUSIC_REST) as RestElementType;
+    rest.setAttribute('duration', duration);
+    (this.wrapperElement ?? this.staffContainer).appendChild(rest);
+    this.#syntheticElements.push(rest);
+    return rest;
+  }
+
+  // One voice's real staff-Y coordinates from its own elements/beatOffsets
+  // (each element's own beat-offset drives its clef-segment lookup — see
+  // #noteToYCoordinateAtBeatOffset — so this resolves correctly regardless
+  // of which voice it's called for). Shared by Pass 1.5 (direction
+  // resolution) and #buildVoiceRenderState (falls back to this when no
+  // precomputed result is handed in, e.g. the 'combined'/'shared-rest'
+  // synthetic tracks, which don't exist yet during Pass 1.5).
+  #resolveVoiceStaffYCoords(
+    elements: NoteChordOrRestElementType[],
+    beatOffsets: number[]
+  ): VoiceStaffYCoords {
     const noteStaffYCoords = new Map<NoteElementType, number>();
     const chordStaffYCoords = new Map<ChordElementType, number[]>();
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
+      const beatOffset = beatOffsets[i];
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         noteStaffYCoords.set(
           noteElement,
-          this.noteToYCoordinate(
+          this.#noteToYCoordinateAtBeatOffset(
             noteElement.note,
             noteElement.octave ?? undefined,
-            i
+            beatOffset
           )
         );
       } else if (element.nodeName === MUSIC_CHORD_NODE) {
         const chordElement = element as ChordElementType;
         chordStaffYCoords.set(
           chordElement,
-          this.#resolveChordStaffYCoordinates(chordElement.notes, i)
+          this.#resolveChordStaffYCoordinates(chordElement.notes, beatOffset)
         );
       }
     }
+    return { noteStaffYCoords, chordStaffYCoords };
+  }
+
+  // Builds one voice key's full VoiceRenderState: Y-coordinate resolution,
+  // beam/stem resolution (policy-driven for a real multi-voice track,
+  // pitch-driven for the single-voice case and the 'combined' track — see
+  // determineVoiceStemDirections vs the untouched pitch-driven default in
+  // buildBeamsRenderer), per-element property writes (reading back from the
+  // one merged-by-beat-offset accidental resolution every voice key shares),
+  // tuplet groups, and trill footprints.
+  #buildVoiceRenderState(
+    voiceKey: VoiceKey,
+    elements: NoteChordOrRestElementType[],
+    beatOffsets: number[],
+    tupletsByIndex: Map<number, TupletElementType[]>,
+    arpeggioGroups: ArpeggioGroupPlacement[],
+    direction: VoiceDirection,
+    pitchDriven: boolean,
+    accidentals: ReturnType<typeof computeNoteAccidentals>,
+    precomputedYCoords?: VoiceStaffYCoords
+  ): VoiceRenderState {
+    const { noteStaffYCoords, chordStaffYCoords } =
+      precomputedYCoords ??
+      this.#resolveVoiceStaffYCoords(elements, beatOffsets);
 
     const arpeggioRunIndices = new Set<number>(
-      this.#arpeggioGroups.flatMap((group) => group.runIndices)
+      arpeggioGroups.flatMap((group) => group.runIndices)
     );
+    const stemDirectionsOverride = pitchDriven
+      ? undefined
+      : determineVoiceStemDirections(elements, direction);
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.effectiveTimeSig,
       noteStaffYCoords,
       chordStaffYCoords,
-      this.#tupletsByIndex,
-      arpeggioRunIndices
+      tupletsByIndex,
+      arpeggioRunIndices,
+      // The 'combined' track's own array indices are contiguous (0..N-1)
+      // but its real beat-time gaps between entries are not — see
+      // rules/voiceCombineRules.ts. Every other track's positions are
+      // still derived by BeamsBuilder's own sequential accumulation.
+      voiceKey === 'combined' ? beatOffsets : undefined,
+      stemDirectionsOverride
     );
-    this.#beamRenderer = beamRenderer;
 
-    // Snapshot data needed by #spaceElements to render tuplet brackets
-    this.#stemDirections = stemDirections;
-    this.#beamedIndicesSnapshot = new Set(
+    const beamedIndices = new Set(
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
     );
-    this.#noteStaffYCoordsSnapshot = new Map(noteStaffYCoords);
-    this.#chordStaffYCoordsSnapshot = new Map(chordStaffYCoords);
-    this.#tupletGroups = buildTupletGroups(elements, this.#tupletsByIndex);
+    const tupletGroups = buildTupletGroups(elements, tupletsByIndex);
+    const voiceRestContext: VoiceRestContext | undefined = pitchDriven
+      ? undefined
+      : { direction };
 
-    const {
-      noteShowAccidentals,
-      chordNoteAccidentals,
-      graceShowAccidentals,
-      trillFinishShowAccidentals,
-    } = computeNoteAccidentals(
-      elements,
-      this.#effectiveKeySig,
-      this.#effectiveMode
-    );
-
-    // Set rendering properties on each element
-    // (triggers their self-render via requestAnimationFrame)
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
       const stemUp = stemDirections[i];
       const isBeamed = beamsBuilder.isBeamed(i);
-      const extension = this.#beamRenderer.stemExtension(i);
+      const extension = beamRenderer.stemExtension(i);
 
       if (element.nodeName === MUSIC_REST_NODE) {
-        // no stem, beam, or accidental properties — rest renders itself
+        // no stem/beam/accidental properties — position is set in
+        // #spaceElements() via restToYCoordinate(duration, voiceRestContext)
       } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
           noteElement.stemExtension = extension;
           noteElement.noFlags = isBeamed;
-          noteElement.showAccidental = noteShowAccidentals.get(noteElement);
+          noteElement.showAccidental =
+            accidentals.noteShowAccidentals.get(noteElement);
           noteElement.staffY = noteStaffYCoords.get(noteElement) ?? null;
           noteElement.resolvedGraceAccidentals =
-            graceShowAccidentals.get(noteElement) ?? null;
+            accidentals.graceShowAccidentals.get(noteElement) ?? null;
           noteElement.resolvedTrillFinishAccidentals =
-            trillFinishShowAccidentals.get(noteElement) ?? null;
+            accidentals.trillFinishShowAccidentals.get(noteElement) ?? null;
           noteElement.resolvedTrillPitch = noteElement.trill
             ? resolveTrillPitch(
                 noteElement.note,
@@ -902,17 +1143,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       } else {
         const chordElement = element as ChordElementType;
         const staffYCoordinates = chordStaffYCoords.get(chordElement) ?? [];
-        const accidentals = chordNoteAccidentals.get(chordElement) ?? [];
+        const chordAccidentals =
+          accidentals.chordNoteAccidentals.get(chordElement) ?? [];
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
           chordElement.stemExtension = extension;
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
-          chordElement.noteAccidentals = accidentals;
+          chordElement.noteAccidentals = chordAccidentals;
           chordElement.resolvedGraceAccidentals =
-            graceShowAccidentals.get(chordElement) ?? null;
+            accidentals.graceShowAccidentals.get(chordElement) ?? null;
           chordElement.resolvedTrillFinishAccidentals =
-            trillFinishShowAccidentals.get(chordElement) ?? null;
+            accidentals.trillFinishShowAccidentals.get(chordElement) ?? null;
           chordElement.resolvedTrillPitch = chordElement.trill
             ? this.#resolveChordTrillPitch(chordElement, staffYCoordinates)
             : null;
@@ -920,18 +1162,323 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    const previousElements = this.#currentElements;
-    this.#currentElements = elements;
+    const state: VoiceRenderState = {
+      elements,
+      beatOffsets,
+      tupletsByIndex,
+      arpeggioGroups,
+      tupletGroups,
+      beamsBuilder,
+      beamRenderer,
+      stemDirections,
+      beamedIndices,
+      noteStaffYCoords,
+      chordStaffYCoords,
+      noteXPositions: new Map(),
+      firstGraceHeadXPositions: new Map(),
+      writtenTrillFootprints: new Map(),
+      trillFinishFootprints: new Map(),
+      direction,
+      restContext: voiceRestContext,
+    };
     // #spaceElements() (below) reads these to push a following entry clear
     // of a rightward-reserving decoration's footprint, so they must be
     // resolved before that call, not after.
-    this.#writtenTrillFootprints = this.#computeWrittenTrillFootprints();
-    this.#trillFinishFootprints = this.#computeTrillFinishFootprints();
-    this.#resolveArpeggiandoPassages(elements, previousElements);
+    state.writtenTrillFootprints = this.#computeWrittenTrillFootprints(state);
+    state.trillFinishFootprints = this.#computeTrillFinishFootprints(state);
+    return state;
+  }
+
+  #renderNotes(): void {
+    this.#clearSyntheticElements();
+
+    const voiceNumbers = [...this.#voices.keys()];
+    const isMultiVoice = voiceNumbers.length > 1;
+
+    // Pass 1: per real voice — bar-fit truncate, compute beat offsets.
+    type Pass1Voice = {
+      elements: NoteChordOrRestElementType[];
+      beatOffsets: number[];
+      tupletsByIndex: Map<number, TupletElementType[]>;
+      arpeggioGroups: ArpeggioGroupPlacement[];
+    };
+    const pass1ByVoice = new Map<VoiceNumber, Pass1Voice>();
+    for (const voiceNumber of voiceNumbers) {
+      const voiceData = this.#voices.get(voiceNumber);
+      if (!voiceData) {
+        continue;
+      }
+      const { allowedElementCount, error } = computeAllowedElementCount(
+        voiceData.flatElements,
+        this.effectiveTimeSig,
+        voiceData.tupletsByIndex,
+        voiceData.arpeggioGroups
+      );
+      if (error !== null) {
+        console.warn(isMultiVoice ? `[voice ${voiceNumber}] ${error}` : error);
+      }
+      for (let i = 0; i < voiceData.flatElements.length; i++) {
+        voiceData.flatElements[i].style.display =
+          i < allowedElementCount ? '' : 'none';
+      }
+      const elements = voiceData.flatElements.slice(0, allowedElementCount);
+      const arpeggioRunIndices = new Set<number>(
+        voiceData.arpeggioGroups.flatMap((group) => group.runIndices)
+      );
+      const beatOffsets = computeBeatOffsets(
+        elements,
+        voiceData.tupletsByIndex,
+        arpeggioRunIndices
+      );
+      pass1ByVoice.set(voiceNumber, {
+        elements,
+        beatOffsets,
+        tupletsByIndex: voiceData.tupletsByIndex,
+        arpeggioGroups: voiceData.arpeggioGroups,
+      });
+    }
+
+    // Clef markers are always relative to voice 1's own array (see
+    // ClefMarkerPlacement's doc comment) — this survival filter is the same
+    // whether the staff is single- or multi-voice. #voice1BeatOffsets is
+    // snapshotted here too: it's what lets #activeClefAt (via
+    // #clefMarkerBeatOffset) and the public noteToYCoordinate() convert an
+    // index-based marker/argument into the shared beat-offset space every
+    // voice's own Y-coordinate resolution reads from below.
+    const voice1 = pass1ByVoice.get(1);
+    const allowedElementCount = voice1?.elements.length ?? 0;
+    this.#voice1BeatOffsets = voice1?.beatOffsets ?? [];
+    const survivingClefMarkers: ClefMarkerPlacement[] = [];
+    for (const marker of this.#clefMarkers) {
+      if (marker.afterElementIndex < allowedElementCount) {
+        survivingClefMarkers.push(marker);
+      } else {
+        marker.element.style.display = 'none';
+      }
+    }
+    this.#clefMarkers = survivingClefMarkers;
+
+    // Cross-voice pre-pass: shared-rest detection (v1-scoped, only ever
+    // considered once 2+ voices are active), then — only if it didn't fire
+    // — combine detection (also v1-scoped, 2+ voices).
+    type TrackInput = Pass1Voice;
+    const trackInputs = new Map<VoiceKey, TrackInput>();
+
+    const sharedRestDuration = isMultiVoice
+      ? detectSharedWholeMeasureRest(
+          new Map(
+            [...pass1ByVoice.entries()].map(([vn, p]) => [vn, p.elements])
+          ),
+          this.effectiveTimeSig
+        )
+      : null;
+
+    if (sharedRestDuration !== null) {
+      for (const p of pass1ByVoice.values()) {
+        for (const element of p.elements) {
+          element.style.display = 'none';
+        }
+      }
+      const sharedRest = this.#synthesizeSharedRest(sharedRestDuration);
+      trackInputs.set('shared-rest', {
+        elements: [sharedRest],
+        beatOffsets: [0],
+        tupletsByIndex: new Map(),
+        arpeggioGroups: [],
+      });
+    } else {
+      const combineInputs = new Map<VoiceNumber, VoiceCombineInput>();
+      for (const [voiceNumber, p] of pass1ByVoice) {
+        combineInputs.set(voiceNumber, {
+          elements: p.elements,
+          beatOffsets: p.beatOffsets,
+          tupletsByIndex: p.tupletsByIndex,
+          arpeggioRunIndices: new Set(
+            p.arpeggioGroups.flatMap((group) => group.runIndices)
+          ),
+          arpeggioTargetIndices: new Set(
+            p.arpeggioGroups.map((group) => group.targetIndex)
+          ),
+        });
+      }
+      const combinedGroups = isMultiVoice
+        ? detectCombinableGroups(combineInputs)
+        : [];
+
+      const removedIndicesByVoice = new Map<VoiceNumber, Set<number>>();
+      for (const group of combinedGroups) {
+        for (const member of group.members) {
+          const set =
+            removedIndicesByVoice.get(member.voiceNumber) ?? new Set<number>();
+          set.add(member.index);
+          removedIndicesByVoice.set(member.voiceNumber, set);
+        }
+      }
+
+      for (const [voiceNumber, p] of pass1ByVoice) {
+        const removed = removedIndicesByVoice.get(voiceNumber);
+        if (!removed || removed.size === 0) {
+          trackInputs.set(voiceNumber, p);
+          continue;
+        }
+        const keptElements: NoteChordOrRestElementType[] = [];
+        const keptBeatOffsets: number[] = [];
+        for (let i = 0; i < p.elements.length; i++) {
+          if (removed.has(i)) {
+            p.elements[i].style.display = 'none';
+            continue;
+          }
+          keptElements.push(p.elements[i]);
+          keptBeatOffsets.push(p.beatOffsets[i]);
+        }
+        trackInputs.set(voiceNumber, {
+          elements: keptElements,
+          beatOffsets: keptBeatOffsets,
+          tupletsByIndex: reindexTupletsByIndex(p.tupletsByIndex, removed),
+          arpeggioGroups: reindexArpeggioGroups(p.arpeggioGroups, removed),
+        });
+      }
+
+      if (combinedGroups.length > 0) {
+        const combinedElements = combinedGroups.map((group) =>
+          this.#synthesizeCombinedChord(group)
+        );
+        trackInputs.set('combined', {
+          elements: combinedElements,
+          beatOffsets: combinedGroups.map((group) => group.beatOffset),
+          tupletsByIndex: new Map(),
+          arpeggioGroups: [],
+        });
+      }
+    }
+
+    // One merged-by-beat-offset sequence across every active track —
+    // computeNoteAccidentals's returned maps are keyed by element identity,
+    // not array position, so calling it once here (rather than once per
+    // track) is what makes an accidental introduced in one voice correctly
+    // suppress/require the same pitch's accidental in another voice later
+    // in the bar (real engraving convention — one accidental applies to all
+    // parts on a staff, not repeated per voice).
+    const mergedForAccidentals: {
+      element: NoteChordOrRestElementType;
+      beatOffset: number;
+    }[] = [];
+    for (const input of trackInputs.values()) {
+      for (let i = 0; i < input.elements.length; i++) {
+        mergedForAccidentals.push({
+          element: input.elements[i],
+          beatOffset: input.beatOffsets[i],
+        });
+      }
+    }
+    mergedForAccidentals.sort((a, b) => a.beatOffset - b.beatOffset);
+    const accidentals = computeNoteAccidentals(
+      mergedForAccidentals.map((m) => m.element),
+      this.#effectiveKeySig,
+      this.#effectiveMode
+    );
+
+    // Pass 1.5: precompute each real voice's own Y-coordinates from its
+    // Pass-1 elements/beatOffsets. Needed before resolveVoiceDirections can
+    // contextually place voice 3 (3-voice case only — see
+    // rules/voiceRules.ts#resolveMiddleVoiceDirection), and reused directly
+    // by Pass 2 below so every real voice's Y-coordinates are computed once,
+    // not twice ('combined'/'shared-rest' don't exist yet at this point —
+    // they're a byproduct of the compaction pass above — so they still
+    // compute their own inline in #buildVoiceRenderState).
+    const yCoordsByVoice = new Map<VoiceNumber, VoiceStaffYCoords>();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      yCoordsByVoice.set(
+        voiceNumber,
+        this.#resolveVoiceStaffYCoords(p.elements, p.beatOffsets)
+      );
+    }
+    const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      const y = yCoordsByVoice.get(voiceNumber);
+      if (!y) {
+        continue;
+      }
+      staffYsByVoice.set(
+        voiceNumber,
+        p.elements.map((element, i) => ({
+          staffYs: getStaffYs(element, y.noteStaffYCoords, y.chordStaffYCoords),
+          beatOffset: p.beatOffsets[i],
+        }))
+      );
+    }
+
+    // Pass 2: per active voice key — Y-resolution, beams/stems, rest-Y
+    // context, per-element property writes, tuplet groups, trill footprints.
+    const directionsByVoice = resolveVoiceDirections(
+      voiceNumbers,
+      staffYsByVoice
+    );
+    const newRenderStates = new Map<VoiceKey, VoiceRenderState>();
+    const activeKeys = new Set<VoiceKey>(trackInputs.keys());
+
+    for (const [voiceKey, input] of trackInputs) {
+      const direction: VoiceDirection =
+        typeof voiceKey === 'number'
+          ? directionsByVoice.get(voiceKey) ?? 'up'
+          : 'up';
+      const pitchDriven = !isMultiVoice || voiceKey === 'combined';
+      const state = this.#buildVoiceRenderState(
+        voiceKey,
+        input.elements,
+        input.beatOffsets,
+        input.tupletsByIndex,
+        input.arpeggioGroups,
+        direction,
+        pitchDriven,
+        accidentals,
+        typeof voiceKey === 'number' ? yCoordsByVoice.get(voiceKey) : undefined
+      );
+      newRenderStates.set(voiceKey, state);
+    }
+
+    // #resolveArpeggiandoPassages' dropped-element cleanup needs each
+    // voice key's PREVIOUS elements — one array per key instead of one
+    // shared array, so a dropped element's impliedArpeggio is cleared
+    // regardless of which voice it came from (including a voice key that
+    // existed last pass but not this one, e.g. it became a shared rest).
+    const previousElementsByVoice = this.#previousElementsByVoice;
+    this.#previousElementsByVoice = new Map(
+      [...newRenderStates.entries()].map(([key, state]) => [
+        key,
+        state.elements,
+      ])
+    );
+    for (const [voiceKey, state] of newRenderStates) {
+      this.#resolveArpeggiandoPassages(
+        state.elements,
+        previousElementsByVoice.get(voiceKey) ?? []
+      );
+    }
+    for (const [voiceKey, elements] of previousElementsByVoice) {
+      if (!newRenderStates.has(voiceKey)) {
+        this.#resolveArpeggiandoPassages([], elements);
+      }
+    }
+
+    this.#voiceRenderStates = newRenderStates;
+
+    this.#prepareVoiceContainers(this.#beamsContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#tupletContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#dynamicsContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#trillLinesContainers, activeKeys);
+
     this.#spaceElements();
 
-    for (const svgGroup of this.#beamRenderer.svgGroups) {
-      this.#beamsContainer.appendChild(svgGroup);
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const container = this.#containerFor(
+        this.#beamsContainers,
+        voiceKey,
+        'beams-container'
+      );
+      for (const svgGroup of state.beamRenderer?.svgGroups ?? []) {
+        container.appendChild(svgGroup);
+      }
     }
 
     this.dispatchEvent(
@@ -943,38 +1490,61 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     this.drawConnectorsWhenStandalone();
 
-    if (elements.length > 0) {
-      // First entry: the full leftward stack sits between it and the describe
-      // area, so all of it (accidental included) adds to the measure width.
-      const firstElementLeftwardWidth = this.#entryLeftwardExtent(elements[0]);
-      // Later entries: only the decorations that inter-note spacing does not
-      // already absorb (accidental columns excluded — see #entryLeftwardExtent).
+    // Min-width/natural-width: computed per active voice key with the exact
+    // same per-entry math as the original single-voice pass, then the max
+    // across keys is what this staff reports — a documented, minor
+    // simplification (two voices both wanting extra width at the exact same
+    // beat could in principle want more than either alone), but actual
+    // collisions are still separately clamped per-voice in #spaceElements(),
+    // so this only affects the staff's own *preferred* width.
+    let maxMinWidth = 0;
+    let maxNaturalWidth = 0;
+    let anyVoiceHasContent = false;
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      if (state.elements.length === 0) {
+        continue;
+      }
+      anyVoiceHasContent = true;
+      const firstElementLeftwardWidth = this.#entryLeftwardExtent(
+        state.elements[0]
+      );
       let extraLeftwardWidth = 0;
-      for (let i = 1; i < elements.length; i++) {
-        extraLeftwardWidth += this.#entryLeftwardExtent(elements[i], false);
+      for (let i = 1; i < state.elements.length; i++) {
+        extraLeftwardWidth += this.#entryLeftwardExtent(
+          state.elements[i],
+          false
+        );
       }
       let extraRightwardWidth = 0;
-      for (let i = 0; i < elements.length; i++) {
-        extraRightwardWidth += this.#rightwardFootprint(i);
+      for (let i = 0; i < state.elements.length; i++) {
+        extraRightwardWidth += this.#rightwardFootprint(voiceKey, i);
       }
+      const clefMarkerWidth =
+        !isMultiVoice || voiceKey === 1
+          ? this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
+          : 0;
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
-        computeTupletScaledNoteCount(elements, this.#tupletsByIndex),
+        computeTupletScaledNoteCount(state.elements, state.tupletsByIndex),
         firstElementLeftwardWidth,
         extraLeftwardWidth,
-        this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX,
+        clefMarkerWidth,
         extraRightwardWidth
       );
       const { totalWeight } = computeSpacingWeights(
-        elements,
-        computeTupletScaleByIndex(elements, this.#tupletsByIndex)
+        state.elements,
+        computeTupletScaleByIndex(state.elements, state.tupletsByIndex)
       );
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
+      maxMinWidth = Math.max(maxMinWidth, minWidth);
+      maxNaturalWidth = Math.max(maxNaturalWidth, naturalWidth);
+    }
+    if (anyVoiceHasContent) {
       this.dispatchEvent(
         new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
           bubbles: true,
           composed: false,
-          detail: { minWidth, naturalWidth },
+          detail: { minWidth: maxMinWidth, naturalWidth: maxNaturalWidth },
         })
       );
     }
@@ -982,18 +1552,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #resolveChordStaffYCoordinates(
     notes: ChordNote[],
-    elementIndex: number
+    beatOffset: number
   ): number[] {
     const result: number[] = [];
     let previousY = Infinity;
-    const { octaves } = this.#renderDataForIndex(elementIndex);
+    const { octaves } = this.#renderDataForBeatOffset(beatOffset);
 
     for (const note of notes) {
       if (note.octave !== null) {
-        const y = this.noteToYCoordinate(
+        const y = this.#noteToYCoordinateAtBeatOffset(
           note.value,
           note.octave ?? undefined,
-          elementIndex
+          beatOffset
         );
         result.push(y);
         previousY = y;
@@ -1003,7 +1573,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // pitch (root-position close voicing).
         const candidates: number[] = [];
         for (const octave of octaves) {
-          const y = this.noteToYCoordinate(note.value, octave, elementIndex);
+          const y = this.#noteToYCoordinateAtBeatOffset(
+            note.value,
+            octave,
+            beatOffset
+          );
           if (y > 0 && y < previousY) {
             candidates.push(y);
           }
@@ -1011,7 +1585,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const resolved =
           candidates.length > 0
             ? Math.max(...candidates)
-            : this.noteToYCoordinate(note.value, undefined, elementIndex);
+            : this.#noteToYCoordinateAtBeatOffset(
+                note.value,
+                undefined,
+                beatOffset
+              );
         result.push(resolved);
         previousY = resolved;
       }
@@ -1020,29 +1598,47 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return result;
   }
 
-  // Finds the clef marker active at `elementIndex` — the latest marker whose
-  // `afterElementIndex` is strictly less than it — or null if segment 0 (the
-  // staff's own clef, via the abstract yCoordinates/octaves getters) applies.
-  // Always null for staves with no <music-clef> markers (e.g. StaffVocalElement),
-  // which is exactly what keeps this mechanism a no-op for them.
-  #activeClefAt(elementIndex: number): ClefType | null {
+  // Finds the clef marker active at `beatOffset` (whole-note-fraction, the
+  // shared coordinate space every voice's positions already align on) — the
+  // latest marker whose own beat-offset is strictly less than it — or null if
+  // segment 0 (the staff's own clef, via the abstract yCoordinates/octaves
+  // getters) applies. Always null for staves with no <music-clef> markers
+  // (e.g. StaffVocalElement), which is exactly what keeps this a no-op for
+  // them. Beat-offset-anchored (not index-anchored) so it resolves correctly
+  // for every voice on a multi-voice staff, not just voice 1 — see
+  // #clefMarkers' own doc comment for how a marker's index converts here.
+  #activeClefAt(beatOffset: number): ClefType | null {
     let active: ClefMarkerPlacement | null = null;
+    let activeBeatOffset = -Infinity;
     for (const marker of this.#clefMarkers) {
+      const markerBeatOffset = this.#clefMarkerBeatOffset(marker);
       if (
-        marker.afterElementIndex < elementIndex &&
-        (active === null || marker.afterElementIndex > active.afterElementIndex)
+        markerBeatOffset < beatOffset &&
+        markerBeatOffset > activeBeatOffset
       ) {
         active = marker;
+        activeBeatOffset = markerBeatOffset;
       }
     }
     return active ? active.element.clef : null;
   }
 
-  #renderDataForIndex(elementIndex: number): {
+  // #clefMarkers stores each marker's `afterElementIndex` relative to voice
+  // 1's own flat array (see ClefMarkerPlacement's doc comment) — converts
+  // that into the shared beat-offset coordinate space via #voice1BeatOffsets
+  // (populated once per #renderNotes() pass), so #activeClefAt can compare it
+  // against any voice's own beat-offset, not just voice 1's index.
+  #clefMarkerBeatOffset(marker: ClefMarkerPlacement): number {
+    return marker.afterElementIndex === -1
+      ? -1
+      : this.#voice1BeatOffsets[marker.afterElementIndex] ?? -1;
+  }
+
+  #renderDataForBeatOffset(beatOffset: number): {
     yCoordinates: YCoordinates;
     octaves: Octave[];
   } {
-    const clef = this.#activeClefAt(elementIndex);
+    const clef = this.#activeClefAt(beatOffset);
     if (clef === null) {
       return { yCoordinates: this.yCoordinates, octaves: this.octaves };
     }
@@ -1060,10 +1656,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // The clef in effect at the very start of the staff's note stream — the
-  // staff's own clef (via `ownClef`), unless a <music-clef> marker sits at
-  // afterElementIndex === -1. Backs composition-level courtesy-clef logic.
+  // staff's own clef (via `ownClef`), unless a <music-clef> marker sits
+  // before the first element (beat-offset -1). Queried with -0.5 (any value
+  // strictly between -1 and 0, the smallest real beat-offset, works) so only
+  // that leading marker — never a real, >=0 one — can be "active" here.
+  // Backs composition-level courtesy-clef logic.
   public get effectiveStartClef(): ClefType | null {
-    return this.#activeClefAt(0) ?? this.ownClef;
+    return this.#activeClefAt(-0.5) ?? this.ownClef;
   }
 
   // The clef in effect after the last note/chord/rest — the last marker's
@@ -1074,11 +1673,38 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   // Return the y-coordinate for a given note and octave.
   // Accidentals are ignored for vertical placement — C# and C natural occupy
-  // the same staff line/space.
+  // the same staff line/space. `elementIndex`, when given, is always an
+  // index into voice 1's own array (documented host-app-facing contract, see
+  // this method's class-level usage in apps/ui's drag interactions) —
+  // converted internally to a beat-offset via #voice1BeatOffsets: no index at
+  // all skips clef-segment resolution entirely (same as before beat-offset
+  // anchoring existed — the caller has no note to anchor against, so this
+  // resolves against the staff's own base clef only), and an index at or
+  // past the known array's end resolves as "after everything" — the same
+  // convention effectiveEndClef already uses — rather than as "unknown."
+  // Internal per-voice callers elsewhere in this file use
+  // #noteToYCoordinateAtBeatOffset directly with their own voice's real beat-
+  // offset instead, since a plain element index only ever means "voice 1"
+  // here.
   public noteToYCoordinate(
     note: Note,
     octave?: Octave,
     elementIndex?: number
+  ): number {
+    let beatOffset = Number.NEGATIVE_INFINITY;
+    if (elementIndex !== undefined) {
+      beatOffset =
+        elementIndex < this.#voice1BeatOffsets.length
+          ? this.#voice1BeatOffsets[elementIndex]
+          : Number.POSITIVE_INFINITY;
+    }
+    return this.#noteToYCoordinateAtBeatOffset(note, octave, beatOffset);
+  }
+
+  #noteToYCoordinateAtBeatOffset(
+    note: Note,
+    octave: Octave | undefined,
+    beatOffset: number
   ): number {
     if (!note) {
       return 0;
@@ -1086,10 +1712,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     // Strip accidentals: take the first character (always the letter A-G).
     const letter = note[0].toUpperCase();
-    const { yCoordinates, octaves } =
-      elementIndex !== undefined
-        ? this.#renderDataForIndex(elementIndex)
-        : { yCoordinates: this.yCoordinates, octaves: this.octaves };
+    const { yCoordinates, octaves } = this.#renderDataForBeatOffset(beatOffset);
 
     if (octave !== undefined) {
       const yCoordinate =
@@ -1097,29 +1720,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (yCoordinate !== undefined) {
         return yCoordinate;
       }
-    } else {
-      for (const n of octaves) {
-        const yCoordinate = yCoordinates[`${letter}${n}` as NoteLetterOctave];
-        if (yCoordinate !== undefined) {
-          return yCoordinate;
-        }
-      }
+      return extrapolateYCoordinate(letter, octave, yCoordinates);
     }
 
-    return 0;
+    for (const n of octaves) {
+      const yCoordinate = yCoordinates[`${letter}${n}` as NoteLetterOctave];
+      if (yCoordinate !== undefined) {
+        return yCoordinate;
+      }
+    }
+    return extrapolateYCoordinate(letter, octaves[0] ?? 4, yCoordinates);
   }
 
   // Rightward layout footprint (px) per writtenNoteAnchorIndex — the mirror
   // of #entryLeftwardExtent for a written trilling notehead (trill-note),
   // the first rightward-reserving decoration in this codebase. Spans whose
   // resolved pitch isn't in written mode (the common case: no trill-note, or
-  // the accidental-only override) contribute nothing. Recomputed from
-  // #currentElements, so call after resolvedTrillPitch has been pushed onto
-  // every element for this pass.
-  #computeWrittenTrillFootprints(): Map<number, number> {
+  // the accidental-only override) contribute nothing. Recomputed from the
+  // voice's own elements, so call after resolvedTrillPitch has been pushed
+  // onto every element for this pass.
+  #computeWrittenTrillFootprints(state: VoiceRenderState): Map<number, number> {
     const footprints = new Map<number, number>();
-    for (const span of resolveTrillSpans(this.#currentElements)) {
-      const startElement = this.#currentElements[span.startIndex];
+    for (const span of resolveTrillSpans(state.elements)) {
+      const startElement = state.elements[span.startIndex];
       if (
         startElement.nodeName !== MUSIC_NOTE_NODE &&
         startElement.nodeName !== MUSIC_CHORD_NODE
@@ -1146,10 +1769,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // this codebase, alongside the written trilling notehead above. Unlike
   // that one, this always anchors at its own host index (no tie-chain-based
   // deferral — a finishing figure trails the current note directly).
-  #computeTrillFinishFootprints(): Map<number, number> {
+  #computeTrillFinishFootprints(state: VoiceRenderState): Map<number, number> {
     const footprints = new Map<number, number>();
-    for (let i = 0; i < this.#currentElements.length; i++) {
-      const element = this.#currentElements[i];
+    for (let i = 0; i < state.elements.length; i++) {
+      const element = state.elements[i];
       if (
         element.nodeName !== MUSIC_NOTE_NODE &&
         element.nodeName !== MUSIC_CHORD_NODE
@@ -1170,14 +1793,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return footprints;
   }
 
-  // Combined rightward footprint (px) at `index` — every decoration that
-  // reserves space after an entry's own right edge sums here, so
-  // #spaceElements() and the strut min-width only need one call site
-  // regardless of how many such decorations exist.
-  #rightwardFootprint(index: number): number {
+  // Combined rightward footprint (px) at `index` of `voiceKey` — every
+  // decoration that reserves space after an entry's own right edge sums
+  // here, so #spaceElements() and the strut min-width only need one call
+  // site regardless of how many such decorations exist.
+  #rightwardFootprint(voiceKey: VoiceKey, index: number): number {
+    const state = this.#voiceRenderStates.get(voiceKey);
+    if (!state) {
+      return 0;
+    }
     return (
-      (this.#writtenTrillFootprints.get(index) ?? 0) +
-      (this.#trillFinishFootprints.get(index) ?? 0)
+      (state.writtenTrillFootprints.get(index) ?? 0) +
+      (state.trillFinishFootprints.get(index) ?? 0)
     );
   }
 
@@ -1272,7 +1899,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return extent;
   }
 
-  #spaceElements() {
+  // Sets the standard x/width/viewBox/height attributes shared by every
+  // per-voice overlay container (beams/tuplets/dynamics/trill-lines) — they
+  // all cover exactly the same notes area.
+  #sizeVoiceContainer(container: SVGSVGElement, remainingWidth: number): void {
+    container.setAttribute('x', `${this.#describeEndX}`);
+    container.setAttribute('width', `${remainingWidth}`);
+    container.setAttribute(
+      'viewBox',
+      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
+    );
+    container.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
+  }
+
+  #spaceElements(): void {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     if (typeof this.#describeContainer.getBBox === 'function') {
       const describeBBox = this.#describeContainer.getBBox();
@@ -1283,12 +1923,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
-    // Estimate above-staff budget using stem directions and staff-referenced positions.
-    // This is a conservative estimate computed before notes are positioned; the actual
-    // tuplet bracket geometries are computed after note positions are set (below).
+    // Estimate above/below-staff budget using stem directions and staff-referenced
+    // positions. This is a conservative estimate computed before notes are
+    // positioned; the actual tuplet bracket geometries are computed after note
+    // positions are set (below).
     const aboveStaffBudget = this.#estimateAboveStaffBudget();
+    const belowStaffBudget = this.#estimateBelowStaffBudget();
     const containerWidth = Math.round(transcribeRect.width);
-    const totalHeight = STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget;
+    const totalHeight =
+      STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget + belowStaffBudget;
     this.transcribeContainer.style.top =
       aboveStaffBudget > 0 ? `-${aboveStaffBudget}px` : '0px';
     this.transcribeContainer.style.height = `${totalHeight}px`;
@@ -1297,30 +1940,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       `0 -${aboveStaffBudget} ${containerWidth} ${totalHeight}`
     );
 
-    this.#noteXPositions.clear();
-    this.#firstGraceHeadXPositions.clear();
-
-    // Configure beams container to cover the notes area
-    this.#beamsContainer.setAttribute('x', `${this.#describeEndX}`);
-    this.#beamsContainer.setAttribute('width', `${remainingWidth}`);
-    this.#beamsContainer.setAttribute(
-      'viewBox',
-      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-    this.#beamsContainer.setAttribute(
-      'height',
-      `${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-
-    const tupletScaleByIndex = computeTupletScaleByIndex(
-      this.#currentElements,
-      this.#tupletsByIndex
-    );
-    const { totalWeight } = computeSpacingWeights(
-      this.#currentElements,
-      tupletScaleByIndex
-    );
-    this.#currentSpacingSlackWeight = totalWeight;
+    // transcribeContainer's own height/viewBox growth above only expands
+    // its own SVG coordinate space — staffContainer/transcribeContainer are
+    // both `position: absolute` inside `.staff-wrapper` (staffBase.ts),
+    // which has a fixed min-height and never grows to match, so the extra
+    // room doesn't reserve any real space in the surrounding page (a
+    // Storybook canvas, a composition, any host page). Mirroring the
+    // budgets onto this host element's own margin makes them participate
+    // in real page layout instead, pushing surrounding content out of the
+    // way like a real engraving program growing the space between systems.
+    this.style.marginTop = aboveStaffBudget > 0 ? `${aboveStaffBudget}px` : '';
+    this.style.marginBottom =
+      belowStaffBudget > 0 ? `${belowStaffBudget}px` : '';
 
     // Each entry is positioned as a fraction of the measure's fixed beat
     // capacity (from the time signature — constant regardless of how many
@@ -1328,165 +1959,306 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // This is what makes a full measure fill the staff, what makes a resize
     // reflow every entry together, and what keeps appending an entry from
     // ever moving an already-placed one: neither the capacity nor the
-    // available width it's scaled against depends on entry count.
+    // available width it's scaled against depends on entry count. Every
+    // voice shares this exact formula (same measureCapacity, same
+    // proportionalWidth), which is what makes same-beat notes across
+    // voices land at the same x with zero explicit coordination.
     const [beatsInMeasure, beatType] = this.effectiveTimeSig;
     const measureCapacity = beatsInMeasure / beatType;
-    const arpeggioRunIndices = new Set<number>(
-      this.#arpeggioGroups.flatMap((group) => group.runIndices)
-    );
-    const beatOffsets = computeBeatOffsets(
-      this.#currentElements,
-      this.#tupletsByIndex,
-      arpeggioRunIndices
-    );
-    const proportionalWidth =
-      remainingWidth -
-      LEADING_NOTE_GAP_PX -
-      this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
-    const measureOffsets = computeMeasureProportionalOffsets(
-      beatOffsets,
-      measureCapacity,
-      proportionalWidth
-    );
+    const isMultiVoice = this.#voices.size > 1;
 
-    const clefMarkersByAfterIndex = new Map(
-      this.#clefMarkers.map((marker) => [marker.afterElementIndex, marker])
-    );
+    let totalSlackWeight = 0;
+    // Beat-offset-clustered noteheads across every real voice, for the
+    // cross-voice collision pass below (needs every voice's positions
+    // resolved first — see rules/voiceRules.ts#computeCrossVoiceDisplacements).
+    const placementColumns: {
+      beatOffset: number;
+      placements: VoiceNoteheadPlacement[];
+    }[] = [];
 
-    let clefMarkerReservedWidth = 0;
-    let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
-    let previousNoteX: number | null = null;
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      state.noteXPositions.clear();
+      state.firstGraceHeadXPositions.clear();
 
-    // A marker before the first note/chord/rest (afterElementIndex === -1)
-    // is positioned here, ahead of the loop, since there's no element index
-    // to key off inside it.
-    const leadingClefMarker = clefMarkersByAfterIndex.get(-1);
-    if (leadingClefMarker) {
-      leadingClefMarker.element.style.position = 'absolute';
-      leadingClefMarker.element.style.left = `${previousRightEdge}px`;
-      leadingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
-      leadingClefMarker.element.style.display = '';
-      previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-      clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
-    }
+      const beamsContainer = this.#containerFor(
+        this.#beamsContainers,
+        voiceKey,
+        'beams-container'
+      );
+      this.#sizeVoiceContainer(beamsContainer, remainingWidth);
 
-    for (let i = 0; i < this.#currentElements.length; i++) {
-      const element = this.#currentElements[i];
-      const duration = element.duration as DurationType;
-      const xOffsetInNotesSpace =
-        LEADING_NOTE_GAP_PX + clefMarkerReservedWidth + measureOffsets[i];
-
-      // Position the light DOM element via inline styles
-      let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
-
-      // Collision floor: the proportional position above has no built-in
-      // minimum gap (unlike a per-entry strut), so enforce one against the
-      // *previous* entry alone — never looking ahead, so appending a new
-      // entry can never move an already-placed one.
-      if (previousNoteX !== null) {
-        xInWrapper = Math.max(xInWrapper, previousNoteX + MIN_NOTE_WIDTH);
+      if (voiceKey === 'shared-rest') {
+        // Represents every voice's silence at once — centered across the
+        // measure's notes area (never the normal per-beat positioning every
+        // other voice key goes through below), direction-agnostic, so the
+        // plain undisplaced restToYCoordinate is used rather than a
+        // voiceContext-displaced one.
+        const restElement = state.elements[0];
+        if (restElement) {
+          const x = sharedRestGlyphX(
+            this.#describeEndX,
+            remainingWidth,
+            NOTE_SVG_WIDTH
+          );
+          restElement.style.position = 'absolute';
+          restElement.style.left = `${x}px`;
+          restElement.style.top = `${restToYCoordinate(
+            restElement.duration
+          )}px`;
+          state.noteXPositions.set(0, x - this.#describeEndX);
+        }
+        continue;
       }
 
-      // Everything drawn left of this entry — accidental / grace / arpeggio sign
-      // + dynamic-change hairpin / cross-staff span footprint (see
-      // #entryLeftwardExtent, the single source of truth).
-      const leftwardWidth = this.#entryLeftwardExtent(element);
+      const tupletScaleByIndex = computeTupletScaleByIndex(
+        state.elements,
+        state.tupletsByIndex
+      );
+      const { totalWeight } = computeSpacingWeights(
+        state.elements,
+        tupletScaleByIndex
+      );
+      totalSlackWeight += totalWeight;
 
-      // Barline constraint: the overhang must not cross into the describe area
-      if (leftwardWidth > 0) {
-        xInWrapper = Math.max(
-          xInWrapper,
-          this.#describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
-        );
-      }
+      // state.beatOffsets was already computed in Pass 1 (#renderNotes) for
+      // every real voice and for 'shared-rest'; the 'combined' track's own
+      // beat offsets (from each CombinedGroup) were set there too — so this
+      // is always already correct and does not need recomputing here.
+      const beatOffsets = state.beatOffsets;
 
-      xInWrapper = computeInterNoteSpacing(
-        xInWrapper,
-        leftwardWidth,
-        previousRightEdge
+      // Clef markers are staff-wide and only meaningful for voice 1 in the
+      // single-voice case (see #renderNotes' clef-marker handling).
+      const isVoiceOneOrSingle = !isMultiVoice || voiceKey === 1;
+      const clefMarkerCount = isVoiceOneOrSingle ? this.#clefMarkers.length : 0;
+      const proportionalWidth =
+        remainingWidth -
+        LEADING_NOTE_GAP_PX -
+        clefMarkerCount * CLEF_CHANGE_RESERVED_WIDTH_PX;
+      const measureOffsets = computeMeasureProportionalOffsets(
+        beatOffsets,
+        measureCapacity,
+        proportionalWidth
       );
 
-      // A rightward-reserving decoration (a written trilling notehead, a
-      // trill's finishing grace note(s), or both) on the previous entry
-      // reserves real space regardless of whether *this* entry has any
-      // leftward decorations of its own — computeInterNoteSpacing only
-      // enforces previousRightEdge when leftwardWidth is positive (the
-      // leftward-only case every other decoration in this codebase
-      // reserves), so apply it unconditionally here for that case.
-      if (i > 0 && this.#rightwardFootprint(i - 1) > 0) {
-        xInWrapper = Math.max(xInWrapper, previousRightEdge);
-      }
-
-      // Notify beam renderer of final position after any accidental shift, so beam
-      // endpoints stay in sync with the DOM positions of the chord elements.
-      const xInBeamsContainer = xInWrapper - this.#describeEndX;
-      this.#beamRenderer?.setX(i, xInBeamsContainer);
-      this.#noteXPositions.set(i, xInBeamsContainer);
-
-      // Only needed when the element actually has a grace-dynamic to place —
-      // computeFirstGraceHeadX still needs `grace` itself (a grace-dynamic
-      // with no grace notes has nothing to anchor to and is simply skipped
-      // by #renderDynamics via the same null check).
-      const noteOrChordForGrace = element as INoteElement | IChordElement;
-      if (
-        element.nodeName !== MUSIC_REST_NODE &&
-        noteOrChordForGrace.graceDynamic !== null &&
-        noteOrChordForGrace.grace !== null
-      ) {
-        this.#firstGraceHeadXPositions.set(
-          i,
-          computeFirstGraceHeadX(
-            xInBeamsContainer,
-            leftwardWidth,
-            noteOrChordForGrace.grace,
-            noteOrChordForGrace.resolvedGraceAccidentals
+      const clefMarkersByAfterIndex = isVoiceOneOrSingle
+        ? new Map(
+            this.#clefMarkers.map((marker) => [
+              marker.afterElementIndex,
+              marker,
+            ])
           )
-        );
-      }
+        : new Map<number, ClefMarkerPlacement>();
 
-      element.style.position = 'absolute';
-      element.style.left = `${xInWrapper}px`;
-      previousNoteX = xInWrapper;
-      previousRightEdge =
-        xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(i);
+      let clefMarkerReservedWidth = 0;
+      let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
+      let previousNoteX: number | null = null;
 
-      if (element.nodeName === MUSIC_REST_NODE) {
-        element.style.top = `${restToYCoordinate(element.duration)}px`;
-      } else if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = element as NoteElementType;
-        const yHeadOffset = computeYHeadOffset(
-          noteElement.stemUp,
-          duration,
-          noteElement.noFlags
-        );
-        const noteY =
-          STAFF_Y_PADDING +
-          this.noteToYCoordinate(
-            noteElement.note,
-            noteElement.octave ?? undefined,
-            i
-          ) -
-          yHeadOffset;
-        element.style.top = `${noteY}px`;
-      } else {
-        // Chord y-positioning is handled internally by the chord's own SVG rendering
-        element.style.top = '0px';
-      }
-
-      // A marker following this element (afterElementIndex === i) is
-      // zero-duration — it does not consume spacing slack — but does reserve
-      // horizontal space, same as MIN_NOTE_WIDTH does for a real note.
-      const trailingClefMarker = clefMarkersByAfterIndex.get(i);
-      if (trailingClefMarker) {
-        trailingClefMarker.element.style.position = 'absolute';
-        trailingClefMarker.element.style.left = `${previousRightEdge}px`;
-        trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
-        trailingClefMarker.element.style.display = '';
+      // A marker before the first note/chord/rest (afterElementIndex === -1)
+      // is positioned here, ahead of the loop, since there's no element index
+      // to key off inside it.
+      const leadingClefMarker = clefMarkersByAfterIndex.get(-1);
+      if (leadingClefMarker) {
+        leadingClefMarker.element.style.position = 'absolute';
+        leadingClefMarker.element.style.left = `${previousRightEdge}px`;
+        leadingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
+        leadingClefMarker.element.style.display = '';
         previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
         clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
       }
+
+      for (let i = 0; i < state.elements.length; i++) {
+        const element = state.elements[i];
+        const duration = element.duration as DurationType;
+        const xOffsetInNotesSpace =
+          LEADING_NOTE_GAP_PX + clefMarkerReservedWidth + measureOffsets[i];
+
+        // Position the light DOM element via inline styles
+        let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
+
+        // Collision floor: the proportional position above has no built-in
+        // minimum gap (unlike a per-entry strut), so enforce one against the
+        // *previous* entry alone — never looking ahead, so appending a new
+        // entry can never move an already-placed one.
+        if (previousNoteX !== null) {
+          xInWrapper = Math.max(xInWrapper, previousNoteX + MIN_NOTE_WIDTH);
+        }
+
+        // Everything drawn left of this entry — accidental / grace / arpeggio sign
+        // + dynamic-change hairpin / cross-staff span footprint (see
+        // #entryLeftwardExtent, the single source of truth).
+        const leftwardWidth = this.#entryLeftwardExtent(element);
+
+        // Barline constraint: the overhang must not cross into the describe area
+        if (leftwardWidth > 0) {
+          xInWrapper = Math.max(
+            xInWrapper,
+            this.#describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
+          );
+        }
+
+        xInWrapper = computeInterNoteSpacing(
+          xInWrapper,
+          leftwardWidth,
+          previousRightEdge
+        );
+
+        // A rightward-reserving decoration (a written trilling notehead, a
+        // trill's finishing grace note(s), or both) on the previous entry
+        // reserves real space regardless of whether *this* entry has any
+        // leftward decorations of its own — computeInterNoteSpacing only
+        // enforces previousRightEdge when leftwardWidth is positive (the
+        // leftward-only case every other decoration in this codebase
+        // reserves), so apply it unconditionally here for that case.
+        if (i > 0 && this.#rightwardFootprint(voiceKey, i - 1) > 0) {
+          xInWrapper = Math.max(xInWrapper, previousRightEdge);
+        }
+
+        // Notify beam renderer of final position after any accidental shift, so beam
+        // endpoints stay in sync with the DOM positions of the chord elements.
+        const xInBeamsContainer = xInWrapper - this.#describeEndX;
+        state.beamRenderer?.setX(i, xInBeamsContainer);
+        state.noteXPositions.set(i, xInBeamsContainer);
+
+        // Only needed when the element actually has a grace-dynamic to place —
+        // computeFirstGraceHeadX still needs `grace` itself (a grace-dynamic
+        // with no grace notes has nothing to anchor to and is simply skipped
+        // by #renderDynamics via the same null check).
+        const noteOrChordForGrace = element as INoteElement | IChordElement;
+        if (
+          element.nodeName !== MUSIC_REST_NODE &&
+          noteOrChordForGrace.graceDynamic !== null &&
+          noteOrChordForGrace.grace !== null
+        ) {
+          state.firstGraceHeadXPositions.set(
+            i,
+            computeFirstGraceHeadX(
+              xInBeamsContainer,
+              leftwardWidth,
+              noteOrChordForGrace.grace,
+              noteOrChordForGrace.resolvedGraceAccidentals
+            )
+          );
+        }
+
+        element.style.position = 'absolute';
+        element.style.left = `${xInWrapper}px`;
+        previousNoteX = xInWrapper;
+        previousRightEdge =
+          xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(voiceKey, i);
+
+        if (element.nodeName === MUSIC_REST_NODE) {
+          element.style.top = `${restToYCoordinate(
+            element.duration,
+            state.restContext
+          )}px`;
+        } else if (element.nodeName === MUSIC_NOTE_NODE) {
+          const noteElement = element as NoteElementType;
+          const yHeadOffset = computeYHeadOffset(
+            noteElement.stemUp,
+            duration,
+            noteElement.noFlags
+          );
+          // Read back Pass 2's already-resolved value instead of calling the
+          // public noteToYCoordinate() again here — that method's own
+          // `elementIndex` argument always means "index into voice 1", so
+          // passing this loop's local `i` for voice 2/3 would silently
+          // resolve against the wrong voice's clef segment on a staff with a
+          // mid-stream <music-clef> marker.
+          const noteY =
+            STAFF_Y_PADDING +
+            (state.noteStaffYCoords.get(noteElement) ?? 0) -
+            yHeadOffset;
+          element.style.top = `${noteY}px`;
+        } else {
+          // Chord y-positioning is handled internally by the chord's own SVG rendering
+          element.style.top = '0px';
+        }
+
+        // A marker following this element (afterElementIndex === i) is
+        // zero-duration — it does not consume spacing slack — but does reserve
+        // horizontal space, same as MIN_NOTE_WIDTH does for a real note.
+        const trailingClefMarker = clefMarkersByAfterIndex.get(i);
+        if (trailingClefMarker) {
+          trailingClefMarker.element.style.position = 'absolute';
+          trailingClefMarker.element.style.left = `${previousRightEdge}px`;
+          trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
+          trailingClefMarker.element.style.display = '';
+          previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
+          clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
+        }
+
+        // Collect this notehead's placement for the cross-voice collision
+        // pass below — real voices only ('combined'/'shared-rest' already
+        // merged or represent every voice at once, so neither has anything
+        // left to collide with — see rules/voiceRules.ts).
+        if (
+          typeof voiceKey === 'number' &&
+          element.nodeName !== MUSIC_REST_NODE
+        ) {
+          const staffYs =
+            element.nodeName === MUSIC_NOTE_NODE
+              ? [state.noteStaffYCoords.get(element as NoteElementType) ?? 0]
+              : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
+          const beatOffset = beatOffsets[i];
+          let column = placementColumns.find(
+            (c) => Math.abs(c.beatOffset - beatOffset) < 1e-9
+          );
+          if (!column) {
+            column = { beatOffset, placements: [] };
+            placementColumns.push(column);
+          }
+          column.placements.push({
+            voiceNumber: voiceKey,
+            localIndex: i,
+            staffYCoordinates: staffYs,
+            direction: state.direction,
+            hasFlagOrBeam:
+              state.beamedIndices.has(i) ||
+              (durationToFlagCountMap.get(duration) ?? 0) > 0,
+          });
+        }
+      }
+
+      state.beamRenderer?.spaceAll();
     }
-    this.#beamRenderer?.spaceAll();
+
+    this.#currentSpacingSlackWeight = totalSlackWeight;
+
+    // Cross-voice collision pass — only meaningful once 2+ real voices
+    // share the staff. Applies a small horizontal nudge on top of the
+    // shared beat-position x already set above, exactly as
+    // rules/chordRules.ts#computeAdjacentDisplacements is already layered
+    // on top of a chord's own base x.
+    if (isMultiVoice) {
+      let anyDisplacement = false;
+      for (const column of placementColumns) {
+        if (column.placements.length < 2) {
+          continue;
+        }
+        for (const displacement of computeCrossVoiceDisplacements(
+          column.placements
+        )) {
+          const state = this.#voiceRenderStates.get(displacement.voiceNumber);
+          if (!state) {
+            continue;
+          }
+          const element = state.elements[displacement.localIndex];
+          const currentLeft = parseFloat(element.style.left || '0');
+          element.style.left = `${currentLeft + displacement.xOffset}px`;
+          const currentX =
+            state.noteXPositions.get(displacement.localIndex) ?? 0;
+          const newX = currentX + displacement.xOffset;
+          state.noteXPositions.set(displacement.localIndex, newX);
+          state.beamRenderer?.setX(displacement.localIndex, newX);
+          anyDisplacement = true;
+        }
+      }
+      if (anyDisplacement) {
+        for (const state of this.#voiceRenderStates.values()) {
+          state.beamRenderer?.spaceAll();
+        }
+      }
+    }
 
     // Reconcile each beamed stem to the beam line as actually drawn. #renderNotes()
     // pushed an index-fraction estimate before X was known; now that setX + spaceAll
@@ -1494,13 +2266,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // note/chord setter makes this a no-op for the common evenly-spaced case, and
     // it is the only stem-length pass that runs on a bare resize (onStaffResize →
     // #spaceElements, never #renderNotes).
-    if (this.#beamRenderer !== null) {
-      for (let i = 0; i < this.#currentElements.length; i++) {
-        if (!this.#beamedIndicesSnapshot.has(i)) {
+    for (const state of this.#voiceRenderStates.values()) {
+      if (state.beamRenderer === null) {
+        continue;
+      }
+      for (let i = 0; i < state.elements.length; i++) {
+        if (!state.beamedIndices.has(i)) {
           continue;
         }
-        const element = this.#currentElements[i];
-        const extension = this.#beamRenderer.stemExtension(i);
+        const element = state.elements[i];
+        const extension = state.beamRenderer.stemExtension(i);
         if (element.nodeName === MUSIC_NOTE_NODE) {
           (element as NoteElementType).stemExtension = extension;
         } else if (element.nodeName === MUSIC_CHORD_NODE) {
@@ -1509,141 +2284,149 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    // Size the tuplet container to match the notes area (same as beams container)
-    this.#tupletContainer.setAttribute('x', `${this.#describeEndX}`);
-    this.#tupletContainer.setAttribute('width', `${remainingWidth}`);
-    this.#tupletContainer.setAttribute(
-      'viewBox',
-      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-    this.#tupletContainer.setAttribute(
-      'height',
-      `${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
+    // Tuplet bracket rendering, per voice key. Note positions are now set
+    // so x/y lookups work.
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const tupletContainer = this.#containerFor(
+        this.#tupletContainers,
+        voiceKey,
+        'tuplets-container'
+      );
+      // #spaceElements() runs on every resize (onStaffResize), independent of
+      // #renderNotes()'s own container clear — without this, a resize would
+      // append a second set of brackets alongside the stale ones instead of
+      // replacing them.
+      tupletContainer.innerHTML = '';
+      this.#sizeVoiceContainer(tupletContainer, remainingWidth);
 
-    // Two-pass tuplet bracket rendering. Note positions are now set so x/y lookups work.
-
-    // Pass 1: inner groups (nestingLevel > 0) — beam-referenced numeral placement.
-    const innerGeometriesByGroup = new Map<
-      TupletGroup,
-      TupletBracketGeometry
-    >();
-    for (const group of this.#tupletGroups) {
-      if (group.nestingLevel === 0) {
-        continue;
+      // Pass 1: inner groups (nestingLevel > 0) — beam-referenced numeral placement.
+      const innerGeometriesByGroup = new Map<
+        TupletGroup,
+        TupletBracketGeometry
+      >();
+      for (const group of state.tupletGroups) {
+        if (group.nestingLevel === 0) {
+          continue;
+        }
+        const hasInnerGroups = state.tupletGroups.some(
+          (other) =>
+            other.nestingLevel > group.nestingLevel &&
+            other.indices.every((i) => group.indices.includes(i))
+        );
+        const geometry = computeTupletBracketGeometry(
+          group,
+          state.elements,
+          state.noteXPositions,
+          state.stemDirections,
+          state.beamedIndices,
+          state.noteStaffYCoords,
+          state.chordStaffYCoords,
+          null,
+          hasInnerGroups,
+          (i) => state.beamRenderer?.primaryBeamYForIndex(i) ?? null
+        );
+        if (geometry !== null) {
+          innerGeometriesByGroup.set(group, geometry);
+        }
       }
-      const hasInnerGroups = this.#tupletGroups.some(
-        (other) =>
-          other.nestingLevel > group.nestingLevel &&
-          other.indices.every((i) => group.indices.includes(i))
-      );
-      const geometry = computeTupletBracketGeometry(
-        group,
-        this.#currentElements,
-        this.#noteXPositions,
-        this.#stemDirections,
-        this.#beamedIndicesSnapshot,
-        this.#noteStaffYCoordsSnapshot,
-        this.#chordStaffYCoordsSnapshot,
-        null,
-        hasInnerGroups,
-        (i) => this.#beamRenderer?.primaryBeamYForIndex(i) ?? null
-      );
-      if (geometry !== null) {
-        innerGeometriesByGroup.set(group, geometry);
+
+      // Pass 2: outer groups (nestingLevel=0) — baseY derived from actual inner numeralYs.
+      const allGeometries: TupletBracketGeometry[] = [
+        ...innerGeometriesByGroup.values(),
+      ];
+      for (const group of state.tupletGroups) {
+        if (group.nestingLevel !== 0) {
+          continue;
+        }
+        const outerIndexSet = new Set(group.indices);
+        const innerNumeralYs = [...innerGeometriesByGroup.entries()]
+          .filter(([innerGroup]) =>
+            innerGroup.indices.every((i) => outerIndexSet.has(i))
+          )
+          .map(([, geom]) => geom.numeralY);
+
+        const upVotes = group.indices.filter(
+          (i) => state.stemDirections[i] === true
+        ).length;
+        const stemUp = upVotes >= group.indices.length / 2;
+        const outerBaseY =
+          innerNumeralYs.length > 0
+            ? computeOuterBracketBaseY(innerNumeralYs, stemUp)
+            : null;
+
+        const hasInnerGroups = innerNumeralYs.length > 0;
+        const geometry = computeTupletBracketGeometry(
+          group,
+          state.elements,
+          state.noteXPositions,
+          state.stemDirections,
+          state.beamedIndices,
+          state.noteStaffYCoords,
+          state.chordStaffYCoords,
+          outerBaseY,
+          hasInnerGroups,
+          (i) => state.beamRenderer?.primaryBeamYForIndex(i) ?? null
+        );
+        if (geometry !== null) {
+          allGeometries.push(geometry);
+        }
+      }
+
+      for (const geometry of allGeometries) {
+        tupletContainer.appendChild(createTupletBracketSvg(geometry));
       }
     }
 
-    // Pass 2: outer groups (nestingLevel=0) — baseY derived from actual inner numeralYs.
-    const allGeometries: TupletBracketGeometry[] = [
-      ...innerGeometriesByGroup.values(),
-    ];
-    for (const group of this.#tupletGroups) {
-      if (group.nestingLevel !== 0) {
-        continue;
-      }
-      const outerIndexSet = new Set(group.indices);
-      const innerNumeralYs = [...innerGeometriesByGroup.entries()]
-        .filter(([innerGroup]) =>
-          innerGroup.indices.every((i) => outerIndexSet.has(i))
-        )
-        .map(([, geom]) => geom.numeralY);
-
-      const upVotes = group.indices.filter(
-        (i) => this.#stemDirections[i] === true
-      ).length;
-      const stemUp = upVotes >= group.indices.length / 2;
-      const outerBaseY =
-        innerNumeralYs.length > 0
-          ? computeOuterBracketBaseY(innerNumeralYs, stemUp)
-          : null;
-
-      const hasInnerGroups = innerNumeralYs.length > 0;
-      const geometry = computeTupletBracketGeometry(
-        group,
-        this.#currentElements,
-        this.#noteXPositions,
-        this.#stemDirections,
-        this.#beamedIndicesSnapshot,
-        this.#noteStaffYCoordsSnapshot,
-        this.#chordStaffYCoordsSnapshot,
-        outerBaseY,
-        hasInnerGroups,
-        (i) => this.#beamRenderer?.primaryBeamYForIndex(i) ?? null
+    // Dynamics/hairpins/arpeggiando text, per voice key.
+    for (const voiceKey of this.#voiceRenderStates.keys()) {
+      const dynamicsContainer = this.#containerFor(
+        this.#dynamicsContainers,
+        voiceKey,
+        'dynamics-container'
       );
-      if (geometry !== null) {
-        allGeometries.push(geometry);
-      }
+      this.#sizeVoiceContainer(dynamicsContainer, remainingWidth);
+      this.#renderDynamics(voiceKey);
     }
 
-    this.#tupletContainer.innerHTML = '';
-    for (const geometry of allGeometries) {
-      this.#tupletContainer.appendChild(createTupletBracketSvg(geometry));
+    // Trill lines/signs/finish-slurs, per voice key.
+    for (const voiceKey of this.#voiceRenderStates.keys()) {
+      const trillLinesContainer = this.#containerFor(
+        this.#trillLinesContainers,
+        voiceKey,
+        'trill-lines-container'
+      );
+      this.#sizeVoiceContainer(trillLinesContainer, remainingWidth);
+      this.#redrawTrillLines(voiceKey, remainingWidth);
     }
-
-    this.#dynamicsContainer.setAttribute('x', `${this.#describeEndX}`);
-    this.#dynamicsContainer.setAttribute('width', `${remainingWidth}`);
-    this.#dynamicsContainer.setAttribute(
-      'viewBox',
-      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-    this.#dynamicsContainer.setAttribute(
-      'height',
-      `${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-    this.#dynamicsContainer.innerHTML = '';
-    this.#renderDynamics();
-
-    this.#trillLinesContainer.setAttribute('x', `${this.#describeEndX}`);
-    this.#trillLinesContainer.setAttribute('width', `${remainingWidth}`);
-    this.#trillLinesContainer.setAttribute(
-      'viewBox',
-      `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-    this.#trillLinesContainer.setAttribute(
-      'height',
-      `${STAFF_TRANSCRIPTION_HEIGHT}`
-    );
-    this.#trillLinesContainer.innerHTML = '';
-    this.#redrawTrillLines(remainingWidth);
   }
 
-  #renderDynamics(): void {
-    for (let i = 0; i < this.#currentElements.length; i++) {
-      const element = this.#currentElements[i];
+  #renderDynamics(voiceKey: VoiceKey): void {
+    const state = this.#voiceRenderStates.get(voiceKey);
+    if (!state) {
+      return;
+    }
+    const container = this.#containerFor(
+      this.#dynamicsContainers,
+      voiceKey,
+      'dynamics-container'
+    );
+    // #spaceElements() runs on every resize, independent of #renderNotes()'s
+    // own container clear — without this, a resize would append a second
+    // set of markings/hairpins alongside the stale ones instead of
+    // replacing them.
+    container.innerHTML = '';
+    const baselineY = this.#dynamicsBaselineForVoice(voiceKey, state);
+    for (let i = 0; i < state.elements.length; i++) {
+      const element = state.elements[i];
       if (element.nodeName === MUSIC_REST_NODE) {
         continue;
       }
       const noteOrChord = element as INoteElement | IChordElement;
       if (noteOrChord.dynamic !== null) {
-        const noteX = this.#noteXPositions.get(i) ?? 0;
+        const noteX = state.noteXPositions.get(i) ?? 0;
         const centerX = noteX + NOTE_SVG_WIDTH / 2;
-        this.#dynamicsContainer.appendChild(
-          createDynamicMarkingSvg(
-            noteOrChord.dynamic,
-            centerX,
-            DYNAMICS_BASELINE_Y
-          )
+        container.appendChild(
+          createDynamicMarkingSvg(noteOrChord.dynamic, centerX, baselineY)
         );
       }
 
@@ -1652,36 +2435,36 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // p-under-main example) and sits under the first grace note instead of
       // the host's own column.
       if (noteOrChord.graceDynamic !== null) {
-        const firstGraceHeadX = this.#firstGraceHeadXPositions.get(i);
+        const firstGraceHeadX = state.firstGraceHeadXPositions.get(i);
         if (firstGraceHeadX !== undefined) {
-          this.#dynamicsContainer.appendChild(
+          container.appendChild(
             createDynamicMarkingSvg(
               noteOrChord.graceDynamic,
               firstGraceHeadX,
-              DYNAMICS_BASELINE_Y
+              baselineY
             )
           );
         }
       }
     }
 
-    const pairs = pairHairpins(this.#currentElements, this.#noteXPositions);
+    const pairs = pairHairpins(state.elements, state.noteXPositions);
     for (const pair of pairs) {
       if (pair.errors.length > 0) {
         console.warn(pair.errors);
       }
-      this.#dynamicsContainer.appendChild(
+      container.appendChild(
         createHairpinSvg(
           pair.kind,
           pair.startX,
           pair.endX,
-          DYNAMICS_BASELINE_Y,
+          baselineY,
           HAIRPIN_OPEN_HEIGHT
         )
       );
     }
 
-    this.#renderArpeggiandoText();
+    this.#renderArpeggiandoText(voiceKey);
   }
 
   // `sempre arpeggiando` (abbreviated `sempre arpegg.`): from an element marked
@@ -1736,9 +2519,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   }
 
-  #renderArpeggiandoText(): void {
-    for (let i = 0; i < this.#currentElements.length; i++) {
-      const element = this.#currentElements[i];
+  #renderArpeggiandoText(voiceKey: VoiceKey): void {
+    const state = this.#voiceRenderStates.get(voiceKey);
+    if (!state) {
+      return;
+    }
+    const container = this.#containerFor(
+      this.#dynamicsContainers,
+      voiceKey,
+      'dynamics-container'
+    );
+    for (let i = 0; i < state.elements.length; i++) {
+      const element = state.elements[i];
       if (
         element.nodeName !== MUSIC_NOTE_NODE &&
         element.nodeName !== MUSIC_CHORD_NODE
@@ -1750,8 +2542,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       ) {
         continue;
       }
-      const noteX = this.#noteXPositions.get(i) ?? 0;
-      this.#dynamicsContainer.appendChild(
+      const noteX = state.noteXPositions.get(i) ?? 0;
+      container.appendChild(
         createSempreArpeggiandoText(
           noteX,
           STAFF_TOP_LINE_Y - ARPEGGIO_TEXT_ABOVE_STAFF_PX
@@ -1790,7 +2582,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // dispatches CONNECTOR_ATTRIBUTE_CHANGE) needs the full trill re-layout
   // pass too, since a trill span's own endpoint depends on the tie chain.
   #hasTrillMarkedElement(): boolean {
-    return this.#currentElements.some((element) => {
+    return this.#allElements.some((element) => {
       if (element.nodeName === MUSIC_NOTE_NODE) {
         return (element as NoteElementType).trill;
       }
@@ -1801,6 +2593,52 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     });
   }
 
+  // A trill's on-staff decoration is drawn by two independent code paths
+  // that are meant to move as one visual unit: the line/notch (this staff's
+  // own trill-lines-container overlay) and the sign glyph (drawn inside the
+  // trilling note/chord's own shadow DOM, via NoteProps/ChordProps'
+  // trillSignExtraLift — a note has no visibility into sibling voices'
+  // geometry on its own). Both sit at a fixed height above the staff,
+  // independent of pitch — correct engraving for a single voice, but voice
+  // 1 is always the up-stem voice under the multi-voice policy, so its own
+  // noteheads can occupy the exact territory a lower voice's trill is fixed
+  // to use. Returns the px to raise BOTH past any OTHER active voice's own
+  // up-stem content that horizontally overlaps [startX, endX] — down-stem
+  // content is excluded outright since it never competes for the
+  // above-staff territory. 0 when no other voice has anything in the span,
+  // so this only ever raises the line/sign, never lowers them.
+  #trillLineLiftClearingOtherVoices(
+    ownVoiceKey: VoiceKey,
+    startX: number,
+    endX: number
+  ): number {
+    let lift = 0;
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      if (otherKey === ownVoiceKey) {
+        continue;
+      }
+      const upStemOverlapping = otherState.elements
+        .map((_, i) => i)
+        .filter((i) => {
+          if (!otherState.stemDirections[i]) {
+            return false;
+          }
+          const x = otherState.noteXPositions.get(i);
+          return x !== undefined && x + NOTE_SVG_WIDTH >= startX && x <= endX;
+        });
+      const extreme = this.#extremeStemTipY(
+        otherState,
+        upStemOverlapping,
+        true
+      );
+      if (extreme !== null) {
+        const requiredY = extreme - TRILL_ABOVE_STAFF_GAP_PX;
+        lift = Math.max(lift, TRILL_ABOVE_STAFF_BOTTOM_Y - requiredY);
+      }
+    }
+    return lift;
+  }
+
   // Draws the wavy trill line (+ end-notch) and, when in written mode, the
   // small parenthesized trilling notehead, for every `trill`-marked element
   // in the current note stream, same-measure only (a span never crosses into
@@ -1808,20 +2646,57 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // from #spaceElements() (remainingWidth already known there), itself part
   // of the full #renderNotes() pass every trill/tie-affecting attribute
   // change now routes through.
-  #redrawTrillLines(remainingWidth?: number): void {
+  #redrawTrillLines(voiceKey: VoiceKey, remainingWidth?: number): void {
+    const state = this.#voiceRenderStates.get(voiceKey);
+    if (!state) {
+      return;
+    }
+    const container = this.#containerFor(
+      this.#trillLinesContainers,
+      voiceKey,
+      'trill-lines-container'
+    );
+    // #spaceElements() runs on every resize, independent of #renderNotes()'s
+    // own container clear — without this, a resize would append a second
+    // set of lines/signs/notches alongside the stale ones instead of
+    // replacing them.
+    container.innerHTML = '';
     const width =
       remainingWidth ??
       this.transcribeContainer.getBoundingClientRect().width -
         this.#describeEndX;
 
-    for (const span of resolveTrillSpans(this.#currentElements)) {
-      const startElement = this.#currentElements[span.startIndex] as
+    for (const span of resolveTrillSpans(state.elements)) {
+      const startElement = state.elements[span.startIndex] as
         | NoteElementType
         | ChordElementType;
       const resolvedTrillPitch = startElement.resolvedTrillPitch;
 
+      // The sign glyph's own footprint (drawn inside the note/chord's own
+      // shadow DOM) sits left of where the line begins — check overlap from
+      // there, not just the line's own span, so a collision purely against
+      // the sign (no line at all, or a line that starts further right)
+      // still raises it. Computed unconditionally (not gated behind
+      // span.hasLine) since the sign itself renders whenever `trill` is
+      // set, independent of whether a line does.
+      const stemUp = state.stemDirections[span.startIndex] ?? true;
+      const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
+      const signLeftOffset = trillSignLeftX(stemUp);
+      const signStartX = startNoteX + signLeftOffset;
+      const endX = span.hasLine
+        ? this.#trillLineEndX(state, span, width)
+        : signStartX + TRILL_SIGN_WIDTH_PX;
+      const lift = this.#trillLineLiftClearingOtherVoices(
+        voiceKey,
+        signStartX,
+        endX
+      );
+      startElement.trillSignExtraLift = lift;
+
       if (resolvedTrillPitch?.written === true) {
         this.#drawWrittenTrillNote(
+          state,
+          container,
           span.startIndex,
           span.writtenNoteAnchorIndex,
           resolvedTrillPitch
@@ -1832,40 +2707,36 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
 
-      const y = TRILL_ABOVE_STAFF_BOTTOM_Y;
-      const stemUp = this.#stemDirections[span.startIndex] ?? true;
-      const startNoteX = this.#noteXPositions.get(span.startIndex) ?? 0;
-      const signLeftOffset = trillSignLeftX(stemUp);
-      const startX =
-        startNoteX +
-        signLeftOffset +
-        TRILL_SIGN_WIDTH_PX +
-        TRILL_SIGN_LINE_GAP_PX;
-      const endX = this.#trillLineEndX(span, width);
+      const startX = signStartX + TRILL_SIGN_WIDTH_PX + TRILL_SIGN_LINE_GAP_PX;
+      const y = TRILL_ABOVE_STAFF_BOTTOM_Y - lift;
 
       const line = createTrillLineSvg({ startX, endX, bottomY: y });
       if (line) {
-        this.#trillLinesContainer.appendChild(line);
+        container.appendChild(line);
       }
       if (span.stopped) {
-        this.#trillLinesContainer.appendChild(createTrillNotchSvg(endX, y));
+        container.appendChild(createTrillNotchSvg(endX, y));
       }
     }
 
-    this.#drawTrillFinishSlurs();
+    this.#drawTrillFinishSlurs(state, container);
   }
 
   // Where the line/notch ends, given a resolved trill span.
-  #trillLineEndX(span: TrillLineSpan, width: number): number {
+  #trillLineEndX(
+    state: VoiceRenderState,
+    span: TrillLineSpan,
+    width: number
+  ): number {
     if (span.stopped) {
       // Cut short rather than running to the next notehead — stop just past
       // this trill's own last tied note.
-      const lastNoteX = this.#noteXPositions.get(span.lastTiedIndex) ?? width;
+      const lastNoteX = state.noteXPositions.get(span.lastTiedIndex) ?? width;
       return lastNoteX + NOTE_SVG_WIDTH;
     }
     if (span.endBeforeIndex !== null) {
       return (
-        (this.#noteXPositions.get(span.endBeforeIndex) ?? width) -
+        (state.noteXPositions.get(span.endBeforeIndex) ?? width) -
         TRILL_LINE_END_GAP_PX
       );
     }
@@ -1876,12 +2747,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // note/chord at `index` — the "to-next" trill-finish slur's far endpoint
   // (see #drawTrillFinishSlurs). Returns null for a rest (nothing to slur
   // to) or an out-of-range index.
-  #referenceHeadPosition(index: number): { xCenter: number; y: number } | null {
-    const element = this.#currentElements[index];
+  #referenceHeadPosition(
+    state: VoiceRenderState,
+    index: number
+  ): { xCenter: number; y: number } | null {
+    const element = state.elements[index];
     if (element === undefined || element.nodeName === MUSIC_REST_NODE) {
       return null;
     }
-    const noteX = this.#noteXPositions.get(index) ?? 0;
+    const noteX = state.noteXPositions.get(index) ?? 0;
     const xCenter = noteX + NOTE_SVG_WIDTH / 2;
     if (element.nodeName === MUSIC_NOTE_NODE) {
       const noteElement = element as NoteElementType;
@@ -1896,8 +2770,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       };
     }
     const chordElement = element as ChordElementType;
-    const staffYCoords =
-      this.#chordStaffYCoordsSnapshot.get(chordElement) ?? [];
+    const staffYCoords = state.chordStaffYCoords.get(chordElement) ?? [];
     if (staffYCoords.length === 0) {
       return null;
     }
@@ -1915,9 +2788,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // the host element's own render used (mirrors
   // #computeWrittenTrillFootprints/#drawWrittenTrillNote) rather than
   // reading it back from rendered DOM.
-  #drawTrillFinishSlurs(): void {
-    for (let i = 0; i < this.#currentElements.length; i++) {
-      const element = this.#currentElements[i];
+  #drawTrillFinishSlurs(
+    state: VoiceRenderState,
+    container: SVGSVGElement
+  ): void {
+    for (let i = 0; i < state.elements.length; i++) {
+      const element = state.elements[i];
       if (
         element.nodeName !== MUSIC_NOTE_NODE &&
         element.nodeName !== MUSIC_CHORD_NODE
@@ -1936,10 +2812,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
       const nextIndex = i + 1;
-      if (nextIndex >= this.#currentElements.length) {
+      if (nextIndex >= state.elements.length) {
         continue;
       }
-      const targetPosition = this.#referenceHeadPosition(nextIndex);
+      const targetPosition = this.#referenceHeadPosition(state, nextIndex);
       if (targetPosition === null) {
         continue;
       }
@@ -1971,7 +2847,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       );
       const layout = computeGraceLayout(descriptors);
       const lastLocalIndex = descriptors.length - 1;
-      const hostX = this.#noteXPositions.get(i) ?? 0;
+      const hostX = state.noteXPositions.get(i) ?? 0;
       const lastHeadX =
         hostX +
         NOTE_SVG_WIDTH +
@@ -1994,7 +2870,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         targetPosition.y,
         NOTE_HEAD_RADIUS_PX * 0.75
       );
-      this.#trillLinesContainer.appendChild(slur);
+      container.appendChild(slur);
     }
   }
 
@@ -2003,6 +2879,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // for why this can differ from the trill's own starting note), at the
   // resolved pitch's real staff Y.
   #drawWrittenTrillNote(
+    state: VoiceRenderState,
+    container: SVGSVGElement,
     startIndex: number,
     anchorIndex: number,
     resolvedTrillPitch: {
@@ -2014,7 +2892,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     if (resolvedTrillPitch.octave === null) {
       return;
     }
-    const anchorNoteX = this.#noteXPositions.get(anchorIndex) ?? 0;
+    const anchorNoteX = state.noteXPositions.get(anchorIndex) ?? 0;
     const leftX = anchorNoteX + NOTE_SVG_WIDTH + TRILL_WRITTEN_NOTE_GAP_PX;
     const rawY = this.noteToYCoordinate(
       `${resolvedTrillPitch.letter}${accidentalSuffix(
@@ -2029,15 +2907,33 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       centerY,
       accidental: resolvedTrillPitch.accidental,
     });
-    this.#trillLinesContainer.appendChild(element);
+    container.appendChild(element);
   }
 
-  // Conservative above-staff budget estimate using staff-referenced positions.
-  // Used before note x-positions are set; the actual rendering uses real geometry.
+  // Conservative above-staff budget estimate using staff-referenced
+  // positions. Used before note x-positions are set; the actual rendering
+  // uses real geometry. Computed per voice key and maxed across all of
+  // them — this is already a conservative pre-layout estimate, so taking
+  // the max across voices (rather than summing or reasoning precisely
+  // about cross-voice above-staff overlap) is a safe, minor simplification.
   #estimateAboveStaffBudget(): number {
     let budget = 0;
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      budget = Math.max(
+        budget,
+        this.#estimateAboveStaffBudgetForVoice(voiceKey, state)
+      );
+    }
+    return budget;
+  }
 
-    const hasArpeggiandoText = this.#currentElements.some(
+  #estimateAboveStaffBudgetForVoice(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number {
+    let budget = 0;
+
+    const hasArpeggiandoText = state.elements.some(
       (element) =>
         (element.nodeName === MUSIC_NOTE_NODE ||
           element.nodeName === MUSIC_CHORD_NODE) &&
@@ -2055,7 +2951,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     // The upper dynamic letter of an arpeggio-hairpin sits above the chord's
     // top notehead — reserve room when it would otherwise poke past the SVG.
-    for (const element of this.#currentElements) {
+    for (const element of state.elements) {
       if (
         element.nodeName !== MUSIC_NOTE_NODE &&
         element.nodeName !== MUSIC_CHORD_NODE
@@ -2079,8 +2975,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
       const staffYs =
         element.nodeName === MUSIC_NOTE_NODE
-          ? [this.#noteStaffYCoordsSnapshot.get(el as NoteElementType) ?? 0]
-          : this.#chordStaffYCoordsSnapshot.get(el as ChordElementType) ?? [0];
+          ? [state.noteStaffYCoords.get(el as NoteElementType) ?? 0]
+          : state.chordStaffYCoords.get(el as ChordElementType) ?? [0];
       const topHeadY =
         STAFF_Y_PADDING + Math.min(...staffYs) - NOTE_HEAD_Y_OFFSET_CORRECTION;
       const textTopY =
@@ -2099,7 +2995,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // when that combined height would otherwise poke past the SVG. Written
     // mode's accidental renders inline inside the notehead instead and needs
     // no extra vertical room, so it's excluded here.
-    const hasTrillAccidental = this.#currentElements.some((element) => {
+    const hasTrillAccidental = state.elements.some((element) => {
       if (
         element.nodeName !== MUSIC_NOTE_NODE &&
         element.nodeName !== MUSIC_CHORD_NODE
@@ -2126,25 +3022,277 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    const hasStemUpTuplet = this.#tupletGroups.some((group) => {
-      const upVotes = group.indices.filter(
-        (i) => this.#stemDirections[i] === true
-      ).length;
-      return upVotes >= group.indices.length / 2;
-    });
-    if (hasStemUpTuplet) {
+    // A trill's line and sign can both be pushed above their own nominal
+    // above-staff Y to clear another voice's up-stem content in their span
+    // (see #trillLineLiftClearingOtherVoices, used by the actual draw pass
+    // in #redrawTrillLines). x-positions aren't resolved yet at this point
+    // in #spaceElements(), so this can't narrow to the trill's own
+    // horizontal span the way the draw pass does — conservatively checks
+    // every OTHER voice's overall up-stem reach instead, whenever this
+    // voice has any trill span at all (sign-only or with a line — the sign
+    // alone needs the same room). Reserving slightly more room than
+    // strictly necessary is harmless; reserving too little is not.
+    const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
+    if (hasTrillSpan) {
+      for (const [otherKey, otherState] of this.#voiceRenderStates) {
+        if (otherKey === voiceKey) {
+          continue;
+        }
+        const upStemIndices = otherState.elements
+          .map((_, i) => i)
+          .filter((i) => otherState.stemDirections[i]);
+        const extreme = this.#extremeStemTipY(otherState, upStemIndices, true);
+        if (extreme === null) {
+          continue;
+        }
+        const topY = extreme - TRILL_ABOVE_STAFF_GAP_PX - TRILL_SIGN_HEIGHT_PX;
+        if (topY < 0) {
+          budget = Math.max(budget, Math.ceil(-topY) + 2);
+        }
+      }
+    }
+
+    budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
+
+    // Mirrors the below-staff dynamics check in #estimateBelowStaffBudget —
+    // an up-stem voice's dynamics row (see #dynamicsPlacedAbove) needs
+    // above-staff canvas room reserved for it too. Unlike the below case
+    // (whose nominal baseline sits comfortably inside the fixed canvas),
+    // DYNAMICS_ABOVE_BASELINE_Y sits close to the top edge even with no
+    // cross-voice clamping at all — the glyph's own ascent (DYNAMICS_FONT_SIZE,
+    // same approximation #dynamicsBaselineForVoice itself uses) has to be
+    // subtracted here too, or an ordinary up-voice dynamic would poke past
+    // y=0 by default.
+    if (
+      this.#hasDynamicsContent(state) &&
+      this.#dynamicsPlacedAbove(voiceKey, state)
+    ) {
       const topY =
-        STAFF_TOP_LINE_Y -
-        STAFF_Y_PADDING -
-        TUPLET_STAFF_CLEARANCE_PX -
-        TUPLET_HOOK_LENGTH_PX -
-        TUPLET_NUMERAL_FONT_SIZE;
+        this.#dynamicsBaselineForVoice(voiceKey, state) - DYNAMICS_FONT_SIZE;
       if (topY < 0) {
         budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
     }
 
     return budget;
+  }
+
+  // Cheap attribute-presence check, not geometry — noteXPositions (what
+  // pairHairpins needs to actually pair a hairpin) aren't resolved yet at
+  // the point in #spaceElements() the budget estimators run, but
+  // crescendo/decrescendo presence alone is enough to know a hairpin will
+  // draw for this voice. Shared by both the above- and below-staff budget
+  // estimates.
+  #hasDynamicsContent(state: VoiceRenderState): boolean {
+    return state.elements.some((element) => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return false;
+      }
+      const noteOrChord = element as INoteElement | IChordElement;
+      return (
+        noteOrChord.dynamic !== null ||
+        noteOrChord.graceDynamic !== null ||
+        noteOrChord.crescendo !== null ||
+        noteOrChord.decrescendo !== null
+      );
+    });
+  }
+
+  // Below-staff mirror of #estimateAboveStaffBudget — a down-stem tuplet
+  // numeral or a voice's own dynamics/hairpin row can push past the fixed
+  // transcription height; other below-staff decorations (e.g. an
+  // arpeggio-hairpin's lower letter) aren't checked yet, following the
+  // above-budget's own scope today.
+  #estimateBelowStaffBudget(): number {
+    let budget = 0;
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      budget = Math.max(budget, this.#tupletVerticalOverflow(state, false));
+
+      if (
+        this.#hasDynamicsContent(state) &&
+        !this.#dynamicsPlacedAbove(voiceKey, state)
+      ) {
+        const overflow =
+          this.#dynamicsBaselineForVoice(voiceKey, state) -
+          STAFF_TRANSCRIPTION_HEIGHT;
+        if (overflow > 0) {
+          budget = Math.max(budget, Math.ceil(overflow) + 2);
+        }
+      }
+    }
+    return budget;
+  }
+
+  // Worst-case Y a tuplet group whose majority stem direction matches
+  // `stemUp` could need for its numeral, past the staff's own fixed edge (0
+  // above, STAFF_TRANSCRIPTION_HEIGHT below) — used by both the above- and
+  // below-staff budget estimates. Compares the nominal fixed-clearance
+  // formula (baseY when there's no outer/beam context — see
+  // tupletRules.ts#computeTupletBracketGeometry's staffBaseY) against the
+  // real stem-tip extension for a beamed group (whose bracket is omitted and
+  // whose numeral instead clears the actual beam stack, mirroring
+  // beamTipYForIndex's own staff-coord fallback formula there) — a beamed
+  // tuplet on a very high/low voice can extend well past the nominal
+  // clearance alone.
+  #tupletVerticalOverflow(state: VoiceRenderState, stemUp: boolean): number {
+    let overflow = 0;
+
+    for (const group of state.tupletGroups) {
+      const upVotes = group.indices.filter(
+        (i) => state.stemDirections[i] === true
+      ).length;
+      const groupStemUp = upVotes >= group.indices.length / 2;
+      if (groupStemUp !== stemUp) {
+        continue;
+      }
+
+      const nominalY = stemUp
+        ? STAFF_TOP_LINE_Y -
+          STAFF_Y_PADDING -
+          TUPLET_STAFF_CLEARANCE_PX -
+          TUPLET_HOOK_LENGTH_PX -
+          TUPLET_NUMERAL_FONT_SIZE
+        : STAFF_BOTTOM_LINE_Y +
+          STAFF_Y_PADDING +
+          TUPLET_STAFF_CLEARANCE_PX +
+          TUPLET_HOOK_LENGTH_PX +
+          TUPLET_NUMERAL_FONT_SIZE;
+
+      const extremeStemTipY = this.#extremeStemTipY(
+        state,
+        group.indices,
+        stemUp
+      );
+
+      const numeralOffset =
+        TUPLET_NUMERAL_FONT_SIZE / 2 +
+        TUPLET_NUMERAL_BEAM_GAP_PX +
+        BEAM_THICKNESS_PX;
+      const beamDerivedY =
+        extremeStemTipY !== null
+          ? stemUp
+            ? extremeStemTipY - numeralOffset
+            : extremeStemTipY + numeralOffset
+          : nominalY;
+
+      const worstY = stemUp
+        ? Math.min(nominalY, beamDerivedY)
+        : Math.max(nominalY, beamDerivedY);
+
+      const edgeOverflow = stemUp
+        ? worstY < 0
+          ? Math.ceil(-worstY) + 2
+          : 0
+        : worstY > STAFF_TRANSCRIPTION_HEIGHT
+        ? Math.ceil(worstY - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        : 0;
+
+      overflow = Math.max(overflow, edgeOverflow);
+    }
+
+    return overflow;
+  }
+
+  // The extreme (min for stemUp, max for !stemUp) real stem-tip Y across
+  // `indices` in `state` — the actual notehead+stem extent, not a nominal
+  // staff-relative offset. Returns null when none of the indices resolve to
+  // a real Y (e.g. all rests). Shared by #tupletVerticalOverflow and
+  // #dynamicsBaselineForVoice.
+  #extremeStemTipY(
+    state: VoiceRenderState,
+    indices: Iterable<number>,
+    stemUp: boolean
+  ): number | null {
+    let extreme = stemUp ? Infinity : -Infinity;
+    let anyResolved = false;
+    for (const i of indices) {
+      if (state.elements[i].nodeName === MUSIC_REST_NODE) {
+        continue;
+      }
+      const staffY = getStaffYForIndex(
+        i,
+        state.elements,
+        state.stemDirections,
+        state.noteStaffYCoords,
+        state.chordStaffYCoords
+      );
+      if (staffY === null) {
+        continue;
+      }
+      const yHeadOffset = stemUp
+        ? NOTE_Y_HEAD_OFFSET_STEM_UP
+        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+      const stemTipOffset = stemUp
+        ? NOTE_STEM_TIP_Y_OFFSET
+        : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+      const tipY = STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+      extreme = stemUp ? Math.min(extreme, tipY) : Math.max(extreme, tipY);
+      anyResolved = true;
+    }
+    return anyResolved ? extreme : null;
+  }
+
+  // On a genuinely multi-voice staff, each voice's dynamics/hairpins sit on
+  // its OWN side of the staff, matching its stem direction — the up-stem
+  // voice above, the down-stem voice below — standard multi-voice-on-one-
+  // staff notation convention, so two voices' rows never compete for the
+  // same territory. A single-voice staff (direction otherwise irrelevant)
+  // and the 'combined'/'shared-rest' synthetic tracks (whose `direction` is
+  // an unused placeholder, not a real per-voice-policy value) always stay
+  // below, matching today's byte-for-byte behavior.
+  #dynamicsPlacedAbove(voiceKey: VoiceKey, state: VoiceRenderState): boolean {
+    return (
+      this.#voices.size > 1 &&
+      typeof voiceKey === 'number' &&
+      state.direction === 'up'
+    );
+  }
+
+  // DYNAMICS_BASELINE_Y/DYNAMICS_ABOVE_BASELINE_Y alone are only a safe
+  // default when the voice's notes sit close to the staff. Clamps past the
+  // voice's own worst real stem-tip extent on that side — computed
+  // unconditionally as if every note had that side's stem direction, a
+  // conservative simplification (a note whose own stem happens to go the
+  // other way gets slightly more clearance than strictly needed, never
+  // less) rather than tracking each element's real stem direction
+  // separately. Computed once per voice, not per-marking, so a passage
+  // with several dynamics keeps one visually consistent row.
+  #dynamicsBaselineForVoice(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number {
+    const placeAbove = this.#dynamicsPlacedAbove(voiceKey, state);
+    const extremeStemTipY = this.#extremeStemTipY(
+      state,
+      state.elements.keys(),
+      placeAbove
+    );
+
+    // `extremeStemTipY` is where the stem tip ends, but the value fed into
+    // createDynamicMarkingSvg is the text's own BASELINE, not its edge —
+    // the glyph itself extends past that baseline (ascent when below the
+    // staff, reaching back up toward the stem; descent when above,
+    // reaching back down) unless accounted for. DYNAMICS_FONT_SIZE
+    // approximates that reach, the same way
+    // #estimateAboveStaffBudgetForVoice's arpeggio-hairpin check already
+    // does for its own text placement.
+    if (placeAbove) {
+      if (extremeStemTipY === null) {
+        return DYNAMICS_ABOVE_BASELINE_Y;
+      }
+      return Math.min(
+        DYNAMICS_ABOVE_BASELINE_Y,
+        extremeStemTipY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING
+      );
+    }
+
+    if (extremeStemTipY === null) {
+      return DYNAMICS_BASELINE_Y;
+    }
+    return Math.max(
+      DYNAMICS_BASELINE_Y,
+      extremeStemTipY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING
+    );
   }
 
   // Respace notes on resize. Runs even when there are no notes/chords, since

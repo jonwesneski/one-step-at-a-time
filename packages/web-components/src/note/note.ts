@@ -160,6 +160,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #stemUp = true;
     #stemExtension = 0;
+    #trillSignExtraLift = 0;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -237,6 +238,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#stemExtension = v;
+      this.#scheduleRender();
+    }
+
+    get trillSignExtraLift(): number {
+      return this.#trillSignExtraLift;
+    }
+    set trillSignExtraLift(v: number) {
+      if (v === this.#trillSignExtraLift) {
+        return;
+      }
+      this.#trillSignExtraLift = v;
       this.#scheduleRender();
     }
 
@@ -962,6 +974,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             ? this.#resolvedTrillPitch.accidental
             : null,
         staffY: this.#staffY,
+        trillSignExtraLift: this.#trillSignExtraLift,
       });
 
       if (this.#staffY !== null) {

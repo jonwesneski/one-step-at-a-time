@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { effectiveClefOfEntry, resolveEntryOctaves } from './clefsHelpers';
+import { buildSingleVoiceStaff } from './test-fixtures/voiceFixtures';
 import type { CompositionStructure } from './types';
 
 function structureWith(entryIds: string[]): CompositionStructure {
@@ -8,13 +9,7 @@ function structureWith(entryIds: string[]): CompositionStructure {
     measureOrder: ['m1'],
     measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
     stavesById: {
-      s1: {
-        id: 's1',
-        type: 'treble',
-        entryIds,
-        group: null,
-        groupId: null,
-      },
+      s1: buildSingleVoiceStaff('s1', entryIds),
     },
     entriesById: {
       n1: { id: 'n1', type: 'note', value: 'C', duration: 'quarter' },

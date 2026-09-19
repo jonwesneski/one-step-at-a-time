@@ -19,7 +19,7 @@ import type {
   TrillFinishSlur,
   TrillLineMode,
   TupletRatio,
-  Voice,
+  VocalType,
 } from '../types/theory';
 
 export const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -29,6 +29,7 @@ export const MUSIC_REST = 'music-rest';
 export const MUSIC_CHORD = 'music-chord';
 export const MUSIC_TUPLET = 'music-tuplet';
 export const MUSIC_ARPEGGIO = 'music-arpeggio';
+export const MUSIC_VOICE = 'music-voice';
 export const MUSIC_GUITAR_NOTE = 'music-guitar-note';
 export const MUSIC_GUITAR_CHORD = 'music-guitar-chord';
 export const MUSIC_MEASURE = 'music-measure';
@@ -54,6 +55,7 @@ export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
 export const MUSIC_CHORD_NODE = MUSIC_CHORD.toUpperCase();
 export const MUSIC_TUPLET_NODE = MUSIC_TUPLET.toUpperCase();
 export const MUSIC_ARPEGGIO_NODE = MUSIC_ARPEGGIO.toUpperCase();
+export const MUSIC_VOICE_NODE = MUSIC_VOICE.toUpperCase();
 export const MUSIC_GUITAR_NOTE_NODE = MUSIC_GUITAR_NOTE.toUpperCase();
 export const MUSIC_GUITAR_CHORD_NODE = MUSIC_GUITAR_CHORD.toUpperCase();
 export const MUSIC_MEASURE_NODE = MUSIC_MEASURE.toUpperCase();
@@ -154,7 +156,7 @@ export const TIMES: TimeSignature[] = [
   '12/8',
 ];
 
-export const VOICES: Voice[] = [
+export const VOICES: VocalType[] = [
   'soprano',
   'mezzo',
   'alto',
@@ -285,3 +287,6 @@ export const TUPLET_RATIOS: TupletRatio[] = [
   '8',
   '9',
 ];
+
+/** Hard cap on distinct `<music-voice>` siblings a staff supports. */
+export const MAX_VOICES = 3;

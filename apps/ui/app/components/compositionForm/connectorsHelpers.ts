@@ -5,9 +5,17 @@ import type {
   ConnectorKind,
   ConnectorRole,
   NormalizedConnector,
+  NormalizedStaff,
   Selection,
   StaffType,
 } from './types';
+
+// Every entry in `staff`, in voice order — inlined rather than imported from
+// voiceHelpers.ts (which itself needs pruneBrokenTies below for its own
+// cascade cleanup) to keep that dependency one-directional.
+function staffEntryIds(staff: NormalizedStaff): string[] {
+  return staff.voiceOrder.flatMap((id) => staff.voicesById[id].entryIds);
+}
 
 // Tie/slur resolution for the composition form. Mirrors the pairing rules of
 // packages/web-components' connectorsBuilder (pairConnectors): connectors are
@@ -40,6 +48,8 @@ type EntryStaffContext = {
   staffId: string;
   staffIndex: number;
   staffType: StaffType;
+  voiceId: string;
+  voiceIndex: number;
 };
 
 // All entry ids in the order packages/web-components sees them — measure, then
@@ -57,7 +67,7 @@ export function flattenEntryOrder(structure: CompositionStructure): string[] {
       if (!staff) {
         continue;
       }
-      order.push(...staff.entryIds);
+      order.push(...staffEntryIds(staff));
     }
   }
   return order;
@@ -84,13 +94,21 @@ export function staffOfEntry(
     ) {
       const staffId = measure.staffIds[staffIndex];
       const staff = structure.stavesById[staffId];
-      if (staff && staff.entryIds.includes(entryId)) {
+      if (!staff) {
+        continue;
+      }
+      const voiceIndex = staff.voiceOrder.findIndex((voiceId) =>
+        staff.voicesById[voiceId].entryIds.includes(entryId)
+      );
+      if (voiceIndex !== -1) {
         return {
           measureId,
           measureIndex,
           staffId,
           staffIndex,
           staffType: staff.type,
+          voiceId: staff.voiceOrder[voiceIndex],
+          voiceIndex,
         };
       }
     }
@@ -141,10 +159,13 @@ export function isConnectableSelection(
     return null;
   }
 
-  const sameStaff = startContext.staffId === endContext.staffId;
+  const sameStaff =
+    startContext.staffId === endContext.staffId &&
+    startContext.voiceIndex === endContext.voiceIndex;
   const sameVoiceAcrossMeasures =
     startContext.staffIndex === endContext.staffIndex &&
     startContext.staffType === endContext.staffType &&
+    startContext.voiceIndex === endContext.voiceIndex &&
     startContext.measureIndex < endContext.measureIndex;
 
   if (!sameStaff && !sameVoiceAcrossMeasures) {
@@ -228,8 +249,14 @@ export function canTie(
     return false;
   }
 
-  if (startContext.staffId === endContext.staffId) {
-    const entryIds = structure.stavesById[startContext.staffId].entryIds;
+  if (
+    startContext.staffId === endContext.staffId &&
+    startContext.voiceId === endContext.voiceId
+  ) {
+    const entryIds =
+      structure.stavesById[startContext.staffId].voicesById[
+        startContext.voiceId
+      ].entryIds;
     return (
       entryIds.indexOf(endpoints.endEntryId) -
         entryIds.indexOf(endpoints.startEntryId) ===
@@ -237,12 +264,17 @@ export function canTie(
     );
   }
 
-  const startStaff = structure.stavesById[startContext.staffId];
-  const endStaff = structure.stavesById[endContext.staffId];
+  const startVoiceEntryIds =
+    structure.stavesById[startContext.staffId].voicesById[startContext.voiceId]
+      .entryIds;
+  const endVoiceEntryIds =
+    structure.stavesById[endContext.staffId].voicesById[endContext.voiceId]
+      .entryIds;
   return (
-    startStaff.entryIds[startStaff.entryIds.length - 1] ===
+    startContext.voiceIndex === endContext.voiceIndex &&
+    startVoiceEntryIds[startVoiceEntryIds.length - 1] ===
       endpoints.startEntryId &&
-    endStaff.entryIds[0] === endpoints.endEntryId &&
+    endVoiceEntryIds[0] === endpoints.endEntryId &&
     endContext.measureIndex - startContext.measureIndex === 1
   );
 }

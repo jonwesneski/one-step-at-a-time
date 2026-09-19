@@ -2,8 +2,9 @@ import type {
   DurationType,
   TimeSignature,
 } from '@one-step-at-a-time/web-components';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { rebar } from './rebarHelpers';
+import { buildMultiVoiceStaff } from './test-fixtures/voiceFixtures';
 import type {
   CompositionStructure,
   MusicEntry,
@@ -19,7 +20,18 @@ const note = (duration: DurationType, id = `e${seq++}`): MusicEntry => ({
   duration,
 });
 
-type MeasureSpec = { time?: TimeSignature | null; staves: MusicEntry[][] };
+// One staff spec is one or more voices, each its own entry stream — a plain
+// MusicEntry[][] means a single-voice staff (the common case every existing
+// test here uses); a MusicEntry[][][] element with 2+ voices is genuinely
+// multi-voice.
+type StaffSpec = MusicEntry[] | MusicEntry[][];
+type MeasureSpec = { time?: TimeSignature | null; staves: StaffSpec[] };
+
+function voicesOf(spec: StaffSpec): MusicEntry[][] {
+  return Array.isArray(spec[0])
+    ? (spec as MusicEntry[][])
+    : [spec as MusicEntry[]];
+}
 
 function build(
   timeSig: TimeSignature,
@@ -29,16 +41,14 @@ function build(
   const stavesById: Record<string, NormalizedStaff> = {};
   const entriesById: Record<string, MusicEntry> = {};
   const measureOrder = measures.map((spec, mi) => {
-    const staffIds = spec.staves.map((entries, si) => {
+    const staffIds = spec.staves.map((staffSpec, si) => {
       const staffId = `m${mi}s${si}`;
-      stavesById[staffId] = {
-        id: staffId,
-        type: 'treble',
-        entryIds: entries.map((e) => e.id),
-        group: null,
-        groupId: null,
-      };
-      for (const entry of entries) {
+      const voices = voicesOf(staffSpec);
+      stavesById[staffId] = buildMultiVoiceStaff(
+        staffId,
+        voices.map((entries) => entries.map((e) => e.id))
+      );
+      for (const entry of voices.flat()) {
         entriesById[entry.id] = entry;
       }
       return staffId;
@@ -64,12 +74,14 @@ function build(
 
 function durationsPerMeasure(
   structure: CompositionStructure,
-  staffIndex = 0
+  staffIndex = 0,
+  voiceIndex = 0
 ): DurationType[][] {
   return structure.measureOrder.map((mid) => {
     const staffId = structure.measuresById[mid].staffIds[staffIndex];
     const staff = structure.stavesById[staffId];
-    return staff.entryIds.map((eid) => {
+    const voice = staff.voicesById[staff.voiceOrder[voiceIndex]];
+    return voice.entryIds.map((eid) => {
       const entry = structure.entriesById[eid];
       return entry.type === 'clef' ? ('clef' as DurationType) : entry.duration;
     });
@@ -168,7 +180,9 @@ describe('rebar', () => {
     ]);
     const secondMeasureStaff =
       out.stavesById[out.measuresById[out.measureOrder[1]].staffIds[0]];
-    const stillTupleted = secondMeasureStaff.entryIds.filter((id) => {
+    const secondMeasureVoice1 =
+      secondMeasureStaff.voicesById[secondMeasureStaff.voiceOrder[0]];
+    const stillTupleted = secondMeasureVoice1.entryIds.filter((id) => {
       const entry = out.entriesById[id];
       return entry.type === 'note' && entry.tupletId === 'tup';
     });
@@ -191,7 +205,9 @@ describe('rebar', () => {
     const lastMeasure = out.measuresById[out.measureOrder[2]];
     expect(lastMeasure.time).toBe('2/4');
     const lastStaff = out.stavesById[lastMeasure.staffIds[0]];
-    expect(lastStaff.entryIds).toContain('kept');
+    expect(lastStaff.voicesById[lastStaff.voiceOrder[0]].entryIds).toContain(
+      'kept'
+    );
   });
 
   it('carries a region-start override onto the reflowed first measure', () => {
@@ -211,5 +227,54 @@ describe('rebar', () => {
       ['half', 'quarter'],
       ['quarter'],
     ]);
+  });
+
+  it('reflows a 2-voice staff’s voices independently, preserving voice count', () => {
+    const s = build('4/4', [
+      {
+        staves: [
+          [
+            [
+              note('quarter'),
+              note('quarter'),
+              note('quarter'),
+              note('quarter'),
+            ],
+            [note('half'), note('half')],
+          ],
+        ],
+      },
+    ]);
+    const out = rebar({ ...s, timeSig: '3/4' }, 0);
+
+    expect(durationsPerMeasure(out, 0, 0)).toEqual([
+      ['quarter', 'quarter', 'quarter'],
+      ['quarter'],
+    ]);
+    expect(durationsPerMeasure(out, 0, 1)).toEqual([
+      ['half', 'quarter'],
+      ['quarter'],
+    ]);
+    for (const measureId of out.measureOrder) {
+      const staff = out.stavesById[out.measuresById[measureId].staffIds[0]];
+      expect(staff.voiceOrder).toHaveLength(2);
+    }
+  });
+
+  it('warns and no-ops when voice count is inconsistent across the region', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const s: CompositionStructure = {
+      ...build('4/4', [
+        { staves: [[[note('quarter'), note('quarter')], [note('half')]]] },
+        { staves: [[[note('quarter'), note('quarter')]]] }, // only 1 voice here
+      ]),
+      timeSig: '3/4',
+    };
+    const out = rebar(s, 0);
+    expect(out).toBe(s);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('voice count is inconsistent')
+    );
+    warn.mockRestore();
   });
 });

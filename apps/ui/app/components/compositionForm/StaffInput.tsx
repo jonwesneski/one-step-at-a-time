@@ -1,5 +1,7 @@
+import { Select } from '@/design-system';
 import '@one-step-at-a-time/web-components';
 import type { TimeSignature } from '@one-step-at-a-time/web-components';
+import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { AddChordInput } from './AddChordInput';
 import { AddClefInput } from './AddClefInput';
@@ -21,6 +23,7 @@ import {
   useConnectorAttributes,
 } from './useCompositionStructure';
 import { useEntryDrag } from './useEntryDrag';
+import { VoiceInput } from './VoiceInput';
 
 interface StaffInputProps {
   staffId: string;
@@ -52,20 +55,50 @@ export function StaffInput({
 
   const isSelected = session.selection.staffIds.includes(staffId);
 
-  const entries = staff.entryIds.map((eid) => entriesById[eid]);
+  // Which voice the "Staff Entries" add-panel targets. Plain local state —
+  // nothing else needs this value, and StaffInput already remounts per staff
+  // via the parent's own .map, so it's naturally staff-scoped. Falls back to
+  // voice 1 if the stored id no longer exists (its voice was removed).
+  const [targetVoiceId, setTargetVoiceId] = useState(staff.voiceOrder[0]);
+  const effectiveTargetVoiceId = staff.voicesById[targetVoiceId]
+    ? targetVoiceId
+    : staff.voiceOrder[0];
+
+  const entries = staff.voicesById[effectiveTargetVoiceId].entryIds.map(
+    (eid) => entriesById[eid]
+  );
 
   const remainingBeats = remainingDuration(
     entries,
     timeSignature,
     structure.tupletsById
   );
-  const add = (entry: DraftMusicEntry) => addEntry(measureId, staffId, entry);
+  const add = (entry: DraftMusicEntry) =>
+    addEntry(measureId, staffId, entry, effectiveTargetVoiceId);
+
+  // Hidden entirely for the common single-voice case — no added friction.
+  const voiceSelector =
+    staff.voiceOrder.length > 1 ? (
+      <label className="flex items-center gap-2 px-3 pt-2 text-xs font-medium text-zinc-500">
+        Voice
+        <Select
+          value={effectiveTargetVoiceId}
+          onChange={(e) => setTargetVoiceId(e.target.value)}
+        >
+          {staff.voiceOrder.map((voiceId, index) => (
+            <option key={voiceId} value={voiceId}>
+              Voice {index + 1}
+            </option>
+          ))}
+        </Select>
+      </label>
+    ) : null;
 
   const staffClass = `cursor-pointer rounded transition-shadow ${
     isSelected ? 'rainbow-selected' : ''
   }`;
 
-  const renderEntry = (entry: MusicEntry) => {
+  const renderEntry = (voiceId: string, entry: MusicEntry) => {
     const isEntrySelected = session.selection.entryIds.includes(entry.id);
     const isDraggable = entry.type !== 'clef';
     const entryClass = `${isEntrySelected ? 'rainbow-selected' : ''} ${
@@ -80,8 +113,9 @@ export function StaffInput({
       onEntryPointerDown(e, {
         entry,
         staffId,
+        voiceId,
         clef: effectiveClefOfEntry(structure, entry.id),
-        entryIds: staff.entryIds,
+        entryIds: staff.voicesById[voiceId].entryIds,
       });
     };
 
@@ -152,20 +186,28 @@ export function StaffInput({
   };
 
   // A tuplet run renders as a <music-tuplet> wrapper (a direct child of
-  // <music-staff>, as the library's slot walker requires); loose runs render
-  // their entries inline.
-  const runs = resolveTupletRuns(staff.entryIds, entriesById);
-  const entryNodes = runs.map((run) => {
-    const nodes = run.entries.map(renderEntry);
-    if (run.tupletId === null) {
-      return nodes;
-    }
-    const ratio = structure.tupletsById[run.tupletId]?.ratio;
-    return (
-      <music-tuplet key={run.tupletId} ratio={ratio}>
-        {nodes}
-      </music-tuplet>
-    );
+  // <music-voice>, as the library's slot walker requires); loose runs render
+  // their entries inline. Each voice renders as its own <music-voice> —
+  // wrapping even a single implicit voice this way is byte-identical to no
+  // wrapper at all (the library's own direction/stem-policy resolution keys
+  // off how many <music-voice> children exist, not whether the tag is
+  // present), so this needs no rework once Phase 5 lets a staff carry 2-3.
+  const voiceNodes = staff.voiceOrder.map((voiceId) => {
+    const voice = staff.voicesById[voiceId];
+    const runs = resolveTupletRuns(voice.entryIds, entriesById);
+    const nodes = runs.map((run) => {
+      const runNodes = run.entries.map((entry) => renderEntry(voiceId, entry));
+      if (run.tupletId === null) {
+        return runNodes;
+      }
+      const ratio = structure.tupletsById[run.tupletId]?.ratio;
+      return (
+        <music-tuplet key={run.tupletId} ratio={ratio}>
+          {runNodes}
+        </music-tuplet>
+      );
+    });
+    return <music-voice key={voiceId}>{nodes}</music-voice>;
   });
 
   return (
@@ -181,7 +223,7 @@ export function StaffInput({
         time={timeSignature}
         onClick={(e) => selectStaff(measureId, staffId, e)}
       >
-        {entryNodes}
+        {voiceNodes}
       </music-staff>
       {isSelected && (
         <AnchoredTabPanel
@@ -189,24 +231,40 @@ export function StaffInput({
             {
               label: 'Note',
               content: (
-                <AddNoteInput onAdd={add} remainingBeats={remainingBeats} />
+                <>
+                  {voiceSelector}
+                  <AddNoteInput onAdd={add} remainingBeats={remainingBeats} />
+                </>
               ),
             },
             {
               label: 'Chord',
               content: (
-                <AddChordInput onAdd={add} remainingBeats={remainingBeats} />
+                <>
+                  {voiceSelector}
+                  <AddChordInput onAdd={add} remainingBeats={remainingBeats} />
+                </>
               ),
             },
             {
               label: 'Rest',
               content: (
-                <AddRestInput onAdd={add} remainingBeats={remainingBeats} />
+                <>
+                  {voiceSelector}
+                  <AddRestInput onAdd={add} remainingBeats={remainingBeats} />
+                </>
               ),
             },
             {
+              // No voice selector here — a clef change always targets voice
+              // 1 regardless (addEntry enforces this; a clef change is
+              // staff-wide, not voice-scoped), so a selector would mislead.
               label: 'Clef Change',
               content: <AddClefInput onAdd={add} />,
+            },
+            {
+              label: 'Voices',
+              content: <VoiceInput staffId={staffId} />,
             },
           ]}
         />
