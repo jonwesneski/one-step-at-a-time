@@ -285,6 +285,25 @@ machine, wired onto every note/chord/rest via `onPointerDown` in `StaffInput`.
   `document.body` at `z-index: 60`. `entryElements` / `staffElements` (the id →
   DOM maps) are exposed on the session context for this and the marquee.
 
+**11. A staff's voices are edited through selectors, not drag.** The data
+shape (`voiceOrder`/`voicesById`), the `addVoice`/`removeVoice`/
+`moveEntryToVoice` mutators, and the `ClefEntry`-always-in-`voiceOrder[0]`
+rule are covered in Data model above — see piece 1 for the `removeVoice`
+selection-cleanup wrapper.
+
+- `VoiceInput.tsx` (the "Voices" tab, mounted from `StaffInput`) is the only
+  place a voice is created or removed. It's a plain list + Add/Remove
+  buttons, not a drag surface.
+- `moveEntryToVoice` is exposed as a "Move to Voice" `<Select>` in the
+  entry's own Edit panel (`EntryEditInput`), not as a drag target. **This is
+  deliberate, not a placeholder**: `useEntryDrag` (piece 10) has no
+  cross-voice awareness at all — its reorder path computes a drop index
+  against the dragged entry's _own_ voice's `entryElements` rects only, with
+  no other-voice hit-testing or Y-axis/row disambiguation to extend. Building
+  real drag-to-another-voice would need that disambiguation heuristic from
+  scratch; a selector ships the capability now without it. Revisit only if
+  real usage shows the selector too slow for dense multi-voice editing.
+
 ### Component tree
 
 ```

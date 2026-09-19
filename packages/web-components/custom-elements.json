@@ -5356,7 +5356,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "A vocal staff for one of the six standard voice types. Behaves like\n`<music-staff>` (notes, beams, accidentals, key/time signatures) and\nadditionally lays out slotted `<music-lyrics>` syllables beneath the notes.\nUsable inside a `<music-measure>` / `<music-composition>` or on its own.",
+          "description": "A vocal staff for one of the six standard vocal types. Behaves like\n`<music-staff>` (notes, beams, accidentals, key/time signatures) and\nadditionally lays out slotted `<music-lyrics>` syllables beneath the notes.\nUsable inside a `<music-measure>` / `<music-composition>` or on its own.",
           "name": "StaffVocalElement",
           "members": [
             {
@@ -5582,7 +5582,7 @@
               "kind": "field",
               "name": "voice",
               "type": {
-                "text": "Voice"
+                "text": "VocalType"
               }
             },
             {
@@ -7645,7 +7645,7 @@
               "type": {
                 "text": "'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass'"
               },
-              "description": "Voice type, which selects the clef and range. Defaults to `soprano`."
+              "description": "Vocal type, which selects the clef and range. Defaults to `soprano`."
             },
             {
               "type": {

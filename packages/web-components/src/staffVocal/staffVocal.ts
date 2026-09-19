@@ -15,7 +15,7 @@ import {
   NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
-import { Octave, Voice } from '../types/theory';
+import { Octave, VocalType } from '../types/theory';
 import {
   MUSIC_CHORD_NODE,
   MUSIC_NOTE_NODE,
@@ -34,13 +34,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_VERSE_SPACING = 15; // px between verse lines
 
   /**
-   * A vocal staff for one of the six standard voice types. Behaves like
+   * A vocal staff for one of the six standard vocal types. Behaves like
    * `<music-staff>` (notes, beams, accidentals, key/time signatures) and
    * additionally lays out slotted `<music-lyrics>` syllables beneath the notes.
    * Usable inside a `<music-measure>` / `<music-composition>` or on its own.
    *
    * @customElement music-staff-vocal
-   * @attr {'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass'} voice - Voice type, which selects the clef and range. Defaults to `soprano`.
+   * @attr {'soprano' | 'mezzo' | 'alto' | 'tenor' | 'baritone' | 'bass'} voice - Vocal type, which selects the clef and range. Defaults to `soprano`.
    * @attr {Note} key-sig - Key-signature tonic. Inherited from a parent measure/composition when unset.
    * @attr {'major' | 'minor'} mode - Key-signature mode. Inherited when unset. Defaults to `major`.
    * @attr {TimeSignature} time - Beats per measure. Inherited when unset.
@@ -229,11 +229,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return [...super.observedAttributes, 'voice'];
     }
 
-    get voice(): Voice {
-      return (this.getAttribute('voice') as Voice) ?? 'soprano';
+    get voice(): VocalType {
+      return (this.getAttribute('voice') as VocalType) ?? 'soprano';
     }
 
-    set voice(value: Voice) {
+    set voice(value: VocalType) {
       this.setAttribute('voice', value);
     }
 

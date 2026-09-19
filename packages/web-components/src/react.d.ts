@@ -33,7 +33,7 @@ import type {
   TrillFinishSlur,
   TrillLineMode,
   TupletRatio,
-  Voice,
+  VocalType,
 } from '@one-step-at-a-time/web-components';
 import 'react';
 
@@ -80,7 +80,7 @@ declare module 'react' {
         'group-id'?: string;
       };
       'music-staff-vocal': WebComponentProps & {
-        voice?: Voice;
+        voice?: VocalType;
         'key-sig'?: Note;
         mode?: Mode;
         time?: TimeSignature;

@@ -130,8 +130,8 @@ export type TimeSignature =
 
 export type Mode = 'major' | 'minor';
 
-/** The six standard voice types for `<music-staff-vocal>`. */
-export type Voice =
+/** The six standard vocal types for `<music-staff-vocal>`. */
+export type VocalType =
   | 'soprano'
   | 'mezzo'
   | 'alto'
@@ -141,7 +141,7 @@ export type Voice =
 
 /**
  * Which contrapuntal voice (independent rhythmic/melodic line sharing one
- * staff) a note/chord/rest belongs to — NOT the vocal-range `Voice` type
+ * staff) a note/chord/rest belongs to — NOT the vocal-range `VocalType`
  * above. 1 = top voice (always stems up), 2 = bottom voice (always stems
  * down), 3 = middle voice (only valid alongside both 1 and 2; contextual
  * stem direction — see rules/voiceRules.ts). Never authored directly —

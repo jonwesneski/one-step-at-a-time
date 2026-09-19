@@ -19,7 +19,7 @@ import type {
   TrillFinishSlur,
   TrillLineMode,
   TupletRatio,
-  Voice,
+  VocalType,
 } from '../types/theory';
 
 export const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -156,7 +156,7 @@ export const TIMES: TimeSignature[] = [
   '12/8',
 ];
 
-export const VOICES: Voice[] = [
+export const VOICES: VocalType[] = [
   'soprano',
   'mezzo',
   'alto',
