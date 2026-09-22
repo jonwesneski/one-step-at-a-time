@@ -409,9 +409,30 @@
             },
             {
               "kind": "field",
+              "name": "glissando",
+              "type": {
+                "text": "ConnectorRole | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoHint",
+              "type": {
+                "text": "GlissandoHint | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicShared",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -779,11 +800,32 @@
               "description": "Marks this chord as the start or end of a slur."
             },
             {
+              "name": "glissando",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks this chord as the start or end of a glissando (a straight line indicating a continuous slide between pitches)."
+            },
+            {
+              "name": "glissando-hint",
+              "type": {
+                "text": "'white-key' | 'black-key'"
+              },
+              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across."
+            },
+            {
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking"
               },
               "description": "Dynamic marking under the chord."
+            },
+            {
+              "name": "dynamic-shared",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone chord falls back to no rendering rather than guessing a position."
             },
             {
               "name": "crescendo",
@@ -985,7 +1027,7 @@
               "type": {
                 "text": "string"
               },
-              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs.",
+              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.",
               "name": "for"
             }
           ],
@@ -1549,6 +1591,16 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawConnectors",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundRedrawSharedDynamics",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "number",
               "type": {
                 "text": "number | null"
@@ -1645,7 +1697,30 @@
             },
             {
               "kind": "method",
+              "name": "#redrawConnectors",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawSharedDynamics",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
               "name": "#renderGroupConnectors",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "isFirstInRow",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#renderStaffLabels",
               "privacy": "private",
               "parameters": [
                 {
@@ -1933,9 +2008,30 @@
             },
             {
               "kind": "field",
+              "name": "glissando",
+              "type": {
+                "text": "ConnectorRole | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoHint",
+              "type": {
+                "text": "GlissandoHint | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicShared",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -2303,11 +2399,32 @@
               "description": "Marks this note as the start or end of a slur."
             },
             {
+              "name": "glissando",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches)."
+            },
+            {
+              "name": "glissando-hint",
+              "type": {
+                "text": "'white-key' | 'black-key'"
+              },
+              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across."
+            },
+            {
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking"
               },
               "description": "Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …)."
+            },
+            {
+              "name": "dynamic-shared",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone note falls back to no rendering rather than guessing a position."
             },
             {
               "name": "crescendo",
@@ -2502,7 +2619,7 @@
               "type": {
                 "text": "string"
               },
-              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs.",
+              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.",
               "name": "for"
             }
           ],
@@ -4460,8 +4577,33 @@
               }
             },
             {
+              "kind": "field",
+              "name": "label",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchGroupAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchLabelAttributeChange",
               "privacy": "protected",
               "return": {
                 "type": {
@@ -4662,6 +4804,17 @@
                 "text": "string"
               },
               "description": "Shared identifier letting a `group=\"bracket\"` connector span more than two contiguous staves.",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "name": "label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5046,8 +5199,33 @@
               }
             },
             {
+              "kind": "field",
+              "name": "label",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchGroupAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchLabelAttributeChange",
               "privacy": "protected",
               "return": {
                 "type": {
@@ -5227,6 +5405,13 @@
                 "text": "string"
               },
               "description": "Shared identifier letting a `group=\"bracket\"` connector span more than two contiguous staves."
+            },
+            {
+              "name": "label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row."
             },
             {
               "type": {
@@ -7472,8 +7657,33 @@
               }
             },
             {
+              "kind": "field",
+              "name": "label",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchGroupAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchLabelAttributeChange",
               "privacy": "protected",
               "return": {
                 "type": {
@@ -7685,6 +7895,17 @@
                 "text": "string"
               },
               "description": "Shared identifier letting a `group=\"bracket\"` connector span more than two contiguous staves.",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "name": "label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"

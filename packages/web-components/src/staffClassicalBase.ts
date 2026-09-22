@@ -444,6 +444,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       COMMON_ATTRIBUTES.TIME,
       'group',
       'group-id',
+      'label',
     ];
   }
 
@@ -885,6 +886,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (name === 'group' || name === 'group-id') {
       this.dispatchGroupAttributeChange();
+      return;
+    }
+
+    if (name === 'label') {
+      this.dispatchLabelAttributeChange();
       return;
     }
 
@@ -2422,7 +2428,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
       const noteOrChord = element as INoteElement | IChordElement;
-      if (noteOrChord.dynamic !== null) {
+      // `dynamic-shared` moves this marking to a measure-level overlay
+      // centered between this staff and its neighbor (see
+      // measure.ts#redrawSharedDynamics) instead of this staff's own local
+      // placement — never render both.
+      if (noteOrChord.dynamic !== null && !noteOrChord.dynamicShared) {
         const noteX = state.noteXPositions.get(i) ?? 0;
         const centerX = noteX + NOTE_SVG_WIDTH / 2;
         container.appendChild(

@@ -2257,6 +2257,119 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
   });
 });
 
+test.describe(`${MUSIC_COMPOSITION} cross-staff slurs (grand staff)`, () => {
+  // composition.ts's own #redrawConnectors() collects note-like elements
+  // across every staff in every measure with no staff filter, so a slur
+  // whose start/end land on two different sibling staves should already
+  // pair and render — this verifies that's actually true, not assumed.
+  test('a slur from the treble staff to the bass staff renders one curve spanning both endpoints', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '800px';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        const trebleStart = document.createElement(noteTag);
+        trebleStart.setAttribute('note', 'C');
+        trebleStart.setAttribute('octave', '5');
+        trebleStart.setAttribute('duration', 'quarter');
+        trebleStart.setAttribute('slur', 'start');
+        trebleStart.setAttribute('id', 'slur-start');
+        treble.appendChild(trebleStart);
+        for (const value of ['D', 'E', 'F']) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', value);
+          note.setAttribute('octave', '5');
+          note.setAttribute('duration', 'quarter');
+          treble.appendChild(note);
+        }
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const bassA = document.createElement(noteTag);
+        bassA.setAttribute('note', 'C');
+        bassA.setAttribute('octave', '4');
+        bassA.setAttribute('duration', 'half');
+        bass.appendChild(bassA);
+        const bassEnd = document.createElement(noteTag);
+        bassEnd.setAttribute('note', 'G');
+        bassEnd.setAttribute('octave', '3');
+        bassEnd.setAttribute('duration', 'half');
+        bassEnd.setAttribute('slur', 'end');
+        bassEnd.setAttribute('for', 'slur-start');
+        bass.appendChild(bassEnd);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ compositionTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const overlay = composition.shadowRoot.querySelector(
+          '.connectors-overlay'
+        );
+        const paths = overlay
+          ? (Array.from(overlay.querySelectorAll('path')) as SVGPathElement[])
+          : [];
+        const start = document.getElementById('slur-start');
+        const end = document.querySelector('[for="slur-start"]');
+        return {
+          pathCount: paths.length,
+          pathBBox: paths.length > 0 ? paths[0].getBoundingClientRect() : null,
+          startRect: start?.getBoundingClientRect() ?? null,
+          endRect: end?.getBoundingClientRect() ?? null,
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION }
+    );
+
+    expect(result.pathCount).toBeGreaterThanOrEqual(1);
+    expect(result.pathBBox).not.toBeNull();
+    expect(result.startRect).not.toBeNull();
+    expect(result.endRect).not.toBeNull();
+    if (
+      result.pathBBox === null ||
+      result.startRect === null ||
+      result.endRect === null
+    ) {
+      throw new Error('unreachable');
+    }
+    // A real cross-staff curve spans vertically from the treble note down to
+    // the bass note — a same-staff slur would never have this much height.
+    // (The curve's own bulge anchors near, not exactly at, each note's own
+    // edge, so this checks the span is close to the full gap rather than
+    // requiring the bbox to exactly reach past both note rects.)
+    const gap = result.endRect.top - result.startRect.bottom;
+    expect(result.pathBBox.height).toBeGreaterThan(gap * 0.9);
+    expect(result.pathBBox.top).toBeLessThanOrEqual(result.startRect.bottom);
+  });
+});
+
 test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
   async function readMeasureWidths(page: Page): Promise<number[]> {
     return page.evaluate(

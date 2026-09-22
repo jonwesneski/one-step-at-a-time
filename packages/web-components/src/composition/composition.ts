@@ -183,6 +183,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
+      this.removeEventListener(
+        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
     }
 
     attributeChangedCallback(
@@ -303,6 +307,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.addEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
+      this.addEventListener(
+        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
     }

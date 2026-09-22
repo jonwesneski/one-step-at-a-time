@@ -267,6 +267,15 @@ export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
  */
 export const NOTES_AREA_LEFT_MARGIN = 2;
 
+/**
+ * Estimated width (px) per character of a connector's italic label (e.g. a
+ * glissando's "white-note gliss." hint). Mirrors DYNAMICS_CHAR_WIDTH_PX's
+ * estimate-don't-measure ratio (× 0.65), applied to curve.ts's own
+ * LABEL_FONT_SIZE (STAFF_LINE_SPACING × 1.1) — kept in sync manually since
+ * that font size is local to curve.ts.
+ */
+export const CONNECTOR_LABEL_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 1.1 * 0.65;
+
 // ─── Note spacing — sizing preference (horizontal) ────────────────────────────
 //
 // PIXELS_PER_BEAT feeds only computeSpacingWeights, which answers "how wide
@@ -576,6 +585,32 @@ export const BRACKET_EXTRA_HEIGHT_PX = STAFF_LINE_SPACING * 0.5;
  * reference engraving font's bracket stem thickness (0.5 staff-spaces).
  */
 export const BRACKET_STEM_THICKNESS_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Staff label (r.h./l.h. hand-distribution, instrument names) ──────────────
+
+/**
+ * Font size (px) for a staff's `label` attribute text (e.g. "r.h."/"l.h.").
+ * Matches DYNAMICS_FONT_SIZE's italic-marking scale — both are short margin
+ * annotations, not full notation glyphs.
+ */
+export const STAFF_LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
+
+/**
+ * Horizontal gap (px) reserved to the left of a staff label's own text, so
+ * it doesn't sit flush against the container/page edge (or, when combined
+ * with a brace/bracket, against that glyph). Starting value — tune visually
+ * in Storybook.
+ */
+export const STAFF_LABEL_LEFT_MARGIN_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Horizontal width (px) reserved for a staff label column — an approximation
+ * (label text is free-form, so this isn't measured per-instance) generous
+ * enough for "r.h."/"l.h." and short instrument names like "Piano I"; a
+ * longer label may render slightly into the staff's own margin. Starting
+ * value — tune visually in Storybook.
+ */
+export const STAFF_LABEL_WIDTH_PX = STAFF_LINE_SPACING * 5;
 
 // ─── Arpeggiation ─────────────────────────────────────────────────────────────
 //

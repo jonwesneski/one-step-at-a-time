@@ -5,6 +5,7 @@ import type {
   ArticulationType,
   ClefType,
   DynamicMarking,
+  GlissandoHint,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -24,6 +25,7 @@ import {
   ARTICULATIONS,
   CLEFS,
   DYNAMICS,
+  GLISSANDO_HINTS,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
@@ -51,6 +53,7 @@ const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
   TRILL_CONTINUATION_MODES
 );
 const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
+const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
 const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
@@ -117,6 +120,15 @@ export const parseStaffGroup = (
 ): StaffGroupType | null => {
   if (value !== null && VALID_STAFF_GROUPS.has(value)) {
     return value as StaffGroupType;
+  }
+  return null;
+};
+
+export const parseGlissandoHint = (
+  value: string | null
+): GlissandoHint | null => {
+  if (value !== null && VALID_GLISSANDO_HINTS.has(value)) {
+    return value as GlissandoHint;
   }
   return null;
 };

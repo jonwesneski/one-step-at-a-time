@@ -13,6 +13,7 @@ import type {
   ConnectorRole,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
   GraceArticulationsType,
   GraceDuration,
   GraceNotesType,
@@ -73,11 +74,13 @@ declare module 'react' {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
+        label?: string;
       };
       'music-staff-guitar-tab': WebComponentProps & {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
+        label?: string;
       };
       'music-staff-vocal': WebComponentProps & {
         voice?: VocalType;
@@ -86,6 +89,7 @@ declare module 'react' {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
+        label?: string;
       };
       'music-lyrics': WebComponentProps & {
         verse?: string;
@@ -111,6 +115,8 @@ declare module 'react' {
         tie?: TieValue;
         'lv-label'?: boolean;
         slur?: ConnectorRole;
+        glissando?: ConnectorRole;
+        'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
         crescendo?: HairpinRole;
@@ -148,6 +154,8 @@ declare module 'react' {
         tie?: TieValue;
         'lv-label'?: boolean;
         slur?: ConnectorRole;
+        glissando?: ConnectorRole;
+        'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
         crescendo?: HairpinRole;

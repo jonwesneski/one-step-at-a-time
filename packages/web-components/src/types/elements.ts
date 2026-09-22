@@ -6,6 +6,7 @@ import type {
   ClefType,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -59,7 +60,12 @@ export interface INoteElement {
   slur: ConnectorRole | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
+  glissando: ConnectorRole | null;
+  /** Which register of key the glissando line starts on — shown as text. */
+  glissandoHint: GlissandoHint | null;
   dynamic: DynamicMarking | null;
+  /** Centers `dynamic` between this staff and its neighbor instead of locally. */
+  dynamicShared: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -197,7 +203,12 @@ export interface IChordElement {
   slur: ConnectorRole | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
+  glissando: ConnectorRole | null;
+  /** Which register of key the glissando line starts on — shown as text. */
+  glissandoHint: GlissandoHint | null;
   dynamic: DynamicMarking | null;
+  /** Centers `dynamic` between this staff and its neighbor instead of locally. */
+  dynamicShared: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -373,6 +384,8 @@ export interface IVoiceElement {
 export interface IStaffElementBase {
   group: StaffGroupType | null;
   groupId: string | null;
+  /** Short margin text to the left of the staff (e.g. "r.h."/"l.h."). */
+  label: string | null;
   time: TimeSignature;
   readonly staffHeight: number;
   readonly staffLineCount: number;

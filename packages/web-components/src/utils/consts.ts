@@ -5,6 +5,7 @@ import type {
   ClefType,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -91,6 +92,7 @@ export const STAFF_EVENTS = {
   NOTES_POSITIONED: 'staff-notes-positioned',
   STAFF_MIN_WIDTH: 'staff-min-width',
   GROUP_ATTRIBUTE_CHANGE: 'staff-group-attribute-change',
+  LABEL_ATTRIBUTE_CHANGE: 'staff-label-attribute-change',
 } as const;
 
 export const COMMON_ATTRIBUTES = {
@@ -249,6 +251,8 @@ export const GRACE_DURATIONS: GraceDuration[] = [
 export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
 
 export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
+
+export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
 
 export const TRILL_CONTINUATION_MODES: TrillContinuationMode[] = [
   'bracketed',

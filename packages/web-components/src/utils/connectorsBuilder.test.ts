@@ -252,6 +252,34 @@ describe('pairConnectors', () => {
     expect(slurPair?.end).toBe(b);
   });
 
+  it('pairs a glissando and resolves its hint text into the pair label', () => {
+    const a = makeNote({
+      note: 'C',
+      octave: '4',
+      glissando: 'start',
+      'glissando-hint': 'white-key',
+    });
+    const b = makeNote({ note: 'C', octave: '5', glissando: 'end' });
+
+    const pairs = pairConnectors([a, b]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]).toMatchObject({
+      kind: 'glissando',
+      start: a,
+      end: b,
+      label: 'white-note gliss.',
+    });
+  });
+
+  it('leaves a glissando pair with no label when no hint is set', () => {
+    const a = makeNote({ note: 'C', octave: '4', glissando: 'start' });
+    const b = makeNote({ note: 'C', octave: '5', glissando: 'end' });
+
+    const pairs = pairConnectors([a, b]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].label).toBeUndefined();
+  });
+
   it('pairs guitar-tab hammer-on connectors', () => {
     const a = makeGuitarNote({ fret: '5', string: '3', 'hammer-on': 'start' });
     const b = makeGuitarNote({ fret: '7', string: '3', 'hammer-on': 'end' });
@@ -434,6 +462,49 @@ describe('buildConnectorSvgs', () => {
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
     const { fromY, cy, toY } = parsePath(d);
     expect(cy).toBeGreaterThan((fromY + toY) / 2);
+  });
+
+  it('glissando renders a straight line, not a curve', () => {
+    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
+    const endNote = makeLayoutNote({ stemUp: true, left: 150, top: 60 });
+    const pair: ConnectorPair = {
+      kind: 'glissando',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+    };
+
+    const [svgGroup] = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
+    expect(d).not.toContain('Q');
+    expect(d).toMatch(/^M \S+ \S+ L \S+ \S+$/);
+  });
+
+  it('glissando renders its hint text as a label near the line', () => {
+    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
+    const endNote = makeLayoutNote({ stemUp: true, left: 150, top: 60 });
+    const pair: ConnectorPair = {
+      kind: 'glissando',
+      start: startNote,
+      end: endNote,
+      nestingLevel: 0,
+      label: 'white-note gliss.',
+    };
+
+    const [svgGroup] = buildConnectorSvgs([pair], {
+      rootRect,
+      rowLeft: 0,
+      rowRight: 800,
+    });
+
+    expect(svgGroup.querySelector('text')?.textContent).toBe(
+      'white-note gliss.'
+    );
   });
 
   it('slur across a pitch interval on a standalone staff renders one curve, not a split pair', () => {

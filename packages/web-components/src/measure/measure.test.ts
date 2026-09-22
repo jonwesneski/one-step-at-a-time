@@ -29,6 +29,15 @@ describe(MUSIC_MEASURE, () => {
     expect(el.shadowRoot.innerHTML).not.toBe('');
   });
 
+  it('never renders the literal text "null" when `number` is unset', () => {
+    const el = document.createElement(MUSIC_MEASURE) as any;
+    document.body.appendChild(el);
+
+    const span = el.shadowRoot.querySelector('.measure-number');
+    expect(span).not.toBeNull();
+    expect(span?.textContent).not.toContain('null');
+  });
+
   it('redraws the group connector when `group` is set on an already-connected staff, without waiting for a resize', () => {
     const measure = document.createElement(MUSIC_MEASURE) as any;
     const staffA = document.createElement(MUSIC_STAFF);

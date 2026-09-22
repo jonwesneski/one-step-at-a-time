@@ -46,6 +46,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TimeSignature} time - Beats per measure. Inherited when unset.
    * @attr {'grand' | 'bracket'} group - Joins this staff to its next sibling under a brace or bracket connector.
    * @attr {string} group-id - Shared identifier letting a `group="bracket"` connector span more than two contiguous staves.
+   * @attr {string} label - Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.
    *
    * @example
    * <music-staff-vocal voice="tenor" key-sig="G" mode="major" time="4/4">

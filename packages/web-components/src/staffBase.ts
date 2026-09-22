@@ -114,12 +114,36 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
   }
 
+  get label(): string | null {
+    return this.getAttribute('label');
+  }
+
+  set label(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('label');
+    } else {
+      this.setAttribute('label', value);
+    }
+  }
+
   protected dispatchGroupAttributeChange(): void {
     if (!this.isConnected) {
       return;
     }
     this.dispatchEvent(
       new CustomEvent(STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE, {
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  protected dispatchLabelAttributeChange(): void {
+    if (!this.isConnected) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent(STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE, {
         bubbles: true,
         composed: true,
       })
@@ -314,7 +338,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected drawConnectorsWhenStandalone(): void {
-    if (this.closest(MUSIC_COMPOSITION)) {
+    // A <music-measure> or <music-composition> ancestor owns connector
+    // drawing once present — it can see this staff's siblings, which a lone
+    // staff cannot, so a cross-staff pair (e.g. a slur from one hand of a
+    // grand staff to the other) can only ever be paired at that level.
+    if (this.closest(MUSIC_COMPOSITION) || this.closest(MUSIC_MEASURE)) {
       return;
     }
 

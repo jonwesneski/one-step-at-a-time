@@ -260,6 +260,13 @@ export type GraceDuration = Extract<
 export type GraceSlur = 'auto' | 'none';
 
 /**
+ * Which register of key a `glissando` starts on — text shown near the line
+ * ("white-note gliss." / "black-note gliss."), matching standard keyboard
+ * engraving practice for clarifying which keys a glissando slides across.
+ */
+export type GlissandoHint = 'white-key' | 'black-key';
+
+/**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver
  * wants the bare sign only on an isolated, untied note-value.

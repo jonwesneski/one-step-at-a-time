@@ -1280,3 +1280,510 @@ test.describe(`${MUSIC_MEASURE} cross-staff arpeggio wave footprint (partner-onl
     expect(withSpan).toBeGreaterThan(withoutSpan);
   });
 });
+
+test.describe(`${MUSIC_MEASURE} cross-staff connectors (standalone)`, () => {
+  // A standalone <music-measure> (no <music-composition> ancestor) has no
+  // shared coordination point for its staves by default — each staff bails
+  // out of drawing its own connectors once it has a <music-measure>
+  // ancestor (staffBase.ts#drawConnectorsWhenStandalone), so the measure
+  // itself must take over, mirroring how it already does for cross-staff
+  // arpeggio spans.
+  test('a slur from one staff to another renders a curve in the measure, with no <music-composition> ancestor', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        const trebleStart = document.createElement(noteTag);
+        trebleStart.setAttribute('note', 'C');
+        trebleStart.setAttribute('octave', '5');
+        trebleStart.setAttribute('duration', 'quarter');
+        trebleStart.setAttribute('slur', 'start');
+        trebleStart.setAttribute('id', 'slur-start');
+        treble.appendChild(trebleStart);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const bassEnd = document.createElement(noteTag);
+        bassEnd.setAttribute('note', 'G');
+        bassEnd.setAttribute('octave', '3');
+        bassEnd.setAttribute('duration', 'quarter');
+        bassEnd.setAttribute('slur', 'end');
+        bassEnd.setAttribute('for', 'slur-start');
+        bass.appendChild(bassEnd);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ measureTag }) => {
+        const measure = document.querySelector(measureTag);
+        if (measure === null || measure.shadowRoot === null) {
+          throw new Error('measure not ready');
+        }
+        const overlay = measure.shadowRoot.querySelector('.connectors-overlay');
+        const paths = overlay
+          ? (Array.from(overlay.querySelectorAll('path')) as SVGPathElement[])
+          : [];
+        return { pathCount: paths.length };
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(result.pathCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('a same-staff tie inside a standalone measure still renders (the staff no longer draws its own)', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const measure = document.createElement(measureTag);
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        const noteA = document.createElement(noteTag);
+        noteA.setAttribute('note', 'C');
+        noteA.setAttribute('octave', '5');
+        noteA.setAttribute('duration', 'quarter');
+        noteA.setAttribute('tie', 'start');
+        const noteB = document.createElement(noteTag);
+        noteB.setAttribute('note', 'C');
+        noteB.setAttribute('octave', '5');
+        noteB.setAttribute('duration', 'quarter');
+        noteB.setAttribute('tie', 'end');
+        staff.appendChild(noteA);
+        staff.appendChild(noteB);
+        measure.appendChild(staff);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ measureTag }) => {
+        const measure = document.querySelector(measureTag);
+        if (measure === null || measure.shadowRoot === null) {
+          throw new Error('measure not ready');
+        }
+        const overlay = measure.shadowRoot.querySelector('.connectors-overlay');
+        const paths = overlay
+          ? (Array.from(overlay.querySelectorAll('path')) as SVGPathElement[])
+          : [];
+        return { pathCount: paths.length };
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(result.pathCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('setting `slur`/`for` on already-connected notes draws a cross-staff curve without a resize', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        const trebleStart = document.createElement(noteTag);
+        trebleStart.setAttribute('note', 'C');
+        trebleStart.setAttribute('octave', '5');
+        trebleStart.setAttribute('duration', 'quarter');
+        trebleStart.setAttribute('id', 'slur-start');
+        treble.appendChild(trebleStart);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const bassEnd = document.createElement(noteTag);
+        bassEnd.setAttribute('note', 'G');
+        bassEnd.setAttribute('octave', '3');
+        bassEnd.setAttribute('duration', 'quarter');
+        bassEnd.setAttribute('id', 'slur-end');
+        bass.appendChild(bassEnd);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    await page.evaluate(() => {
+      const start = document.getElementById('slur-start');
+      const end = document.getElementById('slur-end');
+      start?.setAttribute('slur', 'start');
+      end?.setAttribute('slur', 'end');
+      end?.setAttribute('for', 'slur-start');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ measureTag }) => {
+        const measure = document.querySelector(measureTag);
+        if (measure === null || measure.shadowRoot === null) {
+          throw new Error('measure not ready');
+        }
+        const overlay = measure.shadowRoot.querySelector('.connectors-overlay');
+        const paths = overlay
+          ? (Array.from(overlay.querySelectorAll('path')) as SVGPathElement[])
+          : [];
+        return { pathCount: paths.length };
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(result.pathCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} shared dynamics (dynamic-shared)`, () => {
+  test('a dynamic-shared marking renders once, centered in the gap between two staves, not inside either staff', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'whole');
+        trebleNote.setAttribute('dynamic', 'mf');
+        trebleNote.setAttribute('dynamic-shared', '');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'whole');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ measureTag }) => {
+        const measure = document.querySelector(measureTag);
+        const treble = document.getElementById('treble');
+        const bass = document.getElementById('bass');
+        if (
+          measure === null ||
+          measure.shadowRoot === null ||
+          treble === null ||
+          treble.shadowRoot === null ||
+          bass === null ||
+          bass.shadowRoot === null
+        ) {
+          throw new Error('not ready');
+        }
+        const overlay = measure.shadowRoot.querySelector(
+          '.shared-dynamics-overlay'
+        );
+        const sharedMarkings = overlay
+          ? Array.from(overlay.querySelectorAll('.dynamic-marking'))
+          : [];
+        const trebleLocalMarkings = Array.from(
+          treble.shadowRoot.querySelectorAll('.dynamic-marking')
+        );
+        const bassLocalMarkings = Array.from(
+          bass.shadowRoot.querySelectorAll('.dynamic-marking')
+        );
+        return {
+          sharedCount: sharedMarkings.length,
+          sharedText: sharedMarkings[0]?.textContent ?? null,
+          sharedY:
+            (sharedMarkings[0] as SVGTextElement | undefined)?.getAttribute(
+              'y'
+            ) ?? null,
+          trebleLocalCount: trebleLocalMarkings.length,
+          bassLocalCount: bassLocalMarkings.length,
+          trebleRect: treble.getBoundingClientRect(),
+          bassRect: bass.getBoundingClientRect(),
+          measureRect: measure.getBoundingClientRect(),
+        };
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    // Exactly one shared marking, drawn by the measure — never duplicated
+    // inside either staff's own shadow DOM.
+    expect(result.sharedCount).toBe(1);
+    expect(result.sharedText).toBe('mf');
+    expect(result.trebleLocalCount).toBe(0);
+    expect(result.bassLocalCount).toBe(0);
+
+    expect(result.sharedY).not.toBeNull();
+    const sharedYPage = Number(result.sharedY) + result.measureRect.top;
+    // The marking sits in the vertical gap between the two staves, not
+    // inside either one.
+    expect(sharedYPage).toBeGreaterThan(result.trebleRect.bottom - 5);
+    expect(sharedYPage).toBeLessThan(result.bassRect.top + 5);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} staff labels (label)`, () => {
+  test('a labeled staff renders margin text vertically centered on its own slot, and the measure reserves left margin', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('label', 'r.h.');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'whole');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('label', 'l.h.');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'whole');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ measureTag }) => {
+        const measure = document.querySelector(
+          measureTag
+        ) as HTMLElement | null;
+        const treble = document.getElementById('treble');
+        const bass = document.getElementById('bass');
+        if (
+          measure === null ||
+          measure.shadowRoot === null ||
+          treble === null ||
+          bass === null
+        ) {
+          throw new Error('not ready');
+        }
+        const labels = Array.from(
+          measure.shadowRoot.querySelectorAll('.staff-labels > *')
+        );
+        return {
+          hasClass: measure.classList.contains('has-staff-label'),
+          marginLeft: parseFloat(getComputedStyle(measure).marginLeft),
+          labelCount: labels.length,
+          labelTexts: labels.map((el) => el.textContent),
+          firstLabelRect: labels[0]?.getBoundingClientRect() ?? null,
+          trebleRect: treble.getBoundingClientRect(),
+        };
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(result.hasClass).toBe(true);
+    expect(result.marginLeft).toBeGreaterThan(0);
+    expect(result.labelCount).toBe(2);
+    expect(result.labelTexts).toEqual(['r.h.', 'l.h.']);
+    expect(result.firstLabelRect).not.toBeNull();
+    if (result.firstLabelRect === null) {
+      throw new Error('unreachable');
+    }
+    // "r.h." sits roughly vertically centered on the treble staff's own
+    // slot, not off at the top/bottom of the whole measure.
+    const trebleMidY = (result.trebleRect.top + result.trebleRect.bottom) / 2;
+    const labelMidY =
+      (result.firstLabelRect.top + result.firstLabelRect.bottom) / 2;
+    expect(Math.abs(labelMidY - trebleMidY)).toBeLessThan(
+      result.trebleRect.height
+    );
+  });
+
+  test('a label is not drawn on a measure that is not first in its row', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '2000px';
+        const composition = document.createElement(compositionTag);
+
+        for (let i = 0; i < 2; i++) {
+          const measure = document.createElement(measureTag);
+          const staff = document.createElement(staffTag);
+          staff.setAttribute('clef', 'treble');
+          staff.setAttribute('label', 'r.h.');
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'C');
+          note.setAttribute('octave', '5');
+          note.setAttribute('duration', 'whole');
+          staff.appendChild(note);
+          measure.appendChild(staff);
+          composition.appendChild(measure);
+        }
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const counts = await page.evaluate(
+      ({ measureTag }) => {
+        const measures = Array.from(document.querySelectorAll(measureTag));
+        return measures.map(
+          (m) => m.shadowRoot?.querySelectorAll('.staff-labels > *').length ?? 0
+        );
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(counts[0]).toBe(1);
+    expect(counts[1]).toBe(0);
+  });
+
+  test('a label on a bracket-grouped staff renders entirely to the left of the bracket glyph, not overlapping it', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'bracket');
+        treble.setAttribute('group-id', 'piano');
+        treble.setAttribute('label', 'r.h.');
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'whole');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.setAttribute('group', 'bracket');
+        bass.setAttribute('group-id', 'piano');
+        bass.setAttribute('label', 'l.h.');
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'whole');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ measureTag }) => {
+        const measure = document.querySelector(
+          measureTag
+        ) as HTMLElement | null;
+        if (measure === null || measure.shadowRoot === null) {
+          throw new Error('not ready');
+        }
+        const bracket = measure.shadowRoot.querySelector(
+          '.group-connectors svg.bracket'
+        );
+        const label = measure.shadowRoot.querySelector('.staff-labels > *');
+        if (bracket === null || label === null) {
+          throw new Error('bracket or label not rendered');
+        }
+        return {
+          bracketLeft: bracket.getBoundingClientRect().left,
+          labelRight: label.getBoundingClientRect().right,
+        };
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    // The label's right edge must land at or left of the bracket's own left
+    // edge — no horizontal overlap between the two glyphs.
+    expect(result.labelRight).toBeLessThanOrEqual(result.bracketLeft);
+  });
+});

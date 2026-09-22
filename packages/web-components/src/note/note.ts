@@ -20,6 +20,7 @@ import type {
   ArticulationType,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -51,6 +52,7 @@ import {
   parseArticulation,
   parseConnectorRole,
   parseDynamicMarking,
+  parseGlissandoHint,
   parseGraceArticulations,
   parseGraceDuration,
   parseGraceNotes,
@@ -82,8 +84,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
    * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
    * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
-   * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs.
+   * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches).
+   * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
+   * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
    * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
+   * @attr {boolean} dynamic-shared - Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone note falls back to no rendering rather than guessing a position.
    * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
    * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
    * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -127,7 +132,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'tie',
         'lv-label',
         'slur',
+        'glissando',
+        'glissando-hint',
         'dynamic',
+        'dynamic-shared',
         'crescendo',
         'decrescendo',
         'diminuendo',
@@ -318,6 +326,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get glissando(): ConnectorRole | null {
+      return parseConnectorRole(this.getAttribute('glissando'));
+    }
+    set glissando(value: ConnectorRole | null) {
+      if (value === null) {
+        this.removeAttribute('glissando');
+      } else {
+        this.setAttribute('glissando', value);
+      }
+    }
+
+    get glissandoHint(): GlissandoHint | null {
+      return parseGlissandoHint(this.getAttribute('glissando-hint'));
+    }
+    set glissandoHint(value: GlissandoHint | null) {
+      if (value === null) {
+        this.removeAttribute('glissando-hint');
+      } else {
+        this.setAttribute('glissando-hint', value);
+      }
+    }
+
     get dynamic(): DynamicMarking | null {
       return parseDynamicMarking(this.getAttribute('dynamic'));
     }
@@ -326,6 +356,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('dynamic');
       } else {
         this.setAttribute('dynamic', value);
+      }
+    }
+
+    get dynamicShared(): boolean {
+      return this.hasAttribute('dynamic-shared');
+    }
+    set dynamicShared(value: boolean) {
+      if (value) {
+        this.setAttribute('dynamic-shared', '');
+      } else {
+        this.removeAttribute('dynamic-shared');
       }
     }
 
@@ -773,7 +814,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'tie' || name === 'slur' || name === 'lv-label') {
+      if (
+        name === 'tie' ||
+        name === 'slur' ||
+        name === 'lv-label' ||
+        name === 'glissando' ||
+        name === 'glissando-hint'
+      ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
             bubbles: true,
@@ -797,7 +844,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'dynamic' ||
         name === 'crescendo' ||
         name === 'decrescendo' ||
-        name === 'grace-dynamic'
+        name === 'grace-dynamic' ||
+        name === 'dynamic-shared'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
