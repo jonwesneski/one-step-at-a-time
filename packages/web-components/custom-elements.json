@@ -1183,6 +1183,13 @@
               }
             },
             {
+              "kind": "field",
+              "name": "measureNumbers",
+              "type": {
+                "text": "MeasureNumberDisplay"
+              }
+            },
+            {
               "kind": "method",
               "name": "#resolveMaxWidthCss",
               "privacy": "private",
@@ -1347,6 +1354,13 @@
                 "text": "number | 'none'"
               },
               "description": "Caps the rendered score width in px (default 900); `none` fills the container."
+            },
+            {
+              "name": "measure-numbers",
+              "type": {
+                "text": "'none' | 'all' | 'row-start' | 'row-end' | 'odd' | 'even'"
+              },
+              "description": "Which measures show their own `number`. Defaults to `none`. A standalone `<music-measure>` (no composition ancestor) has no way to opt in and never shows its number."
             },
             {
               "type": {
@@ -1668,6 +1682,30 @@
             },
             {
               "kind": "method",
+              "name": "#isLastInRow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "allMeasures",
+                  "type": {
+                    "text": "Element[]"
+                  }
+                },
+                {
+                  "name": "currentIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#redrawArpeggios",
               "privacy": "private",
               "parameters": [
@@ -1730,6 +1768,34 @@
                   }
                 }
               ]
+            },
+            {
+              "kind": "method",
+              "name": "#renderMeasureNumber",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "isFirstInRow",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "isLastInRow",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "refreshMeasureNumberDisplay",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
             }
           ],
           "attributes": [
@@ -1738,7 +1804,7 @@
               "type": {
                 "text": "number"
               },
-              "description": "Bar number shown above the measure."
+              "description": "Bar number. Whether it's actually shown above the measure is controlled by the ancestor `<music-composition>`'s `measure-numbers` attribute (default: not shown)."
             },
             {
               "type": {

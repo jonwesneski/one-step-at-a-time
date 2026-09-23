@@ -11,6 +11,7 @@ import type {
   NoteElementType,
   StaffElementBaseType,
 } from '../types/elements';
+import type { MeasureNumberDisplay } from '../types/theory';
 import {
   createHairpinSvg,
   createTrillContinuationSignSvg,
@@ -27,6 +28,7 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   COMMON_ATTRIBUTES,
+  isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -39,7 +41,6 @@ import {
   STAFF_EVENTS,
   STAFF_TAGS,
   SVG_NS,
-  isStaffNodeName,
 } from '../utils/consts';
 import {
   COMPOSITION_MAX_WIDTH_PX,
@@ -52,6 +53,7 @@ import {
   TRILL_LINE_END_GAP_PX,
   TRILL_SIGN_LINE_GAP_PX,
 } from '../utils/notationDimensions';
+import { parseMeasureNumberDisplay } from '../utils/parsers';
 import { flattenSlotElements } from '../utils/slotElements';
 
 // The trill line's own local Y offset from the top of its staff (see
@@ -78,6 +80,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'major' | 'minor'} mode - Key-signature mode. Defaults to `major`.
    * @attr {TimeSignature} time - Beats per measure (e.g. `4/4`, `6/8`). Defaults to `4/4`.
    * @attr {number | 'none'} max-width - Caps the rendered score width in px (default 900); `none` fills the container.
+   * @attr {'none' | 'all' | 'row-start' | 'row-end' | 'odd' | 'even'} measure-numbers - Which measures show their own `number`. Defaults to `none`. A standalone `<music-measure>` (no composition ancestor) has no way to opt in and never shows its number.
    *
    * @example
    * <music-composition key-sig="G" mode="major" time="4/4">
@@ -97,6 +100,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         COMMON_ATTRIBUTES.MODE,
         COMMON_ATTRIBUTES.TIME,
         'max-width',
+        'measure-numbers',
       ];
     }
 
@@ -144,6 +148,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     set maxWidth(value: string) {
       this.setAttribute('max-width', value);
+    }
+
+    get measureNumbers(): MeasureNumberDisplay {
+      return (
+        parseMeasureNumberDisplay(this.getAttribute('measure-numbers')) ??
+        'none'
+      );
+    }
+
+    set measureNumbers(value: MeasureNumberDisplay) {
+      this.setAttribute('measure-numbers', value);
     }
 
     /** `max-width` attribute → a CSS length for `.composition-wrapper`. */
@@ -206,6 +221,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) =>
           (staff as any).refreshInheritedAttrs?.()
         );
+      }
+      if (name === 'measure-numbers') {
+        // A measure resolves its effective display mode live via
+        // closest(MUSIC_COMPOSITION) whenever it redraws — this just needs
+        // to force that redraw, mirroring refreshInheritedAttrs?.() above.
+        Array.from(this.querySelectorAll(MUSIC_MEASURE)).forEach((measure) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (measure as any).refreshMeasureNumberDisplay?.();
+        });
       }
       if (name === 'max-width') {
         // Push the new cap onto the live wrapper rather than re-rendering: a

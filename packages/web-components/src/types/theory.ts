@@ -267,6 +267,21 @@ export type GraceSlur = 'auto' | 'none';
 export type GlissandoHint = 'white-key' | 'black-key';
 
 /**
+ * Which measures of a `<music-composition>` show their own `number` —
+ * `'none'` (default) shows none, `'all'` shows every numbered measure,
+ * `'row-start'`/`'row-end'` show only the first/last measure of each visual
+ * row (the common engraving default, here opt-in rather than assumed), and
+ * `'odd'`/`'even'` filter by the `number` value's own parity.
+ */
+export type MeasureNumberDisplay =
+  | 'none'
+  | 'all'
+  | 'row-start'
+  | 'row-end'
+  | 'odd'
+  | 'even';
+
+/**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver
  * wants the bare sign only on an isolated, untied note-value.

@@ -11,6 +11,7 @@ import type {
   GraceType,
   HairpinKind,
   HairpinRole,
+  MeasureNumberDisplay,
   Note,
   Octave,
   StaffGroupType,
@@ -29,6 +30,7 @@ import {
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
+  MEASURE_NUMBER_DISPLAYS,
   OCTAVES,
   STAFF_GROUPS,
   STRESSES,
@@ -54,6 +56,7 @@ const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
 );
 const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
+const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
 const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
@@ -129,6 +132,15 @@ export const parseGlissandoHint = (
 ): GlissandoHint | null => {
   if (value !== null && VALID_GLISSANDO_HINTS.has(value)) {
     return value as GlissandoHint;
+  }
+  return null;
+};
+
+export const parseMeasureNumberDisplay = (
+  value: string | null
+): MeasureNumberDisplay | null => {
+  if (value !== null && VALID_MEASURE_NUMBER_DISPLAYS.has(value)) {
+    return value as MeasureNumberDisplay;
   }
   return null;
 };

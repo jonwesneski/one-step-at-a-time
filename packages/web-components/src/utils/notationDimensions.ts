@@ -612,6 +612,22 @@ export const STAFF_LABEL_LEFT_MARGIN_PX = STAFF_LINE_SPACING * 0.5;
  */
 export const STAFF_LABEL_WIDTH_PX = STAFF_LINE_SPACING * 5;
 
+// ─── Measure number ─────────────────────────────────────────────────────────
+
+/**
+ * Font size (px) for a measure's own `number` display — smaller than
+ * STAFF_LABEL_FONT_SIZE: a running counter the reader glances at, not a
+ * primary annotation like a hand-distribution label.
+ */
+export const MEASURE_NUMBER_FONT_SIZE = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Vertical gap (px) between a measure number's own baseline and
+ * CONNECTOR_TOP_PX (measure.ts) — keeps it clear of the staff itself.
+ * Starting value — tune visually in Storybook.
+ */
+export const MEASURE_NUMBER_BOTTOM_MARGIN_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Arpeggiation ─────────────────────────────────────────────────────────────
 //
 // The wavy line is built by tiling one engraved wiggle segment vertically (see

@@ -2370,6 +2370,225 @@ test.describe(`${MUSIC_COMPOSITION} cross-staff slurs (grand staff)`, () => {
   });
 });
 
+test.describe(`${MUSIC_COMPOSITION} measure numbers`, () => {
+  test('measure-numbers="row-start" shows only the first measure of each row, with its own number', async ({
+    page,
+  }) => {
+    await buildComposition(page, {
+      measureCount: 6,
+      notesPerMeasure: 4,
+      duration: 'quarter',
+      hostWidth: 1600,
+    });
+    await page.evaluate(
+      ({ compositionTag, measureTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null) {
+          throw new Error('composition missing');
+        }
+        composition.setAttribute('measure-numbers', 'row-start');
+        const measures = Array.from(
+          document.querySelectorAll(measureTag)
+        ) as HTMLElement[];
+        measures.forEach((m, i) => m.setAttribute('number', `${i + 1}`));
+      },
+      { compositionTag: MUSIC_COMPOSITION, measureTag: MUSIC_MEASURE }
+    );
+    await waitForRedrawCycle(page);
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const rows = await page.evaluate(
+      ({ measureTag }) => {
+        const measures = Array.from(
+          document.querySelectorAll(measureTag)
+        ) as HTMLElement[];
+        const grouped: { top: number; entries: (string | null)[] }[] = [];
+        for (const measure of measures) {
+          const top = measure.getBoundingClientRect().top;
+          const text =
+            measure.shadowRoot?.querySelector('.measure-numbers > *')
+              ?.textContent ?? null;
+          const existingRow = grouped.find((r) => Math.abs(r.top - top) <= 5);
+          if (existingRow === undefined) {
+            grouped.push({ top, entries: [text] });
+          } else {
+            existingRow.entries.push(text);
+          }
+        }
+        return grouped.map((r) => r.entries);
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    let expectedNumber = 1;
+    for (const row of rows) {
+      expect(row[0]).toBe(`${expectedNumber}`);
+      for (let i = 1; i < row.length; i++) {
+        expect(row[i]).toBeNull();
+      }
+      expectedNumber += row.length;
+    }
+  });
+
+  test('measure-numbers="row-end" shows only the last measure of each row, with its own number', async ({
+    page,
+  }) => {
+    await buildComposition(page, {
+      measureCount: 6,
+      notesPerMeasure: 4,
+      duration: 'quarter',
+      hostWidth: 1600,
+    });
+    await page.evaluate(
+      ({ compositionTag, measureTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null) {
+          throw new Error('composition missing');
+        }
+        composition.setAttribute('measure-numbers', 'row-end');
+        const measures = Array.from(
+          document.querySelectorAll(measureTag)
+        ) as HTMLElement[];
+        measures.forEach((m, i) => m.setAttribute('number', `${i + 1}`));
+      },
+      { compositionTag: MUSIC_COMPOSITION, measureTag: MUSIC_MEASURE }
+    );
+    await waitForRedrawCycle(page);
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const rows = await page.evaluate(
+      ({ measureTag }) => {
+        const measures = Array.from(
+          document.querySelectorAll(measureTag)
+        ) as HTMLElement[];
+        const grouped: { top: number; entries: (string | null)[] }[] = [];
+        for (const measure of measures) {
+          const top = measure.getBoundingClientRect().top;
+          const text =
+            measure.shadowRoot?.querySelector('.measure-numbers > *')
+              ?.textContent ?? null;
+          const existingRow = grouped.find((r) => Math.abs(r.top - top) <= 5);
+          if (existingRow === undefined) {
+            grouped.push({ top, entries: [text] });
+          } else {
+            existingRow.entries.push(text);
+          }
+        }
+        return grouped.map((r) => r.entries);
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    let seen = 0;
+    for (const row of rows) {
+      seen += row.length;
+      for (let i = 0; i < row.length - 1; i++) {
+        expect(row[i]).toBeNull();
+      }
+      expect(row[row.length - 1]).toBe(`${seen}`);
+    }
+  });
+
+  // The earlier unstyled stub rendered `number` as an inline element sharing
+  // normal document flow with the slotted staves — its presence/absence
+  // shifted the staff's real position, throwing off the brace's own fixed-px
+  // position (position: absolute, unaffected by flow) relative to it. This
+  // proves the new implementation, built entirely from absolutely-positioned
+  // overlays, can't repeat that: toggling measure-numbers on must not move
+  // the brace at all.
+  test('turning measure-numbers on does not move a grand-staff brace (regression)', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+        measure.setAttribute('number', '1');
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.setAttribute('group', 'grand');
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'whole');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'whole');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const readBraceTop = () =>
+      page.evaluate(
+        ({ measureTag }) => {
+          const measure = document.querySelector(measureTag);
+          const brace = measure?.shadowRoot?.querySelector(
+            '.group-connectors svg.brace'
+          );
+          return brace?.getBoundingClientRect().top ?? null;
+        },
+        { measureTag: MUSIC_MEASURE }
+      );
+
+    const braceTopBefore = await readBraceTop();
+    expect(braceTopBefore).not.toBeNull();
+
+    await page.evaluate(
+      ({ compositionTag }) => {
+        document
+          .querySelector(compositionTag)
+          ?.setAttribute('measure-numbers', 'all');
+      },
+      { compositionTag: MUSIC_COMPOSITION }
+    );
+    await waitForRedrawCycle(page);
+
+    const numberShown = await page.evaluate(
+      ({ measureTag }) =>
+        document
+          .querySelector(measureTag)
+          ?.shadowRoot?.querySelector('.measure-numbers > *')?.textContent ??
+        null,
+      { measureTag: MUSIC_MEASURE }
+    );
+    expect(numberShown).toBe('1');
+
+    const braceTopAfter = await readBraceTop();
+    expect(braceTopAfter).toBe(braceTopBefore);
+  });
+});
+
 test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
   async function readMeasureWidths(page: Page): Promise<number[]> {
     return page.evaluate(

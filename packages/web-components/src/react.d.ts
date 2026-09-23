@@ -23,6 +23,7 @@ import type {
   GuitarFret,
   HairpinKind,
   HairpinRole,
+  MeasureNumberDisplay,
   Mode,
   Note,
   Octave,
@@ -60,6 +61,7 @@ declare module 'react' {
         mode?: Mode;
         time?: TimeSignature;
         'max-width'?: number | 'none';
+        'measure-numbers'?: MeasureNumberDisplay;
       };
       'music-measure': WebComponentProps & {
         number?: number;

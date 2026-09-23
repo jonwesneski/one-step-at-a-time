@@ -10,6 +10,7 @@ import type {
   GraceSlur,
   GraceType,
   HairpinKind,
+  MeasureNumberDisplay,
   Mode,
   Note,
   Octave,
@@ -253,6 +254,15 @@ export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
 export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
 
 export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
+
+export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
+  'none',
+  'all',
+  'row-start',
+  'row-end',
+  'odd',
+  'even',
+];
 
 export const TRILL_CONTINUATION_MODES: TrillContinuationMode[] = [
   'bracketed',

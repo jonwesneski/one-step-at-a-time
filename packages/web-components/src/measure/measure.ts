@@ -43,12 +43,15 @@ import {
   BRACKET_WIDTH_PX,
   EMPTY_MEASURE_FLEX_BASIS_PX,
   MEASURE_MIN_WIDTH_PX,
+  MEASURE_NUMBER_BOTTOM_MARGIN_PX,
+  MEASURE_NUMBER_FONT_SIZE,
   STAFF_BOTTOM_MARGIN,
   STAFF_LABEL_FONT_SIZE,
   STAFF_LABEL_LEFT_MARGIN_PX,
   STAFF_LABEL_WIDTH_PX,
   STAFF_LINE_START,
 } from '../utils/notationDimensions';
+import { parseMeasureNumberDisplay } from '../utils/parsers';
 
 // Per-staff vertical footprint within a measure's stacked staff children,
 // used both by the plain full-measure barline (#updateConnectorVisibility)
@@ -62,7 +65,16 @@ import {
 // CONNECTOR_TOP_PX (a separate, still-empirical top-offset constant) don't
 // depend on staff height and stay as plain constants.
 const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
-const CONNECTOR_TOP_PX = 51;
+// Recalibrated (was 51) when the measure-number stub before <slot> in the
+// template changed from a non-empty inline element (which occupied ~18px of
+// real flow height, quietly shifting every slotted staff down by that much)
+// to an always-absolutely-positioned one (which occupies none). Every
+// staff-relative position below (barline, brace/bracket, staff labels,
+// measure numbers) is calibrated against where the staff *actually* renders,
+// not a fixed assumption, so this had to move by the same 18px the staff
+// did — verified empirically against the full browser-test suite, not
+// derived analytically.
+const CONNECTOR_TOP_PX = 33;
 
 function staffSlotHeightPx(staff: StaffElementBaseType): number {
   return staff.staffHeight + 2;
@@ -77,7 +89,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * overridden here to start a mid-piece change. Works standalone.
    *
    * @customElement music-measure
-   * @attr {number} number - Bar number shown above the measure.
+   * @attr {number} number - Bar number. Whether it's actually shown above the measure is controlled by the ancestor `<music-composition>`'s `measure-numbers` attribute (default: not shown).
    * @attr {Note} key-sig - Overrides the inherited key-signature tonic from this bar on.
    * @attr {'major' | 'minor'} mode - Overrides the inherited key-signature mode.
    * @attr {TimeSignature} time - Overrides the inherited time signature from this bar on.
@@ -323,10 +335,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             color: currentColor;
           }
 
+          .measure-numbers {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+          }
+
+          .measure-numbers > * {
+            position: absolute;
+            left: 0;
+            top: ${CONNECTOR_TOP_PX - MEASURE_NUMBER_BOTTOM_MARGIN_PX}px;
+            font-size: ${MEASURE_NUMBER_FONT_SIZE}px;
+            transform: translateY(-100%);
+            white-space: nowrap;
+            color: currentColor;
+          }
+
           .staff-connector {
             position: absolute;
             left: 0;
-            top: 51px;
+            top: ${CONNECTOR_TOP_PX}px;
             width: 1px;
             background-color: currentColor;
             z-index: 5;
@@ -390,15 +418,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           <!-- dynamic-shared markings, centered between two sibling
                staves — see #redrawSharedDynamics -->
           <svg class="shared-dynamics-overlay"></svg>
-          <!-- Unimplemented measure-number display (TODO.md), unstyled and
-               unpositioned. An empty string here would collapse this inline
-               span to zero height, which shifts every brace/bracket/label's
-               fixed px-based position (all absolute, unaffected by flow)
-               out of alignment with the slotted staves below it (which DO
-               participate in flow) — a non-breaking space keeps the same
-               line-height this stub has always occupied, independent of the
-               number attribute, without showing visible text. -->
-          <span class="measure-number">${this.number ?? ' '}</span>
+          <!-- This measure's own number, shown per the ancestor
+               music-composition element's measure-numbers policy — see
+               #renderMeasureNumber. Absolutely positioned (like every other
+               overlay above) so it never participates in normal flow; an
+               earlier inline-span version of this shifted the brace/
+               bracket/label position by changing flow height (see
+               packages/web-components/CLAUDE.md) — this shape can't repeat
+               that, since none of these overlays affect :host size. -->
+          <div class="measure-numbers"></div>
           <slot></slot>
         </div>
       `;
@@ -423,9 +451,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       staffConnector.style.height = `${connectorHeight}px`;
 
       const isFirstInRow = this.#isFirstInRow(allMeasures, currentIndex);
+      const isLastInRow = this.#isLastInRow(allMeasures, currentIndex);
 
       this.#renderGroupConnectors(isFirstInRow);
       this.#renderStaffLabels(isFirstInRow);
+      this.#renderMeasureNumber(isFirstInRow, isLastInRow);
       staffConnector.classList.toggle('hidden', !isFirstInRow);
       this.#redrawArpeggios();
       this.#redrawConnectors();
@@ -447,6 +477,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       // Tolerance of 5px for rounding errors
       return Math.abs(currentRect.top - prevRect.top) > 5;
+    }
+
+    #isLastInRow(allMeasures: Element[], currentIndex: number): boolean {
+      if (currentIndex === allMeasures.length - 1) {
+        return true;
+      }
+
+      const nextMeasure = allMeasures[currentIndex + 1];
+      if (!nextMeasure) {
+        return true;
+      }
+
+      const nextRect = nextMeasure.getBoundingClientRect();
+      const currentRect = this.getBoundingClientRect();
+
+      // Tolerance of 5px for rounding errors
+      return Math.abs(currentRect.top - nextRect.top) > 5;
     }
 
     // A staff with a `group` attribute joins a brace/bracket connector with
@@ -879,6 +926,59 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           container.appendChild(el);
         }
         precedingStavesHeight += slotHeight + STAFF_SLOT_GAP_PX;
+      }
+    }
+
+    // Which measures actually show their own `number` is a whole-composition
+    // policy (row-start/row-end describe how the *entire* piece wraps, not a
+    // single measure's own concern), so the mode is read from the ancestor
+    // <music-composition> — never this measure's own attribute. No ancestor
+    // means no policy to read, so a standalone measure never shows a number.
+    #renderMeasureNumber(isFirstInRow: boolean, isLastInRow: boolean) {
+      const container =
+        this.shadowRoot?.querySelector<HTMLElement>('.measure-numbers');
+      if (!container) {
+        return;
+      }
+
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+
+      const number = this.number;
+      if (number === null) {
+        return;
+      }
+
+      const mode =
+        parseMeasureNumberDisplay(
+          this.closest(MUSIC_COMPOSITION)?.getAttribute('measure-numbers') ??
+            null
+        ) ?? 'none';
+      const shouldShow =
+        mode === 'all' ||
+        (mode === 'row-start' && isFirstInRow) ||
+        (mode === 'row-end' && isLastInRow) ||
+        (mode === 'odd' && number % 2 === 1) ||
+        (mode === 'even' && number % 2 === 0);
+      if (!shouldShow) {
+        return;
+      }
+
+      const el = document.createElement('div');
+      el.classList.add('measure-number');
+      el.textContent = `${number}`;
+      container.appendChild(el);
+    }
+
+    // Duck-typed call from composition.ts's attributeChangedCallback when
+    // its own `measure-numbers` attribute changes — this measure reads that
+    // attribute live (via closest(), above) whenever it redraws, so this
+    // just needs to force a redraw, mirroring refreshInheritedAttrs?.() on
+    // staves for key-sig/mode/time.
+    refreshMeasureNumberDisplay(): void {
+      if (this.isConnected) {
+        this.#updateConnectorVisibility();
       }
     }
   }
