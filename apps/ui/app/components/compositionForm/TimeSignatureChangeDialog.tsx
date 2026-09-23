@@ -5,7 +5,6 @@ import { remainingDuration } from './measureCapacityHelpers';
 import { effectiveTimeSignatures } from './timeSignaturesHelpers';
 import type { CompositionStructure } from './types';
 import { useCompositionStructure } from './useCompositionStructure';
-import { staffEntryIds } from './voiceHelpers';
 
 // The Sibelius-style prompt shown after the user picks a new time signature:
 // rewrite the music to fit, apply the signature only, or cancel. Rendered by
@@ -74,7 +73,7 @@ export function TimeSignatureChangeDialog() {
   );
 }
 
-function signatureOnlyOverflowCount(
+export function signatureOnlyOverflowCount(
   structure: CompositionStructure,
   pending: PendingTimeSignatureChange
 ): number {
@@ -96,13 +95,22 @@ function signatureOnlyOverflowCount(
     const measure = next.measuresById[id];
     const overfull = measure.staffIds.some((sid) => {
       const staff = next.stavesById[sid];
+      // Checked per voice, not per staff — each voice has its own
+      // independent capacity budget (see measureCapacityHelpers.ts and
+      // MeasureInput's matching check), so summing across voices before
+      // comparing would wrongly flag a staff whose voices each
+      // individually fit.
       return (
-        staff !== undefined &&
-        remainingDuration(
-          staffEntryIds(staff).map((eid) => next.entriesById[eid]),
-          timeSignatures[index],
-          next.tupletsById
-        ) < -1e-9
+        staff?.voiceOrder.some(
+          (voiceId) =>
+            remainingDuration(
+              staff.voicesById[voiceId].entryIds.map(
+                (eid) => next.entriesById[eid]
+              ),
+              timeSignatures[index],
+              next.tupletsById
+            ) < -1e-9
+        ) ?? false
       );
     });
     return overfull ? count + 1 : count;

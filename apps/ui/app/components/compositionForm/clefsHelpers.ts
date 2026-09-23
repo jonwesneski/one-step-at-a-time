@@ -3,6 +3,7 @@ import type {
   Note,
   Octave,
 } from '@one-step-at-a-time/web-components';
+import { CAPACITY_EPSILON, entryFactor } from './measureCapacityHelpers';
 import type { ChordNote, CompositionStructure } from './types';
 
 // Effective clef and clef-derived octave for a note/chord entry. Mirrors the
@@ -44,20 +45,36 @@ export const CLEF_RANGES: Record<ClefType, ClefRange> = {
   bass: { octaves: [2, 3, 4], lowStep: step('E', 2), highStep: step('E', 4) },
 };
 
+// The beat offset of `targetId` within `entryIds` — the cumulative duration
+// of every entry before it (a clef marker's own `entryFactor` is 0, so it
+// never shifts the offset of what follows it). Mirrors the library's own
+// computeBeatOffsets, adapted to this app's normalized entry lists instead
+// of live DOM elements.
+function beatOffsetOf(
+  structure: CompositionStructure,
+  entryIds: string[],
+  targetId: string
+): number {
+  let cumulative = 0;
+  for (const id of entryIds) {
+    if (id === targetId) {
+      return cumulative;
+    }
+    const entry = structure.entriesById[id];
+    cumulative += entry ? entryFactor(entry, structure.tupletsById) : 0;
+  }
+  return cumulative;
+}
+
 // The clef in effect at `entryId`: the containing staff's base clef,
 // overridden by any `ClefEntry` earlier in that staff's stream. A clef
 // change is staff-wide but only ever authored in voice 1 (see
-// NormalizedStaff's own doc comment), so this always walks voice 1's own
-// entryIds looking for the last clef marker before `entryId`'s position.
-//
-// When `entryId` itself is in voice 1, this is exact — array position in
-// voice 1's own stream is a real ordering. When it's in a different voice
-// (unreachable this phase — nothing in the UI can create a 2nd voice yet),
-// comparing array positions across two different voices' streams isn't
-// meaningful without a real beat-offset (the same problem the library's own
-// Phase 3 solved with computeBeatOffsets); rather than build that now for an
-// unreachable case, this falls back to "the last clef anywhere in voice 1" —
-// a known, documented gap for Phase 5, not a silent wrong answer.
+// NormalizedStaff's own doc comment), so this resolves `entryId`'s own beat
+// offset within its own voice, then walks voice 1's stream comparing each
+// clef marker's beat offset against it — correct for an entry in voice 1
+// itself (array position in that same stream) and for one in voice 2/3
+// (compared by beat offset, not document position, since the two voices'
+// streams aren't otherwise comparable).
 export function effectiveClefOfEntry(
   structure: CompositionStructure,
   entryId: string
@@ -70,17 +87,25 @@ export function effectiveClefOfEntry(
   if (!staff) {
     return 'treble';
   }
+  const ownVoice = staff.voiceOrder
+    .map((voiceId) => staff.voicesById[voiceId])
+    .find((voice) => voice.entryIds.includes(entryId));
+  const entryBeatOffset = ownVoice
+    ? beatOffsetOf(structure, ownVoice.entryIds, entryId)
+    : 0;
+
   const firstVoice = staff.voicesById[staff.voiceOrder[0]];
-  const inFirstVoice = firstVoice.entryIds.includes(entryId);
   let clef: ClefType = staff.type;
+  let cumulative = 0;
   for (const id of firstVoice.entryIds) {
-    if (inFirstVoice && id === entryId) {
+    if (cumulative > entryBeatOffset + CAPACITY_EPSILON) {
       break;
     }
     const entry = structure.entriesById[id];
     if (entry?.type === 'clef') {
       clef = entry.clef;
     }
+    cumulative += entry ? entryFactor(entry, structure.tupletsById) : 0;
   }
   return clef;
 }

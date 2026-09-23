@@ -5,6 +5,7 @@ import {
   flattenEntryOrder,
   isConnectableSelection,
   pruneBrokenTies,
+  pruneConnectorsForEntries,
   removeConnector,
   resolveConnectorAttributes,
   upsertConnector,
@@ -476,5 +477,37 @@ describe('pruneBrokenTies', () => {
       duration: 'quarter',
     };
     expect(pruneBrokenTies(structure).connectorOrder).toHaveLength(2);
+  });
+});
+
+describe('pruneConnectorsForEntries', () => {
+  it('drops a slur whose endpoint is in the given set — unlike pruneBrokenTies, which leaves slurs alone', () => {
+    const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
+    const next = pruneConnectorsForEntries(structure, new Set(['e2']));
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
+  it('drops a hairpin whose endpoint is in the given set', () => {
+    const structure = upsertConnector(
+      buildStructure(),
+      'e1',
+      'e2',
+      'crescendo'
+    );
+    const next = pruneConnectorsForEntries(structure, new Set(['e1']));
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
+  it('keeps a connector whose endpoints are not in the given set', () => {
+    const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
+    const next = pruneConnectorsForEntries(structure, new Set(['e3']));
+    expect(next).toBe(structure);
+  });
+
+  it('is a no-op for an empty set', () => {
+    const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
+    expect(pruneConnectorsForEntries(structure, new Set())).toBe(structure);
   });
 });

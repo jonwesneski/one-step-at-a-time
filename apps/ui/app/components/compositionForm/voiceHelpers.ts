@@ -1,4 +1,4 @@
-import { pruneBrokenTies } from './connectorsHelpers';
+import { pruneConnectorsForEntries } from './connectorsHelpers';
 import type {
   CompositionStructure,
   NormalizedStaff,
@@ -60,9 +60,11 @@ export function addVoiceToStaff(
 // deleteSelectionHelpers.ts's own repair — this app's sole-writer contract
 // means neither file can just call the other without a circular import, since
 // deleteSelectionHelpers.ts already depends on staffEntryIds below), and
-// prunes any tie that no longer joins a single sustained pitch via
-// `pruneBrokenTies`. A no-op (warns) when it's the staff's only voice — a
-// staff always needs at least one.
+// drops any tie/slur/hairpin whose endpoint was one of the removed entries
+// via `pruneConnectorsForEntries` (kind-agnostic — mirrors
+// deleteSelectionHelpers.ts's own delete-cascade connector filter). A no-op
+// (warns) when it's the staff's only voice — a staff always needs at least
+// one.
 export function removeVoiceFromStaff(
   structure: CompositionStructure,
   staffId: string,
@@ -118,10 +120,13 @@ export function removeVoiceFromStaff(
     ])
   );
 
-  return pruneBrokenTies({
-    ...structure,
-    stavesById,
-    entriesById,
-    tupletsById,
-  });
+  return pruneConnectorsForEntries(
+    {
+      ...structure,
+      stavesById,
+      entriesById,
+      tupletsById,
+    },
+    removedEntryIds
+  );
 }

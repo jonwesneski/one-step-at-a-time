@@ -22,6 +22,18 @@ import type {
 } from './types';
 import { isPitchedEntry } from './types';
 
+// Whether `rebar` actually reflowed the region (`rebarred: true`) or bailed
+// out and returned the input structure unchanged (`rebarred: false`) — the
+// caller already applied the new time signature to `structure` before
+// calling this, so a bail-out is NOT a safe no-op to silently commit: it
+// would land as a "signature only" change even though the user chose
+// "Rewrite". Callers must check this and abort the whole operation (not
+// call `record()`) when `rebarred` is false.
+export type RebarResult = {
+  structure: CompositionStructure;
+  rebarred: boolean;
+};
+
 // Re-flows one time signature region into measures of its (already-updated) time
 // signature: the note stream of each staff index is concatenated and re-sliced,
 // notes that cross a new barline are split into a tie chain, and measures are
@@ -36,10 +48,10 @@ import { isPitchedEntry } from './types';
 export function rebar(
   structure: CompositionStructure,
   fromMeasureIndex: number
-): CompositionStructure {
+): RebarResult {
   const order = structure.measureOrder;
   if (order.length === 0) {
-    return structure;
+    return { structure, rebarred: false };
   }
   const idx = Math.max(0, Math.min(fromMeasureIndex, order.length - 1));
   const { startIndex, endIndex } = timeSignatureRegionAt(structure, idx);
@@ -57,7 +69,7 @@ export function rebar(
     ...regionMeasures.map((m) => m.staffIds.length)
   );
   if (staffCount === 0) {
-    return structure;
+    return { structure, rebarred: false };
   }
 
   // A staff's voice count must stay identical across every measure in the
@@ -82,7 +94,7 @@ export function rebar(
       console.warn(
         `[rebarHelpers] staff index ${si}'s voice count is inconsistent across this region's measures; skipping rebar`
       );
-      return structure;
+      return { structure, rebarred: false };
     }
     const src = staffCandidates[0];
     staffTemplate.push({
@@ -193,13 +205,16 @@ export function rebar(
   }
 
   return {
-    ...structure,
-    measureOrder,
-    measuresById,
-    stavesById,
-    entriesById,
-    connectorsById,
-    connectorOrder,
+    structure: {
+      ...structure,
+      measureOrder,
+      measuresById,
+      stavesById,
+      entriesById,
+      connectorsById,
+      connectorOrder,
+    },
+    rebarred: true,
   };
 }
 

@@ -441,7 +441,18 @@ export function CompositionInput() {
   ) {
     const s = getStructure();
     const withTimeSignature = { ...s, timeSig };
-    record(rewrite ? rebar(withTimeSignature, 0) : withTimeSignature);
+    if (!rewrite) {
+      record(withTimeSignature);
+      return;
+    }
+    const { structure, rebarred } = rebar(withTimeSignature, 0);
+    if (!rebarred) {
+      window.alert(
+        'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.'
+      );
+      return;
+    }
+    record(structure);
   }
 
   function setMeasureTimeSignature(
@@ -461,10 +472,19 @@ export function CompositionInput() {
         [measureId]: { ...measure, time: timeSig },
       },
     };
+    if (!rewrite) {
+      record(withTimeSignature);
+      return;
+    }
     const measureIndex = s.measureOrder.indexOf(measureId);
-    record(
-      rewrite ? rebar(withTimeSignature, measureIndex) : withTimeSignature
-    );
+    const { structure, rebarred } = rebar(withTimeSignature, measureIndex);
+    if (!rebarred) {
+      window.alert(
+        'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.'
+      );
+      return;
+    }
+    record(structure);
   }
 
   return (

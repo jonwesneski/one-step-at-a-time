@@ -131,23 +131,42 @@ describe('flattenStaffSlotElements', () => {
     expect([...voices.keys()]).toEqual([1, 2, 3]);
   });
 
-  it('warns and ignores a 4th <music-voice> sibling', () => {
+  it('warns, ignores, and hides a 4th <music-voice> sibling (its descendants would otherwise render unpositioned)', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const fourthVoice = voice([note('F')]) as HTMLElement;
     const { voices } = flattenStaffSlotElements([
       voice([note('C')]),
       voice([note('D')]),
       voice([note('E')]),
-      voice([note('F')]),
+      fourthVoice,
     ]);
 
     expect(voices.size).toBe(3);
+    expect(fourthVoice.style.display).toBe('none');
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('at most 3 <music-voice> siblings')
     );
     warn.mockRestore();
   });
 
-  it('warns and discards a bare top-level note alongside <music-voice> siblings, rather than folding it into voice 1', () => {
+  it('re-shows a formerly-hidden 4th voice once an earlier voice is removed and it becomes the 3rd', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const v1 = voice([note('C')]) as HTMLElement;
+    const v2 = voice([note('D')]) as HTMLElement;
+    const v3 = voice([note('E')]) as HTMLElement;
+    const v4 = voice([note('F')]) as HTMLElement;
+
+    flattenStaffSlotElements([v1, v2, v3, v4]);
+    expect(v4.style.display).toBe('none');
+
+    // v2 removed — v4 is now the 3rd sibling and must become visible again.
+    const { voices } = flattenStaffSlotElements([v1, v3, v4]);
+    expect(voices.size).toBe(3);
+    expect(v4.style.display).toBe('');
+    warn.mockRestore();
+  });
+
+  it('warns, hides, and discards a bare top-level note alongside <music-voice> siblings, rather than folding it into voice 1', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const bareNote = note('G');
     const { voices } = flattenStaffSlotElements([
@@ -158,6 +177,7 @@ describe('flattenStaffSlotElements', () => {
 
     expect(voices.get(1)?.flatElements).toHaveLength(1);
     expect(voices.get(1)?.flatElements).not.toContain(bareNote);
+    expect(bareNote.style.display).toBe('none');
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('cannot appear alongside <music-voice> siblings')
     );

@@ -45,8 +45,10 @@ type Candidate = {
 /**
  * A note/chord is combine-eligible only when every one of these is absent —
  * excluded from combining entirely, not merely "must match" — since a
- * tie/slur/arpeggio/trill/grace attached to one voice's note has no
- * unambiguous meaning once merged and un-merged downstream.
+ * tie/slur/arpeggio/trill/grace/glissando/stress/dynamic-shared attached to
+ * one voice's note has no unambiguous meaning once merged and un-merged
+ * downstream: the synthetic chord never copies these onto itself, so they'd
+ * silently vanish when the original element is hidden.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   if (voice.tupletsByIndex.has(index)) {
@@ -68,7 +70,10 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.arpeggiate === null &&
     element.trill === false &&
     element.grace === null &&
-    element.trillFinish === null
+    element.trillFinish === null &&
+    element.glissando === null &&
+    element.stress === null &&
+    !element.dynamicShared
   );
 }
 
@@ -187,5 +192,11 @@ export function detectCombinableGroups(
     }
   }
 
+  // Columns (and therefore groups) are in candidate-discovery order
+  // (voice 1, then 2, then 3), not beat order — a beat only voices 2/3
+  // share (absent from voice 1) would otherwise land out of sequence,
+  // handing the synthetic 'combined' track's sequential collision-floor
+  // pass a non-monotonic beatOffset run.
+  groups.sort((a, b) => a.beatOffset - b.beatOffset);
   return groups;
 }

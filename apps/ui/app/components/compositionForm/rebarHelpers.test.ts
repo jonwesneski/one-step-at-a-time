@@ -101,7 +101,7 @@ describe('rebar', () => {
         ],
       },
     ]);
-    const out = rebar({ ...s, timeSig: '3/4' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
     expect(durationsPerMeasure(out)).toEqual([
       ['quarter', 'quarter', 'quarter'],
       ['quarter'],
@@ -111,7 +111,7 @@ describe('rebar', () => {
 
   it('splits a note that crosses the new barline into a tie chain', () => {
     const s = build('4/4', [{ staves: [[note('half'), note('half')]] }]);
-    const out = rebar({ ...s, timeSig: '3/4' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
     expect(durationsPerMeasure(out)).toEqual([
       ['half', 'quarter'],
       ['quarter'],
@@ -124,7 +124,7 @@ describe('rebar', () => {
       { staves: [[note('whole')]] },
       { staves: [[note('whole')]] },
     ]);
-    const out = rebar({ ...s, timeSig: '2/4' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '2/4' }, 0);
     expect(durationsPerMeasure(out)).toEqual([
       ['half'],
       ['half'],
@@ -143,7 +143,7 @@ describe('rebar', () => {
         ],
       },
     ]);
-    const out = rebar({ ...s, timeSig: '3/4' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
     expect(durationsPerMeasure(out, 0)).toEqual([
       ['quarter', 'quarter', 'quarter'],
       ['quarter'],
@@ -173,7 +173,7 @@ describe('rebar', () => {
     ]);
     s.tupletsById.tup = { id: 'tup', ratio: '3:2' };
 
-    const out = rebar({ ...s, timeSig: '5/8' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '5/8' }, 0);
     expect(durationsPerMeasure(out)).toEqual([
       ['quarter', 'quarter'],
       ['eighth', 'eighth', 'eighth', 'quarter'],
@@ -199,7 +199,7 @@ describe('rebar', () => {
       },
       { time: '2/4', staves: [[kept, note('quarter')]] },
     ]);
-    const out = rebar({ ...s, timeSig: '3/4' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
 
     expect(out.measureOrder).toHaveLength(3);
     const lastMeasure = out.measuresById[out.measureOrder[2]];
@@ -218,7 +218,7 @@ describe('rebar', () => {
         staves: [[note('half'), note('half')]],
       },
     ]);
-    const out = rebar(s, 1);
+    const { structure: out } = rebar(s, 1);
     // region is just measure 1 (3/4): [half half] → [half quarter~][~quarter]
     expect(out.measuresById[out.measureOrder[1]].time).toBe('3/4');
     expect(out.measuresById[out.measureOrder[2]].time).toBeNull();
@@ -245,7 +245,7 @@ describe('rebar', () => {
         ],
       },
     ]);
-    const out = rebar({ ...s, timeSig: '3/4' }, 0);
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
 
     expect(durationsPerMeasure(out, 0, 0)).toEqual([
       ['quarter', 'quarter', 'quarter'],
@@ -261,7 +261,7 @@ describe('rebar', () => {
     }
   });
 
-  it('warns and no-ops when voice count is inconsistent across the region', () => {
+  it('warns, reports rebarred: false, and no-ops when voice count is inconsistent across the region', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const s: CompositionStructure = {
       ...build('4/4', [
@@ -270,11 +270,24 @@ describe('rebar', () => {
       ]),
       timeSig: '3/4',
     };
-    const out = rebar(s, 0);
+    const { structure: out, rebarred } = rebar(s, 0);
+    expect(rebarred).toBe(false);
     expect(out).toBe(s);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('voice count is inconsistent')
     );
     warn.mockRestore();
+  });
+
+  it('reports rebarred: true on a successful reflow', () => {
+    const s = build('4/4', [
+      {
+        staves: [
+          [note('quarter'), note('quarter'), note('quarter'), note('quarter')],
+        ],
+      },
+    ]);
+    const { rebarred } = rebar({ ...s, timeSig: '3/4' }, 0);
+    expect(rebarred).toBe(true);
   });
 });

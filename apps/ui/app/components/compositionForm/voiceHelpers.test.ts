@@ -151,6 +151,28 @@ describe('removeVoiceFromStaff', () => {
     expect(next.connectorsById).toEqual({});
   });
 
+  it('drops a slur or hairpin referencing a removed voice’s entry, not just ties', () => {
+    const s = structure();
+    s.connectorsById.slur1 = {
+      id: 'slur1',
+      kind: 'slur',
+      startEntryId: 'e3',
+      endEntryId: 'e4',
+    };
+    s.connectorsById.hp1 = {
+      id: 'hp1',
+      kind: 'decrescendo',
+      startEntryId: 'e3',
+      endEntryId: 'e4',
+    };
+    s.connectorOrder = ['slur1', 'hp1'];
+
+    const next = removeVoiceFromStaff(s, 's1', 's1-v2');
+
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
   it('refuses to remove the only voice', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const s: CompositionStructure = {

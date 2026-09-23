@@ -217,4 +217,65 @@ describe('detectCombinableGroups', () => {
     );
     expect(groups).toHaveLength(1);
   });
+
+  it('excludes a glissando-anchored note from combining, since the synthetic chord would drop the anchor', () => {
+    const v1Note = note('C', 4);
+    const v2Note = note('E', 4);
+    v2Note.setAttribute('glissando', 'start');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Note], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('excludes a stressed note from combining, since the synthetic chord would drop the stress mark', () => {
+    const v1Note = note('C', 4);
+    const v2Note = note('E', 4);
+    v2Note.setAttribute('stress', 'stressed');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Note], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('excludes a dynamic-shared note from combining, since the synthetic chord would make it local again', () => {
+    const v1Note = note('C', 4);
+    const v2Note = note('E', 4);
+    v2Note.setAttribute('dynamic', 'mf');
+    v2Note.setAttribute('dynamic-shared', '');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Note], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('returns groups in ascending beatOffset order, even when a shared voice-2/3 beat is absent from voice 1', () => {
+    // Voice 1 has candidates at beats 0 and 1. Voices 2 and 3 both also
+    // share a candidate at beat 0.5, a beat voice 1 lacks — discovery order
+    // (all of voice 1, then voice 2, then voice 3) would otherwise append
+    // the beat-0.5 column after the beat-1 column.
+    const v1BeatZero = note('C', 4);
+    const v1BeatOne = note('C', 5);
+    const v2BeatZero = note('E', 4);
+    const v2BeatHalf = note('G', 4);
+    const v3BeatHalf = note('G', 4);
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1BeatZero, v1BeatOne], [0, 1])],
+        [2, voiceInput([v2BeatZero, v2BeatHalf], [0, 0.5])],
+        [3, voiceInput([v3BeatHalf], [0.5])],
+      ])
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.beatOffset)).toEqual([0, 0.5]);
+  });
 });

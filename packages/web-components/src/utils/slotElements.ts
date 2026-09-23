@@ -180,6 +180,14 @@ export function flattenStaffSlotElements(
     );
   }
 
+  // Set every <music-voice> wrapper's visibility unconditionally on every
+  // call, not just the newly-excluded ones — a wrapper hidden here on a
+  // previous call (e.g. a since-removed earlier voice pushed it past
+  // MAX_VOICES) must become visible again once it's back within range.
+  voiceElements.forEach((voiceElement, i) => {
+    (voiceElement as HTMLElement).style.display = i < MAX_VOICES ? '' : 'none';
+  });
+
   // <music-clef> is no longer exempt here: once voice 1 can carry its own
   // nested markers (see below), a bare top-level sibling clef has no way to
   // express a real anchor point (its DOM position among <music-voice>
@@ -195,8 +203,9 @@ export function flattenStaffSlotElements(
         (element as ClefElementType).style.display = 'none';
       } else {
         console.warn(
-          `[flattenStaffSlotElements] a bare <${element.nodeName.toLowerCase()}> cannot appear alongside <music-voice> siblings; ignoring it — wrap every active voice, including voice 1, in its own <music-voice>`
+          `[flattenStaffSlotElements] a bare <${element.nodeName.toLowerCase()}> cannot appear alongside <music-voice> siblings; hiding it — wrap every active voice, including voice 1, in its own <music-voice>`
         );
+        (element as HTMLElement).style.display = 'none';
       }
     }
   }

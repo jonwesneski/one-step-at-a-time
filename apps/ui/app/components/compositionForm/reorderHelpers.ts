@@ -1,4 +1,8 @@
-import { flattenEntryOrder, pruneBrokenTies } from './connectorsHelpers';
+import {
+  flattenEntryOrder,
+  pruneBrokenTies,
+  pruneConnectorsForEntries,
+} from './connectorsHelpers';
 import type { CompositionStructure, NormalizedVoice } from './types';
 import { isPitchedEntry } from './types';
 
@@ -125,6 +129,11 @@ export function moveEntryToVoice(
     next = dissolveDiscontiguousTuplets(next, staffId, fromVoiceId);
   }
   next = normalizeConnectorEndpointOrder(next);
+  // The renderer pairs connectors per voice, so any slur/hairpin/tie
+  // touching the moved entry is invalid the moment its voice changes — not
+  // just ties (pruneBrokenTies alone leaves slurs/hairpins as dangling
+  // stored state that silently stops rendering).
+  next = pruneConnectorsForEntries(next, new Set([entryId]));
   next = pruneBrokenTies(next);
   return next;
 }

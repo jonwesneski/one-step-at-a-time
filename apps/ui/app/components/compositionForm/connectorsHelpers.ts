@@ -470,6 +470,49 @@ export function pruneBrokenTies(
   };
 }
 
+// Drops every connector (tie, slur, or hairpin — any kind) whose start or
+// end entry id is in `entryIds`. The kind-agnostic counterpart to
+// `pruneBrokenTies` above: that one re-validates every tie in the structure
+// against `canTie` (needed because a pitch/clef edit can invalidate a tie
+// that doesn't touch the edited entry at all), but has no equivalent for
+// slurs/hairpins, which carry no pitch constraint to re-check — they're
+// simply invalid once either endpoint is gone or has moved to a different
+// voice (the renderer pairs connectors per voice). Mirrors
+// `deleteSelectionHelpers.ts`'s own "drop any tie/slur/hairpin whose start
+// or end entry is gone" filter, generalized for reuse by callers whose
+// entries didn't necessarily get deleted (e.g. moved to another voice).
+export function pruneConnectorsForEntries(
+  structure: CompositionStructure,
+  entryIds: ReadonlySet<string>
+): CompositionStructure {
+  if (entryIds.size === 0) {
+    return structure;
+  }
+  const broken = new Set(
+    Object.entries(structure.connectorsById)
+      .filter(
+        ([, connector]) =>
+          entryIds.has(connector.startEntryId) ||
+          entryIds.has(connector.endEntryId)
+      )
+      .map(([id]) => id)
+  );
+  if (broken.size === 0) {
+    return structure;
+  }
+  const connectorsById: Record<string, NormalizedConnector> = {};
+  for (const [id, connector] of Object.entries(structure.connectorsById)) {
+    if (!broken.has(id)) {
+      connectorsById[id] = connector;
+    }
+  }
+  return {
+    ...structure,
+    connectorsById,
+    connectorOrder: structure.connectorOrder.filter((id) => !broken.has(id)),
+  };
+}
+
 export function removeConnector(
   structure: CompositionStructure,
   connectorId: string

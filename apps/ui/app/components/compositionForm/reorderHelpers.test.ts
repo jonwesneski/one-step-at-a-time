@@ -318,6 +318,33 @@ describe('moveEntryToVoice', () => {
     expect(next.connectorsById).toEqual({});
   });
 
+  it('drops a slur or hairpin whose endpoint moved to a different voice, not just ties', () => {
+    const s = twoVoiceStructure(
+      [['a', 'b'], ['x']],
+      { a: note('a'), b: note('b'), x: note('x') },
+      {
+        connectorsById: {
+          slur1: {
+            id: 'slur1',
+            kind: 'slur',
+            startEntryId: 'a',
+            endEntryId: 'b',
+          },
+          hp1: {
+            id: 'hp1',
+            kind: 'crescendo',
+            startEntryId: 'a',
+            endEntryId: 'b',
+          },
+        },
+        connectorOrder: ['slur1', 'hp1'],
+      }
+    );
+    const next = moveEntryToVoice(s, 's1', 'b', 's1-v1', 's1-v2');
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
   it('is a no-op when the entry is not in the source voice, the voices are the same, or either is unknown', () => {
     const s = twoVoiceStructure([['a', 'b'], ['x']], {
       a: note('a'),
