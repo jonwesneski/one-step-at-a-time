@@ -110,6 +110,12 @@ export type NoteProps = {
   // stream to span into, so a sign with no possible line is not drawn
   // either): null (standalone, no staff) suppresses the sign entirely.
   staffY?: number | null;
+  // Staff-written px to raise the trill sign further above its own nominal
+  // Y — set when another voice's own content occupies that territory in a
+  // multi-voice staff (see StaffClassicalElementBase#trillLineYClearingOtherVoices,
+  // which computes the same value the sibling trill line/notch use, so the
+  // sign and line move together as one visual unit).
+  trillSignExtraLift?: number;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -125,7 +131,11 @@ export function trillSignLeftX(stemUp: boolean): number {
 // Local-space Y at which a note's trill sign's bottom edge sits — a fixed gap
 // above the staff top line, converted from the shared staff-absolute
 // coordinate space into this note's own translated SVG.
-function trillSignBottomY(stemUp: boolean, staffY: number): number {
+function trillSignBottomY(
+  stemUp: boolean,
+  staffY: number,
+  extraLift: number
+): number {
   const headCenterY = stemUp
     ? NOTE_Y_HEAD_OFFSET_STEM_UP
     : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
@@ -133,7 +143,8 @@ function trillSignBottomY(stemUp: boolean, staffY: number): number {
     headCenterY -
     NOTE_HEAD_Y_OFFSET_CORRECTION -
     staffY +
-    (STAFF_TOP_LINE_Y - TRILL_ABOVE_STAFF_GAP_PX)
+    (STAFF_TOP_LINE_Y - TRILL_ABOVE_STAFF_GAP_PX) -
+    extraLift
   );
 }
 
@@ -154,6 +165,7 @@ export const createNoteSvg = ({
   trill = false,
   trillAccidental = null,
   staffY = null,
+  trillSignExtraLift = 0,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
@@ -413,7 +425,7 @@ export const createNoteSvg = ({
 
   if (trill && qualifiedElementName === 'svg' && staffY !== null) {
     const leftX = trillSignLeftX(stemUp);
-    const bottomY = trillSignBottomY(stemUp, staffY);
+    const bottomY = trillSignBottomY(stemUp, staffY, trillSignExtraLift);
     const sign = createTrillSignSvg({
       leftX,
       bottomY,

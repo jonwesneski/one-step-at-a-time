@@ -5,9 +5,17 @@ import type {
   ConnectorKind,
   ConnectorRole,
   NormalizedConnector,
+  NormalizedStaff,
   Selection,
   StaffType,
 } from './types';
+
+// Every entry in `staff`, in voice order — inlined rather than imported from
+// voiceHelpers.ts (which itself needs pruneBrokenTies below for its own
+// cascade cleanup) to keep that dependency one-directional.
+function staffEntryIds(staff: NormalizedStaff): string[] {
+  return staff.voiceOrder.flatMap((id) => staff.voicesById[id].entryIds);
+}
 
 // Tie/slur resolution for the composition form. Mirrors the pairing rules of
 // packages/web-components' connectorsBuilder (pairConnectors): connectors are
@@ -40,6 +48,8 @@ type EntryStaffContext = {
   staffId: string;
   staffIndex: number;
   staffType: StaffType;
+  voiceId: string;
+  voiceIndex: number;
 };
 
 // All entry ids in the order packages/web-components sees them — measure, then
@@ -57,7 +67,7 @@ export function flattenEntryOrder(structure: CompositionStructure): string[] {
       if (!staff) {
         continue;
       }
-      order.push(...staff.entryIds);
+      order.push(...staffEntryIds(staff));
     }
   }
   return order;
@@ -84,13 +94,21 @@ export function staffOfEntry(
     ) {
       const staffId = measure.staffIds[staffIndex];
       const staff = structure.stavesById[staffId];
-      if (staff && staff.entryIds.includes(entryId)) {
+      if (!staff) {
+        continue;
+      }
+      const voiceIndex = staff.voiceOrder.findIndex((voiceId) =>
+        staff.voicesById[voiceId].entryIds.includes(entryId)
+      );
+      if (voiceIndex !== -1) {
         return {
           measureId,
           measureIndex,
           staffId,
           staffIndex,
           staffType: staff.type,
+          voiceId: staff.voiceOrder[voiceIndex],
+          voiceIndex,
         };
       }
     }
@@ -141,10 +159,13 @@ export function isConnectableSelection(
     return null;
   }
 
-  const sameStaff = startContext.staffId === endContext.staffId;
+  const sameStaff =
+    startContext.staffId === endContext.staffId &&
+    startContext.voiceIndex === endContext.voiceIndex;
   const sameVoiceAcrossMeasures =
     startContext.staffIndex === endContext.staffIndex &&
     startContext.staffType === endContext.staffType &&
+    startContext.voiceIndex === endContext.voiceIndex &&
     startContext.measureIndex < endContext.measureIndex;
 
   if (!sameStaff && !sameVoiceAcrossMeasures) {
@@ -228,8 +249,14 @@ export function canTie(
     return false;
   }
 
-  if (startContext.staffId === endContext.staffId) {
-    const entryIds = structure.stavesById[startContext.staffId].entryIds;
+  if (
+    startContext.staffId === endContext.staffId &&
+    startContext.voiceId === endContext.voiceId
+  ) {
+    const entryIds =
+      structure.stavesById[startContext.staffId].voicesById[
+        startContext.voiceId
+      ].entryIds;
     return (
       entryIds.indexOf(endpoints.endEntryId) -
         entryIds.indexOf(endpoints.startEntryId) ===
@@ -237,12 +264,17 @@ export function canTie(
     );
   }
 
-  const startStaff = structure.stavesById[startContext.staffId];
-  const endStaff = structure.stavesById[endContext.staffId];
+  const startVoiceEntryIds =
+    structure.stavesById[startContext.staffId].voicesById[startContext.voiceId]
+      .entryIds;
+  const endVoiceEntryIds =
+    structure.stavesById[endContext.staffId].voicesById[endContext.voiceId]
+      .entryIds;
   return (
-    startStaff.entryIds[startStaff.entryIds.length - 1] ===
+    startContext.voiceIndex === endContext.voiceIndex &&
+    startVoiceEntryIds[startVoiceEntryIds.length - 1] ===
       endpoints.startEntryId &&
-    endStaff.entryIds[0] === endpoints.endEntryId &&
+    endVoiceEntryIds[0] === endpoints.endEntryId &&
     endContext.measureIndex - startContext.measureIndex === 1
   );
 }
@@ -425,6 +457,49 @@ export function pruneBrokenTies(
     return structure;
   }
 
+  const connectorsById: Record<string, NormalizedConnector> = {};
+  for (const [id, connector] of Object.entries(structure.connectorsById)) {
+    if (!broken.has(id)) {
+      connectorsById[id] = connector;
+    }
+  }
+  return {
+    ...structure,
+    connectorsById,
+    connectorOrder: structure.connectorOrder.filter((id) => !broken.has(id)),
+  };
+}
+
+// Drops every connector (tie, slur, or hairpin — any kind) whose start or
+// end entry id is in `entryIds`. The kind-agnostic counterpart to
+// `pruneBrokenTies` above: that one re-validates every tie in the structure
+// against `canTie` (needed because a pitch/clef edit can invalidate a tie
+// that doesn't touch the edited entry at all), but has no equivalent for
+// slurs/hairpins, which carry no pitch constraint to re-check — they're
+// simply invalid once either endpoint is gone or has moved to a different
+// voice (the renderer pairs connectors per voice). Mirrors
+// `deleteSelectionHelpers.ts`'s own "drop any tie/slur/hairpin whose start
+// or end entry is gone" filter, generalized for reuse by callers whose
+// entries didn't necessarily get deleted (e.g. moved to another voice).
+export function pruneConnectorsForEntries(
+  structure: CompositionStructure,
+  entryIds: ReadonlySet<string>
+): CompositionStructure {
+  if (entryIds.size === 0) {
+    return structure;
+  }
+  const broken = new Set(
+    Object.entries(structure.connectorsById)
+      .filter(
+        ([, connector]) =>
+          entryIds.has(connector.startEntryId) ||
+          entryIds.has(connector.endEntryId)
+      )
+      .map(([id]) => id)
+  );
+  if (broken.size === 0) {
+    return structure;
+  }
   const connectorsById: Record<string, NormalizedConnector> = {};
   for (const [id, connector] of Object.entries(structure.connectorsById)) {
     if (!broken.has(id)) {

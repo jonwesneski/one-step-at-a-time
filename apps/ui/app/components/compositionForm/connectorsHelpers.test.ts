@@ -5,10 +5,15 @@ import {
   flattenEntryOrder,
   isConnectableSelection,
   pruneBrokenTies,
+  pruneConnectorsForEntries,
   removeConnector,
   resolveConnectorAttributes,
   upsertConnector,
 } from './connectorsHelpers';
+import {
+  buildMultiVoiceStaff,
+  buildSingleVoiceStaff,
+} from './test-fixtures/voiceFixtures';
 import type { CompositionStructure, Selection } from './types';
 
 function buildStructure(): CompositionStructure {
@@ -20,20 +25,8 @@ function buildStructure(): CompositionStructure {
       m2: { id: 'm2', staffIds: ['s2'] },
     },
     stavesById: {
-      s1: {
-        id: 's1',
-        type: 'treble',
-        entryIds: ['e1', 'e2', 'e3', 'e4'],
-        group: null,
-        groupId: null,
-      },
-      s2: {
-        id: 's2',
-        type: 'treble',
-        entryIds: ['e5', 'e6', 'e7', 'e8'],
-        group: null,
-        groupId: null,
-      },
+      s1: buildSingleVoiceStaff('s1', ['e1', 'e2', 'e3', 'e4']),
+      s2: buildSingleVoiceStaff('s2', ['e5', 'e6', 'e7', 'e8']),
     },
     entriesById: {
       e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },
@@ -108,6 +101,27 @@ describe('isConnectableSelection', () => {
       )
     ).toBeNull();
   });
+
+  it('rejects two entries in different voices of the same staff', () => {
+    const structure: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1'] } },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [['e1'], ['e2']]),
+      },
+      entriesById: {
+        e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },
+        e2: { id: 'e2', type: 'note', value: 'C', duration: 'quarter' },
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+    expect(
+      isConnectableSelection(selection(['e1', 'e2']), structure)
+    ).toBeNull();
+  });
 });
 
 describe('canTie', () => {
@@ -180,10 +194,50 @@ describe('canTie', () => {
 
   it('rejects a cross-measure tie when a mid-stream clef change shifts the start octave', () => {
     const structure = buildStructure();
-    structure.stavesById.s1.entryIds = ['e1', 'e2', 'e3', 'ec', 'e4'];
+    structure.stavesById.s1.voicesById['s1-v1'].entryIds = [
+      'e1',
+      'e2',
+      'e3',
+      'ec',
+      'e4',
+    ];
     structure.entriesById.ec = { id: 'ec', type: 'clef', clef: 'bass' };
     expect(canTie(structure, { startEntryId: 'e4', endEntryId: 'e5' })).toBe(
       false
+    );
+  });
+
+  it('rejects a tie between different voices, even at the same staff index across measures', () => {
+    const structure: CompositionStructure = {
+      timeSig: '4/4',
+      measureOrder: ['m1', 'm2'],
+      measuresById: {
+        m1: { id: 'm1', staffIds: ['s1'] },
+        m2: { id: 'm2', staffIds: ['s2'] },
+      },
+      stavesById: {
+        s1: buildMultiVoiceStaff('s1', [['e1'], ['e2']]),
+        s2: buildMultiVoiceStaff('s2', [['e3'], ['e4']]),
+      },
+      entriesById: {
+        e1: { id: 'e1', type: 'note', value: 'C', duration: 'quarter' },
+        e2: { id: 'e2', type: 'note', value: 'C', duration: 'quarter' },
+        e3: { id: 'e3', type: 'note', value: 'C', duration: 'quarter' },
+        e4: { id: 'e4', type: 'note', value: 'C', duration: 'quarter' },
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+    };
+    // e1 is voice 1's last note; e4 is voice 2's first note in the next
+    // measure — same staff index, same pitch, but a different voice, so this
+    // must not be treated as a valid tie continuation.
+    expect(canTie(structure, { startEntryId: 'e1', endEntryId: 'e4' })).toBe(
+      false
+    );
+    // The genuinely matching pair (voice 1 to voice 1) still works.
+    expect(canTie(structure, { startEntryId: 'e1', endEntryId: 'e3' })).toBe(
+      true
     );
   });
 
@@ -423,5 +477,37 @@ describe('pruneBrokenTies', () => {
       duration: 'quarter',
     };
     expect(pruneBrokenTies(structure).connectorOrder).toHaveLength(2);
+  });
+});
+
+describe('pruneConnectorsForEntries', () => {
+  it('drops a slur whose endpoint is in the given set — unlike pruneBrokenTies, which leaves slurs alone', () => {
+    const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
+    const next = pruneConnectorsForEntries(structure, new Set(['e2']));
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
+  it('drops a hairpin whose endpoint is in the given set', () => {
+    const structure = upsertConnector(
+      buildStructure(),
+      'e1',
+      'e2',
+      'crescendo'
+    );
+    const next = pruneConnectorsForEntries(structure, new Set(['e1']));
+    expect(next.connectorOrder).toEqual([]);
+    expect(next.connectorsById).toEqual({});
+  });
+
+  it('keeps a connector whose endpoints are not in the given set', () => {
+    const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
+    const next = pruneConnectorsForEntries(structure, new Set(['e3']));
+    expect(next).toBe(structure);
+  });
+
+  it('is a no-op for an empty set', () => {
+    const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
+    expect(pruneConnectorsForEntries(structure, new Set())).toBe(structure);
   });
 });

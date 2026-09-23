@@ -15,6 +15,7 @@ import {
   createArpeggioSvg,
   createBraceSvg,
   createBracketSvg,
+  createDynamicMarkingSvg,
   isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
@@ -24,6 +25,13 @@ import {
   STAFF_EVENTS,
   SVG_NS,
 } from '../utils';
+import {
+  buildConnectorSvgs,
+  collectArpeggioTiePairs,
+  collectNoteLikeElements,
+  pairConnectors,
+  partitionByVoice,
+} from '../utils/connectorsBuilder';
 import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
@@ -35,9 +43,15 @@ import {
   BRACKET_WIDTH_PX,
   EMPTY_MEASURE_FLEX_BASIS_PX,
   MEASURE_MIN_WIDTH_PX,
+  MEASURE_NUMBER_BOTTOM_MARGIN_PX,
+  MEASURE_NUMBER_FONT_SIZE,
   STAFF_BOTTOM_MARGIN,
+  STAFF_LABEL_FONT_SIZE,
+  STAFF_LABEL_LEFT_MARGIN_PX,
+  STAFF_LABEL_WIDTH_PX,
   STAFF_LINE_START,
 } from '../utils/notationDimensions';
+import { parseMeasureNumberDisplay } from '../utils/parsers';
 
 // Per-staff vertical footprint within a measure's stacked staff children,
 // used both by the plain full-measure barline (#updateConnectorVisibility)
@@ -51,7 +65,16 @@ import {
 // CONNECTOR_TOP_PX (a separate, still-empirical top-offset constant) don't
 // depend on staff height and stay as plain constants.
 const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
-const CONNECTOR_TOP_PX = 51;
+// Recalibrated (was 51) when the measure-number stub before <slot> in the
+// template changed from a non-empty inline element (which occupied ~18px of
+// real flow height, quietly shifting every slotted staff down by that much)
+// to an always-absolutely-positioned one (which occupies none). Every
+// staff-relative position below (barline, brace/bracket, staff labels,
+// measure numbers) is calibrated against where the staff *actually* renders,
+// not a fixed assumption, so this had to move by the same 18px the staff
+// did — verified empirically against the full browser-test suite, not
+// derived analytically.
+const CONNECTOR_TOP_PX = 33;
 
 function staffSlotHeightPx(staff: StaffElementBaseType): number {
   return staff.staffHeight + 2;
@@ -66,7 +89,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * overridden here to start a mid-piece change. Works standalone.
    *
    * @customElement music-measure
-   * @attr {number} number - Bar number shown above the measure.
+   * @attr {number} number - Bar number. Whether it's actually shown above the measure is controlled by the ancestor `<music-composition>`'s `measure-numbers` attribute (default: not shown).
    * @attr {Note} key-sig - Overrides the inherited key-signature tonic from this bar on.
    * @attr {'major' | 'minor'} mode - Overrides the inherited key-signature mode.
    * @attr {TimeSignature} time - Overrides the inherited time signature from this bar on.
@@ -114,11 +137,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.style.flex = measureFlexValue(maxNaturalWidth);
       this.style.minWidth = `${Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX)}px`;
       // Staves have just (re)laid out their notes — refresh any continuous
-      // cross-staff arpeggio that spans them.
+      // cross-staff arpeggio that spans them, and any tie/slur/etc. across
+      // this measure's own staves.
       this.#redrawArpeggios();
+      this.#redrawConnectors();
+      this.#redrawSharedDynamics();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
+    // A plain tie/slur attribute change (no geometry change) only ever
+    // dispatches CONNECTOR_ATTRIBUTE_CHANGE, never STAFF_MIN_WIDTH — mirrors
+    // composition.ts's own listener for the same event/reason.
+    #boundRedrawConnectors = () => this.#redrawConnectors();
+    // Likewise, a `dynamic`/`dynamic-shared` attribute change only ever
+    // dispatches DYNAMIC_ATTRIBUTE_CHANGE (staffClassicalBase.ts's own
+    // listener re-runs its local #renderDynamics, not a full layout pass).
+    #boundRedrawSharedDynamics = () => this.#redrawSharedDynamics();
 
     constructor() {
       super();
@@ -187,8 +221,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundUpdateConnectorVisibility
       );
       this.addEventListener(
+        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
+        this.#boundUpdateConnectorVisibility
+      );
+      this.addEventListener(
         NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE,
         this.#boundRedrawArpeggios
+      );
+      this.addEventListener(
+        NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+        this.#boundRedrawConnectors
+      );
+      this.addEventListener(
+        NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
+        this.#boundRedrawSharedDynamics
       );
     }
 
@@ -203,8 +249,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundUpdateConnectorVisibility
       );
       this.removeEventListener(
+        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
+        this.#boundUpdateConnectorVisibility
+      );
+      this.removeEventListener(
         NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE,
         this.#boundRedrawArpeggios
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+        this.#boundRedrawConnectors
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
+        this.#boundRedrawSharedDynamics
       );
       this.#staffWidths.clear();
     }
@@ -245,10 +303,58 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             )}px;
           }
 
+          :host(.has-staff-label) {
+            margin-left: ${STAFF_LABEL_WIDTH_PX + STAFF_LABEL_LEFT_MARGIN_PX}px;
+          }
+
+          /* Combined reservation is summed, not jointly tuned — a v1
+             simplification when a measure has both a brace/bracket and a
+             staff label (see packages/web-components/CLAUDE.md). */
+          :host(.has-group-connector.has-staff-label) {
+            margin-left: ${
+              Math.max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX) +
+              STAFF_LABEL_WIDTH_PX +
+              STAFF_LABEL_LEFT_MARGIN_PX
+            }px;
+          }
+
+          .staff-labels {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+          }
+
+          .staff-labels > * {
+            position: absolute;
+            width: ${STAFF_LABEL_WIDTH_PX}px;
+            text-align: right;
+            font-size: ${STAFF_LABEL_FONT_SIZE}px;
+            font-style: italic;
+            transform: translateY(-50%);
+            white-space: nowrap;
+            color: currentColor;
+          }
+
+          .measure-numbers {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+          }
+
+          .measure-numbers > * {
+            position: absolute;
+            left: 0;
+            top: ${CONNECTOR_TOP_PX - MEASURE_NUMBER_BOTTOM_MARGIN_PX}px;
+            font-size: ${MEASURE_NUMBER_FONT_SIZE}px;
+            transform: translateY(-100%);
+            white-space: nowrap;
+            color: currentColor;
+          }
+
           .staff-connector {
             position: absolute;
             left: 0;
-            top: 51px;
+            top: ${CONNECTOR_TOP_PX}px;
             width: 1px;
             background-color: currentColor;
             z-index: 5;
@@ -279,15 +385,48 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .connectors-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
+
+          .shared-dynamics-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div>
           <div class="staff-connector"></div>
           <div class="group-connectors"></div>
+          <div class="staff-labels"></div>
           <!-- must be <svg>: holds <g> arpeggio-sign nodes that share this
                element's coordinate space; inset:0 aligns that space 1:1 with
                the measure box so #redrawArpeggios can position with raw px -->
           <svg class="arpeggio-connectors"></svg>
-          <span>${this.number}</span>
+          <!-- ties/slurs/etc. across this measure's own staves — only draws
+               when this measure has no <music-composition> ancestor (that
+               case is composition.ts's own #redrawConnectors); see
+               staffBase.ts#drawConnectorsWhenStandalone's escalation -->
+          <svg class="connectors-overlay"></svg>
+          <!-- dynamic-shared markings, centered between two sibling
+               staves — see #redrawSharedDynamics -->
+          <svg class="shared-dynamics-overlay"></svg>
+          <!-- This measure's own number, shown per the ancestor
+               music-composition element's measure-numbers policy — see
+               #renderMeasureNumber. Absolutely positioned (like every other
+               overlay above) so it never participates in normal flow; an
+               earlier inline-span version of this shifted the brace/
+               bracket/label position by changing flow height (see
+               packages/web-components/CLAUDE.md) — this shape can't repeat
+               that, since none of these overlays affect :host size. -->
+          <div class="measure-numbers"></div>
           <slot></slot>
         </div>
       `;
@@ -312,10 +451,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       staffConnector.style.height = `${connectorHeight}px`;
 
       const isFirstInRow = this.#isFirstInRow(allMeasures, currentIndex);
+      const isLastInRow = this.#isLastInRow(allMeasures, currentIndex);
 
       this.#renderGroupConnectors(isFirstInRow);
+      this.#renderStaffLabels(isFirstInRow);
+      this.#renderMeasureNumber(isFirstInRow, isLastInRow);
       staffConnector.classList.toggle('hidden', !isFirstInRow);
       this.#redrawArpeggios();
+      this.#redrawConnectors();
+      this.#redrawSharedDynamics();
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -333,6 +477,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       // Tolerance of 5px for rounding errors
       return Math.abs(currentRect.top - prevRect.top) > 5;
+    }
+
+    #isLastInRow(allMeasures: Element[], currentIndex: number): boolean {
+      if (currentIndex === allMeasures.length - 1) {
+        return true;
+      }
+
+      const nextMeasure = allMeasures[currentIndex + 1];
+      if (!nextMeasure) {
+        return true;
+      }
+
+      const nextRect = nextMeasure.getBoundingClientRect();
+      const currentRect = this.getBoundingClientRect();
+
+      // Tolerance of 5px for rounding errors
+      return Math.abs(currentRect.top - nextRect.top) > 5;
     }
 
     // A staff with a `group` attribute joins a brace/bracket connector with
@@ -525,6 +686,116 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return heads ? Array.from(heads, (h) => h.getBoundingClientRect()) : [];
     }
 
+    // Ties/slurs/etc. across this measure's own staves (e.g. a slur from one
+    // hand of a grand staff to the other). A <music-composition> ancestor
+    // already runs the same pairing composition-wide via its own
+    // #redrawConnectors — bail here so the two passes don't double-draw.
+    // Each staff already bails out of its own standalone connector drawing
+    // once it has a <music-measure> ancestor (staffBase.ts), so this is the
+    // only place same-staff *and* cross-staff pairs get drawn for a
+    // standalone measure.
+    #redrawConnectors() {
+      if (this.closest(MUSIC_COMPOSITION)) {
+        return;
+      }
+
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.connectors-overlay'
+      );
+      if (!overlay) {
+        return;
+      }
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const byVoice = partitionByVoice(collectNoteLikeElements(this));
+      const pairs = [
+        ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
+        ...collectArpeggioTiePairs(this),
+      ];
+      if (pairs.length === 0) {
+        return;
+      }
+
+      const rootRect = this.getBoundingClientRect();
+      const svgs = buildConnectorSvgs(pairs, {
+        rootRect,
+        rowLeft: 0,
+        rowRight: rootRect.width,
+      });
+      for (const svg of svgs) {
+        overlay.appendChild(svg);
+      }
+    }
+
+    // A `dynamic-shared` note/chord suppresses its own staff-local dynamic
+    // rendering (staffClassicalBase.ts#renderDynamics) in favor of one drawn
+    // here, centered in the vertical gap between this staff and its nearest
+    // sibling staff — e.g. a keyboard dynamic marking both hands at once.
+    // Unlike #redrawConnectors, this never defers to composition.ts (there is
+    // no composition-level equivalent — a measure's own staves are always the
+    // right unit for "the gap between two staves").
+    #redrawSharedDynamics() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.shared-dynamics-overlay'
+      );
+      if (!overlay) {
+        return;
+      }
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+      if (staves.length < 2) {
+        return;
+      }
+
+      const measureRect = this.getBoundingClientRect();
+      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
+
+      staves.forEach((staff, staffIndex) => {
+        const neighborIndex =
+          staffIndex + 1 < staves.length ? staffIndex + 1 : staffIndex - 1;
+        const neighbor = staves[neighborIndex];
+        if (!neighbor) {
+          return;
+        }
+        const staffRect = staff.getBoundingClientRect();
+        const neighborRect = neighbor.getBoundingClientRect();
+        const gapMidY =
+          neighborIndex > staffIndex
+            ? (staffRect.bottom + neighborRect.top) / 2
+            : (neighborRect.bottom + staffRect.top) / 2;
+
+        const elements = Array.from(
+          staff.querySelectorAll(elementSelector)
+        ) as NoteOrChordElementType[];
+        for (const element of elements) {
+          if (element.dynamic === null || !element.dynamicShared) {
+            continue;
+          }
+          const heads = this.#headRects(element);
+          if (heads.length === 0) {
+            continue;
+          }
+          const centerX =
+            heads.reduce((sum, r) => sum + r.left + r.width / 2, 0) /
+            heads.length;
+          overlay.appendChild(
+            createDynamicMarkingSvg(
+              element.dynamic,
+              centerX - measureRect.left,
+              gapMidY - measureRect.top
+            )
+          );
+        }
+      });
+    }
+
     #renderGroupConnectors(isFirstInRow: boolean) {
       const container =
         this.shadowRoot?.querySelector<HTMLElement>('.group-connectors');
@@ -591,6 +862,123 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         glyph.style.left = `${-(glyphWidth + gap)}px`;
         glyph.style.top = `${topOffset}px`;
         container.appendChild(glyph);
+      }
+    }
+
+    // A staff's `label` (e.g. "r.h."/"l.h.") renders as small text in the
+    // margin, vertically centered on that staff's own slot — a system-start
+    // decoration like the brace/bracket above, only drawn for the first
+    // measure of each visual row.
+    #renderStaffLabels(isFirstInRow: boolean) {
+      const container =
+        this.shadowRoot?.querySelector<HTMLElement>('.staff-labels');
+      if (!container) {
+        return;
+      }
+
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+
+      if (!isFirstInRow) {
+        this.classList.remove('has-staff-label');
+        return;
+      }
+
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+
+      const hasAnyLabel = staves.some(
+        (staff) => staff.label !== null && staff.label !== ''
+      );
+      this.classList.toggle('has-staff-label', hasAnyLabel);
+      if (!hasAnyLabel) {
+        return;
+      }
+
+      // When a brace/bracket is also present, it draws in this same
+      // coordinate space, spanning from x=0 back to -groupConnectorWidthPx —
+      // the label needs to sit further left than its own margin alone to
+      // clear it, matching the :host(.has-group-connector.has-staff-label)
+      // margin reservation above, or the two visually overlap.
+      const groupConnectorWidthPx = this.classList.contains(
+        'has-group-connector'
+      )
+        ? Math.max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX)
+        : 0;
+
+      let precedingStavesHeight = 0;
+      for (const staff of staves) {
+        const slotHeight = staffSlotHeightPx(staff);
+        if (staff.label) {
+          const el = document.createElement('div');
+          el.classList.add('staff-label');
+          el.style.left = `${-(
+            groupConnectorWidthPx +
+            STAFF_LABEL_WIDTH_PX +
+            STAFF_LABEL_LEFT_MARGIN_PX
+          )}px`;
+          el.style.top = `${
+            CONNECTOR_TOP_PX + precedingStavesHeight + slotHeight / 2
+          }px`;
+          el.textContent = staff.label;
+          container.appendChild(el);
+        }
+        precedingStavesHeight += slotHeight + STAFF_SLOT_GAP_PX;
+      }
+    }
+
+    // Which measures actually show their own `number` is a whole-composition
+    // policy (row-start/row-end describe how the *entire* piece wraps, not a
+    // single measure's own concern), so the mode is read from the ancestor
+    // <music-composition> — never this measure's own attribute. No ancestor
+    // means no policy to read, so a standalone measure never shows a number.
+    #renderMeasureNumber(isFirstInRow: boolean, isLastInRow: boolean) {
+      const container =
+        this.shadowRoot?.querySelector<HTMLElement>('.measure-numbers');
+      if (!container) {
+        return;
+      }
+
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+
+      const number = this.number;
+      if (number === null) {
+        return;
+      }
+
+      const mode =
+        parseMeasureNumberDisplay(
+          this.closest(MUSIC_COMPOSITION)?.getAttribute('measure-numbers') ??
+            null
+        ) ?? 'none';
+      const shouldShow =
+        mode === 'all' ||
+        (mode === 'row-start' && isFirstInRow) ||
+        (mode === 'row-end' && isLastInRow) ||
+        (mode === 'odd' && number % 2 === 1) ||
+        (mode === 'even' && number % 2 === 0);
+      if (!shouldShow) {
+        return;
+      }
+
+      const el = document.createElement('div');
+      el.classList.add('measure-number');
+      el.textContent = `${number}`;
+      container.appendChild(el);
+    }
+
+    // Duck-typed call from composition.ts's attributeChangedCallback when
+    // its own `measure-numbers` attribute changes — this measure reads that
+    // attribute live (via closest(), above) whenever it redraws, so this
+    // just needs to force a redraw, mirroring refreshInheritedAttrs?.() on
+    // staves for key-sig/mode/time.
+    refreshMeasureNumberDisplay(): void {
+      if (this.isConnected) {
+        this.#updateConnectorVisibility();
       }
     }
   }

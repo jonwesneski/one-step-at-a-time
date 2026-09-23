@@ -1361,3 +1361,148 @@ test.describe(`${MUSIC_STAFF} beat-proportional spacing`, () => {
     expect(leftsAfterThird[1]).toBe(lefts1And2[1]);
   });
 });
+
+test.describe(`${MUSIC_STAFF} glissando`, () => {
+  test('renders a straight diagonal line between the two notes, with the hint text near it', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+
+        const start = document.createElement(noteTag);
+        start.setAttribute('note', 'C');
+        start.setAttribute('octave', '4');
+        start.setAttribute('duration', 'half');
+        start.setAttribute('glissando', 'start');
+        start.setAttribute('glissando-hint', 'white-key');
+        staff.appendChild(start);
+
+        const end = document.createElement(noteTag);
+        end.setAttribute('note', 'C');
+        end.setAttribute('octave', '6');
+        end.setAttribute('duration', 'half');
+        end.setAttribute('glissando', 'end');
+        staff.appendChild(end);
+
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const staff = document.querySelector(staffTag);
+        if (staff === null || staff.shadowRoot === null) {
+          throw new Error('staff not ready');
+        }
+        const overlay = staff.shadowRoot.querySelector(
+          '.standalone-connectors-overlay'
+        );
+        const path = overlay?.querySelector('path') ?? null;
+        const text = overlay?.querySelector('text') ?? null;
+        const notes = Array.from(staff.querySelectorAll(noteTag));
+        return {
+          d: path?.getAttribute('d') ?? null,
+          textContent: text?.textContent ?? null,
+          startRect: notes[0]?.getBoundingClientRect() ?? null,
+          endRect: notes[1]?.getBoundingClientRect() ?? null,
+        };
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+
+    expect(result.d).not.toBeNull();
+    // A glissando is a straight line ("M x y L x y"), never a curve ("Q").
+    expect(result.d).not.toContain('Q');
+    expect(result.d).toMatch(/^M \S+ \S+ L \S+ \S+$/);
+    expect(result.textContent).toBe('white-note gliss.');
+    expect(result.startRect).not.toBeNull();
+    expect(result.endRect).not.toBeNull();
+    if (result.startRect === null || result.endRect === null) {
+      throw new Error('unreachable');
+    }
+    // The end note is a 6th above the start note — the line must slope
+    // upward (end notehead's top is well above the start's).
+    expect(result.endRect.top).toBeLessThan(result.startRect.top - 10);
+  });
+
+  test('the hint label clears the line across its own width, not just at its center', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+
+        const start = document.createElement(noteTag);
+        start.setAttribute('note', 'C');
+        start.setAttribute('octave', '4');
+        start.setAttribute('duration', 'half');
+        start.setAttribute('glissando', 'start');
+        start.setAttribute('glissando-hint', 'black-key');
+        staff.appendChild(start);
+
+        const end = document.createElement(noteTag);
+        end.setAttribute('note', 'C');
+        end.setAttribute('octave', '6');
+        end.setAttribute('duration', 'half');
+        end.setAttribute('glissando', 'end');
+        staff.appendChild(end);
+
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        throw new Error('staff not ready');
+      }
+      const overlay = staff.shadowRoot.querySelector(
+        '.standalone-connectors-overlay'
+      );
+      const path = overlay?.querySelector('path');
+      const text = overlay?.querySelector('text');
+      if (!path || !text) {
+        throw new Error('connector not rendered');
+      }
+      const match = /^M (\S+) (\S+) L (\S+) (\S+)$/.exec(
+        path.getAttribute('d') ?? ''
+      );
+      if (!match) {
+        throw new Error('unexpected path shape');
+      }
+      const [, x1, y1, x2, y2] = match.map(Number);
+      const textBBox = (text as unknown as SVGGraphicsElement).getBBox();
+      const lineYAt = (x: number) => y1 + ((y2 - y1) * (x - x1)) / (x2 - x1);
+      return {
+        textBottom: textBBox.y + textBBox.height,
+        lineYAtTextLeft: lineYAt(textBBox.x),
+        lineYAtTextRight: lineYAt(textBBox.x + textBBox.width),
+      };
+    }, MUSIC_STAFF);
+
+    // Label sits above the line ("above" = smaller y) — its bottom edge
+    // must clear the line's y at BOTH ends of its own horizontal span, not
+    // just at the line's overall midpoint.
+    expect(result.textBottom).toBeLessThan(result.lineYAtTextLeft);
+    expect(result.textBottom).toBeLessThan(result.lineYAtTextRight);
+  });
+});

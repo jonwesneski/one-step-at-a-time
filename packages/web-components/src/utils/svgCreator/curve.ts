@@ -1,5 +1,8 @@
 import { SVG_NS } from '../consts';
-import { STAFF_LINE_SPACING } from '../notationDimensions';
+import {
+  CONNECTOR_LABEL_CHAR_WIDTH_PX,
+  STAFF_LINE_SPACING,
+} from '../notationDimensions';
 
 export type CurveBulge = 'above' | 'below';
 export type CurveStyle = 'smooth' | 'straight';
@@ -65,10 +68,25 @@ export const createCurveSvg = ({
 
   if (label) {
     const text = document.createElementNS(SVG_NS, 'text');
-    const labelY =
-      style === 'straight'
-        ? (startY + endY) / 2 + bulgeSign * LABEL_FONT_SIZE * 0.9
-        : midY + bulgeSign * LABEL_FONT_SIZE * 0.6;
+    let labelY: number;
+    if (style === 'straight') {
+      // A straight line's Y varies with slope across the label's own width —
+      // clearing only the midpoint isn't enough for a steep line (e.g. a
+      // multi-octave glissando), so clear whichever of the label's two edges
+      // sits closest to the line on the bulge side.
+      const halfWidth = (label.length * CONNECTOR_LABEL_CHAR_WIDTH_PX) / 2;
+      const slope = endX === startX ? 0 : (endY - startY) / (endX - startX);
+      const trueMidY = (startY + endY) / 2;
+      const yAtLeftEdge = trueMidY - slope * halfWidth;
+      const yAtRightEdge = trueMidY + slope * halfWidth;
+      const clearedY =
+        bulge === 'above'
+          ? Math.min(yAtLeftEdge, yAtRightEdge)
+          : Math.max(yAtLeftEdge, yAtRightEdge);
+      labelY = clearedY + bulgeSign * LABEL_FONT_SIZE * 0.9;
+    } else {
+      labelY = midY + bulgeSign * LABEL_FONT_SIZE * 0.6;
+    }
     text.setAttribute('x', `${midX}`);
     text.setAttribute('y', `${labelY}`);
     text.setAttribute('text-anchor', 'middle');

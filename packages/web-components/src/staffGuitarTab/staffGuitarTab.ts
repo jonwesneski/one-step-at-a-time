@@ -36,6 +36,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TimeSignature} time - Beats per measure, used for note spacing. Inherited from a parent measure/composition when unset.
    * @attr {'grand' | 'bracket'} group - Joins this staff to its next sibling under a brace or bracket connector.
    * @attr {string} group-id - Shared identifier letting a `group="bracket"` connector span more than two contiguous staves.
+   * @attr {string} label - Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.
    *
    * @example
    * <music-staff-guitar-tab time="4/4">
@@ -96,7 +97,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     static get observedAttributes(): string[] {
-      return [COMMON_ATTRIBUTES.TIME, 'group', 'group-id'];
+      return [COMMON_ATTRIBUTES.TIME, 'group', 'group-id', 'label'];
     }
 
     // No time-signature glyph to render (tab notation doesn't show one), so
@@ -116,6 +117,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         );
       } else if (name === 'group' || name === 'group-id') {
         this.dispatchGroupAttributeChange();
+      } else if (name === 'label') {
+        this.dispatchLabelAttributeChange();
       }
     }
 

@@ -27,7 +27,10 @@ import { DragSelectOverlay } from './DragSelectOverlay';
 import { applyEntryUpdate } from './entryEditsHelpers';
 import { MeasureInput } from './MeasureInput';
 import { rebar } from './rebarHelpers';
-import { moveEntryInStaff } from './reorderHelpers';
+import {
+  moveEntryInVoice,
+  moveEntryToVoice as moveEntryToVoiceInStructure,
+} from './reorderHelpers';
 import { findGroupMembers } from './staffGroupsHelpers';
 import { TimeSignatureChangeDialog } from './TimeSignatureChangeDialog';
 import { setTuplet as setTupletInStructure } from './tupletsHelpers';
@@ -40,6 +43,11 @@ import type {
   StaffType,
 } from './types';
 import { isSelectionEmpty } from './types';
+import {
+  addVoiceToStaff,
+  createDefaultVoice,
+  removeVoiceFromStaff,
+} from './voiceHelpers';
 
 const firstMeasureId = crypto.randomUUID();
 
@@ -209,12 +217,20 @@ export function CompositionInput() {
       });
       return;
     }
-    // Copying the staff structure from the last measure
+    // Copying the staff structure from the last measure — same voice count,
+    // each voice starts empty (never the previous measure's own entries).
     const newStaffEntries = lastMeasure.staffIds.map((sid) => {
       const newSid = crypto.randomUUID();
+      const srcStaff = s.stavesById[sid];
+      const emptyVoices = srcStaff.voiceOrder.map(() => createDefaultVoice());
       return {
         newSid,
-        staff: { ...s.stavesById[sid], id: newSid, entryIds: [] },
+        staff: {
+          ...srcStaff,
+          id: newSid,
+          voiceOrder: emptyVoices.map((v) => v.id),
+          voicesById: Object.fromEntries(emptyVoices.map((v) => [v.id, v])),
+        },
       };
     });
     record({
@@ -234,6 +250,7 @@ export function CompositionInput() {
   function addStaff(measureId: string, staffType: StaffType) {
     const s = getStructure();
     const newSid = crypto.randomUUID();
+    const voice = createDefaultVoice();
     record({
       ...s,
       measuresById: {
@@ -248,7 +265,8 @@ export function CompositionInput() {
         [newSid]: {
           id: newSid,
           type: staffType,
-          entryIds: [],
+          voiceOrder: [voice.id],
+          voicesById: { [voice.id]: voice },
           group: null,
           groupId: null,
         },
@@ -302,20 +320,63 @@ export function CompositionInput() {
     record({ ...s, stavesById });
   }
 
+  function addVoice(staffId: string) {
+    record(addVoiceToStaff(getStructure(), staffId));
+  }
+
+  function removeVoice(staffId: string, voiceId: string) {
+    record(removeVoiceFromStaff(getStructure(), staffId, voiceId));
+  }
+
+  function moveEntryToVoice(
+    staffId: string,
+    entryId: string,
+    fromVoiceId: string,
+    toVoiceId: string
+  ) {
+    const s = getStructure();
+    const next = moveEntryToVoiceInStructure(
+      s,
+      staffId,
+      entryId,
+      fromVoiceId,
+      toVoiceId
+    );
+    if (next !== s) {
+      record(next);
+    }
+  }
+
   function addEntry(
     measureId: string,
     staffId: string,
-    entry: DraftMusicEntry
+    entry: DraftMusicEntry,
+    voiceId?: string
   ) {
     const s = getStructure();
+    const staff = s.stavesById[staffId];
+    // A clef change is staff-wide but only ever authored in voice 1 (the
+    // canonical timeline every other voice's position is judged against) —
+    // enforced here regardless of which voice was passed in.
+    const targetVoiceId =
+      entry.type === 'clef'
+        ? staff.voiceOrder[0]
+        : voiceId ?? staff.voiceOrder[0];
+    const targetVoice = staff.voicesById[targetVoiceId];
     const newEid = crypto.randomUUID();
     record({
       ...s,
       stavesById: {
         ...s.stavesById,
         [staffId]: {
-          ...s.stavesById[staffId],
-          entryIds: [...s.stavesById[staffId].entryIds, newEid],
+          ...staff,
+          voicesById: {
+            ...staff.voicesById,
+            [targetVoiceId]: {
+              ...targetVoice,
+              entryIds: [...targetVoice.entryIds, newEid],
+            },
+          },
         },
       },
       entriesById: {
@@ -333,9 +394,14 @@ export function CompositionInput() {
     }
   }
 
-  function reorderEntry(staffId: string, entryId: string, toIndex: number) {
+  function reorderEntry(
+    staffId: string,
+    voiceId: string,
+    entryId: string,
+    toIndex: number
+  ) {
     const s = getStructure();
-    const next = moveEntryInStaff(s, staffId, entryId, toIndex);
+    const next = moveEntryInVoice(s, staffId, voiceId, entryId, toIndex);
     if (next !== s) {
       record(next);
     }
@@ -375,7 +441,18 @@ export function CompositionInput() {
   ) {
     const s = getStructure();
     const withTimeSignature = { ...s, timeSig };
-    record(rewrite ? rebar(withTimeSignature, 0) : withTimeSignature);
+    if (!rewrite) {
+      record(withTimeSignature);
+      return;
+    }
+    const { structure, rebarred } = rebar(withTimeSignature, 0);
+    if (!rebarred) {
+      window.alert(
+        'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.'
+      );
+      return;
+    }
+    record(structure);
   }
 
   function setMeasureTimeSignature(
@@ -395,10 +472,19 @@ export function CompositionInput() {
         [measureId]: { ...measure, time: timeSig },
       },
     };
+    if (!rewrite) {
+      record(withTimeSignature);
+      return;
+    }
     const measureIndex = s.measureOrder.indexOf(measureId);
-    record(
-      rewrite ? rebar(withTimeSignature, measureIndex) : withTimeSignature
-    );
+    const { structure, rebarred } = rebar(withTimeSignature, measureIndex);
+    if (!rebarred) {
+      window.alert(
+        'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.'
+      );
+      return;
+    }
+    record(structure);
   }
 
   return (
@@ -408,6 +494,9 @@ export function CompositionInput() {
       onAddMeasure={addMeasure}
       onAddStaff={addStaff}
       onSetStaffGroup={setStaffGroup}
+      onAddVoice={addVoice}
+      onRemoveVoice={removeVoice}
+      onMoveEntryToVoice={moveEntryToVoice}
       onAddEntry={addEntry}
       onUpdateEntry={updateEntry}
       onReorderEntry={reorderEntry}

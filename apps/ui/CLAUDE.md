@@ -93,8 +93,29 @@ nodes, every id a `crypto.randomUUID()`.
 timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef)
 measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin, by entry id)
 measuresById: Record<id, { staffIds, time? }>   connectorOrder: string[]
-stavesById:   Record<id, { type, entryIds, group, groupId }>   tupletsById: Record<id, { ratio }>
+stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tupletsById: Record<id, { ratio }>
 ```
+
+A staff's entries are one level deeper than the diagram above shows:
+`voiceOrder: string[]` (ascending = voice 1..3, position IS the voice number,
+mirrors the library's `<music-voice>` model) + `voicesById: Record<id, {
+id, entryIds }>`. A staff's "Voices" tab (`VoiceInput.tsx`, mounted from
+`StaffInput.tsx` alongside "Staff Entries") adds/removes a voice
+(`addVoice`/`removeVoice` mutators, wrapping `voiceHelpers.ts`'s
+`addVoiceToStaff`/`removeVoiceFromStaff`, capped at 3 like the library); the
+"Staff Entries" add-panel gets a Voice selector once a staff has 2+ (hidden
+for the common single-voice case); an existing entry can be relocated to a
+different voice via a "Voice" selector in its own Edit panel
+(`moveEntryToVoice` mutator) — real drag-to-another-voice is not implemented
+(today's reorder-drag is single-voice by construction; moving voices is a
+plain control, not drag). A `ClefEntry` always lives in `voiceOrder[0]`'s own
+`entryIds` — a clef change is staff-wide, but the library only honors a
+mid-stream `<music-clef>` nested in the first `<music-voice>` — so the
+add-panel's Voice selector never appears on the Clef Change tab. Use
+`voiceHelpers.ts`'s `staffEntryIds(staff)` for anything that genuinely needs
+"every entry in this staff regardless of voice" (deletion cascades,
+staff-wide search, marquee hit-testing) rather
+than reading `voicesById` directly.
 
 `keySig` / `mode` inheritance is **not** stored per node — it lives on the root
 form values, passed straight to `<music-composition>`, and the library flows it
@@ -111,10 +132,16 @@ Editing an existing entry goes through `updateEntry` → `applyEntryUpdate`
 undo stack, then writes the new one. Never call `methods.setValue` on a structural
 field directly — you'd skip undo history.
 
-- Mutators (`addMeasure`, `addStaff`, `setStaffGroup`, `addEntry`, `setConnector`,
-  …) are defined in `CompositionInput.tsx`, passed into
-  `CompositionFormSessionProvider` as `on*` props, and re-exposed through
-  `useCompositionFormSession()`. Add a new mutator the same way.
+- Mutators (`addMeasure`, `addStaff`, `setStaffGroup`, `addVoice`, `removeVoice`,
+  `moveEntryToVoice`, `addEntry`, `setConnector`, …) are defined in
+  `CompositionInput.tsx`, passed into `CompositionFormSessionProvider` as `on*`
+  props, and re-exposed through `useCompositionFormSession()`. Add a new mutator
+  the same way. A mutator whose effect can invalidate the current selection
+  (deletes/moves ids the selection references) gets a small wrapper defined
+  _inside_ the provider instead of a raw pass-through — see `removeVoice`
+  (drops now-dangling entry ids from `session.selection` after the delete) and
+  `confirmTimeSignatureChange` (clears the selection outright after a rebar
+  mints fresh ids).
 - `getStructure` / `setStructure` in `CompositionInput.tsx` bridge the form store
   and `useUndoRedo`. If you add a field to `CompositionStructure`, add it in **four
   places**: the type, `defaultValues`, `getStructure`, `setStructure`.
@@ -248,14 +275,34 @@ machine, wired onto every note/chord/rest via `onPointerDown` in `StaffInput`.
   from `clefsHelpers.ts`, and skips a chord's other notes. Live preview writes the
   `note`/`octave` attribute straight onto the light-DOM element — the library
   re-renders in place via its `note-y-change` event. Commit reuses `updateEntry`.
-- **Reorder** computes a drop index by geometry over the staff's `entryElements`
-  rects (`reorderTargetIndex`), then `reorderEntry` → `moveEntryInStaff`
-  (`reorderHelpers.ts`), which splices `entryIds` and repairs the fallout:
+- **Reorder** computes a drop index by geometry over the entry's own voice's
+  `entryElements` rects (`reorderTargetIndex`), then `reorderEntry` →
+  `moveEntryInVoice` (`reorderHelpers.ts`), which splices that voice's
+  `entryIds` and repairs the fallout:
   dissolves a tuplet whose run is no longer contiguous, swaps inverted connector
   endpoints, prunes now-invalid ties.
 - Overlays (drop clone, drop indicator, `D4 → F4` tooltip) are appended to
   `document.body` at `z-index: 60`. `entryElements` / `staffElements` (the id →
   DOM maps) are exposed on the session context for this and the marquee.
+
+**11. A staff's voices are edited through selectors, not drag.** The data
+shape (`voiceOrder`/`voicesById`), the `addVoice`/`removeVoice`/
+`moveEntryToVoice` mutators, and the `ClefEntry`-always-in-`voiceOrder[0]`
+rule are covered in Data model above — see piece 1 for the `removeVoice`
+selection-cleanup wrapper.
+
+- `VoiceInput.tsx` (the "Voices" tab, mounted from `StaffInput`) is the only
+  place a voice is created or removed. It's a plain list + Add/Remove
+  buttons, not a drag surface.
+- `moveEntryToVoice` is exposed as a "Move to Voice" `<Select>` in the
+  entry's own Edit panel (`EntryEditInput`), not as a drag target. **This is
+  deliberate, not a placeholder**: `useEntryDrag` (piece 10) has no
+  cross-voice awareness at all — its reorder path computes a drop index
+  against the dragged entry's _own_ voice's `entryElements` rects only, with
+  no other-voice hit-testing or Y-axis/row disambiguation to extend. Building
+  real drag-to-another-voice would need that disambiguation heuristic from
+  scratch; a selector ships the capability now without it. Revisit only if
+  real usage shows the selector too slow for dense multi-voice editing.
 
 ### Component tree
 

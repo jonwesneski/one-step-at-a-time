@@ -27,7 +27,9 @@ export function buildBeamsRenderer(
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
-  arpeggioRunIndices: ReadonlySet<number> = new Set()
+  arpeggioRunIndices: ReadonlySet<number> = new Set(),
+  elementBeatOffsets?: number[],
+  stemDirectionsOverride?: boolean[]
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -41,14 +43,23 @@ export function buildBeamsRenderer(
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
-    elementDurationFactors
+    elementDurationFactors,
+    elementBeatOffsets
   );
-  const stemDirections = determineStemDirections(
-    elements,
-    beamsBuilder,
-    noteStaffYCoords,
-    chordStaffYCoords
-  );
+  // stemDirectionsOverride lets a caller impose a fixed per-voice policy
+  // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
+  // instead of the pitch-driven default: the beam renderer's own Y-position
+  // math below depends on stem direction, so swapping directions after
+  // construction would leave stale geometry — this must happen before
+  // noteYPositions is built, not after.
+  const stemDirections =
+    stemDirectionsOverride ??
+    determineStemDirections(
+      elements,
+      beamsBuilder,
+      noteStaffYCoords,
+      chordStaffYCoords
+    );
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {

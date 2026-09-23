@@ -13,6 +13,7 @@ import type {
   ConnectorRole,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
   GraceArticulationsType,
   GraceDuration,
   GraceNotesType,
@@ -22,6 +23,7 @@ import type {
   GuitarFret,
   HairpinKind,
   HairpinRole,
+  MeasureNumberDisplay,
   Mode,
   Note,
   Octave,
@@ -33,7 +35,7 @@ import type {
   TrillFinishSlur,
   TrillLineMode,
   TupletRatio,
-  Voice,
+  VocalType,
 } from '@one-step-at-a-time/web-components';
 import 'react';
 
@@ -59,6 +61,7 @@ declare module 'react' {
         mode?: Mode;
         time?: TimeSignature;
         'max-width'?: number | 'none';
+        'measure-numbers'?: MeasureNumberDisplay;
       };
       'music-measure': WebComponentProps & {
         number?: number;
@@ -73,19 +76,22 @@ declare module 'react' {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
+        label?: string;
       };
       'music-staff-guitar-tab': WebComponentProps & {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
+        label?: string;
       };
       'music-staff-vocal': WebComponentProps & {
-        voice?: Voice;
+        voice?: VocalType;
         'key-sig'?: Note;
         mode?: Mode;
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
+        label?: string;
       };
       'music-lyrics': WebComponentProps & {
         verse?: string;
@@ -96,6 +102,7 @@ declare module 'react' {
       'music-rest': WebComponentNoChildrenProps & {
         duration?: DurationType;
       };
+      'music-voice': WebComponentProps;
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
       };
@@ -110,6 +117,8 @@ declare module 'react' {
         tie?: TieValue;
         'lv-label'?: boolean;
         slur?: ConnectorRole;
+        glissando?: ConnectorRole;
+        'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
         crescendo?: HairpinRole;
@@ -147,6 +156,8 @@ declare module 'react' {
         tie?: TieValue;
         'lv-label'?: boolean;
         slur?: ConnectorRole;
+        glissando?: ConnectorRole;
+        'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
         crescendo?: HairpinRole;

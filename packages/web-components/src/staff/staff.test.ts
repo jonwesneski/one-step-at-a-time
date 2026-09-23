@@ -2,7 +2,10 @@
  * @jest-environment jsdom
  */
 import '../index';
-import { generateYCoordinates } from '../rules/theoryHelpers';
+import {
+  extrapolateYCoordinate,
+  generateYCoordinates,
+} from '../rules/theoryHelpers';
 import type {
   ClefElementType,
   NoteElementType,
@@ -290,6 +293,29 @@ describe(`${MUSIC_STAFF} clef changes`, () => {
     expect(treble['C3']).toBeUndefined();
     expect(staff.noteToYCoordinate('C', 3, 2)).toBe(bass['C3']);
     expect(staff.noteToYCoordinate('C', 3, 2)).not.toBe(0);
+  });
+
+  it('noteToYCoordinate extrapolates a real below/above-staff position for a note outside the clef\'s own table, instead of the "not found" sentinel', () => {
+    // A treble staff still legitimately accepts octave 2/3 and octave 6+
+    // notes (the `octave` attribute isn't clef-restricted) — they just fall
+    // outside the pre-generated C6-C4 table and used to silently resolve to
+    // 0 (the top of the SVG) instead of a real ledger-line position.
+    const staff = makeStaff('treble');
+    renderElements(staff, []);
+
+    const treble = generateYCoordinates(...CLEF_RANGES.treble);
+
+    expect(staff.noteToYCoordinate('B', 3)).toBe(
+      extrapolateYCoordinate('B', 3, treble)
+    );
+    expect(staff.noteToYCoordinate('B', 3)).not.toBe(0);
+    expect(staff.noteToYCoordinate('B', 3)).toBeGreaterThan(treble['C4'] ?? 0);
+
+    expect(staff.noteToYCoordinate('D', 6)).toBe(
+      extrapolateYCoordinate('D', 6, treble)
+    );
+    expect(staff.noteToYCoordinate('D', 6)).not.toBe(0);
+    expect(staff.noteToYCoordinate('D', 6)).toBeLessThan(treble['C6'] ?? 0);
   });
 
   it('drops and hides a clef marker whose anchor note is truncated by measure overflow', () => {

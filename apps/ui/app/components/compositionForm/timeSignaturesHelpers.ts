@@ -1,5 +1,6 @@
 import type { TimeSignature } from '@one-step-at-a-time/web-components';
 import type { CompositionStructure } from './types';
+import { staffEntryIds } from './voiceHelpers';
 
 // The time signature is a positional value: `structure.timeSig` is the
 // composition (measure 1) time signature, and any later measure may carry a
@@ -41,9 +42,10 @@ export function timeSignatureOfEntry(
   const timeSignatures = effectiveTimeSignatures(structure);
   for (let i = 0; i < structure.measureOrder.length; i++) {
     const measure = structure.measuresById[structure.measureOrder[i]];
-    const holdsEntry = measure?.staffIds.some((sid) =>
-      structure.stavesById[sid]?.entryIds.includes(entryId)
-    );
+    const holdsEntry = measure?.staffIds.some((sid) => {
+      const staff = structure.stavesById[sid];
+      return staff ? staffEntryIds(staff).includes(entryId) : false;
+    });
     if (holdsEntry) {
       return timeSignatures[i];
     }

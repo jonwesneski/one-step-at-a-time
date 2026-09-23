@@ -176,7 +176,7 @@ export function buildTupletGroups(
   return groups;
 }
 
-function getStaffYForIndex(
+export function getStaffYForIndex(
   index: number,
   elements: NoteChordOrRestElementType[],
   stemDirections: boolean[],
@@ -339,16 +339,17 @@ export function computeTupletBracketGeometry(
     return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
   };
 
-  // When notes are beamed, push baseY outward past the extreme stem tip so the
-  // bracket never overlaps a stem or beam. Only applies when we are drawing a
-  // bracket (omitBracket === false will be determined after, but we can check
-  // the beamed/rest conditions here since omitBracket implies we won't render a
-  // bracket line anyway).
-  const allBeamed = group.indices.every((i) => beamedIndices.has(i));
+  // Push baseY outward past the extreme stem tip so the bracket never
+  // overlaps a stem, beam, or (for a non-beamed group sitting well past the
+  // staff, e.g. ledger-line notes) the noteheads themselves — the nominal
+  // staffBaseY above is only a safe default when the group's notes sit
+  // close to the staff. A no-op (baseY unchanged) whenever the nominal
+  // clearance already suffices, since this only ever pushes baseY further
+  // out via the Math.max/min below.
   const nonRestIndicesForClamping = group.indices.filter(
     (i) => elements[i].nodeName !== MUSIC_REST_NODE
   );
-  if (allBeamed && nonRestIndicesForClamping.length > 0) {
+  if (nonRestIndicesForClamping.length > 0) {
     const gap = TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX;
 
     const extremeStemTipY = nonRestIndicesForClamping.reduce(

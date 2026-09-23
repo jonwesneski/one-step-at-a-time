@@ -39,6 +39,7 @@ const preview: Preview = {
             'Trills',
             'Clef Changes',
             'Beams',
+            'Voices',
           ],
           'Instruments',
           [
@@ -46,7 +47,8 @@ const preview: Preview = {
             'Guitar',
             'Strings',
             'Winds & Brass',
-            'Percussion & Keyboard',
+            'Keyboard',
+            'Percussion',
           ],
         ],
       },

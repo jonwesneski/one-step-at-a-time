@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import '../index';
+import { MEASURE_NUMBER_DISPLAYS } from '../utils/consts';
 
 const meta: Meta = {
   title: 'Composition',
@@ -12,6 +13,7 @@ const meta: Meta = {
       key-sig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
+      measure-numbers=${args.measureNumbers}
     >
       <music-measure>
         <music-staff
@@ -67,11 +69,17 @@ const meta: Meta = {
       options: ['major', 'minor'],
     },
     time: { control: 'text' },
+    measureNumbers: {
+      name: 'measure-numbers',
+      control: 'select',
+      options: MEASURE_NUMBER_DISPLAYS,
+    },
   },
   args: {
     keySig: 'C',
     mode: 'major',
     time: '4/4',
+    measureNumbers: 'none',
   },
 };
 export default meta;
@@ -104,6 +112,7 @@ export const MultipleMeasuresSingleStaff: Story = {
       mode=${args.mode}
       time=${args.time}
       max-width=${ifDefined(args.maxWidth)}
+      measure-numbers=${args.measureNumbers}
     >
       ${[0, 1, 2, 3, 4].map(
         () => html`
@@ -135,6 +144,7 @@ export const MultipleMeasuresTwoStaves: Story = {
       mode=${args.mode}
       time=${args.time}
       max-width=${ifDefined(args.maxWidth)}
+      measure-numbers=${args.measureNumbers}
     >
       ${[0, 1, 2, 3, 4].map(
         () => html`
@@ -174,6 +184,7 @@ export const CrossMeasureTie: Story = {
       key-sig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
+      measure-numbers=${args.measureNumbers}
     >
       <music-measure>
         <music-staff
@@ -223,6 +234,7 @@ export const CrossSystemTie: Story = {
         key-sig=${args.keySig}
         mode=${args.mode}
         time=${args.time}
+        measure-numbers=${args.measureNumbers}
       >
         <music-measure>
           <music-staff
@@ -265,9 +277,14 @@ export const CrossSystemTie: Story = {
 
 export const CrossSystemHairpin: Story = {
   name: 'Cross System - Hairpin',
-  render: () => html`
+  render: (args) => html`
     <div style="max-width: 200px;">
-      <music-composition key-sig="C" mode="major" time="4/4">
+      <music-composition
+        key-sig="C"
+        mode="major"
+        time="4/4"
+        measure-numbers=${args.measureNumbers}
+      >
         <music-measure>
           <music-staff clef="treble" key-sig="C" mode="major" time="4/4">
             <music-note
@@ -303,9 +320,14 @@ export const CrossSystemHairpin: Story = {
 
 export const CrossSystemCourtesyClef: Story = {
   name: 'Cross System - Courtesy Clef',
-  render: () => html`
+  render: (args) => html`
     <div style="max-width: 150px;">
-      <music-composition key-sig="C" mode="major" time="4/4">
+      <music-composition
+        key-sig="C"
+        mode="major"
+        time="4/4"
+        measure-numbers=${args.measureNumbers}
+      >
         <music-measure>
           <music-staff clef="treble">
             <music-note note="C" duration="whole"></music-note>
@@ -328,6 +350,7 @@ export const GrandStaff: Story = {
       key-sig=${args.keySig}
       mode=${args.mode}
       time=${args.time}
+      measure-numbers=${args.measureNumbers}
     >
       <music-measure>
         <music-staff

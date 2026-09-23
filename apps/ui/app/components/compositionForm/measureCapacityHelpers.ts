@@ -76,32 +76,39 @@ export function remainingDuration(
   return measureDuration(timeSig) - usedDuration(entries, tupletsById);
 }
 
+export type StaffVoiceContext = { staff: NormalizedStaff; voiceId: string };
+
 export function staffOfEntryId(
   structure: CompositionStructure,
   entryId: string
-): NormalizedStaff | null {
+): StaffVoiceContext | null {
   for (const staff of Object.values(structure.stavesById)) {
-    if (staff.entryIds.includes(entryId)) {
-      return staff;
+    for (const voiceId of staff.voiceOrder) {
+      if (staff.voicesById[voiceId].entryIds.includes(entryId)) {
+        return { staff, voiceId };
+      }
     }
   }
   return null;
 }
 
 // Budget available to `entryId` if its own slot is freed — i.e. the largest a
-// single entry at that position may grow to. Returns the whole-measure budget
-// when the entry isn't found or carries no beat duration.
+// single entry at that position may grow to, within its own voice's stream.
+// Returns the whole-measure budget when the entry isn't found or carries no
+// beat duration.
 export function availableForDuration(
   structure: CompositionStructure,
   timeSig: TimeSignature,
   entryId: string
 ): number {
   const total = measureDuration(timeSig);
-  const staff = staffOfEntryId(structure, entryId);
-  if (!staff) {
+  const context = staffOfEntryId(structure, entryId);
+  if (!context) {
     return total;
   }
-  const entries = staff.entryIds.map((id) => structure.entriesById[id]);
+  const entries = context.staff.voicesById[context.voiceId].entryIds.map(
+    (id) => structure.entriesById[id]
+  );
   const used = usedDuration(entries, structure.tupletsById);
   const self = structure.entriesById[entryId];
   const freed = self ? entryFactor(self, structure.tupletsById) : 0;
@@ -118,12 +125,14 @@ export function tupletRatioFits(
   entryIds: string[],
   ratio: TupletRatio
 ): boolean {
-  const staff = staffOfEntryId(structure, entryIds[0]);
-  if (!staff) {
+  const context = staffOfEntryId(structure, entryIds[0]);
+  if (!context) {
     return true;
   }
   const total = measureDuration(timeSignatureOfEntry(structure, entryIds[0]));
-  const entries = staff.entryIds.map((id) => structure.entriesById[id]);
+  const entries = context.staff.voicesById[context.voiceId].entryIds.map(
+    (id) => structure.entriesById[id]
+  );
   const used = usedDuration(entries, structure.tupletsById);
   const currentRun = entryIds.reduce(
     (sum, id) =>

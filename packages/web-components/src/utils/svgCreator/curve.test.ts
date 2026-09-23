@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import { CONNECTOR_LABEL_CHAR_WIDTH_PX } from '../notationDimensions';
 import { BULGE_STEP_PX, createCurveSvg } from './curve';
 
 describe('createCurveSvg', () => {
@@ -85,6 +86,31 @@ describe('createCurveSvg', () => {
     const d = group.querySelector('path')!.getAttribute('d') ?? '';
     expect(d.startsWith('M 0 100')).toBe(true);
     expect(d).toMatch(/500 100$/);
+  });
+
+  it("clears a steep straight-style line across the label's full width, not just its midpoint", () => {
+    const label = 'black-note gliss.';
+    const from = { x: 0, y: 300 };
+    const to = { x: 100, y: 0 };
+    const group = createCurveSvg({
+      from,
+      to,
+      bulge: 'above',
+      style: 'straight',
+      label,
+    });
+    const text = group.querySelector('text')!;
+    const labelY = Number(text.getAttribute('y'));
+
+    const slope = (to.y - from.y) / (to.x - from.x);
+    const trueMidY = (from.y + to.y) / 2;
+    const halfWidth = (label.length * CONNECTOR_LABEL_CHAR_WIDTH_PX) / 2;
+    // The line's y at the label's rightmost edge — the steep edge closest to
+    // "above" on this ascending line — is what a slope-naive fixed offset
+    // from the midpoint alone would fail to clear.
+    const yAtRightEdge = trueMidY + slope * halfWidth;
+
+    expect(labelY).toBeLessThan(yAtRightEdge);
   });
 
   it('pushes the control point further out per nestingLevel', () => {

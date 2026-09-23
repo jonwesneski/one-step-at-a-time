@@ -1,5 +1,6 @@
 import { DurationType } from '../types/theory';
 import { DURATIONS } from '../utils';
+import { VOICE_REST_DISPLACEMENT_PX } from '../utils/notationDimensions';
 import {
   getFirstBallYPx,
   HALF_RECT_BOTTOM_PX,
@@ -7,6 +8,7 @@ import {
   QUARTER_SY_PX,
   WHOLE_RECT_TOP_PX,
 } from '../utils/svgCreator/rest';
+import { VoiceDirection } from './voiceRules';
 
 // Absolute staff line positions (px from staff-wrapper top), clef-agnostic
 const LINE_1 = 28; // top staff line
@@ -37,6 +39,25 @@ const restTopMap: Record<DurationType, number> = Object.fromEntries(
   DURATIONS.map((d) => [d, computeTopY(d)])
 ) as Record<DurationType, number>;
 
-export function restToYCoordinate(duration: DurationType): number {
-  return restTopMap[duration];
+export type VoiceRestContext = { direction: VoiceDirection };
+
+/**
+ * Duration-keyed Y position, optionally displaced for a voice sharing a
+ * staff with another voice — voice 1's rests shift up, voice 2's shift
+ * down, clearly avoiding the other voice's notes (and, when the rest sits
+ * beside a beamed group in the same voice, automatically on the same side
+ * as that group, since both read the same `direction`). Omitting
+ * `voiceContext` reproduces today's exact single-voice behavior.
+ */
+export function restToYCoordinate(
+  duration: DurationType,
+  voiceContext?: VoiceRestContext
+): number {
+  const base = restTopMap[duration];
+  if (!voiceContext) {
+    return base;
+  }
+  return voiceContext.direction === 'up'
+    ? base - VOICE_REST_DISPLACEMENT_PX
+    : base + VOICE_REST_DISPLACEMENT_PX;
 }

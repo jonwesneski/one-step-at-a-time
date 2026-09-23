@@ -2,12 +2,14 @@
  * @jest-environment jsdom
  */
 import '../chord/index';
+import '../composition/index';
 import '../note/index';
 import '../staff/index';
 import type { ChordElementType } from '../types/elements';
 import type { Chord } from '../types/theory';
 import {
   MUSIC_CHORD,
+  MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_STAFF,
   STAFF_EVENTS,
@@ -27,6 +29,96 @@ describe(MUSIC_MEASURE, () => {
     expect(el.mode).toBe('major');
     expect(el.shadowRoot).not.toBeNull();
     expect(el.shadowRoot.innerHTML).not.toBe('');
+  });
+
+  it('never renders the literal text "null" when `number` is unset', () => {
+    const el = document.createElement(MUSIC_MEASURE) as any;
+    document.body.appendChild(el);
+
+    const container = el.shadowRoot.querySelector('.measure-numbers');
+    expect(container).not.toBeNull();
+    expect(container?.textContent).not.toContain('null');
+  });
+
+  describe('measure number display', () => {
+    function measureNumberText(measure: Element): string | null {
+      return (
+        measure.shadowRoot?.querySelector('.measure-numbers > *')
+          ?.textContent ?? null
+      );
+    }
+
+    it('never shows a number standalone (no <music-composition> ancestor)', () => {
+      const measure = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      document.body.appendChild(measure);
+      measure.setAttribute('number', '3');
+
+      expect(measureNumberText(measure)).toBeNull();
+    });
+
+    it('defaults to "none" (no numbers shown) when the composition sets no measure-numbers attribute', () => {
+      const composition = document.createElement(MUSIC_COMPOSITION);
+      const measure = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      composition.appendChild(measure);
+      document.body.appendChild(composition);
+      measure.setAttribute('number', '3');
+
+      expect(measureNumberText(measure)).toBeNull();
+    });
+
+    it('shows every numbered measure under measure-numbers="all"', () => {
+      const composition = document.createElement(MUSIC_COMPOSITION);
+      composition.setAttribute('measure-numbers', 'all');
+      const measure = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      composition.appendChild(measure);
+      document.body.appendChild(composition);
+      measure.setAttribute('number', '7');
+
+      expect(measureNumberText(measure)).toBe('7');
+    });
+
+    it('shows only odd-numbered measures under measure-numbers="odd"', () => {
+      const composition = document.createElement(MUSIC_COMPOSITION);
+      composition.setAttribute('measure-numbers', 'odd');
+      const even = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      const odd = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      composition.appendChild(even);
+      composition.appendChild(odd);
+      document.body.appendChild(composition);
+      even.setAttribute('number', '4');
+      odd.setAttribute('number', '5');
+
+      expect(measureNumberText(even)).toBeNull();
+      expect(measureNumberText(odd)).toBe('5');
+    });
+
+    it('shows only even-numbered measures under measure-numbers="even"', () => {
+      const composition = document.createElement(MUSIC_COMPOSITION);
+      composition.setAttribute('measure-numbers', 'even');
+      const even = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      const odd = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      composition.appendChild(even);
+      composition.appendChild(odd);
+      document.body.appendChild(composition);
+      even.setAttribute('number', '4');
+      odd.setAttribute('number', '5');
+
+      expect(measureNumberText(even)).toBe('4');
+      expect(measureNumberText(odd)).toBeNull();
+    });
+
+    it('re-resolves every measure when the composition’s measure-numbers attribute changes', () => {
+      const composition = document.createElement(MUSIC_COMPOSITION);
+      const measure = document.createElement(MUSIC_MEASURE) as HTMLElement;
+      composition.appendChild(measure);
+      document.body.appendChild(composition);
+      measure.setAttribute('number', '2');
+      expect(measureNumberText(measure)).toBeNull();
+
+      composition.setAttribute('measure-numbers', 'all');
+
+      expect(measureNumberText(measure)).toBe('2');
+    });
   });
 
   it('redraws the group connector when `group` is set on an already-connected staff, without waiting for a resize', () => {

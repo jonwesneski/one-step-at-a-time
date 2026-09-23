@@ -6,6 +6,7 @@ import type {
   ClefType,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -59,7 +60,12 @@ export interface INoteElement {
   slur: ConnectorRole | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
+  glissando: ConnectorRole | null;
+  /** Which register of key the glissando line starts on — shown as text. */
+  glissandoHint: GlissandoHint | null;
   dynamic: DynamicMarking | null;
+  /** Centers `dynamic` between this staff and its neighbor instead of locally. */
+  dynamicShared: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -129,6 +135,11 @@ export interface INoteElement {
     written: boolean;
     octave: Octave | null;
   } | null;
+  // Staff-written px to raise the trill sign glyph above its own nominal
+  // position, when another voice's own content occupies that territory in
+  // a multi-voice staff. Not an attribute; mirrors stemExtension's own
+  // staff-internal, non-author-set pattern.
+  trillSignExtraLift: number;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -192,7 +203,12 @@ export interface IChordElement {
   slur: ConnectorRole | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
+  glissando: ConnectorRole | null;
+  /** Which register of key the glissando line starts on — shown as text. */
+  glissandoHint: GlissandoHint | null;
   dynamic: DynamicMarking | null;
+  /** Centers `dynamic` between this staff and its neighbor instead of locally. */
+  dynamicShared: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -262,6 +278,11 @@ export interface IChordElement {
     written: boolean;
     octave: Octave | null;
   } | null;
+  // Staff-written px to raise the trill sign glyph above its own nominal
+  // position, when another voice's own content occupies that territory in
+  // a multi-voice staff. Not an attribute; mirrors stemExtension's own
+  // staff-internal, non-author-set pattern.
+  trillSignExtraLift: number;
   get grace(): Note[] | null;
   set grace(value: GraceNotesType);
   // Per-grace-note octave, aligned by index with `grace`. A null slot (or a
@@ -349,9 +370,22 @@ export interface IArpeggioElement {
   readonly targetElement: NoteOrChordElementType | null;
 }
 
+/**
+ * `<music-voice>` — groups one contrapuntal voice's entire ordered
+ * note/chord/rest/tuplet/arpeggio subtree within a staff. Purely a grouping
+ * wrapper (no shadow DOM, no attributes) — voice number (1/2/3) is derived
+ * from sibling position among a staff's `<music-voice>` children, not stored
+ * on the element itself; see utils/slotElements.ts.
+ */
+export interface IVoiceElement {
+  readonly flatElements: NoteChordOrRestElementType[];
+}
+
 export interface IStaffElementBase {
   group: StaffGroupType | null;
   groupId: string | null;
+  /** Short margin text to the left of the staff (e.g. "r.h."/"l.h."). */
+  label: string | null;
   time: TimeSignature;
   readonly staffHeight: number;
   readonly staffLineCount: number;
@@ -369,6 +403,7 @@ export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
+export type VoiceElementType = HTMLElement & IVoiceElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -385,7 +420,11 @@ export type NoteLikeElementType =
 // A <music-clef> encountered in a staff's slotted content, marking a
 // mid-stream clef change. `afterElementIndex` is the index (into the
 // resulting flatElements array) of the note/chord/rest this marker follows;
-// -1 means the marker appears before any note/chord/rest.
+// -1 means the marker appears before any note/chord/rest. On a multi-voice
+// staff this is always relative to voice 1's own flatElements array — a
+// clef change is staff-wide, so it's only ever authored inside the first
+// <music-voice> (voice.ts rejects it elsewhere) — staffClassicalBase.ts
+// converts the index into a beat-offset to apply it to every other voice.
 export type ClefMarkerPlacement = {
   afterElementIndex: number;
   element: ClefElementType;

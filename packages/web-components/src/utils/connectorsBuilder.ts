@@ -7,12 +7,15 @@ import type {
   NoteElementType,
   NoteLikeElementType,
 } from '../types/elements';
+import { GlissandoHint, VoiceNumber } from '../types/theory';
 import {
   MUSIC_ARPEGGIO,
   MUSIC_CHORD,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_VOICE,
+  MUSIC_VOICE_NODE,
   STAFF_TAGS,
 } from './consts';
 import {
@@ -22,6 +25,7 @@ import {
   LAISSEZ_VIBRER_CURVE_LENGTH_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
+import { parseGlissandoHint } from './parsers';
 import {
   computeWrittenTrillNoteWidth,
   createCurveSvg,
@@ -35,7 +39,13 @@ import {
   NOTE_SVG_WIDTH,
 } from './svgCreator/note';
 
-export type ConnectorKind = 'tie' | 'slur' | 'hammer-on' | 'pull-off' | 'slide';
+export type ConnectorKind =
+  | 'tie'
+  | 'slur'
+  | 'hammer-on'
+  | 'pull-off'
+  | 'slide'
+  | 'glissando';
 
 const CONNECTOR_ATTRS: Record<ConnectorKind, string> = {
   tie: 'tie',
@@ -43,11 +53,20 @@ const CONNECTOR_ATTRS: Record<ConnectorKind, string> = {
   'hammer-on': 'hammer-on',
   'pull-off': 'pull-off',
   slide: 'slide',
+  glissando: 'glissando',
 };
 
 const CONNECTOR_LABELS: Partial<Record<ConnectorKind, string>> = {
   'hammer-on': 'H',
   'pull-off': 'P',
+};
+
+// Text shown near a glissando line when its start element sets
+// `glissando-hint` — standard keyboard engraving practice for clarifying
+// which keys the line slides across.
+const GLISSANDO_HINT_LABELS: Record<GlissandoHint, string> = {
+  'white-key': 'white-note gliss.',
+  'black-key': 'black-note gliss.',
 };
 
 // Row-split tolerance (px). Matches the pattern in measure.ts's #updateConnectorVisibility.
@@ -93,6 +112,46 @@ export const collectNoteLikeElements = (
   const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
   return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
 };
+
+// Resolves a note-like element's voice number from its nearest <music-voice>
+// ancestor's sibling position (1st <music-voice> sibling = voice 1, 2nd =
+// voice 2, 3rd = voice 3) — falls back to voice 1 when there is no
+// <music-voice> ancestor at all (the ordinary single-voice case).
+function resolveVoiceNumber(note: NoteLikeElementType): VoiceNumber {
+  const voiceElement = note.closest(MUSIC_VOICE);
+  if (voiceElement === null || voiceElement.parentElement === null) {
+    return 1;
+  }
+  const siblingVoices = Array.from(voiceElement.parentElement.children).filter(
+    (child) => child.nodeName === MUSIC_VOICE_NODE
+  );
+  const position = siblingVoices.indexOf(voiceElement);
+  return ((position === -1 ? 0 : position) + 1) as VoiceNumber;
+}
+
+// Groups note-like elements by voice — the fix for cross-voice tie/slur
+// mispairing: today's LIFO stack-top fallback in pairConnectors (used
+// whenever a tie/slur has no explicit `for="id"`) would incorrectly let a
+// voice-2 note with no `for` pop a voice-1 tie's stack entry when voices
+// interleave in document order. Callers partition first, then pair each
+// voice's own notes independently:
+//   const byVoice = partitionByVoice(collectNoteLikeElements(root));
+//   const pairs = [...byVoice.values()].flatMap((notes) => pairConnectors(notes));
+export function partitionByVoice(
+  notes: readonly NoteLikeElementType[]
+): Map<VoiceNumber, NoteLikeElementType[]> {
+  const result = new Map<VoiceNumber, NoteLikeElementType[]>();
+  for (const note of notes) {
+    const voiceNumber = resolveVoiceNumber(note);
+    const bucket = result.get(voiceNumber);
+    if (bucket) {
+      bucket.push(note);
+    } else {
+      result.set(voiceNumber, [note]);
+    }
+  }
+  return result;
+}
 
 // Synthesizes the run→chord ties of every `<music-arpeggio>` under `root`.
 // These are not authored `tie` attributes, so `pairConnectors` never sees them;
@@ -184,6 +243,7 @@ export const pairConnectors = (
     'hammer-on': [],
     'pull-off': [],
     slide: [],
+    glissando: [],
   };
 
   const kinds = Object.keys(stacks) as ConnectorKind[];
@@ -270,6 +330,11 @@ export const pairConnectors = (
         console.warn(`[connectorsBuilder] ${warning}`);
       }
 
+      const glissandoHint =
+        kind === 'glissando'
+          ? parseGlissandoHint(startEntry.note.getAttribute('glissando-hint'))
+          : null;
+
       indexedPairs.push({
         kind,
         start: startEntry.note,
@@ -277,6 +342,7 @@ export const pairConnectors = (
         nestingLevel: 0,
         startIndex: startEntry.startIndex,
         endIndex: noteIndex,
+        label: glissandoHint ? GLISSANDO_HINT_LABELS[glissandoHint] : undefined,
       });
     }
   });
@@ -671,8 +737,12 @@ export const buildConnectorSvgs = (
   for (const pair of pairs) {
     const startBulge = pickBulge(pair.start);
     const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
-    const style = pair.kind === 'slide' ? 'straight' : 'smooth';
-    const label = CONNECTOR_LABELS[pair.kind];
+    const style =
+      pair.kind === 'slide' || pair.kind === 'glissando'
+        ? 'straight'
+        : 'smooth';
+    const label =
+      pair.kind === 'glissando' ? pair.label : CONNECTOR_LABELS[pair.kind];
 
     // Laissez-vibrer: an open-ended tie curving forward off the notehead.
     if (pair.laissezVibrer) {
@@ -865,12 +935,18 @@ export const buildConnectorSvgs = (
       noteheadOffsetPx
     );
 
+    // A glissando's hint label always sits above the line, regardless of the
+    // notes' stem direction — a fixed annotation position, unlike a slur or
+    // tie's bulge (which follows the stem to stay clear of it).
+    const renderStartBulge = pair.kind === 'glissando' ? 'above' : startBulge;
+    const renderEndBulge = pair.kind === 'glissando' ? 'above' : endBulge;
+
     if (sameRow(startAnchor, endAnchor)) {
       elements.push(
         createCurveSvg({
           from: { x: startAnchor.x, y: startAnchor.y },
           to: { x: endAnchor.x, y: endAnchor.y },
-          bulge: startBulge,
+          bulge: renderStartBulge,
           label,
           style,
           nestingLevel: pair.nestingLevel,
@@ -884,7 +960,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: startAnchor.x, y: startAnchor.y },
         to: { x: rowRight, y: startAnchor.y },
-        bulge: startBulge,
+        bulge: renderStartBulge,
         label,
         style,
         nestingLevel: pair.nestingLevel,
@@ -894,7 +970,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: rowLeft, y: endAnchor.y },
         to: { x: endAnchor.x, y: endAnchor.y },
-        bulge: endBulge,
+        bulge: renderEndBulge,
         style,
         nestingLevel: pair.nestingLevel,
       })

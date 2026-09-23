@@ -17,9 +17,22 @@ import type {
   NormalizedConnector,
   NormalizedMeasure,
   NormalizedStaff,
+  NormalizedVoice,
   PitchedEntry,
 } from './types';
 import { isPitchedEntry } from './types';
+
+// Whether `rebar` actually reflowed the region (`rebarred: true`) or bailed
+// out and returned the input structure unchanged (`rebarred: false`) — the
+// caller already applied the new time signature to `structure` before
+// calling this, so a bail-out is NOT a safe no-op to silently commit: it
+// would land as a "signature only" change even though the user chose
+// "Rewrite". Callers must check this and abort the whole operation (not
+// call `record()`) when `rebarred` is false.
+export type RebarResult = {
+  structure: CompositionStructure;
+  rebarred: boolean;
+};
 
 // Re-flows one time signature region into measures of its (already-updated) time
 // signature: the note stream of each staff index is concatenated and re-sliced,
@@ -35,10 +48,10 @@ import { isPitchedEntry } from './types';
 export function rebar(
   structure: CompositionStructure,
   fromMeasureIndex: number
-): CompositionStructure {
+): RebarResult {
   const order = structure.measureOrder;
   if (order.length === 0) {
-    return structure;
+    return { structure, rebarred: false };
   }
   const idx = Math.max(0, Math.min(fromMeasureIndex, order.length - 1));
   const { startIndex, endIndex } = timeSignatureRegionAt(structure, idx);
@@ -56,41 +69,67 @@ export function rebar(
     ...regionMeasures.map((m) => m.staffIds.length)
   );
   if (staffCount === 0) {
-    return structure;
+    return { structure, rebarred: false };
   }
 
-  const staffTemplate = Array.from({ length: staffCount }, (_, si) => {
-    const src = regionMeasures
+  // A staff's voice count must stay identical across every measure in the
+  // region — mirrors the library's own documented "inconsistent staff/voice
+  // count across measures is not supported" constraint. Warn and no-op
+  // (rather than silently guessing which measure's voice count is "right")
+  // when it differs, same as the staffCount===0 no-op above.
+  const staffTemplate: {
+    type: NormalizedStaff['type'];
+    group: NormalizedStaff['group'];
+    groupId: NormalizedStaff['groupId'];
+    voiceCount: number;
+  }[] = [];
+  for (let si = 0; si < staffCount; si++) {
+    const staffCandidates = regionMeasures
       .map((m) => structure.stavesById[m.staffIds[si]])
-      .find((s): s is NormalizedStaff => Boolean(s));
-    return {
+      .filter((s): s is NormalizedStaff => Boolean(s));
+    const voiceCounts = new Set(
+      staffCandidates.map((s) => s.voiceOrder.length)
+    );
+    if (voiceCounts.size > 1) {
+      console.warn(
+        `[rebarHelpers] staff index ${si}'s voice count is inconsistent across this region's measures; skipping rebar`
+      );
+      return { structure, rebarred: false };
+    }
+    const src = staffCandidates[0];
+    staffTemplate.push({
       type: src?.type ?? 'treble',
       group: src?.group ?? null,
       groupId: src?.groupId ?? null,
-    };
-  });
+      voiceCount: src?.voiceOrder.length ?? 1,
+    });
+  }
 
   const entriesById: Record<string, MusicEntry> = { ...structure.entriesById };
   const newTies: NormalizedConnector[] = [];
   const tieReanchor = new Map<string, string>();
 
-  const perStaffMeasures = staffTemplate.map((_, si) =>
-    reflowStaff(
-      collectStream(structure, regionMeasures, si),
-      capacity,
-      structure,
-      entriesById,
-      newTies,
-      tieReanchor
+  // Each staff's voices reflow independently — a voice is its own rhythmic
+  // stream, same as a staff index is its own "part" (see collectStream).
+  const perStaffVoiceMeasures = staffTemplate.map((tpl, si) =>
+    Array.from({ length: tpl.voiceCount }, (_, vi) =>
+      reflowStaff(
+        collectStream(structure, regionMeasures, si, vi),
+        capacity,
+        structure,
+        entriesById,
+        newTies,
+        tieReanchor
+      )
     )
   );
 
-  const regionHasContent = perStaffMeasures.some((ms) =>
-    ms.some((entries) => entries.length > 0)
+  const regionHasContent = perStaffVoiceMeasures.some((voices) =>
+    voices.some((ms) => ms.some((entries) => entries.length > 0))
   );
   const newMeasureCount = Math.max(
     regionHasContent ? 1 : regionMeasureIds.length,
-    ...perStaffMeasures.map((ms) => ms.length)
+    ...perStaffVoiceMeasures.flatMap((voices) => voices.map((ms) => ms.length))
   );
 
   const newMeasuresById: Record<string, NormalizedMeasure> = {};
@@ -101,12 +140,23 @@ export function rebar(
     newMeasureIds.push(measureId);
     const staffIds = staffTemplate.map((tpl, si) => {
       const staffId = crypto.randomUUID();
+      const voiceOrder: string[] = [];
+      const voicesById: Record<string, NormalizedVoice> = {};
+      for (let vi = 0; vi < tpl.voiceCount; vi++) {
+        const voiceId = crypto.randomUUID();
+        voiceOrder.push(voiceId);
+        voicesById[voiceId] = {
+          id: voiceId,
+          entryIds: perStaffVoiceMeasures[si][vi][mi] ?? [],
+        };
+      }
       newStavesById[staffId] = {
         id: staffId,
         type: tpl.type,
         group: tpl.group,
         groupId: tpl.groupId,
-        entryIds: perStaffMeasures[si][mi] ?? [],
+        voiceOrder,
+        voicesById,
       };
       return staffId;
     });
@@ -155,26 +205,32 @@ export function rebar(
   }
 
   return {
-    ...structure,
-    measureOrder,
-    measuresById,
-    stavesById,
-    entriesById,
-    connectorsById,
-    connectorOrder,
+    structure: {
+      ...structure,
+      measureOrder,
+      measuresById,
+      stavesById,
+      entriesById,
+      connectorsById,
+      connectorOrder,
+    },
+    rebarred: true,
   };
 }
 
 function collectStream(
   structure: CompositionStructure,
   regionMeasures: NormalizedMeasure[],
-  staffIndex: number
+  staffIndex: number,
+  voiceIndex: number
 ): string[] {
   const ids: string[] = [];
   for (const measure of regionMeasures) {
     const staff = structure.stavesById[measure.staffIds[staffIndex]];
-    if (staff) {
-      ids.push(...staff.entryIds);
+    const voiceId = staff?.voiceOrder[voiceIndex];
+    const voice = voiceId ? staff.voicesById[voiceId] : undefined;
+    if (voice) {
+      ids.push(...voice.entryIds);
     }
   }
   return ids;

@@ -130,14 +130,25 @@ export type TimeSignature =
 
 export type Mode = 'major' | 'minor';
 
-/** The six standard voice types for `<music-staff-vocal>`. */
-export type Voice =
+/** The six standard vocal types for `<music-staff-vocal>`. */
+export type VocalType =
   | 'soprano'
   | 'mezzo'
   | 'alto'
   | 'tenor'
   | 'baritone'
   | 'bass';
+
+/**
+ * Which contrapuntal voice (independent rhythmic/melodic line sharing one
+ * staff) a note/chord/rest belongs to — NOT the vocal-range `VocalType`
+ * above. 1 = top voice (always stems up), 2 = bottom voice (always stems
+ * down), 3 = middle voice (only valid alongside both 1 and 2; contextual
+ * stem direction — see rules/voiceRules.ts). Never authored directly —
+ * derived from a note's position among `<music-voice>` siblings, see
+ * utils/slotElements.ts.
+ */
+export type VoiceNumber = 1 | 2 | 3;
 
 /**
  * Clef available on a staff.
@@ -247,6 +258,28 @@ export type GraceDuration = Extract<
 
 /** Whether the slur from a grace group to its main note is drawn (`auto`) or not (`none`). */
 export type GraceSlur = 'auto' | 'none';
+
+/**
+ * Which register of key a `glissando` starts on — text shown near the line
+ * ("white-note gliss." / "black-note gliss."), matching standard keyboard
+ * engraving practice for clarifying which keys a glissando slides across.
+ */
+export type GlissandoHint = 'white-key' | 'black-key';
+
+/**
+ * Which measures of a `<music-composition>` show their own `number` —
+ * `'none'` (default) shows none, `'all'` shows every numbered measure,
+ * `'row-start'`/`'row-end'` show only the first/last measure of each visual
+ * row (the common engraving default, here opt-in rather than assumed), and
+ * `'odd'`/`'even'` filter by the `number` value's own parity.
+ */
+export type MeasureNumberDisplay =
+  | 'none'
+  | 'all'
+  | 'row-start'
+  | 'row-end'
+  | 'odd'
+  | 'even';
 
 /**
  * `'auto'` (default) draws the wavy extension line, matching standard

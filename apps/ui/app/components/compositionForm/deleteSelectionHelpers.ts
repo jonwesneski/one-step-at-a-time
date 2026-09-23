@@ -1,6 +1,7 @@
 import { findGroupMembers } from './staffGroupsHelpers';
 import type { CompositionStructure, Selection } from './types';
 import { isPitchedEntry } from './types';
+import { staffEntryIds } from './voiceHelpers';
 
 export function removeSelectionFromStructure(
   structure: CompositionStructure,
@@ -17,7 +18,8 @@ export function removeSelectionFromStructure(
 
   const entryIdsToDelete = new Set(selection.entryIds);
   for (const staffId of staffIdsToDelete) {
-    for (const entryId of structure.stavesById[staffId]?.entryIds ?? []) {
+    const staff = structure.stavesById[staffId];
+    for (const entryId of staff ? staffEntryIds(staff) : []) {
       entryIdsToDelete.add(entryId);
     }
   }
@@ -49,13 +51,36 @@ export function removeSelectionFromStructure(
   const stavesById = Object.fromEntries(
     Object.entries(structure.stavesById)
       .filter(([id]) => !staffIdsToDelete.has(id))
-      .map(([id, staff]) => [
-        id,
-        {
-          ...staff,
-          entryIds: staff.entryIds.filter((eid) => !entryIdsToDelete.has(eid)),
-        },
-      ])
+      .map(([id, staff]) => {
+        const voicesById = Object.fromEntries(
+          staff.voiceOrder.map((voiceId) => {
+            const voice = staff.voicesById[voiceId];
+            return [
+              voiceId,
+              {
+                ...voice,
+                entryIds: voice.entryIds.filter(
+                  (eid) => !entryIdsToDelete.has(eid)
+                ),
+              },
+            ];
+          })
+        );
+        // A voice left with zero entries is dropped, mirroring the "group
+        // dropped below 2 staves" repair below — but a staff always keeps at
+        // least its first voice, even if empty, so the composition never ends
+        // up with a staff that has nowhere for the next entry to go, and so
+        // deleting voice 1's last note never silently promotes voice 2 into
+        // voice 1's own stem-direction policy.
+        const voiceOrder = staff.voiceOrder.filter(
+          (voiceId, index) =>
+            index === 0 || voicesById[voiceId].entryIds.length > 0
+        );
+        const survivingVoicesById = Object.fromEntries(
+          voiceOrder.map((voiceId) => [voiceId, voicesById[voiceId]])
+        );
+        return [id, { ...staff, voiceOrder, voicesById: survivingVoicesById }];
+      })
   );
   let entriesById = Object.fromEntries(
     Object.entries(structure.entriesById).filter(
