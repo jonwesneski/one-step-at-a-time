@@ -57,6 +57,13 @@ export {
   stemUpTipYPx,
   trillSignLeftX,
 } from './note';
+export {
+  createOctaveContinuationSignSvg,
+  createOctaveCornerSvg,
+  createOctaveExtensionLineSvg,
+  createOctaveLocoLabelSvg,
+  createOctaveSignSvg,
+} from './octaveSigns';
 export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
 export { createSharpSvg } from './sharp';
 export { createBraceSvg, createBracketSvg } from './staffGroup';

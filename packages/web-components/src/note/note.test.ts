@@ -1501,6 +1501,66 @@ describe('trill', () => {
   });
 });
 
+describe('octave shift', () => {
+  it('round-trips octave-shift and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveShift).toBeNull();
+    noteElement.octaveShift = '8va';
+    expect(noteElement.getAttribute('octave-shift')).toBe('8va');
+    expect(noteElement.octaveShift).toBe('8va');
+
+    noteElement.setAttribute('octave-shift', 'nope');
+    expect(noteElement.octaveShift).toBeNull();
+
+    noteElement.octaveShift = '15mb';
+    noteElement.octaveShift = null;
+    expect(noteElement.getAttribute('octave-shift')).toBeNull();
+  });
+
+  it('round-trips octave-stop as a boolean presence attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveStop).toBe(false);
+    noteElement.octaveStop = true;
+    expect(noteElement.getAttribute('octave-stop')).toBe('');
+    expect(noteElement.octaveStop).toBe(true);
+    noteElement.octaveStop = false;
+    expect(noteElement.getAttribute('octave-stop')).toBeNull();
+  });
+
+  it('round-trips octave-mode and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveMode).toBeNull();
+    noteElement.octaveMode = 'col';
+    expect(noteElement.getAttribute('octave-mode')).toBe('col');
+    expect(noteElement.octaveMode).toBe('col');
+
+    noteElement.setAttribute('octave-mode', 'nope');
+    expect(noteElement.octaveMode).toBeNull();
+
+    noteElement.octaveMode = 'sign';
+    noteElement.octaveMode = null;
+    expect(noteElement.getAttribute('octave-mode')).toBeNull();
+  });
+
+  it('round-trips loco as a boolean presence attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.loco).toBe(false);
+    noteElement.loco = true;
+    expect(noteElement.getAttribute('loco')).toBe('');
+    expect(noteElement.loco).toBe(true);
+    noteElement.loco = false;
+    expect(noteElement.getAttribute('loco')).toBeNull();
+  });
+});
+
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();

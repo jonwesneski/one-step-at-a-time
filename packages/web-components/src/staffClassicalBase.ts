@@ -20,6 +20,12 @@ import {
   computeGraceLayout,
 } from './rules/graceRules';
 import { computeAllowedElementCount } from './rules/measureRules';
+import {
+  isOctaveRaise,
+  OctaveSpan,
+  resolveOctaveSpanExtremalStaffY,
+  resolveOctaveSpans,
+} from './rules/octaveRules';
 import { restToYCoordinate, VoiceRestContext } from './rules/restRules';
 import {
   computeMeasureProportionalOffsets,
@@ -100,6 +106,10 @@ import {
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
+  createOctaveCornerSvg,
+  createOctaveExtensionLineSvg,
+  createOctaveLocoLabelSvg,
+  createOctaveSignSvg,
   createOrnamentConnectorSlur,
   createSempreArpeggiandoText,
   createSharpSvg,
@@ -150,6 +160,14 @@ import {
   MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
+  OCTAVE_LOCO_GAP_PX,
+  OCTAVE_SIGN_ABOVE_STAFF_Y,
+  OCTAVE_SIGN_BELOW_STAFF_Y,
+  OCTAVE_SIGN_CORNER_PX,
+  OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
+  OCTAVE_SIGN_LEADING_GAP_PX,
+  OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
+  OCTAVE_SIGN_TRAILING_GAP_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
@@ -485,6 +503,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #tupletContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #dynamicsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #trillLinesContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -517,6 +536,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const [voiceKey, container] of this.#dynamicsContainers) {
       container.innerHTML = '';
       this.#renderDynamics(voiceKey);
+    }
+  };
+  #boundRenderOctaveSigns = () => {
+    for (const [voiceKey, container] of this.#octaveSignsContainers) {
+      container.innerHTML = '';
+      this.#renderOctaveSigns(voiceKey);
     }
   };
   #boundNoteYChange = () => {
@@ -728,6 +753,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
       this.#boundRenderDynamics
     );
+    this.addEventListener(
+      NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
+      this.#boundRenderOctaveSigns
+    );
     // A trill attribute change needs the same full re-layout NOTE_Y_CHANGE
     // triggers, not a narrower redraw — toggling `trill` when `trill-note`
     // is already set (or vice versa) changes the written notehead's own
@@ -768,6 +797,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#containerFor(this.#tupletContainers, 1, 'tuplets-container');
     this.#containerFor(this.#dynamicsContainers, 1, 'dynamics-container');
     this.#containerFor(this.#trillLinesContainers, 1, 'trill-lines-container');
+    this.#containerFor(
+      this.#octaveSignsContainers,
+      1,
+      'octave-signs-container'
+    );
   }
 
   #refreshDescribe() {
@@ -1473,6 +1507,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#prepareVoiceContainers(this.#tupletContainers, activeKeys);
     this.#prepareVoiceContainers(this.#dynamicsContainers, activeKeys);
     this.#prepareVoiceContainers(this.#trillLinesContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#octaveSignsContainers, activeKeys);
 
     this.#spaceElements();
 
@@ -2404,6 +2439,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#sizeVoiceContainer(trillLinesContainer, remainingWidth);
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
+
+    // Octave signs, per voice key.
+    for (const voiceKey of this.#voiceRenderStates.keys()) {
+      const octaveSignsContainer = this.#containerFor(
+        this.#octaveSignsContainers,
+        voiceKey,
+        'octave-signs-container'
+      );
+      this.#sizeVoiceContainer(octaveSignsContainer, remainingWidth);
+      this.#renderOctaveSigns(voiceKey);
+    }
   }
 
   #renderDynamics(voiceKey: VoiceKey): void {
@@ -2475,6 +2521,108 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     this.#renderArpeggiandoText(voiceKey);
+  }
+
+  // Phase 1: own-measure only, straight horizontal line — no cross-measure
+  // continuation yet (see rules/octaveRules.ts for span resolution).
+  #octaveSignRowY(
+    span: OctaveSpan,
+    raisesPitch: boolean,
+    state: VoiceRenderState
+  ): number {
+    const nominalY = raisesPitch
+      ? OCTAVE_SIGN_ABOVE_STAFF_Y
+      : OCTAVE_SIGN_BELOW_STAFF_Y;
+    const extremalStaffY = resolveOctaveSpanExtremalStaffY(
+      span,
+      raisesPitch,
+      (i) =>
+        getStaffYs(
+          state.elements[i],
+          state.noteStaffYCoords,
+          state.chordStaffYCoords
+        )
+    );
+    if (extremalStaffY === null) {
+      return nominalY;
+    }
+    const headY =
+      STAFF_Y_PADDING + extremalStaffY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const contentClearY = raisesPitch
+      ? headY - NOTE_HEAD_RADIUS_PX - OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX
+      : headY + NOTE_HEAD_RADIUS_PX + OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX;
+    return raisesPitch
+      ? Math.min(nominalY, contentClearY)
+      : Math.max(nominalY, contentClearY);
+  }
+
+  #renderOctaveSigns(voiceKey: VoiceKey): void {
+    const state = this.#voiceRenderStates.get(voiceKey);
+    if (!state) {
+      return;
+    }
+    const container = this.#containerFor(
+      this.#octaveSignsContainers,
+      voiceKey,
+      'octave-signs-container'
+    );
+    // #spaceElements() runs on every resize, independent of #renderNotes()'s
+    // own container clear — without this, a resize would append a second
+    // set of signs/lines/corners alongside the stale ones instead of
+    // replacing them.
+    container.innerHTML = '';
+
+    const { spans, warnings, standaloneLocoIndices } = resolveOctaveSpans(
+      state.elements
+    );
+    for (const warning of warnings) {
+      console.warn(warning);
+    }
+
+    for (const span of spans) {
+      const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
+      const signX =
+        startNoteX -
+        OCTAVE_SIGN_LEADING_GAP_PX -
+        OCTAVE_SIGN_ESTIMATED_WIDTH_PX;
+      const stopNoteX = state.noteXPositions.get(span.stopIndex) ?? startNoteX;
+      // + OCTAVE_SIGN_CORNER_PX accounts for the corner glyph's own foot
+      // stroke, which draws backward from this anchor — without it, the
+      // corner's true leftmost ink lands OCTAVE_SIGN_CORNER_PX short of the
+      // trailing gap this is meant to guarantee.
+      const endX =
+        stopNoteX +
+        NOTE_SVG_WIDTH +
+        OCTAVE_SIGN_TRAILING_GAP_PX +
+        OCTAVE_SIGN_CORNER_PX;
+      const raisesPitch = isOctaveRaise(span.amount);
+      const y = this.#octaveSignRowY(span, raisesPitch, state);
+
+      container.appendChild(
+        createOctaveSignSvg(span.amount, signX, y, span.mode)
+      );
+      container.appendChild(
+        createOctaveExtensionLineSvg(
+          signX + OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
+          endX,
+          y
+        )
+      );
+      container.appendChild(createOctaveCornerSvg(endX, y, raisesPitch));
+      if (span.closedBy === 'loco') {
+        container.appendChild(
+          createOctaveLocoLabelSvg(endX + OCTAVE_LOCO_GAP_PX, y, false)
+        );
+      }
+    }
+
+    for (const index of standaloneLocoIndices) {
+      const x = state.noteXPositions.get(index) ?? 0;
+      // No open span here to derive raise/lower placement from — default to
+      // the sopra position as a neutral choice for a standalone reminder.
+      const y = OCTAVE_SIGN_ABOVE_STAFF_Y;
+      container.appendChild(createOctaveLocoLabelSvg(x, y, true));
+    }
   }
 
   // `sempre arpeggiando` (abbreviated `sempre arpegg.`): from an element marked
@@ -3063,6 +3211,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
+    budget = Math.max(budget, this.#octaveSignVerticalOverflow(state, true));
 
     // Mirrors the below-staff dynamics check in #estimateBelowStaffBudget —
     // an up-stem voice's dynamics row (see #dynamicsPlacedAbove) needs
@@ -3117,6 +3266,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     let budget = 0;
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       budget = Math.max(budget, this.#tupletVerticalOverflow(state, false));
+      budget = Math.max(budget, this.#octaveSignVerticalOverflow(state, false));
 
       if (
         this.#hasDynamicsContent(state) &&
@@ -3200,6 +3350,34 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       overflow = Math.max(overflow, edgeOverflow);
     }
 
+    return overflow;
+  }
+
+  // Worst-case Y an octave-sign span's own row needs to clear a real
+  // notehead it decorates, past the staff's own fixed edge (0 above,
+  // STAFF_TRANSCRIPTION_HEIGHT below) — mirrors #tupletVerticalOverflow's own
+  // shape, reused by both the above- and below-staff budget estimates.
+  // `above` true only considers raise ("sopra") spans; false only considers
+  // lower ("bassa") spans. Reuses #octaveSignRowY so the reserved canvas
+  // budget can never diverge from what #renderOctaveSigns actually draws.
+  #octaveSignVerticalOverflow(state: VoiceRenderState, above: boolean): number {
+    let overflow = 0;
+    const { spans } = resolveOctaveSpans(state.elements);
+    for (const span of spans) {
+      const raisesPitch = isOctaveRaise(span.amount);
+      if (raisesPitch !== above) {
+        continue;
+      }
+      const rowY = this.#octaveSignRowY(span, raisesPitch, state);
+      if (raisesPitch && rowY < 0) {
+        overflow = Math.max(overflow, Math.ceil(-rowY) + 2);
+      } else if (!raisesPitch && rowY > STAFF_TRANSCRIPTION_HEIGHT) {
+        overflow = Math.max(
+          overflow,
+          Math.ceil(rowY - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        );
+      }
+    }
     return overflow;
   }
 

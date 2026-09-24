@@ -308,6 +308,35 @@ export type TrillContinuationMode = 'bracketed' | 'line-only';
 export type TrillFinishSlur = 'none' | 'to-main' | 'to-next' | 'both';
 
 /**
+ * Octave-transposition span amount: `8va`/`15ma`/`22ma` shift the written
+ * pitch up one/two/three octaves; `8vb`/`15mb`/`22mb` shift it down by the
+ * same amounts.
+ */
+export type OctaveShiftAmount =
+  | '8va'
+  | '8vb'
+  | '15ma'
+  | '15mb'
+  | '22ma'
+  | '22mb';
+
+/**
+ * Display mode for an octave-transposition span's label: `sign` (default)
+ * renders the bare numeral; `col` renders prose text ("col 8va"/"col 8va
+ * bassa") instead.
+ */
+export type OctaveDisplayMode = 'sign' | 'col';
+
+/**
+ * Controls how an octave-transposition span's numeral restates itself after
+ * a system break: `'bracketed'` (default) redraws it in parentheses at the
+ * start of the new row; `'line-only'` lets the line resume with no restated
+ * numeral. Meaningless (ignored) at an ordinary same-row barline, where the
+ * line always resumes with no restatement regardless of this value.
+ */
+export type OctaveContinuationMode = 'bracketed' | 'line-only';
+
+/**
  * Tuplet ratio: either a bare actual count (`'3'` → triplet) or a full
  * `actual:normal` form (`'3:2'`).
  */

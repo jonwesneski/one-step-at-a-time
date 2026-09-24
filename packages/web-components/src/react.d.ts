@@ -27,6 +27,9 @@ import type {
   Mode,
   Note,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
   StaffGroupType,
   StressType,
   TieValue,
@@ -148,6 +151,11 @@ declare module 'react' {
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
         'trill-finish-slur'?: TrillFinishSlur;
+        'octave-shift'?: OctaveShiftAmount;
+        'octave-mode'?: OctaveDisplayMode;
+        'octave-stop'?: boolean;
+        loco?: boolean;
+        'octave-continuation'?: OctaveContinuationMode;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -187,6 +195,11 @@ declare module 'react' {
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
         'trill-finish-slur'?: TrillFinishSlur;
+        'octave-shift'?: OctaveShiftAmount;
+        'octave-mode'?: OctaveDisplayMode;
+        'octave-stop'?: boolean;
+        loco?: boolean;
+        'octave-continuation'?: OctaveContinuationMode;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

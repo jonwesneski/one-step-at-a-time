@@ -16,6 +16,9 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
   StaffGroupType,
   StressType,
   TimeSignature,
@@ -176,6 +179,26 @@ export interface INoteElement {
   // Key-signature-resolved accidentals for the trill-finish pitches, set by
   // the staff — same fallback shape as `resolvedGraceAccidentals`.
   resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null;
+  // Starts an octave-transposition span at this element. A repeated value
+  // while a span carrying that same value is already open is a no-op that
+  // continues the existing span rather than restarting a new one.
+  octaveShift: OctaveShiftAmount | null;
+  // Display mode for the span this element starts: `sign` (default, bare
+  // numeral) or `col` (prose "col 8va"/"col 8va bassa" label). Meaningless
+  // without a matching octaveShift.
+  octaveMode: OctaveDisplayMode | null;
+  // Closes the currently open octave-transposition span at this element,
+  // inclusive.
+  octaveStop: boolean;
+  // Closes the currently open octave-transposition span at this element,
+  // rendering a "loco" label alongside the closing corner — or, with no open
+  // span, a standalone "(loco)" reminder.
+  loco: boolean;
+  // Meaningful only on the element that started the octave-transposition
+  // span — controls the system-break restatement, resolved by the ancestor
+  // composition. Ignored at an ordinary same-row barline, where the line
+  // always resumes silently regardless of this value.
+  octaveContinuation: OctaveContinuationMode;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
@@ -319,6 +342,26 @@ export interface IChordElement {
   // Key-signature-resolved accidentals for the trill-finish pitches, set by
   // the staff — same fallback shape as `resolvedGraceAccidentals`.
   resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null;
+  // Starts an octave-transposition span at this element. A repeated value
+  // while a span carrying that same value is already open is a no-op that
+  // continues the existing span rather than restarting a new one.
+  octaveShift: OctaveShiftAmount | null;
+  // Display mode for the span this element starts: `sign` (default, bare
+  // numeral) or `col` (prose "col 8va"/"col 8va bassa" label). Meaningless
+  // without a matching octaveShift.
+  octaveMode: OctaveDisplayMode | null;
+  // Closes the currently open octave-transposition span at this element,
+  // inclusive.
+  octaveStop: boolean;
+  // Closes the currently open octave-transposition span at this element,
+  // rendering a "loco" label alongside the closing corner — or, with no open
+  // span, a standalone "(loco)" reminder.
+  loco: boolean;
+  // Meaningful only on the element that started the octave-transposition
+  // span — controls the system-break restatement, resolved by the ancestor
+  // composition. Ignored at an ordinary same-row barline, where the line
+  // always resumes silently regardless of this value.
+  octaveContinuation: OctaveContinuationMode;
   batchUpdate(fn: () => void): void;
 }
 

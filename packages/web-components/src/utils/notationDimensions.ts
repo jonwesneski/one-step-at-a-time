@@ -798,3 +798,114 @@ export const TRILL_PARENTHESIS_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.25;
 
 /** Horizontal bow depth (px) of each parenthesis curve. */
 export const TRILL_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;
+
+// ─── Octave signs ───────────────────────────────────────────────────────────
+// Own-measure only (Phase 0): a numeral + optional va/ma suffix, a dashed
+// extension line, and a corner terminator, rendered at a fixed nominal Y
+// clear of the staff. Starting values — tune visually in Storybook.
+
+/** Rendered height (px) of the octave-sign numeral — 1.5 staff-spaces tall. */
+export const OCTAVE_SIGN_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Scale applied to the va/ma suffix relative to the numeral — a smaller
+ * superscript-style companion glyph, not a second full-size numeral.
+ */
+export const OCTAVE_SIGN_SUFFIX_SCALE = 0.6;
+
+/**
+ * Estimated width (px) per numeral character (italic serif). Mirrors
+ * DYNAMICS_CHAR_WIDTH_PX's estimate-don't-measure approach — used to
+ * position the va/ma suffix flush after the numeral.
+ */
+export const OCTAVE_SIGN_CHAR_WIDTH_PX = OCTAVE_SIGN_FONT_SIZE_PX * 0.65;
+
+/**
+ * Conservative estimated width (px) of a whole octave sign (numeral +
+ * suffix), covering the widest case — a 2-digit numeral ("15"/"22") plus its
+ * 2-letter suffix at OCTAVE_SIGN_SUFFIX_SCALE — so leftward-reserving layout
+ * code doesn't need to measure the actual rendered text.
+ */
+export const OCTAVE_SIGN_ESTIMATED_WIDTH_PX =
+  OCTAVE_SIGN_CHAR_WIDTH_PX * (2 + 2 * OCTAVE_SIGN_SUFFIX_SCALE);
+
+/**
+ * Fixed nominal Y position (px, note-coordinate space) for a pitch-raising
+ * (sopra) span's numeral/line. One half-space further from the staff than
+ * DYNAMICS_ABOVE_BASELINE_Y, so the two decorations don't land on the exact
+ * same row by default even though Phase 0 doesn't yet read the real
+ * above-staff budget.
+ * = STAFF_TOP_LINE_Y − 2.5 × STAFF_LINE_SPACING
+ */
+export const OCTAVE_SIGN_ABOVE_STAFF_Y =
+  STAFF_TOP_LINE_Y - STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Fixed nominal Y position (px, note-coordinate space) for a pitch-lowering
+ * (bassa) span's numeral/line — mirrors OCTAVE_SIGN_ABOVE_STAFF_Y below the
+ * staff.
+ * = STAFF_BOTTOM_LINE_Y + 2.5 × STAFF_LINE_SPACING
+ */
+export const OCTAVE_SIGN_BELOW_STAFF_Y =
+  STAFF_BOTTOM_LINE_Y + STAFF_LINE_SPACING * 2.5;
+
+/** Gap (px) between the octave sign's own right edge and the first affected note's left edge. */
+export const OCTAVE_SIGN_LEADING_GAP_PX = STAFF_LINE_SPACING;
+
+/** Gap (px) between the last affected note's own right edge and the corner terminator. */
+export const OCTAVE_SIGN_TRAILING_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Size (px) of each stroke in the corner terminator — mirrors
+ * TRILL_NOTCH_HEIGHT_PX's scale for a small end-of-span glyph.
+ */
+export const OCTAVE_SIGN_CORNER_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Extra breathing room (px) between the octave sign's row and a real
+ * notehead's own edge, once content-awareness pushes the row past its fixed
+ * nominal position to avoid a genuine collision — added on top of the real
+ * notehead radius (NOTE_HEAD_RADIUS_PX, utils/svgCreator/note.ts) at the
+ * call site, not baked in here.
+ */
+export const OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Font size (px) for the octave-sign feature's prose text — the `col`-mode
+ * label ("col 8va bassa") and the `loco` label ("(loco)"/"loco"). Both are
+ * short italic annotations at the same visual weight, so they share one
+ * constant rather than two independently-tuned near-duplicates. Smaller than
+ * OCTAVE_SIGN_FONT_SIZE_PX since it renders a multi-word phrase, not a single
+ * stylized numeral glyph.
+ */
+export const OCTAVE_SIGN_PROSE_FONT_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Gap (px) between the corner terminator and a `loco`-closed span's label. */
+export const OCTAVE_LOCO_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Octave signs: cross-measure/system-break continuation (Phase 2) ───────
+
+/**
+ * Gap (px) between a row-wrap restated octave-sign numeral and the resumed
+ * extension line — mirrors TRILL_SIGN_LINE_GAP_PX's role for trill's own
+ * restated sign.
+ */
+export const OCTAVE_SIGN_LINE_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Stroke width (px) of the row-wrap continuation sign's wrapping
+ * parentheses — a fixed pixel value, not staff-relative, mirroring
+ * TRILL_PARENTHESIS_STROKE_WIDTH's own choice for the same reason (a stroke
+ * shouldn't visibly thicken/thin as the staff scales).
+ */
+export const OCTAVE_CONTINUATION_PARENTHESIS_STROKE_WIDTH = 1.2;
+
+/** Horizontal gap (px) between a continuation-sign parenthesis and the numeral/label it wraps. */
+export const OCTAVE_CONTINUATION_PARENTHESIS_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/** Extra vertical reach (px) of each continuation-sign parenthesis stroke past the numeral's own top/bottom edge. */
+export const OCTAVE_CONTINUATION_PARENTHESIS_OVERSHOOT_PX =
+  STAFF_LINE_SPACING * 0.25;
+
+/** Horizontal bow depth (px) of each continuation-sign parenthesis curve. */
+export const OCTAVE_CONTINUATION_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;

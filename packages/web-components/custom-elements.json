@@ -670,6 +670,41 @@
               }
             },
             {
+              "kind": "field",
+              "name": "octaveShift",
+              "type": {
+                "text": "OctaveShiftAmount | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveMode",
+              "type": {
+                "text": "OctaveDisplayMode | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveStop",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuation",
+              "type": {
+                "text": "OctaveContinuationMode"
+              }
+            },
+            {
               "kind": "method",
               "name": "batchUpdate",
               "return": {
@@ -1017,6 +1052,41 @@
               "description": "Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`."
             },
             {
+              "name": "octave-shift",
+              "type": {
+                "text": "OctaveShiftAmount"
+              },
+              "description": "Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this chord: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone chord)."
+            },
+            {
+              "name": "octave-mode",
+              "type": {
+                "text": "OctaveDisplayMode"
+              },
+              "description": "Set on the chord that starts an octave-transposition span: `col` renders the span's label as prose (\"col 8va\"/\"col 8va bassa\" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`."
+            },
+            {
+              "name": "octave-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this chord (inclusive)."
+            },
+            {
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this chord, adding a \"loco\" label alongside the closing corner. With no open span, renders a standalone \"(loco)\" reminder instead."
+            },
+            {
+              "name": "octave-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span."
+            },
+            {
               "type": {
                 "text": "Chord"
               },
@@ -1319,6 +1389,11 @@
             {
               "kind": "method",
               "name": "#redrawTrills",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawOctaveSigns",
               "privacy": "private"
             },
             {
@@ -2335,6 +2410,41 @@
               }
             },
             {
+              "kind": "field",
+              "name": "octaveShift",
+              "type": {
+                "text": "OctaveShiftAmount | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveMode",
+              "type": {
+                "text": "OctaveDisplayMode | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveStop",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuation",
+              "type": {
+                "text": "OctaveContinuationMode"
+              }
+            },
+            {
               "kind": "method",
               "name": "batchUpdate",
               "return": {
@@ -2680,6 +2790,41 @@
                 "text": "'none' | 'to-main' | 'to-next' | 'both'"
               },
               "description": "Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`."
+            },
+            {
+              "name": "octave-shift",
+              "type": {
+                "text": "OctaveShiftAmount"
+              },
+              "description": "Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note)."
+            },
+            {
+              "name": "octave-mode",
+              "type": {
+                "text": "OctaveDisplayMode"
+              },
+              "description": "Set on the note that starts an octave-transposition span: `col` renders the span's label as prose (\"col 8va\"/\"col 8va bassa\" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`."
+            },
+            {
+              "name": "octave-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this note (inclusive)."
+            },
+            {
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this note, adding a \"loco\" label alongside the closing corner. With no open span, renders a standalone \"(loco)\" reminder instead."
+            },
+            {
+              "name": "octave-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span."
             },
             {
               "type": {
@@ -3083,6 +3228,19 @@
             },
             {
               "kind": "field",
+              "name": "#octaveSignsContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -3093,6 +3251,15 @@
             {
               "kind": "field",
               "name": "#boundRenderDynamics",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundRenderOctaveSigns",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -4013,6 +4180,62 @@
             },
             {
               "kind": "method",
+              "name": "#octaveSignRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "raisesPitch",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderOctaveSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#resolveArpeggiandoPassages",
               "privacy": "private",
               "return": {
@@ -4394,6 +4617,34 @@
                 },
                 {
                   "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
                   "type": {
                     "text": "boolean"
                   }
@@ -6186,6 +6437,19 @@
             },
             {
               "kind": "field",
+              "name": "#octaveSignsContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -6196,6 +6460,15 @@
             {
               "kind": "field",
               "name": "#boundRenderDynamics",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundRenderOctaveSigns",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -7107,6 +7380,62 @@
             },
             {
               "kind": "method",
+              "name": "#octaveSignRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "raisesPitch",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderOctaveSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#resolveArpeggiandoPassages",
               "privacy": "private",
               "return": {
@@ -7488,6 +7817,34 @@
                 },
                 {
                   "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
                   "type": {
                     "text": "boolean"
                   }

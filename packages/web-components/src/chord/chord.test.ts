@@ -383,6 +383,71 @@ describe(MUSIC_CHORD, () => {
     });
   });
 
+  describe('octave shift', () => {
+    function makeChord(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'C' satisfies Chord);
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips octave-shift and rejects unknown values', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.octaveShift).toBeNull();
+      chordElement.octaveShift = '8va';
+      expect(chordElement.getAttribute('octave-shift')).toBe('8va');
+      expect(chordElement.octaveShift).toBe('8va');
+
+      chordElement.setAttribute('octave-shift', 'nope');
+      expect(chordElement.octaveShift).toBeNull();
+
+      chordElement.octaveShift = '15mb';
+      chordElement.octaveShift = null;
+      expect(chordElement.getAttribute('octave-shift')).toBeNull();
+    });
+
+    it('round-trips octave-stop as a boolean presence attribute', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.octaveStop).toBe(false);
+      chordElement.octaveStop = true;
+      expect(chordElement.getAttribute('octave-stop')).toBe('');
+      expect(chordElement.octaveStop).toBe(true);
+      chordElement.octaveStop = false;
+      expect(chordElement.getAttribute('octave-stop')).toBeNull();
+    });
+
+    it('round-trips octave-mode and rejects unknown values', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.octaveMode).toBeNull();
+      chordElement.octaveMode = 'col';
+      expect(chordElement.getAttribute('octave-mode')).toBe('col');
+      expect(chordElement.octaveMode).toBe('col');
+
+      chordElement.setAttribute('octave-mode', 'nope');
+      expect(chordElement.octaveMode).toBeNull();
+
+      chordElement.octaveMode = 'sign';
+      chordElement.octaveMode = null;
+      expect(chordElement.getAttribute('octave-mode')).toBeNull();
+    });
+
+    it('round-trips loco as a boolean presence attribute', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.loco).toBe(false);
+      chordElement.loco = true;
+      expect(chordElement.getAttribute('loco')).toBe('');
+      expect(chordElement.loco).toBe(true);
+      chordElement.loco = false;
+      expect(chordElement.getAttribute('loco')).toBeNull();
+    });
+  });
+
   describe('articulations', () => {
     function makeChordWithNotes(): ChordElementType {
       const chordElement = document.createElement(

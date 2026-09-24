@@ -14,6 +14,9 @@ import type {
   MeasureNumberDisplay,
   Note,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
   StaffGroupType,
   StressType,
   TrillContinuationMode,
@@ -31,6 +34,9 @@ import {
   GRACE_SLURS,
   GRACE_TYPES,
   MEASURE_NUMBER_DISPLAYS,
+  OCTAVE_CONTINUATION_MODES,
+  OCTAVE_DISPLAY_MODES,
+  OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
   STAFF_GROUPS,
   STRESSES,
@@ -55,6 +61,11 @@ const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
   TRILL_CONTINUATION_MODES
 );
 const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
+const VALID_OCTAVE_SHIFT_AMOUNTS = new Set<string>(OCTAVE_SHIFT_AMOUNTS);
+const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
+const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
+  OCTAVE_CONTINUATION_MODES
+);
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
 const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
 
@@ -189,6 +200,38 @@ export const parseTrillFinishSlur = (value: string | null): TrillFinishSlur => {
     return value as TrillFinishSlur;
   }
   return 'to-main';
+};
+
+// No default: unlike parseTrillLineMode's 'auto', there is no sensible
+// fallback amount for an unset/invalid octave-shift value.
+export const parseOctaveShiftAmount = (
+  value: string | null
+): OctaveShiftAmount | null => {
+  if (value !== null && VALID_OCTAVE_SHIFT_AMOUNTS.has(value)) {
+    return value as OctaveShiftAmount;
+  }
+  return null;
+};
+
+// No default: the 'sign' fallback is applied at span-open time in
+// rules/octaveRules.ts, not here — an element with no octaveShift of its own
+// has no span to default the mode of.
+export const parseOctaveDisplayMode = (
+  value: string | null
+): OctaveDisplayMode | null => {
+  if (value !== null && VALID_OCTAVE_DISPLAY_MODES.has(value)) {
+    return value as OctaveDisplayMode;
+  }
+  return null;
+};
+
+export const parseOctaveContinuationMode = (
+  value: string | null
+): OctaveContinuationMode => {
+  if (value !== null && VALID_OCTAVE_CONTINUATION_MODES.has(value)) {
+    return value as OctaveContinuationMode;
+  }
+  return 'bracketed';
 };
 
 export const parseGraceType = (value: string | null): GraceType | null => {
