@@ -2,14 +2,21 @@ import {
   type ArpeggioEntry,
   resolveArpeggioSpans,
 } from '../rules/arpeggioRules';
+import { computeBeamLevelStructure } from '../rules/beamStructureRules';
 import {
   DoubleStemmedBeamEntry,
+  DoubleStemmedBeamMember,
   DoubleStemmedBeamPoint,
+  DoubleStemmedBeamSegmentPosition,
+  DoubleStemmedBeamSegmentSide,
   resolveDoubleStemmedBeamGroups,
   resolveDoubleStemmedBeamLine,
+  resolveGroupSecondaryBeamSide,
+  resolveSecondaryBeamVerticalSide,
 } from '../rules/doubleStemmedBeamRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
+import { durationToFlagCountMap } from '../rules/theoryConsts';
 import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
@@ -44,6 +51,8 @@ import {
 import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  BEAM_GAP_PX,
+  BEAM_THICKNESS_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
   BRACKET_EXTRA_HEIGHT_PX,
@@ -51,6 +60,7 @@ import {
   BRACKET_TOP_OFFSET_PX,
   BRACKET_WIDTH_PX,
   EMPTY_MEASURE_FLEX_BASIS_PX,
+  FRACTIONAL_BEAM_WIDTH_PX,
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
   MEASURE_NUMBER_FONT_SIZE,
@@ -937,6 +947,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
         const memberGeometries: {
           element: NoteOrChordElementType;
+          staffIndex: number;
           stemUp: boolean;
           point: DoubleStemmedBeamPoint;
         }[] = [];
@@ -970,6 +981,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const x = (stemRect.left + stemRect.right) / 2 - measureRect.left;
           memberGeometries.push({
             element,
+            staffIndex: member.staffIndex,
             stemUp,
             point: {
               x,
@@ -990,13 +1002,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const firstX = memberGeometries[0].point.x;
         const lastX = memberGeometries[memberGeometries.length - 1].point.x;
         const run = lastX - firstX;
+        // Linear interpolation (extrapolates past [firstX, lastX] too, same
+        // as a same-staff beam's own primaryBeamYAt — a fractional beam's
+        // stub end reaches slightly past its one real note).
+        const beamYAtX = (x: number): number =>
+          run === 0
+            ? line.yAtFirstX
+            : line.yAtFirstX +
+              ((line.yAtLastX - line.yAtFirstX) * (x - firstX)) / run;
 
         for (const { element, stemUp, point } of memberGeometries) {
-          const beamY =
-            run === 0
-              ? line.yAtFirstX
-              : line.yAtFirstX +
-                ((line.yAtLastX - line.yAtFirstX) * (point.x - firstX)) / run;
+          const beamY = beamYAtX(point.x);
           // createDoubleStemmedBeamPolygon (below) always draws its
           // thickness growing downward from beamY, so beamY is the
           // polygon's TOP edge regardless of which staff this member
@@ -1021,6 +1037,120 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             line.yAtLastX
           )
         );
+
+        // Secondary/fractional beams (mixed durations within the group) —
+        // computeBeamLevelStructure is the same pure level-by-level run
+        // detection a same-staff beam group uses (rules/beamStructureRules.ts),
+        // fed this group's own non-rest members' flag counts in order; its
+        // local indices line up 1:1 with memberGeometries.
+        const beamCounts = memberGeometries.map(
+          (g) => durationToFlagCountMap.get(g.element.duration) ?? 0
+        );
+        const { secondaryBeams, fractionalBeams } =
+          computeBeamLevelStructure(beamCounts);
+        const segments = [...secondaryBeams, ...fractionalBeams];
+        if (segments.length === 0) {
+          continue;
+        }
+
+        const membersForSide: DoubleStemmedBeamMember[] = memberGeometries.map(
+          (g) => ({
+            staffIndex: g.staffIndex,
+            entryIndex: 0,
+            isRest: false,
+          })
+        );
+        const lastLocalIndex = memberGeometries.length - 1;
+        const segmentSides = segments.map((segment) => {
+          const position: DoubleStemmedBeamSegmentPosition =
+            segment.fromNoteIndex === 0
+              ? 'start'
+              : segment.toNoteIndex === lastLocalIndex
+              ? 'end'
+              : 'middle';
+          return resolveSecondaryBeamVerticalSide(
+            segment,
+            membersForSide,
+            group.topStaffIndex,
+            position
+          );
+        });
+        // "Keep all secondary beams on the same side" — tie-broken toward
+        // the group's own pitch-contour lean (which way the primary beam
+        // itself slopes); a perfectly horizontal beam has no such lean, so
+        // 'bottom' is an arbitrary but deterministic default there.
+        const tieBreakSide: DoubleStemmedBeamSegmentSide =
+          line.yAtLastX < line.yAtFirstX
+            ? 'top'
+            : line.yAtLastX > line.yAtFirstX
+            ? 'bottom'
+            : 'bottom';
+        const groupSide = resolveGroupSecondaryBeamSide(
+          segmentSides,
+          tieBreakSide
+        );
+        const layerDirection = groupSide === 'top' ? -1 : 1;
+
+        // A member on the group's resolved secondary side already reaches
+        // every level on its way to the primary (that side's stems and the
+        // secondary stack both move the same direction — same as a
+        // same-staff beam). A member on the OPPOSITE side does not: the
+        // secondary sits further from its own notehead than the primary
+        // does, not between the two, so its stem must be re-extended past
+        // the primary to reach the deepest level it actually participates
+        // in — mirrors "a note's stem always reaches the outermost beam
+        // level it's part of." A plain member with no secondary/fractional
+        // participation (deepest level 0) is untouched.
+        const deepestLevelByIndex = new Map<number, number>();
+        for (const segment of segments) {
+          for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
+            deepestLevelByIndex.set(
+              i,
+              Math.max(deepestLevelByIndex.get(i) ?? 0, segment.beamLevel)
+            );
+          }
+        }
+        for (let i = 0; i < memberGeometries.length; i++) {
+          const level = deepestLevelByIndex.get(i);
+          if (!level) {
+            continue;
+          }
+          const { element, staffIndex, stemUp, point } = memberGeometries[i];
+          const memberSide: DoubleStemmedBeamSegmentSide =
+            staffIndex === group.topStaffIndex ? 'top' : 'bottom';
+          if (memberSide === groupSide) {
+            continue;
+          }
+          const levelOffset =
+            level * layerDirection * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+          const targetY = beamYAtX(point.x) + levelOffset + STEM_OVERLAP_PX;
+          const extension = stemUp
+            ? point.naturalY - targetY
+            : targetY - point.naturalY;
+          element.stemExtension = extension;
+        }
+
+        for (const segment of segments) {
+          const levelOffset =
+            segment.beamLevel *
+            layerDirection *
+            (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+          let x1 = memberGeometries[segment.fromNoteIndex].point.x;
+          let x2 = memberGeometries[segment.toNoteIndex].point.x;
+          if (segment.fractionalBeamSide === 'left') {
+            x1 -= FRACTIONAL_BEAM_WIDTH_PX;
+          } else if (segment.fractionalBeamSide === 'right') {
+            x2 += FRACTIONAL_BEAM_WIDTH_PX;
+          }
+          overlay.appendChild(
+            createDoubleStemmedBeamPolygon(
+              x1,
+              beamYAtX(x1) + levelOffset,
+              x2,
+              beamYAtX(x2) + levelOffset
+            )
+          );
+        }
       }
     }
 

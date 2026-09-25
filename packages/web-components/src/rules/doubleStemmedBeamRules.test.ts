@@ -1,9 +1,13 @@
 import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
+import type { BeamLineDescriptor } from './beamStructureRules';
 import {
   DoubleStemmedBeamEntry,
+  DoubleStemmedBeamMember,
   DoubleStemmedBeamPoint,
   resolveDoubleStemmedBeamGroups,
   resolveDoubleStemmedBeamLine,
+  resolveGroupSecondaryBeamSide,
+  resolveSecondaryBeamVerticalSide,
 } from './doubleStemmedBeamRules';
 
 function note(
@@ -219,5 +223,78 @@ describe('resolveDoubleStemmedBeamLine', () => {
       150
     );
     expect(line).toEqual({ yAtFirstX: 10, yAtLastX: 25 });
+  });
+});
+
+function member(staffIndex: number): DoubleStemmedBeamMember {
+  return { staffIndex, entryIndex: 0, isRest: false };
+}
+
+function seg(
+  fromNoteIndex: number,
+  toNoteIndex: number,
+  beamLevel = 1
+): BeamLineDescriptor {
+  return { fromNoteIndex, toNoteIndex, beamLevel };
+}
+
+describe('resolveSecondaryBeamVerticalSide', () => {
+  const TOP = 0;
+
+  it("resolves a segment whose every member is on the same staff to that staff's side", () => {
+    const members = [member(0), member(0)];
+    expect(
+      resolveSecondaryBeamVerticalSide(seg(0, 1), members, TOP, 'middle')
+    ).toBe('top');
+  });
+
+  it('resolves a mixed-interior segment to its own outer (first/last) side when they agree', () => {
+    const members = [member(0), member(1), member(0)];
+    expect(
+      resolveSecondaryBeamVerticalSide(seg(0, 2), members, TOP, 'middle')
+    ).toBe('top');
+  });
+
+  it("resolves a genuine outer-direction conflict to the opposite of the first member's side, at the start of the main beam", () => {
+    const members = [member(0), member(1)];
+    expect(
+      resolveSecondaryBeamVerticalSide(seg(0, 1), members, TOP, 'start')
+    ).toBe('bottom');
+  });
+
+  it("resolves a genuine outer-direction conflict to match the first member's side, at the end of the main beam", () => {
+    const members = [member(0), member(1)];
+    expect(
+      resolveSecondaryBeamVerticalSide(seg(0, 1), members, TOP, 'end')
+    ).toBe('top');
+  });
+
+  it("resolves a genuine outer-direction conflict to match the first member's side, for an interior segment (no specified rule; extends the end-of-beam default)", () => {
+    const members = [member(0), member(1)];
+    expect(
+      resolveSecondaryBeamVerticalSide(seg(0, 1), members, TOP, 'middle')
+    ).toBe('top');
+  });
+});
+
+describe('resolveGroupSecondaryBeamSide', () => {
+  it('picks the clear majority side', () => {
+    expect(
+      resolveGroupSecondaryBeamSide(['top', 'top', 'bottom'], 'bottom')
+    ).toBe('top');
+    expect(
+      resolveGroupSecondaryBeamSide(['top', 'bottom', 'bottom'], 'top')
+    ).toBe('bottom');
+  });
+
+  it('breaks an exact tie toward the supplied tie-break side', () => {
+    expect(resolveGroupSecondaryBeamSide(['top', 'bottom'], 'bottom')).toBe(
+      'bottom'
+    );
+    expect(resolveGroupSecondaryBeamSide(['top', 'bottom'], 'top')).toBe('top');
+  });
+
+  it('falls back to the tie-break side when there are no segments at all', () => {
+    expect(resolveGroupSecondaryBeamSide([], 'top')).toBe('top');
   });
 });

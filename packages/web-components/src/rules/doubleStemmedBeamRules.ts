@@ -1,4 +1,5 @@
 import { MUSIC_REST_NODE } from '../utils/consts';
+import type { BeamLineDescriptor } from './beamStructureRules';
 
 export type DoubleStemmedBeamMember = {
   staffIndex: number;
@@ -193,4 +194,89 @@ export function resolveDoubleStemmedBeamLine(
     yAtFirstX: first.naturalY,
     yAtLastX: first.naturalY + angle * run,
   };
+}
+
+/** Which staff a secondary/fractional beam segment stacks toward. */
+export type DoubleStemmedBeamSegmentSide = 'top' | 'bottom';
+
+/**
+ * Where a secondary/fractional beam segment sits relative to the group's
+ * own overall span — only matters for the "genuine conflict" tie-break in
+ * resolveSecondaryBeamVerticalSide below. A segment that both starts and
+ * ends the group (i.e. spans every member) is 'start' — moot in practice,
+ * since a whole-group-spanning segment is necessarily single-direction and
+ * never reaches that tie-break.
+ */
+export type DoubleStemmedBeamSegmentPosition = 'start' | 'end' | 'middle';
+
+/**
+ * Resolves which staff's side a secondary or fractional beam segment
+ * stacks toward — a question the single-staff model never has to answer,
+ * since a same-staff group only ever has one uniform stem direction for
+ * every level. Impossible to answer here without knowing, per member in
+ * the segment's own index range, which staff it belongs to (`members`,
+ * `groupTopStaffIndex` — the complementary `bottomStaffIndex` is implied,
+ * since a resolved group always spans exactly two staves).
+ *
+ * Order of rules: every member in the segment's range is on the same
+ * staff → that side. Otherwise (mixed): the segment's own first and last
+ * member (its "outer" notes) agree → that side. Otherwise (a genuine
+ * outer-direction conflict) → the opposite of the first member's side when
+ * the segment sits at the very start of the group's own span, or the first
+ * member's own side otherwise (both the group's own end and any interior
+ * segment — the source engraving rule only specifies the start/end case;
+ * extending the end rule to an interior conflict is the least arbitrary
+ * default absent a directional bias to prefer flipping it there).
+ */
+export function resolveSecondaryBeamVerticalSide(
+  segment: BeamLineDescriptor,
+  members: readonly DoubleStemmedBeamMember[],
+  groupTopStaffIndex: number,
+  positionInMainBeam: DoubleStemmedBeamSegmentPosition
+): DoubleStemmedBeamSegmentSide {
+  const sideOf = (memberIndex: number): DoubleStemmedBeamSegmentSide =>
+    members[memberIndex].staffIndex === groupTopStaffIndex ? 'top' : 'bottom';
+
+  const segmentSides = new Set<DoubleStemmedBeamSegmentSide>();
+  for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
+    segmentSides.add(sideOf(i));
+  }
+  if (segmentSides.size === 1) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- a Set with size 1 always has exactly one value
+    return [...segmentSides][0]!;
+  }
+
+  const firstSide = sideOf(segment.fromNoteIndex);
+  const lastSide = sideOf(segment.toNoteIndex);
+  if (firstSide === lastSide) {
+    return firstSide;
+  }
+
+  if (positionInMainBeam === 'start') {
+    return firstSide === 'top' ? 'bottom' : 'top';
+  }
+  return firstSide;
+}
+
+/**
+ * "Keep all secondary beams on the same side" — the group-wide post-pass
+ * resolveSecondaryBeamVerticalSide's own per-segment result still needs. A
+ * clear majority across every segment in the group wins; an exact tie
+ * breaks toward `tieBreakSide` (the group's own pitch-contour lean —
+ * resolveDoubleStemmedBeamLine's net ascend/descend classification, supplied
+ * by the caller since this function has no access to real geometry).
+ */
+export function resolveGroupSecondaryBeamSide(
+  segmentSides: readonly DoubleStemmedBeamSegmentSide[],
+  tieBreakSide: DoubleStemmedBeamSegmentSide
+): DoubleStemmedBeamSegmentSide {
+  if (segmentSides.length === 0) {
+    return tieBreakSide;
+  }
+  const topCount = segmentSides.filter((side) => side === 'top').length;
+  const bottomCount = segmentSides.length - topCount;
+  if (topCount === bottomCount) {
+    return tieBreakSide;
+  }
+  return topCount > bottomCount ? 'top' : 'bottom';
 }
