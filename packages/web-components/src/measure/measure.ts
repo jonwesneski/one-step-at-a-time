@@ -2,9 +2,16 @@ import {
   type ArpeggioEntry,
   resolveArpeggioSpans,
 } from '../rules/arpeggioRules';
+import {
+  DoubleStemmedBeamEntry,
+  DoubleStemmedBeamPoint,
+  resolveDoubleStemmedBeamGroups,
+  resolveDoubleStemmedBeamLine,
+} from '../rules/doubleStemmedBeamRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
 import type {
+  NoteChordOrRestElementType,
   NoteOrChordElementType,
   StaffElementBaseType,
 } from '../types/elements';
@@ -15,12 +22,14 @@ import {
   createArpeggioSvg,
   createBraceSvg,
   createBracketSvg,
+  createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
   isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -50,6 +59,7 @@ import {
   STAFF_LABEL_LEFT_MARGIN_PX,
   STAFF_LABEL_WIDTH_PX,
   STAFF_LINE_START,
+  STEM_OVERLAP_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
 
@@ -142,9 +152,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawArpeggios();
       this.#redrawConnectors();
       this.#redrawSharedDynamics();
+      this.#redrawDoubleStemmedBeams();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
+    // A plain beam-group attribute change (no geometry change on its own)
+    // only ever dispatches BEAM_GROUP_ATTRIBUTE_CHANGE — the resulting stem
+    // override, once pushed onto each staff, still triggers that staff's own
+    // full #renderNotes() (real geometry follows from there), same shape as
+    // #boundRedrawSharedDynamics below.
+    #boundRedrawDoubleStemmedBeams = () => this.#redrawDoubleStemmedBeams();
     // A plain tie/slur attribute change (no geometry change) only ever
     // dispatches CONNECTOR_ATTRIBUTE_CHANGE, never STAFF_MIN_WIDTH — mirrors
     // composition.ts's own listener for the same event/reason.
@@ -236,6 +253,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
         this.#boundRedrawSharedDynamics
       );
+      this.addEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
+      );
     }
 
     disconnectedCallback(): void {
@@ -263,6 +284,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
         this.#boundRedrawSharedDynamics
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
       );
       this.#staffWidths.clear();
     }
@@ -401,6 +426,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .double-stemmed-beams-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div>
           <div class="staff-connector"></div>
@@ -418,6 +451,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           <!-- dynamic-shared markings, centered between two sibling
                staves — see #redrawSharedDynamics -->
           <svg class="shared-dynamics-overlay"></svg>
+          <!-- the shared beam polygon for a cross-staff double-stemmed
+               group, spanning both staves' gap — see
+               #redrawDoubleStemmedBeams -->
+          <svg class="double-stemmed-beams-overlay"></svg>
           <!-- This measure's own number, shown per the ancestor
                music-composition element's measure-numbers policy — see
                #renderMeasureNumber. Absolutely positioned (like every other
@@ -460,6 +497,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawArpeggios();
       this.#redrawConnectors();
       this.#redrawSharedDynamics();
+      this.#redrawDoubleStemmedBeams();
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -686,6 +724,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return heads ? Array.from(heads, (h) => h.getBoundingClientRect()) : [];
     }
 
+    // Real geometry of a note/chord's own currently-rendered stem — null
+    // when it has none (a duration with no stem at all, e.g. whole notes).
+    // Used by #redrawDoubleStemmedBeams to read each cross-staff member's
+    // own provisional (zero-extension) stem-tip position before bridging it
+    // to the shared beam.
+    #stemRect(element: NoteOrChordElementType): DOMRect | null {
+      const stem = element.shadowRoot?.querySelector('.stem');
+      return stem ? stem.getBoundingClientRect() : null;
+    }
+
     // Ties/slurs/etc. across this measure's own staves (e.g. a slur from one
     // hand of a grand staff to the other). A <music-composition> ancestor
     // already runs the same pairing composition-wide via its own
@@ -794,6 +842,186 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           );
         }
       });
+    }
+
+    // Resolves cross-staff double-stemmed beam groups (`beam-group`) over
+    // every staff's own top-level element stream, then pushes the correct
+    // per-element stem direction onto each involved staff — top-staff members
+    // always stem down, bottom-staff members always stem up (see the
+    // double-stemmed-beams plan's Stem-direction resolution section), the
+    // same static, non-pitch-driven policy voice 1/voice 2 already use.
+    // A staff's own render pass (staffClassicalBase.ts) still decides
+    // everything else about beam grouping and geometry; this only resolves
+    // *which direction* a cross-staff member's stem points, so its own
+    // BeamsBuilder pass (which excludes these indices from same-staff
+    // grouping) has a correct direction to render with in the meantime,
+    // before a later phase draws the real shared beam polygon.
+    #redrawDoubleStemmedBeams() {
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+
+      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined, ${MUSIC_REST}:defined`;
+      const perStaffElements: NoteChordOrRestElementType[][] = staves.map(
+        (staff) =>
+          Array.from(
+            staff.querySelectorAll(elementSelector)
+          ) as NoteChordOrRestElementType[]
+      );
+
+      const entries: DoubleStemmedBeamEntry[] = perStaffElements.flatMap(
+        (elements, staffIndex) =>
+          elements.map((element, entryIndex) => ({
+            staffIndex,
+            entryIndex,
+            beamGroup: element.beamGroup,
+            nodeName: element.nodeName,
+          }))
+      );
+
+      const { groups, warnings } = resolveDoubleStemmedBeamGroups(entries);
+      for (const warning of warnings) {
+        console.warn(`[music-measure] ${warning}`);
+      }
+
+      // Pass 1 (stem-direction convergence): resolve + push each involved
+      // staff's own per-element override. Each staff's own #renderNotes()
+      // re-render (inside the crossStaffBeamStemOverrides setter) is
+      // synchronous, so pass 2 below can safely measure real,
+      // post-direction-change geometry immediately after this loop.
+      const overridesByStaffIndex = new Map<number, Map<number, boolean>>();
+      for (const group of groups) {
+        for (const member of group.members) {
+          if (member.isRest) {
+            continue;
+          }
+          const stemUp = member.staffIndex === group.bottomStaffIndex;
+          const staffOverrides =
+            overridesByStaffIndex.get(member.staffIndex) ?? new Map();
+          staffOverrides.set(member.entryIndex, stemUp);
+          overridesByStaffIndex.set(member.staffIndex, staffOverrides);
+        }
+      }
+
+      staves.forEach((staff, staffIndex) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- crossStaffBeamStemOverrides is staff-internal (StaffClassicalElementBase), not part of the shared StaffElementBaseType surface — same precedent as showDescribe/clefChangeAtBoundary in composition.ts
+        (staff as any).crossStaffBeamStemOverrides =
+          overridesByStaffIndex.get(staffIndex) ?? null;
+      });
+
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.double-stemmed-beams-overlay'
+      );
+      if (overlay) {
+        while (overlay.firstChild) {
+          overlay.removeChild(overlay.firstChild);
+        }
+      }
+      if (groups.length === 0 || !overlay) {
+        return;
+      }
+
+      // Pass 2 (coordinate bridging): resolve the shared beam line per group
+      // from each non-rest member's own, now-correctly-directioned
+      // provisional stem tip, then push each member's real stemExtension to
+      // reach it — a note-local write (re-renders only that note's own
+      // stem), not a further staff relayout.
+      const measureRect = this.getBoundingClientRect();
+      for (const group of groups) {
+        const topGapEdgeY =
+          staves[group.topStaffIndex].getBoundingClientRect().bottom -
+          measureRect.top;
+        const bottomGapEdgeY =
+          staves[group.bottomStaffIndex].getBoundingClientRect().top -
+          measureRect.top;
+
+        const memberGeometries: {
+          element: NoteOrChordElementType;
+          stemUp: boolean;
+          point: DoubleStemmedBeamPoint;
+        }[] = [];
+        for (const member of group.members) {
+          if (member.isRest) {
+            continue;
+          }
+          const element = perStaffElements[member.staffIndex][
+            member.entryIndex
+          ] as NoteOrChordElementType;
+          const stemRect = this.#stemRect(element);
+          if (!stemRect) {
+            // No stem at all (e.g. a beam-group member with a whole-note
+            // duration) — nothing to bridge for this one.
+            continue;
+          }
+          const stemUp = member.staffIndex === group.bottomStaffIndex;
+          const measuredTipY =
+            (stemUp ? stemRect.top : stemRect.bottom) - measureRect.top;
+          // Un-shift back to the zero-extension baseline before using it as
+          // "natural" input: a previous redraw cycle may have already
+          // applied a stemExtension here (increasing it moves a stem-up tip
+          // to a *smaller* Y, a stem-down tip to a *larger* Y — the inverse
+          // of that is added back here). Without this, re-running this
+          // method (it fires on every STAFF_MIN_WIDTH / resize, not just
+          // once) would re-measure its own previous output as if it were
+          // fresh input, never converging to a stable, correct target.
+          const naturalY = stemUp
+            ? measuredTipY + element.stemExtension
+            : measuredTipY - element.stemExtension;
+          const x = (stemRect.left + stemRect.right) / 2 - measureRect.left;
+          memberGeometries.push({
+            element,
+            stemUp,
+            point: {
+              x,
+              naturalY,
+              isTopStaff: member.staffIndex === group.topStaffIndex,
+            },
+          });
+        }
+        if (memberGeometries.length < 2) {
+          continue;
+        }
+
+        const line = resolveDoubleStemmedBeamLine(
+          memberGeometries.map((g) => g.point),
+          topGapEdgeY,
+          bottomGapEdgeY
+        );
+        const firstX = memberGeometries[0].point.x;
+        const lastX = memberGeometries[memberGeometries.length - 1].point.x;
+        const run = lastX - firstX;
+
+        for (const { element, stemUp, point } of memberGeometries) {
+          const beamY =
+            run === 0
+              ? line.yAtFirstX
+              : line.yAtFirstX +
+                ((line.yAtLastX - line.yAtFirstX) * (point.x - firstX)) / run;
+          // createDoubleStemmedBeamPolygon (below) always draws its
+          // thickness growing downward from beamY, so beamY is the
+          // polygon's TOP edge regardless of which staff this member
+          // belongs to — both directions target the same point,
+          // STEM_OVERLAP_PX past that edge, so the tip sits slightly
+          // inside the polygon body (not at its edge) rather than
+          // outside it. (A top-staff/stem-down tip subtracting the
+          // overlap here would land above the polygon entirely — a real
+          // bug found via visual review, not merely a style choice.)
+          const targetY = beamY + STEM_OVERLAP_PX;
+          const extension = stemUp
+            ? point.naturalY - targetY
+            : targetY - point.naturalY;
+          element.stemExtension = extension;
+        }
+
+        overlay.appendChild(
+          createDoubleStemmedBeamPolygon(
+            firstX,
+            line.yAtFirstX,
+            lastX,
+            line.yAtLastX
+          )
+        );
+      }
     }
 
     #renderGroupConnectors(isFirstInRow: boolean) {

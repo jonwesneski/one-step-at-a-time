@@ -11,7 +11,12 @@ import type {
   Octave,
   TimeSignature,
 } from '../types/theory';
-import { COMMON_ATTRIBUTES, MUSIC_NOTE, MUSIC_STAFF } from '../utils/consts';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_NOTE,
+  MUSIC_STAFF,
+  NOTE_EVENTS,
+} from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   GRACE_SCALE,
@@ -1558,6 +1563,35 @@ describe('octave shift', () => {
     expect(noteElement.loco).toBe(true);
     noteElement.loco = false;
     expect(noteElement.getAttribute('loco')).toBeNull();
+  });
+});
+
+describe('beam group', () => {
+  it('round-trips beam-group as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.beamGroup).toBeNull();
+    noteElement.beamGroup = 'rh-lh-1';
+    expect(noteElement.getAttribute('beam-group')).toBe('rh-lh-1');
+    expect(noteElement.beamGroup).toBe('rh-lh-1');
+
+    noteElement.beamGroup = null;
+    expect(noteElement.getAttribute('beam-group')).toBeNull();
+  });
+
+  it('dispatches BEAM_GROUP_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.beamGroup = 'rh-lh-1';
+
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 

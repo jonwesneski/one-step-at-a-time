@@ -234,6 +234,15 @@
             },
             {
               "kind": "field",
+              "name": "#noStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#renderArpeggioSign",
               "privacy": "private",
               "type": {
@@ -374,6 +383,13 @@
             },
             {
               "kind": "field",
+              "name": "noStem",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
               "name": "staffYCoordinates",
               "type": {
                 "text": "number[] | null"
@@ -480,6 +496,13 @@
             {
               "kind": "field",
               "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamGroup",
               "type": {
                 "text": "string | null"
               }
@@ -1087,6 +1110,13 @@
               "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span."
             },
             {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord)."
+            },
+            {
               "type": {
                 "text": "Chord"
               },
@@ -1680,6 +1710,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "#boundRedrawConnectors",
               "privacy": "private"
             },
@@ -1810,12 +1845,35 @@
             },
             {
               "kind": "method",
+              "name": "#stemRect",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DOMRect | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#redrawConnectors",
               "privacy": "private"
             },
             {
               "kind": "method",
               "name": "#redrawSharedDynamics",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawDoubleStemmedBeams",
               "privacy": "private"
             },
             {
@@ -2220,6 +2278,13 @@
             {
               "kind": "field",
               "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamGroup",
               "type": {
                 "text": "string | null"
               }
@@ -2827,6 +2892,13 @@
               "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span."
             },
             {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
+            },
+            {
               "type": {
                 "text": "string"
               },
@@ -2869,6 +2941,13 @@
               }
             },
             {
+              "kind": "field",
+              "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
               "kind": "method",
               "name": "render",
               "privacy": "private",
@@ -2893,6 +2972,13 @@
                 "text": "DurationType"
               },
               "description": "Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`."
+            },
+            {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself."
             }
           ],
           "superclass": {
@@ -3104,6 +3190,19 @@
                 "text": "boolean"
               },
               "default": "false",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffBeamStemOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<number, boolean> | null"
+              },
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3427,6 +3526,17 @@
               "name": "timeChangeAtBoundary",
               "type": {
                 "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffBeamStemOverrides",
+              "type": {
+                "text": "ReadonlyMap<number, boolean> | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -6423,6 +6533,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffBeamStemOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<number, boolean> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -6739,6 +6862,17 @@
               "name": "timeChangeAtBoundary",
               "type": {
                 "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffBeamStemOverrides",
+              "type": {
+                "text": "ReadonlyMap<number, boolean> | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",

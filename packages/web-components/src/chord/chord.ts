@@ -132,6 +132,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this chord (inclusive).
    * @attr {boolean} loco - Closes the currently open octave-transposition span at this chord, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
    * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span.
+   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -186,6 +187,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'octave-stop',
         'loco',
         'octave-continuation',
+        'beam-group',
       ];
     }
 
@@ -196,6 +198,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #trillSignExtraLift = 0;
     #noFlags = false;
+    #noStem = false;
     #renderArpeggioSign = true;
     #impliedArpeggio: ArpeggioType | null = null;
     #staffYCoordinates: number[] | null = null;
@@ -293,6 +296,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set noFlags(v: boolean) {
       this.#noFlags = v;
+      this.#scheduleRender();
+    }
+
+    get noStem(): boolean {
+      return this.#noStem;
+    }
+    set noStem(v: boolean) {
+      this.#noStem = v;
       this.#scheduleRender();
     }
 
@@ -462,6 +473,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('arpeggio-for');
       } else {
         this.setAttribute('arpeggio-for', value);
+      }
+    }
+
+    // `id` shared by every element across a measure's two adjacent grand-staff
+    // staves that joins one cross-staff double-stemmed beam group. Resolved
+    // by the ancestor <music-measure>.
+    get beamGroup(): string | null {
+      return this.getAttribute('beam-group');
+    }
+    set beamGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('beam-group');
+      } else {
+        this.setAttribute('beam-group', value);
       }
     }
 
@@ -1018,6 +1043,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'beam-group') {
+        // The ancestor measure resolves cross-staff double-stemmed beam
+        // groups over both staves' element streams; nothing renders locally
+        // in this chord's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
       if (
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
@@ -1092,6 +1130,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               : null,
           trillSignExtraLift: this.#trillSignExtraLift,
           noFlags: this.#noFlags,
+          noStem: this.#noStem,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
@@ -1196,6 +1235,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemUp,
           noteAccidentals,
           noFlags: false,
+          noStem: this.#noStem,
           stemExtension: 0,
           qualifiedElementName: 'g',
           articulation: this.articulation,

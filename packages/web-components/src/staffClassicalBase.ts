@@ -388,6 +388,14 @@ type VoiceRenderState = {
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null;
   stemDirections: boolean[];
   beamedIndices: Set<number>;
+  // Indices joined to a cross-staff double-stemmed beam group — their real
+  // stemExtension is resolved and written directly by the ancestor
+  // <music-measure> from both-staves geometry this staff can't see. Any
+  // staff-local pass that would otherwise recompute stemExtension from this
+  // staff's own beamRenderer (which only ever returns the unbeamed
+  // fallback, 0, for these indices) must skip them instead, or it silently
+  // overwrites that cross-staff bridging on its next unrelated re-render.
+  externallyBeamedIndices: ReadonlySet<number>;
   noteStaffYCoords: Map<NoteElementType, number>;
   chordStaffYCoords: Map<ChordElementType, number[]>;
   noteXPositions: Map<number, number>;
@@ -475,6 +483,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #showDescribe = true;
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
+  #crossStaffBeamStemOverrides: ReadonlyMap<number, boolean> | null = null;
   #clefMarkers: ClefMarkerPlacement[] = [];
   // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
   // #renderNotes() pass — the shared coordinate space #clefMarkers'
@@ -666,6 +675,33 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     this.#timeChangeAtBoundary = value;
     this.#refreshDescribe();
+  }
+
+  // Set by the ancestor <music-measure> once it resolves this staff's role
+  // (top/bottom) in a cross-staff double-stemmed beam group — keyed by this
+  // staff's own element index, `true` meaning stem-up. A full #renderNotes()
+  // pass is needed (not a narrower redraw) since it changes beam grouping and
+  // stem geometry, not just a decoration's position — but the map is rebuilt
+  // fresh on every measure relayout, so this setter compares content, not
+  // reference identity, or an unchanged map would still trigger one and the
+  // resulting STAFF_MIN_WIDTH would call back in here forever.
+  get crossStaffBeamStemOverrides(): ReadonlyMap<number, boolean> | null {
+    return this.#crossStaffBeamStemOverrides;
+  }
+
+  set crossStaffBeamStemOverrides(value: ReadonlyMap<number, boolean> | null) {
+    const current = this.#crossStaffBeamStemOverrides;
+    const unchanged =
+      current === value ||
+      (current !== null &&
+        value !== null &&
+        current.size === value.size &&
+        [...current].every(([index, stemUp]) => value.get(index) === stemUp));
+    if (unchanged) {
+      return;
+    }
+    this.#crossStaffBeamStemOverrides = value;
+    this.#renderNotes();
   }
 
   constructor() {
@@ -1124,6 +1160,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const stemDirectionsOverride = pitchDriven
       ? undefined
       : determineVoiceStemDirections(elements, direction);
+    // Own-staff exclusion (Chapter B, Phase 4 of the double-stemmed-beams
+    // plan): a beam-group member is drawn by the ancestor <music-measure>'s
+    // cross-staff overlay, not this staff's own BeamsBuilder — excluding it
+    // here still reports isBeamed() true for it (suppresses its own flag)
+    // without letting it join or extend a same-staff run.
+    const externallyBeamedIndices = new Set(
+      elements
+        .map((_, i) => i)
+        .filter((i) => {
+          const element = elements[i];
+          return (
+            element.nodeName !== MUSIC_REST_NODE &&
+            (element as NoteElementType | ChordElementType).beamGroup !== null
+          );
+        })
+    );
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.effectiveTimeSig,
@@ -1136,7 +1188,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // rules/voiceCombineRules.ts. Every other track's positions are
       // still derived by BeamsBuilder's own sequential accumulation.
       voiceKey === 'combined' ? beatOffsets : undefined,
-      stemDirectionsOverride
+      stemDirectionsOverride,
+      externallyBeamedIndices,
+      this.#crossStaffBeamStemOverrides ?? undefined
     );
 
     const beamedIndices = new Set(
@@ -1151,6 +1205,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const element = elements[i];
       const stemUp = stemDirections[i];
       const isBeamed = beamsBuilder.isBeamed(i);
+      // A cross-staff (beam-group) member's real stemExtension is resolved
+      // and written directly by the ancestor <music-measure> from real,
+      // both-staves geometry this staff can't see — beamRenderer's own value
+      // for it is always the unbeamed fallback (0), so writing it here on
+      // every re-render (for any unrelated reason — a resize, a sibling
+      // element's own attribute change) would silently wipe out that
+      // cross-staff bridging the next time this staff redraws.
+      const isExternallyBeamed = externallyBeamedIndices.has(i);
       const extension = beamRenderer.stemExtension(i);
 
       if (element.nodeName === MUSIC_REST_NODE) {
@@ -1160,7 +1222,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const noteElement = element as NoteElementType;
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
-          noteElement.stemExtension = extension;
+          if (!isExternallyBeamed) {
+            noteElement.stemExtension = extension;
+          }
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental =
             accidentals.noteShowAccidentals.get(noteElement);
@@ -1187,7 +1251,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           accidentals.chordNoteAccidentals.get(chordElement) ?? [];
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
-          chordElement.stemExtension = extension;
+          if (!isExternallyBeamed) {
+            chordElement.stemExtension = extension;
+          }
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
           chordElement.noteAccidentals = chordAccidentals;
@@ -1212,6 +1278,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beamRenderer,
       stemDirections,
       beamedIndices,
+      externallyBeamedIndices,
       noteStaffYCoords,
       chordStaffYCoords,
       noteXPositions: new Map(),
@@ -2312,7 +2379,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
       for (let i = 0; i < state.elements.length; i++) {
-        if (!state.beamedIndices.has(i)) {
+        if (
+          !state.beamedIndices.has(i) ||
+          state.externallyBeamedIndices.has(i)
+        ) {
           continue;
         }
         const element = state.elements[i];

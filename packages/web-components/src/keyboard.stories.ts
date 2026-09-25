@@ -45,6 +45,73 @@ export const CrossStaffSlur: Story = {
   `,
 };
 
+export const DoubleStemmedBeam: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="F"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-note
+            note="C"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="F"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const WhiteKeyGlissando: Story = {
   render: () => html`
     <music-staff clef="treble" key-sig="C" mode="major" time="4/4">
@@ -197,12 +264,15 @@ export const Planned: Story = {
     <p>
       Keyboard pedal marks (sustain/sostenuto/una-corda, half pedal) are not
       implemented yet. Tracked in <code>TODO.md</code> §7 &ldquo;Percussion
-      &amp; Keyboard Techniques&rdquo;. Octave signs (8va/15ma) and note
-      clusters also appear frequently in keyboard writing but are
-      general-purpose notations, not keyboard-specific &mdash; tracked as their
-      own rows in <code>TODO.md</code>. Hairpin placement that angles through
-      the stave to avoid a double-stemmed beam is also not implemented &mdash;
-      see &ldquo;Known Incomplete Areas&rdquo; in <code>CLAUDE.md</code>.
+      &amp; Keyboard Techniques&rdquo;. Note clusters (Cowell-style
+      black-key/white-key/chromatic notation) also appear frequently in keyboard
+      writing but are a general-purpose notation, not keyboard-specific &mdash;
+      tracked as its own row in <code>TODO.md</code>. Double-stemmed beams
+      (<code>beam-group</code>, see &ldquo;Double-Stemmed Beam&rdquo; above)
+      currently draw only the primary beam &mdash; secondary/fractional beams,
+      rest placement, cross-staff tuplets/slurs/hairpins, and a shared single
+      stem are not yet implemented; see &ldquo;Known Incomplete Areas&rdquo; in
+      <code>CLAUDE.md</code>.
     </p>
   `,
 };

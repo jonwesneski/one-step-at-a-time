@@ -78,6 +78,7 @@ export const NOTE_EVENTS = {
   ARPEGGIO_ATTRIBUTE_CHANGE: 'arpeggio-attribute-change',
   TRILL_ATTRIBUTE_CHANGE: 'trill-attribute-change',
   OCTAVE_ATTRIBUTE_CHANGE: 'octave-attribute-change',
+  BEAM_GROUP_ATTRIBUTE_CHANGE: 'beam-group-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',

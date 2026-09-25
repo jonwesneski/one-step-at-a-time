@@ -6,7 +6,12 @@ import '../staff/index';
 import type { RestElementType } from '../types/elements';
 import type { DurationType, TimeSignature } from '../types/theory';
 import { DURATIONS } from '../utils';
-import { COMMON_ATTRIBUTES, MUSIC_REST, MUSIC_STAFF } from '../utils/consts';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_REST,
+  MUSIC_STAFF,
+  NOTE_EVENTS,
+} from '../utils/consts';
 import './index';
 
 afterEach(() => {
@@ -77,6 +82,35 @@ describe(MUSIC_REST, () => {
     restElement.setAttribute('duration', 'eighth');
     restSvg = restElement.shadowRoot.querySelector('svg[class~="rest"]');
     expect(restSvg?.dataset.duration).toBe('eighth');
+  });
+
+  describe('beam group', () => {
+    it('round-trips beam-group as a plain string attribute', () => {
+      const restElement = document.createElement(MUSIC_REST) as RestElementType;
+      document.body.appendChild(restElement);
+
+      expect(restElement.beamGroup).toBeNull();
+      restElement.beamGroup = 'rh-lh-1';
+      expect(restElement.getAttribute('beam-group')).toBe('rh-lh-1');
+      expect(restElement.beamGroup).toBe('rh-lh-1');
+
+      restElement.beamGroup = null;
+      expect(restElement.getAttribute('beam-group')).toBeNull();
+    });
+
+    it('dispatches BEAM_GROUP_ATTRIBUTE_CHANGE without re-rendering the rest locally', () => {
+      const restElement = document.createElement(MUSIC_REST) as RestElementType;
+      document.body.appendChild(restElement);
+      const handler = jest.fn();
+      restElement.addEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        handler
+      );
+
+      restElement.beamGroup = 'rh-lh-1';
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

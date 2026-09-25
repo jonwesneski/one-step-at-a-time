@@ -59,6 +59,9 @@ export interface INoteElement {
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
+  // `id` shared by every element across a measure's two adjacent grand-staff
+  // staves that joins one cross-staff double-stemmed beam group.
+  beamGroup: string | null;
   tie: TieValue | null;
   slur: ConnectorRole | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
@@ -220,6 +223,9 @@ export interface IChordElement {
   stemUp: boolean;
   stemExtension: number;
   noFlags: boolean;
+  noStem: boolean;
+  // See INoteElement.beamGroup.
+  beamGroup: string | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;
@@ -381,6 +387,10 @@ export interface IGuitarNoteElement {
 
 export interface IRestElement {
   duration: DurationType;
+  // Correlation key only — a rest never contributes to the beam polygon, but
+  // shares INoteElement.beamGroup's `id` shape so a double-stemmed group can
+  // tell "this rest belongs to me" for rest-placement purposes.
+  beamGroup: string | null;
 }
 
 export interface IClefElement {

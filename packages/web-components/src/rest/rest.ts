@@ -11,6 +11,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *
    * @customElement music-rest
    * @attr {DurationType} duration - Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`.
+   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -20,7 +21,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    */
   class RestElement extends HTMLElement implements IRestElement {
     static get observedAttributes(): string[] {
-      return ['duration'];
+      return ['duration', 'beam-group'];
     }
 
     constructor() {
@@ -36,16 +37,42 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute('duration', value);
     }
 
+    // `id` shared by every element across a measure's two adjacent grand-staff
+    // staves that joins one cross-staff double-stemmed beam group. Resolved
+    // by the ancestor <music-measure>.
+    get beamGroup(): string | null {
+      return this.getAttribute('beam-group');
+    }
+    set beamGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('beam-group');
+      } else {
+        this.setAttribute('beam-group', value);
+      }
+    }
+
     connectedCallback(): void {
       this.render();
     }
 
     attributeChangedCallback(
-      _name: string,
+      name: string,
       oldValue: string | null,
       newValue: string | null
     ): void {
       if (oldValue === newValue || !this.isConnected) {
+        return;
+      }
+      if (name === 'beam-group') {
+        // The ancestor measure resolves cross-staff double-stemmed beam
+        // groups over both staves' element streams; nothing renders locally
+        // in this rest's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
         return;
       }
       this.render();

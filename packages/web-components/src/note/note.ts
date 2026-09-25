@@ -127,6 +127,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this note (inclusive).
    * @attr {boolean} loco - Closes the currently open octave-transposition span at this note, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
    * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.
+   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -179,6 +180,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'octave-stop',
         'loco',
         'octave-continuation',
+        'beam-group',
       ];
     }
 
@@ -459,6 +461,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('arpeggio-for');
       } else {
         this.setAttribute('arpeggio-for', value);
+      }
+    }
+
+    // `id` shared by every element across a measure's two adjacent grand-staff
+    // staves that joins one cross-staff double-stemmed beam group. Resolved
+    // by the ancestor <music-measure>.
+    get beamGroup(): string | null {
+      return this.getAttribute('beam-group');
+    }
+    set beamGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('beam-group');
+      } else {
+        this.setAttribute('beam-group', value);
       }
     }
 
@@ -1009,6 +1025,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // overlay — nothing renders locally in this note's own shadow DOM.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (name === 'beam-group') {
+        // The ancestor measure resolves cross-staff double-stemmed beam
+        // groups over both staves' element streams; nothing renders locally
+        // in this note's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
             bubbles: true,
             composed: true,
           })

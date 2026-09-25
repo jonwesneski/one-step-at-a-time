@@ -85,6 +85,7 @@ export const createChordSvg = ({
   trillAccidental = null,
   trillSignExtraLift = 0,
   noFlags = false,
+  noStem = false,
   stemUp = true,
   stemExtension = 0,
   noteAccidentals,
@@ -128,7 +129,11 @@ export const createChordSvg = ({
     const [noteSvg, yOffset] = createNoteSvg({
       duration,
       noFlags,
-      noStem: !isExtremal,
+      // A chord-level noStem (the whole chord defers to a cross-staff shared
+      // stem drawn elsewhere) suppresses every notehead's own stem, including
+      // the extremal one — not just the non-extremal noteheads that already
+      // never draw their own stem within a normal chord.
+      noStem: noStem || !isExtremal,
       stemUp,
       stemExtension: isExtremal
         ? noFlags
