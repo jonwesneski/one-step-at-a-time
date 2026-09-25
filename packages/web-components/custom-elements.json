@@ -4201,6 +4201,12 @@
                   }
                 },
                 {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
                   "name": "state",
                   "type": {
                     "text": "VoiceRenderState"
@@ -4226,6 +4232,13 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "optional": true,
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -4629,11 +4642,11 @@
             },
             {
               "kind": "method",
-              "name": "#octaveSignVerticalOverflow",
+              "name": "#tupletExtremeY",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "number"
+                  "text": "number | null"
                 }
               },
               "parameters": [
@@ -4644,9 +4657,99 @@
                   }
                 },
                 {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
                   "name": "above",
                   "type": {
                     "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherAboveStaffDecorationTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherBelowStaffDecorationBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -7401,6 +7504,12 @@
                   }
                 },
                 {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
                   "name": "state",
                   "type": {
                     "text": "VoiceRenderState"
@@ -7426,6 +7535,13 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "optional": true,
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -7829,11 +7945,11 @@
             },
             {
               "kind": "method",
-              "name": "#octaveSignVerticalOverflow",
+              "name": "#tupletExtremeY",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "number"
+                  "text": "number | null"
                 }
               },
               "parameters": [
@@ -7844,9 +7960,99 @@
                   }
                 },
                 {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
                   "name": "above",
                   "type": {
                     "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherAboveStaffDecorationTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherBelowStaffDecorationBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 }
               ],

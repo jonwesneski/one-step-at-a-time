@@ -2448,7 +2448,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         'octave-signs-container'
       );
       this.#sizeVoiceContainer(octaveSignsContainer, remainingWidth);
-      this.#renderOctaveSigns(voiceKey);
+      this.#renderOctaveSigns(voiceKey, remainingWidth);
     }
   }
 
@@ -2523,16 +2523,40 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#renderArpeggiandoText(voiceKey);
   }
 
-  // Phase 1: own-measure only, straight horizontal line — no cross-measure
-  // continuation yet (see rules/octaveRules.ts for span resolution).
+  // Own-measure only, straight horizontal line — no cross-measure
+  // continuation yet (see rules/octaveRules.ts for span resolution). The
+  // nominal position is itself pushed outside whatever other above/below-
+  // staff decoration this voice already has (#otherAboveStaffDecorationTopY/
+  // #otherBelowStaffDecorationBottomY) before the note-clearance check below
+  // is applied on top of it — "outside all other notation" as the default,
+  // matching the engraving convention, without needing a full cross-feature
+  // stacking registry (nothing here reasons about a competing decoration's
+  // own horizontal span, just this voice's worst-case vertical reach).
   #octaveSignRowY(
     span: OctaveSpan,
     raisesPitch: boolean,
+    voiceKey: VoiceKey,
     state: VoiceRenderState
   ): number {
-    const nominalY = raisesPitch
+    const fixedNominalY = raisesPitch
       ? OCTAVE_SIGN_ABOVE_STAFF_Y
       : OCTAVE_SIGN_BELOW_STAFF_Y;
+    const otherEdgeY = raisesPitch
+      ? this.#otherAboveStaffDecorationTopY(voiceKey, state)
+      : this.#otherBelowStaffDecorationBottomY(voiceKey, state);
+    const nominalY =
+      otherEdgeY === null
+        ? fixedNominalY
+        : raisesPitch
+        ? Math.min(
+            fixedNominalY,
+            otherEdgeY - OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX
+          )
+        : Math.max(
+            fixedNominalY,
+            otherEdgeY + OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX
+          );
+
     const extremalStaffY = resolveOctaveSpanExtremalStaffY(
       span,
       raisesPitch,
@@ -2556,7 +2580,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       : Math.max(nominalY, contentClearY);
   }
 
-  #renderOctaveSigns(voiceKey: VoiceKey): void {
+  #renderOctaveSigns(voiceKey: VoiceKey, remainingWidth?: number): void {
     const state = this.#voiceRenderStates.get(voiceKey);
     if (!state) {
       return;
@@ -2571,6 +2595,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // set of signs/lines/corners alongside the stale ones instead of
     // replacing them.
     container.innerHTML = '';
+    const width =
+      remainingWidth ??
+      this.transcribeContainer.getBoundingClientRect().width -
+        this.#describeEndX;
 
     const { spans, warnings, standaloneLocoIndices } = resolveOctaveSpans(
       state.elements
@@ -2578,6 +2606,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const warning of warnings) {
       console.warn(warning);
     }
+
+    const trillSpansByStartIndex = new Map(
+      resolveTrillSpans(state.elements).map((trillSpan) => [
+        trillSpan.startIndex,
+        trillSpan,
+      ])
+    );
 
     for (const span of spans) {
       const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
@@ -2590,13 +2625,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // stroke, which draws backward from this anchor — without it, the
       // corner's true leftmost ink lands OCTAVE_SIGN_CORNER_PX short of the
       // trailing gap this is meant to guarantee.
-      const endX =
+      let endX =
         stopNoteX +
         NOTE_SVG_WIDTH +
         OCTAVE_SIGN_TRAILING_GAP_PX +
         OCTAVE_SIGN_CORNER_PX;
+      // The closing note's own trill (if it has an active line) reaches
+      // further right than its bare notehead — never let the octave line's
+      // corner land short of where that trill line itself ends.
+      const closingTrillSpan = trillSpansByStartIndex.get(span.stopIndex);
+      if (closingTrillSpan?.hasLine) {
+        const trillEndX = this.#trillLineEndX(state, closingTrillSpan, width);
+        endX = Math.max(endX, trillEndX);
+      }
       const raisesPitch = isOctaveRaise(span.amount);
-      const y = this.#octaveSignRowY(span, raisesPitch, state);
+      const y = this.#octaveSignRowY(span, raisesPitch, voiceKey, state);
 
       container.appendChild(
         createOctaveSignSvg(span.amount, signX, y, span.mode)
@@ -3211,7 +3254,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
-    budget = Math.max(budget, this.#octaveSignVerticalOverflow(state, true));
+    budget = Math.max(
+      budget,
+      this.#octaveSignVerticalOverflow(voiceKey, state, true)
+    );
 
     // Mirrors the below-staff dynamics check in #estimateBelowStaffBudget —
     // an up-stem voice's dynamics row (see #dynamicsPlacedAbove) needs
@@ -3266,7 +3312,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     let budget = 0;
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       budget = Math.max(budget, this.#tupletVerticalOverflow(state, false));
-      budget = Math.max(budget, this.#octaveSignVerticalOverflow(state, false));
+      budget = Math.max(
+        budget,
+        this.#octaveSignVerticalOverflow(voiceKey, state, false)
+      );
 
       if (
         this.#hasDynamicsContent(state) &&
@@ -3295,7 +3344,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // tuplet on a very high/low voice can extend well past the nominal
   // clearance alone.
   #tupletVerticalOverflow(state: VoiceRenderState, stemUp: boolean): number {
-    let overflow = 0;
+    const worstY = this.#tupletExtremeY(state, stemUp);
+    if (worstY === null) {
+      return 0;
+    }
+    return stemUp
+      ? worstY < 0
+        ? Math.ceil(-worstY) + 2
+        : 0
+      : worstY > STAFF_TRANSCRIPTION_HEIGHT
+      ? Math.ceil(worstY - STAFF_TRANSCRIPTION_HEIGHT) + 2
+      : 0;
+  }
+
+  // The real Y a tuplet numeral on the `stemUp` side reaches — the extreme
+  // (min above, max below) across every group whose majority stem direction
+  // matches `stemUp` — regardless of whether it actually overflows the
+  // staff's own fixed canvas edge. `#tupletVerticalOverflow` (canvas-budget
+  // use) and #otherAboveStaffDecorationTopY/#otherBelowStaffDecorationBottomY
+  // (octave-sign outermost-placement use) both read this so neither can
+  // diverge from where the tuplet bracket is actually drawn. Returns null
+  // when no group matches `stemUp`.
+  #tupletExtremeY(state: VoiceRenderState, stemUp: boolean): number | null {
+    let extreme: number | null = null;
 
     for (const group of state.tupletGroups) {
       const upVotes = group.indices.filter(
@@ -3339,18 +3410,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ? Math.min(nominalY, beamDerivedY)
         : Math.max(nominalY, beamDerivedY);
 
-      const edgeOverflow = stemUp
-        ? worstY < 0
-          ? Math.ceil(-worstY) + 2
-          : 0
-        : worstY > STAFF_TRANSCRIPTION_HEIGHT
-        ? Math.ceil(worstY - STAFF_TRANSCRIPTION_HEIGHT) + 2
-        : 0;
-
-      overflow = Math.max(overflow, edgeOverflow);
+      extreme =
+        extreme === null
+          ? worstY
+          : stemUp
+          ? Math.min(extreme, worstY)
+          : Math.max(extreme, worstY);
     }
 
-    return overflow;
+    return extreme;
   }
 
   // Worst-case Y an octave-sign span's own row needs to clear a real
@@ -3360,7 +3428,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // `above` true only considers raise ("sopra") spans; false only considers
   // lower ("bassa") spans. Reuses #octaveSignRowY so the reserved canvas
   // budget can never diverge from what #renderOctaveSigns actually draws.
-  #octaveSignVerticalOverflow(state: VoiceRenderState, above: boolean): number {
+  #octaveSignVerticalOverflow(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    above: boolean
+  ): number {
     let overflow = 0;
     const { spans } = resolveOctaveSpans(state.elements);
     for (const span of spans) {
@@ -3368,7 +3440,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (raisesPitch !== above) {
         continue;
       }
-      const rowY = this.#octaveSignRowY(span, raisesPitch, state);
+      const rowY = this.#octaveSignRowY(span, raisesPitch, voiceKey, state);
       if (raisesPitch && rowY < 0) {
         overflow = Math.max(overflow, Math.ceil(-rowY) + 2);
       } else if (!raisesPitch && rowY > STAFF_TRANSCRIPTION_HEIGHT) {
@@ -3379,6 +3451,157 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
     return overflow;
+  }
+
+  // The real topmost Y (smallest, i.e. furthest above the staff) that any
+  // OTHER above-staff decoration for this voice reaches — the same checks
+  // #estimateAboveStaffBudgetForVoice makes, but returning the raw edge
+  // instead of only the amount it overflows past the fixed canvas. Read by
+  // #octaveSignRowY so an octave sign's default (un-collision-driven)
+  // position lands outside whatever else already occupies that space,
+  // rather than only reacting to an actual notehead collision. Returns null
+  // when this voice has no other above-staff decoration at all.
+  #otherAboveStaffDecorationTopY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number | null {
+    let top: number | null = null;
+    const consider = (y: number): void => {
+      top = top === null ? y : Math.min(top, y);
+    };
+
+    const hasArpeggiandoText = state.elements.some(
+      (element) =>
+        (element.nodeName === MUSIC_NOTE_NODE ||
+          element.nodeName === MUSIC_CHORD_NODE) &&
+        (element as NoteElementType | ChordElementType).arpeggiate === 'start'
+    );
+    if (hasArpeggiandoText) {
+      consider(
+        STAFF_TOP_LINE_Y -
+          ARPEGGIO_TEXT_ABOVE_STAFF_PX -
+          ARPEGGIO_TEXT_FONT_SIZE
+      );
+    }
+
+    for (const element of state.elements) {
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        continue;
+      }
+      const el = element as NoteElementType | ChordElementType;
+      if (footprintArpeggioHairpin(el, null) === null) {
+        continue;
+      }
+      const effective =
+        el.arpeggio ??
+        el.impliedArpeggio ??
+        (el.arpeggioFor !== null ? 'up' : null);
+      const topMark =
+        effective === 'down' ? el.arpeggioHairpinFrom : el.arpeggioHairpinTo;
+      if (topMark === null) {
+        continue;
+      }
+      const staffYs =
+        element.nodeName === MUSIC_NOTE_NODE
+          ? [state.noteStaffYCoords.get(el as NoteElementType) ?? 0]
+          : state.chordStaffYCoords.get(el as ChordElementType) ?? [0];
+      const topHeadY =
+        STAFF_Y_PADDING + Math.min(...staffYs) - NOTE_HEAD_Y_OFFSET_CORRECTION;
+      consider(
+        topHeadY -
+          ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX -
+          ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX -
+          DYNAMICS_FONT_SIZE
+      );
+    }
+
+    const hasTrillAccidental = state.elements.some((element) => {
+      if (
+        element.nodeName !== MUSIC_NOTE_NODE &&
+        element.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        return false;
+      }
+      const pitch = (element as NoteElementType | ChordElementType)
+        .resolvedTrillPitch;
+      return (
+        pitch !== null && pitch.written === false && pitch.accidental !== null
+      );
+    });
+    if (hasTrillAccidental) {
+      const tallestAccidentalHeight =
+        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
+        TRILL_ACCIDENTAL_SCALE;
+      consider(
+        TRILL_ABOVE_STAFF_BOTTOM_Y -
+          TRILL_SIGN_HEIGHT_PX -
+          TRILL_ACCIDENTAL_GAP_PX -
+          tallestAccidentalHeight
+      );
+    }
+
+    const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
+    if (hasTrillSpan) {
+      for (const [otherKey, otherState] of this.#voiceRenderStates) {
+        if (otherKey === voiceKey) {
+          continue;
+        }
+        const upStemIndices = otherState.elements
+          .map((_, i) => i)
+          .filter((i) => otherState.stemDirections[i]);
+        const extreme = this.#extremeStemTipY(otherState, upStemIndices, true);
+        if (extreme === null) {
+          continue;
+        }
+        consider(extreme - TRILL_ABOVE_STAFF_GAP_PX - TRILL_SIGN_HEIGHT_PX);
+      }
+    }
+
+    const tupletTop = this.#tupletExtremeY(state, true);
+    if (tupletTop !== null) {
+      consider(tupletTop);
+    }
+
+    if (
+      this.#hasDynamicsContent(state) &&
+      this.#dynamicsPlacedAbove(voiceKey, state)
+    ) {
+      consider(
+        this.#dynamicsBaselineForVoice(voiceKey, state) - DYNAMICS_FONT_SIZE
+      );
+    }
+
+    return top;
+  }
+
+  // Below-staff mirror of #otherAboveStaffDecorationTopY — matches
+  // #estimateBelowStaffBudget's own narrower scope (tuplet + dynamics only;
+  // see that method's comment for why other below-staff decorations aren't
+  // checked yet).
+  #otherBelowStaffDecorationBottomY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number | null {
+    let bottom: number | null = null;
+
+    const tupletBottom = this.#tupletExtremeY(state, false);
+    if (tupletBottom !== null) {
+      bottom = tupletBottom;
+    }
+
+    if (
+      this.#hasDynamicsContent(state) &&
+      !this.#dynamicsPlacedAbove(voiceKey, state)
+    ) {
+      const dynamicsBottom = this.#dynamicsBaselineForVoice(voiceKey, state);
+      bottom =
+        bottom === null ? dynamicsBottom : Math.max(bottom, dynamicsBottom);
+    }
+
+    return bottom;
   }
 
   // The extreme (min for stemUp, max for !stemUp) real stem-tip Y across
