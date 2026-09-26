@@ -1,6 +1,7 @@
 import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
 import type { BeamLineDescriptor } from './beamStructureRules';
 import {
+  classifyAutoRestStaffSide,
   DoubleStemmedBeamEntry,
   DoubleStemmedBeamMember,
   DoubleStemmedBeamPoint,
@@ -296,5 +297,37 @@ describe('resolveGroupSecondaryBeamSide', () => {
 
   it('falls back to the tie-break side when there are no segments at all', () => {
     expect(resolveGroupSecondaryBeamSide([], 'top')).toBe('top');
+  });
+});
+
+const TOP = 0;
+const BOTTOM = 1;
+
+describe('classifyAutoRestStaffSide', () => {
+  it("classifies a rest interior to a same-staff run to that staff's side", () => {
+    const members = [member(TOP), member(TOP), member(TOP)];
+    expect(classifyAutoRestStaffSide(members, 1, TOP)).toBe('above');
+  });
+
+  it('classifies a rest interior to a same-staff run on the bottom staff to "below"', () => {
+    const members = [member(BOTTOM), member(BOTTOM), member(BOTTOM)];
+    expect(classifyAutoRestStaffSide(members, 1, TOP)).toBe('below');
+  });
+
+  it('prefers the following member\'s side when neighbors disagree ("the note it precedes")', () => {
+    // prev=TOP, next=BOTTOM — disagree, so the rest at index 1 follows the
+    // *next* member's side (BOTTOM → 'below'), not the preceding one.
+    const members = [member(TOP), member(BOTTOM), member(BOTTOM)];
+    expect(classifyAutoRestStaffSide(members, 1, TOP)).toBe('below');
+  });
+
+  it("falls back to the preceding member's side when there is no following member", () => {
+    const members = [member(BOTTOM), member(TOP)];
+    expect(classifyAutoRestStaffSide(members, 1, TOP)).toBe('below');
+  });
+
+  it("falls back to the following member's side when there is no preceding member", () => {
+    const members = [member(TOP), member(BOTTOM)];
+    expect(classifyAutoRestStaffSide(members, 0, TOP)).toBe('below');
   });
 });

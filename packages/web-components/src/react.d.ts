@@ -30,6 +30,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
   StressType,
   TieValue,
@@ -105,6 +106,7 @@ declare module 'react' {
       'music-rest': WebComponentNoChildrenProps & {
         duration?: DurationType;
         'beam-group'?: string;
+        'rest-staff-side'?: RestStaffSide;
       };
       'music-voice': WebComponentProps;
       'music-tuplet': WebComponentProps & {

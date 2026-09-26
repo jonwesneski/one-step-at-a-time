@@ -226,6 +226,81 @@ export const DoubleStemmedBeamWithSecondaryBeam: Story = {
   `,
 };
 
+export const DoubleStemmedBeamWithRests: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="eighth" beam-group="g1"></music-rest>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-note
+            note="D"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const DoubleStemmedBeamWithCenteredRest: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest
+            duration="eighth"
+            beam-group="g1"
+            rest-staff-side="centered"
+          ></music-rest>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-rest duration="eighth"></music-rest>
+          <music-note
+            note="D"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const WhiteKeyGlissando: Story = {
   render: () => html`
     <music-staff clef="treble" key-sig="C" mode="major" time="4/4">
@@ -384,10 +459,13 @@ export const Planned: Story = {
       tracked as its own row in <code>TODO.md</code>. Double-stemmed beams
       (<code>beam-group</code>, see &ldquo;Double-Stemmed Beam&rdquo; and
       &ldquo;Double-Stemmed Beam With Secondary Beam&rdquo; above) currently
-      draw the primary beam plus secondary/fractional beams for mixed durations
-      &mdash; rest placement, cross-staff tuplets/slurs/hairpins, and a shared
-      single stem are not yet implemented; see &ldquo;Known Incomplete
-      Areas&rdquo; in <code>CLAUDE.md</code>.
+      draw the primary beam, secondary/fractional beams for mixed durations, and
+      rest placement (<code>rest-staff-side</code> on
+      <code>&lt;music-rest&gt;</code>, see &ldquo;Double-Stemmed Beam With
+      Rests&rdquo; and &ldquo;Double-Stemmed Beam With Centered Rest&rdquo;
+      above) &mdash; cross-staff tuplets/slurs/hairpins and a shared single stem
+      are not yet implemented; see &ldquo;Known Incomplete Areas&rdquo; in
+      <code>CLAUDE.md</code>.
     </p>
   `,
 };

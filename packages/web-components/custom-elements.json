@@ -2948,6 +2948,13 @@
               }
             },
             {
+              "kind": "field",
+              "name": "restStaffSide",
+              "type": {
+                "text": "RestStaffSide | null"
+              }
+            },
+            {
               "kind": "method",
               "name": "render",
               "privacy": "private",
@@ -2979,6 +2986,13 @@
                 "text": "string"
               },
               "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself."
+            },
+            {
+              "name": "rest-staff-side",
+              "type": {
+                "text": "RestStaffSide"
+              },
+              "description": "Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`."
             }
           ],
           "superclass": {

@@ -17,6 +17,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
   StressType,
   TrillContinuationMode,
@@ -38,6 +39,7 @@ import {
   OCTAVE_DISPLAY_MODES,
   OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
+  REST_STAFF_SIDES,
   STAFF_GROUPS,
   STRESSES,
   TRILL_CONTINUATION_MODES,
@@ -63,6 +65,7 @@ const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
 const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
 const VALID_OCTAVE_SHIFT_AMOUNTS = new Set<string>(OCTAVE_SHIFT_AMOUNTS);
 const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
+const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
 const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
@@ -221,6 +224,18 @@ export const parseOctaveDisplayMode = (
 ): OctaveDisplayMode | null => {
   if (value !== null && VALID_OCTAVE_DISPLAY_MODES.has(value)) {
     return value as OctaveDisplayMode;
+  }
+  return null;
+};
+
+// No default: null means "no author override," resolved separately by the
+// ancestor <music-measure> auto-classifying by beat position when this rest
+// is a member of an active beam-group (see rules/doubleStemmedBeamRules.ts).
+export const parseRestStaffSide = (
+  value: string | null
+): RestStaffSide | null => {
+  if (value !== null && VALID_REST_STAFF_SIDES.has(value)) {
+    return value as RestStaffSide;
   }
   return null;
 };

@@ -17,6 +17,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
   StressType,
   TimeSignature,
@@ -79,6 +80,7 @@ export const NOTE_EVENTS = {
   TRILL_ATTRIBUTE_CHANGE: 'trill-attribute-change',
   OCTAVE_ATTRIBUTE_CHANGE: 'octave-attribute-change',
   BEAM_GROUP_ATTRIBUTE_CHANGE: 'beam-group-attribute-change',
+  REST_STAFF_SIDE_ATTRIBUTE_CHANGE: 'rest-staff-side-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',
@@ -270,6 +272,8 @@ export const OCTAVE_SHIFT_AMOUNTS: OctaveShiftAmount[] = [
 export const OCTAVE_DISPLAY_MODES: OctaveDisplayMode[] = ['sign', 'col'];
 
 export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
+
+export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 
 export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
   'none',

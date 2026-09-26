@@ -112,6 +112,50 @@ describe(MUSIC_REST, () => {
       expect(handler).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('rest staff side', () => {
+    it('defaults to null and round-trips valid values', () => {
+      const restElement = document.createElement(MUSIC_REST) as RestElementType;
+      document.body.appendChild(restElement);
+
+      expect(restElement.restStaffSide).toBeNull();
+
+      restElement.restStaffSide = 'above';
+      expect(restElement.getAttribute('rest-staff-side')).toBe('above');
+      expect(restElement.restStaffSide).toBe('above');
+
+      restElement.restStaffSide = 'below';
+      expect(restElement.restStaffSide).toBe('below');
+
+      restElement.restStaffSide = 'centered';
+      expect(restElement.restStaffSide).toBe('centered');
+
+      restElement.restStaffSide = null;
+      expect(restElement.getAttribute('rest-staff-side')).toBeNull();
+    });
+
+    it('rejects an invalid attribute value, falling back to null', () => {
+      const restElement = document.createElement(MUSIC_REST) as RestElementType;
+      restElement.setAttribute('rest-staff-side', 'sideways');
+      document.body.appendChild(restElement);
+
+      expect(restElement.restStaffSide).toBeNull();
+    });
+
+    it('dispatches REST_STAFF_SIDE_ATTRIBUTE_CHANGE without re-rendering the rest locally', () => {
+      const restElement = document.createElement(MUSIC_REST) as RestElementType;
+      document.body.appendChild(restElement);
+      const handler = jest.fn();
+      restElement.addEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+        handler
+      );
+
+      restElement.restStaffSide = 'centered';
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 function makeStaff(): Element {

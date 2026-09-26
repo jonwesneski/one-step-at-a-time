@@ -4,6 +4,7 @@ import {
 } from '../rules/arpeggioRules';
 import { computeBeamLevelStructure } from '../rules/beamStructureRules';
 import {
+  classifyAutoRestStaffSide,
   DoubleStemmedBeamEntry,
   DoubleStemmedBeamMember,
   DoubleStemmedBeamPoint,
@@ -14,12 +15,14 @@ import {
   resolveGroupSecondaryBeamSide,
   resolveSecondaryBeamVerticalSide,
 } from '../rules/doubleStemmedBeamRules';
+import { restToYCoordinate } from '../rules/restRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
 import { durationToFlagCountMap } from '../rules/theoryConsts';
 import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
+  RestElementType,
   StaffElementBaseType,
 } from '../types/elements';
 import type { HairpinKind } from '../types/theory';
@@ -37,6 +40,7 @@ import {
   MUSIC_MEASURE,
   MUSIC_NOTE,
   MUSIC_REST,
+  MUSIC_REST_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -64,6 +68,10 @@ import {
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
   MEASURE_NUMBER_FONT_SIZE,
+  MIN_REST_NOTE_CLEARANCE_PX,
+  REST_BEAM_CLEARANCE_PX,
+  REST_STEM_AVOIDANCE_NUDGE_PX,
+  REST_STEM_AVOIDANCE_THRESHOLD_PX,
   STAFF_BOTTOM_MARGIN,
   STAFF_LABEL_FONT_SIZE,
   STAFF_LABEL_LEFT_MARGIN_PX,
@@ -243,6 +251,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.STAFF_MIN_WIDTH,
         this.#onStaffMinWidth
       );
+      // A staff's own ResizeObserver-driven onStaffResize() re-runs
+      // #spaceElements() (resetting every entry's real position, including
+      // a cross-staff rest's own style.left — style.top is separately
+      // guarded via externallyPositionedRestIndices, but left isn't)
+      // without going through the STAFF_MIN_WIDTH dispatch above, so a
+      // cross-staff rest's stem-avoidance nudge needs this event too, or
+      // that staff-level reset silently outlives the last redraw that
+      // applied it.
+      this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawDoubleStemmedBeams
+      );
       this.addEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
@@ -267,6 +287,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
       );
+      this.addEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
+      );
     }
 
     disconnectedCallback(): void {
@@ -274,6 +298,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         STAFF_EVENTS.STAFF_MIN_WIDTH,
         this.#onStaffMinWidth
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawDoubleStemmedBeams
       );
       this.removeEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
@@ -297,6 +325,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.removeEventListener(
         NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
       );
       this.#staffWidths.clear();
@@ -734,6 +766,109 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return heads ? Array.from(heads, (h) => h.getBoundingClientRect()) : [];
     }
 
+    // A staff custom element's own outer box (staffBase.ts's `.staff-wrapper`)
+    // always includes its built-in STAFF_LINE_START/STAFF_BOTTOM_MARGIN
+    // padding around the visible lines — two grand-staff siblings stack with
+    // no margin *between* their outer boxes, so one's bottom edge is always
+    // flush with the next one's top edge regardless of how much real visual
+    // room the padding gives the actual staff lines. `.staff-container` is
+    // the inner element the padding surrounds (its own border-top/bottom act
+    // as the staff's outermost lines), so its real rect is the correct
+    // boundary for "the real gap between two staves."
+    #staffContainerRect(staff: StaffElementBaseType): DOMRect {
+      return (
+        staff.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect() ?? staff.getBoundingClientRect()
+      );
+    }
+
+    // Resolves a beam-hugging rest's real target Y (measure-relative,
+    // the glyph's own visible feature — not the box-top; see
+    // restRules.ts#restGlyphOffsetFromBoxTop) for #redrawDoubleStemmedBeams.
+    // Prefers REST_BEAM_CLEARANCE_PX past the beam's own near edge, but
+    // pulls back toward the beam (never past it, floored at BEAM_GAP_PX)
+    // when that preferred position would land within
+    // MIN_REST_NOTE_CLEARANCE_PX of the nearest real notehead — increasing
+    // the clearance from the beam moves *toward* a note further past it, so
+    // hugging the beam more tightly, not less, is what actually creates
+    // room here.
+    #restHuggingTargetY(
+      side: 'above' | 'below',
+      beamTopYReal: number,
+      nearestHeadRect: DOMRect | null
+    ): number {
+      const dir = side === 'below' ? 1 : -1;
+      const beamEdgeReal =
+        side === 'below' ? beamTopYReal + BEAM_THICKNESS_PX : beamTopYReal;
+      const preferredReal = beamEdgeReal + dir * REST_BEAM_CLEARANCE_PX;
+      if (!nearestHeadRect) {
+        return preferredReal;
+      }
+      const beamBoundReal = beamEdgeReal + dir * BEAM_GAP_PX;
+      const headNearEdgeReal =
+        dir === 1 ? nearestHeadRect.top : nearestHeadRect.bottom;
+      const noteBoundReal = headNearEdgeReal - dir * MIN_REST_NOTE_CLEARANCE_PX;
+      return dir === 1
+        ? Math.max(beamBoundReal, Math.min(preferredReal, noteBoundReal))
+        : Math.min(beamBoundReal, Math.max(preferredReal, noteBoundReal));
+    }
+
+    // Pushes y clear of [bandTop, bandBottom] toward whichever edge is
+    // nearer, clamped to [minY, maxY] — shared by both obstacles a
+    // "centered" rest must avoid (the real, possibly-sloped beam at its own
+    // X, and the nearest real notehead), each with its own clearance
+    // already folded into the band's own edges by the caller.
+    #pushYClearOfBand(
+      y: number,
+      bandTop: number,
+      bandBottom: number,
+      minY: number,
+      maxY: number
+    ): number {
+      if (y < bandTop || y > bandBottom) {
+        return y;
+      }
+      const pushUp = Math.max(minY, bandTop);
+      const pushDown = Math.min(maxY, bandBottom);
+      return Math.abs(y - pushUp) <= Math.abs(pushDown - y) ? pushUp : pushDown;
+    }
+
+    // Resolves a "centered" rest's real target Y — the real inter-staff
+    // gap's vertical center. That center is a fixed value (the two staves'
+    // own static edges), but the beam it sits beside can be sloped, so the
+    // beam's own real position at this rest's specific X can drift well
+    // past the gap's fixed center — first pushed clear of the beam's own
+    // real band (REST_BEAM_CLEARANCE_PX, same as a hugging rest), then of
+    // the nearest real notehead (MIN_REST_NOTE_CLEARANCE_PX), each clamped
+    // back into the gap itself.
+    #restCenteredTargetY(
+      gapCenterReal: number,
+      topGapEdgeReal: number,
+      bottomGapEdgeReal: number,
+      beamTopYAtXReal: number,
+      beamBottomYAtXReal: number,
+      nearestHeadRect: DOMRect | null
+    ): number {
+      const clearOfBeam = this.#pushYClearOfBand(
+        gapCenterReal,
+        beamTopYAtXReal - REST_BEAM_CLEARANCE_PX,
+        beamBottomYAtXReal + REST_BEAM_CLEARANCE_PX,
+        topGapEdgeReal,
+        bottomGapEdgeReal
+      );
+      if (!nearestHeadRect) {
+        return clearOfBeam;
+      }
+      return this.#pushYClearOfBand(
+        clearOfBeam,
+        nearestHeadRect.top - MIN_REST_NOTE_CLEARANCE_PX,
+        nearestHeadRect.bottom + MIN_REST_NOTE_CLEARANCE_PX,
+        topGapEdgeReal,
+        bottomGapEdgeReal
+      );
+    }
+
     // Real geometry of a note/chord's own currently-rendered stem — null
     // when it has none (a duration with no stem at all, e.g. whole notes).
     // Used by #redrawDoubleStemmedBeams to read each cross-staff member's
@@ -894,6 +1029,34 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         console.warn(`[music-measure] ${warning}`);
       }
 
+      // rest-staff-side is only ever meaningful for a rest that's a member
+      // of a resolved, active beam-group (it's a position relative to the
+      // shared beam / real inter-staff gap, neither of which exist
+      // otherwise) — warn, same shape as an unmatched arpeggio-for, rather
+      // than silently ignoring an author's explicit override.
+      const restMembersInGroups = new Set(
+        groups.flatMap((group) =>
+          group.members
+            .filter((member) => member.isRest)
+            .map(
+              (member) => perStaffElements[member.staffIndex][member.entryIndex]
+            )
+        )
+      );
+      for (const elements of perStaffElements) {
+        for (const element of elements) {
+          if (
+            element.nodeName === MUSIC_REST_NODE &&
+            (element as RestElementType).restStaffSide !== null &&
+            !restMembersInGroups.has(element)
+          ) {
+            console.warn(
+              '[music-measure] rest-staff-side is set on a rest with no active double-stemmed beam-group; ignoring'
+            );
+          }
+        }
+      }
+
       // Pass 1 (stem-direction convergence): resolve + push each involved
       // staff's own per-element override. Each staff's own #renderNotes()
       // re-render (inside the crossStaffBeamStemOverrides setter) is
@@ -939,10 +1102,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const measureRect = this.getBoundingClientRect();
       for (const group of groups) {
         const topGapEdgeY =
-          staves[group.topStaffIndex].getBoundingClientRect().bottom -
+          this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
           measureRect.top;
         const bottomGapEdgeY =
-          staves[group.bottomStaffIndex].getBoundingClientRect().top -
+          this.#staffContainerRect(staves[group.bottomStaffIndex]).top -
           measureRect.top;
 
         const memberGeometries: {
@@ -1037,6 +1200,126 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             line.yAtLastX
           )
         );
+
+        // Rest placement within the group — "above"/"below" sit just
+        // above/below the shared beam itself (a rest cutting through it
+        // would obscure the rhythm), "centered" sits at the real gap's
+        // vertical center. A rest and the real note it "hugs" toward (or,
+        // for "centered", either staff's nearest note) are frequently at
+        // the very same X (same beat — see classifyAutoRestStaffSide),
+        // so the flat beam/gap-relative target alone can't guarantee real
+        // clearance from it; #restHuggingTargetY / #restCenteredTargetY
+        // check the real nearest notehead and back off before that ever
+        // happens (vertically) — the horizontal nudge below handles the
+        // same member's own stem, which the vertical check alone can't
+        // see. The resolved target is this rest's own visible glyph
+        // feature's Y, in measure-relative real px — converted into this
+        // rest's own staff-local coordinate space by subtracting that
+        // staff's own real top before handing it to restRules.ts, which
+        // stays DOM-free.
+        const gapCenterYReal = (topGapEdgeY + bottomGapEdgeY) / 2;
+        for (let i = 0; i < group.members.length; i++) {
+          const member = group.members[i];
+          if (!member.isRest) {
+            continue;
+          }
+          const element = perStaffElements[member.staffIndex][
+            member.entryIndex
+          ] as RestElementType;
+          // This staff's own #spaceElements() always (re)computes and
+          // writes this rest's natural style.left unconditionally on
+          // every pass (only style.top is guarded for a cross-staff
+          // rest — see externallyPositionedRestIndices) — so, unlike the
+          // stem-extension bridging above, there is nothing here to
+          // un-shift: restRect.left always reflects this staff's own
+          // fresh natural position, never a previous nudge from below.
+          const restRect = element.getBoundingClientRect();
+          const x = restRect.left + restRect.width / 2 - measureRect.left;
+          const side =
+            element.restStaffSide ??
+            classifyAutoRestStaffSide(group.members, i, group.topStaffIndex);
+
+          let nearestHeadRect: DOMRect | null = null;
+          let nearestGeoX: number | null = null;
+          let nearestDist = Infinity;
+          for (const geo of memberGeometries) {
+            const dist = Math.abs(geo.point.x - x);
+            if (dist >= nearestDist) {
+              continue;
+            }
+            const heads = this.#headRects(geo.element);
+            if (heads.length === 0) {
+              continue;
+            }
+            const top = Math.min(...heads.map((h) => h.top));
+            const bottom = Math.max(...heads.map((h) => h.bottom));
+            nearestDist = dist;
+            nearestGeoX = geo.point.x;
+            nearestHeadRect = new DOMRect(
+              heads[0].x,
+              top - measureRect.top,
+              heads[0].width,
+              bottom - top
+            );
+          }
+
+          const beamY = beamYAtX(x);
+          const targetReal =
+            side === 'centered'
+              ? this.#restCenteredTargetY(
+                  gapCenterYReal,
+                  topGapEdgeY,
+                  bottomGapEdgeY,
+                  beamY,
+                  beamY + BEAM_THICKNESS_PX,
+                  nearestHeadRect
+                )
+              : this.#restHuggingTargetY(side, beamY, nearestHeadRect);
+
+          const staffOffsetY =
+            staves[member.staffIndex].getBoundingClientRect().top -
+            measureRect.top;
+          element.style.position = 'absolute';
+          element.style.top = `${restToYCoordinate(
+            element.duration,
+            undefined,
+            {
+              targetY: targetReal - staffOffsetY,
+            }
+          )}px`;
+
+          // The rest and its nearest real member are frequently at the
+          // very same X (same beat — the note it precedes or hugs
+          // toward), meaning that member's own stem spans the entire
+          // distance between its notehead and the beam right through
+          // where the rest sits, regardless of how much vertical
+          // clearance the rest has from the notehead itself. Nudge left,
+          // clear of the stem, rather than trying to out-space it
+          // vertically in a gap the stem already fully occupies — computed
+          // from the real note's own stable x (nearestGeoX, driven by this
+          // staff's own natural spacing, never by this rest's own position)
+          // so it stays idempotent across repeated redraw cycles, the same
+          // way the un-shift trick keeps the stem-extension bridging above
+          // idempotent without needing one itself here.
+          if (
+            nearestGeoX !== null &&
+            nearestDist < REST_STEM_AVOIDANCE_THRESHOLD_PX
+          ) {
+            // Unlike Y (where sibling staves sit at real, genuinely
+            // different vertical offsets from the measure, requiring
+            // staffOffsetY above), every staff's own local X origin
+            // already coincides with the measure's — staves stack
+            // vertically, never inset horizontally from one another — so
+            // this measure-relative real x converts to this rest's own
+            // local left directly, with no staff offset to subtract.
+            // Positions the rest's own *right* edge (not its center)
+            // REST_STEM_AVOIDANCE_NUDGE_PX clear of the stem's real X, so
+            // the rest's own width doesn't eat back into that clearance.
+            element.style.left = `${
+              nearestGeoX - REST_STEM_AVOIDANCE_NUDGE_PX - restRect.width
+            }px`;
+          }
+        }
 
         // Secondary/fractional beams (mixed durations within the group) —
         // computeBeamLevelStructure is the same pure level-by-level run

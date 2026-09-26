@@ -1,3 +1,4 @@
+import type { RestStaffSide } from '../types/theory';
 import { MUSIC_REST_NODE } from '../utils/consts';
 import type { BeamLineDescriptor } from './beamStructureRules';
 
@@ -256,6 +257,36 @@ export function resolveSecondaryBeamVerticalSide(
     return firstSide === 'top' ? 'bottom' : 'top';
   }
   return firstSide;
+}
+
+/**
+ * Auto-classifies which side of the shared beam a rest (a member with
+ * `isRest: true`) should sit against, when its own `restStaffSide` is
+ * unset — approximates two rules from the reference engraving material:
+ * "at the beginning/end of a subdivision, place the rest on the same
+ * stave as the remainder of the subdivision" and "in the middle of a
+ * beat, place it on the stave of the note it precedes." No beat-subdivision
+ * machinery exists anywhere in this codebase (beam levels track flag-count
+ * runs, not raw beat subdivisions), so this approximates both rules using
+ * only adjacency in `members` (ascending beat order, from
+ * resolveDoubleStemmedBeamGroups): a rest interior to a same-staff run of
+ * neighbors takes that staff's side; otherwise it prefers the following
+ * member's side (the literal "the note it precedes" rule) over the
+ * preceding one.
+ */
+export function classifyAutoRestStaffSide(
+  members: readonly DoubleStemmedBeamMember[],
+  restMemberIndex: number,
+  topStaffIndex: number
+): RestStaffSide {
+  const prev = members[restMemberIndex - 1];
+  const next = members[restMemberIndex + 1];
+  const neighborStaffIndex =
+    prev && next && prev.staffIndex === next.staffIndex
+      ? prev.staffIndex
+      : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- at least one neighbor exists given a resolved group always has >=2 non-rest members
+        (next ?? prev ?? members[restMemberIndex])!.staffIndex;
+  return neighborStaffIndex === topStaffIndex ? 'above' : 'below';
 }
 
 /**

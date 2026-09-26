@@ -328,6 +328,15 @@ export type OctaveShiftAmount =
 export type OctaveDisplayMode = 'sign' | 'col';
 
 /**
+ * A rest's placement relative to a double-stemmed beam it's a member of
+ * (meaningless outside an active `beam-group`): `above`/`below` sit just
+ * above/below the shared beam itself (not a position within either staff's
+ * own line system); `centered` sits at the real vertical center of the gap
+ * between the two staves.
+ */
+export type RestStaffSide = 'above' | 'below' | 'centered';
+
+/**
  * Controls how an octave-transposition span's numeral restates itself after
  * a system break: `'bracketed'` (default) redraws it in parentheses at the
  * start of the new row; `'line-only'` lets the line resume with no restated

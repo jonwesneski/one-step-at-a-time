@@ -192,6 +192,60 @@ export const MAX_STEM_SHORTENING_PX =
  */
 export const STEM_OVERLAP_PX = STAFF_LINE_SPACING * 0.2;
 
+/**
+ * Preferred clearance (px) between a rest's own glyph and the near edge of
+ * a double-stemmed beam it's placed against (`restStaffSide` 'above'/
+ * 'below') — a rest cutting through the beam itself would obscure the
+ * rhythm. Used at full strength when there's room; when the nearest real
+ * notehead on that side leaves less headroom than this, measure.ts scales
+ * it down (see MIN_REST_NOTE_CLEARANCE_PX below) rather than pushing the
+ * rest past a comfortable distance from the beam and into the notehead —
+ * increasing this value moves a 'below' rest *closer* to a note further
+ * below it, not further away, so it is not the lever for "too close to an
+ * adjacent note"; MIN_REST_NOTE_CLEARANCE_PX is.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const REST_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Minimum real clearance (px) kept between a cross-staff rest's own glyph
+ * and the nearest actual notehead on an adjacent staff — the rest and the
+ * note it "hugs" toward (or, for a centered rest, either staff's nearest
+ * note) are frequently at the very same X (same beat), so a flat
+ * beam-relative offset alone can't guarantee this; measure.ts checks real
+ * geometry and enforces this floor directly.
+ * = STAFF_LINE_SPACING
+ */
+export const MIN_REST_NOTE_CLEARANCE_PX = STAFF_LINE_SPACING;
+
+/**
+ * Real X distance (px) below which a cross-staff rest's nearest real
+ * member counts as "the same beat" for horizontal-collision purposes — a
+ * hugging/centered rest that shares its X with a real note's own stem
+ * (the common case: it's either the note it precedes or the note it's
+ * centered against) visually sits right on top of that stem regardless of
+ * how much *vertical* clearance it has, since the stem spans the entire
+ * distance between the notehead and the beam. When within this distance,
+ * measure.ts nudges the rest left by REST_STEM_AVOIDANCE_NUDGE_PX instead.
+ * A rest and a note genuinely at the same beat still differ by roughly
+ * STAFF_LINE_SPACING in their own real center-X (their SVG boxes aren't
+ * the same width), so this is set well past that natural baseline gap —
+ * a tighter threshold flickers on/off across redraw passes as layout
+ * settles, verified empirically against the real rendered story.
+ * = 2.5 × STAFF_LINE_SPACING
+ */
+export const REST_STEM_AVOIDANCE_THRESHOLD_PX = STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Leftward horizontal nudge (px) applied to a cross-staff rest whose
+ * natural X would otherwise sit on top of a real note's own stem (see
+ * REST_STEM_AVOIDANCE_THRESHOLD_PX) — left, not right, since the rest is
+ * conventionally the note it "precedes," so shifting earlier reads
+ * naturally rather than displacing it past the note it's beside.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const REST_STEM_AVOIDANCE_NUDGE_PX = STAFF_LINE_SPACING * 1.2;
+
 // ─── Describe area (clef, key signature, time signature) ─────────────────────
 
 /**

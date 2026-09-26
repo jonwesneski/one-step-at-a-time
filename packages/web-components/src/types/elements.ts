@@ -19,6 +19,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
   StressType,
   TimeSignature,
@@ -391,6 +392,11 @@ export interface IRestElement {
   // shares INoteElement.beamGroup's `id` shape so a double-stemmed group can
   // tell "this rest belongs to me" for rest-placement purposes.
   beamGroup: string | null;
+  // Author override for a rest that's a member of an active beam-group;
+  // meaningless (inert) otherwise. Unset (null) = auto-classified by the
+  // ancestor <music-measure> from the rest's position among its group's
+  // members, re-derived on every render rather than persisted here.
+  restStaffSide: RestStaffSide | null;
 }
 
 export interface IClefElement {

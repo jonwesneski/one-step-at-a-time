@@ -396,6 +396,12 @@ type VoiceRenderState = {
   // fallback, 0, for these indices) must skip them instead, or it silently
   // overwrites that cross-staff bridging on its next unrelated re-render.
   externallyBeamedIndices: ReadonlySet<number>;
+  // Rest indices joined to a cross-staff double-stemmed beam group — same
+  // rationale as externallyBeamedIndices above, but for a rest's Y position
+  // (restToYCoordinate) instead of a note's stemExtension: the ancestor
+  // <music-measure> writes it directly from both-staves geometry, so this
+  // staff's own #spaceElements() must skip these indices too.
+  externallyPositionedRestIndices: ReadonlySet<number>;
   noteStaffYCoords: Map<NoteElementType, number>;
   chordStaffYCoords: Map<ChordElementType, number[]>;
   noteXPositions: Map<number, number>;
@@ -1176,6 +1182,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           );
         })
     );
+    // Rest counterpart of the exclusion above (Chapter D of the
+    // double-stemmed-beams plan): a rest joined to a cross-staff group has
+    // its real Y resolved and written directly by the ancestor
+    // <music-measure> — this staff's own #spaceElements() must skip it.
+    const externallyPositionedRestIndices = new Set(
+      elements
+        .map((_, i) => i)
+        .filter((i) => {
+          const element = elements[i];
+          return (
+            element.nodeName === MUSIC_REST_NODE &&
+            (element as RestElementType).beamGroup !== null
+          );
+        })
+    );
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.effectiveTimeSig,
@@ -1279,6 +1300,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       stemDirections,
       beamedIndices,
       externallyBeamedIndices,
+      externallyPositionedRestIndices,
       noteStaffYCoords,
       chordStaffYCoords,
       noteXPositions: new Map(),
@@ -2255,10 +2277,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(voiceKey, i);
 
         if (element.nodeName === MUSIC_REST_NODE) {
-          element.style.top = `${restToYCoordinate(
-            element.duration,
-            state.restContext
-          )}px`;
+          if (!state.externallyPositionedRestIndices.has(i)) {
+            element.style.top = `${restToYCoordinate(
+              element.duration,
+              state.restContext
+            )}px`;
+          }
         } else if (element.nodeName === MUSIC_NOTE_NODE) {
           const noteElement = element as NoteElementType;
           const yHeadOffset = computeYHeadOffset(
