@@ -11,7 +11,12 @@ import type {
   Octave,
   TimeSignature,
 } from '../types/theory';
-import { COMMON_ATTRIBUTES, MUSIC_NOTE, MUSIC_STAFF } from '../utils/consts';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_NOTE,
+  MUSIC_STAFF,
+  NOTE_EVENTS,
+} from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   GRACE_SCALE,
@@ -1498,6 +1503,95 @@ describe('trill', () => {
         noteElement.shadowRoot?.querySelector('.trill-finish-notes')
       ).not.toBeNull();
     });
+  });
+});
+
+describe('octave shift', () => {
+  it('round-trips octave-shift and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveShift).toBeNull();
+    noteElement.octaveShift = '8va';
+    expect(noteElement.getAttribute('octave-shift')).toBe('8va');
+    expect(noteElement.octaveShift).toBe('8va');
+
+    noteElement.setAttribute('octave-shift', 'nope');
+    expect(noteElement.octaveShift).toBeNull();
+
+    noteElement.octaveShift = '15mb';
+    noteElement.octaveShift = null;
+    expect(noteElement.getAttribute('octave-shift')).toBeNull();
+  });
+
+  it('round-trips octave-stop as a boolean presence attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveStop).toBe(false);
+    noteElement.octaveStop = true;
+    expect(noteElement.getAttribute('octave-stop')).toBe('');
+    expect(noteElement.octaveStop).toBe(true);
+    noteElement.octaveStop = false;
+    expect(noteElement.getAttribute('octave-stop')).toBeNull();
+  });
+
+  it('round-trips octave-mode and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveMode).toBeNull();
+    noteElement.octaveMode = 'col';
+    expect(noteElement.getAttribute('octave-mode')).toBe('col');
+    expect(noteElement.octaveMode).toBe('col');
+
+    noteElement.setAttribute('octave-mode', 'nope');
+    expect(noteElement.octaveMode).toBeNull();
+
+    noteElement.octaveMode = 'sign';
+    noteElement.octaveMode = null;
+    expect(noteElement.getAttribute('octave-mode')).toBeNull();
+  });
+
+  it('round-trips loco as a boolean presence attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.loco).toBe(false);
+    noteElement.loco = true;
+    expect(noteElement.getAttribute('loco')).toBe('');
+    expect(noteElement.loco).toBe(true);
+    noteElement.loco = false;
+    expect(noteElement.getAttribute('loco')).toBeNull();
+  });
+});
+
+describe('beam group', () => {
+  it('round-trips beam-group as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.beamGroup).toBeNull();
+    noteElement.beamGroup = 'rh-lh-1';
+    expect(noteElement.getAttribute('beam-group')).toBe('rh-lh-1');
+    expect(noteElement.beamGroup).toBe('rh-lh-1');
+
+    noteElement.beamGroup = null;
+    expect(noteElement.getAttribute('beam-group')).toBeNull();
+  });
+
+  it('dispatches BEAM_GROUP_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.beamGroup = 'rh-lh-1';
+
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 

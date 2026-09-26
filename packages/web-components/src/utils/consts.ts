@@ -14,6 +14,10 @@ import type {
   Mode,
   Note,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
   StressType,
   TimeSignature,
@@ -74,6 +78,9 @@ export const NOTE_EVENTS = {
   DYNAMIC_ATTRIBUTE_CHANGE: 'dynamic-attribute-change',
   ARPEGGIO_ATTRIBUTE_CHANGE: 'arpeggio-attribute-change',
   TRILL_ATTRIBUTE_CHANGE: 'trill-attribute-change',
+  OCTAVE_ATTRIBUTE_CHANGE: 'octave-attribute-change',
+  BEAM_GROUP_ATTRIBUTE_CHANGE: 'beam-group-attribute-change',
+  REST_STAFF_SIDE_ATTRIBUTE_CHANGE: 'rest-staff-side-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',
@@ -253,7 +260,20 @@ export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
 
 export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
 
+export const OCTAVE_SHIFT_AMOUNTS: OctaveShiftAmount[] = [
+  '8va',
+  '8vb',
+  '15ma',
+  '15mb',
+  '22ma',
+  '22mb',
+];
+
+export const OCTAVE_DISPLAY_MODES: OctaveDisplayMode[] = ['sign', 'col'];
+
 export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
+
+export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 
 export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
   'none',
@@ -265,6 +285,11 @@ export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
 ];
 
 export const TRILL_CONTINUATION_MODES: TrillContinuationMode[] = [
+  'bracketed',
+  'line-only',
+];
+
+export const OCTAVE_CONTINUATION_MODES: OctaveContinuationMode[] = [
   'bracketed',
   'line-only',
 ];

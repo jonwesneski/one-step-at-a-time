@@ -823,4 +823,40 @@ describe('beams', () => {
       expect(builder.isBeamed(1)).toBe(true);
     });
   });
+
+  describe('externallyBeamedIndices (cross-staff double-stemmed beam members)', () => {
+    it('reports isBeamed true for an externally-beamed index with no same-staff group of its own', () => {
+      const elements = [makeNote({ note: 'C', octave: 4, duration: 'eighth' })];
+      const builder = new BeamsBuilder(
+        elements,
+        [4, 4],
+        undefined,
+        undefined,
+        new Set([0])
+      );
+      expect(builder.isBeamed(0)).toBe(true);
+      expect(builder.beamGroupFor(0)).toBeNull();
+    });
+
+    it('breaks a same-staff run exactly like a rest, without joining the beam group on either side', () => {
+      const elements = [
+        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
+        makeNote({ note: 'E', octave: 4, duration: 'eighth' }),
+      ];
+      const builder = new BeamsBuilder(
+        elements,
+        [4, 4],
+        undefined,
+        undefined,
+        new Set([1])
+      );
+      // The externally-beamed middle note breaks the run — indices 0 and 2
+      // are each lone beamable notes now, not a group.
+      expect(builder.isBeamed(0)).toBe(false);
+      expect(builder.isBeamed(1)).toBe(true);
+      expect(builder.isBeamed(2)).toBe(false);
+      expect(builder.beamGroupFor(1)).toBeNull();
+    });
+  });
 });

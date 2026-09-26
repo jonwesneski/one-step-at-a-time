@@ -6,8 +6,17 @@ import {
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
 } from '../utils/consts';
+import { REST_BEAM_CLEARANCE_PX } from '../utils/notationDimensions';
+import { getFirstBallYPx, hookCountMap } from '../utils/svgCreator/rest';
+
+// A rest's element.style.top positions its own box-top, not its visible
+// glyph feature (the ball position, here) directly — see restRules.ts's
+// restGlyphOffsetFromBoxTop. Tests below that assert a rest's real
+// rendered position relative to the beam account for this offset.
+const EIGHTH_REST_GLYPH_OFFSET = getFirstBallYPx(hookCountMap.eighth);
 
 const MIN_NOTE_WIDTH = 20;
 const LEADING_NOTE_GAP = 10;
@@ -1569,6 +1578,966 @@ test.describe(`${MUSIC_MEASURE} shared dynamics (dynamic-shared)`, () => {
     // inside either one.
     expect(sharedYPage).toBeGreaterThan(result.trebleRect.bottom - 5);
     expect(sharedYPage).toBeLessThan(result.bassRect.top + 5);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — stem direction resolution`, () => {
+  test("the top staff's members stem down and the bottom staff's stem up, converging within the same redraw cycle", async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        for (const note of ['C', 'D']) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', '4');
+          el.setAttribute('duration', 'eighth');
+          el.setAttribute('beam-group', 'g1');
+          treble.appendChild(el);
+        }
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        for (const note of ['E', 'F']) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', '3');
+          el.setAttribute('duration', 'eighth');
+          el.setAttribute('beam-group', 'g1');
+          bass.appendChild(el);
+        }
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const treble = document.getElementById('treble');
+      const bass = document.getElementById('bass');
+      if (treble === null || bass === null) {
+        throw new Error('staff missing');
+      }
+      const withStemUp = (el: Element) => el as unknown as { stemUp: boolean };
+      const trebleNotes = Array.from(treble.querySelectorAll('music-note')).map(
+        withStemUp
+      );
+      const bassNotes = Array.from(bass.querySelectorAll('music-note')).map(
+        withStemUp
+      );
+      return {
+        trebleStemUp: trebleNotes.map((n) => n.stemUp),
+        bassStemUp: bassNotes.map((n) => n.stemUp),
+      };
+    });
+
+    expect(result.trebleStemUp).toEqual([false, false]);
+    expect(result.bassStemUp).toEqual([true, true]);
+  });
+
+  test('an ungrouped staff pair keeps ordinary pitch-driven stem direction (no cross-staff override applied)', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '4');
+        trebleNote.setAttribute('duration', 'quarter');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'quarter');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const treble = document.getElementById('treble');
+      const bass = document.getElementById('bass');
+      if (treble === null || bass === null) {
+        throw new Error('staff missing');
+      }
+      const withStemUp = (el: Element | null) =>
+        el as unknown as { stemUp: boolean } | null;
+      return {
+        // C4 (middle line/below) is pitch-driven stem-up on a treble staff;
+        // C3 is pitch-driven stem-up on a bass staff too — neither is forced
+        // by a cross-staff override, since neither carries a beam-group.
+        trebleStemUp: withStemUp(treble.querySelector('music-note'))?.stemUp,
+        bassStemUp: withStemUp(bass.querySelector('music-note'))?.stemUp,
+      };
+    });
+
+    expect(result.trebleStemUp).toBe(true);
+    expect(result.bassStemUp).toBe(true);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — coordinate bridging`, () => {
+  test('a wide pitch gap between the two staves still converges to a shared, real beam-tip Y', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        // A very high treble note and a very low bass note have wildly
+        // different own-staff-relative "natural" stem-tip targets — real
+        // bridging is needed to make them meet at one shared beam.
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '6');
+        trebleNote.setAttribute('duration', 'eighth');
+        trebleNote.setAttribute('beam-group', 'g1');
+        treble.appendChild(trebleNote);
+        const trebleNote2 = document.createElement(noteTag);
+        trebleNote2.setAttribute('note', 'C');
+        trebleNote2.setAttribute('octave', '6');
+        trebleNote2.setAttribute('duration', 'eighth');
+        treble.appendChild(trebleNote2);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '2');
+        bassNote.setAttribute('duration', 'eighth');
+        bassNote.setAttribute('beam-group', 'g1');
+        bass.appendChild(bassNote);
+        const bassNote2 = document.createElement(noteTag);
+        bassNote2.setAttribute('note', 'C');
+        bassNote2.setAttribute('octave', '2');
+        bassNote2.setAttribute('duration', 'eighth');
+        bass.appendChild(bassNote2);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const treble = document.getElementById('treble');
+      const bass = document.getElementById('bass');
+      if (treble === null || bass === null) {
+        throw new Error('staff missing');
+      }
+      const asStemful = (el: Element | null) =>
+        el as unknown as { stemExtension: number } | null;
+      const trebleNote = treble.querySelector('music-note');
+      const bassNote = bass.querySelector('music-note');
+      const trebleStem = trebleNote?.shadowRoot?.querySelector('.stem');
+      const bassStem = bassNote?.shadowRoot?.querySelector('.stem');
+      if (!trebleStem || !bassStem) {
+        throw new Error('stem missing');
+      }
+      return {
+        trebleStemExtension: asStemful(trebleNote)?.stemExtension,
+        bassStemExtension: asStemful(bassNote)?.stemExtension,
+        // Stem-down (top staff): tip is the bottom of the stem rect.
+        trebleTipY: trebleStem.getBoundingClientRect().bottom,
+        // Stem-up (bottom staff): tip is the top of the stem rect.
+        bassTipY: bassStem.getBoundingClientRect().top,
+      };
+    });
+
+    // Real bridging occurred — at least one side's stem actually extended
+    // beyond its own default (zero-extension) length.
+    expect(
+      Math.abs(result.trebleStemExtension ?? 0) > 0.5 ||
+        Math.abs(result.bassStemExtension ?? 0) > 0.5
+    ).toBe(true);
+    // Both stems now reach the same real shared beam line, not two
+    // independent, staff-local positions — each tip retreats slightly
+    // (STEM_OVERLAP_PX) from the line itself, so a small residual gap
+    // between them is expected, not a bug; what matters is it's nowhere
+    // near the ~114px gap between their own independent natural positions.
+    expect(
+      Math.abs((result.trebleTipY ?? 0) - (result.bassTipY ?? 0))
+    ).toBeLessThan(10);
+  });
+
+  test("draws exactly one beam polygon spanning both members' real X positions, in the overlay", async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'eighth');
+        trebleNote.setAttribute('beam-group', 'g1');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'eighth');
+        bassNote.setAttribute('beam-group', 'g1');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const treble = document.getElementById('treble');
+      const bass = document.getElementById('bass');
+      if (
+        measure === null ||
+        measure.shadowRoot === null ||
+        treble === null ||
+        bass === null
+      ) {
+        throw new Error('not ready');
+      }
+      const overlay = measure.shadowRoot.querySelector(
+        '.double-stemmed-beams-overlay'
+      );
+      const polygons = overlay
+        ? Array.from(overlay.querySelectorAll('.double-stemmed-beam'))
+        : [];
+      const trebleNote = treble.querySelector('music-note');
+      const bassNote = bass.querySelector('music-note');
+      const trebleStem = trebleNote?.shadowRoot?.querySelector('.stem');
+      const bassStem = bassNote?.shadowRoot?.querySelector('.stem');
+      return {
+        polygonCount: polygons.length,
+        points: (polygons[0] as SVGPolygonElement | undefined)?.getAttribute(
+          'points'
+        ),
+        trebleStemX: trebleStem?.getBoundingClientRect().left,
+        bassStemX: bassStem?.getBoundingClientRect().left,
+        measureRect: measure.getBoundingClientRect(),
+      };
+    });
+
+    expect(result.polygonCount).toBe(1);
+    expect(result.points).not.toBeUndefined();
+    // The polygon's own X range should span between the two real stem X
+    // positions (measure-relative), not sit at some unrelated location.
+    const xs = (result.points ?? '')
+      .split(/\s+/)
+      .map((p) => Number(p.split(',')[0]));
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const trebleXRelative = (result.trebleStemX ?? 0) - result.measureRect.left;
+    const bassXRelative = (result.bassStemX ?? 0) - result.measureRect.left;
+    expect(minX).toBeCloseTo(Math.min(trebleXRelative, bassXRelative), 0);
+    expect(maxX).toBeCloseTo(Math.max(trebleXRelative, bassXRelative), 0);
+  });
+
+  test("both staves' stem tips land strictly inside the drawn beam polygon, not short of it on either side", async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'eighth');
+        trebleNote.setAttribute('beam-group', 'g1');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'eighth');
+        bassNote.setAttribute('beam-group', 'g1');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const treble = document.getElementById('treble');
+      const bass = document.getElementById('bass');
+      if (
+        measure === null ||
+        measure.shadowRoot === null ||
+        treble === null ||
+        bass === null
+      ) {
+        throw new Error('not ready');
+      }
+      const polygon = measure.shadowRoot.querySelector(
+        '.double-stemmed-beams-overlay .double-stemmed-beam'
+      );
+      const trebleStem = treble
+        .querySelector('music-note')
+        ?.shadowRoot?.querySelector('.stem');
+      const bassStem = bass
+        .querySelector('music-note')
+        ?.shadowRoot?.querySelector('.stem');
+      if (!polygon || !trebleStem || !bassStem) {
+        throw new Error('polygon or stem not found');
+      }
+      const polygonBox = (polygon as SVGPolygonElement).getBoundingClientRect();
+      return {
+        polygonTop: polygonBox.top,
+        polygonBottom: polygonBox.bottom,
+        // Stem-down (top staff): the real tip is the bottom of its own
+        // rendered stem line.
+        trebleTipY: trebleStem.getBoundingClientRect().bottom,
+        // Stem-up (bottom staff): the real tip is the top of its own
+        // rendered stem line.
+        bassTipY: bassStem.getBoundingClientRect().top,
+      };
+    });
+
+    // Both tips must land within the polygon's own real vertical extent —
+    // not merely close to each other (the pre-fix bug had the top staff's
+    // tip converge toward the bottom staff's, while both sat outside the
+    // polygon on the top-staff side).
+    expect(result.trebleTipY).toBeGreaterThanOrEqual(result.polygonTop - 0.5);
+    expect(result.trebleTipY).toBeLessThanOrEqual(result.polygonBottom + 0.5);
+    expect(result.bassTipY).toBeGreaterThanOrEqual(result.polygonTop - 0.5);
+    expect(result.bassTipY).toBeLessThanOrEqual(result.polygonBottom + 0.5);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — secondary beams`, () => {
+  test('a mixed-duration group draws a narrower secondary beam over just the faster notes, offset from the primary beam', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNotes: [string, string, string][] = [
+          ['C', '5', 'eighth'],
+          ['D', '5', 'sixteenth'],
+          ['E', '5', 'sixteenth'],
+          ['F', '5', 'eighth'],
+        ];
+        for (const [note, octave, duration] of trebleNotes) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', octave);
+          el.setAttribute('duration', duration);
+          el.setAttribute('beam-group', 'g1');
+          treble.appendChild(el);
+        }
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNotes: [string, string, string][] = [
+          ['C', '3', 'eighth'],
+          ['D', '3', 'sixteenth'],
+          ['E', '3', 'sixteenth'],
+          ['F', '3', 'eighth'],
+        ];
+        for (const [note, octave, duration] of bassNotes) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', octave);
+          el.setAttribute('duration', duration);
+          el.setAttribute('beam-group', 'g1');
+          bass.appendChild(el);
+        }
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      if (measure === null || measure.shadowRoot === null) {
+        throw new Error('not ready');
+      }
+      const polygons = Array.from(
+        measure.shadowRoot.querySelectorAll(
+          '.double-stemmed-beams-overlay .double-stemmed-beam'
+        )
+      ) as SVGPolygonElement[];
+      const rects = polygons.map((p) => p.getBoundingClientRect());
+      return {
+        count: polygons.length,
+        widths: rects.map((r) => r.width),
+        tops: rects.map((r) => r.top),
+      };
+    });
+
+    expect(result.count).toBe(2);
+    // The primary beam spans all four notes on each staff; the secondary
+    // beam spans only the two sixteenth notes — strictly narrower.
+    const [wideIndex, narrowIndex] =
+      result.widths[0] >= result.widths[1] ? [0, 1] : [1, 0];
+    expect(result.widths[narrowIndex]).toBeLessThan(result.widths[wideIndex]);
+    // The secondary beam sits at a real, visibly distinct Y from the
+    // primary — offset by roughly BEAM_THICKNESS_PX + BEAM_GAP_PX (12px),
+    // not drawn directly on top of it.
+    expect(
+      Math.abs(result.tops[narrowIndex] - result.tops[wideIndex])
+    ).toBeGreaterThan(5);
+  });
+
+  test("an opposite-side member's stem reaches the secondary beam it participates in, not just the primary", async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '400px';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNotes: [string, string, string][] = [
+          ['C', '5', 'eighth'],
+          ['D', '5', 'sixteenth'],
+          ['E', '5', 'sixteenth'],
+          ['F', '5', 'eighth'],
+        ];
+        for (const [note, octave, duration] of trebleNotes) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', octave);
+          el.setAttribute('duration', duration);
+          el.setAttribute('beam-group', 'g1');
+          treble.appendChild(el);
+        }
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNotes: [string, string, string][] = [
+          ['C', '3', 'eighth'],
+          ['D', '3', 'sixteenth'],
+          ['E', '3', 'sixteenth'],
+          ['F', '3', 'eighth'],
+        ];
+        for (const [note, octave, duration] of bassNotes) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', octave);
+          el.setAttribute('duration', duration);
+          el.setAttribute('beam-group', 'g1');
+          bass.appendChild(el);
+        }
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      if (measure === null || measure.shadowRoot === null) {
+        throw new Error('not ready');
+      }
+      const polygons = Array.from(
+        measure.shadowRoot.querySelectorAll(
+          '.double-stemmed-beams-overlay .double-stemmed-beam'
+        )
+      ) as SVGPolygonElement[];
+      const rects = polygons.map((p) => p.getBoundingClientRect());
+      const [wideIndex, narrowIndex] =
+        rects[0].width >= rects[1].width ? [0, 1] : [1, 0];
+      const secondary = rects[narrowIndex];
+      const primary = rects[wideIndex];
+
+      const bass = document.getElementById('bass');
+      if (bass === null) {
+        throw new Error('bass missing');
+      }
+      const bassSixteenths = Array.from(
+        bass.querySelectorAll('music-note')
+      ).filter((n) => n.getAttribute('duration') === 'sixteenth');
+      const bassSixteenthStemTips = bassSixteenths.map((n) => {
+        const stem = n.shadowRoot?.querySelector('.stem');
+        const r = stem?.getBoundingClientRect();
+        if (r === undefined) {
+          throw new Error('stem missing');
+        }
+        // Bass stems point up (tip = smaller y = rect.top).
+        return r.top;
+      });
+
+      return {
+        secondaryTop: secondary.top,
+        secondaryBottom: secondary.bottom,
+        primaryTop: primary.top,
+        primaryBottom: primary.bottom,
+        bassSixteenthStemTips,
+      };
+    });
+
+    for (const tip of result.bassSixteenthStemTips) {
+      expect(tip).toBeGreaterThanOrEqual(result.secondaryTop);
+      expect(tip).toBeLessThanOrEqual(result.secondaryBottom);
+    }
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — rests`, () => {
+  async function buildTwoRestGroup(page: Page) {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const c = document.createElement(noteTag);
+        c.setAttribute('note', 'C');
+        c.setAttribute('octave', '5');
+        c.setAttribute('duration', 'eighth');
+        c.setAttribute('beam-group', 'g1');
+        treble.appendChild(c);
+        const trebleRest = document.createElement(restTag);
+        trebleRest.setAttribute('duration', 'eighth');
+        trebleRest.setAttribute('beam-group', 'g1');
+        trebleRest.id = 'treble-rest';
+        treble.appendChild(trebleRest);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassRest = document.createElement(restTag);
+        bassRest.setAttribute('duration', 'eighth');
+        bassRest.setAttribute('beam-group', 'g1');
+        bassRest.id = 'bass-rest';
+        bass.appendChild(bassRest);
+        const d = document.createElement(noteTag);
+        d.setAttribute('note', 'C');
+        d.setAttribute('octave', '3');
+        d.setAttribute('duration', 'eighth');
+        d.setAttribute('beam-group', 'g1');
+        bass.appendChild(d);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      {
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        restTag: MUSIC_REST,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test("an auto-classified interior rest lands within REST_BEAM_CLEARANCE_PX of the beam's own near edge, on the side its neighbors resolve to", async ({
+    page,
+  }) => {
+    await buildTwoRestGroup(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const beam = measure?.shadowRoot
+        ?.querySelector('.double-stemmed-beam')
+        ?.getBoundingClientRect();
+      const trebleRest = document
+        .getElementById('treble-rest')
+        ?.getBoundingClientRect();
+      const bassRest = document
+        .getElementById('bass-rest')
+        ?.getBoundingClientRect();
+      return {
+        beamTop: beam?.top,
+        beamBottom: beam?.bottom,
+        trebleRestTop: trebleRest?.top,
+        bassRestTop: bassRest?.top,
+      };
+    });
+
+    if (
+      result.beamTop === undefined ||
+      result.beamBottom === undefined ||
+      result.trebleRestTop === undefined ||
+      result.bassRestTop === undefined
+    ) {
+      throw new Error('geometry not ready');
+    }
+
+    // The treble rest's own neighbor (the bass note it precedes) is on the
+    // bottom staff, so it auto-classifies 'below' — its visible glyph
+    // feature (box-top + the duration's own internal offset) lands just
+    // past the beam's own bottom edge.
+    const trebleRestGlyphY = result.trebleRestTop + EIGHTH_REST_GLYPH_OFFSET;
+    expect(trebleRestGlyphY).toBeGreaterThan(result.beamBottom);
+    expect(trebleRestGlyphY).toBeLessThan(
+      result.beamBottom + REST_BEAM_CLEARANCE_PX + 2
+    );
+
+    // The bass rest's own neighbor (the treble note it follows) is on the
+    // top staff, so it auto-classifies 'above' — its glyph box ends just
+    // before the beam's own top edge (rest boxes are a fixed height, so we
+    // only assert the box starts above the beam, not the exact bottom).
+    expect(result.bassRestTop).toBeLessThan(result.beamTop);
+  });
+
+  test("a rest at the same beat as a real note nudges clear of that note's own stem, not just its notehead", async ({
+    page,
+  }) => {
+    await buildTwoRestGroup(page);
+
+    const result = await page.evaluate(() => {
+      const trebleRest = document
+        .getElementById('treble-rest')
+        ?.getBoundingClientRect();
+      const bassNote = document.querySelector(
+        '#bass music-note'
+      ) as HTMLElement | null;
+      const bassStem = bassNote?.shadowRoot
+        ?.querySelector('.stem')
+        ?.getBoundingClientRect();
+      return {
+        trebleRestRight: trebleRest?.right,
+        bassStemLeft: bassStem?.left,
+        bassStemRight: bassStem?.right,
+      };
+    });
+
+    if (
+      result.trebleRestRight === undefined ||
+      result.bassStemLeft === undefined ||
+      result.bassStemRight === undefined
+    ) {
+      throw new Error('geometry not ready');
+    }
+
+    // Both the rest and the bass note it precedes land at the same real X
+    // (same beat), so the bass note's own stem — which spans the entire
+    // distance between its notehead and the shared beam — would otherwise
+    // run directly through the rest regardless of how much *vertical*
+    // clearance it has from the notehead. The rest's own box must end
+    // clear of the stem's real horizontal footprint.
+    expect(result.trebleRestRight).toBeLessThan(result.bassStemLeft);
+  });
+
+  test('an explicit rest-staff-side overrides the auto-classification', async ({
+    page,
+  }) => {
+    await buildTwoRestGroup(page);
+
+    const readTrebleRestTop = () =>
+      page.evaluate(
+        () =>
+          document.getElementById('treble-rest')?.getBoundingClientRect().top
+      );
+
+    // Auto-classification (its own neighbors are both bass-staff members —
+    // see the interior-run case in doubleStemmedBeamRules.test.ts) resolves
+    // this rest to 'below'.
+    const belowTop = await readTrebleRestTop();
+
+    await page.evaluate(() => {
+      document
+        .getElementById('treble-rest')
+        ?.setAttribute('rest-staff-side', 'above');
+    });
+    await waitForRedrawCycle(page);
+    const aboveTop = await readTrebleRestTop();
+
+    if (belowTop === undefined || aboveTop === undefined) {
+      throw new Error('geometry not ready');
+    }
+    // 'above' sits BEAM_THICKNESS_PX + 2×REST_BEAM_CLEARANCE_PX higher
+    // (smaller Y) than 'below', at the same X — a difference real enough to
+    // hold regardless of the beam's own (possibly sloped) exact Y there.
+    expect(aboveTop).toBeLessThan(belowTop - 10);
+  });
+
+  test('an explicit "centered" rest lands at the real inter-staff gap center', async ({
+    page,
+  }) => {
+    await buildTwoRestGroup(page);
+
+    const readBassRestTop = () =>
+      page.evaluate(
+        () => document.getElementById('bass-rest')?.getBoundingClientRect().top
+      );
+
+    // Auto-classification (its neighbors disagree — the treble note it
+    // follows vs. the bass note it precedes — so it prefers the following
+    // member's side) resolves this rest to 'below', hugging the beam
+    // itself, not the real gap center.
+    const belowTop = await readBassRestTop();
+
+    await page.evaluate(() => {
+      document
+        .getElementById('bass-rest')
+        ?.setAttribute('rest-staff-side', 'centered');
+    });
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const treble = document.getElementById('treble');
+      const bass = document.getElementById('bass');
+      const bassRest = document
+        .getElementById('bass-rest')
+        ?.getBoundingClientRect();
+      if (treble === null || bass === null || bassRest === undefined) {
+        throw new Error('geometry not ready');
+      }
+      // The real inter-staff gap is bounded by each staff's own visible
+      // lines (`.staff-container`, whose border-top/bottom render the
+      // outermost lines) — not the whole custom element's outer box, which
+      // always includes its own STAFF_LINE_START/STAFF_BOTTOM_MARGIN
+      // padding and so is flush against its sibling regardless of how much
+      // real visual room that padding gives the lines themselves.
+      const topGapEdgeY = treble.shadowRoot
+        ?.querySelector('.staff-container')
+        ?.getBoundingClientRect().bottom;
+      const bottomGapEdgeY = bass.shadowRoot
+        ?.querySelector('.staff-container')
+        ?.getBoundingClientRect().top;
+      if (topGapEdgeY === undefined || bottomGapEdgeY === undefined) {
+        throw new Error('geometry not ready');
+      }
+      const realGapCenterY = (topGapEdgeY + bottomGapEdgeY) / 2;
+      return { realGapCenterY, bassRestTop: bassRest.top };
+    });
+
+    if (belowTop === undefined) {
+      throw new Error('geometry not ready');
+    }
+    // Real, meaningful move away from the auto-classified 'below' position
+    // — not an unset/default value coincidentally unchanged.
+    expect(Math.abs(result.bassRestTop - belowTop)).toBeGreaterThan(5);
+    // The rest's own visible glyph feature (box-top + the duration's own
+    // internal offset — see EIGHTH_REST_GLYPH_OFFSET) lands close to the
+    // real gap center, not just somewhere within the box's own 60px span
+    // (which would also pass for a glyph rendered well off-target).
+    const bassRestGlyphY = result.bassRestTop + EIGHTH_REST_GLYPH_OFFSET;
+    expect(Math.abs(bassRestGlyphY - result.realGapCenterY)).toBeLessThan(2);
+  });
+
+  test('a "centered" rest also stays clear of the real beam at its own X, not just the fixed gap center', async ({
+    page,
+  }) => {
+    await buildTwoRestGroup(page);
+
+    // The treble rest sits at the same beat as the bass note (x = 0.5),
+    // where the beam — sloped steeply here, since it connects only two
+    // real notes half a beat apart across the full staff-to-staff gap — has
+    // already descended most of the way toward the bass staff, well past
+    // the fixed (staff-edge-derived) gap center a naive "centered" target
+    // would otherwise use.
+    await page.evaluate(() => {
+      document
+        .getElementById('treble-rest')
+        ?.setAttribute('rest-staff-side', 'centered');
+    });
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate((eighthRestGlyphOffset) => {
+      const measure = document.querySelector('music-measure');
+      const measureRect = measure?.getBoundingClientRect();
+      const beam = measure?.shadowRoot?.querySelector('.double-stemmed-beam');
+      const pointsAttr = beam?.getAttribute('points');
+      const trebleRest = document
+        .getElementById('treble-rest')
+        ?.getBoundingClientRect();
+      if (
+        measureRect === undefined ||
+        pointsAttr === null ||
+        pointsAttr === undefined ||
+        trebleRest === undefined
+      ) {
+        return null;
+      }
+      // Parse the polygon's own 4 points (see createDoubleStemmedBeamPolygon:
+      // (x1,y1) (x1,y1+thick) (x2,y2+thick) (x2,y2), measure-relative real
+      // px) to find the beam's real local Y range at this rest's own real
+      // X — its overall bounding box spans the whole sloped run and is not
+      // representative of the local band at any one interior X.
+      const pts = pointsAttr
+        .trim()
+        .split(/\s+/)
+        .map((p) => p.split(',').map(Number));
+      const [x1, y1] = pts[0];
+      const [, y1Bottom] = pts[1];
+      const [x2, y2Bottom] = pts[2];
+      const [, y2] = pts[3];
+      const trebleRestX =
+        trebleRest.left + trebleRest.width / 2 - measureRect.left;
+      const run = x2 - x1;
+      const t = run === 0 ? 0 : (trebleRestX - x1) / run;
+      const localBeamTop = y1 + (y2 - y1) * t;
+      const localBeamBottom = y1Bottom + (y2Bottom - y1Bottom) * t;
+      return {
+        localBeamTop,
+        localBeamBottom,
+        trebleRestGlyphYReal:
+          trebleRest.top - measureRect.top + eighthRestGlyphOffset,
+      };
+    }, EIGHTH_REST_GLYPH_OFFSET);
+
+    if (result === null) {
+      throw new Error('geometry not ready');
+    }
+
+    const clearsAbove =
+      result.trebleRestGlyphYReal <=
+      result.localBeamTop - REST_BEAM_CLEARANCE_PX + 2;
+    const clearsBelow =
+      result.trebleRestGlyphYReal >=
+      result.localBeamBottom + REST_BEAM_CLEARANCE_PX - 2;
+    expect(clearsAbove || clearsBelow).toBe(true);
+  });
+
+  test('rest-staff-side on a rest with no active beam-group warns and is ignored', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' || msg.text().includes('rest-staff-side')) {
+        warnings.push(msg.text());
+      }
+    });
+
+    await page.evaluate(
+      ({ measureTag, staffTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        const rest = document.createElement(restTag);
+        rest.setAttribute('duration', 'eighth');
+        rest.setAttribute('rest-staff-side', 'centered');
+        treble.appendChild(rest);
+        measure.appendChild(treble);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, restTag: MUSIC_REST }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    expect(warnings.some((w) => w.includes('rest-staff-side'))).toBe(true);
   });
 });
 

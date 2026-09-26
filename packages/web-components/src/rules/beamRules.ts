@@ -29,7 +29,9 @@ export function buildBeamsRenderer(
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
   arpeggioRunIndices: ReadonlySet<number> = new Set(),
   elementBeatOffsets?: number[],
-  stemDirectionsOverride?: boolean[]
+  stemDirectionsOverride?: boolean[],
+  externallyBeamedIndices?: ReadonlySet<number>,
+  crossStaffStemOverrides?: ReadonlyMap<number, boolean>
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -44,7 +46,8 @@ export function buildBeamsRenderer(
     elements,
     timeSig,
     elementDurationFactors,
-    elementBeatOffsets
+    elementBeatOffsets,
+    externallyBeamedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -52,7 +55,7 @@ export function buildBeamsRenderer(
   // math below depends on stem direction, so swapping directions after
   // construction would leave stale geometry — this must happen before
   // noteYPositions is built, not after.
-  const stemDirections =
+  const baseStemDirections =
     stemDirectionsOverride ??
     determineStemDirections(
       elements,
@@ -60,6 +63,15 @@ export function buildBeamsRenderer(
       noteStaffYCoords,
       chordStaffYCoords
     );
+  // crossStaffStemOverrides (the ancestor <music-measure>'s own
+  // double-stemmed-beam resolution) is a sparse, index-keyed overlay applied
+  // on top of whichever base policy above produced — it needs BeamsBuilder's
+  // own beam-group data (via determineStemDirections) to exist first, so it
+  // can't be folded into stemDirectionsOverride itself without duplicating
+  // that construction at the call site.
+  const stemDirections = crossStaffStemOverrides
+    ? baseStemDirections.map((d, i) => crossStaffStemOverrides.get(i) ?? d)
+    : baseStemDirections;
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {

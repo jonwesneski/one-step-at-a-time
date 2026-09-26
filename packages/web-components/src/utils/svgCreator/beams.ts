@@ -22,6 +22,10 @@ Beam grouping implemented here:
 */
 
 import {
+  BeamLineDescriptor,
+  computeBeamLevelStructure,
+} from '../../rules/beamStructureRules';
+import {
   durationToFactor,
   durationToFlagCountMap,
 } from '../../rules/theoryConsts';
@@ -360,57 +364,30 @@ class BeamGroup {
     return renderer;
   }
 
-  // Derives the beam structure from the flag counts of each note.
-  // Level 0 always produces exactly one full-span primary beam.
-  // Level 1+ produces either full-span secondary beams (for consecutive runs)
-  // or fractional (partial/stub) beams for isolated notes at that level.
+  // Derives the beam structure from the flag counts of each note — the pure
+  // level-by-level run detection lives in rules/beamStructureRules.ts (shared
+  // with double-stemmed beams' own cross-staff structure); this wraps its
+  // plain descriptors back into BeamLine instances for the renderer below.
   #computeBeamStructure(): {
     primaryBeam: BeamLine;
     secondaryBeams: BeamLine[];
     fractionalBeams: BeamLine[];
   } {
-    let primaryBeam: BeamLine | undefined;
-    const secondaryBeams: BeamLine[] = [];
-    const fractionalBeams: BeamLine[] = [];
-    const maxBeamCount = Math.max(...this.#notes.map((n) => n.beamCount));
+    const { primaryBeam, secondaryBeams, fractionalBeams } =
+      computeBeamLevelStructure(this.#notes.map((n) => n.beamCount));
+    const toBeamLine = (d: BeamLineDescriptor): BeamLine =>
+      new BeamLine(
+        d.fromNoteIndex,
+        d.toNoteIndex,
+        d.beamLevel,
+        d.fractionalBeamSide
+      );
 
-    for (let level = 0; level < maxBeamCount; level++) {
-      let beamRunStart = -1;
-      for (let i = 0; i <= this.#notes.length; i++) {
-        const participatesAtLevel =
-          i < this.#notes.length && this.#notes[i].beamCount > level;
-
-        if (participatesAtLevel && beamRunStart === -1) {
-          beamRunStart = i;
-        } else if (!participatesAtLevel && beamRunStart !== -1) {
-          const runEnd = i - 1;
-          if (runEnd > beamRunStart) {
-            // Multiple notes — full beam run at this level.
-            const beamLine = new BeamLine(beamRunStart, runEnd, level);
-            if (level === 0) {
-              primaryBeam = beamLine;
-            } else {
-              secondaryBeams.push(beamLine);
-            }
-          } else {
-            // Single isolated note — fractional (partial/stub) beam toward the nearest neighbor.
-            const fractionalBeamSide = beamRunStart > 0 ? 'left' : 'right';
-            fractionalBeams.push(
-              new BeamLine(
-                beamRunStart,
-                beamRunStart,
-                level,
-                fractionalBeamSide
-              )
-            );
-          }
-          beamRunStart = -1;
-        }
-      }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- BeamGroup only exists for ≥2 beamable notes, so a full-span primary beam is always built above
-    return { primaryBeam: primaryBeam!, secondaryBeams, fractionalBeams };
+    return {
+      primaryBeam: toBeamLine(primaryBeam),
+      secondaryBeams: secondaryBeams.map(toBeamLine),
+      fractionalBeams: fractionalBeams.map(toBeamLine),
+    };
   }
 
   /** Creates the <g> element with one <polygon> per beam line. */
@@ -480,21 +457,29 @@ class BeamRenderer {
 export class BeamsBuilder {
   #groups: BeamGroup[];
   #beamedIndices: Set<number>;
+  #externallyBeamedIndices: ReadonlySet<number>;
 
   constructor(
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
     elementDurationFactors?: number[],
-    elementBeatOffsets?: number[]
+    elementBeatOffsets?: number[],
+    // Indices already joined to a cross-staff double-stemmed beam group
+    // (rules/doubleStemmedBeamRules.ts) — never join or extend a same-staff
+    // run here, exactly like a rest already breaks one, but still report as
+    // isBeamed() so the note/chord still suppresses its own flag.
+    externallyBeamedIndices: ReadonlySet<number> = new Set()
   ) {
     const { groups, beamedIndices } = BeamsBuilder.#scan(
       elements,
       time,
       elementDurationFactors,
-      elementBeatOffsets
+      elementBeatOffsets,
+      externallyBeamedIndices
     );
     this.#groups = groups;
     this.#beamedIndices = beamedIndices;
+    this.#externallyBeamedIndices = externallyBeamedIndices;
   }
 
   // Returns the duration (as a whole-note fraction) of each beam-grouping window
@@ -515,7 +500,8 @@ export class BeamsBuilder {
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
     elementDurationFactors?: number[],
-    elementBeatOffsets?: number[]
+    elementBeatOffsets?: number[],
+    externallyBeamedIndices: ReadonlySet<number> = new Set()
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
     const [beats, beatType] = time;
     const measureDuration = beats / beatType;
@@ -578,6 +564,17 @@ export class BeamsBuilder {
         )
           continue;
 
+        if (externallyBeamedIndices.has(i)) {
+          // Already joined to a cross-staff beam group — breaks a same-staff
+          // run exactly like a rest does, but isBeamed() reports it true
+          // separately (see the constructor's own field), so its flag still
+          // suppresses correctly.
+          flushRun(pendingFlagCounts, pendingNoteIndices);
+          pendingFlagCounts = [];
+          pendingNoteIndices = [];
+          continue;
+        }
+
         const dur = (elements[i].dataset.duration ??
           elements[i].getAttribute('duration')) as DurationType;
         const flagCount =
@@ -610,9 +607,16 @@ export class BeamsBuilder {
     return { groups, beamedIndices };
   }
 
-  /** Returns true if the note at noteIndex belongs to a beam group (and should suppress its flag). */
+  /**
+   * Returns true if the note at noteIndex belongs to a same-staff beam group
+   * OR a cross-staff double-stemmed one (and should suppress its flag either
+   * way) — see the constructor's externallyBeamedIndices param.
+   */
   isBeamed(noteIndex: number): boolean {
-    return this.#beamedIndices.has(noteIndex);
+    return (
+      this.#beamedIndices.has(noteIndex) ||
+      this.#externallyBeamedIndices.has(noteIndex)
+    );
   }
 
   /**

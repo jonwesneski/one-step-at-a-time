@@ -2,10 +2,27 @@ import {
   type ArpeggioEntry,
   resolveArpeggioSpans,
 } from '../rules/arpeggioRules';
+import { computeBeamLevelStructure } from '../rules/beamStructureRules';
+import {
+  classifyAutoRestStaffSide,
+  DoubleStemmedBeamEntry,
+  DoubleStemmedBeamMember,
+  DoubleStemmedBeamPoint,
+  DoubleStemmedBeamSegmentPosition,
+  DoubleStemmedBeamSegmentSide,
+  resolveDoubleStemmedBeamGroups,
+  resolveDoubleStemmedBeamLine,
+  resolveGroupSecondaryBeamSide,
+  resolveSecondaryBeamVerticalSide,
+} from '../rules/doubleStemmedBeamRules';
+import { restToYCoordinate } from '../rules/restRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
+import { durationToFlagCountMap } from '../rules/theoryConsts';
 import type {
+  NoteChordOrRestElementType,
   NoteOrChordElementType,
+  RestElementType,
   StaffElementBaseType,
 } from '../types/elements';
 import type { HairpinKind } from '../types/theory';
@@ -15,12 +32,15 @@ import {
   createArpeggioSvg,
   createBraceSvg,
   createBracketSvg,
+  createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
   isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
+  MUSIC_REST_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -35,6 +55,8 @@ import {
 import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  BEAM_GAP_PX,
+  BEAM_THICKNESS_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
   BRACKET_EXTRA_HEIGHT_PX,
@@ -42,14 +64,20 @@ import {
   BRACKET_TOP_OFFSET_PX,
   BRACKET_WIDTH_PX,
   EMPTY_MEASURE_FLEX_BASIS_PX,
+  FRACTIONAL_BEAM_WIDTH_PX,
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
   MEASURE_NUMBER_FONT_SIZE,
+  MIN_REST_NOTE_CLEARANCE_PX,
+  REST_BEAM_CLEARANCE_PX,
+  REST_STEM_AVOIDANCE_NUDGE_PX,
+  REST_STEM_AVOIDANCE_THRESHOLD_PX,
   STAFF_BOTTOM_MARGIN,
   STAFF_LABEL_FONT_SIZE,
   STAFF_LABEL_LEFT_MARGIN_PX,
   STAFF_LABEL_WIDTH_PX,
   STAFF_LINE_START,
+  STEM_OVERLAP_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
 
@@ -142,9 +170,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawArpeggios();
       this.#redrawConnectors();
       this.#redrawSharedDynamics();
+      this.#redrawDoubleStemmedBeams();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
+    // A plain beam-group attribute change (no geometry change on its own)
+    // only ever dispatches BEAM_GROUP_ATTRIBUTE_CHANGE — the resulting stem
+    // override, once pushed onto each staff, still triggers that staff's own
+    // full #renderNotes() (real geometry follows from there), same shape as
+    // #boundRedrawSharedDynamics below.
+    #boundRedrawDoubleStemmedBeams = () => this.#redrawDoubleStemmedBeams();
     // A plain tie/slur attribute change (no geometry change) only ever
     // dispatches CONNECTOR_ATTRIBUTE_CHANGE, never STAFF_MIN_WIDTH — mirrors
     // composition.ts's own listener for the same event/reason.
@@ -216,6 +251,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.STAFF_MIN_WIDTH,
         this.#onStaffMinWidth
       );
+      // A staff's own ResizeObserver-driven onStaffResize() re-runs
+      // #spaceElements() (resetting every entry's real position, including
+      // a cross-staff rest's own style.left — style.top is separately
+      // guarded via externallyPositionedRestIndices, but left isn't)
+      // without going through the STAFF_MIN_WIDTH dispatch above, so a
+      // cross-staff rest's stem-avoidance nudge needs this event too, or
+      // that staff-level reset silently outlives the last redraw that
+      // applied it.
+      this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawDoubleStemmedBeams
+      );
       this.addEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
@@ -235,6 +282,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener(
         NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
         this.#boundRedrawSharedDynamics
+      );
+      this.addEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
+      );
+      this.addEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
       );
     }
 
@@ -245,6 +300,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#onStaffMinWidth
       );
       this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
@@ -263,6 +322,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
         this.#boundRedrawSharedDynamics
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawDoubleStemmedBeams
       );
       this.#staffWidths.clear();
     }
@@ -401,6 +468,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .double-stemmed-beams-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div>
           <div class="staff-connector"></div>
@@ -418,6 +493,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           <!-- dynamic-shared markings, centered between two sibling
                staves — see #redrawSharedDynamics -->
           <svg class="shared-dynamics-overlay"></svg>
+          <!-- the shared beam polygon for a cross-staff double-stemmed
+               group, spanning both staves' gap — see
+               #redrawDoubleStemmedBeams -->
+          <svg class="double-stemmed-beams-overlay"></svg>
           <!-- This measure's own number, shown per the ancestor
                music-composition element's measure-numbers policy — see
                #renderMeasureNumber. Absolutely positioned (like every other
@@ -460,6 +539,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawArpeggios();
       this.#redrawConnectors();
       this.#redrawSharedDynamics();
+      this.#redrawDoubleStemmedBeams();
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -686,6 +766,119 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return heads ? Array.from(heads, (h) => h.getBoundingClientRect()) : [];
     }
 
+    // A staff custom element's own outer box (staffBase.ts's `.staff-wrapper`)
+    // always includes its built-in STAFF_LINE_START/STAFF_BOTTOM_MARGIN
+    // padding around the visible lines — two grand-staff siblings stack with
+    // no margin *between* their outer boxes, so one's bottom edge is always
+    // flush with the next one's top edge regardless of how much real visual
+    // room the padding gives the actual staff lines. `.staff-container` is
+    // the inner element the padding surrounds (its own border-top/bottom act
+    // as the staff's outermost lines), so its real rect is the correct
+    // boundary for "the real gap between two staves."
+    #staffContainerRect(staff: StaffElementBaseType): DOMRect {
+      return (
+        staff.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect() ?? staff.getBoundingClientRect()
+      );
+    }
+
+    // Resolves a beam-hugging rest's real target Y (measure-relative,
+    // the glyph's own visible feature — not the box-top; see
+    // restRules.ts#restGlyphOffsetFromBoxTop) for #redrawDoubleStemmedBeams.
+    // Prefers REST_BEAM_CLEARANCE_PX past the beam's own near edge, but
+    // pulls back toward the beam (never past it, floored at BEAM_GAP_PX)
+    // when that preferred position would land within
+    // MIN_REST_NOTE_CLEARANCE_PX of the nearest real notehead — increasing
+    // the clearance from the beam moves *toward* a note further past it, so
+    // hugging the beam more tightly, not less, is what actually creates
+    // room here.
+    #restHuggingTargetY(
+      side: 'above' | 'below',
+      beamTopYReal: number,
+      nearestHeadRect: DOMRect | null
+    ): number {
+      const dir = side === 'below' ? 1 : -1;
+      const beamEdgeReal =
+        side === 'below' ? beamTopYReal + BEAM_THICKNESS_PX : beamTopYReal;
+      const preferredReal = beamEdgeReal + dir * REST_BEAM_CLEARANCE_PX;
+      if (!nearestHeadRect) {
+        return preferredReal;
+      }
+      const beamBoundReal = beamEdgeReal + dir * BEAM_GAP_PX;
+      const headNearEdgeReal =
+        dir === 1 ? nearestHeadRect.top : nearestHeadRect.bottom;
+      const noteBoundReal = headNearEdgeReal - dir * MIN_REST_NOTE_CLEARANCE_PX;
+      return dir === 1
+        ? Math.max(beamBoundReal, Math.min(preferredReal, noteBoundReal))
+        : Math.min(beamBoundReal, Math.max(preferredReal, noteBoundReal));
+    }
+
+    // Pushes y clear of [bandTop, bandBottom] toward whichever edge is
+    // nearer, clamped to [minY, maxY] — shared by both obstacles a
+    // "centered" rest must avoid (the real, possibly-sloped beam at its own
+    // X, and the nearest real notehead), each with its own clearance
+    // already folded into the band's own edges by the caller.
+    #pushYClearOfBand(
+      y: number,
+      bandTop: number,
+      bandBottom: number,
+      minY: number,
+      maxY: number
+    ): number {
+      if (y < bandTop || y > bandBottom) {
+        return y;
+      }
+      const pushUp = Math.max(minY, bandTop);
+      const pushDown = Math.min(maxY, bandBottom);
+      return Math.abs(y - pushUp) <= Math.abs(pushDown - y) ? pushUp : pushDown;
+    }
+
+    // Resolves a "centered" rest's real target Y — the real inter-staff
+    // gap's vertical center. That center is a fixed value (the two staves'
+    // own static edges), but the beam it sits beside can be sloped, so the
+    // beam's own real position at this rest's specific X can drift well
+    // past the gap's fixed center — first pushed clear of the beam's own
+    // real band (REST_BEAM_CLEARANCE_PX, same as a hugging rest), then of
+    // the nearest real notehead (MIN_REST_NOTE_CLEARANCE_PX), each clamped
+    // back into the gap itself.
+    #restCenteredTargetY(
+      gapCenterReal: number,
+      topGapEdgeReal: number,
+      bottomGapEdgeReal: number,
+      beamTopYAtXReal: number,
+      beamBottomYAtXReal: number,
+      nearestHeadRect: DOMRect | null
+    ): number {
+      const clearOfBeam = this.#pushYClearOfBand(
+        gapCenterReal,
+        beamTopYAtXReal - REST_BEAM_CLEARANCE_PX,
+        beamBottomYAtXReal + REST_BEAM_CLEARANCE_PX,
+        topGapEdgeReal,
+        bottomGapEdgeReal
+      );
+      if (!nearestHeadRect) {
+        return clearOfBeam;
+      }
+      return this.#pushYClearOfBand(
+        clearOfBeam,
+        nearestHeadRect.top - MIN_REST_NOTE_CLEARANCE_PX,
+        nearestHeadRect.bottom + MIN_REST_NOTE_CLEARANCE_PX,
+        topGapEdgeReal,
+        bottomGapEdgeReal
+      );
+    }
+
+    // Real geometry of a note/chord's own currently-rendered stem — null
+    // when it has none (a duration with no stem at all, e.g. whole notes).
+    // Used by #redrawDoubleStemmedBeams to read each cross-staff member's
+    // own provisional (zero-extension) stem-tip position before bridging it
+    // to the shared beam.
+    #stemRect(element: NoteOrChordElementType): DOMRect | null {
+      const stem = element.shadowRoot?.querySelector('.stem');
+      return stem ? stem.getBoundingClientRect() : null;
+    }
+
     // Ties/slurs/etc. across this measure's own staves (e.g. a slur from one
     // hand of a grand staff to the other). A <music-composition> ancestor
     // already runs the same pairing composition-wide via its own
@@ -794,6 +987,454 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           );
         }
       });
+    }
+
+    // Resolves cross-staff double-stemmed beam groups (`beam-group`) over
+    // every staff's own top-level element stream, then pushes the correct
+    // per-element stem direction onto each involved staff — top-staff members
+    // always stem down, bottom-staff members always stem up (see the
+    // double-stemmed-beams plan's Stem-direction resolution section), the
+    // same static, non-pitch-driven policy voice 1/voice 2 already use.
+    // A staff's own render pass (staffClassicalBase.ts) still decides
+    // everything else about beam grouping and geometry; this only resolves
+    // *which direction* a cross-staff member's stem points, so its own
+    // BeamsBuilder pass (which excludes these indices from same-staff
+    // grouping) has a correct direction to render with in the meantime,
+    // before a later phase draws the real shared beam polygon.
+    #redrawDoubleStemmedBeams() {
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+
+      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined, ${MUSIC_REST}:defined`;
+      const perStaffElements: NoteChordOrRestElementType[][] = staves.map(
+        (staff) =>
+          Array.from(
+            staff.querySelectorAll(elementSelector)
+          ) as NoteChordOrRestElementType[]
+      );
+
+      const entries: DoubleStemmedBeamEntry[] = perStaffElements.flatMap(
+        (elements, staffIndex) =>
+          elements.map((element, entryIndex) => ({
+            staffIndex,
+            entryIndex,
+            beamGroup: element.beamGroup,
+            nodeName: element.nodeName,
+          }))
+      );
+
+      const { groups, warnings } = resolveDoubleStemmedBeamGroups(entries);
+      for (const warning of warnings) {
+        console.warn(`[music-measure] ${warning}`);
+      }
+
+      // rest-staff-side is only ever meaningful for a rest that's a member
+      // of a resolved, active beam-group (it's a position relative to the
+      // shared beam / real inter-staff gap, neither of which exist
+      // otherwise) — warn, same shape as an unmatched arpeggio-for, rather
+      // than silently ignoring an author's explicit override.
+      const restMembersInGroups = new Set(
+        groups.flatMap((group) =>
+          group.members
+            .filter((member) => member.isRest)
+            .map(
+              (member) => perStaffElements[member.staffIndex][member.entryIndex]
+            )
+        )
+      );
+      for (const elements of perStaffElements) {
+        for (const element of elements) {
+          if (
+            element.nodeName === MUSIC_REST_NODE &&
+            (element as RestElementType).restStaffSide !== null &&
+            !restMembersInGroups.has(element)
+          ) {
+            console.warn(
+              '[music-measure] rest-staff-side is set on a rest with no active double-stemmed beam-group; ignoring'
+            );
+          }
+        }
+      }
+
+      // Pass 1 (stem-direction convergence): resolve + push each involved
+      // staff's own per-element override. Each staff's own #renderNotes()
+      // re-render (inside the crossStaffBeamStemOverrides setter) is
+      // synchronous, so pass 2 below can safely measure real,
+      // post-direction-change geometry immediately after this loop.
+      const overridesByStaffIndex = new Map<number, Map<number, boolean>>();
+      for (const group of groups) {
+        for (const member of group.members) {
+          if (member.isRest) {
+            continue;
+          }
+          const stemUp = member.staffIndex === group.bottomStaffIndex;
+          const staffOverrides =
+            overridesByStaffIndex.get(member.staffIndex) ?? new Map();
+          staffOverrides.set(member.entryIndex, stemUp);
+          overridesByStaffIndex.set(member.staffIndex, staffOverrides);
+        }
+      }
+
+      staves.forEach((staff, staffIndex) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- crossStaffBeamStemOverrides is staff-internal (StaffClassicalElementBase), not part of the shared StaffElementBaseType surface — same precedent as showDescribe/clefChangeAtBoundary in composition.ts
+        (staff as any).crossStaffBeamStemOverrides =
+          overridesByStaffIndex.get(staffIndex) ?? null;
+      });
+
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.double-stemmed-beams-overlay'
+      );
+      if (overlay) {
+        while (overlay.firstChild) {
+          overlay.removeChild(overlay.firstChild);
+        }
+      }
+      if (groups.length === 0 || !overlay) {
+        return;
+      }
+
+      // Pass 2 (coordinate bridging): resolve the shared beam line per group
+      // from each non-rest member's own, now-correctly-directioned
+      // provisional stem tip, then push each member's real stemExtension to
+      // reach it — a note-local write (re-renders only that note's own
+      // stem), not a further staff relayout.
+      const measureRect = this.getBoundingClientRect();
+      for (const group of groups) {
+        const topGapEdgeY =
+          this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
+          measureRect.top;
+        const bottomGapEdgeY =
+          this.#staffContainerRect(staves[group.bottomStaffIndex]).top -
+          measureRect.top;
+
+        const memberGeometries: {
+          element: NoteOrChordElementType;
+          staffIndex: number;
+          stemUp: boolean;
+          point: DoubleStemmedBeamPoint;
+        }[] = [];
+        for (const member of group.members) {
+          if (member.isRest) {
+            continue;
+          }
+          const element = perStaffElements[member.staffIndex][
+            member.entryIndex
+          ] as NoteOrChordElementType;
+          const stemRect = this.#stemRect(element);
+          if (!stemRect) {
+            // No stem at all (e.g. a beam-group member with a whole-note
+            // duration) — nothing to bridge for this one.
+            continue;
+          }
+          const stemUp = member.staffIndex === group.bottomStaffIndex;
+          const measuredTipY =
+            (stemUp ? stemRect.top : stemRect.bottom) - measureRect.top;
+          // Un-shift back to the zero-extension baseline before using it as
+          // "natural" input: a previous redraw cycle may have already
+          // applied a stemExtension here (increasing it moves a stem-up tip
+          // to a *smaller* Y, a stem-down tip to a *larger* Y — the inverse
+          // of that is added back here). Without this, re-running this
+          // method (it fires on every STAFF_MIN_WIDTH / resize, not just
+          // once) would re-measure its own previous output as if it were
+          // fresh input, never converging to a stable, correct target.
+          const naturalY = stemUp
+            ? measuredTipY + element.stemExtension
+            : measuredTipY - element.stemExtension;
+          const x = (stemRect.left + stemRect.right) / 2 - measureRect.left;
+          memberGeometries.push({
+            element,
+            staffIndex: member.staffIndex,
+            stemUp,
+            point: {
+              x,
+              naturalY,
+              isTopStaff: member.staffIndex === group.topStaffIndex,
+            },
+          });
+        }
+        if (memberGeometries.length < 2) {
+          continue;
+        }
+
+        const line = resolveDoubleStemmedBeamLine(
+          memberGeometries.map((g) => g.point),
+          topGapEdgeY,
+          bottomGapEdgeY
+        );
+        const firstX = memberGeometries[0].point.x;
+        const lastX = memberGeometries[memberGeometries.length - 1].point.x;
+        const run = lastX - firstX;
+        // Linear interpolation (extrapolates past [firstX, lastX] too, same
+        // as a same-staff beam's own primaryBeamYAt — a fractional beam's
+        // stub end reaches slightly past its one real note).
+        const beamYAtX = (x: number): number =>
+          run === 0
+            ? line.yAtFirstX
+            : line.yAtFirstX +
+              ((line.yAtLastX - line.yAtFirstX) * (x - firstX)) / run;
+
+        for (const { element, stemUp, point } of memberGeometries) {
+          const beamY = beamYAtX(point.x);
+          // createDoubleStemmedBeamPolygon (below) always draws its
+          // thickness growing downward from beamY, so beamY is the
+          // polygon's TOP edge regardless of which staff this member
+          // belongs to — both directions target the same point,
+          // STEM_OVERLAP_PX past that edge, so the tip sits slightly
+          // inside the polygon body (not at its edge) rather than
+          // outside it. (A top-staff/stem-down tip subtracting the
+          // overlap here would land above the polygon entirely — a real
+          // bug found via visual review, not merely a style choice.)
+          const targetY = beamY + STEM_OVERLAP_PX;
+          const extension = stemUp
+            ? point.naturalY - targetY
+            : targetY - point.naturalY;
+          element.stemExtension = extension;
+        }
+
+        overlay.appendChild(
+          createDoubleStemmedBeamPolygon(
+            firstX,
+            line.yAtFirstX,
+            lastX,
+            line.yAtLastX
+          )
+        );
+
+        // Rest placement within the group — "above"/"below" sit just
+        // above/below the shared beam itself (a rest cutting through it
+        // would obscure the rhythm), "centered" sits at the real gap's
+        // vertical center. A rest and the real note it "hugs" toward (or,
+        // for "centered", either staff's nearest note) are frequently at
+        // the very same X (same beat — see classifyAutoRestStaffSide),
+        // so the flat beam/gap-relative target alone can't guarantee real
+        // clearance from it; #restHuggingTargetY / #restCenteredTargetY
+        // check the real nearest notehead and back off before that ever
+        // happens (vertically) — the horizontal nudge below handles the
+        // same member's own stem, which the vertical check alone can't
+        // see. The resolved target is this rest's own visible glyph
+        // feature's Y, in measure-relative real px — converted into this
+        // rest's own staff-local coordinate space by subtracting that
+        // staff's own real top before handing it to restRules.ts, which
+        // stays DOM-free.
+        const gapCenterYReal = (topGapEdgeY + bottomGapEdgeY) / 2;
+        for (let i = 0; i < group.members.length; i++) {
+          const member = group.members[i];
+          if (!member.isRest) {
+            continue;
+          }
+          const element = perStaffElements[member.staffIndex][
+            member.entryIndex
+          ] as RestElementType;
+          // This staff's own #spaceElements() always (re)computes and
+          // writes this rest's natural style.left unconditionally on
+          // every pass (only style.top is guarded for a cross-staff
+          // rest — see externallyPositionedRestIndices) — so, unlike the
+          // stem-extension bridging above, there is nothing here to
+          // un-shift: restRect.left always reflects this staff's own
+          // fresh natural position, never a previous nudge from below.
+          const restRect = element.getBoundingClientRect();
+          const x = restRect.left + restRect.width / 2 - measureRect.left;
+          const side =
+            element.restStaffSide ??
+            classifyAutoRestStaffSide(group.members, i, group.topStaffIndex);
+
+          let nearestHeadRect: DOMRect | null = null;
+          let nearestGeoX: number | null = null;
+          let nearestDist = Infinity;
+          for (const geo of memberGeometries) {
+            const dist = Math.abs(geo.point.x - x);
+            if (dist >= nearestDist) {
+              continue;
+            }
+            const heads = this.#headRects(geo.element);
+            if (heads.length === 0) {
+              continue;
+            }
+            const top = Math.min(...heads.map((h) => h.top));
+            const bottom = Math.max(...heads.map((h) => h.bottom));
+            nearestDist = dist;
+            nearestGeoX = geo.point.x;
+            nearestHeadRect = new DOMRect(
+              heads[0].x,
+              top - measureRect.top,
+              heads[0].width,
+              bottom - top
+            );
+          }
+
+          const beamY = beamYAtX(x);
+          const targetReal =
+            side === 'centered'
+              ? this.#restCenteredTargetY(
+                  gapCenterYReal,
+                  topGapEdgeY,
+                  bottomGapEdgeY,
+                  beamY,
+                  beamY + BEAM_THICKNESS_PX,
+                  nearestHeadRect
+                )
+              : this.#restHuggingTargetY(side, beamY, nearestHeadRect);
+
+          const staffOffsetY =
+            staves[member.staffIndex].getBoundingClientRect().top -
+            measureRect.top;
+          element.style.position = 'absolute';
+          element.style.top = `${restToYCoordinate(
+            element.duration,
+            undefined,
+            {
+              targetY: targetReal - staffOffsetY,
+            }
+          )}px`;
+
+          // The rest and its nearest real member are frequently at the
+          // very same X (same beat — the note it precedes or hugs
+          // toward), meaning that member's own stem spans the entire
+          // distance between its notehead and the beam right through
+          // where the rest sits, regardless of how much vertical
+          // clearance the rest has from the notehead itself. Nudge left,
+          // clear of the stem, rather than trying to out-space it
+          // vertically in a gap the stem already fully occupies — computed
+          // from the real note's own stable x (nearestGeoX, driven by this
+          // staff's own natural spacing, never by this rest's own position)
+          // so it stays idempotent across repeated redraw cycles, the same
+          // way the un-shift trick keeps the stem-extension bridging above
+          // idempotent without needing one itself here.
+          if (
+            nearestGeoX !== null &&
+            nearestDist < REST_STEM_AVOIDANCE_THRESHOLD_PX
+          ) {
+            // Unlike Y (where sibling staves sit at real, genuinely
+            // different vertical offsets from the measure, requiring
+            // staffOffsetY above), every staff's own local X origin
+            // already coincides with the measure's — staves stack
+            // vertically, never inset horizontally from one another — so
+            // this measure-relative real x converts to this rest's own
+            // local left directly, with no staff offset to subtract.
+            // Positions the rest's own *right* edge (not its center)
+            // REST_STEM_AVOIDANCE_NUDGE_PX clear of the stem's real X, so
+            // the rest's own width doesn't eat back into that clearance.
+            element.style.left = `${
+              nearestGeoX - REST_STEM_AVOIDANCE_NUDGE_PX - restRect.width
+            }px`;
+          }
+        }
+
+        // Secondary/fractional beams (mixed durations within the group) —
+        // computeBeamLevelStructure is the same pure level-by-level run
+        // detection a same-staff beam group uses (rules/beamStructureRules.ts),
+        // fed this group's own non-rest members' flag counts in order; its
+        // local indices line up 1:1 with memberGeometries.
+        const beamCounts = memberGeometries.map(
+          (g) => durationToFlagCountMap.get(g.element.duration) ?? 0
+        );
+        const { secondaryBeams, fractionalBeams } =
+          computeBeamLevelStructure(beamCounts);
+        const segments = [...secondaryBeams, ...fractionalBeams];
+        if (segments.length === 0) {
+          continue;
+        }
+
+        const membersForSide: DoubleStemmedBeamMember[] = memberGeometries.map(
+          (g) => ({
+            staffIndex: g.staffIndex,
+            entryIndex: 0,
+            isRest: false,
+          })
+        );
+        const lastLocalIndex = memberGeometries.length - 1;
+        const segmentSides = segments.map((segment) => {
+          const position: DoubleStemmedBeamSegmentPosition =
+            segment.fromNoteIndex === 0
+              ? 'start'
+              : segment.toNoteIndex === lastLocalIndex
+              ? 'end'
+              : 'middle';
+          return resolveSecondaryBeamVerticalSide(
+            segment,
+            membersForSide,
+            group.topStaffIndex,
+            position
+          );
+        });
+        // "Keep all secondary beams on the same side" — tie-broken toward
+        // the group's own pitch-contour lean (which way the primary beam
+        // itself slopes); a perfectly horizontal beam has no such lean, so
+        // 'bottom' is an arbitrary but deterministic default there.
+        const tieBreakSide: DoubleStemmedBeamSegmentSide =
+          line.yAtLastX < line.yAtFirstX
+            ? 'top'
+            : line.yAtLastX > line.yAtFirstX
+            ? 'bottom'
+            : 'bottom';
+        const groupSide = resolveGroupSecondaryBeamSide(
+          segmentSides,
+          tieBreakSide
+        );
+        const layerDirection = groupSide === 'top' ? -1 : 1;
+
+        // A member on the group's resolved secondary side already reaches
+        // every level on its way to the primary (that side's stems and the
+        // secondary stack both move the same direction — same as a
+        // same-staff beam). A member on the OPPOSITE side does not: the
+        // secondary sits further from its own notehead than the primary
+        // does, not between the two, so its stem must be re-extended past
+        // the primary to reach the deepest level it actually participates
+        // in — mirrors "a note's stem always reaches the outermost beam
+        // level it's part of." A plain member with no secondary/fractional
+        // participation (deepest level 0) is untouched.
+        const deepestLevelByIndex = new Map<number, number>();
+        for (const segment of segments) {
+          for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
+            deepestLevelByIndex.set(
+              i,
+              Math.max(deepestLevelByIndex.get(i) ?? 0, segment.beamLevel)
+            );
+          }
+        }
+        for (let i = 0; i < memberGeometries.length; i++) {
+          const level = deepestLevelByIndex.get(i);
+          if (!level) {
+            continue;
+          }
+          const { element, staffIndex, stemUp, point } = memberGeometries[i];
+          const memberSide: DoubleStemmedBeamSegmentSide =
+            staffIndex === group.topStaffIndex ? 'top' : 'bottom';
+          if (memberSide === groupSide) {
+            continue;
+          }
+          const levelOffset =
+            level * layerDirection * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+          const targetY = beamYAtX(point.x) + levelOffset + STEM_OVERLAP_PX;
+          const extension = stemUp
+            ? point.naturalY - targetY
+            : targetY - point.naturalY;
+          element.stemExtension = extension;
+        }
+
+        for (const segment of segments) {
+          const levelOffset =
+            segment.beamLevel *
+            layerDirection *
+            (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+          let x1 = memberGeometries[segment.fromNoteIndex].point.x;
+          let x2 = memberGeometries[segment.toNoteIndex].point.x;
+          if (segment.fractionalBeamSide === 'left') {
+            x1 -= FRACTIONAL_BEAM_WIDTH_PX;
+          } else if (segment.fractionalBeamSide === 'right') {
+            x2 += FRACTIONAL_BEAM_WIDTH_PX;
+          }
+          overlay.appendChild(
+            createDoubleStemmedBeamPolygon(
+              x1,
+              beamYAtX(x1) + levelOffset,
+              x2,
+              beamYAtX(x2) + levelOffset
+            )
+          );
+        }
+      }
     }
 
     #renderGroupConnectors(isFirstInRow: boolean) {

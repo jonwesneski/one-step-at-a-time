@@ -31,6 +31,9 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
   StressType,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -55,6 +58,9 @@ import {
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseOctaveContinuationMode,
+  parseOctaveDisplayMode,
+  parseOctaveShiftAmount,
   parseStress,
   parseTieValue,
   parseTrillContinuationMode,
@@ -121,6 +127,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this chord (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
    * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`.
    * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
+   * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this chord: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone chord).
+   * @attr {OctaveDisplayMode} octave-mode - Set on the chord that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
+   * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this chord (inclusive).
+   * @attr {boolean} loco - Closes the currently open octave-transposition span at this chord, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
+   * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span.
+   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -170,6 +182,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'trill-finish',
         'trill-finish-octave',
         'trill-finish-slur',
+        'octave-shift',
+        'octave-mode',
+        'octave-stop',
+        'loco',
+        'octave-continuation',
+        'beam-group',
       ];
     }
 
@@ -180,6 +198,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #trillSignExtraLift = 0;
     #noFlags = false;
+    #noStem = false;
     #renderArpeggioSign = true;
     #impliedArpeggio: ArpeggioType | null = null;
     #staffYCoordinates: number[] | null = null;
@@ -277,6 +296,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
     set noFlags(v: boolean) {
       this.#noFlags = v;
+      this.#scheduleRender();
+    }
+
+    get noStem(): boolean {
+      return this.#noStem;
+    }
+    set noStem(v: boolean) {
+      this.#noStem = v;
       this.#scheduleRender();
     }
 
@@ -446,6 +473,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('arpeggio-for');
       } else {
         this.setAttribute('arpeggio-for', value);
+      }
+    }
+
+    // `id` shared by every element across a measure's two adjacent grand-staff
+    // staves that joins one cross-staff double-stemmed beam group. Resolved
+    // by the ancestor <music-measure>.
+    get beamGroup(): string | null {
+      return this.getAttribute('beam-group');
+    }
+    set beamGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('beam-group');
+      } else {
+        this.setAttribute('beam-group', value);
       }
     }
 
@@ -763,6 +804,67 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    // Starts an octave-transposition span at this chord. The ancestor staff
+    // resolves the span over its own element stream — see
+    // NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE in attributeChangedCallback.
+    get octaveShift(): OctaveShiftAmount | null {
+      return parseOctaveShiftAmount(this.getAttribute('octave-shift'));
+    }
+    set octaveShift(value: OctaveShiftAmount | null) {
+      if (value === null) {
+        this.removeAttribute('octave-shift');
+      } else {
+        this.setAttribute('octave-shift', value);
+      }
+    }
+
+    // Display mode for the span this chord starts. Resolved to 'sign' at
+    // span-open time by rules/octaveRules.ts, not here — see
+    // parseOctaveDisplayMode.
+    get octaveMode(): OctaveDisplayMode | null {
+      return parseOctaveDisplayMode(this.getAttribute('octave-mode'));
+    }
+    set octaveMode(value: OctaveDisplayMode | null) {
+      if (value === null) {
+        this.removeAttribute('octave-mode');
+      } else {
+        this.setAttribute('octave-mode', value);
+      }
+    }
+
+    get octaveStop(): boolean {
+      return this.hasAttribute('octave-stop');
+    }
+    set octaveStop(value: boolean) {
+      if (value) {
+        this.setAttribute('octave-stop', '');
+      } else {
+        this.removeAttribute('octave-stop');
+      }
+    }
+
+    get loco(): boolean {
+      return this.hasAttribute('loco');
+    }
+    set loco(value: boolean) {
+      if (value) {
+        this.setAttribute('loco', '');
+      } else {
+        this.removeAttribute('loco');
+      }
+    }
+
+    // Meaningful only on the octave-span-starting element — controls the
+    // system-break restatement, resolved by the ancestor composition.
+    get octaveContinuation(): OctaveContinuationMode {
+      return parseOctaveContinuationMode(
+        this.getAttribute('octave-continuation')
+      );
+    }
+    set octaveContinuation(value: OctaveContinuationMode) {
+      this.setAttribute('octave-continuation', value);
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -923,6 +1025,38 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'octave-shift' ||
+        name === 'octave-mode' ||
+        name === 'octave-stop' ||
+        name === 'loco' ||
+        name === 'octave-continuation'
+      ) {
+        // The ancestor staff resolves octave-transposition spans over its
+        // own element stream and redraws the sign/line/corner in its own
+        // overlay — nothing renders locally in this chord's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (name === 'beam-group') {
+        // The ancestor measure resolves cross-staff double-stemmed beam
+        // groups over both staves' element streams; nothing renders locally
+        // in this chord's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
         name === 'arpeggio-hairpin' ||
@@ -996,6 +1130,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               : null,
           trillSignExtraLift: this.#trillSignExtraLift,
           noFlags: this.#noFlags,
+          noStem: this.#noStem,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
@@ -1100,6 +1235,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemUp,
           noteAccidentals,
           noFlags: false,
+          noStem: this.#noStem,
           stemExtension: 0,
           qualifiedElementName: 'g',
           articulation: this.articulation,
