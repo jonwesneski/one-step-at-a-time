@@ -1,6 +1,12 @@
 import { getClefRenderData } from '../rules/clefRules';
 import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
 import {
+  isOctaveRaise,
+  resolveOctaveContinuationSegments,
+  resolveOctaveSpans,
+  type OctaveMeasureBoundary,
+} from '../rules/octaveRules';
+import {
   resolveTrillContinuationSegments,
   resolveTrillSpans,
   type TrillMeasureBoundary,
@@ -11,9 +17,13 @@ import type {
   NoteElementType,
   StaffElementBaseType,
 } from '../types/elements';
-import type { MeasureNumberDisplay } from '../types/theory';
+import type { MeasureNumberDisplay, VoiceNumber } from '../types/theory';
 import {
   createHairpinSvg,
+  createOctaveContinuationSignSvg,
+  createOctaveCornerSvg,
+  createOctaveExtensionLineSvg,
+  createOctaveLocoLabelSvg,
   createTrillContinuationSignSvg,
   createTrillLineSvg,
   createTrillNotchSvg,
@@ -32,8 +42,10 @@ import {
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_CHORD_NODE,
   MUSIC_MEASURE_NODE,
   MUSIC_NOTE,
+  MUSIC_NOTE_NODE,
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
@@ -47,6 +59,11 @@ import {
   COURTESY_CLEF_MARGIN_RIGHT_PX,
   COURTESY_CLEF_SCALE,
   DYNAMICS_BASELINE_Y,
+  OCTAVE_LOCO_GAP_PX,
+  OCTAVE_SIGN_ABOVE_STAFF_Y,
+  OCTAVE_SIGN_BELOW_STAFF_Y,
+  OCTAVE_SIGN_LINE_GAP_PX,
+  OCTAVE_SIGN_TRAILING_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -54,7 +71,10 @@ import {
   TRILL_SIGN_LINE_GAP_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
-import { flattenSlotElements } from '../utils/slotElements';
+import {
+  flattenSlotElements,
+  flattenStaffSlotElements,
+} from '../utils/slotElements';
 
 // The trill line's own local Y offset from the top of its staff (see
 // staffClassicalBase.ts#redrawTrillLines) — reused here so a cross-measure
@@ -66,6 +86,16 @@ const TRILL_LINE_ROOT_Y_OFFSET =
   STAFF_TOP_LINE_Y -
   NOTE_HEAD_Y_OFFSET_CORRECTION -
   TRILL_ABOVE_STAFF_GAP_PX;
+
+// Bridges the staff-local octave-sign Y constants (staffClassicalBase.ts's
+// own-measure render pass) into this file's root/page coordinate space, the
+// same way TRILL_LINE_ROOT_Y_OFFSET does for the trill line above — so a
+// cross-measure continuation segment lines up exactly with whatever the
+// starting measure's own staff-local render already drew.
+const OCTAVE_SIGN_ABOVE_ROOT_Y_OFFSET =
+  STAFF_Y_PADDING + OCTAVE_SIGN_ABOVE_STAFF_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+const OCTAVE_SIGN_BELOW_ROOT_Y_OFFSET =
+  STAFF_Y_PADDING + OCTAVE_SIGN_BELOW_STAFF_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -195,6 +225,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundRedraw
       );
       this.removeEventListener(
+        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
+      this.removeEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
@@ -303,6 +337,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .octave-continuation-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div class="composition-wrapper">
           <div class="composition-grid">
@@ -311,6 +355,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           <svg class="connectors-overlay"></svg>
           <svg class="courtesy-clef-overlay"></svg>
           <svg class="trill-continuation-overlay"></svg>
+          <svg class="octave-continuation-overlay"></svg>
         </div>
       `;
     }
@@ -327,6 +372,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener('dynamic-attribute-change', this.#boundRedraw);
       this.addEventListener(
         NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
+      this.addEventListener(
+        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
       this.addEventListener(
@@ -350,6 +399,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawConnectors();
         this.#redrawHairpins();
         this.#redrawTrills();
+        this.#redrawOctaveSigns();
         this.#updateDescribeVisibility();
         this.#updateClefContinuity();
         this.#updateTimeSignatureContinuity();
@@ -715,6 +765,167 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             }
             if (segment.stopAtLocalIndex !== null) {
               overlay.appendChild(createTrillNotchSvg(lineEndX, y));
+            }
+          }
+        }
+      }
+    }
+
+    // Extends an octave-transposition span's own-measure line (drawn by the
+    // staff itself, see staffClassicalBase.ts#renderOctaveSigns) across
+    // measure boundaries — the octave-sign equivalent of #redrawTrills()
+    // above, with two deliberate differences: voice-aware flattening
+    // (flattenStaffSlotElements, looping every active voice number
+    // independently — #redrawTrills()'s use of the plain flattenSlotElements
+    // is a documented bug this pass does not repeat) since a staff can carry
+    // 2-3 independent voices each needing their own span-tracking track; and
+    // no tie-chain walk at all — an octave span has no tie chain, its
+    // startIndex/stopIndex are already fully resolved by resolveOctaveSpans.
+    #redrawOctaveSigns() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.octave-continuation-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
+
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const rootRect = wrapper.getBoundingClientRect();
+
+      for (const track of this.#buildStaffTracks()) {
+        if (track.length < 2) {
+          continue;
+        }
+
+        // Flattened once per staff in the track, reused across every voice
+        // number below — flattenStaffSlotElements does its own real work
+        // (warnings, clef markers) regardless of which voice is queried.
+        const staffFlattenResults = track.map(({ staff }) =>
+          flattenStaffSlotElements(Array.from(staff.children))
+        );
+
+        for (const voiceNumber of [1, 2, 3] as VoiceNumber[]) {
+          const globalElements: NoteChordOrRestElementType[] = [];
+          const measureBoundaries: OctaveMeasureBoundary[] = [];
+          for (const flatten of staffFlattenResults) {
+            const flatElements =
+              flatten.voices.get(voiceNumber)?.flatElements ?? [];
+            const startIndex = globalElements.length;
+            globalElements.push(...flatElements);
+            measureBoundaries.push({
+              startIndex,
+              endIndex: globalElements.length,
+            });
+          }
+
+          const hasOctaveShiftElement = globalElements.some(
+            (element) =>
+              (element.nodeName === MUSIC_NOTE_NODE ||
+                element.nodeName === MUSIC_CHORD_NODE) &&
+              (element as NoteElementType | ChordElementType).octaveShift !==
+                null
+          );
+          if (!hasOctaveShiftElement) {
+            continue;
+          }
+
+          const { spans, warnings } = resolveOctaveSpans(globalElements);
+          for (const warning of warnings) {
+            console.warn(warning);
+          }
+
+          for (const span of spans) {
+            const segments = resolveOctaveContinuationSegments(
+              measureBoundaries,
+              span
+            );
+            if (segments.length === 0) {
+              continue;
+            }
+
+            const startElement = globalElements[span.startIndex] as
+              | NoteElementType
+              | ChordElementType;
+            const restatesSign =
+              startElement.octaveContinuation !== 'line-only';
+            const raisesPitch = isOctaveRaise(span.amount);
+
+            for (const segment of segments) {
+              const { staff, rowIndex } = track[segment.measureIndex];
+              const isRowWrap =
+                rowIndex !== track[segment.measureIndex - 1].rowIndex;
+
+              const staffRect = staff.getBoundingClientRect();
+              const y =
+                staffRect.top -
+                rootRect.top +
+                (raisesPitch
+                  ? OCTAVE_SIGN_ABOVE_ROOT_Y_OFFSET
+                  : OCTAVE_SIGN_BELOW_ROOT_Y_OFFSET);
+              const notesAreaLeft = this.#computeNotesAreaLeftForStaff(
+                staff,
+                rootRect
+              );
+
+              let lineStartX = notesAreaLeft;
+              if (isRowWrap && restatesSign) {
+                const { element: sign, width: signWidth } =
+                  createOctaveContinuationSignSvg(
+                    span.amount,
+                    span.mode,
+                    notesAreaLeft,
+                    y,
+                    true
+                  );
+                overlay.appendChild(sign);
+                lineStartX =
+                  notesAreaLeft + signWidth + OCTAVE_SIGN_LINE_GAP_PX;
+              }
+
+              // The corner terminator (when this segment closes the span)
+              // and the line's own end share the same X — matches the
+              // starting measure's own-measure render, where the extension
+              // line and corner both land at stopNoteX + trailing gap.
+              let lineEndX: number;
+              if (segment.stopAtLocalIndex !== null) {
+                const measureStart =
+                  measureBoundaries[segment.measureIndex].startIndex;
+                const stopElement =
+                  globalElements[measureStart + segment.stopAtLocalIndex];
+                lineEndX =
+                  stopElement.getBoundingClientRect().right -
+                  rootRect.left +
+                  OCTAVE_SIGN_TRAILING_GAP_PX;
+              } else {
+                // Runs to this row's own last barline, never beyond — the
+                // staff element's own right edge is that barline position.
+                lineEndX = staffRect.right - rootRect.left;
+              }
+
+              overlay.appendChild(
+                createOctaveExtensionLineSvg(lineStartX, lineEndX, y)
+              );
+
+              if (segment.stopAtLocalIndex !== null) {
+                overlay.appendChild(
+                  createOctaveCornerSvg(lineEndX, y, raisesPitch)
+                );
+                if (span.closedBy === 'loco') {
+                  overlay.appendChild(
+                    createOctaveLocoLabelSvg(
+                      lineEndX + OCTAVE_LOCO_GAP_PX,
+                      y,
+                      false
+                    )
+                  );
+                }
+              }
             }
           }
         }

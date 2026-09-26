@@ -17,7 +17,9 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  BEAM_THICKNESS_PX,
   STAFF_TOP_LINE_Y,
+  STEM_OVERLAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
@@ -95,6 +97,12 @@ export type NoteProps = {
   accidental?: AccidentalType;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
+  // Set by the ancestor <music-measure> — see
+  // INoteElement.articulationAnchorsToStem. When true, articulation marks
+  // anchor to this note's own real stem tip (already known locally from
+  // stemUp/stemExtension/duration — no coordinates need to cross from
+  // measure.ts) instead of the notehead.
+  articulationAnchorsToStem?: boolean;
   arpeggio?: ArpeggioType | null;
   arpeggioHairpin?: HairpinKind | null;
   arpeggioHairpinFrom?: DynamicMarking | null;
@@ -158,6 +166,7 @@ export const createNoteSvg = ({
   accidental,
   articulation,
   stress,
+  articulationAnchorsToStem = false,
   arpeggio,
   arpeggioHairpin = null,
   arpeggioHairpinFrom = null,
@@ -190,23 +199,22 @@ export const createNoteSvg = ({
     !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
 
-  // Stem
-  const stemX = stemUp
-    ? xStart + HEAD_WIDTH - 15
-    : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
+  // Stem — computed unconditionally (not just inside the `!noStem` block
+  // below) so articulationAnchorsToStem can reuse the same tip position the
+  // stem itself is drawn to; an inner-voice double-stemmed member always
+  // has a real stem anyway (noStem is for shared-stem/chord-internal
+  // suppression, unrelated).
+  const { x: stemX, y: stemTipY } = stemTipPosition(
+    stemUp,
+    duration,
+    noFlags,
+    stemExtension
+  );
   if (!noStem && duration !== 'whole' && duration !== 'double-whole') {
-    const stemExtensionInternal = stemExtension / NOTE_SCALE;
     // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
     // Stem-down: left side of head, head end at top (y1), tip at bottom (y2).
-    const stemY1 = stemUp
-      ? NOTE_Y_STEM_START - stemExtensionInternal
-      : HEAD_WIDTH;
-    const stemY2 = stemUp
-      ? yStemEnd
-      : HEAD_WIDTH +
-        BASE_STEM_LENGTH +
-        flagStemExtension +
-        stemExtensionInternal;
+    const stemY1 = stemUp ? stemTipY : HEAD_WIDTH;
+    const stemY2 = stemUp ? yStemEnd : stemTipY;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
@@ -362,6 +370,9 @@ export const createNoteSvg = ({
     stemUp,
     noteHeadCenterX: Number(headXStartStr),
     noteHeadCenterY: Number(headYStartStr),
+    stemAnchor: articulationAnchorsToStem
+      ? stemBeamJunctionPosition(stemUp, duration, noFlags, stemExtension)
+      : null,
   });
   if (articulationMarks) {
     g.appendChild(articulationMarks);
@@ -466,6 +477,61 @@ export function noteHeadCenter(
     cx: stemUp ? xStart - 10 : xStart + STEM_WIDTH,
     cy: stemUp ? yStemEnd : HEAD_WIDTH,
   };
+}
+
+// This note's own real stem-tip position (600-unit space) — the same
+// geometry createNoteSvg's own stem line is drawn to, factored out so a
+// caller (createArticulationMarks, via a passed-through stemAnchor) can
+// anchor there without duplicating the formula. Unlike noteHeadCenter
+// above, this depends on stemExtension, since that's exactly what moves
+// the tip (e.g. to reach a cross-staff double-stemmed beam).
+export function stemTipPosition(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean,
+  stemExtension: number
+): { x: number; y: number } {
+  const xStart = COORD_WIDTH / 2;
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  const flagStemExtension =
+    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const stemExtensionInternal = stemExtension / NOTE_SCALE;
+  return {
+    x: stemUp ? xStart + HEAD_WIDTH - 15 : xStart + STEM_WIDTH - HEAD_WIDTH + 5,
+    y: stemUp
+      ? NOTE_Y_STEM_START - stemExtensionInternal
+      : HEAD_WIDTH +
+        BASE_STEM_LENGTH +
+        flagStemExtension +
+        stemExtensionInternal,
+  };
+}
+
+// This note's own real position where its stem meets the double-stemmed
+// beam's actual visible surface (600-unit space) — used as the anchor for
+// an inner-voice articulation mark instead of the raw stem tip.
+// measure.ts#redrawDoubleStemmedBeams extends a member's stem past the
+// beam's near surface by a fixed STEM_OVERLAP_PX (so the drawn line
+// reliably disappears under the beam's opaque fill), and that overlap is
+// asymmetric: a stem-up member's raw tip sits deep inside the polygon body
+// (it travels through BEAM_THICKNESS_PX - STEM_OVERLAP_PX of hidden beam
+// before reaching its own tip target), while a stem-down member's raw tip
+// is only STEM_OVERLAP_PX past its own near surface. A mark placed at the
+// raw tip would therefore often render underneath the beam's fill — this
+// walks back from the tip, toward the notehead, by exactly that hidden
+// distance, landing right at the beam's real visible edge.
+export function stemBeamJunctionPosition(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean,
+  stemExtension: number
+): { x: number; y: number } {
+  const { x, y } = stemTipPosition(stemUp, duration, noFlags, stemExtension);
+  const hiddenPastSurfacePx = stemUp
+    ? BEAM_THICKNESS_PX - STEM_OVERLAP_PX
+    : STEM_OVERLAP_PX;
+  const towardNoteSign = stemUp ? 1 : -1;
+  return { x, y: y + (towardNoteSign * hiddenPastSurfacePx) / NOTE_SCALE };
 }
 
 // Pixel Y of where a stem-up tip would sit, regardless of the note's actual

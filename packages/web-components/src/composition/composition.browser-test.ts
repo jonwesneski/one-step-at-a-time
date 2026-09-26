@@ -2257,6 +2257,208 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
   });
 });
 
+test.describe('octave sign continuation across measures', () => {
+  // Measure 1: 3 quarter fillers + an octave-shift="8va" quarter (4 beats).
+  // Measure 2: a quarter carrying octave-stop (closing the span there) + a
+  // quarter + a half (4 beats). Unlike trill, an octave span needs no tie
+  // chain to carry across the barline — resolveOctaveSpans just keeps the
+  // span open until an explicit octave-stop (or loco, or a differing
+  // octave-shift) closes it, however many elements later that is.
+  async function buildOctaveSpanAcrossMeasures(
+    page: Page,
+    hostWidth: number,
+    octaveContinuation?: 'bracketed' | 'line-only'
+  ): Promise<void> {
+    await page.evaluate(
+      ({
+        compositionTag,
+        measureTag,
+        staffTag,
+        noteTag,
+        continuation,
+        hostWidthPx,
+      }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = `${hostWidthPx}px`;
+
+        const composition = document.createElement(compositionTag);
+
+        const measure1 = document.createElement(measureTag);
+        const staff1 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['C', '5'],
+          ['D', '5'],
+          ['E', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff1.appendChild(n);
+        }
+        const spanStart = document.createElement(noteTag);
+        spanStart.setAttribute('note', 'F');
+        spanStart.setAttribute('octave', '5');
+        spanStart.setAttribute('duration', 'quarter');
+        spanStart.setAttribute('octave-shift', '8va');
+        if (continuation) {
+          spanStart.setAttribute('octave-continuation', continuation);
+        }
+        staff1.appendChild(spanStart);
+        measure1.appendChild(staff1);
+
+        const measure2 = document.createElement(measureTag);
+        const staff2 = document.createElement(staffTag);
+        const spanStop = document.createElement(noteTag);
+        spanStop.setAttribute('note', 'G');
+        spanStop.setAttribute('octave', '5');
+        spanStop.setAttribute('duration', 'quarter');
+        spanStop.setAttribute('octave-stop', '');
+        staff2.appendChild(spanStop);
+        const filler = document.createElement(noteTag);
+        filler.setAttribute('note', 'A');
+        filler.setAttribute('octave', '5');
+        filler.setAttribute('duration', 'quarter');
+        staff2.appendChild(filler);
+        const lastFiller = document.createElement(noteTag);
+        lastFiller.setAttribute('note', 'B');
+        lastFiller.setAttribute('octave', '5');
+        lastFiller.setAttribute('duration', 'half');
+        staff2.appendChild(lastFiller);
+        measure2.appendChild(staff2);
+
+        composition.appendChild(measure1);
+        composition.appendChild(measure2);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        continuation: octaveContinuation,
+        hostWidthPx: hostWidth,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readOctaveContinuationOverlay(page: Page) {
+    return page.evaluate((compositionTag) => {
+      const composition = document.querySelector(compositionTag);
+      if (composition === null || composition.shadowRoot === null) {
+        throw new Error('composition not ready');
+      }
+      const overlay = composition.shadowRoot.querySelector(
+        '.octave-continuation-overlay'
+      );
+      const wrapper = composition.shadowRoot.querySelector(
+        '.composition-wrapper'
+      );
+      if (overlay === null || wrapper === null) {
+        throw new Error('overlay or wrapper missing');
+      }
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const lines = Array.from(
+        overlay.querySelectorAll('.octave-extension-line')
+      ) as SVGLineElement[];
+      const corners = Array.from(
+        overlay.querySelectorAll('.octave-corner')
+      ) as SVGPathElement[];
+      const signs = Array.from(
+        overlay.querySelectorAll('g.octave-continuation-sign')
+      ) as SVGGElement[];
+      const staves = Array.from(
+        composition.querySelectorAll('music-staff')
+      ) as HTMLElement[];
+      const secondStaffRect = staves[1].getBoundingClientRect();
+      return {
+        lineCount: lines.length,
+        cornerCount: corners.length,
+        signCount: signs.length,
+        parenthesisCountInSign:
+          signs[0]?.querySelectorAll('.octave-continuation-parenthesis')
+            .length ?? 0,
+        signNumeralCountInSign:
+          signs[0]?.querySelectorAll('.octave-sign-numeral').length ?? 0,
+        signRight: signs[0]
+          ? signs[0].getBoundingClientRect().right - wrapperRect.left
+          : null,
+        lineLeft: lines[0]
+          ? lines[0].getBoundingClientRect().left - wrapperRect.left
+          : null,
+        cornerLeft: corners[0]
+          ? corners[0].getBoundingClientRect().left - wrapperRect.left
+          : null,
+        secondStaffLeft: secondStaffRect.left - wrapperRect.left,
+        secondStaffRight: secondStaffRect.right - wrapperRect.left,
+      };
+    }, MUSIC_COMPOSITION);
+  }
+
+  test('the line continues across the barline and the corner terminator lands in the later measure, on the same row', async ({
+    page,
+  }) => {
+    await buildOctaveSpanAcrossMeasures(page, 1200);
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.lineCount).toBe(1);
+    expect(result.cornerCount).toBe(1);
+    expect(result.signCount).toBe(0);
+    // The resumed line starts at or after the second measure's own left
+    // edge (it begins inside that measure's notes area, past the barline).
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThanOrEqual(
+      result.secondStaffLeft - 1
+    );
+    // The corner terminator lands within the second measure's own bounds,
+    // near the octave-stop note rather than at the row's far right edge.
+    expect(result.cornerLeft).not.toBeNull();
+    expect(result.cornerLeft as number).toBeGreaterThanOrEqual(
+      result.secondStaffLeft - 1
+    );
+    expect(result.cornerLeft as number).toBeLessThan(result.secondStaffRight);
+  });
+
+  test('restates a bracketed numeral at the start of a new row (default)', async ({
+    page,
+  }) => {
+    await buildOctaveSpanAcrossMeasures(page, 220);
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.lineCount).toBe(1);
+    expect(result.cornerCount).toBe(1);
+    expect(result.signCount).toBe(1);
+    expect(result.parenthesisCountInSign).toBe(2);
+    expect(result.signNumeralCountInSign).toBe(1);
+    // The line resumes clear of the restated sign's own right edge.
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.signRight).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThan(
+      result.signRight as number
+    );
+  });
+
+  test('`octave-continuation="line-only"` suppresses the restated numeral at a row wrap', async ({
+    page,
+  }) => {
+    await buildOctaveSpanAcrossMeasures(page, 220, 'line-only');
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.lineCount).toBe(1);
+    expect(result.cornerCount).toBe(1);
+    expect(result.signCount).toBe(0);
+    // With no sign to clear, the line starts right at the new row's own
+    // notes area, same as the same-row case.
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThanOrEqual(
+      result.secondStaffLeft - 1
+    );
+  });
+});
+
 test.describe(`${MUSIC_COMPOSITION} cross-staff slurs (grand staff)`, () => {
   // composition.ts's own #redrawConnectors() collects note-like elements
   // across every staff in every measure with no staff filter, so a slur

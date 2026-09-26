@@ -29,7 +29,9 @@ export function buildBeamsRenderer(
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
   arpeggioRunIndices: ReadonlySet<number> = new Set(),
   elementBeatOffsets?: number[],
-  stemDirectionsOverride?: boolean[]
+  stemDirectionsOverride?: boolean[],
+  externallyBeamedIndices?: ReadonlySet<number>,
+  crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -44,7 +46,8 @@ export function buildBeamsRenderer(
     elements,
     timeSig,
     elementDurationFactors,
-    elementBeatOffsets
+    elementBeatOffsets,
+    externallyBeamedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -52,7 +55,7 @@ export function buildBeamsRenderer(
   // math below depends on stem direction, so swapping directions after
   // construction would leave stale geometry — this must happen before
   // noteYPositions is built, not after.
-  const stemDirections =
+  const baseStemDirections =
     stemDirectionsOverride ??
     determineStemDirections(
       elements,
@@ -60,6 +63,24 @@ export function buildBeamsRenderer(
       noteStaffYCoords,
       chordStaffYCoords
     );
+  // crossStaffStemOverrides (the ancestor <music-measure>'s own
+  // double-stemmed-beam resolution) is a sparse overlay applied on top of
+  // whichever base policy above produced — it needs BeamsBuilder's own
+  // beam-group data (via determineStemDirections) to exist first, so it
+  // can't be folded into stemDirectionsOverride itself without duplicating
+  // that construction at the call site. Keyed by the element itself, not a
+  // positional index: the ancestor <music-measure> resolves it from a
+  // staff-flat DOM traversal, but `elements` here is this one voice's own
+  // local array (staffClassicalBase.ts#buildVoiceRenderState) — those two
+  // index spaces only coincide for a single-voice staff, so an index-keyed
+  // map would silently misapply on a multi-voice one. Object identity
+  // sidesteps the mismatch entirely, since both sides reference the same
+  // live DOM elements.
+  const stemDirections = crossStaffStemOverrides
+    ? baseStemDirections.map(
+        (d, i) => crossStaffStemOverrides.get(elements[i]) ?? d
+      )
+    : baseStemDirections;
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {

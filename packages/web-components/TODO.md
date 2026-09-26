@@ -398,10 +398,10 @@ Horizontal lines with a text indicator that shift pitch by octaves.
 
 |          | Marking            | Direction   | Meaning                             |
 | -------- | ------------------ | ----------- | ----------------------------------- |
-| &#x2610; | `8va -------`      | Above staff | Play one octave higher than written |
-| &#x2610; | `8vb -------`      | Below staff | Play one octave lower than written  |
-| &#x2610; | `15ma -------`     | Above staff | Play two octaves higher             |
-| &#x2610; | `15mb -------`     | Below staff | Play two octaves lower              |
+| &#x2611; | `8va -------`      | Above staff | Play one octave higher than written |
+| &#x2611; | `8vb -------`      | Below staff | Play one octave lower than written  |
+| &#x2611; | `15ma -------`     | Above staff | Play two octaves higher             |
+| &#x2611; | `15mb -------`     | Below staff | Play two octaves lower              |
 | &#x2610; | `8` (with bracket) | Above/below | Shorthand for the same              |
 
 ---

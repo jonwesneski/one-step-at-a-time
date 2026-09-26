@@ -47,6 +47,7 @@ import {
   NOTE_STEM_X_OFFSET,
   NOTE_SVG_WIDTH,
   noteHeadCenter,
+  stemBeamJunctionPosition,
   type NoteProps,
 } from './note';
 import { createTrillSignSvg } from './trill';
@@ -85,11 +86,13 @@ export const createChordSvg = ({
   trillAccidental = null,
   trillSignExtraLift = 0,
   noFlags = false,
+  noStem = false,
   stemUp = true,
   stemExtension = 0,
   noteAccidentals,
   articulation,
   stress,
+  articulationAnchorsToStem = false,
   graceNotes,
   graceType = 'acciaccatura',
   graceDuration = null,
@@ -112,6 +115,12 @@ export const createChordSvg = ({
   // above the outermost notehead as a single note's stem would be.
   const chordSpread =
     Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates);
+  // The real extension the extremal note's own stem actually renders with
+  // (chord-spread-adjusted) — reused below for the chord-level articulation
+  // anchor so it matches the real rendered tip, not the raw prop value.
+  const effectiveStemExtension = noFlags
+    ? stemExtension
+    : Math.max(stemExtension, chordSpread);
 
   const displacements = computeAdjacentDisplacements(staffYCoordinates, stemUp);
   const displacementMap = new Map(
@@ -128,13 +137,13 @@ export const createChordSvg = ({
     const [noteSvg, yOffset] = createNoteSvg({
       duration,
       noFlags,
-      noStem: !isExtremal,
+      // A chord-level noStem (the whole chord defers to a cross-staff shared
+      // stem drawn elsewhere) suppresses every notehead's own stem, including
+      // the extremal one — not just the non-extremal noteheads that already
+      // never draw their own stem within a normal chord.
+      noStem: noStem || !isExtremal,
       stemUp,
-      stemExtension: isExtremal
-        ? noFlags
-          ? stemExtension
-          : Math.max(stemExtension, chordSpread)
-        : 0,
+      stemExtension: isExtremal ? effectiveStemExtension : 0,
       qualifiedElementName: 'svg',
     });
     if (isExtremal) {
@@ -395,6 +404,14 @@ export const createChordSvg = ({
     stemUp,
     noteHeadCenterX,
     noteHeadCenterY,
+    stemAnchor: articulationAnchorsToStem
+      ? stemBeamJunctionPosition(
+          stemUp,
+          duration,
+          noFlags,
+          effectiveStemExtension
+        )
+      : null,
   });
   if (articulationMarks) {
     const wrapper = document.createElementNS(SVG_NS, 'svg');
