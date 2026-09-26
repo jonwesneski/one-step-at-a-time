@@ -63,6 +63,20 @@ export interface INoteElement {
   // `id` shared by every element across a measure's two adjacent grand-staff
   // staves that joins one cross-staff double-stemmed beam group.
   beamGroup: string | null;
+  // `id` of the other-staff element this one shares a single stem with —
+  // both hands occasionally playing the same beat simultaneously in
+  // otherwise single-part writing. Resolved by the ancestor
+  // <music-measure>, which suppresses each end's own local stem (noStem)
+  // and draws one real stem line between the two real notehead positions.
+  sharedStemFor: string | null;
+  // Set by the ancestor <music-measure> to true when this element is a
+  // double-stemmed beam-group member on an inner voice (a real second
+  // <music-voice> sharing its staff) — anchors its articulation marks at
+  // its own real stem-tip position instead of the notehead, so they land
+  // right next to the shared beam rather than on the outer voice's own
+  // territory. false on every other element (outer voice, single-voice
+  // staff, or not a beam-group member at all). Not an attribute.
+  articulationAnchorsToStem: boolean;
   tie: TieValue | null;
   slur: ConnectorRole | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
@@ -227,6 +241,10 @@ export interface IChordElement {
   noStem: boolean;
   // See INoteElement.beamGroup.
   beamGroup: string | null;
+  // See INoteElement.sharedStemFor.
+  sharedStemFor: string | null;
+  // See INoteElement.articulationAnchorsToStem.
+  articulationAnchorsToStem: boolean;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;

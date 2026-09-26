@@ -66,6 +66,7 @@ export {
   createOctaveSignSvg,
 } from './octaveSigns';
 export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
+export { createSharedStemLine } from './sharedStem';
 export { createSharpSvg } from './sharp';
 export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';

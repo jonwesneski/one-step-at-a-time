@@ -527,6 +527,42 @@ describe(MUSIC_CHORD, () => {
     });
   });
 
+  describe('shared stem', () => {
+    function makeChord(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'C' satisfies Chord);
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips shared-stem-for as a plain string attribute', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.sharedStemFor).toBeNull();
+      chordElement.sharedStemFor = 'bass-c3';
+      expect(chordElement.getAttribute('shared-stem-for')).toBe('bass-c3');
+      expect(chordElement.sharedStemFor).toBe('bass-c3');
+
+      chordElement.sharedStemFor = null;
+      expect(chordElement.getAttribute('shared-stem-for')).toBeNull();
+    });
+
+    it('dispatches SHARED_STEM_ATTRIBUTE_CHANGE without re-rendering the chord locally', () => {
+      const chordElement = makeChord();
+      const handler = jest.fn();
+      chordElement.addEventListener(
+        NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
+        handler
+      );
+
+      chordElement.sharedStemFor = 'bass-c3';
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('articulations', () => {
     function makeChordWithNotes(): ChordElementType {
       const chordElement = document.createElement(

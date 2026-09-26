@@ -160,6 +160,7 @@ declare module 'react' {
         loco?: boolean;
         'octave-continuation'?: OctaveContinuationMode;
         'beam-group'?: string;
+        'shared-stem-for'?: string;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -205,6 +206,7 @@ declare module 'react' {
         loco?: boolean;
         'octave-continuation'?: OctaveContinuationMode;
         'beam-group'?: string;
+        'shared-stem-for'?: string;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

@@ -509,6 +509,13 @@
             },
             {
               "kind": "field",
+              "name": "sharedStemFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "arpeggioHairpin",
               "type": {
                 "text": "HairpinKind | null"
@@ -1117,6 +1124,13 @@
               "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord)."
             },
             {
+              "name": "shared-stem-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord)."
+            },
+            {
               "type": {
                 "text": "Chord"
               },
@@ -1692,6 +1706,12 @@
             },
             {
               "kind": "field",
+              "name": "#sharedStemSuppressedElements",
+              "privacy": "private",
+              "default": "new Set<NoteOrChordElementType>()"
+            },
+            {
+              "kind": "field",
               "name": "#onStaffMinWidth",
               "privacy": "private"
             },
@@ -1711,6 +1731,11 @@
             {
               "kind": "field",
               "name": "#boundRedrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundRedrawSharedStems",
               "privacy": "private"
             },
             {
@@ -1845,6 +1870,144 @@
             },
             {
               "kind": "method",
+              "name": "#staffContainerRect",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DOMRect"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "StaffElementBaseType"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#restHuggingTargetY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "'above' | 'below'"
+                  }
+                },
+                {
+                  "name": "beamTopYReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "nearestHeadRect",
+                  "type": {
+                    "text": "DOMRect | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#pushYClearOfBand",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bandTop",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bandBottom",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "minY",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "maxY",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#restCenteredTargetY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "gapCenterReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "topGapEdgeReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bottomGapEdgeReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "beamTopYAtXReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "beamBottomYAtXReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "nearestHeadRect",
+                  "type": {
+                    "text": "DOMRect | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#stemRect",
               "privacy": "private",
               "return": {
@@ -1874,6 +2037,11 @@
             {
               "kind": "method",
               "name": "#redrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawSharedStems",
               "privacy": "private"
             },
             {
@@ -2285,6 +2453,13 @@
             {
               "kind": "field",
               "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
               }
@@ -2897,6 +3072,13 @@
                 "text": "string"
               },
               "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
+            },
+            {
+              "name": "shared-stem-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
             },
             {
               "type": {

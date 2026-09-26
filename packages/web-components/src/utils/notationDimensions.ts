@@ -246,6 +246,28 @@ export const REST_STEM_AVOIDANCE_THRESHOLD_PX = STAFF_LINE_SPACING * 2.5;
  */
 export const REST_STEM_AVOIDANCE_NUDGE_PX = STAFF_LINE_SPACING * 1.2;
 
+/**
+ * Stroke width (px) of the real stem line `measure.ts#redrawSharedStems`
+ * draws directly between two real noteheads on adjacent staves that share
+ * one stem (`shared-stem-for`) — matches a normal note's own rendered stem
+ * width (`STEM_WIDTH` in `svgCreator/note.ts`, 22 units in its 600-unit
+ * space at `NOTE_SCALE`), since this line stands in for both ends' now
+ * locally-suppressed stems and shouldn't look thicker or thinner than one.
+ * = 0.12 × STAFF_LINE_SPACING
+ */
+export const SHARED_STEM_WIDTH_PX = STAFF_LINE_SPACING * 0.12;
+
+/**
+ * Real X distance (px) beyond which a `shared-stem-for` pair's two
+ * noteheads count as landing at meaningfully different beats — same-beat
+ * entries on sibling staves land at the same X by construction (the
+ * measure's beat-proportional spacing formula runs identically on every
+ * staff), so a gap this size signals a real authoring mistake (not a
+ * layout fix) worth a console warning rather than a silently-skewed line.
+ * = STAFF_LINE_SPACING
+ */
+export const SHARED_STEM_MISALIGNMENT_WARN_PX = STAFF_LINE_SPACING;
+
 // ─── Describe area (clef, key signature, time signature) ─────────────────────
 
 /**

@@ -489,7 +489,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #showDescribe = true;
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
-  #crossStaffBeamStemOverrides: ReadonlyMap<number, boolean> | null = null;
+  #crossStaffBeamStemOverrides: ReadonlyMap<
+    NoteChordOrRestElementType,
+    boolean
+  > | null = null;
   #clefMarkers: ClefMarkerPlacement[] = [];
   // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
   // #renderNotes() pass — the shared coordinate space #clefMarkers'
@@ -684,25 +687,37 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // Set by the ancestor <music-measure> once it resolves this staff's role
-  // (top/bottom) in a cross-staff double-stemmed beam group — keyed by this
-  // staff's own element index, `true` meaning stem-up. A full #renderNotes()
-  // pass is needed (not a narrower redraw) since it changes beam grouping and
-  // stem geometry, not just a decoration's position — but the map is rebuilt
+  // (top/bottom) in a cross-staff double-stemmed beam group — keyed by the
+  // element itself (not a positional index: this staff's own multi-voice
+  // rendering below reads it once per voice, against that voice's own
+  // local element array, and only element identity survives translation
+  // between the ancestor's staff-flat view and this staff's per-voice one
+  // — see rules/beamRules.ts#buildBeamsRenderer's own comment on the same
+  // point), `true` meaning stem-up. A full #renderNotes() pass is needed
+  // (not a narrower redraw) since it changes beam grouping and stem
+  // geometry, not just a decoration's position — but the map is rebuilt
   // fresh on every measure relayout, so this setter compares content, not
   // reference identity, or an unchanged map would still trigger one and the
   // resulting STAFF_MIN_WIDTH would call back in here forever.
-  get crossStaffBeamStemOverrides(): ReadonlyMap<number, boolean> | null {
+  get crossStaffBeamStemOverrides(): ReadonlyMap<
+    NoteChordOrRestElementType,
+    boolean
+  > | null {
     return this.#crossStaffBeamStemOverrides;
   }
 
-  set crossStaffBeamStemOverrides(value: ReadonlyMap<number, boolean> | null) {
+  set crossStaffBeamStemOverrides(
+    value: ReadonlyMap<NoteChordOrRestElementType, boolean> | null
+  ) {
     const current = this.#crossStaffBeamStemOverrides;
     const unchanged =
       current === value ||
       (current !== null &&
         value !== null &&
         current.size === value.size &&
-        [...current].every(([index, stemUp]) => value.get(index) === stemUp));
+        [...current].every(
+          ([element, stemUp]) => value.get(element) === stemUp
+        ));
     if (unchanged) {
       return;
     }

@@ -16,6 +16,21 @@ const MARK_GAP = 90;
 const MARK_STEP = 150;
 // Marks are roughly one notehead wide.
 const MARK_HALF_WIDTH = 70;
+// Gap from the stem-anchor point to the center of the first (closest) mark,
+// when stem-anchored — a historically-attested alternative to
+// notehead-centered placement (common pre-1920, still used for an inner
+// double-stemmed voice per the reference engraving material this mirrors),
+// so marks nestle at the stem end rather than the fixed, much larger
+// MARK_GAP a notehead anchor uses. The anchor point itself (stemAnchor,
+// computed by note.ts#stemBeamJunctionPosition) already sits right at the
+// beam's real visible surface, not inside its hidden/painted-over body, so
+// this only needs to be a small, clearly-visible margin beyond that.
+const STEM_ANCHOR_GAP = 70;
+// Horizontal offset from the stem's own X for a stem-anchored mark, in the
+// same direction the stem already leans away from the notehead center —
+// otherwise the mark's own radius/half-width straddles the thin stem line
+// itself instead of sitting beside it.
+const STEM_ANCHOR_X_OFFSET = 90;
 
 export type ArticulationMarksProps = {
   articulation?: ArticulationType | null;
@@ -24,6 +39,13 @@ export type ArticulationMarksProps = {
   // Notehead center in the 600-unit note coordinate space.
   noteHeadCenterX: number;
   noteHeadCenterY: number;
+  // This note's own real stem-tip position (600-unit space) — set when it's
+  // an inner voice of a double-stemmed beam group, so marks anchor at the
+  // stem end (next to the shared beam) instead of the notehead, matching
+  // the reference engraving material's own placement for that case (see
+  // measure.ts#redrawDoubleStemmedBeams). null/undefined = the ordinary
+  // notehead-relative default.
+  stemAnchor?: { x: number; y: number } | null;
 };
 
 // Split a combined articulation value into its optional accent prefix and its
@@ -219,6 +241,7 @@ export const createArticulationMarks = ({
   stemUp,
   noteHeadCenterX,
   noteHeadCenterY,
+  stemAnchor = null,
 }: ArticulationMarksProps): SVGGElement | null => {
   if (!articulation && !stress) {
     return null;
@@ -231,12 +254,39 @@ export const createArticulationMarks = ({
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('articulations');
 
-  // +1 places marks below the head (stem-up), -1 above (stem-down).
-  const dir = stemUp ? 1 : -1;
+  // +1 places marks below the head (stem-up), -1 above (stem-down) — the
+  // ordinary default, opposite the stem. stemAnchor flips this: the stem
+  // tip sits on the *stem's own* side, not the opposite one — an
+  // inner-voice group anchors its marks there instead (see
+  // measure.ts#redrawDoubleStemmedBeams), since the ordinary
+  // opposite-of-stem side is occupied by the outer voice's own content. dir
+  // still drives each glyph's own internal shape orientation (e.g. a wedge
+  // apex pointing toward the notehead) either way, since that's about the
+  // mark's position relative to the notehead, not about which direction
+  // marks stack away from their anchor.
+  const dir = stemAnchor !== null ? (stemUp ? -1 : 1) : stemUp ? 1 : -1;
+  // markX follows suit: the stem's own X (already offset from the notehead
+  // center, same as the stem line itself), pushed out further by
+  // STEM_ANCHOR_X_OFFSET in the same direction so the mark sits beside the
+  // stem rather than straddling it.
+  const markX =
+    stemAnchor !== null
+      ? stemAnchor.x + (stemUp ? 1 : -1) * STEM_ANCHOR_X_OFFSET
+      : noteHeadCenterX;
+  const anchorY = stemAnchor?.y ?? noteHeadCenterY;
+  const baseOffset =
+    stemAnchor !== null ? STEM_ANCHOR_GAP : HEAD_HALF_HEIGHT + MARK_GAP;
+  // Marks always stack from their anchor toward the side that's actually
+  // free. For the ordinary notehead anchor that's dir itself (away from the
+  // notehead, into the opposite-of-stem territory). For a stem anchor it's
+  // the opposite of dir: the anchor already sits at the beam's own visible
+  // surface (the far end of the only safe space), so stacking must walk
+  // back toward the notehead, into the corridor beside the stem — which
+  // numerically always works out to stemUp ? 1 : -1 regardless of anchoring.
+  const stackDir = stemUp ? 1 : -1;
   let step = 0;
   const nextY = (): number => {
-    const y =
-      noteHeadCenterY + dir * (HEAD_HALF_HEIGHT + MARK_GAP + step * MARK_STEP);
+    const y = anchorY + stackDir * (baseOffset + step * MARK_STEP);
     step++;
     return y;
   };
@@ -245,37 +295,37 @@ export const createArticulationMarks = ({
   // the two legal within-length combinations and stack the dot/wedge nearest the
   // head with the tenuto line just beyond it. (fermata is handled separately.)
   if (length === 'staccato') {
-    group.appendChild(createStaccatoDot(noteHeadCenterX, nextY()));
+    group.appendChild(createStaccatoDot(markX, nextY()));
   } else if (length === 'staccatissimo') {
-    group.appendChild(createStaccatissimoWedge(noteHeadCenterX, nextY(), dir));
+    group.appendChild(createStaccatissimoWedge(markX, nextY(), dir));
   } else if (length === 'tenuto') {
-    group.appendChild(createTenutoLine(noteHeadCenterX, nextY()));
+    group.appendChild(createTenutoLine(markX, nextY()));
   } else if (length === 'portato') {
-    group.appendChild(createStaccatoDot(noteHeadCenterX, nextY()));
-    group.appendChild(createTenutoLine(noteHeadCenterX, nextY()));
+    group.appendChild(createStaccatoDot(markX, nextY()));
+    group.appendChild(createTenutoLine(markX, nextY()));
   } else if (length === 'tenuto-staccatissimo') {
-    group.appendChild(createStaccatissimoWedge(noteHeadCenterX, nextY(), dir));
-    group.appendChild(createTenutoLine(noteHeadCenterX, nextY()));
+    group.appendChild(createStaccatissimoWedge(markX, nextY(), dir));
+    group.appendChild(createTenutoLine(markX, nextY()));
   }
 
   // Accent — outside the length marks.
   if (accent === 'accent') {
-    group.appendChild(createAccentMark(noteHeadCenterX, nextY()));
+    group.appendChild(createAccentMark(markX, nextY()));
   } else if (accent === 'marcato') {
-    group.appendChild(createMarcatoMark(noteHeadCenterX, nextY(), dir));
+    group.appendChild(createMarcatoMark(markX, nextY(), dir));
   }
 
   // Fermata — opposite the stem like the other marks, outermost (after any
   // accent). Never coexists with a length mark.
   if (length === 'fermata') {
-    group.appendChild(createFermataSvg(noteHeadCenterX, nextY(), dir));
+    group.appendChild(createFermataSvg(markX, nextY(), dir));
   }
 
   // Schoenberg stress — outermost on the opposite-stem side.
   if (stress === 'stressed') {
-    group.appendChild(createStressMark(noteHeadCenterX, nextY()));
+    group.appendChild(createStressMark(markX, nextY()));
   } else if (stress === 'unstressed') {
-    group.appendChild(createUnstressMark(noteHeadCenterX, nextY(), dir));
+    group.appendChild(createUnstressMark(markX, nextY(), dir));
   }
 
   return group;

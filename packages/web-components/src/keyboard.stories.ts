@@ -301,6 +301,81 @@ export const DoubleStemmedBeamWithCenteredRest: Story = {
   `,
 };
 
+export const SharedStem: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+          <music-note note="D" octave="5" duration="quarter"></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="quarter"
+            id="melody-e5"
+          ></music-note>
+          <music-note note="F" octave="5" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-rest duration="half"></music-rest>
+          <music-note
+            note="E"
+            octave="3"
+            duration="quarter"
+            shared-stem-for="melody-e5"
+          ></music-note>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const DoubleStemmedBeamWithInnerVoiceArticulation: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="G"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note note="A" octave="5" duration="eighth"></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-voice>
+            <music-note note="C" octave="4" duration="quarter"></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note
+              note="C"
+              octave="3"
+              duration="eighth"
+              beam-group="g1"
+              articulation="staccato"
+            ></music-note>
+            <music-note note="D" octave="3" duration="eighth"></music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const WhiteKeyGlissando: Story = {
   render: () => html`
     <music-staff clef="treble" key-sig="C" mode="major" time="4/4">

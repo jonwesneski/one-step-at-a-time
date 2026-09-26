@@ -133,6 +133,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {boolean} loco - Closes the currently open octave-transposition span at this chord, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
    * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span.
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
+   * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -188,6 +189,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'loco',
         'octave-continuation',
         'beam-group',
+        'shared-stem-for',
       ];
     }
 
@@ -197,6 +199,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemUp = true;
     #stemExtension = 0;
     #trillSignExtraLift = 0;
+    #articulationAnchorsToStem = false;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -288,6 +291,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#trillSignExtraLift = v;
+      this.#scheduleRender();
+    }
+
+    get articulationAnchorsToStem(): boolean {
+      return this.#articulationAnchorsToStem;
+    }
+    set articulationAnchorsToStem(v: boolean) {
+      if (v === this.#articulationAnchorsToStem) {
+        return;
+      }
+      this.#articulationAnchorsToStem = v;
       this.#scheduleRender();
     }
 
@@ -487,6 +501,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('beam-group');
       } else {
         this.setAttribute('beam-group', value);
+      }
+    }
+
+    // `id` of the other-staff element this chord shares a single stem with.
+    // Resolved by the ancestor <music-measure>.
+    get sharedStemFor(): string | null {
+      return this.getAttribute('shared-stem-for');
+    }
+    set sharedStemFor(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('shared-stem-for');
+      } else {
+        this.setAttribute('shared-stem-for', value);
       }
     }
 
@@ -1056,6 +1083,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'shared-stem-for') {
+        // The ancestor measure resolves shared-stem pairs across both
+        // staves, suppresses each end's own local stem (noStem — that
+        // property's own setter re-renders this chord), and draws the real
+        // connecting stem itself; nothing else to do locally here.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
       if (
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
@@ -1137,6 +1178,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteAccidentals: this.#noteAccidentals,
           articulation: this.articulation,
           stress: this.stress,
+          articulationAnchorsToStem: this.#articulationAnchorsToStem,
           graceNotes: this.#buildGraceDescriptors(this.notes),
           graceType: this.graceType,
           graceDuration: this.graceDuration,

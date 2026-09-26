@@ -1595,6 +1595,35 @@ describe('beam group', () => {
   });
 });
 
+describe('shared stem', () => {
+  it('round-trips shared-stem-for as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.sharedStemFor).toBeNull();
+    noteElement.sharedStemFor = 'bass-c3';
+    expect(noteElement.getAttribute('shared-stem-for')).toBe('bass-c3');
+    expect(noteElement.sharedStemFor).toBe('bass-c3');
+
+    noteElement.sharedStemFor = null;
+    expect(noteElement.getAttribute('shared-stem-for')).toBeNull();
+  });
+
+  it('dispatches SHARED_STEM_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.sharedStemFor = 'bass-c3';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();

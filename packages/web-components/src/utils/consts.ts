@@ -81,6 +81,7 @@ export const NOTE_EVENTS = {
   OCTAVE_ATTRIBUTE_CHANGE: 'octave-attribute-change',
   BEAM_GROUP_ATTRIBUTE_CHANGE: 'beam-group-attribute-change',
   REST_STAFF_SIDE_ATTRIBUTE_CHANGE: 'rest-staff-side-attribute-change',
+  SHARED_STEM_ATTRIBUTE_CHANGE: 'shared-stem-attribute-change',
   CLICK: 'note-click',
   POINTERDOWN: 'note-pointerdown',
   POINTERUP: 'note-pointerup',

@@ -8,6 +8,7 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_STAFF,
+  MUSIC_VOICE,
 } from '../utils/consts';
 import { REST_BEAM_CLEARANCE_PX } from '../utils/notationDimensions';
 import { getFirstBallYPx, hookCountMap } from '../utils/svgCreator/rest';
@@ -1713,6 +1714,213 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — stem direc
   });
 });
 
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — multi-voice / inner-voice articulations`, () => {
+  async function buildInnerVoiceGroup(page: Page) {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag, voiceTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'G');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'eighth');
+        trebleNote.setAttribute('beam-group', 'g1');
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const voice1 = document.createElement(voiceTag);
+        const voice1Note = document.createElement(noteTag);
+        voice1Note.setAttribute('note', 'C');
+        voice1Note.setAttribute('octave', '4');
+        voice1Note.setAttribute('duration', 'quarter');
+        voice1.appendChild(voice1Note);
+        bass.appendChild(voice1);
+        const voice2 = document.createElement(voiceTag);
+        const innerNote = document.createElement(noteTag);
+        innerNote.setAttribute('note', 'C');
+        innerNote.setAttribute('octave', '3');
+        innerNote.setAttribute('duration', 'eighth');
+        innerNote.setAttribute('beam-group', 'g1');
+        innerNote.setAttribute('articulation', 'staccato');
+        innerNote.id = 'inner-note';
+        voice2.appendChild(innerNote);
+        bass.appendChild(voice2);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      {
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        voiceTag: MUSIC_VOICE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test("a beam-group member on voice 2 of a multi-voice staff gets the correct forced stem direction, not its own voice's default", async ({
+    page,
+  }) => {
+    await buildInnerVoiceGroup(page);
+
+    // Bass plays the bottom-staff role in this group, which forces
+    // stem-up — the opposite of voice 2's own always-down policy. Deriving
+    // direction from real geometry (stem above vs. below the head), not
+    // reading the internal stemUp property, so this genuinely checks what
+    // rendered rather than what the (possibly still-buggy) resolution
+    // merely recorded.
+    const result = await page.evaluate(() => {
+      const note = document.getElementById('inner-note');
+      const head = note?.shadowRoot?.querySelector('.head');
+      const stem = note?.shadowRoot?.querySelector('.stem');
+      if (!head || !stem) {
+        return null;
+      }
+      const headRect = head.getBoundingClientRect();
+      const stemRect = stem.getBoundingClientRect();
+      return { stemUp: stemRect.top < headRect.top };
+    });
+
+    if (result === null) {
+      throw new Error('geometry not ready');
+    }
+    expect(result.stemUp).toBe(true);
+  });
+
+  test("the same member's articulation mark lands right next to the real beam, on the beam's own side of the notehead", async ({
+    page,
+  }) => {
+    await buildInnerVoiceGroup(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const beam = measure?.shadowRoot
+        ?.querySelector('.double-stemmed-beam')
+        ?.getBoundingClientRect();
+      const note = document.getElementById('inner-note');
+      const head = note?.shadowRoot?.querySelector('.head');
+      const stem = note?.shadowRoot?.querySelector('.stem');
+      const dot = note?.shadowRoot?.querySelector('.staccato');
+      if (!beam || !head || !stem || !dot) {
+        return null;
+      }
+      const headRect = head.getBoundingClientRect();
+      const stemRect = stem.getBoundingClientRect();
+      const dotRect = dot.getBoundingClientRect();
+      return {
+        beamTop: beam.top,
+        beamBottom: beam.bottom,
+        headTop: headRect.top,
+        headCenterX: headRect.left + headRect.width / 2,
+        stemCenterX: stemRect.left + stemRect.width / 2,
+        dotCenterX: dotRect.left + dotRect.width / 2,
+        dotCenterY: dotRect.top + dotRect.height / 2,
+      };
+    });
+    if (result === null) {
+      throw new Error('geometry not ready');
+    }
+
+    // On the beam's own side of the notehead (between the two, not past
+    // the notehead on the ordinary opposite side).
+    expect(result.dotCenterY).toBeLessThan(result.headTop);
+    expect(result.dotCenterY).toBeGreaterThan(result.beamTop);
+    // Close to the beam's own near edge — well within the notehead-to-beam
+    // span, not still sitting up near the notehead.
+    const distanceToBeam = Math.min(
+      Math.abs(result.dotCenterY - result.beamTop),
+      Math.abs(result.dotCenterY - result.beamBottom)
+    );
+    const distanceToHead = result.headTop - result.dotCenterY;
+    expect(distanceToBeam).toBeLessThan(distanceToHead);
+    // Horizontally, it sits at the stem's own X (next to the stem end),
+    // not centered on the notehead — the two differ by construction (a
+    // stem attaches to one side of its notehead, never the center).
+    expect(Math.abs(result.dotCenterX - result.stemCenterX)).toBeLessThan(
+      Math.abs(result.dotCenterX - result.headCenterX)
+    );
+  });
+
+  test('the same articulation, on a single-voice staff (no inner/outer voice at all), keeps the ordinary opposite-of-stem default', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'G');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'eighth');
+        trebleNote.setAttribute('beam-group', 'g1');
+        treble.appendChild(trebleNote);
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const outerNote = document.createElement(noteTag);
+        outerNote.setAttribute('note', 'C');
+        outerNote.setAttribute('octave', '3');
+        outerNote.setAttribute('duration', 'eighth');
+        outerNote.setAttribute('beam-group', 'g1');
+        outerNote.setAttribute('articulation', 'staccato');
+        outerNote.id = 'outer-note';
+        bass.appendChild(outerNote);
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const note = document.getElementById('outer-note');
+      const head = note?.shadowRoot?.querySelector('.head');
+      const dot = note?.shadowRoot?.querySelector('.staccato');
+      if (!head || !dot) {
+        return null;
+      }
+      const headRect = head.getBoundingClientRect();
+      const dotRect = dot.getBoundingClientRect();
+      return {
+        headBottom: headRect.bottom,
+        dotCenterY: dotRect.top + dotRect.height / 2,
+        articulationAnchorsToStem: (
+          note as unknown as { articulationAnchorsToStem: boolean }
+        ).articulationAnchorsToStem,
+      };
+    });
+    if (result === null) {
+      throw new Error('geometry not ready');
+    }
+
+    // Stem-up here too (bottom-staff role), so opposite-of-stem is still
+    // below the head — but at the fixed default distance, since there's no
+    // other voice on this staff for it to be "inner" relative to.
+    expect(result.articulationAnchorsToStem).toBe(false);
+    expect(result.dotCenterY).toBeGreaterThan(result.headBottom);
+  });
+});
+
 test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — coordinate bridging`, () => {
   test('a wide pitch gap between the two staves still converges to a shared, real beam-tip Y', async ({
     page,
@@ -2538,6 +2746,183 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — rests`, ()
     await waitForRedrawCycle(page);
 
     expect(warnings.some((w) => w.includes('rest-staff-side'))).toBe(true);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} shared stem (shared-stem-for)`, () => {
+  async function buildSharedStemPair(page: Page) {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'quarter');
+        trebleNote.id = 'treble-note';
+        treble.appendChild(trebleNote);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'quarter');
+        bassNote.id = 'bass-note';
+        bassNote.setAttribute('shared-stem-for', 'treble-note');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test('both ends suppress their own local stem, and one real stem line spans between their real noteheads', async ({
+    page,
+  }) => {
+    await buildSharedStemPair(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const sharedStem = measure?.shadowRoot
+        ?.querySelector('.shared-stem')
+        ?.getBoundingClientRect();
+      const trebleNote = document.getElementById('treble-note');
+      const bassNote = document.getElementById('bass-note');
+      const trebleStem = trebleNote?.shadowRoot?.querySelector('.stem');
+      const bassStem = bassNote?.shadowRoot?.querySelector('.stem');
+      const trebleHead = trebleNote?.shadowRoot
+        ?.querySelector('.head')
+        ?.getBoundingClientRect();
+      const bassHead = bassNote?.shadowRoot
+        ?.querySelector('.head')
+        ?.getBoundingClientRect();
+      return {
+        sharedStemTop: sharedStem?.top,
+        sharedStemBottom: sharedStem?.bottom,
+        trebleStemExists: trebleStem !== null && trebleStem !== undefined,
+        bassStemExists: bassStem !== null && bassStem !== undefined,
+        trebleHeadBottom: trebleHead?.bottom,
+        bassHeadTop: bassHead?.top,
+      };
+    });
+
+    // Each note's own local stem is suppressed — the measure draws the one
+    // real connecting line instead.
+    expect(result.trebleStemExists).toBe(false);
+    expect(result.bassStemExists).toBe(false);
+
+    if (
+      result.sharedStemTop === undefined ||
+      result.sharedStemBottom === undefined ||
+      result.trebleHeadBottom === undefined ||
+      result.bassHeadTop === undefined
+    ) {
+      throw new Error('geometry not ready');
+    }
+    // The real drawn line reaches from the treble notehead down to the bass
+    // notehead — not just some short stub near one end.
+    expect(result.sharedStemTop).toBeLessThanOrEqual(
+      result.trebleHeadBottom + 1
+    );
+    expect(result.sharedStemBottom).toBeGreaterThanOrEqual(
+      result.bassHeadTop - 1
+    );
+  });
+
+  test("removing shared-stem-for restores each note's own local stem", async ({
+    page,
+  }) => {
+    await buildSharedStemPair(page);
+
+    const readState = () =>
+      page.evaluate(() => {
+        const measure = document.querySelector('music-measure');
+        const sharedStem = measure?.shadowRoot?.querySelector('.shared-stem');
+        const trebleNote = document.getElementById('treble-note');
+        const bassNote = document.getElementById('bass-note');
+        return {
+          sharedStemExists: sharedStem !== null && sharedStem !== undefined,
+          trebleStemExists:
+            trebleNote?.shadowRoot?.querySelector('.stem') !== null,
+          bassStemExists: bassNote?.shadowRoot?.querySelector('.stem') !== null,
+        };
+      });
+
+    // Confirm the suppressed, paired state actually happened first — this
+    // is what makes the removal below a real restoration, not a no-op.
+    const before = await readState();
+    expect(before.sharedStemExists).toBe(true);
+    expect(before.trebleStemExists).toBe(false);
+    expect(before.bassStemExists).toBe(false);
+
+    await page.evaluate(() => {
+      document.getElementById('bass-note')?.removeAttribute('shared-stem-for');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const after = await readState();
+    expect(after.sharedStemExists).toBe(false);
+    expect(after.trebleStemExists).toBe(true);
+    expect(after.bassStemExists).toBe(true);
+  });
+
+  test('shared-stem-for matching no element warns and each note keeps its own local stem', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning') {
+        warnings.push(msg.text());
+      }
+    });
+
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        const trebleNote = document.createElement(noteTag);
+        trebleNote.setAttribute('note', 'C');
+        trebleNote.setAttribute('octave', '5');
+        trebleNote.setAttribute('duration', 'quarter');
+        treble.appendChild(trebleNote);
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'quarter');
+        bassNote.setAttribute('shared-stem-for', 'missing-id');
+        bass.appendChild(bassNote);
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    expect(warnings.some((w) => w.includes('shared-stem-for'))).toBe(true);
   });
 });
 

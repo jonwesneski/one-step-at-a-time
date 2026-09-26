@@ -16,6 +16,10 @@ import {
   resolveSecondaryBeamVerticalSide,
 } from '../rules/doubleStemmedBeamRules';
 import { restToYCoordinate } from '../rules/restRules';
+import {
+  resolveSharedStemPairs,
+  type SharedStemEntry,
+} from '../rules/sharedStemRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
 import { durationToFlagCountMap } from '../rules/theoryConsts';
@@ -34,6 +38,7 @@ import {
   createBracketSvg,
   createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
+  createSharedStemLine,
   isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
@@ -41,6 +46,8 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_REST_NODE,
+  MUSIC_VOICE,
+  MUSIC_VOICE_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -72,6 +79,7 @@ import {
   REST_BEAM_CLEARANCE_PX,
   REST_STEM_AVOIDANCE_NUDGE_PX,
   REST_STEM_AVOIDANCE_THRESHOLD_PX,
+  SHARED_STEM_MISALIGNMENT_WARN_PX,
   STAFF_BOTTOM_MARGIN,
   STAFF_LABEL_FONT_SIZE,
   STAFF_LABEL_LEFT_MARGIN_PX,
@@ -144,6 +152,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       EventTarget,
       { minWidth: number; naturalWidth: number }
     >();
+    // Elements #redrawSharedStems currently holds noStem=true on. Tracked
+    // (rather than inferred fresh each pass) so a pairing that stops
+    // resolving — shared-stem-for removed, or the pair broken — reliably
+    // restores that element's own local stem instead of leaving it
+    // suppressed forever with nothing left to un-suppress it.
+    #sharedStemSuppressedElements = new Set<NoteOrChordElementType>();
     #onStaffMinWidth = (event: Event): void => {
       const customEvent = event as CustomEvent<{
         minWidth: number;
@@ -171,6 +185,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawConnectors();
       this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawSharedStems();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
@@ -180,6 +195,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // full #renderNotes() (real geometry follows from there), same shape as
     // #boundRedrawSharedDynamics below.
     #boundRedrawDoubleStemmedBeams = () => this.#redrawDoubleStemmedBeams();
+    // Same shape as #boundRedrawDoubleStemmedBeams above, for
+    // shared-stem-for pairs.
+    #boundRedrawSharedStems = () => this.#redrawSharedStems();
     // A plain tie/slur attribute change (no geometry change) only ever
     // dispatches CONNECTOR_ATTRIBUTE_CHANGE, never STAFF_MIN_WIDTH — mirrors
     // composition.ts's own listener for the same event/reason.
@@ -264,6 +282,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundRedrawDoubleStemmedBeams
       );
       this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawSharedStems
+      );
+      this.addEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
@@ -290,6 +312,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.addEventListener(
+        NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
+        this.#boundRedrawSharedStems
       );
     }
 
@@ -304,6 +330,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundRedrawDoubleStemmedBeams
       );
       this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawSharedStems
+      );
+      this.removeEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
@@ -330,6 +360,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
+        this.#boundRedrawSharedStems
       );
       this.#staffWidths.clear();
     }
@@ -476,6 +510,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .shared-stems-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div>
           <div class="staff-connector"></div>
@@ -497,6 +539,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                group, spanning both staves' gap — see
                #redrawDoubleStemmedBeams -->
           <svg class="double-stemmed-beams-overlay"></svg>
+          <!-- the real connecting stem for a shared-stem-for pair — see
+               #redrawSharedStems -->
+          <svg class="shared-stems-overlay"></svg>
           <!-- This measure's own number, shown per the ancestor
                music-composition element's measure-numbers policy — see
                #renderMeasureNumber. Absolutely positioned (like every other
@@ -783,6 +828,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
     }
 
+    // True when element is a real, non-outermost voice sharing its own
+    // staff with another concurrently-sounding voice — "when a
+    // double-stemmed group is an inner part" per the reference engraving
+    // material's own articulation-placement rule (see
+    // #redrawDoubleStemmedBeams' articulationAnchorsToStem write-back). A
+    // staff with zero or one <music-voice> children is never "inner" (the
+    // ordinary single-voice case); voice 1 (the first <music-voice> sibling)
+    // is the canonical outer voice and is never "inner" either, mirroring
+    // how the rest of this codebase already treats voice 1 as the staff's
+    // own primary timeline (see Voices in packages/web-components/CLAUDE.md).
+    #isInnerVoiceMember(
+      element: NoteOrChordElementType,
+      staff: StaffElementBaseType
+    ): boolean {
+      const voiceParent = element.closest(MUSIC_VOICE);
+      if (!voiceParent) {
+        return false;
+      }
+      const voiceSiblings = Array.from(staff.children).filter(
+        (el) => el.nodeName === MUSIC_VOICE_NODE
+      );
+      return voiceSiblings.length > 1 && voiceSiblings[0] !== voiceParent;
+    }
+
     // Resolves a beam-hugging rest's real target Y (measure-relative,
     // the glyph's own visible feature — not the box-top; see
     // restRules.ts#restGlyphOffsetFromBoxTop) for #redrawDoubleStemmedBeams.
@@ -1062,16 +1131,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // re-render (inside the crossStaffBeamStemOverrides setter) is
       // synchronous, so pass 2 below can safely measure real,
       // post-direction-change geometry immediately after this loop.
-      const overridesByStaffIndex = new Map<number, Map<number, boolean>>();
+      // Keyed by the element itself, not member.entryIndex — entryIndex is
+      // this flat, staff-wide traversal's own position, but a multi-voice
+      // staff's own render pass looks the override up per-voice, against
+      // that voice's own local element array (see
+      // rules/beamRules.ts#buildBeamsRenderer's comment on the same
+      // mismatch) — the two index spaces only coincide for a single-voice
+      // staff, so only the element reference itself is a safe, universal key.
+      const overridesByStaffIndex = new Map<
+        number,
+        Map<NoteChordOrRestElementType, boolean>
+      >();
       for (const group of groups) {
         for (const member of group.members) {
           if (member.isRest) {
             continue;
           }
+          const element =
+            perStaffElements[member.staffIndex][member.entryIndex];
           const stemUp = member.staffIndex === group.bottomStaffIndex;
           const staffOverrides =
             overridesByStaffIndex.get(member.staffIndex) ?? new Map();
-          staffOverrides.set(member.entryIndex, stemUp);
+          staffOverrides.set(element, stemUp);
           overridesByStaffIndex.set(member.staffIndex, staffOverrides);
         }
       }
@@ -1174,7 +1255,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             : line.yAtFirstX +
               ((line.yAtLastX - line.yAtFirstX) * (x - firstX)) / run;
 
-        for (const { element, stemUp, point } of memberGeometries) {
+        for (const { element, staffIndex, stemUp, point } of memberGeometries) {
           const beamY = beamYAtX(point.x);
           // createDoubleStemmedBeamPolygon (below) always draws its
           // thickness growing downward from beamY, so beamY is the
@@ -1190,6 +1271,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             ? point.naturalY - targetY
             : targetY - point.naturalY;
           element.stemExtension = extension;
+
+          // Inner-voice articulation anchor — svgCreator/articulations.ts
+          // already knows this element's own real stem-tip position
+          // locally (from stemUp/stemExtension/duration, just written
+          // above), so this is purely a policy bit: true tells it to
+          // anchor marks there (next to the shared beam, on the stem's
+          // own side) instead of the ordinary notehead-relative default,
+          // which is what every outer-voice/single-voice member keeps.
+          element.articulationAnchorsToStem = this.#isInnerVoiceMember(
+            element,
+            staves[staffIndex]
+          );
         }
 
         overlay.appendChild(
@@ -1434,6 +1527,136 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             )
           );
         }
+      }
+    }
+
+    // shared-stem-for: both hands occasionally playing the same beat
+    // simultaneously in otherwise single-part writing, joined with one
+    // real stem instead of each drawing its own — a separate, simpler
+    // mechanism from #redrawDoubleStemmedBeams above (a 1:1 id reference
+    // like arpeggio-for, not an N:M shared beam-group key; no beam polygon,
+    // just one line directly between two real noteheads).
+    #redrawSharedStems() {
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+
+      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
+      const perStaffElements: NoteOrChordElementType[][] = staves.map(
+        (staff) =>
+          Array.from(
+            staff.querySelectorAll(elementSelector)
+          ) as NoteOrChordElementType[]
+      );
+
+      const entries: SharedStemEntry[] = [];
+      perStaffElements.forEach((elements, staffIndex) => {
+        elements.forEach((element, entryIndex) => {
+          entries.push({
+            staffIndex,
+            entryIndex,
+            id: element.id || null,
+            sharedStemFor: element.sharedStemFor,
+          });
+        });
+      });
+
+      const { pairs, warnings } = resolveSharedStemPairs(entries);
+      for (const warning of warnings) {
+        console.warn(`[music-measure] ${warning}`);
+      }
+
+      const resolvedPairs = pairs.map((pair) => {
+        const [topRef, bottomRef] =
+          pair.a.staffIndex < pair.b.staffIndex
+            ? [pair.a, pair.b]
+            : [pair.b, pair.a];
+        return {
+          topElement: perStaffElements[topRef.staffIndex][topRef.entryIndex],
+          bottomElement:
+            perStaffElements[bottomRef.staffIndex][bottomRef.entryIndex],
+        };
+      });
+
+      // A pair that resolved on a previous pass but no longer does (the
+      // attribute changed, or the pair broke) must have its own local
+      // stem restored — nothing else would ever flip noStem back off,
+      // since the staff itself never manages this property (unlike
+      // stemExtension/rest positioning, which the staff's own render pass
+      // guards against via externallyBeamedIndices).
+      const nextSuppressed = new Set<NoteOrChordElementType>();
+      for (const { topElement, bottomElement } of resolvedPairs) {
+        nextSuppressed.add(topElement);
+        nextSuppressed.add(bottomElement);
+      }
+      for (const element of this.#sharedStemSuppressedElements) {
+        if (!nextSuppressed.has(element) && element.noStem) {
+          element.noStem = false;
+        }
+      }
+      this.#sharedStemSuppressedElements = nextSuppressed;
+
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.shared-stems-overlay'
+      );
+      if (overlay) {
+        while (overlay.firstChild) {
+          overlay.removeChild(overlay.firstChild);
+        }
+      }
+      if (resolvedPairs.length === 0 || !overlay) {
+        return;
+      }
+
+      const measureRect = this.getBoundingClientRect();
+      for (const { topElement, bottomElement } of resolvedPairs) {
+        const topHeads = this.#headRects(topElement);
+        const bottomHeads = this.#headRects(bottomElement);
+        if (topHeads.length === 0 || bottomHeads.length === 0) {
+          continue;
+        }
+        // The extremal notehead on the side facing the other staff — the
+        // same anchor a note's own natural (pre-suppression) stem would
+        // use.
+        const topAnchor = topHeads.reduce((closest, h) =>
+          h.bottom > closest.bottom ? h : closest
+        );
+        const bottomAnchor = bottomHeads.reduce((closest, h) =>
+          h.top < closest.top ? h : closest
+        );
+
+        const topX = topAnchor.left + topAnchor.width / 2 - measureRect.left;
+        const bottomX =
+          bottomAnchor.left + bottomAnchor.width / 2 - measureRect.left;
+        if (Math.abs(topX - bottomX) > SHARED_STEM_MISALIGNMENT_WARN_PX) {
+          console.warn(
+            "[music-measure] a shared-stem-for pair's two notes do not land at the same real beat; drawing the connecting stem at their midpoint anyway"
+          );
+        }
+        const x = (topX + bottomX) / 2;
+        const topY = topAnchor.bottom - measureRect.top;
+        const bottomY = bottomAnchor.top - measureRect.top;
+
+        if (
+          (durationToFlagCountMap.get(topElement.duration) ?? 0) > 0 ||
+          (durationToFlagCountMap.get(bottomElement.duration) ?? 0) > 0
+        ) {
+          console.warn(
+            '[music-measure] shared-stem-for on a flagged duration is not yet supported — the flag will not render'
+          );
+        }
+
+        // noStem's own setter isn't dirty-checked (unlike stemExtension's),
+        // so guard the write here — this redraw fires on every resize, and
+        // an unconditional set would re-trigger that note's own render on
+        // every pass for no reason.
+        if (!topElement.noStem) {
+          topElement.noStem = true;
+        }
+        if (!bottomElement.noStem) {
+          bottomElement.noStem = true;
+        }
+        overlay.appendChild(createSharedStemLine(x, topY, bottomY));
       }
     }
 
