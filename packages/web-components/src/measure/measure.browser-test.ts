@@ -8,6 +8,7 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_STAFF,
+  MUSIC_TUPLET,
   MUSIC_VOICE,
 } from '../utils/consts';
 import { REST_BEAM_CLEARANCE_PX } from '../utils/notationDimensions';
@@ -2393,6 +2394,191 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — secondary 
       expect(tip).toBeGreaterThanOrEqual(result.secondaryTop);
       expect(tip).toBeLessThanOrEqual(result.secondaryBottom);
     }
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — cross-staff-beamed tuplets`, () => {
+  async function buildCrossStaffTupletGroup(page: Page) {
+    await page.evaluate(
+      ({ measureTag, staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const measure = document.createElement(measureTag);
+
+        // Treble (top staff, forced stem-down) carries a triplet, all three
+        // notes cross-staff beamed — the tuplet group itself is staff-local
+        // (a <music-tuplet> can't span staves), but its numeral placement
+        // must still clear the real, both-staves beam, not a same-staff
+        // derivation that has no idea the real beam sits much farther away
+        // (across the whole inter-staff gap, not just past this note's own
+        // ordinary stem tip).
+        const treble = document.createElement(staffTag);
+        treble.setAttribute('clef', 'treble');
+        treble.id = 'treble';
+        const tuplet = document.createElement(tupletTag);
+        tuplet.setAttribute('ratio', '3');
+        for (const note of ['G', 'A', 'B']) {
+          const trebleNote = document.createElement(noteTag);
+          trebleNote.setAttribute('note', note);
+          trebleNote.setAttribute('octave', '5');
+          trebleNote.setAttribute('duration', 'eighth');
+          trebleNote.setAttribute('beam-group', 'g1');
+          tuplet.appendChild(trebleNote);
+        }
+        treble.appendChild(tuplet);
+
+        const bass = document.createElement(staffTag);
+        bass.setAttribute('clef', 'bass');
+        bass.id = 'bass';
+        const bassNote = document.createElement(noteTag);
+        bassNote.setAttribute('note', 'C');
+        bassNote.setAttribute('octave', '3');
+        bassNote.setAttribute('duration', 'eighth');
+        bassNote.setAttribute('beam-group', 'g1');
+        bass.appendChild(bassNote);
+
+        measure.appendChild(treble);
+        measure.appendChild(bass);
+        host.appendChild(measure);
+      },
+      {
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test("a tuplet whose notes are also a beam-group's top-staff members positions its numeral against the real shared beam, not a plain staff-coord guess", async ({
+    page,
+  }) => {
+    await buildCrossStaffTupletGroup(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const beam = measure?.shadowRoot
+        ?.querySelector('.double-stemmed-beam')
+        ?.getBoundingClientRect();
+      const treble = document.getElementById('treble');
+      const numeral = treble?.shadowRoot?.querySelector('.tuplet-numeral');
+      if (!beam || !numeral) {
+        return null;
+      }
+      const numeralRect = numeral.getBoundingClientRect();
+      return {
+        beamBottom: beam.bottom,
+        numeralCenterY: numeralRect.top + numeralRect.height / 2,
+      };
+    });
+    if (result === null) {
+      throw new Error('geometry not ready');
+    }
+
+    // Treble is the top staff (forced stem-down), so its numeral sits below
+    // the beam's own far edge, close to it — a plain staff-coord guess
+    // (what the pre-fix code fell back to, since this staff's own
+    // beamRenderer never covers a cross-staff-beamed index) would instead
+    // land close to the treble notes themselves, far short of the real
+    // beam, which sits most of the way across the inter-staff gap.
+    expect(result.numeralCenterY).toBeGreaterThan(result.beamBottom);
+    expect(result.numeralCenterY - result.beamBottom).toBeLessThan(30);
+  });
+
+  test('repeated resizes settle without hanging the page — regression lock for the crossStaffTupletBeamY infinite-redraw freeze', async ({
+    page,
+  }) => {
+    // A single static render (the test above) doesn't exercise repeated
+    // redraw cycles — this is exactly the shape a real, live browser tab
+    // hits (window resizes, layout settling) that surfaced the original
+    // bug: crossStaffTupletBeamY's dirty-check setter compared its
+    // live-geometry-derived delta with exact float equality, so harmless
+    // sub-pixel jitter between passes never converged to "unchanged,"
+    // and the setter's own #renderNotes() call re-triggered the ancestor
+    // measure's redraw (via the synchronous NOTES_POSITIONED dispatch)
+    // forever, freezing the tab. A bounded test timeout here means a
+    // regression fails fast instead of hanging the whole suite.
+    test.setTimeout(15_000);
+    await buildCrossStaffTupletGroup(page);
+
+    for (const width of [500, 300, 700, 250, 900, 400]) {
+      await resizeHost(page, width);
+    }
+
+    const stillResponsive = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      return (
+        measure?.shadowRoot?.querySelector('.double-stemmed-beam') !== null
+      );
+    });
+    expect(stillResponsive).toBe(true);
+  });
+
+  test('genuinely non-convergent geometry stops after a bounded number of passes instead of recursing forever — regression lock for the live-reproduced freeze', async ({
+    page,
+  }) => {
+    // The epsilon fix (previous test) absorbs harmless sub-pixel jitter,
+    // but real-world use showed it wasn't sufficient on its own: during a
+    // live CDP-attached debugging session, a genuine, unbounded storm of
+    // "Maximum call stack size exceeded" was observed for over a minute
+    // straight — the underlying geometry can fail to *actually* converge
+    // (not just jitter within epsilon), specifically during a Storybook
+    // story teardown/mount transition. This test doesn't try to reproduce
+    // that exact transition timing (headless automation never managed to,
+    // even with real SPA navigation and rapid viewport storms) — instead
+    // it forces the same failure shape directly and deterministically, by
+    // making a stem's own measured position genuinely oscillate beyond the
+    // epsilon on every single measurement, and asserts the reentrancy-depth
+    // guard in #redrawDoubleStemmedBeams stops it (a console.warn fires,
+    // the page stays responsive) rather than recursing until the stack
+    // overflows.
+    test.setTimeout(15_000);
+    await buildCrossStaffTupletGroup(page);
+
+    const warnings: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' && msg.text().includes('did not converge')) {
+        warnings.push(msg.text());
+      }
+    });
+
+    await page.evaluate(() => {
+      const original = SVGElement.prototype.getBoundingClientRect;
+      let call = 0;
+      SVGElement.prototype.getBoundingClientRect = function (this: SVGElement) {
+        const rect = original.call(this);
+        if (!this.classList.contains('stem')) {
+          return rect;
+        }
+        // Monotonically growing, large offset on every single stem
+        // measurement — guarantees no two passes ever measure the same Y,
+        // so the geometry can never "agree" with its own previous pass. A
+        // small jitter (a few px) turned out to dampen out within a couple
+        // of passes in practice (the beam-line/epsilon math absorbs modest
+        // perturbation even though it isn't designed to) — only a large,
+        // sustained divergence reliably keeps tripping the "changed"
+        // branch long enough to reach the reentrancy-depth cap this test
+        // is actually verifying.
+        call++;
+        const jitter = call * 500;
+        return new DOMRect(rect.x, rect.y + jitter, rect.width, rect.height);
+      };
+    });
+
+    await resizeHost(page, 500);
+
+    expect(warnings.length).toBeGreaterThan(0);
+
+    const stillResponsive = await Promise.race([
+      page.evaluate(() => document.title).then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve('TIMEOUT'), 5000)),
+    ]);
+    expect(stillResponsive).toBe(true);
   });
 });
 

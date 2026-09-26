@@ -197,6 +197,45 @@ export function getStaffYForIndex(
 }
 
 /**
+ * This note/chord's own natural (unbeamed) stem-tip Y, in the staff's local
+ * coordinate space — the same quantity computeTupletBracketGeometry's own
+ * `beamTipYForIndex` falls back to when no beam renderer covers `index`,
+ * factored out so a caller with a real, externally-resolved beam Y (e.g.
+ * measure.ts, for a cross-staff double-stemmed beam) can add its own offset
+ * to a value guaranteed to align with this staff's own coordinate space,
+ * without duplicating the offset formula. Uses this note's own actual
+ * rendered direction (`stemDirections[index]`), not a group-level vote —
+ * right for a single note's own real tip, unlike the bracket/gap-clearance
+ * uses elsewhere in this file that intentionally use the group's vote.
+ */
+export function naturalStemTipY(
+  index: number,
+  elements: NoteChordOrRestElementType[],
+  stemDirections: boolean[],
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+): number | null {
+  const staffY = getStaffYForIndex(
+    index,
+    elements,
+    stemDirections,
+    noteStaffYCoords,
+    chordStaffYCoords
+  );
+  if (staffY === null) {
+    return null;
+  }
+  const stemUp = stemDirections[index];
+  const yHeadOffset = stemUp
+    ? NOTE_Y_HEAD_OFFSET_STEM_UP
+    : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const stemTipOffset = stemUp
+    ? NOTE_STEM_TIP_Y_OFFSET
+    : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+  return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+}
+
+/**
  * Computes the baseY for an outer bracket given the numeralY positions of its
  * inner child groups. The outer bracket is placed just beyond the furthest
  * inner numeral so it never overlaps any inner numeral.

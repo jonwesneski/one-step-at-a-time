@@ -53,6 +53,7 @@ import {
   computeTupletScaleByIndex,
   computeTupletScaledNoteCount,
   getStaffYForIndex,
+  naturalStemTipY,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -148,6 +149,7 @@ import {
   BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
+  CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
@@ -493,6 +495,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     NoteChordOrRestElementType,
     boolean
   > | null = null;
+  #crossStaffTupletBeamY: ReadonlyMap<
+    NoteChordOrRestElementType,
+    number
+  > | null = null;
   #clefMarkers: ClefMarkerPlacement[] = [];
   // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
   // #renderNotes() pass — the shared coordinate space #clefMarkers'
@@ -722,6 +728,64 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
     this.#crossStaffBeamStemOverrides = value;
+    this.#renderNotes();
+  }
+
+  // Set by the ancestor <music-measure> for a tuplet-group member (see
+  // buildTupletGroups below) that's also a double-stemmed beam-group member:
+  // this staff's own beamRenderer never covers it (it's excluded from this
+  // staff's own same-staff beaming entirely — see externallyBeamedIndices
+  // above), so without this override the tuplet numeral/bracket would fall
+  // back to a plain staff-coord derivation instead of clearing the real,
+  // possibly-sloped shared beam. Same element-keyed shape as
+  // crossStaffBeamStemOverrides above and for the same reason.
+  //
+  // The value is a real-px *delta* (real beam Y minus this element's own
+  // real natural, zero-extension stem tip — see measure.ts's per-member
+  // loop), not an absolute local Y: this staff's own real render origin
+  // relative to the measure's isn't something the ancestor can derive
+  // purely from getBoundingClientRect boxes without duplicating this
+  // staff's internal CSS layout (staff-wrapper/staff-container padding and
+  // margins) — a delta sidesteps that entirely, since it's origin-
+  // independent (both real px, no scale difference between the two
+  // frames), so it can be added directly onto this staff's own analytically
+  // -derived natural stem-tip Y (naturalStemTipY, tupletRules.ts — the same
+  // quantity the ordinary same-staff fallback there computes) to recover a
+  // real, correct local target Y.
+  get crossStaffTupletBeamY(): ReadonlyMap<
+    NoteChordOrRestElementType,
+    number
+  > | null {
+    return this.#crossStaffTupletBeamY;
+  }
+
+  set crossStaffTupletBeamY(
+    value: ReadonlyMap<NoteChordOrRestElementType, number> | null
+  ) {
+    const current = this.#crossStaffTupletBeamY;
+    // Tolerance, not exact equality: this value is re-measured from real
+    // getBoundingClientRect() geometry on every double-stemmed-beam redraw,
+    // and this setter's own #renderNotes() call is itself one step in the
+    // chain that produces the next redraw (via the NOTES_POSITIONED event
+    // it dispatches) — exact equality lets harmless sub-pixel jitter
+    // between passes register as "changed" forever, which never converges
+    // and freezes the page. See CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX.
+    const unchanged =
+      current === value ||
+      (current !== null &&
+        value !== null &&
+        current.size === value.size &&
+        [...current].every(([element, y]) => {
+          const otherY = value.get(element);
+          return (
+            otherY !== undefined &&
+            Math.abs(otherY - y) < CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX
+          );
+        }));
+    if (unchanged) {
+      return;
+    }
+    this.#crossStaffTupletBeamY = value;
     this.#renderNotes();
   }
 
@@ -2449,6 +2513,26 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       tupletContainer.innerHTML = '';
       this.#sizeVoiceContainer(tupletContainer, remainingWidth);
 
+      // The real cross-staff beam's Y at index i, when this staff's own
+      // beamRenderer doesn't cover it (see crossStaffTupletBeamY above for
+      // why the stored value is a delta, not an absolute Y) — else this
+      // staff's own same-staff beam, else null (plain staff-coord fallback,
+      // inside computeTupletBracketGeometry itself).
+      const tupletBeamYForIndex = (i: number): number | null => {
+        const delta = this.#crossStaffTupletBeamY?.get(state.elements[i]);
+        if (delta === undefined) {
+          return state.beamRenderer?.primaryBeamYForIndex(i) ?? null;
+        }
+        const natural = naturalStemTipY(
+          i,
+          state.elements,
+          state.stemDirections,
+          state.noteStaffYCoords,
+          state.chordStaffYCoords
+        );
+        return natural === null ? null : natural + delta;
+      };
+
       // Pass 1: inner groups (nestingLevel > 0) — beam-referenced numeral placement.
       const innerGeometriesByGroup = new Map<
         TupletGroup,
@@ -2473,7 +2557,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           state.chordStaffYCoords,
           null,
           hasInnerGroups,
-          (i) => state.beamRenderer?.primaryBeamYForIndex(i) ?? null
+          tupletBeamYForIndex
         );
         if (geometry !== null) {
           innerGeometriesByGroup.set(group, geometry);
@@ -2515,7 +2599,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           state.chordStaffYCoords,
           outerBaseY,
           hasInnerGroups,
-          (i) => state.beamRenderer?.primaryBeamYForIndex(i) ?? null
+          tupletBeamYForIndex
         );
         if (geometry !== null) {
           allGeometries.push(geometry);

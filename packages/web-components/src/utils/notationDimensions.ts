@@ -268,6 +268,20 @@ export const SHARED_STEM_WIDTH_PX = STAFF_LINE_SPACING * 0.12;
  */
 export const SHARED_STEM_MISALIGNMENT_WARN_PX = STAFF_LINE_SPACING;
 
+/**
+ * Tolerance (px) for treating two `crossStaffTupletBeamY` values as
+ * unchanged. That value is a live-`getBoundingClientRect()`-derived delta,
+ * re-measured on every double-stemmed-beam redraw — comparing it with exact
+ * equality lets harmless sub-pixel layout jitter between passes register as
+ * "changed" every time, re-triggering a full staff re-render (and, via the
+ * NOTES_POSITIONED event it dispatches, the ancestor measure's own redraw)
+ * forever. 0.5px sits comfortably below anything visually meaningful (the
+ * smallest real quantities this value composes with are STEM_OVERLAP_PX
+ * (2px) and BEAM_THICKNESS_PX (8px)) and comfortably above realistic
+ * layout-engine jitter.
+ */
+export const CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX = 0.5;
+
 // ─── Describe area (clef, key signature, time signature) ─────────────────────
 
 /**

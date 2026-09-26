@@ -46,6 +46,7 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_REST_NODE,
+  MUSIC_TUPLET,
   MUSIC_VOICE,
   MUSIC_VOICE_NODE,
   NOTE_EVENTS,
@@ -1058,6 +1059,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
+    // Reentrancy depth for #redrawDoubleStemmedBeams — see its own wrapper
+    // just below for why this exists.
+    #doubleStemmedBeamsRedrawDepth = 0;
+
     // Resolves cross-staff double-stemmed beam groups (`beam-group`) over
     // every staff's own top-level element stream, then pushes the correct
     // per-element stem direction onto each involved staff — top-staff members
@@ -1070,7 +1075,46 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // BeamsBuilder pass (which excludes these indices from same-staff
     // grouping) has a correct direction to render with in the meantime,
     // before a later phase draws the real shared beam polygon.
+    //
+    // Several bridge properties this method writes (crossStaffTupletBeamY,
+    // crossStaffBeamStemOverrides) synchronously trigger a full staff
+    // re-render on change, which synchronously dispatches the very event
+    // this method itself listens for — a real, observed-live infinite
+    // recursion (confirmed via a live CDP-attached debugging session, not
+    // just a theoretical risk): during a Storybook story teardown/mount
+    // transition, real geometry measurements can genuinely fail to
+    // stabilize pass to pass (rather than merely jittering by sub-pixel
+    // noise, which CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX alone was meant to
+    // absorb), so each reentrant pass computes a value just different
+    // enough to trigger another one — deepening until the call stack
+    // overflows, which some outer handler (the browser's own event/observer
+    // dispatch machinery) catches and silently retries on the next frame,
+    // forever, freezing the tab. A depth cap bounds the recursion
+    // unconditionally, regardless of why the underlying geometry doesn't
+    // settle — same principle as a ResizeObserver's own built-in loop-limit
+    // protection. isConnected guards the case that actually triggers this:
+    // a redraw reached via a stale/queued callback after this element (or
+    // its parent) has already been removed from the document, measuring
+    // elements mid-teardown.
     #redrawDoubleStemmedBeams() {
+      if (!this.isConnected) {
+        return;
+      }
+      if (this.#doubleStemmedBeamsRedrawDepth > 4) {
+        console.warn(
+          '[music-measure] double-stemmed beam redraw did not converge after several passes; stopping to avoid a runaway loop'
+        );
+        return;
+      }
+      this.#doubleStemmedBeamsRedrawDepth++;
+      try {
+        this.#redrawDoubleStemmedBeamsImpl();
+      } finally {
+        this.#doubleStemmedBeamsRedrawDepth--;
+      }
+    }
+
+    #redrawDoubleStemmedBeamsImpl() {
       const staves = Array.from(this.children).filter((el) =>
         isStaffNodeName(el.nodeName)
       ) as StaffElementBaseType[];
@@ -1163,6 +1207,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           overridesByStaffIndex.get(staffIndex) ?? null;
       });
 
+      // A cross-staff-beamed member that's also inside a <music-tuplet>
+      // needs its own staff's tuplet numeral/bracket to clear the real
+      // shared beam, not a plain staff-coord derivation — populated per
+      // group in Pass 2 below (it needs the group's own real beamYAtX),
+      // applied to every staff in one pass afterward so a staff with no
+      // (or no longer any) covered tuplet member is correctly reset to
+      // null, same discipline as overridesByStaffIndex above.
+      const tupletBeamYByStaffIndex = new Map<
+        number,
+        Map<NoteChordOrRestElementType, number>
+      >();
+      const applyCrossStaffTupletBeamY = () => {
+        staves.forEach((staff, staffIndex) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- crossStaffTupletBeamY is staff-internal (StaffClassicalElementBase), not part of the shared StaffElementBaseType surface — same precedent as crossStaffBeamStemOverrides above
+          (staff as any).crossStaffTupletBeamY =
+            tupletBeamYByStaffIndex.get(staffIndex) ?? null;
+        });
+      };
+
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.double-stemmed-beams-overlay'
       );
@@ -1172,6 +1235,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       }
       if (groups.length === 0 || !overlay) {
+        applyCrossStaffTupletBeamY();
         return;
       }
 
@@ -1283,6 +1347,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             element,
             staves[staffIndex]
           );
+
+          // Tuplet numeral/bracket bridging — see crossStaffTupletBeamY on
+          // StaffClassicalElementBase. Both beamY and point.naturalY (this
+          // element's own real, zero-extension natural stem tip, already
+          // computed above) are measure-relative real px, so their
+          // difference is a real, origin-independent delta — the target
+          // staff adds it directly onto its own analytically-derived
+          // natural stem-tip Y (the same value its own fallback already
+          // computes), never needing to know this staff's real render
+          // origin at all.
+          if (element.closest(MUSIC_TUPLET) !== null) {
+            const staffElements =
+              tupletBeamYByStaffIndex.get(staffIndex) ?? new Map();
+            staffElements.set(element, beamY - point.naturalY);
+            tupletBeamYByStaffIndex.set(staffIndex, staffElements);
+          }
         }
 
         overlay.appendChild(
@@ -1528,6 +1608,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           );
         }
       }
+
+      applyCrossStaffTupletBeamY();
     }
 
     // shared-stem-for: both hands occasionally playing the same beat

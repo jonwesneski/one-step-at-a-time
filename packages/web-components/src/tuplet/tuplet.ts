@@ -46,5 +46,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  customElements.define(MUSIC_TUPLET, TupletElement);
+  if (!customElements.get(MUSIC_TUPLET)) {
+    customElements.define(MUSIC_TUPLET, TupletElement);
+  }
 }

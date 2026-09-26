@@ -225,6 +225,15 @@
             },
             {
               "kind": "field",
+              "name": "#articulationAnchorsToStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -372,6 +381,13 @@
               "name": "trillSignExtraLift",
               "type": {
                 "text": "number"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationAnchorsToStem",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -1888,6 +1904,30 @@
             },
             {
               "kind": "method",
+              "name": "#isInnerVoiceMember",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "StaffElementBaseType"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#restHuggingTargetY",
               "privacy": "private",
               "return": {
@@ -2185,6 +2225,15 @@
             },
             {
               "kind": "field",
+              "name": "#articulationAnchorsToStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -2322,6 +2371,13 @@
               "name": "trillSignExtraLift",
               "type": {
                 "text": "number"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationAnchorsToStem",
+              "type": {
+                "text": "boolean"
               }
             },
             {
@@ -3396,7 +3452,20 @@
               "name": "#crossStaffBeamStemOverrides",
               "privacy": "private",
               "type": {
-                "text": "ReadonlyMap<number, boolean> | null"
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletBeamY",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
               },
               "default": "null",
               "inheritedFrom": {
@@ -3732,7 +3801,18 @@
               "kind": "field",
               "name": "crossStaffBeamStemOverrides",
               "type": {
-                "text": "ReadonlyMap<number, boolean> | null"
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletBeamY",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -6732,7 +6812,20 @@
               "name": "#crossStaffBeamStemOverrides",
               "privacy": "private",
               "type": {
-                "text": "ReadonlyMap<number, boolean> | null"
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletBeamY",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
               },
               "default": "null",
               "inheritedFrom": {
@@ -7068,7 +7161,18 @@
               "kind": "field",
               "name": "crossStaffBeamStemOverrides",
               "type": {
-                "text": "ReadonlyMap<number, boolean> | null"
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletBeamY",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
