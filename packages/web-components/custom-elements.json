@@ -2075,8 +2075,22 @@
               "privacy": "private"
             },
             {
+              "kind": "field",
+              "name": "#doubleStemmedBeamsRedrawDepth",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
               "kind": "method",
               "name": "#redrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawDoubleStemmedBeamsImpl",
               "privacy": "private"
             },
             {
