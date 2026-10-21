@@ -337,6 +337,17 @@ export type OctaveDisplayMode = 'sign' | 'col';
 export type RestStaffSide = 'above' | 'below' | 'centered';
 
 /**
+ * Author override for a note/chord's stem direction, independent of its
+ * pitch-driven default. Unset (null) leaves today's resolution unchanged
+ * (pitch-driven, or a voice/beam-group policy when applicable). Setting it
+ * on only some members of a same-staff beamed run is the author's own
+ * responsibility to avoid — `BeamGroup` (`utils/svgCreator/beams.ts`) only
+ * ever renders one shared stem direction per group, so an inconsistent
+ * member renders with the wrong stem attachment.
+ */
+export type StemDirection = 'up' | 'down';
+
+/**
  * Controls how an octave-transposition span's numeral restates itself after
  * a system break: `'bracketed'` (default) redraws it in parentheses at the
  * start of the new row; `'line-only'` lets the line resume with no restated

@@ -21,6 +21,7 @@ import type {
   OctaveShiftAmount,
   RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TimeSignature,
   TrillContinuationMode,
@@ -57,6 +58,11 @@ export interface INoteElement {
   note: Note;
   octave: Octave | null;
   stemUp: boolean;
+  // Author override for stemUp, independent of pitch. Unset (null) leaves
+  // today's pitch-driven/voice/beam-group resolution unchanged. Setting it
+  // inconsistently across notes that end up sharing one same-staff beam
+  // group is the author's own responsibility to avoid (see StemDirection).
+  stemDirection: StemDirection | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -79,6 +85,11 @@ export interface INoteElement {
   articulationAnchorsToStem: boolean;
   tie: TieValue | null;
   slur: ConnectorRole | null;
+  // `id` shared by every breakpoint note/chord of one continuous multi-leg
+  // cross-staff phrase slur (the first/last note of each leg, never the
+  // notes still covered by their own staff's ordinary beam). Resolved by
+  // the ancestor <music-measure> / <music-composition>.
+  slurGroup: string | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
@@ -236,6 +247,8 @@ export interface IChordElement {
   chord: Chord | null;
   readonly notes: ChordNote[];
   stemUp: boolean;
+  // See INoteElement.stemDirection.
+  stemDirection: StemDirection | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -249,6 +262,11 @@ export interface IChordElement {
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;
   slur: ConnectorRole | null;
+  // `id` shared by every breakpoint note/chord of one continuous multi-leg
+  // cross-staff phrase slur (the first/last note of each leg, never the
+  // notes still covered by their own staff's ordinary beam). Resolved by
+  // the ancestor <music-measure> / <music-composition>.
+  slurGroup: string | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;

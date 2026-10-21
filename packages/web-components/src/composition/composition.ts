@@ -32,17 +32,21 @@ import {
 import {
   buildConnectorSvgs,
   collectArpeggioTiePairs,
+  collectEntryObstacles,
   collectNoteLikeElements,
+  collectPhraseSlurPairs,
   pairConnectors,
   partitionByVoice,
+  resolveDoubleStemmedBeamConnectorContext,
+  resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
 import {
   COMMON_ATTRIBUTES,
   isStaffNodeName,
   MUSIC_CHORD,
+  MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
-  MUSIC_CHORD_NODE,
   MUSIC_MEASURE_NODE,
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
@@ -452,10 +456,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const byVoice = partitionByVoice(collectNoteLikeElements(this));
+      const noteLikeElements = collectNoteLikeElements(this);
+      const byVoice = partitionByVoice(noteLikeElements);
       const pairs = [
         ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
         ...collectArpeggioTiePairs(this),
+        ...collectPhraseSlurPairs(this),
       ];
       if (pairs.length === 0) {
         return;
@@ -463,10 +469,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const rootRect = wrapper.getBoundingClientRect();
       const rowLeft = this.#computeNotesAreaLeft(rootRect);
+
+      // Double-stemmed beam-group awareness — same resolution
+      // measure.ts#redrawConnectors uses for a standalone measure, shared
+      // via resolveDoubleStemmedBeamConnectorContext since a slur whose
+      // endpoints belong to a beam-group is drawn here whenever the measure
+      // has a <music-composition> ancestor. Runs safely after every
+      // measure's own #redrawDoubleStemmedBeams has drawn its real beam
+      // polygon(s): #scheduleRedraw defers this whole pass to the next
+      // animation frame, by which point that synchronous, same-event
+      // measure-level work has already finished.
+      const measureElements = Array.from(this.querySelectorAll(MUSIC_MEASURE));
+      const { beamRects, elementToGroup, innerVoiceStemAnchorElements } =
+        resolveDoubleStemmedBeamConnectorContext(measureElements, rootRect);
+
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
         rowLeft,
         rowRight: rootRect.width,
+        beamRects,
+        groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
+        innerVoiceElements: innerVoiceStemAnchorElements,
+        entryObstacles: collectEntryObstacles(this, rootRect, measureElements),
       });
       for (const svg of svgs) overlay.appendChild(svg);
     }

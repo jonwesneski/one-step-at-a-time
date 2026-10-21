@@ -1,3 +1,4 @@
+import { cubicSlurControlPoints } from '../../rules/connectorPlacementRules';
 import { SVG_NS } from '../consts';
 import {
   CONNECTOR_LABEL_CHAR_WIDTH_PX,
@@ -19,6 +20,11 @@ export type CurveProps = {
   // side (e.g. to clear an accidental), so the control point still sits
   // outside both endpoints instead of the fixed default undershooting.
   bulgeHeight?: number;
+  // Draws a cubic instead, with control points at 1/3 and 2/3 of the chord
+  // raised toward `bulge` by these heights (see
+  // rules/connectorPlacementRules.ts#cubicSlurControlPoints). Overrides
+  // bulgeHeight/nestingLevel.
+  controlHeights?: readonly [number, number];
 };
 
 export const DEFAULT_BULGE_HEIGHT = STAFF_LINE_SPACING * 0.9;
@@ -34,6 +40,7 @@ export const createCurveSvg = ({
   style = 'smooth',
   nestingLevel = 0,
   bulgeHeight,
+  controlHeights,
 }: CurveProps): SVGGElement => {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('connector');
@@ -54,6 +61,12 @@ export const createCurveSvg = ({
 
   if (style === 'straight') {
     path.setAttribute('d', `M ${startX} ${startY} L ${endX} ${endY}`);
+  } else if (controlHeights) {
+    const [c1, c2] = cubicSlurControlPoints(from, to, bulge, controlHeights);
+    path.setAttribute(
+      'd',
+      `M ${startX} ${startY} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${endX} ${endY}`
+    );
   } else {
     path.setAttribute(
       'd',

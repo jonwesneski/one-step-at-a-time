@@ -1276,6 +1276,36 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           );
         })
     );
+    // Author override (stem-direction attribute): merges into the same
+    // element-keyed override seam crossStaffBeamStemOverrides already
+    // established for beam-group's cross-staff stem forcing, so a plain
+    // same-staff beamed run can force its own (uniform, author-set) stem
+    // direction without joining a cross-staff beam-group. Spread order
+    // makes the author's own explicit choice win on conflict — the two
+    // are never authored on the same note in practice.
+    const authoredStemOverrides = new Map<
+      NoteChordOrRestElementType,
+      boolean
+    >();
+    for (const element of elements) {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        continue;
+      }
+      const stemDirection = (element as NoteElementType | ChordElementType)
+        .stemDirection;
+      if (stemDirection !== null) {
+        authoredStemOverrides.set(element, stemDirection === 'up');
+      }
+    }
+    const combinedStemOverrides:
+      | ReadonlyMap<NoteChordOrRestElementType, boolean>
+      | undefined =
+      authoredStemOverrides.size > 0 || this.#crossStaffBeamStemOverrides
+        ? new Map([
+            ...(this.#crossStaffBeamStemOverrides ?? []),
+            ...authoredStemOverrides,
+          ])
+        : undefined;
     const { beamsBuilder, beamRenderer, stemDirections } = buildBeamsRenderer(
       elements,
       this.effectiveTimeSig,
@@ -1290,7 +1320,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       voiceKey === 'combined' ? beatOffsets : undefined,
       stemDirectionsOverride,
       externallyBeamedIndices,
-      this.#crossStaffBeamStemOverrides ?? undefined
+      combinedStemOverrides
     );
 
     const beamedIndices = new Set(

@@ -32,6 +32,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  StemDirection,
   StressType,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -66,6 +67,7 @@ import {
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
+  parseStemDirection,
   parseStress,
   parseTieValue,
   parseTrillContinuationMode,
@@ -129,6 +131,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
    * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
+   * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
+   * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. Setting it inconsistently across notes that end up sharing one same-staff beam group produces a visibly wrong stem attachment for the inconsistent member(s) — set it the same way on every note of one intended-uniform group.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -183,6 +187,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'octave-continuation',
         'beam-group',
         'shared-stem-for',
+        'slur-group',
+        'stem-direction',
       ];
     }
 
@@ -489,6 +495,33 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('beam-group');
       } else {
         this.setAttribute('beam-group', value);
+      }
+    }
+
+    // `id` shared by every breakpoint note of one continuous multi-leg
+    // cross-staff phrase slur. Resolved by the ancestor <music-measure> /
+    // <music-composition>.
+    get slurGroup(): string | null {
+      return this.getAttribute('slur-group');
+    }
+    set slurGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('slur-group');
+      } else {
+        this.setAttribute('slur-group', value);
+      }
+    }
+
+    // Author override for stemUp, independent of pitch. null = today's
+    // pitch-driven/voice/beam-group resolution, unchanged.
+    get stemDirection(): StemDirection | null {
+      return parseStemDirection(this.getAttribute('stem-direction'));
+    }
+    set stemDirection(value: StemDirection | null) {
+      if (value === null) {
+        this.removeAttribute('stem-direction');
+      } else {
+        this.setAttribute('stem-direction', value);
       }
     }
 
@@ -939,7 +972,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'slur' ||
         name === 'lv-label' ||
         name === 'glissando' ||
-        name === 'glissando-hint'
+        name === 'glissando-hint' ||
+        name === 'slur-group'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
@@ -950,7 +984,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'note' || name === 'octave') {
+      if (name === 'note' || name === 'octave' || name === 'stem-direction') {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,

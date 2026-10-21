@@ -32,6 +32,7 @@ import type {
   OctaveShiftAmount,
   RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TieValue,
   TimeSignature,
@@ -161,6 +162,8 @@ declare module 'react' {
         'octave-continuation'?: OctaveContinuationMode;
         'beam-group'?: string;
         'shared-stem-for'?: string;
+        'slur-group'?: string;
+        'stem-direction'?: StemDirection;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -207,6 +210,8 @@ declare module 'react' {
         'octave-continuation'?: OctaveContinuationMode;
         'beam-group'?: string;
         'shared-stem-for'?: string;
+        'slur-group'?: string;
+        'stem-direction'?: StemDirection;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

@@ -423,6 +423,271 @@ export const DoubleStemmedBeamWithCrossStaffTuplet: Story = {
   `,
 };
 
+export const DoubleStemmedBeamWithSlur: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="G"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+            slur="start"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-note
+            note="A"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+            slur="end"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-rest duration="eighth"></music-rest>
+          <music-note
+            note="C"
+            octave="3"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const DoubleStemmedBeamWithInnerVoiceSlur: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="G"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-voice>
+            <music-note note="C" octave="4" duration="quarter"></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note
+              note="C"
+              octave="3"
+              duration="eighth"
+              beam-group="g1"
+              slur="start"
+            ></music-note>
+            <music-note note="D" octave="3" duration="eighth" slur="end">
+            </music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const HandCrossingPassage: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="3/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="3/4"
+        >
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-note note="E" octave="4" duration="eighth"></music-note>
+          <music-note note="G" octave="4" duration="eighth"></music-note>
+          <music-note
+            note="B"
+            octave="4"
+            duration="eighth"
+            slur="start"
+            id="hand-crossing-passage-leg1-end"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="3/4">
+          <music-note
+            note="E"
+            octave="3"
+            duration="eighth"
+            slur="end"
+            for="hand-crossing-passage-leg1-end"
+          ></music-note>
+          <music-note note="G" octave="3" duration="eighth"></music-note>
+          <music-note note="B" octave="3" duration="eighth"></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="3/4"
+        >
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            stem-direction="down"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="eighth"
+            stem-direction="down"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="5"
+            duration="eighth"
+            stem-direction="down"
+            slur="start"
+            id="hand-crossing-passage-leg2-end"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="3/4">
+          <music-note
+            note="C"
+            octave="4"
+            duration="eighth"
+            stem-direction="up"
+            slur="end"
+            for="hand-crossing-passage-leg2-end"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="4"
+            duration="eighth"
+            stem-direction="up"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="4"
+            duration="eighth"
+            stem-direction="up"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+export const HandCrossingPassageChained: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-note note="D" octave="4" duration="eighth"></music-note>
+          <music-note note="F" octave="4" duration="eighth"></music-note>
+          <music-note note="A" octave="4" duration="eighth"></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="eighth"
+            slur-group="phrase1"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-note
+            note="F"
+            octave="2"
+            duration="eighth"
+            slur-group="phrase1"
+          ></music-note>
+          <music-note note="A" octave="2" duration="eighth"></music-note>
+          <music-note note="D" octave="3" duration="eighth"></music-note>
+          <music-note note="F" octave="3" duration="eighth"></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-note note="A" octave="4" duration="eighth"></music-note>
+          <music-note note="C" octave="5" duration="eighth"></music-note>
+          <music-note note="E" octave="5" duration="eighth"></music-note>
+          <music-note
+            note="G"
+            octave="5"
+            duration="eighth"
+            slur-group="phrase1"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-note
+            note="C"
+            octave="3"
+            duration="eighth"
+            slur-group="phrase1"
+          ></music-note>
+          <music-note note="E" octave="3" duration="eighth"></music-note>
+          <music-note note="A" octave="3" duration="eighth"></music-note>
+          <music-note note="C" octave="4" duration="eighth"></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="eighth"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const WhiteKeyGlissando: Story = {
   render: () => html`
     <music-staff clef="treble" key-sig="C" mode="major" time="4/4">

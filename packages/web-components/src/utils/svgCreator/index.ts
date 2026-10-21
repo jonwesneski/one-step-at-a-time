@@ -14,6 +14,7 @@ export {
 export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export {
+  BULGE_STEP_PX,
   createCurveSvg,
   createOpenTieSvg,
   DEFAULT_BULGE_HEIGHT,

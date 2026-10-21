@@ -47,8 +47,6 @@ import {
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_TUPLET,
-  MUSIC_VOICE,
-  MUSIC_VOICE_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -56,9 +54,14 @@ import {
 import {
   buildConnectorSvgs,
   collectArpeggioTiePairs,
+  collectEntryObstacles,
   collectNoteLikeElements,
+  collectPhraseSlurPairs,
+  isInnerVoiceMember,
   pairConnectors,
   partitionByVoice,
+  resolveDoubleStemmedBeamConnectorContext,
+  resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
 import {
   ARPEGGIO_CHORD_GAP_PX,
@@ -180,12 +183,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.style.flex = measureFlexValue(maxNaturalWidth);
       this.style.minWidth = `${Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX)}px`;
       // Staves have just (re)laid out their notes — refresh any continuous
-      // cross-staff arpeggio that spans them, and any tie/slur/etc. across
-      // this measure's own staves.
+      // cross-staff arpeggio that spans them, any double-stemmed beam, and
+      // any tie/slur/etc. across this measure's own staves. Connectors run
+      // *after* double-stemmed beams — a slur may need to read the real,
+      // already-drawn beam polygon to avoid crossing it (Chapter G).
       this.#redrawArpeggios();
-      this.#redrawConnectors();
       this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawConnectors();
       this.#redrawSharedStems();
     };
     #boundUpdateConnectorVisibility: () => void;
@@ -282,6 +287,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawDoubleStemmedBeams
       );
+      // Registered after the beams listener above — a slur may need to
+      // read the real, already-drawn beam polygon to avoid crossing it
+      // (Chapter G), so connectors must redraw after beams do, both here
+      // and via #onStaffMinWidth/#updateConnectorVisibility's own call
+      // order.
+      this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawConnectors
+      );
       this.addEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawSharedStems
@@ -309,6 +323,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener(
         NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      // Registered after the beams listener above, for the same reason as
+      // the NOTES_POSITIONED pair — a beam-group membership change can
+      // change which beam (if any) a slur needs to avoid, or whether its
+      // two endpoints now share a resolved group at all.
+      this.addEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawConnectors
       );
       this.addEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
@@ -332,6 +354,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.removeEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawConnectors
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawSharedStems
       );
       this.removeEventListener(
@@ -357,6 +383,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawConnectors
       );
       this.removeEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
@@ -583,9 +613,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#renderMeasureNumber(isFirstInRow, isLastInRow);
       staffConnector.classList.toggle('hidden', !isFirstInRow);
       this.#redrawArpeggios();
-      this.#redrawConnectors();
       this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawConnectors();
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -829,30 +859,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
     }
 
-    // True when element is a real, non-outermost voice sharing its own
-    // staff with another concurrently-sounding voice — "when a
-    // double-stemmed group is an inner part" per the reference engraving
-    // material's own articulation-placement rule (see
-    // #redrawDoubleStemmedBeams' articulationAnchorsToStem write-back). A
-    // staff with zero or one <music-voice> children is never "inner" (the
-    // ordinary single-voice case); voice 1 (the first <music-voice> sibling)
-    // is the canonical outer voice and is never "inner" either, mirroring
-    // how the rest of this codebase already treats voice 1 as the staff's
-    // own primary timeline (see Voices in packages/web-components/CLAUDE.md).
-    #isInnerVoiceMember(
-      element: NoteOrChordElementType,
-      staff: StaffElementBaseType
-    ): boolean {
-      const voiceParent = element.closest(MUSIC_VOICE);
-      if (!voiceParent) {
-        return false;
-      }
-      const voiceSiblings = Array.from(staff.children).filter(
-        (el) => el.nodeName === MUSIC_VOICE_NODE
-      );
-      return voiceSiblings.length > 1 && voiceSiblings[0] !== voiceParent;
-    }
-
     // Resolves a beam-hugging rest's real target Y (measure-relative,
     // the glyph's own visible feature — not the box-top; see
     // restRules.ts#restGlyphOffsetFromBoxTop) for #redrawDoubleStemmedBeams.
@@ -972,20 +978,38 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const byVoice = partitionByVoice(collectNoteLikeElements(this));
+      const noteLikeElements = collectNoteLikeElements(this);
+      const byVoice = partitionByVoice(noteLikeElements);
       const pairs = [
         ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
         ...collectArpeggioTiePairs(this),
+        ...collectPhraseSlurPairs(this),
       ];
       if (pairs.length === 0) {
         return;
       }
 
       const rootRect = this.getBoundingClientRect();
+
+      // Double-stemmed beam-group awareness: a slur whose endpoints share a
+      // resolved group is placed over that group's two staves, an
+      // inner-voice member anchors its own end at its stem, and same-staff
+      // slurs avoid the real beam polygons. Shared with composition.ts's own
+      // #redrawConnectors — see resolveDoubleStemmedBeamConnectorContext.
+      // Warnings are skipped here — #redrawDoubleStemmedBeams (which this
+      // method's own callers always run first, see above) already logs
+      // them for this same redraw cycle.
+      const { beamRects, elementToGroup, innerVoiceStemAnchorElements } =
+        resolveDoubleStemmedBeamConnectorContext([this], rootRect);
+
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
         rowLeft: 0,
         rowRight: rootRect.width,
+        beamRects,
+        groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
+        innerVoiceElements: innerVoiceStemAnchorElements,
+        entryObstacles: collectEntryObstacles(this, rootRect, [this]),
       });
       for (const svg of svgs) {
         overlay.appendChild(svg);
@@ -1114,7 +1138,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    #redrawDoubleStemmedBeamsImpl() {
+    // Real DOM entries gathering for beam-group resolution — shared by
+    // #redrawDoubleStemmedBeamsImpl (which owns warning logging) and
+    // #redrawConnectors (silent: both run on every redraw cycle today, and
+    // logging the same warnings twice per cycle would be noise, not signal).
+    #gatherDoubleStemmedBeamEntries(): {
+      staves: StaffElementBaseType[];
+      perStaffElements: NoteChordOrRestElementType[][];
+      entries: DoubleStemmedBeamEntry[];
+    } {
       const staves = Array.from(this.children).filter((el) =>
         isStaffNodeName(el.nodeName)
       ) as StaffElementBaseType[];
@@ -1136,6 +1168,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             nodeName: element.nodeName,
           }))
       );
+
+      return { staves, perStaffElements, entries };
+    }
+
+    #redrawDoubleStemmedBeamsImpl() {
+      const { staves, perStaffElements, entries } =
+        this.#gatherDoubleStemmedBeamEntries();
 
       const { groups, warnings } = resolveDoubleStemmedBeamGroups(entries);
       for (const warning of warnings) {
@@ -1343,7 +1382,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           // anchor marks there (next to the shared beam, on the stem's
           // own side) instead of the ordinary notehead-relative default,
           // which is what every outer-voice/single-voice member keeps.
-          element.articulationAnchorsToStem = this.#isInnerVoiceMember(
+          element.articulationAnchorsToStem = isInnerVoiceMember(
             element,
             staves[staffIndex]
           );

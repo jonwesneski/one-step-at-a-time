@@ -1624,6 +1624,75 @@ describe('shared stem', () => {
   });
 });
 
+describe('slur group', () => {
+  it('round-trips slur-group as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.slurGroup).toBeNull();
+    noteElement.slurGroup = 'phrase1';
+    expect(noteElement.getAttribute('slur-group')).toBe('phrase1');
+    expect(noteElement.slurGroup).toBe('phrase1');
+
+    noteElement.slurGroup = null;
+    expect(noteElement.getAttribute('slur-group')).toBeNull();
+  });
+
+  it('dispatches CONNECTOR_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.slurGroup = 'phrase1';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('stem direction', () => {
+  it('round-trips stem-direction, rejecting an invalid value', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.stemDirection).toBeNull();
+    noteElement.stemDirection = 'up';
+    expect(noteElement.getAttribute('stem-direction')).toBe('up');
+    expect(noteElement.stemDirection).toBe('up');
+
+    noteElement.setAttribute('stem-direction', 'sideways');
+    expect(noteElement.stemDirection).toBeNull();
+
+    noteElement.stemDirection = null;
+    expect(noteElement.getAttribute('stem-direction')).toBeNull();
+  });
+
+  it('dispatches NOTE_Y_CHANGE (the same full-relayout event note/octave changes use)', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    noteElement.stemDirection = 'down';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('overrides the pitch-driven stem direction when set on a real staff', () => {
+    const staff = makeStaff();
+    // C4 (staffY=80 > 50) is pitch-driven stemUp=true by default.
+    const note = renderNote(staff, 'C', 4) as any;
+    expect(note.stemUp).toBe(true);
+
+    note.setAttribute('stem-direction', 'down');
+
+    expect(note.stemUp).toBe(false);
+  });
+});
+
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();

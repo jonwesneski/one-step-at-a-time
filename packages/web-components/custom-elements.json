@@ -525,6 +525,20 @@
             },
             {
               "kind": "field",
+              "name": "slurGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemDirection",
+              "type": {
+                "text": "StemDirection | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
@@ -1145,6 +1159,20 @@
                 "text": "string"
               },
               "description": "`id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord)."
+            },
+            {
+              "name": "slur-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every breakpoint note/chord of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone chord)."
+            },
+            {
+              "name": "stem-direction",
+              "type": {
+                "text": "StemDirection"
+              },
+              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. Setting it inconsistently across notes/chords that end up sharing one same-staff beam group produces a visibly wrong stem attachment for the inconsistent member(s) — set it the same way on every element of one intended-uniform group."
             },
             {
               "type": {
@@ -1904,30 +1932,6 @@
             },
             {
               "kind": "method",
-              "name": "#isInnerVoiceMember",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "boolean"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "element",
-                  "type": {
-                    "text": "NoteOrChordElementType"
-                  }
-                },
-                {
-                  "name": "staff",
-                  "type": {
-                    "text": "StaffElementBaseType"
-                  }
-                }
-              ]
-            },
-            {
-              "kind": "method",
               "name": "#restHuggingTargetY",
               "privacy": "private",
               "return": {
@@ -2087,6 +2091,16 @@
               "kind": "method",
               "name": "#redrawDoubleStemmedBeams",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#gatherDoubleStemmedBeamEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      staves: StaffElementBaseType[];\n      perStaffElements: NoteChordOrRestElementType[][];\n      entries: DoubleStemmedBeamEntry[];\n    }"
+                }
+              }
             },
             {
               "kind": "method",
@@ -2525,6 +2539,20 @@
               "name": "beamGroup",
               "type": {
                 "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slurGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemDirection",
+              "type": {
+                "text": "StemDirection | null"
               }
             },
             {
@@ -3149,6 +3177,20 @@
                 "text": "string"
               },
               "description": "`id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
+            },
+            {
+              "name": "slur-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note)."
+            },
+            {
+              "name": "stem-direction",
+              "type": {
+                "text": "StemDirection"
+              },
+              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. Setting it inconsistently across notes that end up sharing one same-staff beam group produces a visibly wrong stem attachment for the inconsistent member(s) — set it the same way on every note of one intended-uniform group."
             },
             {
               "type": {

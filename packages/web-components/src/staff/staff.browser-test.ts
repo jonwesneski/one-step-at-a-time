@@ -1362,6 +1362,88 @@ test.describe(`${MUSIC_STAFF} beat-proportional spacing`, () => {
   });
 });
 
+test.describe(`${MUSIC_STAFF} stem-direction override`, () => {
+  test('forces a same-staff beamed run onto the opposite side from its pitch-driven default, sharing one correctly-positioned beam', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'bass');
+        // A3/B3/C4 sit above the bass staff's own middle line (D3) — pitch
+        // alone would stem these down. stem-direction="up" on all three
+        // forces the whole run's stems (and its shared beam) up instead.
+        const pitches: [string, string][] = [
+          ['A', '3'],
+          ['B', '3'],
+          ['C', '4'],
+        ];
+        for (const [note, octave] of pitches) {
+          const el = document.createElement(noteTag);
+          el.setAttribute('note', note);
+          el.setAttribute('octave', octave);
+          el.setAttribute('duration', 'eighth');
+          el.setAttribute('stem-direction', 'up');
+          staff.appendChild(el);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate((staffTag) => {
+      const staff = document.querySelector(staffTag);
+      if (staff === null || staff.shadowRoot === null) {
+        throw new Error('staff not ready');
+      }
+      const notes = Array.from(
+        document.querySelectorAll('music-note')
+      ) as (HTMLElement & { stemUp: boolean })[];
+      const beams = Array.from(
+        staff.shadowRoot.querySelectorAll('.beams-container .beam')
+      ) as SVGGraphicsElement[];
+      const stemRects = notes.map((note) => {
+        const stem = note.shadowRoot?.querySelector('.stem');
+        return stem?.getBoundingClientRect() ?? null;
+      });
+      const headRects = notes.map((note) => {
+        const head = note.shadowRoot?.querySelector('.head');
+        return head?.getBoundingClientRect() ?? null;
+      });
+      const beamRect = beams[0]?.getBoundingClientRect() ?? null;
+      return {
+        stemUps: notes.map((n) => n.stemUp),
+        beamCount: beams.length,
+        beamTop: beamRect?.top ?? null,
+        stemTops: stemRects.map((r) => r?.top ?? null),
+        headTops: headRects.map((r) => r?.top ?? null),
+      };
+    }, MUSIC_STAFF);
+
+    expect(result.stemUps).toEqual([true, true, true]);
+    // One shared beam for all three notes, not three independent flags.
+    expect(result.beamCount).toBe(1);
+    expect(result.beamTop).not.toBeNull();
+    // A stem-up note's stem extends upward from its notehead (stem top is
+    // above — smaller y than — the notehead top), and the shared beam sits
+    // above every notehead.
+    for (let i = 0; i < 3; i++) {
+      expect(result.stemTops[i]).not.toBeNull();
+      expect(result.headTops[i]).not.toBeNull();
+      expect(result.stemTops[i]).toBeLessThan(result.headTops[i] as number);
+      expect(result.beamTop).toBeLessThanOrEqual(
+        (result.stemTops[i] as number) + 1
+      );
+    }
+  });
+});
+
 test.describe(`${MUSIC_STAFF} glissando`, () => {
   test('renders a straight diagonal line between the two notes, with the hint text near it', async ({
     page,

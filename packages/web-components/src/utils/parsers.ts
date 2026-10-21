@@ -19,6 +19,7 @@ import type {
   OctaveShiftAmount,
   RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -41,6 +42,7 @@ import {
   OCTAVES,
   REST_STAFF_SIDES,
   STAFF_GROUPS,
+  STEM_DIRECTIONS,
   STRESSES,
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
@@ -66,6 +68,7 @@ const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
 const VALID_OCTAVE_SHIFT_AMOUNTS = new Set<string>(OCTAVE_SHIFT_AMOUNTS);
 const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
 const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
+const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
 const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
@@ -236,6 +239,17 @@ export const parseRestStaffSide = (
 ): RestStaffSide | null => {
   if (value !== null && VALID_REST_STAFF_SIDES.has(value)) {
     return value as RestStaffSide;
+  }
+  return null;
+};
+
+// No default: null means "no author override," resolved by today's
+// existing pitch-driven/voice/beam-group stem direction logic unchanged.
+export const parseStemDirection = (
+  value: string | null
+): StemDirection | null => {
+  if (value !== null && VALID_STEM_DIRECTIONS.has(value)) {
+    return value as StemDirection;
   }
   return null;
 };

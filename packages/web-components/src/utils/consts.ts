@@ -19,6 +19,7 @@ import type {
   OctaveShiftAmount,
   RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TimeSignature,
   TrillContinuationMode,
@@ -275,6 +276,8 @@ export const OCTAVE_DISPLAY_MODES: OctaveDisplayMode[] = ['sign', 'col'];
 export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
 
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
+
+export const STEM_DIRECTIONS: StemDirection[] = ['up', 'down'];
 
 export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
   'none',

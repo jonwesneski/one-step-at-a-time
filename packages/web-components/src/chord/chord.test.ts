@@ -563,6 +563,92 @@ describe(MUSIC_CHORD, () => {
     });
   });
 
+  describe('slur group', () => {
+    function makeChord(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'C' satisfies Chord);
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips slur-group as a plain string attribute', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.slurGroup).toBeNull();
+      chordElement.slurGroup = 'phrase1';
+      expect(chordElement.getAttribute('slur-group')).toBe('phrase1');
+      expect(chordElement.slurGroup).toBe('phrase1');
+
+      chordElement.slurGroup = null;
+      expect(chordElement.getAttribute('slur-group')).toBeNull();
+    });
+
+    it('dispatches CONNECTOR_ATTRIBUTE_CHANGE without re-rendering the chord locally', () => {
+      const chordElement = makeChord();
+      const handler = jest.fn();
+      chordElement.addEventListener(
+        NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+        handler
+      );
+
+      chordElement.slurGroup = 'phrase1';
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('stem direction', () => {
+    function makeChord(): ChordElementType {
+      const chordElement = document.createElement(
+        MUSIC_CHORD
+      ) as ChordElementType;
+      chordElement.setAttribute('chord', 'C' satisfies Chord);
+      document.body.appendChild(chordElement);
+      return chordElement;
+    }
+
+    it('round-trips stem-direction, rejecting an invalid value', () => {
+      const chordElement = makeChord();
+
+      expect(chordElement.stemDirection).toBeNull();
+      chordElement.stemDirection = 'up';
+      expect(chordElement.getAttribute('stem-direction')).toBe('up');
+      expect(chordElement.stemDirection).toBe('up');
+
+      chordElement.setAttribute('stem-direction', 'sideways');
+      expect(chordElement.stemDirection).toBeNull();
+
+      chordElement.stemDirection = null;
+      expect(chordElement.getAttribute('stem-direction')).toBeNull();
+    });
+
+    it('dispatches NOTE_Y_CHANGE (the same full-relayout event note/octave changes use)', () => {
+      const chordElement = makeChord();
+      const handler = jest.fn();
+      chordElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+      chordElement.stemDirection = 'down';
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('overrides the pitch-driven stem direction when set on a real staff', () => {
+      const staff = makeStaff();
+      // E4(70), G4(60) — both > MIDDLE_STAFF_Y(50) → pitch-driven stemUp=true
+      const chord = renderChordByNotes(staff, [
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ]) as any;
+      expect(chord.stemUp).toBe(true);
+
+      chord.setAttribute('stem-direction', 'down');
+
+      expect(chord.stemUp).toBe(false);
+    });
+  });
+
   describe('articulations', () => {
     function makeChordWithNotes(): ChordElementType {
       const chordElement = document.createElement(

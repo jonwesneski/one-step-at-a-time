@@ -282,6 +282,57 @@ export const SHARED_STEM_MISALIGNMENT_WARN_PX = STAFF_LINE_SPACING;
  */
 export const CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX = 0.5;
 
+/**
+ * Pull-back (px) from a slur's real stem-tip anchor, back toward the
+ * notehead, when anchoring at the stem end instead of the notehead — the
+ * bare tip itself is exactly where a double-stemmed beam (or another
+ * voice's own content) sits, so anchoring precisely at it would touch that,
+ * not clear it. Similar order of magnitude to SLUR_NOTEHEAD_OFFSET_PX.
+ * = 0.9 × STAFF_LINE_SPACING
+ */
+export const SLUR_STEM_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Minimum curve height (as a fraction of a slur's own real horizontal span)
+ * for a cross-staff slur — a fixed DEFAULT_BULGE_HEIGHT reads as a
+ * near-straight diagonal once the span reaches the width of a whole
+ * grand-staff hand-crossing passage.
+ */
+export const CROSS_STAFF_SLUR_BULGE_SPAN_RATIO = 0.1;
+
+/**
+ * Clearance (px) past a note's own real stem tip, on the far side from the
+ * notehead, for a cross-staff slur endpoint whose stem points toward the
+ * slur's side (see connectorsBuilder.ts#computeBeyondBeamAnchor).
+ * Comfortably past a beam's own thickness (BEAM_THICKNESS_PX, 8px) so the
+ * anchor lands visibly clear of the drawn beam or flag.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const SLUR_BEYOND_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * Minimum gap (px) a cross-staff slur keeps from every other entry's glyphs
+ * (noteheads, stems, flags, rests, ledger lines, beams) so it visibly does
+ * not touch them.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const SLUR_OBSTACLE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Upper bound of a cross-staff slur's control-point height search, as a
+ * fraction of its own real horizontal span — keeps the obstacle search
+ * bounded; a slur that can't clear within it falls back to the least-colliding
+ * shape.
+ */
+export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
+
+/**
+ * Width (px) of the vertical slices a beam polygon is cut into for slur
+ * obstacle tests, so a sloped beam keeps its real outline instead of
+ * collapsing to its bounding box.
+ */
+export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
+
 // ─── Describe area (clef, key signature, time signature) ─────────────────────
 
 /**

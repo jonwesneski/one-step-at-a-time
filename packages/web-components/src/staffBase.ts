@@ -9,6 +9,7 @@ import {
   buildConnectorSvgs,
   collectArpeggioTiePairs,
   collectNoteLikeElements,
+  collectPhraseSlurPairs,
   pairConnectors,
   partitionByVoice,
 } from './utils/connectorsBuilder';
@@ -353,10 +354,12 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     const root = this as unknown as ParentNode;
-    const byVoice = partitionByVoice(collectNoteLikeElements(root));
+    const noteLikeElements = collectNoteLikeElements(root);
+    const byVoice = partitionByVoice(noteLikeElements);
     const pairs = [
       ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
       ...collectArpeggioTiePairs(root),
+      ...collectPhraseSlurPairs(root),
     ];
     if (pairs.length === 0) {
       return;
