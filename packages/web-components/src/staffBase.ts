@@ -1,3 +1,4 @@
+import { computeBandOverflow, VerticalBand } from './rules/verticalSpaceRules';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
@@ -27,8 +28,13 @@ import {
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
   STAFF_WRAPPER_MIN_HEIGHT,
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from './utils/notationDimensions';
 import { parseStaffGroup } from './utils/parsers';
+import {
+  measureVerticalExtents,
+  VerticalSpaceReservations,
+} from './utils/verticalSpace';
 
 // Runtime-safe fallback for environments without `HTMLElement` (SSR/Node). Prevents errrors if loaded in SSR
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis.HTMLElement isn't typed as a class constructor
@@ -38,6 +44,8 @@ export const _MaybeHTMLElement: any =
     ? // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis.HTMLElement isn't typed as a class constructor
       (globalThis as any).HTMLElement
     : class {};
+
+const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
@@ -57,6 +65,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected readonly transcribeContainer: SVGSVGElement;
   #standaloneConnectorsOverlay: SVGSVGElement;
+  #verticalSpace = new VerticalSpaceReservations(
+    this as unknown as HTMLElement
+  );
   // True once a slotchange (real or the deferred synthetic kick) has been
   // handled — guards against rendering the initial content twice.
   #initialSlotSyncDone = false;
@@ -338,12 +349,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
   }
 
+  // Content drawn past this staff's box reserves room under its own `source`
+  // key; the largest reservation per side becomes the host's margin, so it
+  // participates in page layout. Each source re-reports on every recompute.
+  protected reserveVerticalSpace(source: string, space: VerticalBand): void {
+    this.#verticalSpace.reserve(source, space);
+  }
+
   protected drawConnectorsWhenStandalone(): void {
     // A <music-measure> or <music-composition> ancestor owns connector
     // drawing once present — it can see this staff's siblings, which a lone
     // staff cannot, so a cross-staff pair (e.g. a slur from one hand of a
-    // grand staff to the other) can only ever be paired at that level.
+    // grand staff to the other) can only ever be paired at that level. That
+    // ancestor also owns the room its connectors need.
     if (this.closest(MUSIC_COMPOSITION) || this.closest(MUSIC_MEASURE)) {
+      this.#verticalSpace.release(STANDALONE_OVERLAY_SOURCE);
       return;
     }
 
@@ -362,6 +382,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       ...collectPhraseSlurPairs(root),
     ];
     if (pairs.length === 0) {
+      this.#verticalSpace.release(STANDALONE_OVERLAY_SOURCE);
       return;
     }
 
@@ -374,6 +395,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     for (const svg of svgs) {
       this.#standaloneConnectorsOverlay.appendChild(svg);
     }
+    this.#reserveStandaloneOverlaySpace();
+  }
+
+  // The overlay moves with this host, so growing the margin needs no redraw.
+  #reserveStandaloneOverlaySpace(): void {
+    const rect = (this as unknown as HTMLElement).getBoundingClientRect();
+    const [overflow] = computeBandOverflow(
+      [{ top: rect.top, bottom: rect.bottom }],
+      measureVerticalExtents(
+        this.#standaloneConnectorsOverlay,
+        '.connector path'
+      ),
+      VERTICAL_OVERFLOW_CLEARANCE_PX
+    );
+    this.#verticalSpace.reserve(STANDALONE_OVERLAY_SOURCE, overflow);
   }
 
   disconnectedCallback(): void {

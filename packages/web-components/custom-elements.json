@@ -1297,6 +1297,12 @@
             },
             {
               "kind": "field",
+              "name": "#rowSpaceMeasures",
+              "privacy": "private",
+              "default": "new Set<HTMLElement>()"
+            },
+            {
+              "kind": "field",
               "name": "#redrawScheduled",
               "privacy": "private",
               "type": {
@@ -1377,6 +1383,16 @@
               "kind": "method",
               "name": "#scheduleRedraw",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#reserveRowOverlaySpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
             },
             {
               "kind": "method",
@@ -1756,6 +1772,12 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations(this)"
+            },
+            {
+              "kind": "field",
               "name": "#onStaffMinWidth",
               "privacy": "private"
             },
@@ -2075,6 +2097,24 @@
             },
             {
               "kind": "method",
+              "name": "#reserveOverlaySpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "overlay",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#redrawSharedDynamics",
               "privacy": "private"
             },
@@ -2165,6 +2205,29 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "reserveVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ]
             }
           ],
           "attributes": [
@@ -5384,6 +5447,16 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement )",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#initialSlotSyncDone",
               "privacy": "private",
               "type": {
@@ -5607,8 +5680,50 @@
             },
             {
               "kind": "method",
+              "name": "reserveVerticalSpace",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveStandaloneOverlaySpace",
+              "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"
@@ -6006,6 +6121,16 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement )",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#initialSlotSyncDone",
               "privacy": "private",
               "type": {
@@ -6229,8 +6354,50 @@
             },
             {
               "kind": "method",
+              "name": "reserveVerticalSpace",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveStandaloneOverlaySpace",
+              "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"
@@ -8721,6 +8888,16 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement )",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#initialSlotSyncDone",
               "privacy": "private",
               "type": {
@@ -8944,8 +9121,50 @@
             },
             {
               "kind": "method",
+              "name": "reserveVerticalSpace",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveStandaloneOverlaySpace",
+              "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"

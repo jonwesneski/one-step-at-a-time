@@ -333,6 +333,13 @@ export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
  */
 export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
 
+/**
+ * Gap (px) kept between content drawn past its host's or row's edge and that
+ * edge, once the host grows its margin to make room.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const VERTICAL_OVERFLOW_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Describe area (clef, key signature, time signature) ─────────────────────
 
 /**

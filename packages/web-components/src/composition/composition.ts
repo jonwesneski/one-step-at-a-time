@@ -11,6 +11,7 @@ import {
   resolveTrillSpans,
   type TrillMeasureBoundary,
 } from '../rules/trillRules';
+import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
 import type {
   ChordElementType,
   NoteChordOrRestElementType,
@@ -73,12 +74,14 @@ import {
   TRILL_ABOVE_STAFF_GAP_PX,
   TRILL_LINE_END_GAP_PX,
   TRILL_SIGN_LINE_GAP_PX,
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
 import {
   flattenSlotElements,
   flattenStaffSlotElements,
 } from '../utils/slotElements';
+import { measureVerticalExtents } from '../utils/verticalSpace';
 
 // The trill line's own local Y offset from the top of its staff (see
 // staffClassicalBase.ts#redrawTrillLines) — reused here so a cross-measure
@@ -100,6 +103,20 @@ const OCTAVE_SIGN_ABOVE_ROOT_Y_OFFSET =
   STAFF_Y_PADDING + OCTAVE_SIGN_ABOVE_STAFF_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
 const OCTAVE_SIGN_BELOW_ROOT_Y_OFFSET =
   STAFF_Y_PADDING + OCTAVE_SIGN_BELOW_STAFF_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+const ROW_OVERLAY_SOURCE = 'row-overlay';
+
+// <music-measure>'s reserveVerticalSpace, duck-typed so this file needn't
+// import the measure class.
+const reserveMeasureSpace = (
+  measure: HTMLElement,
+  space: VerticalBand
+): boolean =>
+  (
+    measure as HTMLElement & {
+      reserveVerticalSpace?: (source: string, space: VerticalBand) => boolean;
+    }
+  ).reserveVerticalSpace?.(ROW_OVERLAY_SOURCE, space) ?? false;
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -140,6 +157,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #observer: MutationObserver | null;
     #resizeObserver: ResizeObserver | null;
+    #rowSpaceMeasures = new Set<HTMLElement>();
     #redrawScheduled: boolean;
     #boundRedraw: () => void;
 
@@ -217,6 +235,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     disconnectedCallback(): void {
+      for (const measure of this.#rowSpaceMeasures) {
+        reserveMeasureSpace(measure, { top: 0, bottom: 0 });
+      }
+      this.#rowSpaceMeasures.clear();
       this.#observer?.disconnect();
       this.#observer = null;
       this.#resizeObserver?.disconnect();
@@ -401,6 +423,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#redrawConnectors();
+        if (this.#reserveRowOverlaySpace()) {
+          this.#redrawConnectors();
+        }
         this.#redrawHairpins();
         this.#redrawTrills();
         this.#redrawOctaveSigns();
@@ -408,6 +433,51 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#updateClefContinuity();
         this.#updateTimeSignatureContinuity();
       });
+    }
+
+    // Reserves the same room on every measure in a row so connectors that
+    // rise above or dip below that row stay on the page and clear of the
+    // neighboring row — like engraving software widening system spacing. Row
+    // bands are border boxes (margin excluded) snapshotted before any write,
+    // and curves move with their row, so the next pass computes the same
+    // values. A measure no longer in this composition releases what was
+    // reserved on it. Returns whether any margin changed, so the caller can
+    // redraw the overlay against the shifted rows.
+    #reserveRowOverlaySpace(): boolean {
+      const overlay = this.shadowRoot?.querySelector('.connectors-overlay');
+      if (!overlay) {
+        return false;
+      }
+      const rows = this.#computeMeasureRows();
+      const bands = rows.map((row) => {
+        const rects = row.map((measure) => measure.getBoundingClientRect());
+        return {
+          top: Math.min(...rects.map((rect) => rect.top)),
+          bottom: Math.max(...rects.map((rect) => rect.bottom)),
+        };
+      });
+      const overflow = computeBandOverflow(
+        bands,
+        measureVerticalExtents(overlay, '.connector path'),
+        VERTICAL_OVERFLOW_CLEARANCE_PX
+      );
+
+      let changed = false;
+      const reservedMeasures = new Set<HTMLElement>();
+      rows.forEach((row, index) => {
+        for (const measure of row) {
+          reservedMeasures.add(measure);
+          changed = reserveMeasureSpace(measure, overflow[index]) || changed;
+        }
+      });
+      for (const measure of this.#rowSpaceMeasures) {
+        if (!reservedMeasures.has(measure)) {
+          changed =
+            reserveMeasureSpace(measure, { top: 0, bottom: 0 }) || changed;
+        }
+      }
+      this.#rowSpaceMeasures = reservedMeasures;
+      return changed;
     }
 
     // Groups measures into visual rows by top-position (5px tolerance),

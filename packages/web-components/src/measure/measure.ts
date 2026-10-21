@@ -64,6 +64,11 @@ import {
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
 import {
+  measureVerticalExtents,
+  VerticalSpaceReservations,
+} from '../utils/verticalSpace';
+import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
+import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
   BEAM_GAP_PX,
@@ -90,6 +95,7 @@ import {
   STAFF_LABEL_WIDTH_PX,
   STAFF_LINE_START,
   STEM_OVERLAP_PX,
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
 
@@ -115,6 +121,8 @@ const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
 // did — verified empirically against the full browser-test suite, not
 // derived analytically.
 const CONNECTOR_TOP_PX = 33;
+
+const OVERLAY_SOURCE = 'overlay';
 
 function staffSlotHeightPx(staff: StaffElementBaseType): number {
   return staff.staffHeight + 2;
@@ -162,6 +170,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // restores that element's own local stem instead of leaving it
     // suppressed forever with nothing left to un-suppress it.
     #sharedStemSuppressedElements = new Set<NoteOrChordElementType>();
+    #verticalSpace = new VerticalSpaceReservations(this);
     #onStaffMinWidth = (event: Event): void => {
       const customEvent = event as CustomEvent<{
         minWidth: number;
@@ -965,6 +974,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // standalone measure.
     #redrawConnectors() {
       if (this.closest(MUSIC_COMPOSITION)) {
+        this.#verticalSpace.release(OVERLAY_SOURCE);
         return;
       }
 
@@ -986,6 +996,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ...collectPhraseSlurPairs(this),
       ];
       if (pairs.length === 0) {
+        this.#reserveOverlaySpace(overlay);
         return;
       }
 
@@ -1014,6 +1025,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       for (const svg of svgs) {
         overlay.appendChild(svg);
       }
+      this.#reserveOverlaySpace(overlay);
+    }
+
+    // A standalone measure grows its own margin so a connector rising above
+    // or dipping below it stays on the page; inside a composition the
+    // composition reserves per row instead. The overlay moves with this host,
+    // so no redraw is needed afterward.
+    #reserveOverlaySpace(overlay: SVGSVGElement): void {
+      const rect = this.getBoundingClientRect();
+      const [overflow] = computeBandOverflow(
+        [{ top: rect.top, bottom: rect.bottom }],
+        measureVerticalExtents(overlay, '.connector path'),
+        VERTICAL_OVERFLOW_CLEARANCE_PX
+      );
+      this.#verticalSpace.reserve(OVERLAY_SOURCE, overflow);
     }
 
     // A `dynamic-shared` note/chord suppresses its own staff-local dynamic
@@ -1965,6 +1991,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (this.isConnected) {
         this.#updateConnectorVisibility();
       }
+    }
+
+    // Duck-typed from composition.ts, which reserves room for content drawn
+    // past this measure's row. The largest reservation per side across every
+    // source becomes this measure's margin; returns whether it changed.
+    reserveVerticalSpace(source: string, space: VerticalBand): boolean {
+      return this.#verticalSpace.reserve(source, space);
     }
   }
 

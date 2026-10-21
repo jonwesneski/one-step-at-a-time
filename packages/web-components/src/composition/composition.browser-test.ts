@@ -10,10 +10,12 @@ import {
   MUSIC_LYRICS,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
 } from '../utils/consts';
+import { VERTICAL_OVERFLOW_CLEARANCE_PX } from '../utils/notationDimensions';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -2958,5 +2960,278 @@ test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
     const uncappedRows = await readMeasureRowCount(page);
 
     expect(uncappedRows).toBeLessThan(cappedRows);
+  });
+});
+
+// A row whose slur rises above it grows every one of its measures by the same
+// margin, so the arc stays on the page and the row's measures stay aligned.
+test.describe(`${MUSIC_COMPOSITION} row spacing for connectors`, () => {
+  // Replica of keyboard.stories.ts's HandCrossingPassageChained: the first
+  // phrase segment climbs over the treble rests, well above the row.
+  async function buildChainedHandCrossing(page: Page): Promise<void> {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '1000px';
+        const composition = document.createElement(compositionTag);
+
+        const fill = (
+          staff: Element,
+          items: (string | null)[],
+          slurGroupAt: number
+        ): void => {
+          items.forEach((item, index) => {
+            if (item === null) {
+              const rest = document.createElement(restTag);
+              rest.setAttribute('duration', 'eighth');
+              staff.appendChild(rest);
+              return;
+            }
+            const note = document.createElement(noteTag);
+            note.setAttribute('note', item[0]);
+            note.setAttribute('octave', item[1]);
+            note.setAttribute('duration', 'eighth');
+            if (index === slurGroupAt) {
+              note.setAttribute('slur-group', 'phrase1');
+            }
+            staff.appendChild(note);
+          });
+        };
+
+        const legs: [(string | null)[], (string | null)[]][] = [
+          [
+            [null, null, null, null, 'D4', 'F4', 'A4', 'D5'],
+            ['F2', 'A2', 'D3', 'F3', null, null, null, null],
+          ],
+          [
+            [null, null, null, null, 'A4', 'C5', 'E5', 'G5'],
+            ['C3', 'E3', 'A3', 'C4', null, null, null, null],
+          ],
+        ];
+        for (const [trebleItems, bassItems] of legs) {
+          const measure = document.createElement(measureTag);
+          const treble = document.createElement(staffTag);
+          treble.setAttribute('clef', 'treble');
+          treble.setAttribute('group', 'grand');
+          fill(treble, trebleItems, 7);
+          const bass = document.createElement(staffTag);
+          bass.setAttribute('clef', 'bass');
+          fill(bass, bassItems, 0);
+          measure.appendChild(treble);
+          measure.appendChild(bass);
+          composition.appendChild(measure);
+        }
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        restTag: MUSIC_REST,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  const readLayout = (page: Page) =>
+    page.evaluate(
+      ({ compositionTag, measureTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const paths = Array.from(
+          composition.shadowRoot.querySelectorAll(
+            '.connectors-overlay .connector path'
+          )
+        );
+        const measures = Array.from(
+          document.querySelectorAll<HTMLElement>(measureTag)
+        );
+        return {
+          compositionTop: composition.getBoundingClientRect().top,
+          pathTops: paths.map((path) => path.getBoundingClientRect().top),
+          measureTops: measures.map(
+            (measure) => measure.getBoundingClientRect().top
+          ),
+          margins: measures.map((measure) => ({
+            top: measure.style.marginTop,
+            bottom: measure.style.marginBottom,
+          })),
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION, measureTag: MUSIC_MEASURE }
+    );
+
+  test('a slur rising above its row grows that row, keeping the arc on the page and the row aligned', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const layout = await readLayout(page);
+
+    expect(layout.pathTops.length).toBe(3);
+    for (const top of layout.pathTops) {
+      expect(top).toBeGreaterThanOrEqual(
+        layout.compositionTop + VERTICAL_OVERFLOW_CLEARANCE_PX - 1
+      );
+    }
+
+    // Both measures share one row: same non-empty margin, same top.
+    expect(layout.margins[0].top).not.toBe('');
+    expect(layout.margins[1].top).toBe(layout.margins[0].top);
+    expect(
+      Math.abs(layout.measureTops[0] - layout.measureTops[1])
+    ).toBeLessThan(1);
+  });
+
+  test('the reserved margin is stable across further redraws', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const first = await readLayout(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const second = await readLayout(page);
+
+    expect(second.margins).toEqual(first.margins);
+    expect(second.pathTops).toEqual(first.pathTops);
+  });
+
+  const marginTopPx = (margin: { top: string }): number =>
+    parseFloat(margin.top || '0');
+
+  test('removing every slur releases the reserved margin', async ({ page }) => {
+    await buildChainedHandCrossing(page);
+    const before = await readLayout(page);
+    expect(marginTopPx(before.margins[0])).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      for (const note of Array.from(
+        document.querySelectorAll('music-note[slur-group]')
+      )) {
+        note.removeAttribute('slur-group');
+      }
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await readLayout(page);
+
+    expect(after.pathTops).toHaveLength(0);
+    expect(after.margins).toEqual([
+      { top: '', bottom: '' },
+      { top: '', bottom: '' },
+    ]);
+  });
+
+  test('dropping the tallest slur shrinks the margin instead of keeping the old value', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const before = await readLayout(page);
+
+    // F2 starts the first segment (F2 to D5), the arc that climbs over the
+    // treble rests; D5 to C3 to G5 remain.
+    await page.evaluate(() => {
+      const firstBass = document
+        .querySelectorAll('music-measure')[0]
+        .querySelectorAll('music-staff')[1]
+        .querySelector('music-note[slur-group]');
+      firstBass?.removeAttribute('slur-group');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await readLayout(page);
+
+    expect(after.pathTops).toHaveLength(2);
+    expect(marginTopPx(after.margins[0])).toBeLessThan(
+      marginTopPx(before.margins[0])
+    );
+    expect(after.margins[1]).toEqual(after.margins[0]);
+  });
+
+  test('a measure moved out of the composition releases the row margin it was given', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const before = await readLayout(page);
+    expect(marginTopPx(before.margins[1])).toBeGreaterThan(0);
+
+    const moved = await page.evaluate(async () => {
+      const host = document.getElementById('host');
+      const measure =
+        document.querySelectorAll<HTMLElement>('music-measure')[1];
+      if (!host || !measure) {
+        throw new Error('fixture missing');
+      }
+      // Strip its slurs so the measure's own standalone pass has nothing to
+      // reserve; only the composition's stale reservation could remain.
+      for (const note of Array.from(
+        measure.querySelectorAll('music-note[slur-group]')
+      )) {
+        note.removeAttribute('slur-group');
+      }
+      host.appendChild(measure);
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
+      return {
+        top: measure.style.marginTop,
+        bottom: measure.style.marginBottom,
+      };
+    });
+
+    expect(moved).toEqual({ top: '', bottom: '' });
+  });
+
+  test('a row whose slurs stay inside it gets no extra margin', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        ['E', 'F', 'G', 'A'].forEach((value, index, all) => {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', value);
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'quarter');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === all.length - 1) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        });
+        measure.appendChild(staff);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const layout = await readLayout(page);
+
+    expect(layout.pathTops.length).toBe(1);
+    expect(layout.margins).toEqual([{ top: '', bottom: '' }]);
   });
 });

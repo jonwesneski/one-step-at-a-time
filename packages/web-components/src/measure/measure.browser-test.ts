@@ -12,6 +12,7 @@ import {
   MUSIC_VOICE,
 } from '../utils/consts';
 import {
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
   REST_BEAM_CLEARANCE_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
 } from '../utils/notationDimensions';
@@ -3538,6 +3539,136 @@ test.describe(`${MUSIC_MEASURE} hand-crossing passage (cross-staff slur placemen
     for (const slur of slurs) {
       expectClearOfOtherEntries(slur);
     }
+  });
+});
+
+// HandCrossingPassage's leg 2 in a standalone measure: the slur climbs over the
+// treble rests, above the measure.
+async function buildStandaloneTallSlur(page: Page): Promise<void> {
+  await page.evaluate(
+    ({ measureTag, staffTag, noteTag, restTag }) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      const measure = document.createElement(measureTag);
+      measure.setAttribute('time', '3/4');
+
+      const addNote = (
+        staff: Element,
+        note: string,
+        octave: string,
+        attrs: Record<string, string>
+      ): void => {
+        const el = document.createElement(noteTag);
+        el.setAttribute('note', note);
+        el.setAttribute('octave', octave);
+        el.setAttribute('duration', 'eighth');
+        for (const [k, v] of Object.entries(attrs)) {
+          el.setAttribute(k, v);
+        }
+        staff.appendChild(el);
+      };
+      const addRests = (staff: Element): void => {
+        for (let i = 0; i < 3; i++) {
+          const rest = document.createElement(restTag);
+          rest.setAttribute('duration', 'eighth');
+          staff.appendChild(rest);
+        }
+      };
+
+      // HandCrossingPassage's leg 2: the slur climbs over the treble rests.
+      const treble = document.createElement(staffTag);
+      treble.setAttribute('clef', 'treble');
+      treble.setAttribute('time', '3/4');
+      addRests(treble);
+      addNote(treble, 'C', '5', { 'stem-direction': 'down' });
+      addNote(treble, 'E', '5', { 'stem-direction': 'down' });
+      addNote(treble, 'G', '5', {
+        'stem-direction': 'down',
+        slur: 'start',
+        id: 'leg2-end',
+      });
+      const bass = document.createElement(staffTag);
+      bass.setAttribute('clef', 'bass');
+      bass.setAttribute('time', '3/4');
+      addNote(bass, 'C', '4', {
+        'stem-direction': 'up',
+        slur: 'end',
+        for: 'leg2-end',
+      });
+      addNote(bass, 'E', '4', { 'stem-direction': 'up' });
+      addNote(bass, 'G', '4', { 'stem-direction': 'up' });
+      addRests(bass);
+      measure.appendChild(treble);
+      measure.appendChild(bass);
+      host.appendChild(measure);
+    },
+    {
+      measureTag: MUSIC_MEASURE,
+      staffTag: MUSIC_STAFF,
+      noteTag: MUSIC_NOTE,
+      restTag: MUSIC_REST,
+    }
+  );
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+}
+
+test.describe(`${MUSIC_MEASURE} row spacing for connectors (standalone)`, () => {
+  test('a standalone measure grows its own margin so a slur rising above it stays on the page', async ({
+    page,
+  }) => {
+    await buildStandaloneTallSlur(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector<HTMLElement>('music-measure');
+      const path = measure?.shadowRoot?.querySelector(
+        '.connectors-overlay .connector path'
+      );
+      if (!measure || !path) {
+        throw new Error('geometry not ready');
+      }
+      const marginTop = parseFloat(measure.style.marginTop || '0');
+      return {
+        marginTop,
+        marginBoxTop: measure.getBoundingClientRect().top - marginTop,
+        pathTop: path.getBoundingClientRect().top,
+      };
+    });
+
+    expect(result.marginTop).toBeGreaterThan(0);
+    expect(result.pathTop).toBeGreaterThanOrEqual(
+      result.marginBoxTop + VERTICAL_OVERFLOW_CLEARANCE_PX - 1
+    );
+  });
+
+  test("a standalone measure's margin clears once its slur is removed", async ({
+    page,
+  }) => {
+    await buildStandaloneTallSlur(page);
+
+    const readMargins = () =>
+      page.evaluate(() => {
+        const measure = document.querySelector<HTMLElement>('music-measure');
+        return {
+          top: measure?.style.marginTop ?? null,
+          bottom: measure?.style.marginBottom ?? null,
+        };
+      });
+    const before = await readMargins();
+    expect(before.top !== '' || before.bottom !== '').toBe(true);
+
+    await page.evaluate(() => {
+      for (const note of Array.from(document.querySelectorAll('[slur]'))) {
+        note.removeAttribute('slur');
+      }
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    expect(await readMargins()).toEqual({ top: '', bottom: '' });
   });
 });
 

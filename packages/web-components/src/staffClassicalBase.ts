@@ -2188,9 +2188,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // budgets onto this host element's own margin makes them participate
     // in real page layout instead, pushing surrounding content out of the
     // way like a real engraving program growing the space between systems.
-    this.style.marginTop = aboveStaffBudget > 0 ? `${aboveStaffBudget}px` : '';
-    this.style.marginBottom =
-      belowStaffBudget > 0 ? `${belowStaffBudget}px` : '';
+    this.reserveVerticalSpace('transcription', {
+      top: aboveStaffBudget,
+      bottom: belowStaffBudget,
+    });
 
     // Each entry is positioned as a fraction of the measure's fixed beat
     // capacity (from the time signature — constant regardless of how many
