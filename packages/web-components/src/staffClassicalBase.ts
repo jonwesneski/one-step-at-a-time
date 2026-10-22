@@ -11,6 +11,7 @@ import { buildBeamsRenderer } from './rules/beamRules';
 import { computeBeatOffsets } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
+import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import { pairHairpins } from './rules/dynamicsRules';
 import {
   applyResolvedGraceAccidentals,
@@ -54,6 +55,8 @@ import {
   computeTupletScaledNoteCount,
   getStaffYForIndex,
   naturalStemTipY,
+  noteheadEdgeY,
+  resolveTupletBracketAbove,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -99,6 +102,7 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  TupletPlacement,
   VoiceNumber,
 } from './types/theory';
 import {
@@ -139,6 +143,7 @@ import {
   STAFF_EVENTS,
   STAFF_TAGS,
   SVG_NS,
+  TUPLET_EVENTS,
 } from './utils/consts';
 import {
   ACCIDENTAL_SYMBOL_HEIGHT,
@@ -499,6 +504,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     NoteChordOrRestElementType,
     number
   > | null = null;
+  #crossStaffTupletRoles: ReadonlyMap<
+    TupletElementType,
+    CrossStaffTupletRole
+  > | null = null;
   #clefMarkers: ClefMarkerPlacement[] = [];
   // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
   // #renderNotes() pass — the shared coordinate space #clefMarkers'
@@ -731,6 +740,43 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#renderNotes();
   }
 
+  // Set by the ancestor <music-measure> for each of this staff's
+  // `<music-tuplet tuplet-group>` wrappers that joined a resolved cross-staff
+  // tuplet (measure.ts#redrawCrossStaffTuplets): forces its members' stems
+  // into the gap and either suppresses its bracket or forces its side.
+  // Structural values (no measured pixels), compared by content for the same
+  // reason as crossStaffBeamStemOverrides above.
+  get crossStaffTupletRoles(): ReadonlyMap<
+    TupletElementType,
+    CrossStaffTupletRole
+  > | null {
+    return this.#crossStaffTupletRoles;
+  }
+
+  set crossStaffTupletRoles(
+    value: ReadonlyMap<TupletElementType, CrossStaffTupletRole> | null
+  ) {
+    const current = this.#crossStaffTupletRoles;
+    const unchanged =
+      current === value ||
+      (current !== null &&
+        value !== null &&
+        current.size === value.size &&
+        [...current].every(([tuplet, role]) => {
+          const other = value.get(tuplet);
+          return (
+            other !== undefined &&
+            other.stemUp === role.stemUp &&
+            other.rendering === role.rendering
+          );
+        }));
+    if (unchanged) {
+      return;
+    }
+    this.#crossStaffTupletRoles = value;
+    this.#renderNotes();
+  }
+
   // Set by the ancestor <music-measure> for a tuplet-group member (see
   // buildTupletGroups below) that's also a double-stemmed beam-group member:
   // this staff's own beamRenderer never covers it (it's excluded from this
@@ -890,6 +936,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundClefMarkerChange
     );
+    this.addEventListener(
+      TUPLET_EVENTS.ATTRIBUTE_CHANGE,
+      this.#boundNoteYChange
+    );
   }
 
   // Describe is: clef, key signature, time signature, and beams overlay
@@ -1022,6 +1072,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.removeEventListener(
       CLEF_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundClefMarkerChange
+    );
+    this.removeEventListener(
+      TUPLET_EVENTS.ATTRIBUTE_CHANGE,
+      this.#boundNoteYChange
     );
     try {
       this.#mutationObservers.forEach((m) => m.disconnect());
@@ -1297,12 +1351,30 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         authoredStemOverrides.set(element, stemDirection === 'up');
       }
     }
+    const crossStaffTupletStemOverrides = new Map<
+      NoteChordOrRestElementType,
+      boolean
+    >();
+    if (this.#crossStaffTupletRoles !== null) {
+      for (let i = 0; i < elements.length; i++) {
+        const role = tupletsByIndex
+          .get(i)
+          ?.map((tuplet) => this.#crossStaffTupletRoles?.get(tuplet))
+          .find((found) => found !== undefined);
+        if (role !== undefined && elements[i].nodeName !== MUSIC_REST_NODE) {
+          crossStaffTupletStemOverrides.set(elements[i], role.stemUp);
+        }
+      }
+    }
     const combinedStemOverrides:
       | ReadonlyMap<NoteChordOrRestElementType, boolean>
       | undefined =
-      authoredStemOverrides.size > 0 || this.#crossStaffBeamStemOverrides
+      authoredStemOverrides.size > 0 ||
+      crossStaffTupletStemOverrides.size > 0 ||
+      this.#crossStaffBeamStemOverrides
         ? new Map([
             ...(this.#crossStaffBeamStemOverrides ?? []),
+            ...crossStaffTupletStemOverrides,
             ...authoredStemOverrides,
           ])
         : undefined;
@@ -2570,7 +2642,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         TupletBracketGeometry
       >();
       for (const group of state.tupletGroups) {
-        if (group.nestingLevel === 0) {
+        if (group.nestingLevel === 0 || this.#isTupletSuppressed(group)) {
           continue;
         }
         const hasInnerGroups = state.tupletGroups.some(
@@ -2588,7 +2660,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           state.chordStaffYCoords,
           null,
           hasInnerGroups,
-          tupletBeamYForIndex
+          tupletBeamYForIndex,
+          this.#tupletSideOverride(group)
         );
         if (geometry !== null) {
           innerGeometriesByGroup.set(group, geometry);
@@ -2600,7 +2673,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ...innerGeometriesByGroup.values(),
       ];
       for (const group of state.tupletGroups) {
-        if (group.nestingLevel !== 0) {
+        if (group.nestingLevel !== 0 || this.#isTupletSuppressed(group)) {
           continue;
         }
         const outerIndexSet = new Set(group.indices);
@@ -2610,10 +2683,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           )
           .map(([, geom]) => geom.numeralY);
 
-        const upVotes = group.indices.filter(
-          (i) => state.stemDirections[i] === true
-        ).length;
-        const stemUp = upVotes >= group.indices.length / 2;
+        const stemUp = this.#tupletBracketAbove(state, group);
         const outerBaseY =
           innerNumeralYs.length > 0
             ? computeOuterBracketBaseY(innerNumeralYs, stemUp)
@@ -2630,7 +2700,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           state.chordStaffYCoords,
           outerBaseY,
           hasInnerGroups,
-          tupletBeamYForIndex
+          tupletBeamYForIndex,
+          this.#tupletSideOverride(group)
         );
         if (geometry !== null) {
           allGeometries.push(geometry);
@@ -3593,11 +3664,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     let extreme: number | null = null;
 
     for (const group of state.tupletGroups) {
-      const upVotes = group.indices.filter(
-        (i) => state.stemDirections[i] === true
-      ).length;
-      const groupStemUp = upVotes >= group.indices.length / 2;
-      if (groupStemUp !== stemUp) {
+      if (
+        this.#isTupletSuppressed(group) ||
+        this.#tupletBracketAbove(state, group) !== stemUp
+      ) {
         continue;
       }
 
@@ -3613,11 +3683,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           TUPLET_HOOK_LENGTH_PX +
           TUPLET_NUMERAL_FONT_SIZE;
 
-      const extremeStemTipY = this.#extremeStemTipY(
-        state,
-        group.indices,
-        stemUp
-      );
+      const extremeStemTipY =
+        this.#tupletSideOverride(group) === null
+          ? this.#extremeStemTipY(state, group.indices, stemUp)
+          : this.#forcedSideTupletExtremeY(state, group, stemUp);
 
       const numeralOffset =
         TUPLET_NUMERAL_FONT_SIZE / 2 +
@@ -3833,6 +3902,72 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // staff-relative offset. Returns null when none of the indices resolve to
   // a real Y (e.g. all rests). Shared by #tupletVerticalOverflow and
   // #dynamicsBaselineForVoice.
+  // Which side a tuplet group's bracket is forced to, if any — read by both
+  // the render pass and #tupletExtremeY so the reserved space and the drawn
+  // bracket agree. A cross-staff role outranks the wrapper's own `placement`,
+  // since the measure already folded both wrappers' placement into it.
+  #tupletSideOverride(group: TupletGroup): TupletPlacement | null {
+    const role = this.#crossStaffTupletRoles?.get(group.element);
+    if (role !== undefined) {
+      return role.rendering === 'suppressed' ? null : role.rendering;
+    }
+    return group.element.placement;
+  }
+
+  #isTupletSuppressed(group: TupletGroup): boolean {
+    return (
+      this.#crossStaffTupletRoles?.get(group.element)?.rendering ===
+      'suppressed'
+    );
+  }
+
+  #tupletBracketAbove(state: VoiceRenderState, group: TupletGroup): boolean {
+    return resolveTupletBracketAbove(
+      group.indices,
+      state.stemDirections,
+      this.#tupletSideOverride(group)
+    );
+  }
+
+  // Mirrors computeTupletBracketGeometry's forced-side clamp: a note whose
+  // stem points toward the bracket contributes its stem tip, any other its
+  // notehead edge.
+  #forcedSideTupletExtremeY(
+    state: VoiceRenderState,
+    group: TupletGroup,
+    above: boolean
+  ): number | null {
+    let extreme: number | null = null;
+    for (const i of group.indices) {
+      const y =
+        state.stemDirections[i] === above
+          ? naturalStemTipY(
+              i,
+              state.elements,
+              state.stemDirections,
+              state.noteStaffYCoords,
+              state.chordStaffYCoords
+            )
+          : noteheadEdgeY(
+              i,
+              state.elements,
+              state.noteStaffYCoords,
+              state.chordStaffYCoords,
+              above
+            );
+      if (y === null) {
+        continue;
+      }
+      extreme =
+        extreme === null
+          ? y
+          : above
+          ? Math.min(extreme, y)
+          : Math.max(extreme, y);
+    }
+    return extreme;
+  }
+
   #extremeStemTipY(
     state: VoiceRenderState,
     indices: Iterable<number>,

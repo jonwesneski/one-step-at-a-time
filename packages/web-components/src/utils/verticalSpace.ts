@@ -40,9 +40,11 @@ export const measureVerticalExtents = (
 export class VerticalSpaceReservations {
   readonly #host: HTMLElement;
   readonly #bySource = new Map<string, VerticalBand>();
+  readonly #onMarginChange: (() => void) | null;
 
-  constructor(host: HTMLElement) {
+  constructor(host: HTMLElement, onMarginChange?: () => void) {
     this.#host = host;
+    this.#onMarginChange = onMarginChange ?? null;
   }
 
   /** Returns whether the host's margin changed. A zero band releases `source`. */
@@ -59,6 +61,13 @@ export class VerticalSpaceReservations {
     return this.reserve(source, { top: 0, bottom: 0 });
   }
 
+  /** The larger reservation per side across every source but `source`. */
+  reservedExcluding(source: string): VerticalBand {
+    return maxVerticalBand(
+      [...this.#bySource].filter(([key]) => key !== source).map(([, b]) => b)
+    );
+  }
+
   #applyMargin(): boolean {
     const margin = maxVerticalBand(this.#bySource.values());
     const top = margin.top > 0 ? `${margin.top}px` : '';
@@ -69,6 +78,7 @@ export class VerticalSpaceReservations {
     }
     style.marginTop = top;
     style.marginBottom = bottom;
+    this.#onMarginChange?.();
     return true;
   }
 }

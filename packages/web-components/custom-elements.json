@@ -1303,6 +1303,12 @@
             },
             {
               "kind": "field",
+              "name": "#rowAlignedStaves",
+              "privacy": "private",
+              "default": "new Set<StaffElementBaseType>()"
+            },
+            {
+              "kind": "field",
               "name": "#redrawScheduled",
               "privacy": "private",
               "type": {
@@ -1391,6 +1397,16 @@
               "return": {
                 "type": {
                   "text": "boolean"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#alignRowStaffSpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
                 }
               }
             },
@@ -1796,6 +1812,16 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawCrossStaffTuplets",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundLayoutSystemDecorations",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "#boundRedrawDoubleStemmedBeams",
               "privacy": "private"
             },
@@ -1855,6 +1881,20 @@
             {
               "kind": "method",
               "name": "#updateConnectorVisibility",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#firstInRow",
+              "privacy": "private",
+              "type": {
+                "text": "boolean | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#layoutSystemDecorations",
               "privacy": "private"
             },
             {
@@ -2120,16 +2160,42 @@
             },
             {
               "kind": "field",
-              "name": "#doubleStemmedBeamsRedrawDepth",
+              "name": "#redrawDepths",
               "privacy": "private",
-              "type": {
-                "text": "number"
-              },
-              "default": "0"
+              "default": "new Map<string, number>()"
+            },
+            {
+              "kind": "method",
+              "name": "#guardedRedraw",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "passName",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "redraw",
+                  "type": {
+                    "text": "() => void"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
               "name": "#redrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTuplets",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTupletsImpl",
               "privacy": "private"
             },
             {
@@ -3350,6 +3416,13 @@
                 "text": "RestStaffSide"
               },
               "description": "Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`."
+            },
+            {
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands.",
+              "name": "hidden"
             }
           ],
           "superclass": {
@@ -3585,6 +3658,19 @@
               "privacy": "private",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
               },
               "default": "null",
               "inheritedFrom": {
@@ -3921,6 +4007,17 @@
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5265,6 +5362,112 @@
             },
             {
               "kind": "method",
+              "name": "#tupletSideOverride",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "TupletPlacement | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#isTupletSuppressed",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletBracketAbove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#forcedSideTupletExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#extremeStemTipY",
               "privacy": "private",
               "return": {
@@ -5449,7 +5652,7 @@
               "kind": "field",
               "name": "#verticalSpace",
               "privacy": "private",
-              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement )",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement, () => this.dispatchEvent( new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, { bubbles: true, composed: true, }) ) )",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -5701,6 +5904,41 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "contentVerticalSpace",
+              "type": {
+                "text": "VerticalBand"
+              },
+              "description": "Room this staff's own content needs past its box — every reservation but\nthe row alignment below. Read by `<music-composition>` to line up the\nsame staff across every measure of a row.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "alignVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -6123,7 +6361,7 @@
               "kind": "field",
               "name": "#verticalSpace",
               "privacy": "private",
-              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement )",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement, () => this.dispatchEvent( new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, { bubbles: true, composed: true, }) ) )",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -6375,6 +6613,41 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "contentVerticalSpace",
+              "type": {
+                "text": "VerticalBand"
+              },
+              "description": "Room this staff's own content needs past its box — every reservation but\nthe row alignment below. Read by `<music-composition>` to line up the\nsame staff across every measure of a row.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "alignVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -7058,6 +7331,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffTupletRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -7385,6 +7671,17 @@
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -8720,6 +9017,112 @@
             },
             {
               "kind": "method",
+              "name": "#tupletSideOverride",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "TupletPlacement | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#isTupletSuppressed",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletBracketAbove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#forcedSideTupletExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#extremeStemTipY",
               "privacy": "private",
               "return": {
@@ -8890,7 +9293,7 @@
               "kind": "field",
               "name": "#verticalSpace",
               "privacy": "private",
-              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement )",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement, () => this.dispatchEvent( new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, { bubbles: true, composed: true, }) ) )",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -9148,6 +9551,41 @@
               }
             },
             {
+              "kind": "field",
+              "name": "contentVerticalSpace",
+              "type": {
+                "text": "VerticalBand"
+              },
+              "description": "Room this staff's own content needs past its box — every reservation but\nthe row alignment below. Read by `<music-composition>` to line up the\nsame staff across every measure of a row.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "alignVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
@@ -9295,11 +9733,32 @@
             },
             {
               "kind": "field",
+              "name": "tupletGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "placement",
+              "type": {
+                "text": "TupletPlacement | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "flatElements",
               "type": {
                 "text": "NoteChordOrRestElementType[]"
               },
               "readonly": true
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
             }
           ],
           "attributes": [
@@ -9309,6 +9768,20 @@
                 "text": "TupletRatio"
               },
               "description": "Tuplet ratio: a bare count like `3` or a full `actual:normal` form like `3:2`. Defaults to `3`."
+            },
+            {
+              "name": "tuplet-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by one `<music-tuplet>` on each of a measure's two adjacent grand-staff staves, joining them into one tuplet that spans both hands (single-line passage-work with no shared beam). Each wrapper holds its own staff's share of the tuplet's time — use `<music-rest hidden>` for the beats the other hand plays. Requires a `<music-measure>` ancestor; standalone, each wrapper renders as an ordinary tuplet."
+            },
+            {
+              "name": "placement",
+              "type": {
+                "text": "TupletPlacement"
+              },
+              "description": "Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes)."
             }
           ],
           "superclass": {

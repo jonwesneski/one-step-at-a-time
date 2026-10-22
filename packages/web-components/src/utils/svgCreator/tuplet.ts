@@ -47,6 +47,7 @@ export function createTupletBracketSvg(
     numeralX,
     numeralY,
     hookLength,
+    hookDirections,
     group: { parsedRatio },
   } = geometry;
 
@@ -58,6 +59,8 @@ export function createTupletBracketSvg(
   // Hooks point toward the notes: if bracket is above (stemUp=true), hooks point down (+Y).
   // If bracket is below (stemUp=false), hooks point up (-Y).
   const hookDir = stemUp ? 1 : -1;
+  const startHookDir = hookDirections?.start ?? hookDir;
+  const endHookDir = hookDirections?.end ?? hookDir;
 
   if (!omitBracket) {
     const gapHalf = TUPLET_NUMERAL_GAP_PX / 2;
@@ -77,7 +80,7 @@ export function createTupletBracketSvg(
         startX,
         yAt(startX),
         startX,
-        yAt(startX) + hookDir * hookLength
+        yAt(startX) + startHookDir * hookLength
       );
       // Right arm
       appendLine(group, rightArmStartX, yAt(rightArmStartX), endX, yAt(endX));
@@ -87,7 +90,7 @@ export function createTupletBracketSvg(
         endX,
         yAt(endX),
         endX,
-        yAt(endX) + hookDir * hookLength
+        yAt(endX) + endHookDir * hookLength
       );
     }
   }

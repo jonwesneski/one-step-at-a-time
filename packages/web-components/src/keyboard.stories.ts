@@ -423,6 +423,117 @@ export const DoubleStemmedBeamWithCrossStaffTuplet: Story = {
   `,
 };
 
+// A single line passed between the hands under one tuplet indication, with
+// no shared beam: one `<music-tuplet tuplet-group>` per staff, each holding
+// its own staff's share of the tuplet's time (`<music-rest hidden>` for the
+// beats the other hand plays). Outer notes on different staves → one bracket
+// centred between the staves, each end pointing at its own outer note.
+export const CrossStaffTupletWithoutBeam: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="2/4">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-tuplet ratio="3" tuplet-group="t1">
+            <music-note note="A" octave="4" duration="quarter"></music-note>
+            <music-note note="G" octave="5" duration="quarter"></music-note>
+            <music-rest duration="quarter" hidden></music-rest>
+          </music-tuplet>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-tuplet ratio="3" tuplet-group="t1">
+            <music-rest duration="half" hidden></music-rest>
+            <music-note note="F" octave="3" duration="quarter"></music-note>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-tuplet ratio="5" tuplet-group="t2">
+            <music-rest duration="half" hidden></music-rest>
+            <music-note note="E" octave="5" duration="sixteenth"></music-note>
+            <music-note note="B" octave="5" duration="sixteenth"></music-note>
+          </music-tuplet>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-tuplet ratio="5" tuplet-group="t2">
+            <music-note note="C" octave="3" duration="half"></music-note>
+            <music-rest duration="eighth" hidden></music-rest>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// Outer notes on one staff: (1) the clearest option, separate per-hand
+// tuplets with rests — two plain <music-tuplet>s; (2) one tuplet-group,
+// whose bracket goes outside the system on the outer notes' own side
+// (below here) so it never appears to exclude the other hand's notes;
+// (3) the same with placement="above".
+export const CrossStaffTupletOuterNotesSameStaff: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="2/4">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-tuplet ratio="3">
+            <music-rest duration="quarter"></music-rest>
+            <music-chord duration="quarter">
+              <music-note note="B" octave="4" duration="quarter"></music-note>
+              <music-note note="F" octave="5" duration="quarter"></music-note>
+            </music-chord>
+            <music-rest duration="quarter"></music-rest>
+          </music-tuplet>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-tuplet ratio="3">
+            <music-note note="F" octave="3" duration="quarter"></music-note>
+            <music-rest duration="quarter"></music-rest>
+            <music-note note="C" octave="3" duration="quarter"></music-note>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-tuplet ratio="3" tuplet-group="t1">
+            <music-rest duration="quarter" hidden></music-rest>
+            <music-chord duration="quarter">
+              <music-note note="B" octave="4" duration="quarter"></music-note>
+              <music-note note="F" octave="5" duration="quarter"></music-note>
+            </music-chord>
+            <music-rest duration="quarter" hidden></music-rest>
+          </music-tuplet>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-tuplet ratio="3" tuplet-group="t1">
+            <music-note note="F" octave="3" duration="quarter"></music-note>
+            <music-rest duration="quarter" hidden></music-rest>
+            <music-note note="C" octave="3" duration="quarter"></music-note>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-tuplet ratio="3" tuplet-group="t2" placement="above">
+            <music-rest duration="quarter" hidden></music-rest>
+            <music-chord duration="quarter">
+              <music-note note="B" octave="4" duration="quarter"></music-note>
+              <music-note note="F" octave="5" duration="quarter"></music-note>
+            </music-chord>
+            <music-rest duration="quarter" hidden></music-rest>
+          </music-tuplet>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-tuplet ratio="3" tuplet-group="t2">
+            <music-note note="F" octave="3" duration="quarter"></music-note>
+            <music-rest duration="quarter" hidden></music-rest>
+            <music-note note="C" octave="3" duration="quarter"></music-note>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const DoubleStemmedBeamWithSlur: Story = {
   render: () => html`
     <music-composition key-sig="C" mode="major" time="4/4">
@@ -844,14 +955,8 @@ export const Planned: Story = {
       black-key/white-key/chromatic notation) also appear frequently in keyboard
       writing but are a general-purpose notation, not keyboard-specific &mdash;
       tracked as its own row in <code>TODO.md</code>. Double-stemmed beams
-      (<code>beam-group</code>, see &ldquo;Double-Stemmed Beam&rdquo; and
-      &ldquo;Double-Stemmed Beam With Secondary Beam&rdquo; above) currently
-      draw the primary beam, secondary/fractional beams for mixed durations, and
-      rest placement (<code>rest-staff-side</code> on
-      <code>&lt;music-rest&gt;</code>, see &ldquo;Double-Stemmed Beam With
-      Rests&rdquo; and &ldquo;Double-Stemmed Beam With Centered Rest&rdquo;
-      above) &mdash; cross-staff tuplets/slurs/hairpins and a shared single stem
-      are not yet implemented; see &ldquo;Known Incomplete Areas&rdquo; in
+      (<code>beam-group</code>) do not yet steer hairpins or octave-sign lines
+      around the shared beam; see &ldquo;Known Incomplete Areas&rdquo; in
       <code>CLAUDE.md</code>.
     </p>
   `,

@@ -337,6 +337,13 @@ export type OctaveDisplayMode = 'sign' | 'col';
 export type RestStaffSide = 'above' | 'below' | 'centered';
 
 /**
+ * Author override for which side of the notes a tuplet's bracket/numeral
+ * sits on. Unset = the stem-direction majority vote (or, for a cross-staff
+ * `tuplet-group`, the side nearest its outer notes).
+ */
+export type TupletPlacement = 'above' | 'below';
+
+/**
  * Author override for a note/chord's stem direction, independent of its
  * pitch-driven default. Unset (null) leaves today's resolution unchanged
  * (pitch-driven, or a voice/beam-group policy when applicable). Setting it

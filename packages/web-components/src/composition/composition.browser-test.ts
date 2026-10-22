@@ -14,6 +14,7 @@ import {
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
+  MUSIC_TUPLET,
 } from '../utils/consts';
 import { VERTICAL_OVERFLOW_CLEARANCE_PX } from '../utils/notationDimensions';
 
@@ -3233,5 +3234,141 @@ test.describe(`${MUSIC_COMPOSITION} row spacing for connectors`, () => {
 
     expect(layout.pathTops.length).toBe(1);
     expect(layout.margins).toEqual([{ top: '', bottom: '' }]);
+  });
+});
+
+test.describe(`${MUSIC_COMPOSITION} row staff alignment`, () => {
+  // Measure 1's treble triplet (stems up) brackets above its staff; measure
+  // 2's bass triplet (stems down) brackets below its staff; measure 3 has no
+  // headroom of its own.
+  async function buildRow(page: Page) {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const note = (pitch: string, octave: string, duration: string) =>
+          `<${noteTag} note="${pitch}" octave="${octave}" duration="${duration}"></${noteTag}>`;
+        const triplet = (pitch: string, octave: string) =>
+          `<${tupletTag} ratio="3">${[0, 1, 2]
+            .map(() => note(pitch, octave, 'quarter'))
+            .join('')}</${tupletTag}>`;
+        const measure = (treble: string, bass: string) =>
+          `<${measureTag}>
+            <${staffTag} clef="treble" group="grand">${treble}</${staffTag}>
+            <${staffTag} clef="bass">${bass}</${staffTag}>
+          </${measureTag}>`;
+        host.innerHTML = `<${compositionTag} time="2/4">
+          ${measure(triplet('E', '4'), note('C', '3', 'half'))}
+          ${measure(note('C', '5', 'half'), triplet('A', '3'))}
+          ${measure(note('C', '5', 'half'), note('C', '3', 'half'))}
+        </${compositionTag}>`;
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  // Each measure's [treble, bass] staff-line tops, and its own row top.
+  async function readStaffTops(page: Page) {
+    return page.evaluate(
+      (measureTag) =>
+        Array.from(document.querySelectorAll(measureTag)).map((measure) => ({
+          measureTop: measure.getBoundingClientRect().top,
+          staffTops: Array.from(measure.children).map(
+            (staff) =>
+              staff.shadowRoot
+                ?.querySelector('.staff-container')
+                ?.getBoundingClientRect().top ?? NaN
+          ),
+        })),
+      MUSIC_MEASURE
+    );
+  }
+
+  test("each staff lines up across a row's measures, at the largest headroom any of them needs", async ({
+    page,
+  }) => {
+    await buildRow(page);
+
+    const measures = await readStaffTops(page);
+    expect(new Set(measures.map((m) => Math.round(m.measureTop))).size).toBe(1);
+    for (const staffIndex of [0, 1]) {
+      const tops = measures.map((m) => m.staffTops[staffIndex]);
+      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1);
+    }
+  });
+
+  test('alignment is released once the headroom that caused it is gone', async ({
+    page,
+  }) => {
+    await buildRow(page);
+    const before = await readStaffTops(page);
+
+    await page.evaluate(
+      ({ tupletTag }) => {
+        for (const tuplet of Array.from(document.querySelectorAll(tupletTag))) {
+          const staff = tuplet.parentElement;
+          tuplet.remove();
+          const note = document.createElement('music-note');
+          note.setAttribute('note', 'C');
+          note.setAttribute(
+            'octave',
+            staff?.getAttribute('clef') === 'bass' ? '3' : '5'
+          );
+          note.setAttribute('duration', 'half');
+          staff?.appendChild(note);
+        }
+      },
+      { tupletTag: MUSIC_TUPLET }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const after = await readStaffTops(page);
+    const margins = await page.evaluate(
+      (staffTag) =>
+        Array.from(document.querySelectorAll(staffTag)).map(
+          (staff) =>
+            `${(staff as HTMLElement).style.marginTop}|${
+              (staff as HTMLElement).style.marginBottom
+            }`
+        ),
+      MUSIC_STAFF
+    );
+    expect(margins.every((margin) => margin === '|')).toBe(true);
+    // Measure 3 never needed headroom; it moves up once the row stops
+    // aligning to measure 1's.
+    expect(after[2].staffTops[0]).toBeLessThan(before[2].staffTops[0]);
+  });
+
+  test("rows align independently — a measure that wraps no longer takes its old row's headroom", async ({
+    page,
+  }) => {
+    await buildRow(page);
+    const aligned = await readStaffTops(page);
+
+    await resizeHost(page, 150);
+    await waitForRedrawCycle(page);
+
+    const wrapped = await readStaffTops(page);
+    const rowTops = new Set(wrapped.map((m) => Math.round(m.measureTop)));
+    expect(rowTops.size).toBe(3);
+    // Measure 3 now sits alone on its row: its treble lines sit at the
+    // top-of-row offset with no borrowed headroom.
+    const offset = (m: { measureTop: number; staffTops: number[] }) =>
+      m.staffTops[0] - m.measureTop;
+    expect(offset(wrapped[2])).toBeLessThan(offset(aligned[2]));
+    expect(offset(wrapped[0])).toBeCloseTo(offset(aligned[0]), 0);
   });
 });

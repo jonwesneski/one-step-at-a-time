@@ -68,4 +68,31 @@ describe('VerticalSpaceReservations', () => {
     expect(reservations.reserve('tuplets', { top: 10, bottom: 0 })).toBe(false);
     expect(reservations.release('slurs')).toBe(true);
   });
+
+  it('reports the larger band across every source but the excluded one', () => {
+    const { reservations } = makeHost();
+    reservations.reserve('content', { top: 20, bottom: 5 });
+    reservations.reserve('other', { top: 10, bottom: 8 });
+    reservations.reserve('row', { top: 90, bottom: 90 });
+
+    expect(reservations.reservedExcluding('row')).toEqual({
+      top: 20,
+      bottom: 8,
+    });
+  });
+
+  it('calls onMarginChange only when the margin really changes', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const onMarginChange = jest.fn();
+    const reservations = new VerticalSpaceReservations(host, onMarginChange);
+
+    reservations.reserve('slurs', { top: 50, bottom: 0 });
+    reservations.reserve('slurs', { top: 50, bottom: 0 });
+    reservations.reserve('tuplets', { top: 10, bottom: 0 });
+    expect(onMarginChange).toHaveBeenCalledTimes(1);
+
+    reservations.release('slurs');
+    expect(onMarginChange).toHaveBeenCalledTimes(2);
+  });
 });

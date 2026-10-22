@@ -2586,6 +2586,428 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — cross-staf
   });
 });
 
+test.describe(`${MUSIC_MEASURE} cross-staff tuplets without a beam (tuplet-group)`, () => {
+  type EntrySpec =
+    | {
+        kind: 'note';
+        note: string;
+        octave: string;
+        duration: DurationType;
+        id: string;
+      }
+    | { kind: 'rest'; duration: DurationType; id: string; hidden?: boolean };
+
+  type CrossStaffTupletSpec = {
+    top: EntrySpec[];
+    bottom: EntrySpec[];
+    topRatio?: string;
+    bottomRatio?: string;
+    topPlacement?: string;
+    bottomPlacement?: string;
+  };
+
+  async function buildCrossStaffTuplet(page: Page, spec: CrossStaffTupletSpec) {
+    await page.evaluate(
+      ({ spec, measureTag, staffTag, noteTag, restTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '500px';
+        const measure = document.createElement(measureTag);
+        const staffFor = (
+          clef: string,
+          entries: typeof spec.top,
+          ratio: string,
+          placement: string | undefined
+        ) => {
+          const staff = document.createElement(staffTag);
+          staff.setAttribute('clef', clef);
+          staff.id = clef;
+          const tuplet = document.createElement(tupletTag);
+          tuplet.id = `${clef}-tuplet`;
+          tuplet.setAttribute('ratio', ratio);
+          tuplet.setAttribute('tuplet-group', 't1');
+          if (placement !== undefined) {
+            tuplet.setAttribute('placement', placement);
+          }
+          for (const entry of entries) {
+            const element = document.createElement(
+              entry.kind === 'note' ? noteTag : restTag
+            );
+            element.id = entry.id;
+            element.setAttribute('duration', entry.duration);
+            if (entry.kind === 'note') {
+              element.setAttribute('note', entry.note);
+              element.setAttribute('octave', entry.octave);
+            } else if (entry.hidden) {
+              element.setAttribute('hidden', '');
+            }
+            tuplet.appendChild(element);
+          }
+          staff.appendChild(tuplet);
+          return staff;
+        };
+        measure.appendChild(
+          staffFor('treble', spec.top, spec.topRatio ?? '3', spec.topPlacement)
+        );
+        measure.appendChild(
+          staffFor(
+            'bass',
+            spec.bottom,
+            spec.bottomRatio ?? '3',
+            spec.bottomPlacement
+          )
+        );
+        host.appendChild(measure);
+      },
+      {
+        spec,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        restTag: MUSIC_REST,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  // 7.43.09, first example, bar 1: A4, G5 (treble) → F3 (bass).
+  const trebleToBass: CrossStaffTupletSpec = {
+    top: [
+      { kind: 'note', note: 'A', octave: '4', duration: 'quarter', id: 'a4' },
+      { kind: 'note', note: 'G', octave: '5', duration: 'quarter', id: 'g5' },
+      { kind: 'rest', duration: 'quarter', id: 'top-spacer', hidden: true },
+    ],
+    bottom: [
+      { kind: 'rest', duration: 'half', id: 'bottom-spacer', hidden: true },
+      { kind: 'note', note: 'F', octave: '3', duration: 'quarter', id: 'f3' },
+    ],
+  };
+
+  // Where each tuplet bracket is drawn, plus the gap bracket's own lines.
+  async function readBrackets(page: Page) {
+    return page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const count = (root: ShadowRoot | null | undefined, selector: string) =>
+        root?.querySelectorAll(selector).length ?? 0;
+      const overlay = measure?.shadowRoot?.querySelector(
+        '.cross-staff-tuplets-overlay'
+      );
+      const lines = Array.from(overlay?.querySelectorAll('line') ?? []).map(
+        (line) => ({
+          x1: Number(line.getAttribute('x1')),
+          y1: Number(line.getAttribute('y1')),
+          x2: Number(line.getAttribute('x2')),
+          y2: Number(line.getAttribute('y2')),
+        })
+      );
+      return {
+        overlayBrackets: overlay?.querySelectorAll('.tuplet-group').length ?? 0,
+        trebleBrackets: count(
+          document.getElementById('treble')?.shadowRoot,
+          '.tuplets-container .tuplet-group'
+        ),
+        bassBrackets: count(
+          document.getElementById('bass')?.shadowRoot,
+          '.tuplets-container .tuplet-group'
+        ),
+        lines,
+      };
+    });
+  }
+
+  // Measure-relative real geometry of each staff's lines and of an element's
+  // noteheads and stem.
+  async function readGeometry(page: Page, ids: string[]) {
+    return page.evaluate((ids) => {
+      const required = <T>(value: T | null | undefined, what: string): T => {
+        if (value === null || value === undefined) {
+          throw new Error(`${what} missing`);
+        }
+        return value;
+      };
+      const measureRect = required(
+        document.querySelector('music-measure'),
+        'measure'
+      ).getBoundingClientRect();
+      const containerRect = (id: string) => {
+        const rect = required(
+          document
+            .getElementById(id)
+            ?.shadowRoot?.querySelector('.staff-container'),
+          `${id} staff container`
+        ).getBoundingClientRect();
+        return {
+          top: rect.top - measureRect.top,
+          bottom: rect.bottom - measureRect.top,
+        };
+      };
+      const elements = Object.fromEntries(
+        ids.map((id) => {
+          const element = required(document.getElementById(id), id);
+          const shadowRoot = required(element.shadowRoot, `${id} shadow root`);
+          const heads = Array.from(shadowRoot.querySelectorAll('.head')).map(
+            (head) => head.getBoundingClientRect()
+          );
+          const stem = shadowRoot.querySelector('.stem');
+          const stemRect = stem?.getBoundingClientRect();
+          return [
+            id,
+            {
+              stemUp: (element as unknown as { stemUp: boolean }).stemUp,
+              headLeft:
+                Math.min(...heads.map((h) => h.left)) - measureRect.left,
+              headRight:
+                Math.max(...heads.map((h) => h.right)) - measureRect.left,
+              headTop: Math.min(...heads.map((h) => h.top)) - measureRect.top,
+              headBottom:
+                Math.max(...heads.map((h) => h.bottom)) - measureRect.top,
+              stemTop: stemRect ? stemRect.top - measureRect.top : null,
+              stemBottom: stemRect ? stemRect.bottom - measureRect.top : null,
+            },
+          ];
+        })
+      );
+      return {
+        treble: containerRect('treble'),
+        bass: containerRect('bass'),
+        elements,
+      };
+    }, ids);
+  }
+
+  // Measure-relative box of the tuplet numeral a staff drew itself.
+  async function readStaffNumeral(page: Page, staffId: string) {
+    return page.evaluate((staffId) => {
+      const measure = document.querySelector('music-measure');
+      const numeral = document
+        .getElementById(staffId)
+        ?.shadowRoot?.querySelector('.tuplets-container .tuplet-numeral');
+      if (!measure || !numeral) {
+        throw new Error(`${staffId} tuplet numeral missing`);
+      }
+      const measureTop = measure.getBoundingClientRect().top;
+      const rect = numeral.getBoundingClientRect();
+      return { top: rect.top - measureTop, bottom: rect.bottom - measureTop };
+    }, staffId);
+  }
+
+  test('outer notes on different staves: one bracket centred in the gap, stems into the gap, each hook toward its own outer note', async ({
+    page,
+  }) => {
+    await buildCrossStaffTuplet(page, trebleToBass);
+
+    const brackets = await readBrackets(page);
+    const geometry = await readGeometry(page, ['a4', 'g5', 'f3']);
+    const { a4, g5, f3 } = geometry.elements;
+
+    expect(a4.stemUp).toBe(false);
+    expect(g5.stemUp).toBe(false);
+    expect(f3.stemUp).toBe(true);
+
+    expect(brackets.overlayBrackets).toBe(1);
+    expect(brackets.trebleBrackets).toBe(0);
+    expect(brackets.bassBrackets).toBe(0);
+
+    const arms = brackets.lines.filter((line) => line.y1 === line.y2);
+    const hooks = brackets.lines
+      .filter((line) => line.x1 === line.x2)
+      .sort((a, b) => a.x1 - b.x1);
+    expect(arms.length).toBe(2);
+    expect(hooks.length).toBe(2);
+
+    const lineY = arms[0].y1;
+    expect(lineY).toBeGreaterThan(
+      Math.max(
+        geometry.treble.bottom,
+        a4.stemBottom ?? -Infinity,
+        g5.stemBottom ?? -Infinity
+      )
+    );
+    expect(lineY).toBeLessThan(
+      Math.min(geometry.bass.top, f3.stemTop ?? Infinity)
+    );
+
+    // Treble → bass: the start hook points up, the end hook down.
+    expect(hooks[0].y2).toBeLessThan(hooks[0].y1);
+    expect(hooks[1].y2).toBeGreaterThan(hooks[1].y1);
+    expect(hooks[0].x1).toBeCloseTo(a4.headLeft, 0);
+    expect(hooks[1].x1).toBeCloseTo(f3.headRight, 0);
+  });
+
+  test('a bass → treble line mirrors the hooks (7.43.09 bar 2, a 5:4 quintuplet)', async ({
+    page,
+  }) => {
+    await buildCrossStaffTuplet(page, {
+      topRatio: '5:4',
+      bottomRatio: '5:4',
+      top: [
+        { kind: 'rest', duration: 'half', id: 'top-spacer', hidden: true },
+        {
+          kind: 'note',
+          note: 'E',
+          octave: '5',
+          duration: 'sixteenth',
+          id: 'e5',
+        },
+        {
+          kind: 'note',
+          note: 'B',
+          octave: '5',
+          duration: 'sixteenth',
+          id: 'b5',
+        },
+      ],
+      bottom: [
+        { kind: 'note', note: 'C', octave: '3', duration: 'half', id: 'c3' },
+        { kind: 'rest', duration: 'eighth', id: 'bottom-spacer', hidden: true },
+      ],
+    });
+
+    const brackets = await readBrackets(page);
+    const hooks = brackets.lines
+      .filter((line) => line.x1 === line.x2)
+      .sort((a, b) => a.x1 - b.x1);
+
+    expect(brackets.overlayBrackets).toBe(1);
+    expect(hooks[0].y2).toBeGreaterThan(hooks[0].y1);
+    expect(hooks[1].y2).toBeLessThan(hooks[1].y1);
+  });
+
+  test('outer notes on the bottom staff: the bottom staff draws one bracket below the system, enclosing every member', async ({
+    page,
+  }) => {
+    await buildCrossStaffTuplet(page, {
+      top: [
+        { kind: 'rest', duration: 'quarter', id: 'top-spacer-1', hidden: true },
+        { kind: 'note', note: 'B', octave: '4', duration: 'quarter', id: 'b4' },
+        { kind: 'rest', duration: 'quarter', id: 'top-spacer-2', hidden: true },
+      ],
+      bottom: [
+        { kind: 'note', note: 'F', octave: '3', duration: 'quarter', id: 'f3' },
+        {
+          kind: 'rest',
+          duration: 'quarter',
+          id: 'bottom-spacer',
+          hidden: true,
+        },
+        { kind: 'note', note: 'C', octave: '3', duration: 'quarter', id: 'c3' },
+      ],
+    });
+
+    const brackets = await readBrackets(page);
+    const geometry = await readGeometry(page, ['b4', 'f3', 'c3']);
+    const numeralY = (await readStaffNumeral(page, 'bass')).top;
+
+    expect(geometry.elements.b4.stemUp).toBe(false);
+    expect(brackets.bassBrackets).toBe(1);
+    expect(brackets.trebleBrackets).toBe(0);
+    expect(brackets.overlayBrackets).toBe(0);
+    expect(numeralY).toBeGreaterThan(geometry.bass.bottom);
+    expect(numeralY).toBeGreaterThan(geometry.elements.c3.headBottom);
+  });
+
+  test('placement="above" on either wrapper moves the bracket outside the top of the system', async ({
+    page,
+  }) => {
+    await buildCrossStaffTuplet(page, {
+      ...trebleToBass,
+      bottomPlacement: 'above',
+    });
+
+    const brackets = await readBrackets(page);
+    const geometry = await readGeometry(page, ['a4']);
+    const numeralBottom = (await readStaffNumeral(page, 'treble')).bottom;
+
+    expect(brackets.trebleBrackets).toBe(1);
+    expect(brackets.bassBrackets).toBe(0);
+    expect(brackets.overlayBrackets).toBe(0);
+    expect(numeralBottom).toBeLessThan(geometry.treble.top);
+  });
+
+  test('an invalid group (mismatched ratios) warns and falls back to each staff drawing its own bracket', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+
+    await buildCrossStaffTuplet(page, {
+      ...trebleToBass,
+      bottomRatio: '3:1',
+    });
+
+    const brackets = await readBrackets(page);
+    expect(warnings.some((w) => w.includes('different ratios'))).toBe(true);
+    expect(brackets.overlayBrackets).toBe(0);
+    expect(brackets.trebleBrackets).toBe(1);
+    expect(brackets.bassBrackets).toBe(1);
+  });
+
+  test('a hidden spacer rest draws nothing but keeps its beat time', async ({
+    page,
+  }) => {
+    await buildCrossStaffTuplet(page, trebleToBass);
+
+    const readSpacing = () =>
+      page.evaluate(() => {
+        const spacer = document.getElementById('bottom-spacer');
+        const f3 = document.getElementById('f3');
+        const alignedRest = document.getElementById('top-spacer');
+        if (!spacer || !f3 || !alignedRest) {
+          throw new Error('fixture elements missing');
+        }
+        return {
+          spacerVisibility: getComputedStyle(spacer).visibility,
+          f3Left: f3.getBoundingClientRect().left,
+          alignedRestLeft: alignedRest.getBoundingClientRect().left,
+        };
+      });
+
+    const hidden = await readSpacing();
+    expect(hidden.spacerVisibility).toBe('hidden');
+    // The treble spacer sits on triplet beat 3, the same beat as F3 (a beat
+    // apart would be tens of px; sub-pixel staff differences are not).
+    expect(Math.abs(hidden.f3Left - hidden.alignedRestLeft)).toBeLessThan(2);
+
+    await page.evaluate(() => {
+      for (const id of ['top-spacer', 'bottom-spacer']) {
+        document.getElementById(id)?.removeAttribute('hidden');
+      }
+    });
+    await waitForRedrawCycle(page);
+    const visible = await readSpacing();
+    expect(visible.spacerVisibility).toBe('visible');
+    expect(Math.abs(visible.f3Left - hidden.f3Left)).toBeLessThan(2);
+  });
+
+  test('repeated resizes settle without a runaway redraw', async ({ page }) => {
+    test.setTimeout(15_000);
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.text().includes('did not converge')) {
+        warnings.push(message.text());
+      }
+    });
+    await buildCrossStaffTuplet(page, trebleToBass);
+
+    for (const width of [500, 300, 700, 250, 900, 400]) {
+      await resizeHost(page, width);
+    }
+
+    const brackets = await readBrackets(page);
+    expect(warnings).toEqual([]);
+    expect(brackets.overlayBrackets).toBe(1);
+  });
+});
+
 test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — slurs`, () => {
   test('a slur across a beam-group majority-2-vs-1 sits on the majority side', async ({
     page,
@@ -4415,5 +4837,104 @@ test.describe(`${MUSIC_MEASURE} staff labels (label)`, () => {
     // The label's right edge must land at or left of the bracket's own left
     // edge — no horizontal overlap between the two glyphs.
     expect(result.labelRight).toBeLessThanOrEqual(result.bracketLeft);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} system decorations follow staff margins`, () => {
+  // Brace and barline edges relative to the treble's top line and the
+  // bass's bottom line. Calibration constants make these non-zero; what
+  // matters is that a staff's headroom margin doesn't change them.
+  async function readDecorationOffsets(page: Page, trebleTriplet: boolean) {
+    await page.evaluate(
+      ({ trebleTriplet, measureTag, staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = '500px';
+        const note = (pitch: string, octave: string, duration: string) =>
+          `<${noteTag} note="${pitch}" octave="${octave}" duration="${duration}"></${noteTag}>`;
+        const treble = trebleTriplet
+          ? `<${tupletTag} ratio="3">${note('E', '4', 'quarter').repeat(
+              3
+            )}</${tupletTag}>`
+          : note('C', '5', 'half');
+        host.innerHTML = `<${measureTag}>
+          <${staffTag} clef="treble" group="grand" label="r.h.">${treble}</${staffTag}>
+          <${staffTag} clef="bass" label="l.h.">${note(
+          'C',
+          '3',
+          'half'
+        )}</${staffTag}>
+        </${measureTag}>`;
+      },
+      {
+        trebleTriplet,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    return page.evaluate((measureTag) => {
+      const measure = document.querySelector(measureTag);
+      const [treble, bass] = Array.from(measure?.children ?? []);
+      const trebleLines = treble?.shadowRoot
+        ?.querySelector('.staff-container')
+        ?.getBoundingClientRect();
+      const bassLines = bass?.shadowRoot
+        ?.querySelector('.staff-container')
+        ?.getBoundingClientRect();
+      const brace = measure?.shadowRoot
+        ?.querySelector('.group-connectors svg.brace')
+        ?.getBoundingClientRect();
+      const barline = measure?.shadowRoot
+        ?.querySelector('.staff-connector')
+        ?.getBoundingClientRect();
+      const labels = Array.from(
+        measure?.shadowRoot?.querySelectorAll('.staff-label') ?? []
+      ).map((label) => label.getBoundingClientRect());
+      if (
+        !trebleLines ||
+        !bassLines ||
+        !brace ||
+        !barline ||
+        labels.length !== 2
+      ) {
+        throw new Error('decorations not ready');
+      }
+      return {
+        trebleMarginTop: (treble as HTMLElement).style.marginTop,
+        braceTop: brace.top - trebleLines.top,
+        braceBottom: brace.bottom - bassLines.bottom,
+        barlineTop: barline.top - trebleLines.top,
+        barlineBottom: barline.bottom - bassLines.bottom,
+        trebleLabel: labels[0].top - trebleLines.top,
+        bassLabel: labels[1].top - bassLines.top,
+      };
+    }, MUSIC_MEASURE);
+  }
+
+  test('the brace, barline and staff labels stay on the staff lines when a staff takes headroom margin', async ({
+    page,
+  }) => {
+    const plain = await readDecorationOffsets(page, false);
+    const withHeadroom = await readDecorationOffsets(page, true);
+
+    expect(plain.trebleMarginTop).toBe('');
+    expect(withHeadroom.trebleMarginTop).not.toBe('');
+    for (const key of [
+      'braceTop',
+      'braceBottom',
+      'barlineTop',
+      'barlineBottom',
+      'trebleLabel',
+      'bassLabel',
+    ] as const) {
+      expect(Math.abs(withHeadroom[key] - plain[key])).toBeLessThan(1);
+    }
   });
 });

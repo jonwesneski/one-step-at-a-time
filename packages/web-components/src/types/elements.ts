@@ -1,3 +1,4 @@
+import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
   AccidentalType,
   ArpeggioType,
@@ -27,6 +28,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletPlacement,
   TupletRatio,
 } from './theory';
 
@@ -441,6 +443,8 @@ export interface IClefElement {
 
 export interface ITupletElement {
   ratio: TupletRatio;
+  tupletGroup: string | null;
+  placement: TupletPlacement | null;
   readonly flatElements: NoteChordOrRestElementType[];
 }
 
@@ -484,6 +488,8 @@ export interface IStaffElementBase {
   time: TimeSignature;
   readonly staffHeight: number;
   readonly staffLineCount: number;
+  readonly contentVerticalSpace: VerticalBand;
+  alignVerticalSpace(space: VerticalBand): boolean;
 }
 
 export interface IStaffElement extends IStaffElementBase {

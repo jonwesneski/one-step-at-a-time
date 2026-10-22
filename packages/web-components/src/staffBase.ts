@@ -46,6 +46,7 @@ export const _MaybeHTMLElement: any =
     : class {};
 
 const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
+const ROW_ALIGNMENT_SOURCE = 'row-alignment';
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
@@ -65,8 +66,17 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected readonly transcribeContainer: SVGSVGElement;
   #standaloneConnectorsOverlay: SVGSVGElement;
+  // A margin change moves this staff's lines, so the ancestor measure
+  // re-lays its brace/barline/labels against them.
   #verticalSpace = new VerticalSpaceReservations(
-    this as unknown as HTMLElement
+    this as unknown as HTMLElement,
+    () =>
+      this.dispatchEvent(
+        new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      )
   );
   // True once a slotchange (real or the deferred synthetic kick) has been
   // handled — guards against rendering the initial content twice.
@@ -354,6 +364,23 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   // participates in page layout. Each source re-reports on every recompute.
   protected reserveVerticalSpace(source: string, space: VerticalBand): void {
     this.#verticalSpace.reserve(source, space);
+  }
+
+  /**
+   * Room this staff's own content needs past its box — every reservation but
+   * the row alignment below. Read by `<music-composition>` to line up the
+   * same staff across every measure of a row.
+   */
+  get contentVerticalSpace(): VerticalBand {
+    return this.#verticalSpace.reservedExcluding(ROW_ALIGNMENT_SOURCE);
+  }
+
+  /**
+   * Sets the margin this staff takes so it lines up with its counterparts in
+   * the other measures of its row. Returns whether the margin changed.
+   */
+  alignVerticalSpace(space: VerticalBand): boolean {
+    return this.#verticalSpace.reserve(ROW_ALIGNMENT_SOURCE, space);
   }
 
   protected drawConnectorsWhenStandalone(): void {

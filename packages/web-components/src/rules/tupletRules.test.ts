@@ -25,6 +25,8 @@ import {
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
+  NOTE_HEAD_RADIUS_PX,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
@@ -39,6 +41,7 @@ import {
   defaultNormalCount,
   parseTupletRatio,
   resolveInnermostTuplet,
+  resolveTupletBracketAbove,
 } from './tupletRules';
 
 afterEach(() => {
@@ -347,6 +350,29 @@ describe('buildTupletGroups', () => {
   });
 });
 
+// ─── resolveTupletBracketAbove ───────────────────────────────────────────────
+
+describe('resolveTupletBracketAbove', () => {
+  it('follows the stem majority when there is no override, a tie going up', () => {
+    expect(
+      resolveTupletBracketAbove([0, 1, 2], [true, true, false], null)
+    ).toBe(true);
+    expect(
+      resolveTupletBracketAbove([0, 1, 2], [false, false, true], null)
+    ).toBe(false);
+    expect(resolveTupletBracketAbove([0, 1], [true, false], null)).toBe(true);
+  });
+
+  it('lets an explicit override win over the stem majority', () => {
+    expect(resolveTupletBracketAbove([0, 1], [true, true], 'below')).toBe(
+      false
+    );
+    expect(resolveTupletBracketAbove([0, 1], [false, false], 'above')).toBe(
+      true
+    );
+  });
+});
+
 // ─── computeTupletBracketGeometry ────────────────────────────────────────────
 
 function makeGeometryInputs(
@@ -402,6 +428,105 @@ function makeGeometryInputs(
 }
 
 describe('computeTupletBracketGeometry', () => {
+  describe('sideOverride', () => {
+    // Unbeamed, outermost (nestingLevel 0) group of stem-down notes.
+    function makeStemDownGroup(staffYs: number[]) {
+      const elements: NoteChordOrRestElementType[] = staffYs.map(() =>
+        makeNote({ note: 'C', duration: 'quarter' })
+      );
+      const noteStaffYCoords = new Map<NoteElementType, number>(
+        elements.map((element, i) => [element as NoteElementType, staffYs[i]])
+      );
+      const tupletElement = makeTuplet('3');
+      const tupletsByIndex = new Map<number, TupletElementType[]>(
+        elements.map((_, i) => [i, [tupletElement]])
+      );
+      const [group] = buildTupletGroups(elements, tupletsByIndex);
+      return {
+        group,
+        elements,
+        noteXPositions: new Map(elements.map((_, i) => [i, i * 30 + 10])),
+        stemDirections: elements.map(() => false),
+        noteStaffYCoords,
+      };
+    }
+
+    it('places the bracket on the forced side, against the stem vote', () => {
+      const inputs = makeStemDownGroup([30, 35, 40]);
+      const geometry = (sideOverride: 'above' | 'below' | null) =>
+        computeTupletBracketGeometry(
+          inputs.group,
+          inputs.elements,
+          inputs.noteXPositions,
+          inputs.stemDirections,
+          new Set(),
+          inputs.noteStaffYCoords,
+          new Map(),
+          null,
+          false,
+          () => null,
+          sideOverride
+        )!;
+
+      expect(geometry(null).stemUp).toBe(false);
+      expect(geometry('above').stemUp).toBe(true);
+      expect(geometry('above').baseY).toBeLessThan(
+        STAFF_TOP_LINE_Y - STAFF_Y_PADDING
+      );
+    });
+
+    it('keeps the bracket for a beamed group forced onto its notehead side', () => {
+      const inputs = makeStemDownGroup([30, 35, 40]);
+      const allBeamed = new Set([0, 1, 2]);
+      const geometry = (sideOverride: 'above' | 'below') =>
+        computeTupletBracketGeometry(
+          inputs.group,
+          inputs.elements,
+          inputs.noteXPositions,
+          inputs.stemDirections,
+          allBeamed,
+          inputs.noteStaffYCoords,
+          new Map(),
+          null,
+          false,
+          () => null,
+          sideOverride
+        )!;
+
+      expect(geometry('below').omitBracket).toBe(true);
+      expect(geometry('above').omitBracket).toBe(false);
+    });
+
+    it('clears a stem-away note by its notehead edge, not a stem tip it does not have on that side', () => {
+      // High ledger-line notes push the bracket past the nominal staff
+      // clearance, so the clamp decides baseY.
+      const staffYs = [-40, -30, -35];
+      const inputs = makeStemDownGroup(staffYs);
+      const result = computeTupletBracketGeometry(
+        inputs.group,
+        inputs.elements,
+        inputs.noteXPositions,
+        inputs.stemDirections,
+        new Set(),
+        inputs.noteStaffYCoords,
+        new Map(),
+        null,
+        false,
+        () => null,
+        'above'
+      )!;
+
+      const highestHeadTop =
+        STAFF_Y_PADDING +
+        Math.min(...staffYs) -
+        NOTE_HEAD_Y_OFFSET_CORRECTION -
+        NOTE_HEAD_RADIUS_PX;
+      expect(result.baseY).toBeCloseTo(
+        highestHeadTop - TUPLET_STAFF_CLEARANCE_PX - TUPLET_HOOK_LENGTH_PX
+      );
+    });
+  });
+
   it('returns null for a group with fewer than 2 indices', () => {
     const element = makeNote({ note: 'C', duration: 'eighth' });
     const tupletElementement = makeTuplet('3');

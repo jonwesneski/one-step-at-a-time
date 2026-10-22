@@ -12,6 +12,7 @@ import type {
 import type { DurationType } from '../types/theory';
 import {
   buildConnectorSvgs,
+  collectEntryObstacles,
   collectNoteLikeElements,
   collectPhraseSlurPairs,
   ConnectorPair,
@@ -23,6 +24,7 @@ import {
 import {
   MUSIC_GUITAR_NOTE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_VOICE,
 } from './consts';
@@ -1484,5 +1486,26 @@ describe('buildConnectorSvgs', () => {
     );
 
     expect(withStemPath.fromY).toBeCloseTo(baseline.fromY, 5);
+  });
+});
+
+describe('collectEntryObstacles', () => {
+  it('skips a hidden spacer rest — it draws nothing for a slur to avoid', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const visibleRest = document.createElement(MUSIC_REST);
+    const spacerRest = document.createElement(MUSIC_REST);
+    spacerRest.hidden = true;
+    staff.append(visibleRest, spacerRest);
+    document.body.appendChild(staff);
+
+    const { entries } = collectEntryObstacles(
+      document.body,
+      document.body.getBoundingClientRect(),
+      []
+    );
+
+    const elements = entries.map((entry) => entry.element);
+    expect(elements).toContain(visibleRest);
+    expect(elements).not.toContain(spacerRest);
   });
 });

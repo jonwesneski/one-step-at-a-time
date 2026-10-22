@@ -11,7 +11,11 @@ import {
   resolveTrillSpans,
   type TrillMeasureBoundary,
 } from '../rules/trillRules';
-import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
+import {
+  computeBandOverflow,
+  maxVerticalBand,
+  VerticalBand,
+} from '../rules/verticalSpaceRules';
 import type {
   ChordElementType,
   NoteChordOrRestElementType,
@@ -158,6 +162,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #observer: MutationObserver | null;
     #resizeObserver: ResizeObserver | null;
     #rowSpaceMeasures = new Set<HTMLElement>();
+    #rowAlignedStaves = new Set<StaffElementBaseType>();
     #redrawScheduled: boolean;
     #boundRedraw: () => void;
 
@@ -239,6 +244,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         reserveMeasureSpace(measure, { top: 0, bottom: 0 });
       }
       this.#rowSpaceMeasures.clear();
+      for (const staff of this.#rowAlignedStaves) {
+        staff.alignVerticalSpace({ top: 0, bottom: 0 });
+      }
+      this.#rowAlignedStaves.clear();
       this.#observer?.disconnect();
       this.#observer = null;
       this.#resizeObserver?.disconnect();
@@ -277,10 +286,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === COMMON_ATTRIBUTES.MODE ||
         name === COMMON_ATTRIBUTES.TIME
       ) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-        Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) =>
-          (staff as any).refreshInheritedAttrs?.()
-        );
+        Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (staff as any).refreshInheritedAttrs?.();
+        });
       }
       if (name === 'measure-numbers') {
         // A measure resolves its effective display mode live via
@@ -422,6 +431,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawScheduled = true;
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
+        this.#alignRowStaffSpace();
         this.#redrawConnectors();
         if (this.#reserveRowOverlaySpace()) {
           this.#redrawConnectors();
@@ -478,6 +488,48 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       this.#rowSpaceMeasures = reservedMeasures;
       return changed;
+    }
+
+    // Gives the Nth staff of every measure in a row the same margin — the
+    // largest its own content needs anywhere in that row — so a bracket or
+    // dynamic above one measure's staff doesn't push that measure's staves
+    // out of line with its neighbors. Staves are matched by ordinal position
+    // (same assumption as #updateClefContinuity). Reads each staff's own
+    // content headroom, never the alignment it was given, so the next pass
+    // computes the same values. A staff no longer in this composition is
+    // released.
+    #alignRowStaffSpace(): void {
+      const alignedStaves = new Set<StaffElementBaseType>();
+      for (const row of this.#computeMeasureRows()) {
+        const stavesByMeasure = row.map(
+          (measure) =>
+            Array.from(measure.children).filter((el) =>
+              isStaffNodeName(el.nodeName)
+            ) as StaffElementBaseType[]
+        );
+        const staffCount = Math.max(
+          0,
+          ...stavesByMeasure.map((staves) => staves.length)
+        );
+        for (let index = 0; index < staffCount; index++) {
+          const column = stavesByMeasure
+            .map((staves) => staves[index])
+            .filter((staff) => staff !== undefined);
+          const space = maxVerticalBand(
+            column.map((staff) => staff.contentVerticalSpace)
+          );
+          for (const staff of column) {
+            alignedStaves.add(staff);
+            staff.alignVerticalSpace(space);
+          }
+        }
+      }
+      for (const staff of this.#rowAlignedStaves) {
+        if (!alignedStaves.has(staff)) {
+          staff.alignVerticalSpace({ top: 0, bottom: 0 });
+        }
+      }
+      this.#rowAlignedStaves = alignedStaves;
     }
 
     // Groups measures into visual rows by top-position (5px tolerance),

@@ -4,6 +4,12 @@ import {
 } from '../rules/arpeggioRules';
 import { computeBeamLevelStructure } from '../rules/beamStructureRules';
 import {
+  type CrossStaffTupletEntry,
+  type CrossStaffTupletRole,
+  resolveCrossStaffTupletGapBaseY,
+  resolveCrossStaffTupletGroups,
+} from '../rules/crossStaffTupletRules';
+import {
   classifyAutoRestStaffSide,
   DoubleStemmedBeamEntry,
   DoubleStemmedBeamMember,
@@ -22,12 +28,21 @@ import {
 } from '../rules/sharedStemRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
-import { durationToFlagCountMap } from '../rules/theoryConsts';
+import {
+  durationToFactor,
+  durationToFlagCountMap,
+} from '../rules/theoryConsts';
+import {
+  parseTupletRatio,
+  type TupletBracketGeometry,
+} from '../rules/tupletRules';
+import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
 import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
   RestElementType,
   StaffElementBaseType,
+  TupletElementType,
 } from '../types/elements';
 import type { HairpinKind } from '../types/theory';
 import {
@@ -39,6 +54,7 @@ import {
   createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
   createSharedStemLine,
+  createTupletBracketSvg,
   isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
@@ -50,6 +66,7 @@ import {
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
+  TUPLET_EVENTS,
 } from '../utils';
 import {
   buildConnectorSvgs,
@@ -63,11 +80,6 @@ import {
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
-import {
-  measureVerticalExtents,
-  VerticalSpaceReservations,
-} from '../utils/verticalSpace';
-import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
 import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
@@ -95,9 +107,14 @@ import {
   STAFF_LABEL_WIDTH_PX,
   STAFF_LINE_START,
   STEM_OVERLAP_PX,
+  TUPLET_HOOK_LENGTH_PX,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
+import {
+  measureVerticalExtents,
+  VerticalSpaceReservations,
+} from '../utils/verticalSpace';
 
 // Per-staff vertical footprint within a measure's stacked staff children,
 // used both by the plain full-measure barline (#updateConnectorVisibility)
@@ -126,6 +143,22 @@ const OVERLAY_SOURCE = 'overlay';
 
 function staffSlotHeightPx(staff: StaffElementBaseType): number {
   return staff.staffHeight + 2;
+}
+
+// Each staff's slot top, measured down from CONNECTOR_TOP_PX. A staff's
+// vertical-space margins (its own headroom, or its row alignment — see
+// utils/verticalSpace.ts) move its lines, so they're folded in here rather
+// than assumed zero.
+function staffSlotTopsPx(staves: readonly StaffElementBaseType[]): number[] {
+  let offset = 0;
+  return staves.map((staff) => {
+    const marginTop = parseFloat(staff.style.marginTop) || 0;
+    const marginBottom = parseFloat(staff.style.marginBottom) || 0;
+    const slotTop = offset + marginTop;
+    offset +=
+      marginTop + staffSlotHeightPx(staff) + STAFF_SLOT_GAP_PX + marginBottom;
+    return slotTop;
+  });
 }
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -199,11 +232,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawArpeggios();
       this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawCrossStaffTuplets();
       this.#redrawConnectors();
       this.#redrawSharedStems();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
+    #boundRedrawCrossStaffTuplets = () => this.#redrawCrossStaffTuplets();
+    // A staff's margin can change mid-render (its own headroom) or from the
+    // composition's row alignment; either moves its lines, so only the
+    // system decorations re-lay — not the beam/connector redraw chain, which
+    // the staff's own NOTES_POSITIONED already covers.
+    #boundLayoutSystemDecorations = (event: Event) => {
+      if (event.target !== this) {
+        this.#layoutSystemDecorations();
+      }
+    };
     // A plain beam-group attribute change (no geometry change on its own)
     // only ever dispatches BEAM_GROUP_ATTRIBUTE_CHANGE — the resulting stem
     // override, once pushed onto each staff, still triggers that staff's own
@@ -295,6 +339,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawCrossStaffTuplets
+      );
+      this.addEventListener(
+        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedrawCrossStaffTuplets
+      );
+      this.addEventListener(
+        STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
+        this.#boundLayoutSystemDecorations
       );
       // Registered after the beams listener above — a slur may need to
       // read the real, already-drawn beam polygon to avoid crossing it
@@ -402,6 +458,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundRedrawDoubleStemmedBeams
       );
       this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawCrossStaffTuplets
+      );
+      this.removeEventListener(
+        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedrawCrossStaffTuplets
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
+        this.#boundLayoutSystemDecorations
+      );
+      this.removeEventListener(
         NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
         this.#boundRedrawSharedStems
       );
@@ -457,6 +525,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               STAFF_LABEL_WIDTH_PX +
               STAFF_LABEL_LEFT_MARGIN_PX
             }px;
+          }
+
+          /* A one-column grid so staves' vertical-space margins add up
+             instead of collapsing: the first staff's top margin would
+             otherwise escape through this box, and two staves' facing
+             margins would share space each needs. staffSlotTopsPx relies on
+             this. Not a flex column — a staff's own flex basis would become
+             its height. */
+          .measure-content {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
           }
 
           .staff-labels {
@@ -551,6 +630,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             color: currentColor;
           }
 
+          .cross-staff-tuplets-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
+
           .shared-stems-overlay {
             position: absolute;
             inset: 0;
@@ -559,7 +646,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             color: currentColor;
           }
         </style>
-        <div>
+        <div class="measure-content">
           <div class="staff-connector"></div>
           <div class="group-connectors"></div>
           <div class="staff-labels"></div>
@@ -579,6 +666,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                group, spanning both staves' gap — see
                #redrawDoubleStemmedBeams -->
           <svg class="double-stemmed-beams-overlay"></svg>
+          <!-- a tuplet-group bracket centred in the gap between the hands —
+               see #redrawCrossStaffTuplets -->
+          <svg class="cross-staff-tuplets-overlay"></svg>
           <!-- the real connecting stem for a shared-stem-for pair — see
                #redrawSharedStems -->
           <svg class="shared-stems-overlay"></svg>
@@ -606,25 +696,48 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
 
       const currentIndex = allMeasures.indexOf(this);
-      const staves = Array.from(allMeasures[currentIndex].children).filter(
-        (n) => isStaffNodeName(n.nodeName)
-      ) as StaffElementBaseType[];
-      const connectorHeight =
-        staves.reduce((sum, staff) => sum + staffSlotHeightPx(staff), 0) +
-        STAFF_SLOT_GAP_PX * (staves.length - 1);
-      staffConnector.style.height = `${connectorHeight}px`;
-
       const isFirstInRow = this.#isFirstInRow(allMeasures, currentIndex);
       const isLastInRow = this.#isLastInRow(allMeasures, currentIndex);
+      this.#firstInRow = isFirstInRow;
 
-      this.#renderGroupConnectors(isFirstInRow);
-      this.#renderStaffLabels(isFirstInRow);
+      this.#layoutSystemDecorations();
       this.#renderMeasureNumber(isFirstInRow, isLastInRow);
       staffConnector.classList.toggle('hidden', !isFirstInRow);
       this.#redrawArpeggios();
       this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawCrossStaffTuplets();
       this.#redrawConnectors();
+    }
+
+    // Last value #updateConnectorVisibility resolved — reused when only a
+    // staff's margin moved (#boundLayoutSystemDecorations), which can't
+    // change which row this measure starts. Null until first resolved.
+    #firstInRow: boolean | null = null;
+
+    // The barline, brace/bracket and staff labels, positioned against each
+    // staff's real slot (staffSlotTopsPx).
+    #layoutSystemDecorations() {
+      if (this.#firstInRow === null) {
+        return;
+      }
+      const staffConnector =
+        this.shadowRoot?.querySelector<HTMLElement>('.staff-connector');
+      const staves = Array.from(this.children).filter((n) =>
+        isStaffNodeName(n.nodeName)
+      ) as StaffElementBaseType[];
+      if (staffConnector && staves.length > 0) {
+        const slotTops = staffSlotTopsPx(staves);
+        const lastIndex = staves.length - 1;
+        staffConnector.style.top = `${CONNECTOR_TOP_PX + slotTops[0]}px`;
+        staffConnector.style.height = `${
+          slotTops[lastIndex] +
+          staffSlotHeightPx(staves[lastIndex]) -
+          slotTops[0]
+        }px`;
+      }
+      this.#renderGroupConnectors(this.#firstInRow);
+      this.#renderStaffLabels(this.#firstInRow);
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -1109,27 +1222,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
-    // Reentrancy depth for #redrawDoubleStemmedBeams — see its own wrapper
-    // just below for why this exists.
-    #doubleStemmedBeamsRedrawDepth = 0;
+    // Current re-entry depth per guarded redraw pass — see #guardedRedraw.
+    #redrawDepths = new Map<string, number>();
 
-    // Resolves cross-staff double-stemmed beam groups (`beam-group`) over
-    // every staff's own top-level element stream, then pushes the correct
-    // per-element stem direction onto each involved staff — top-staff members
-    // always stem down, bottom-staff members always stem up (see the
-    // double-stemmed-beams plan's Stem-direction resolution section), the
-    // same static, non-pitch-driven policy voice 1/voice 2 already use.
-    // A staff's own render pass (staffClassicalBase.ts) still decides
-    // everything else about beam grouping and geometry; this only resolves
-    // *which direction* a cross-staff member's stem points, so its own
-    // BeamsBuilder pass (which excludes these indices from same-staff
-    // grouping) has a correct direction to render with in the meantime,
-    // before a later phase draws the real shared beam polygon.
-    //
-    // Several bridge properties this method writes (crossStaffTupletBeamY,
-    // crossStaffBeamStemOverrides) synchronously trigger a full staff
+    // Re-entry guard for the redraw passes that write staff bridge
+    // properties (crossStaffTupletBeamY, crossStaffBeamStemOverrides,
+    // crossStaffTupletRoles): each synchronously triggers a full staff
     // re-render on change, which synchronously dispatches the very event
-    // this method itself listens for — a real, observed-live infinite
+    // the pass itself listens for — a real, observed-live infinite
     // recursion (confirmed via a live CDP-attached debugging session, not
     // just a theoretical risk): during a Storybook story teardown/mount
     // transition, real geometry measurements can genuinely fail to
@@ -1146,21 +1246,220 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // a redraw reached via a stale/queued callback after this element (or
     // its parent) has already been removed from the document, measuring
     // elements mid-teardown.
-    #redrawDoubleStemmedBeams() {
+    #guardedRedraw(passName: string, redraw: () => void) {
       if (!this.isConnected) {
         return;
       }
-      if (this.#doubleStemmedBeamsRedrawDepth > 4) {
+      const depth = this.#redrawDepths.get(passName) ?? 0;
+      if (depth > 4) {
         console.warn(
-          '[music-measure] double-stemmed beam redraw did not converge after several passes; stopping to avoid a runaway loop'
+          `[music-measure] ${passName} redraw did not converge after several passes; stopping to avoid a runaway loop`
         );
         return;
       }
-      this.#doubleStemmedBeamsRedrawDepth++;
+      this.#redrawDepths.set(passName, depth + 1);
       try {
-        this.#redrawDoubleStemmedBeamsImpl();
+        redraw();
       } finally {
-        this.#doubleStemmedBeamsRedrawDepth--;
+        this.#redrawDepths.set(passName, depth);
+      }
+    }
+
+    // Resolves cross-staff double-stemmed beam groups (`beam-group`) over
+    // every staff's own top-level element stream, then pushes the correct
+    // per-element stem direction onto each involved staff — top-staff members
+    // always stem down, bottom-staff members always stem up (see the
+    // double-stemmed-beams plan's Stem-direction resolution section), the
+    // same static, non-pitch-driven policy voice 1/voice 2 already use.
+    // A staff's own render pass (staffClassicalBase.ts) still decides
+    // everything else about beam grouping and geometry; this only resolves
+    // *which direction* a cross-staff member's stem points, so its own
+    // BeamsBuilder pass (which excludes these indices from same-staff
+    // grouping) has a correct direction to render with in the meantime,
+    // before a later phase draws the real shared beam polygon.
+    #redrawDoubleStemmedBeams() {
+      this.#guardedRedraw('double-stemmed beam', () =>
+        this.#redrawDoubleStemmedBeamsImpl()
+      );
+    }
+
+    #redrawCrossStaffTuplets() {
+      this.#guardedRedraw('cross-staff tuplet', () =>
+        this.#redrawCrossStaffTupletsImpl()
+      );
+    }
+
+    // Joins each `<music-tuplet tuplet-group>` pair across two adjacent
+    // staves into one tuplet spanning both hands (rules/
+    // crossStaffTupletRules.ts). Pass 1 pushes a role onto each wrapper's own
+    // staff — stems into the gap, bracket suppressed or forced to one side —
+    // and those setters re-render synchronously, so pass 2's real geometry
+    // already reflects the new stems when it draws a `gap` bracket here.
+    #redrawCrossStaffTupletsImpl() {
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+
+      const entries: CrossStaffTupletEntry<
+        TupletElementType,
+        NoteChordOrRestElementType
+      >[] = [];
+      staves.forEach((staff, staffIndex) => {
+        const tuplets = staff.querySelectorAll<TupletElementType>(
+          `${MUSIC_TUPLET}[tuplet-group]`
+        );
+        for (const tuplet of Array.from(tuplets)) {
+          entries.push({
+            staffIndex,
+            tuplet,
+            tupletGroup: tuplet.tupletGroup ?? '',
+            ratio: parseTupletRatio(tuplet.ratio),
+            placement: tuplet.placement,
+            isNested:
+              tuplet.parentElement?.closest(MUSIC_TUPLET) != null ||
+              tuplet.querySelector(MUSIC_TUPLET) !== null,
+            members: tuplet.flatElements.map((element) => ({
+              element,
+              isRest: element.nodeName === MUSIC_REST_NODE,
+              beatLength: durationToFactor[element.duration],
+              inBeamGroup: element.beamGroup !== null,
+            })),
+          });
+        }
+      });
+
+      const { groups, warnings } = resolveCrossStaffTupletGroups(entries);
+      for (const warning of warnings) {
+        console.warn(`[music-measure] ${warning}`);
+      }
+
+      const rolesByStaffIndex = new Map<
+        number,
+        Map<TupletElementType, CrossStaffTupletRole>
+      >();
+      const assignRole = (
+        staffIndex: number,
+        tuplet: TupletElementType,
+        role: CrossStaffTupletRole
+      ) => {
+        const roles = rolesByStaffIndex.get(staffIndex) ?? new Map();
+        roles.set(tuplet, role);
+        rolesByStaffIndex.set(staffIndex, roles);
+      };
+      for (const group of groups) {
+        assignRole(group.topStaffIndex, group.topTuplet, {
+          stemUp: false,
+          rendering: group.layout === 'above' ? 'above' : 'suppressed',
+        });
+        assignRole(group.bottomStaffIndex, group.bottomTuplet, {
+          stemUp: true,
+          rendering: group.layout === 'below' ? 'below' : 'suppressed',
+        });
+      }
+      staves.forEach((staff, staffIndex) => {
+        (
+          staff as unknown as {
+            crossStaffTupletRoles: ReadonlyMap<
+              TupletElementType,
+              CrossStaffTupletRole
+            > | null;
+          }
+        ).crossStaffTupletRoles = rolesByStaffIndex.get(staffIndex) ?? null;
+      });
+
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.cross-staff-tuplets-overlay'
+      );
+      if (!overlay) {
+        return;
+      }
+      overlay.replaceChildren();
+
+      const measureRect = this.getBoundingClientRect();
+      // How far a wrapper's notes reach toward the other staff (lowest edge
+      // for the top staff, highest for the bottom), measure-relative.
+      const reachIntoGap = (
+        tuplet: TupletElementType,
+        downward: boolean
+      ): number | null => {
+        let extreme: number | null = null;
+        for (const element of tuplet.flatElements) {
+          if (element.nodeName === MUSIC_REST_NODE) {
+            continue;
+          }
+          const noteOrChord = element as NoteOrChordElementType;
+          const stem = this.#stemRect(noteOrChord);
+          const rects = [
+            ...this.#headRects(noteOrChord),
+            ...(stem ? [stem] : []),
+          ];
+          for (const rect of rects) {
+            const y = (downward ? rect.bottom : rect.top) - measureRect.top;
+            extreme =
+              extreme === null
+                ? y
+                : downward
+                ? Math.max(extreme, y)
+                : Math.min(extreme, y);
+          }
+        }
+        return extreme;
+      };
+
+      for (const group of groups) {
+        if (
+          group.layout !== 'gap' ||
+          group.startSide === null ||
+          group.endSide === null
+        ) {
+          continue;
+        }
+        const startHeads = this.#headRects(
+          group.startElement as NoteOrChordElementType
+        );
+        const endHeads = this.#headRects(
+          group.endElement as NoteOrChordElementType
+        );
+        if (startHeads.length === 0 || endHeads.length === 0) {
+          continue;
+        }
+        const startX =
+          Math.min(...startHeads.map((rect) => rect.left)) - measureRect.left;
+        const endX =
+          Math.max(...endHeads.map((rect) => rect.right)) - measureRect.left;
+        const baseY = resolveCrossStaffTupletGapBaseY({
+          topGapEdgeY:
+            this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
+            measureRect.top,
+          bottomGapEdgeY:
+            this.#staffContainerRect(staves[group.bottomStaffIndex]).top -
+            measureRect.top,
+          topExtremeY: reachIntoGap(group.topTuplet, true),
+          bottomExtremeY: reachIntoGap(group.bottomTuplet, false),
+        });
+
+        const geometry: TupletBracketGeometry = {
+          group: {
+            element: group.topTuplet,
+            indices: [],
+            parsedRatio: parseTupletRatio(group.topTuplet.ratio),
+            nestingLevel: 0,
+          },
+          startX,
+          endX,
+          baseY,
+          stemUp: false,
+          angle: 0,
+          omitBracket: false,
+          numeralX: (startX + endX) / 2,
+          numeralY: baseY,
+          hookLength: TUPLET_HOOK_LENGTH_PX,
+          hookDirections: {
+            start: group.startSide === 'top' ? -1 : 1,
+            end: group.endSide === 'top' ? -1 : 1,
+          },
+        };
+        overlay.appendChild(createTupletBracketSvg(geometry));
       }
     }
 
@@ -1845,24 +2144,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // <music-composition>.
       this.classList.toggle('has-group-connector', groups.length > 0);
 
+      const slotTops = staffSlotTopsPx(staves);
       for (const { index, count, group } of groups) {
         const isGrandStaff = group === 'grand';
         const bracketExtraHeight = isGrandStaff ? 0 : BRACKET_EXTRA_HEIGHT_PX;
-        const precedingStavesHeight = staves
-          .slice(0, index)
-          .reduce(
-            (sum, staff) => sum + staffSlotHeightPx(staff) + STAFF_SLOT_GAP_PX,
-            0
-          );
+        const lastIndex = index + count - 1;
         const spanHeight =
-          staves
-            .slice(index, index + count)
-            .reduce((sum, staff) => sum + staffSlotHeightPx(staff), 0) +
-          STAFF_SLOT_GAP_PX * (count - 1) +
+          slotTops[lastIndex] +
+          staffSlotHeightPx(staves[lastIndex]) -
+          slotTops[index] +
           bracketExtraHeight;
         const topOffset =
           CONNECTOR_TOP_PX +
-          precedingStavesHeight -
+          slotTops[index] -
           (isGrandStaff ? 0 : BRACKET_TOP_OFFSET_PX + bracketExtraHeight / 2);
 
         const glyph = isGrandStaff
@@ -1919,8 +2213,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ? Math.max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX)
         : 0;
 
-      let precedingStavesHeight = 0;
-      for (const staff of staves) {
+      const slotTops = staffSlotTopsPx(staves);
+      staves.forEach((staff, staffIndex) => {
         const slotHeight = staffSlotHeightPx(staff);
         if (staff.label) {
           const el = document.createElement('div');
@@ -1931,13 +2225,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             STAFF_LABEL_LEFT_MARGIN_PX
           )}px`;
           el.style.top = `${
-            CONNECTOR_TOP_PX + precedingStavesHeight + slotHeight / 2
+            CONNECTOR_TOP_PX + slotTops[staffIndex] + slotHeight / 2
           }px`;
           el.textContent = staff.label;
           container.appendChild(el);
         }
-        precedingStavesHeight += slotHeight + STAFF_SLOT_GAP_PX;
-      }
+      });
     }
 
     // Which measures actually show their own `number` is a whole-composition

@@ -39,6 +39,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletPlacement,
   TupletRatio,
   VocalType,
 } from '@one-step-at-a-time/web-components';
@@ -108,10 +109,13 @@ declare module 'react' {
         duration?: DurationType;
         'beam-group'?: string;
         'rest-staff-side'?: RestStaffSide;
+        hidden?: boolean;
       };
       'music-voice': WebComponentProps;
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
+        'tuplet-group'?: string;
+        placement?: TupletPlacement;
       };
       'music-arpeggio': WebComponentProps & {
         'run-duration'?: DurationType;

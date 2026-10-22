@@ -12,9 +12,9 @@ import {
   pickStemSide,
   resolveRectClearingBulgeHeight,
   resolveSlurCurve,
-  SlurCurveResolution,
   sliceConvexPolygon,
   slurAnchorKind,
+  SlurCurveResolution,
 } from '../rules/connectorPlacementRules';
 import {
   DoubleStemmedBeamEntry,
@@ -1076,7 +1076,7 @@ export const collectEntryObstacles = (
   rootRect: DOMRect,
   measureElements: readonly Element[]
 ): EntryObstacles => {
-  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}, ${MUSIC_REST}`;
+  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden])`;
   const entries: EntryGeometry[] = Array.from(
     root.querySelectorAll(selector)
   ).map((element) => {

@@ -1,7 +1,6 @@
 import { IRestElement } from '../types/elements';
 import { DurationType, RestStaffSide } from '../types/theory';
-import { NOTE_EVENTS } from '../utils/consts';
-import { MUSIC_REST } from '../utils/consts';
+import { MUSIC_REST, NOTE_EVENTS } from '../utils/consts';
 import { parseRestStaffSide } from '../utils/parsers';
 import { createRestSvg } from '../utils/svgCreator/rest';
 
@@ -14,6 +13,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {DurationType} duration - Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`.
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself.
    * @attr {RestStaffSide} rest-staff-side - Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`.
+   * @attr {boolean} hidden - Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -116,6 +116,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.shadowRoot!.innerHTML = `
         <style>
           :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
+          :host([hidden]) { visibility: hidden; }
         </style>
       `;
 

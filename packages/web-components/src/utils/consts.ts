@@ -25,6 +25,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletPlacement,
   TupletRatio,
   VocalType,
 } from '../types/theory';
@@ -98,11 +99,16 @@ export const CLEF_EVENTS = {
   ATTRIBUTE_CHANGE: 'clef-attribute-change',
 } as const;
 
+export const TUPLET_EVENTS = {
+  ATTRIBUTE_CHANGE: 'tuplet-attribute-change',
+} as const;
+
 export const STAFF_EVENTS = {
   NOTES_POSITIONED: 'staff-notes-positioned',
   STAFF_MIN_WIDTH: 'staff-min-width',
   GROUP_ATTRIBUTE_CHANGE: 'staff-group-attribute-change',
   LABEL_ATTRIBUTE_CHANGE: 'staff-label-attribute-change',
+  VERTICAL_SPACE_CHANGE: 'staff-vertical-space-change',
 } as const;
 
 export const COMMON_ATTRIBUTES = {
@@ -278,6 +284,8 @@ export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 
 export const STEM_DIRECTIONS: StemDirection[] = ['up', 'down'];
+
+export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
 
 export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
   'none',
