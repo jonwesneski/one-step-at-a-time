@@ -1028,15 +1028,6 @@ export const OCTAVE_SIGN_SUFFIX_SCALE = 0.6;
 export const OCTAVE_SIGN_CHAR_WIDTH_PX = OCTAVE_SIGN_FONT_SIZE_PX * 0.65;
 
 /**
- * Conservative estimated width (px) of a whole octave sign (numeral +
- * suffix), covering the widest case — a 2-digit numeral ("15"/"22") plus its
- * 2-letter suffix at OCTAVE_SIGN_SUFFIX_SCALE — so leftward-reserving layout
- * code doesn't need to measure the actual rendered text.
- */
-export const OCTAVE_SIGN_ESTIMATED_WIDTH_PX =
-  OCTAVE_SIGN_CHAR_WIDTH_PX * (2 + 2 * OCTAVE_SIGN_SUFFIX_SCALE);
-
-/**
  * Fixed nominal Y position (px, note-coordinate space) for a pitch-raising
  * (sopra) span's numeral/line. One half-space further from the staff than
  * DYNAMICS_ABOVE_BASELINE_Y, so the two decorations don't land on the exact
@@ -1091,12 +1082,19 @@ export const OCTAVE_SIGN_PROSE_FONT_SIZE_PX = STAFF_LINE_SPACING * 0.9;
 export const OCTAVE_LOCO_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Estimated width (px) of the standalone "(loco)" label — six italic
- * characters at about half an em each.
- * = 3 × OCTAVE_SIGN_PROSE_FONT_SIZE_PX
+ * Estimated width (px) per character of octave-sign prose text (italic
+ * serif, about half an em).
+ * = 0.5 × OCTAVE_SIGN_PROSE_FONT_SIZE_PX
+ */
+export const OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX =
+  OCTAVE_SIGN_PROSE_FONT_SIZE_PX * 0.5;
+
+/**
+ * Estimated width (px) of the standalone "(loco)" label.
+ * = 6 × OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX
  */
 export const OCTAVE_LOCO_ESTIMATED_WIDTH_PX =
-  OCTAVE_SIGN_PROSE_FONT_SIZE_PX * 3;
+  OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX * 6;
 
 /**
  * Clearance (px) kept between a gap-side octave sign and a double-stemmed

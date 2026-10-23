@@ -213,3 +213,31 @@ test("a trilling closing note's own line end extends the octave line's corner pa
   expect(corner.left - head.right).toBeGreaterThan(50);
   expect(corner.right).toBeGreaterThanOrEqual(trillLine.right - 5);
 });
+
+test("a col-mode label's extension line starts after the prose label, not through it", async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="bass" time="4/4">
+       <music-note note="C" octave="3" duration="quarter" octave-shift="15mb" octave-mode="col"></music-note>
+       <music-note note="D" octave="3" duration="quarter"></music-note>
+       <music-note note="E" octave="3" duration="quarter" octave-stop></music-note>
+       <music-note note="F" octave="3" duration="quarter"></music-note>
+     </music-staff>`
+  );
+
+  const { labelRight, lineLeft } = await page.evaluate(() => {
+    const staff = document.querySelector('music-staff');
+    const label = staff?.shadowRoot?.querySelector('.octave-sign-col-label');
+    const line = staff?.shadowRoot?.querySelector('.octave-extension-line');
+    if (!label || !line) {
+      throw new Error('col label or extension line not found');
+    }
+    return {
+      labelRight: label.getBoundingClientRect().right,
+      lineLeft: line.getBoundingClientRect().left,
+    };
+  });
+  expect(lineLeft).toBeGreaterThanOrEqual(labelRight);
+});

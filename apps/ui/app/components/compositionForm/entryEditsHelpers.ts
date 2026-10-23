@@ -4,6 +4,7 @@ import {
   durationFits,
   largestFittingDuration,
 } from './measureCapacityHelpers';
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
 import { timeSignatureOfEntry } from './timeSignaturesHelpers';
 import type { CompositionStructure, MusicEntry } from './types';
 import { isPitchedEntry } from './types';
@@ -29,13 +30,15 @@ export function applyEntryUpdate(
   if (!structure.entriesById[entry.id]) {
     return structure;
   }
-  return pruneBrokenTies({
-    ...structure,
-    entriesById: {
-      ...structure.entriesById,
-      [entry.id]: clampDuration(structure, entry),
-    },
-  });
+  return pruneInvalidNotationLinks(
+    pruneBrokenTies({
+      ...structure,
+      entriesById: {
+        ...structure.entriesById,
+        [entry.id]: clampDuration(structure, entry),
+      },
+    })
+  );
 }
 
 function clampDuration(

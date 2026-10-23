@@ -24,6 +24,7 @@ function structure(
     entriesById,
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
     ...extra,
   };
@@ -209,6 +210,7 @@ describe('moveEntryInVoice', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     const next = moveEntryInVoice(s, 's1', 's1-v1', 'a', 2);
@@ -235,6 +237,7 @@ describe('moveEntryToVoice', () => {
       entriesById,
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
       ...extra,
     };

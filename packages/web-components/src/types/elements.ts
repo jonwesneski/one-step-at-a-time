@@ -77,14 +77,17 @@ export interface INoteElement {
   // <music-measure>, which suppresses each end's own local stem (noStem)
   // and draws one real stem line between the two real notehead positions.
   sharedStemFor: string | null;
-  // Set by the ancestor <music-measure> to true when this element is a
+  // Set by the ancestor <music-measure> when this element is a
   // double-stemmed beam-group member on an inner voice (a real second
   // <music-voice> sharing its staff) — anchors its articulation marks at
-  // its own real stem-tip position instead of the notehead, so they land
-  // right next to the shared beam rather than on the outer voice's own
-  // territory. false on every other element (outer voice, single-voice
-  // staff, or not a beam-group member at all). Not an attribute.
-  articulationAnchorsToStem: boolean;
+  // the beam's surface facing its notehead instead of the notehead, so they
+  // land right next to the shared beam rather than on the outer voice's own
+  // territory. The value is how many secondary/fractional beam levels the
+  // stem passes beyond the primary beam (0 for a plain eighth); those levels
+  // sit between the stem tip and that surface. null on every other element
+  // (outer voice, single-voice staff, or not a beam-group member at all).
+  // Not an attribute.
+  articulationStemAnchorBeamLevels: number | null;
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -258,8 +261,8 @@ export interface IChordElement {
   beamGroup: string | null;
   // See INoteElement.sharedStemFor.
   sharedStemFor: string | null;
-  // See INoteElement.articulationAnchorsToStem.
-  articulationAnchorsToStem: boolean;
+  // See INoteElement.articulationStemAnchorBeamLevels.
+  articulationStemAnchorBeamLevels: number | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;

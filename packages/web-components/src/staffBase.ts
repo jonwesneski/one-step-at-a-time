@@ -31,6 +31,7 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from './utils/notationDimensions';
 import { parseStaffGroup } from './utils/parsers';
+import { upgradeShadowedProperties } from './utils/upgradeShadowedProperties';
 import {
   measureVerticalExtents,
   VerticalSpaceReservations,
@@ -327,6 +328,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.render();
 
     this.staffResizeObserver.observe(this.staffContainer);
+    upgradeShadowedProperties(this);
   }
 
   #buildStaffLines(): void {

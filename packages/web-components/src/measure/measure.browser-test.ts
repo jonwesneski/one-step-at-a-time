@@ -27,6 +27,7 @@ import {
   REST_BEAM_CLEARANCE_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
+  STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
@@ -1819,6 +1820,62 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — multi-voic
     expect(result.stemUp).toBe(true);
   });
 
+  test('a member parsed from markup (innerHTML, so the measure redraws before its staves upgrade) still gets the forced stem direction', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = `<music-measure>
+        <music-staff clef="treble">
+          <music-note note="G" octave="5" duration="eighth" beam-group="g1"></music-note>
+          <music-note note="G" octave="5" duration="eighth" beam-group="g1"></music-note>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-voice>
+            <music-note note="C" octave="4" duration="quarter"></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note id="inner-note" note="C" octave="3" duration="eighth" beam-group="g1"></music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>`;
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const result = await page.evaluate(() => {
+      const measure = document.querySelector('music-measure');
+      const beam = measure?.shadowRoot
+        ?.querySelector('.double-stemmed-beam')
+        ?.getBoundingClientRect();
+      const note = document.getElementById('inner-note');
+      const head = note?.shadowRoot?.querySelector('.head');
+      const stem = note?.shadowRoot?.querySelector('.stem');
+      if (!beam || !head || !stem) {
+        return null;
+      }
+      const headRect = head.getBoundingClientRect();
+      const stemRect = stem.getBoundingClientRect();
+      return {
+        stemTop: stemRect.top,
+        headTop: headRect.top,
+        beamTop: beam.top,
+        beamBottom: beam.bottom,
+      };
+    });
+    if (result === null) {
+      throw new Error('geometry not ready');
+    }
+
+    // Stem-up, and its tip reaches the shared beam rather than overshooting.
+    expect(result.stemTop).toBeLessThan(result.headTop);
+    expect(result.stemTop).toBeGreaterThanOrEqual(result.beamTop - 1);
+    expect(result.stemTop).toBeLessThanOrEqual(result.beamBottom);
+  });
+
   test("the same member's articulation mark lands right next to the real beam, on the beam's own side of the notehead", async ({
     page,
   }) => {
@@ -1923,9 +1980,9 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — multi-voic
       return {
         headBottom: headRect.bottom,
         dotCenterY: dotRect.top + dotRect.height / 2,
-        articulationAnchorsToStem: (
-          note as unknown as { articulationAnchorsToStem: boolean }
-        ).articulationAnchorsToStem,
+        articulationStemAnchorBeamLevels: (
+          note as unknown as { articulationStemAnchorBeamLevels: number | null }
+        ).articulationStemAnchorBeamLevels,
       };
     });
     if (result === null) {
@@ -1935,8 +1992,216 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — multi-voic
     // Stem-up here too (bottom-staff role), so opposite-of-stem is still
     // below the head — but at the fixed default distance, since there's no
     // other voice on this staff for it to be "inner" relative to.
-    expect(result.articulationAnchorsToStem).toBe(false);
+    expect(result.articulationStemAnchorBeamLevels).toBeNull();
     expect(result.dotCenterY).toBeGreaterThan(result.headBottom);
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — inner-voice articulations clear every beam`, () => {
+  // Every articulation mark of #inner-note against every drawn beam polygon
+  // (primary and secondary/fractional), in measure-relative px, plus the
+  // anchor beam-level count the measure wrote back.
+  async function innerNoteMarkBeamOverlaps(page: Page, markup: string) {
+    await page.evaluate((html) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = html;
+    }, markup);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const snapshot = await page.evaluate((measureTag) => {
+      const measure = document.querySelector(measureTag);
+      const note = document.getElementById('inner-note');
+      const marks = note?.shadowRoot?.querySelectorAll('.articulations > *');
+      if (!measure?.shadowRoot || !note || !marks || marks.length === 0) {
+        throw new Error('geometry not ready');
+      }
+      const measureRect = measure.getBoundingClientRect();
+      return {
+        beamLevels: (
+          note as unknown as { articulationStemAnchorBeamLevels: number | null }
+        ).articulationStemAnchorBeamLevels,
+        marks: Array.from(marks).map((mark) => {
+          const rect = mark.getBoundingClientRect();
+          return {
+            left: rect.left - measureRect.left,
+            right: rect.right - measureRect.left,
+            top: rect.top - measureRect.top,
+            bottom: rect.bottom - measureRect.top,
+          };
+        }),
+        beamPolygons: Array.from(
+          measure.shadowRoot.querySelectorAll<SVGPolygonElement>(
+            '.double-stemmed-beams-overlay .double-stemmed-beam'
+          )
+        ).map((polygon) =>
+          Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+            const point = polygon.points.getItem(i);
+            return { x: point.x, y: point.y };
+          })
+        ),
+      };
+    }, MUSIC_MEASURE);
+
+    const slices = snapshot.beamPolygons.flatMap((polygon) =>
+      sliceConvexPolygon(polygon, 1)
+    );
+    // Vertical gap from each mark to the nearest beam slice sharing its x
+    // range (Infinity when none does) — the marks should sit right beside
+    // a beam, or the overlap check below proves nothing.
+    const beamGaps = snapshot.marks.map((mark) =>
+      Math.min(
+        ...slices
+          .filter(
+            (slice) => slice.right >= mark.left && slice.left <= mark.right
+          )
+          .map((slice) =>
+            Math.max(slice.top - mark.bottom, mark.top - slice.bottom, 0)
+          )
+      )
+    );
+    const overlapping = snapshot.marks.filter((mark) =>
+      slices.some(
+        (slice) =>
+          slice.right >= mark.left &&
+          slice.left <= mark.right &&
+          slice.bottom > mark.top &&
+          slice.top < mark.bottom
+      )
+    );
+    return {
+      beamLevels: snapshot.beamLevels,
+      beamCount: snapshot.beamPolygons.length,
+      markCount: snapshot.marks.length,
+      nearestBeamGap: Math.min(...beamGaps),
+      farthestBeamGap: Math.max(...beamGaps),
+      overlapping,
+    };
+  }
+
+  // The inner voice sits on the treble staff, whose shared-beam role
+  // (stems down) matches voice 2's own default. A stem-down member's marks
+  // sit left of its stem, so each case puts them on a member the beam
+  // reaches from the left.
+  const trebleOuterVoice = `<music-voice>
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+    </music-voice>`;
+
+  test("a fermata's dome stays clear of the beam it is anchored against", async ({
+    page,
+  }) => {
+    const result = await innerNoteMarkBeamOverlaps(
+      page,
+      `<music-measure>
+        <music-staff clef="treble">
+          ${trebleOuterVoice}
+          <music-voice>
+            <music-note note="G" octave="4" duration="eighth" beam-group="g1"></music-note>
+            <music-note id="inner-note" note="G" octave="4" duration="eighth" beam-group="g1" articulation="fermata"></music-note>
+          </music-voice>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="eighth" beam-group="g1"></music-note>
+        </music-staff>
+      </music-measure>`
+    );
+    expect(result.markCount).toBe(1);
+    expect(result.nearestBeamGap).toBeLessThan(STAFF_LINE_SPACING);
+    expect(result.farthestBeamGap).toBeLessThan(2 * STAFF_LINE_SPACING);
+    expect(result.overlapping).toEqual([]);
+    expect(result.beamLevels).toBe(0);
+  });
+
+  test("a stem-up member's fermata dome stays clear of the beam above it", async ({
+    page,
+  }) => {
+    // Bottom-staff inner voice: forced stem-up against voice 2's own
+    // stem-down default. Its marks sit right of its stem, so the beam must
+    // continue past it to the right.
+    const result = await innerNoteMarkBeamOverlaps(
+      page,
+      `<music-measure>
+        <music-staff clef="treble">
+          <music-note note="G" octave="5" duration="eighth" beam-group="g1"></music-note>
+          <music-note note="G" octave="5" duration="eighth" beam-group="g1"></music-note>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-voice>
+            <music-note note="C" octave="4" duration="quarter"></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note id="inner-note" note="C" octave="3" duration="eighth" beam-group="g1" articulation="fermata"></music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>`
+    );
+    expect(result.markCount).toBe(1);
+    expect(result.nearestBeamGap).toBeLessThan(STAFF_LINE_SPACING);
+    expect(result.farthestBeamGap).toBeLessThan(2 * STAFF_LINE_SPACING);
+    expect(result.overlapping).toEqual([]);
+    expect(result.beamLevels).toBe(0);
+  });
+
+  test('marks stack past secondary beams on the notehead side', async ({
+    page,
+  }) => {
+    // Both sixteenths are on the treble staff, so the secondary beam stacks
+    // toward their noteheads, between them and the primary.
+    const result = await innerNoteMarkBeamOverlaps(
+      page,
+      `<music-measure>
+        <music-staff clef="treble">
+          ${trebleOuterVoice}
+          <music-voice>
+            <music-note note="G" octave="4" duration="sixteenth" beam-group="g1"></music-note>
+            <music-note id="inner-note" note="G" octave="4" duration="sixteenth" beam-group="g1" articulation="portato"></music-note>
+          </music-voice>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="eighth" beam-group="g1"></music-note>
+        </music-staff>
+      </music-measure>`
+    );
+    expect(result.markCount).toBe(2);
+    expect(result.beamCount).toBeGreaterThan(1);
+    expect(result.nearestBeamGap).toBeLessThan(STAFF_LINE_SPACING);
+    expect(result.farthestBeamGap).toBeLessThan(2 * STAFF_LINE_SPACING);
+    expect(result.overlapping).toEqual([]);
+    expect(result.beamLevels).toBe(1);
+  });
+
+  test('marks clear the primary beam when the stem reaches past it to secondary beams on the far side', async ({
+    page,
+  }) => {
+    // The outer members are both on the bass staff, so the secondary beam
+    // stacks toward the bass side and the inner treble member's stem is
+    // extended through the primary to reach it.
+    const result = await innerNoteMarkBeamOverlaps(
+      page,
+      `<music-measure>
+        <music-staff clef="treble">
+          ${trebleOuterVoice}
+          <music-voice>
+            <music-rest duration="sixteenth"></music-rest>
+            <music-note id="inner-note" note="G" octave="4" duration="sixteenth" beam-group="g1" articulation="portato"></music-note>
+          </music-voice>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="sixteenth" beam-group="g1"></music-note>
+          <music-rest duration="sixteenth"></music-rest>
+          <music-note note="C" octave="3" duration="sixteenth" beam-group="g1"></music-note>
+        </music-staff>
+      </music-measure>`
+    );
+    expect(result.markCount).toBe(2);
+    expect(result.beamCount).toBeGreaterThan(1);
+    expect(result.nearestBeamGap).toBeLessThan(STAFF_LINE_SPACING);
+    expect(result.farthestBeamGap).toBeLessThan(2 * STAFF_LINE_SPACING);
+    expect(result.overlapping).toEqual([]);
+    expect(result.beamLevels).toBe(1);
   });
 });
 

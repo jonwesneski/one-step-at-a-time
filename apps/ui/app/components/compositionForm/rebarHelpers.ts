@@ -6,6 +6,7 @@ import {
   entryFactor,
   measureDuration,
 } from './measureCapacityHelpers';
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
 import {
   effectiveTimeSignatures,
   timeSignatureRegionAt,
@@ -204,8 +205,20 @@ export function rebar(
     connectorOrder.push(tie.id);
   }
 
+  // A split note keeps its id on the first piece, so only a span ending on
+  // one needs to move — to the last piece of the new tie chain.
+  const octaveSpansById = Object.fromEntries(
+    Object.entries(structure.octaveSpansById).map(([id, span]) => [
+      id,
+      {
+        ...span,
+        endEntryId: tieReanchor.get(span.endEntryId) ?? span.endEntryId,
+      },
+    ])
+  );
+
   return {
-    structure: {
+    structure: pruneInvalidNotationLinks({
       ...structure,
       measureOrder,
       measuresById,
@@ -213,7 +226,8 @@ export function rebar(
       entriesById,
       connectorsById,
       connectorOrder,
-    },
+      octaveSpansById,
+    }),
     rebarred: true,
   };
 }

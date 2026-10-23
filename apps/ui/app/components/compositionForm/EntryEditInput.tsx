@@ -1,18 +1,21 @@
-import { Select } from '@/design-system';
+import { Checkbox, Select } from '@/design-system';
 import type {
   DurationType,
   Note,
   Octave,
 } from '@one-step-at-a-time/web-components';
+import { isBeamableDuration } from './beamGroupHelpers';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
 import {
   ChordNoteRows,
   DurationSelect,
   MarkingsFields,
   OctaveSelect,
+  OptionalSelect,
   PitchSelect,
 } from './entryControls';
 import type { PitchedEntry } from './types';
+import { REST_STAFF_SIDE_OPTIONS } from './types';
 
 interface EntryEditInputProps {
   entry: PitchedEntry;
@@ -23,6 +26,8 @@ interface EntryEditInputProps {
   staffId: string | null;
   voiceOrder: readonly string[];
   currentVoiceId: string | null;
+  canShareDynamic: boolean;
+  canTakeLoco: boolean;
 }
 
 const labelClass = 'text-xs font-medium text-zinc-500';
@@ -33,6 +38,8 @@ export function EntryEditInput({
   staffId,
   voiceOrder,
   currentVoiceId,
+  canShareDynamic,
+  canTakeLoco,
 }: EntryEditInputProps) {
   const { updateEntry, moveEntryToVoice } = useCompositionFormSession();
 
@@ -82,11 +89,39 @@ export function EntryEditInput({
           }
         />
       </label>
+      {entry.type !== 'rest' &&
+        entry.beamGroupId &&
+        isBeamableDuration(entry.duration) && (
+          <div className="text-xs text-zinc-400">
+            Part of a cross-staff beam — a quarter or longer leaves it.
+          </div>
+        )}
 
       {entry.type !== 'rest' && (
         <MarkingsFields
           markings={entry}
           onChange={(patch) => updateEntry({ ...entry, ...patch })}
+          canShareDynamic={canShareDynamic}
+          canTakeLoco={canTakeLoco}
+          showStemDirection={!entry.beamGroupId}
+        />
+      )}
+
+      {entry.type === 'rest' && entry.beamGroupId && (
+        <OptionalSelect
+          label="Position against the beam"
+          options={REST_STAFF_SIDE_OPTIONS}
+          value={entry.restStaffSide}
+          onChange={(restStaffSide) => updateEntry({ ...entry, restStaffSide })}
+          noneLabel="auto"
+        />
+      )}
+
+      {entry.type === 'rest' && (
+        <Checkbox
+          label="Hidden (spacer)"
+          checked={entry.hidden ?? false}
+          onChange={(e) => updateEntry({ ...entry, hidden: e.target.checked })}
         />
       )}
 

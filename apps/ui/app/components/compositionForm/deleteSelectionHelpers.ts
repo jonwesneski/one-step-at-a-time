@@ -1,3 +1,5 @@
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
+import { octaveSpansWithoutEntries } from './octaveHelpers';
 import { findGroupMembers } from './staffGroupsHelpers';
 import type { CompositionStructure, Selection } from './types';
 import { isPitchedEntry } from './types';
@@ -140,7 +142,7 @@ export function removeSelectionFromStructure(
     });
   }
 
-  return {
+  return pruneInvalidNotationLinks({
     timeSig: structure.timeSig,
     measureOrder,
     measuresById,
@@ -149,5 +151,6 @@ export function removeSelectionFromStructure(
     connectorsById,
     connectorOrder,
     tupletsById,
-  };
+    octaveSpansById: octaveSpansWithoutEntries(structure, entryIdsToDelete),
+  });
 }

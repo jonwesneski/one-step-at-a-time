@@ -3,6 +3,8 @@ import {
   pruneBrokenTies,
   pruneConnectorsForEntries,
 } from './connectorsHelpers';
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
+import { octaveSpansWithoutEntries } from './octaveHelpers';
 import type { CompositionStructure, NormalizedVoice } from './types';
 import { isPitchedEntry } from './types';
 
@@ -61,7 +63,7 @@ export function moveEntryInVoice(
   next = dissolveDiscontiguousTuplets(next, staffId, voiceId);
   next = normalizeConnectorEndpointOrder(next);
   next = pruneBrokenTies(next);
-  return next;
+  return pruneInvalidNotationLinks(next);
 }
 
 // Moves an entry to a different voice of the same staff — a genuinely
@@ -119,6 +121,8 @@ export function moveEntryToVoice(
   let next: CompositionStructure = {
     ...structure,
     entriesById,
+    // The moved entry leaves its old voice's octave line.
+    octaveSpansById: octaveSpansWithoutEntries(structure, new Set([entryId])),
     stavesById: {
       ...structure.stavesById,
       [staffId]: { ...staff, voiceOrder, voicesById: survivingVoicesById },
@@ -135,7 +139,7 @@ export function moveEntryToVoice(
   // stored state that silently stops rendering).
   next = pruneConnectorsForEntries(next, new Set([entryId]));
   next = pruneBrokenTies(next);
-  return next;
+  return pruneInvalidNotationLinks(next);
 }
 
 // A tuplet must be a single uninterrupted run of 2+ entries in one voice (the

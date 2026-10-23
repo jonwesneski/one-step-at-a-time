@@ -16,21 +16,47 @@ const MARK_GAP = 90;
 const MARK_STEP = 150;
 // Marks are roughly one notehead wide.
 const MARK_HALF_WIDTH = 70;
-// Gap from the stem-anchor point to the center of the first (closest) mark,
-// when stem-anchored — a historically-attested alternative to
-// notehead-centered placement (common pre-1920, still used for an inner
+// Ink clearance from the stem-anchor point to the near edge of the first
+// (closest) mark, when stem-anchored — a historically-attested alternative
+// to notehead-centered placement (common pre-1920, still used for an inner
 // double-stemmed voice per the reference engraving material this mirrors),
 // so marks nestle at the stem end rather than the fixed, much larger
 // MARK_GAP a notehead anchor uses. The anchor point itself (stemAnchor,
-// computed by note.ts#stemBeamJunctionPosition) already sits right at the
-// beam's real visible surface, not inside its hidden/painted-over body, so
-// this only needs to be a small, clearly-visible margin beyond that.
-const STEM_ANCHOR_GAP = 70;
+// computed by note.ts#stemBeamJunctionPosition) already sits at the visible
+// beam surface facing the notehead, so this only needs to be a small,
+// clearly-visible margin (≈2.5px) beyond that. Measured edge-to-edge rather
+// than to the mark's center, since a stem-anchored fermata's dome points
+// back at the beam.
+const STEM_ANCHOR_INK_GAP = 48;
+// Minimum ink clearance between consecutive stacked marks. Every ordinary
+// pair already clears this at MARK_STEP, so it only spreads a pair
+// involving the fermata's tall dome.
+const MARK_INK_GAP = 40;
 // Horizontal offset from the stem's own X for a stem-anchored mark, in the
 // same direction the stem already leans away from the notehead center —
 // otherwise the mark's own radius/half-width straddles the thin stem line
 // itself instead of sitting beside it.
 const STEM_ANCHOR_X_OFFSET = 90;
+
+// A mark's ink extent (from its center, stroke included) along the stacking
+// axis, on its notehead-facing side and on the side away from the notehead.
+type MarkExtent = { towardHead: number; awayFromHead: number };
+
+const symmetricExtent = (half: number): MarkExtent => ({
+  towardHead: half,
+  awayFromHead: half,
+});
+
+const STACCATO_EXTENT = symmetricExtent(22);
+const TENUTO_EXTENT = symmetricExtent(12);
+const STACCATISSIMO_EXTENT = symmetricExtent(45);
+const ACCENT_EXTENT = symmetricExtent(52);
+const MARCATO_EXTENT = symmetricExtent(56);
+// The dome (radius 100) bulges away from the notehead; only the baseline's
+// stroke reaches toward it.
+const FERMATA_EXTENT: MarkExtent = { towardHead: 8, awayFromHead: 108 };
+const STRESS_EXTENT = symmetricExtent(36);
+const UNSTRESS_EXTENT: MarkExtent = { towardHead: 23, awayFromHead: 16 };
 
 export type ArticulationMarksProps = {
   articulation?: ArticulationType | null;
@@ -274,8 +300,6 @@ export const createArticulationMarks = ({
       ? stemAnchor.x + (stemUp ? 1 : -1) * STEM_ANCHOR_X_OFFSET
       : noteHeadCenterX;
   const anchorY = stemAnchor?.y ?? noteHeadCenterY;
-  const baseOffset =
-    stemAnchor !== null ? STEM_ANCHOR_GAP : HEAD_HALF_HEIGHT + MARK_GAP;
   // Marks always stack from their anchor toward the side that's actually
   // free. For the ordinary notehead anchor that's dir itself (away from the
   // notehead, into the opposite-of-stem territory). For a stem anchor it's
@@ -284,48 +308,71 @@ export const createArticulationMarks = ({
   // back toward the notehead, into the corridor beside the stem — which
   // numerically always works out to stemUp ? 1 : -1 regardless of anchoring.
   const stackDir = stemUp ? 1 : -1;
-  let step = 0;
-  const nextY = (): number => {
-    const y = anchorY + stackDir * (baseOffset + step * MARK_STEP);
-    step++;
-    return y;
+  // A glyph's notehead-facing side faces the anchor when notehead-anchored,
+  // and faces away from it when stem-anchored (stacking runs toward the
+  // notehead there).
+  const nearSide = (extent: MarkExtent): number =>
+    stemAnchor !== null ? extent.awayFromHead : extent.towardHead;
+  const farSide = (extent: MarkExtent): number =>
+    stemAnchor !== null ? extent.towardHead : extent.awayFromHead;
+  // Center offset from the anchor and far-edge extent of the last placed
+  // mark; null until the first one.
+  let previous: { offset: number; far: number } | null = null;
+  const nextY = (extent: MarkExtent): number => {
+    let offset: number;
+    if (previous === null) {
+      offset =
+        stemAnchor !== null
+          ? STEM_ANCHOR_INK_GAP + nearSide(extent)
+          : HEAD_HALF_HEIGHT + MARK_GAP;
+    } else {
+      offset =
+        previous.offset +
+        Math.max(MARK_STEP, previous.far + MARK_INK_GAP + nearSide(extent));
+    }
+    previous = { offset, far: farSide(extent) };
+    return anchorY + stackDir * offset;
   };
 
   // Length family — closest to the notehead. portato / tenuto-staccatissimo are
   // the two legal within-length combinations and stack the dot/wedge nearest the
   // head with the tenuto line just beyond it. (fermata is handled separately.)
   if (length === 'staccato') {
-    group.appendChild(createStaccatoDot(markX, nextY()));
+    group.appendChild(createStaccatoDot(markX, nextY(STACCATO_EXTENT)));
   } else if (length === 'staccatissimo') {
-    group.appendChild(createStaccatissimoWedge(markX, nextY(), dir));
+    group.appendChild(
+      createStaccatissimoWedge(markX, nextY(STACCATISSIMO_EXTENT), dir)
+    );
   } else if (length === 'tenuto') {
-    group.appendChild(createTenutoLine(markX, nextY()));
+    group.appendChild(createTenutoLine(markX, nextY(TENUTO_EXTENT)));
   } else if (length === 'portato') {
-    group.appendChild(createStaccatoDot(markX, nextY()));
-    group.appendChild(createTenutoLine(markX, nextY()));
+    group.appendChild(createStaccatoDot(markX, nextY(STACCATO_EXTENT)));
+    group.appendChild(createTenutoLine(markX, nextY(TENUTO_EXTENT)));
   } else if (length === 'tenuto-staccatissimo') {
-    group.appendChild(createStaccatissimoWedge(markX, nextY(), dir));
-    group.appendChild(createTenutoLine(markX, nextY()));
+    group.appendChild(
+      createStaccatissimoWedge(markX, nextY(STACCATISSIMO_EXTENT), dir)
+    );
+    group.appendChild(createTenutoLine(markX, nextY(TENUTO_EXTENT)));
   }
 
   // Accent — outside the length marks.
   if (accent === 'accent') {
-    group.appendChild(createAccentMark(markX, nextY()));
+    group.appendChild(createAccentMark(markX, nextY(ACCENT_EXTENT)));
   } else if (accent === 'marcato') {
-    group.appendChild(createMarcatoMark(markX, nextY(), dir));
+    group.appendChild(createMarcatoMark(markX, nextY(MARCATO_EXTENT), dir));
   }
 
   // Fermata — opposite the stem like the other marks, outermost (after any
   // accent). Never coexists with a length mark.
   if (length === 'fermata') {
-    group.appendChild(createFermataSvg(markX, nextY(), dir));
+    group.appendChild(createFermataSvg(markX, nextY(FERMATA_EXTENT), dir));
   }
 
   // Schoenberg stress — outermost on the opposite-stem side.
   if (stress === 'stressed') {
-    group.appendChild(createStressMark(markX, nextY()));
+    group.appendChild(createStressMark(markX, nextY(STRESS_EXTENT)));
   } else if (stress === 'unstressed') {
-    group.appendChild(createUnstressMark(markX, nextY(), dir));
+    group.appendChild(createUnstressMark(markX, nextY(UNSTRESS_EXTENT), dir));
   }
 
   return group;

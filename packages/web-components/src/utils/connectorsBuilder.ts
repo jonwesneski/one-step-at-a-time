@@ -821,7 +821,7 @@ const pickChordNoteBulge = (
 // with another concurrently-sounding voice — "when a double-stemmed group
 // is an inner part" per the reference engraving material's own
 // articulation-placement rule (see measure.ts#redrawDoubleStemmedBeams'
-// articulationAnchorsToStem write-back, which this mirrors for slur
+// articulationStemAnchorBeamLevels write-back, which this mirrors for slur
 // stem-end anchoring). A staff with zero or one <music-voice> children is
 // never "inner" (the ordinary single-voice case); voice 1 (the first
 // <music-voice> sibling) is the canonical outer voice and is never "inner"

@@ -2466,6 +2466,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           resolvedLine
         );
         const layerDirection = groupSide === 'top' ? -1 : 1;
+        const deepestLevelByIndex = new Map<number, number>();
+        for (const segment of segments) {
+          for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
+            deepestLevelByIndex.set(
+              i,
+              Math.max(deepestLevelByIndex.get(i) ?? 0, segment.beamLevel)
+            );
+          }
+        }
         const beamStep = BEAM_THICKNESS_PX + BEAM_GAP_PX;
         const segmentXRange = (segment: BeamLineDescriptor) => {
           let x1 = memberGeometries[segment.fromNoteIndex].point.x;
@@ -2550,7 +2559,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const beamYAtX = (x: number): number =>
           doubleStemmedBeamYAtX(line, firstX, lastX, x);
 
-        for (const { element, staffIndex, stemUp, point } of memberGeometries) {
+        for (let i = 0; i < memberGeometries.length; i++) {
+          const { element, staffIndex, stemUp, point } = memberGeometries[i];
           const beamY = beamYAtX(point.x);
           // createDoubleStemmedBeamPolygon (below) always draws its
           // thickness growing downward from beamY, so beamY is the
@@ -2569,15 +2579,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
           // Inner-voice articulation anchor — svgCreator/articulations.ts
           // already knows this element's own real stem-tip position
-          // locally (from stemUp/stemExtension/duration, just written
-          // above), so this is purely a policy bit: true tells it to
-          // anchor marks there (next to the shared beam, on the stem's
-          // own side) instead of the ordinary notehead-relative default,
-          // which is what every outer-voice/single-voice member keeps.
-          element.articulationAnchorsToStem = isInnerVoiceMember(
+          // locally (from stemUp/stemExtension/duration), so all it needs
+          // from here is the policy (non-null: anchor next to the shared
+          // beam, on the stem's own side, instead of the ordinary
+          // notehead-relative default every outer-voice/single-voice member
+          // keeps) and how many secondary/fractional levels lie between the
+          // tip and the beam surface facing the notehead.
+          element.articulationStemAnchorBeamLevels = isInnerVoiceMember(
             element,
             staves[staffIndex]
-          );
+          )
+            ? deepestLevelByIndex.get(i) ?? 0
+            : null;
 
           // Tuplet numeral/bracket bridging — see crossStaffTupletBeamY on
           // StaffClassicalElementBase. Both beamY and point.naturalY (this
@@ -2739,15 +2752,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // in — mirrors "a note's stem always reaches the outermost beam
         // level it's part of." A plain member with no secondary/fractional
         // participation (deepest level 0) is untouched.
-        const deepestLevelByIndex = new Map<number, number>();
-        for (const segment of segments) {
-          for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
-            deepestLevelByIndex.set(
-              i,
-              Math.max(deepestLevelByIndex.get(i) ?? 0, segment.beamLevel)
-            );
-          }
-        }
         for (let i = 0; i < memberGeometries.length; i++) {
           const level = deepestLevelByIndex.get(i);
           if (!level) {

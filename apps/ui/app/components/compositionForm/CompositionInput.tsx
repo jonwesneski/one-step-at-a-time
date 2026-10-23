@@ -26,6 +26,7 @@ import {
 import { DragSelectOverlay } from './DragSelectOverlay';
 import { applyEntryUpdate } from './entryEditsHelpers';
 import { MeasureInput } from './MeasureInput';
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
 import { rebar } from './rebarHelpers';
 import {
   moveEntryInVoice,
@@ -165,6 +166,7 @@ export function CompositionInput() {
       connectorsById: {},
       connectorOrder: [],
       tupletsById: {},
+      octaveSpansById: {},
     },
   });
 
@@ -178,6 +180,7 @@ export function CompositionInput() {
       connectorsById: methods.getValues('connectorsById'),
       connectorOrder: methods.getValues('connectorOrder'),
       tupletsById: methods.getValues('tupletsById'),
+      octaveSpansById: methods.getValues('octaveSpansById'),
     }),
     [methods]
   );
@@ -192,6 +195,7 @@ export function CompositionInput() {
       methods.setValue('connectorsById', s.connectorsById);
       methods.setValue('connectorOrder', s.connectorOrder);
       methods.setValue('tupletsById', s.tupletsById);
+      methods.setValue('octaveSpansById', s.octaveSpansById);
     },
     [methods]
   );
@@ -428,7 +432,11 @@ export function CompositionInput() {
   }
 
   function setTuplet(entryIds: string[], ratio: TupletRatio | null) {
-    record(setTupletInStructure(getStructure(), entryIds, ratio));
+    record(
+      pruneInvalidNotationLinks(
+        setTupletInStructure(getStructure(), entryIds, ratio)
+      )
+    );
   }
 
   // A time signature change either re-bars the affected region (`rewrite`) — one
