@@ -6,6 +6,7 @@ import {
   DoubleStemmedBeamEntry,
   DoubleStemmedBeamKeepOut,
   DoubleStemmedBeamMember,
+  DoubleStemmedBeamNotehead,
   DoubleStemmedBeamPoint,
   doubleStemmedBeamYAtX,
   resolveDoubleStemmedBeamClearance,
@@ -272,7 +273,8 @@ describe('resolveDoubleStemmedBeamClearance', () => {
     lastX: 100,
     beamShapes: [primary],
     hangingShapes: [],
-    stemLimits: [],
+    keepOuts: [],
+    noteheads: [],
     clearance: 5,
     minStemLength: 20,
   };
@@ -284,6 +286,16 @@ describe('resolveDoubleStemmedBeamClearance', () => {
     top: 120,
     bottom: 130,
     staff: 'bottom',
+    ...overrides,
+  });
+  const head = (
+    overrides: Partial<DoubleStemmedBeamNotehead>
+  ): DoubleStemmedBeamNotehead => ({
+    left: 0,
+    right: 0,
+    top: 140,
+    bottom: 150,
+    stemUp: true,
     ...overrides,
   });
 
@@ -366,28 +378,80 @@ describe('resolveDoubleStemmedBeamClearance', () => {
     const result = resolveDoubleStemmedBeamClearance({
       ...base,
       keepOuts: [keepOut({ top: 100 })],
-      stemLimits: [{ x: 0, stemUp: false, headEdgeY: 75 }],
+      noteheads: [head({ top: 65, bottom: 75, stemUp: false })],
     });
     expect(result.deficit).toBe(8);
     expect(result.reserveOn).toBe('bottom');
     expect(result.shift).toBe(-9);
   });
 
-  it('never shortens a stem that is already below the minimum', () => {
+  it('pushes the beam away from a notehead already inside the minimum', () => {
+    // Beam top at x=0 is 100; a stem-down notehead ending at 90 needs it at 110.
     const result = resolveDoubleStemmedBeamClearance({
       ...base,
-      keepOuts: [keepOut({ top: 100 })],
-      stemLimits: [{ x: 0, stemUp: false, headEdgeY: 90 }],
+      noteheads: [head({ top: 80, bottom: 90, stemUp: false })],
     });
-    expect(result.deficit).toBe(13);
-    expect(result.shift).toBe(-6.5);
+    expect(result.shift).toBe(10);
+    expect(result.reserveOn).toBe('bottom');
+  });
+
+  it('lifts a rising beam off a stem-up notehead, measured across the whole head', () => {
+    // Beam bottom is 104 at the head's left edge (x=40) and 102.8 at its
+    // stem side (x=52); the lower left edge binds: 115 - 20 - 104.
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      noteheads: [head({ left: 40, right: 52, top: 115, bottom: 125 })],
+    });
+    expect(result.shift).toBeCloseTo(-9);
+  });
+
+  it('ignores a notehead outside the beam span', () => {
+    expect(
+      resolveDoubleStemmedBeamClearance({
+        ...base,
+        noteheads: [head({ left: 150, right: 160, top: 100 })],
+      })
+    ).toEqual({ shift: 0, deficit: 0, reserveOn: null });
+  });
+
+  it('leaves the beam in place when every notehead has room', () => {
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      noteheads: [
+        head({ top: 40, bottom: 50, stemUp: false }),
+        head({ top: 200, bottom: 210 }),
+      ],
+    });
+    expect(result.shift).toBe(0);
+    expect(result.deficit).toBeLessThan(0);
+  });
+
+  it('measures a stem-up notehead to a secondary stacked toward it', () => {
+    const secondaryBelow = {
+      left: 0,
+      right: 100,
+      topOffset: 12,
+      bottomOffset: 20,
+    };
+    const noteheads = [head({ top: 135, bottom: 145 })];
+    // The primary's bottom at 108 leaves 27px; the secondary's at 120 only 15.
+    expect(
+      resolveDoubleStemmedBeamClearance({ ...base, noteheads }).shift
+    ).toBe(0);
+    expect(
+      resolveDoubleStemmedBeamClearance({
+        ...base,
+        beamShapes: [primary, secondaryBelow],
+        noteheads,
+      }).shift
+    ).toBe(-5);
   });
 
   it('measures a stem to the beam level nearest its notehead', () => {
     const input = {
       ...base,
       keepOuts: [keepOut({ top: 100 })],
-      stemLimits: [{ x: 0, stemUp: false, headEdgeY: 60 }],
+      noteheads: [head({ top: 50, bottom: 60, stemUp: false })],
     };
     // Against the primary alone the stem-down member could give up 20px; a
     // secondary stacked toward it (top at 88 instead of 100) leaves only 8,
@@ -402,6 +466,20 @@ describe('resolveDoubleStemmedBeamClearance', () => {
         ],
       }).deficit
     ).toBe(5);
+  });
+
+  it('reports the missing gap when noteheads on both staves squeeze the beam', () => {
+    // The stem-down head needs a drop of 15, the stem-up head a lift of 8.
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      noteheads: [
+        head({ top: 85, bottom: 95, stemUp: false }),
+        head({ top: 120, bottom: 130 }),
+      ],
+    });
+    expect(result.deficit).toBe(23);
+    expect(result.reserveOn).toBe('bottom');
+    expect(result.shift).toBe(3.5);
   });
 
   it('reports the overlap when signs on both staves squeeze the beam', () => {

@@ -208,12 +208,12 @@ export const STEM_OVERLAP_PX = STAFF_LINE_SPACING * 0.2;
 export const REST_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
 
 /**
- * Shortest stem (px, notehead edge to beam) a double-stemmed beam may leave
- * when it moves to clear a gap-side octave sign; past it the gap widens.
- * About 2.5 spaces from the notehead centre, the usual beamed-stem floor.
- * = 2 × STAFF_LINE_SPACING
+ * Minimum gap (px) between a double-stemmed member's notehead and the beam
+ * level nearest it; the beam moves to keep it, and past that the gap widens.
+ * The usual free-stem floor for a two-beam note.
+ * = 1.5 × STAFF_LINE_SPACING
  */
-export const DOUBLE_STEMMED_BEAM_MIN_STEM_PX = STAFF_LINE_SPACING * 2;
+export const DOUBLE_STEMMED_BEAM_MIN_STEM_PX = STAFF_LINE_SPACING * 1.5;
 
 /**
  * Minimum real clearance (px) kept between a cross-staff rest's own glyph

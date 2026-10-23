@@ -2478,10 +2478,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           return { x1, x2 };
         };
 
-        // A gap-side octave sign stays next to its own staff (it applies
-        // only to the stave it is placed against), so the beam moves
-        // instead — and the gap widens when the other hand's stems can't
-        // give up enough length.
+        // The beam moves to keep its noteheads at a minimum distance and to
+        // clear a gap-side octave sign, which stays next to its own staff (it
+        // applies only to the stave it is placed against); the gap widens
+        // when both hands' stems can't be satisfied.
         const clearance = resolveDoubleStemmedBeamClearance({
           line: resolvedLine,
           firstX,
@@ -2517,18 +2517,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               measureRect
             ).map((rect) => ({ ...rect, staff: 'bottom' as const })),
           ],
-          stemLimits: memberGeometries.flatMap(({ element, stemUp, point }) => {
-            const heads = this.#headRects(element);
-            if (heads.length === 0) {
-              return [];
-            }
-            const headEdgeY = stemUp
-              ? Math.min(...heads.map((head) => head.top))
-              : Math.max(...heads.map((head) => head.bottom));
-            return [
-              { x: point.x, stemUp, headEdgeY: headEdgeY - measureRect.top },
-            ];
-          }),
+          noteheads: memberGeometries.flatMap(({ element, stemUp }) =>
+            this.#headRects(element).map((head) => ({
+              left: head.left - measureRect.left,
+              right: head.right - measureRect.left,
+              top: head.top - measureRect.top,
+              bottom: head.bottom - measureRect.top,
+              stemUp,
+            }))
+          ),
           clearance: OCTAVE_SIGN_BEAM_CLEARANCE_PX,
           minStemLength: DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
         });

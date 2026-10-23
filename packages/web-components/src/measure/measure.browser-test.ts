@@ -5637,6 +5637,95 @@ test.describe(`${MUSIC_MEASURE} hairpins angled around a double-stemmed beam`, (
   });
 });
 
+test.describe(`${MUSIC_MEASURE} double-stemmed beam notehead clearance`, () => {
+  // Each beam-group member's notehead gap to the beam level nearest it:
+  // below the beam for the top staff's stem-down members, above it for the
+  // bottom staff's stem-up ones.
+  async function memberHeadGaps(page: Page): Promise<number[]> {
+    const snapshot = await page.evaluate((measureTag) => {
+      const measure = document.querySelector(measureTag);
+      if (measure === null || measure.shadowRoot === null) {
+        throw new Error('measure not ready');
+      }
+      const measureRect = measure.getBoundingClientRect();
+      const staves = Array.from(measure.children).filter(
+        (child) => child.shadowRoot?.querySelector('.staff-container') != null
+      );
+      return {
+        heads: staves.flatMap((staff, staffIndex) =>
+          Array.from(staff.querySelectorAll('[beam-group]')).flatMap((member) =>
+            Array.from(member.shadowRoot?.querySelectorAll('.head') ?? []).map(
+              (head) => {
+                const rect = head.getBoundingClientRect();
+                return {
+                  left: rect.left - measureRect.left,
+                  right: rect.right - measureRect.left,
+                  top: rect.top - measureRect.top,
+                  bottom: rect.bottom - measureRect.top,
+                  stemUp: staffIndex === 1,
+                };
+              }
+            )
+          )
+        ),
+        beamPolygons: Array.from(
+          measure.shadowRoot.querySelectorAll<SVGPolygonElement>(
+            '.double-stemmed-beams-overlay .double-stemmed-beam'
+          )
+        ).map((polygon) =>
+          Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+            const point = polygon.points.getItem(i);
+            return { x: point.x, y: point.y };
+          })
+        ),
+      };
+    }, MUSIC_MEASURE);
+
+    const slices = snapshot.beamPolygons.flatMap((polygon) =>
+      sliceConvexPolygon(polygon, 1)
+    );
+    return snapshot.heads.flatMap((head) => {
+      const over = slices.filter(
+        (slice) => slice.right >= head.left && slice.left <= head.right
+      );
+      if (over.length === 0) {
+        return [];
+      }
+      return [
+        head.stemUp
+          ? head.top - Math.max(...over.map((slice) => slice.bottom))
+          : Math.min(...over.map((slice) => slice.top)) - head.bottom,
+      ];
+    });
+  }
+
+  for (const width of [700, 900]) {
+    test(`a rising sloped beam keeps clear of every notehead at ${width}px`, async ({
+      page,
+    }) => {
+      await buildGrandStaffMeasure(page, angledHairpinMarkup(false), width);
+
+      const gaps = await memberHeadGaps(page);
+      expect(gaps.length).toBeGreaterThan(0);
+      for (const gap of gaps) {
+        expect(gap).toBeGreaterThanOrEqual(DOUBLE_STEMMED_BEAM_MIN_STEM_PX - 1);
+      }
+    });
+
+    test(`a flat beam keeps its secondary clear of a stem-up notehead at ${width}px`, async ({
+      page,
+    }) => {
+      await buildGrandStaffMeasure(page, angledHairpinMarkup(true), width);
+
+      const gaps = await memberHeadGaps(page);
+      expect(gaps.length).toBeGreaterThan(0);
+      for (const gap of gaps) {
+        expect(gap).toBeGreaterThanOrEqual(DOUBLE_STEMMED_BEAM_MIN_STEM_PX - 1);
+      }
+    });
+  }
+});
+
 type OctaveBeamRect = {
   left: number;
   right: number;
