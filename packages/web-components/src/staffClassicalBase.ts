@@ -36,6 +36,7 @@ import {
   OctaveSpan,
   resolveOctaveSpanExtremalStaffY,
   resolveOctaveSpans,
+  splitOctaveSpanIntoRuns,
 } from './rules/octaveRules';
 import { restToYCoordinate, VoiceRestContext } from './rules/restRules';
 import {
@@ -113,6 +114,7 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  OctaveShiftAmount,
   TupletPlacement,
   VoiceNumber,
 } from './types/theory';
@@ -178,6 +180,7 @@ import {
   MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
+  OCTAVE_LOCO_ESTIMATED_WIDTH_PX,
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
   OCTAVE_SIGN_BELOW_STAFF_Y,
@@ -396,6 +399,14 @@ type VoiceStaffYCoords = {
 // (#currentElements, #noteXPositions, #stemDirections, #beamRenderer, …),
 // each populated once per #renderNotes()/#spaceElements() call from voice
 // 1's array alone. One of these exists per active VoiceKey.
+// One octave line crossing a barline, as it touches this staff — see
+// StaffClassicalElementBase#octaveContinuations.
+type OctaveContinuationRow = {
+  rowY: number;
+  raisesPitch: boolean;
+  starts: boolean;
+};
+
 type VoiceRenderState = {
   elements: NoteChordOrRestElementType[];
   beatOffsets: number[];
@@ -523,6 +534,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     NoteOrChordElementType,
     CrossStaffDynamicsOverride
   > | null = null;
+  #crossStaffOctaveBreakAfter: ReadonlySet<NoteChordOrRestElementType> | null =
+    null;
+  #octaveContinuations: ReadonlyMap<Element, OctaveContinuationRow> | null =
+    null;
   #clefMarkers: ClefMarkerPlacement[] = [];
   // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
   // #renderNotes() pass — the shared coordinate space #clefMarkers'
@@ -530,6 +545,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // public noteToYCoordinate()'s `elementIndex` argument (always meaning
   // "index into voice 1") converts into as well.
   #voice1BeatOffsets: number[] = [];
+  // Every voice's elements' beat-offsets from the same pass — see
+  // beatOffsetOf().
+  #beatOffsetByElement = new Map<Element, number>();
   // Voice-partitioned flattening result (always >=1 entry — see
   // flattenStaffSlotElements()).
   #voices: Map<VoiceNumber, VoiceFlattenResult> = new Map();
@@ -907,6 +925,109 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
     this.#boundRenderDynamics();
+  }
+
+  // Set by the ancestor <music-measure>: this staff's octave lines break
+  // after these elements, so a one-hand line under a double-stemmed beam
+  // encloses only its own notes (see measure.ts#crossStaffOctaveBreaks).
+  // Compared by content; a change re-lays the staff, since a run's row can
+  // differ from the whole span's and the vertical budget follows it.
+  get crossStaffOctaveBreakAfter(): ReadonlySet<NoteChordOrRestElementType> | null {
+    return this.#crossStaffOctaveBreakAfter;
+  }
+
+  set crossStaffOctaveBreakAfter(
+    value: ReadonlySet<NoteChordOrRestElementType> | null
+  ) {
+    const current = this.#crossStaffOctaveBreakAfter;
+    const unchanged =
+      (current?.size ?? 0) === (value?.size ?? 0) &&
+      [...(current ?? [])].every((element) => value?.has(element));
+    if (unchanged) {
+      return;
+    }
+    this.#crossStaffOctaveBreakAfter = value;
+    this.#renderNotes();
+  }
+  // Set by the ancestor <music-composition> for every octave line crossing
+  // a barline that touches this measure: the row the whole line takes in
+  // this system, keyed by the first element it covers here. A line that
+  // `starts` here is drawn by this staff at that row, running to this
+  // staff's end with no corner, so it meets the continuation the composition
+  // draws next; one that only passes over this staff is drawn by the
+  // composition, but this staff still makes headroom for it. Compared by
+  // content; a change re-lays the staff, since the rows move its vertical
+  // budget.
+  get octaveContinuations(): ReadonlyMap<
+    Element,
+    OctaveContinuationRow
+  > | null {
+    return this.#octaveContinuations;
+  }
+
+  set octaveContinuations(
+    value: ReadonlyMap<Element, OctaveContinuationRow> | null
+  ) {
+    const current = this.#octaveContinuations;
+    const unchanged =
+      (current?.size ?? 0) === (value?.size ?? 0) &&
+      [...(current ?? [])].every(([element, row]) => {
+        const next = value?.get(element);
+        return (
+          next !== undefined &&
+          next.starts === row.starts &&
+          next.raisesPitch === row.raisesPitch &&
+          Math.abs(next.rowY - row.rowY) < 0.5
+        );
+      });
+    if (unchanged) {
+      return;
+    }
+    this.#octaveContinuations = value;
+    this.#renderNotes();
+  }
+
+  // The row an octave line over `elements` (from this staff's own render)
+  // needs, in this staff's local coordinates — the same note clearance and
+  // decoration push-out as its own lines. Null when it rendered none of them.
+  octaveRowY(
+    elements: readonly Element[],
+    amount: OctaveShiftAmount
+  ): number | null {
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const indices = elements
+        .map((element) =>
+          state.elements.indexOf(element as NoteChordOrRestElementType)
+        )
+        .filter((index) => index >= 0)
+        .sort((a, b) => a - b);
+      if (indices.length === 0) {
+        continue;
+      }
+      const span: OctaveSpan = {
+        amount,
+        mode: 'sign',
+        startIndex: indices[0],
+        stopIndex: indices[indices.length - 1],
+        members: indices.map((index) => ({
+          index,
+          isRest: state.elements[index].nodeName === MUSIC_REST_NODE,
+        })),
+        closedBy: 'implicit',
+      };
+      return this.#octaveSignRowY(span, isOctaveRaise(amount), voiceKey, state);
+    }
+    return null;
+  }
+
+  // A local octave-sign Y (see octaveRowY) in client coordinates.
+  octaveLocalToClientY(y: number): number {
+    const container = this.#octaveSignsContainers.values().next().value;
+    const matrix = container?.getScreenCTM?.();
+    if (matrix) {
+      return matrix.d * y + matrix.f;
+    }
+    return this.transcribeContainer.getBoundingClientRect().top + y;
   }
 
   // Where this staff would draw each of its hairpins with no
@@ -1628,6 +1749,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       arpeggioGroups: ArpeggioGroupPlacement[];
     };
     const pass1ByVoice = new Map<VoiceNumber, Pass1Voice>();
+    this.#beatOffsetByElement = new Map();
     for (const voiceNumber of voiceNumbers) {
       const voiceData = this.#voices.get(voiceNumber);
       if (!voiceData) {
@@ -1654,6 +1776,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         elements,
         voiceData.tupletsByIndex,
         arpeggioRunIndices
+      );
+      elements.forEach((element, i) =>
+        this.#beatOffsetByElement.set(element, beatOffsets[i])
       );
       pass1ByVoice.set(voiceNumber, {
         elements,
@@ -2095,6 +2220,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // clef, or the start clef if there are no markers.
   public get effectiveEndClef(): ClefType | null {
     return this.#activeClefAt(Number.POSITIVE_INFINITY) ?? this.ownClef;
+  }
+
+  // When `element` starts within this measure, as a whole-note fraction —
+  // the offset its x is laid out from, so it compares across staves without
+  // waiting for layout. Null for an element this staff didn't render.
+  beatOffsetOf(element: Element): number | null {
+    return this.#beatOffsetByElement.get(element) ?? null;
   }
 
   // Return the y-coordinate for a given note and octave.
@@ -3030,8 +3162,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const { spans, warnings, standaloneLocoIndices } = resolveOctaveSpans(
       state.elements
     );
-    for (const warning of warnings) {
-      console.warn(warning);
+    // The only warning is an unterminated span. Inside a composition it may
+    // carry on into the next measure, which only the composition's
+    // track-wide pass can tell, so that pass warns instead.
+    if (this.closest(MUSIC_COMPOSITION) === null) {
+      for (const warning of warnings) {
+        console.warn(warning);
+      }
     }
 
     const trillSpansByStartIndex = new Map(
@@ -3041,7 +3178,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       ])
     );
 
-    for (const span of spans) {
+    for (const { run: span, y, continues } of this.#octaveRunLayouts(
+      spans,
+      voiceKey,
+      state
+    )) {
       const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
       const signX =
         startNoteX -
@@ -3066,7 +3207,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         endX = Math.max(endX, trillEndX);
       }
       const raisesPitch = isOctaveRaise(span.amount);
-      const y = this.#octaveSignRowY(span, raisesPitch, voiceKey, state);
 
       container.appendChild(
         createOctaveSignSvg(span.amount, signX, y, span.mode)
@@ -3074,10 +3214,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       container.appendChild(
         createOctaveExtensionLineSvg(
           signX + OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
-          endX,
+          continues ? width : endX,
           y
         )
       );
+      if (continues) {
+        continue;
+      }
       container.appendChild(createOctaveCornerSvg(endX, y, raisesPitch));
       if (span.closedBy === 'loco') {
         container.appendChild(
@@ -3087,12 +3230,62 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     for (const index of standaloneLocoIndices) {
-      const x = state.noteXPositions.get(index) ?? 0;
+      const noteX = state.noteXPositions.get(index) ?? 0;
+      // Under a double-stemmed beam the reminder ends before its note, like
+      // an octave sign's numeral, rather than running under the beam. Like
+      // the numeral it reserves no leftward room: it sits clear of the staff
+      // lines, and pushing its note right would pull it off the beat it
+      // shares with the other hand.
+      const x = state.externallyBeamedIndices.has(index)
+        ? noteX - OCTAVE_SIGN_LEADING_GAP_PX - OCTAVE_LOCO_ESTIMATED_WIDTH_PX
+        : noteX;
       // No open span here to derive raise/lower placement from — default to
       // the sopra position as a neutral choice for a standalone reminder.
       const y = OCTAVE_SIGN_ABOVE_STAFF_Y;
       container.appendChild(createOctaveLocoLabelSvg(x, y, true));
     }
+  }
+
+  // Each run as drawn: its row — the system-wide one when the span carries
+  // on past this measure (see octaveContinuations) — and whether it is the
+  // run that carries on. Shared by drawing and the vertical budget so the
+  // two can't disagree.
+  #octaveRunLayouts(
+    spans: readonly OctaveSpan[],
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): { run: OctaveSpan; y: number; continues: boolean }[] {
+    return spans.flatMap((span) => {
+      const row = this.#octaveContinuations?.get(
+        state.elements[span.startIndex]
+      );
+      const continuation = row?.starts ? row : undefined;
+      const runs = this.#octaveSpanRuns(span, state);
+      return runs.map((run, i) => ({
+        run,
+        y:
+          continuation?.rowY ??
+          this.#octaveSignRowY(run, isOctaveRaise(run.amount), voiceKey, state),
+        continues: continuation !== undefined && i === runs.length - 1,
+      }));
+    });
+  }
+
+  // The runs a span is drawn as — split where the measure breaks a
+  // one-hand line around the other hand's notes of a shared beam.
+  #octaveSpanRuns(span: OctaveSpan, state: VoiceRenderState): OctaveSpan[] {
+    const breaks = this.#crossStaffOctaveBreakAfter;
+    if (breaks === null || breaks.size === 0) {
+      return [span];
+    }
+    return splitOctaveSpanIntoRuns(
+      span,
+      new Set(
+        span.members
+          .filter((member) => breaks.has(state.elements[member.index]))
+          .map((member) => member.index)
+      )
+    );
   }
 
   // `sempre arpeggiando` (abbreviated `sempre arpegg.`): from an element marked
@@ -3810,14 +4003,31 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // use) and #otherAboveStaffDecorationTopY/#otherBelowStaffDecorationBottomY
   // (octave-sign outermost-placement use) both read this so neither can
   // diverge from where the tuplet bracket is actually drawn. Returns null
-  // when no group matches `stemUp`.
-  #tupletExtremeY(state: VoiceRenderState, stemUp: boolean): number | null {
+  // when no group matches `stemUp`. `skipSharedBeamNumerals` leaves out a
+  // group whose notes all join a double-stemmed beam: its numeral hangs off
+  // that beam on the far side of the gap, which the octave sign never
+  // follows.
+  #tupletExtremeY(
+    state: VoiceRenderState,
+    stemUp: boolean,
+    skipSharedBeamNumerals = false
+  ): number | null {
     let extreme: number | null = null;
 
     for (const group of state.tupletGroups) {
       if (
         this.#isTupletSuppressed(group) ||
         this.#tupletBracketAbove(state, group) !== stemUp
+      ) {
+        continue;
+      }
+      if (
+        skipSharedBeamNumerals &&
+        group.indices.every(
+          (i) =>
+            state.elements[i].nodeName === MUSIC_REST_NODE ||
+            state.externallyBeamedIndices.has(i)
+        )
       ) {
         continue;
       }
@@ -3879,12 +4089,24 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   ): number {
     let overflow = 0;
     const { spans } = resolveOctaveSpans(state.elements);
-    for (const span of spans) {
-      const raisesPitch = isOctaveRaise(span.amount);
+    const rows = [
+      ...this.#octaveRunLayouts(spans, voiceKey, state).map(({ run, y }) => ({
+        raisesPitch: isOctaveRaise(run.amount),
+        rowY: y,
+      })),
+      // A line only passing over this voice is drawn by the composition.
+      ...[...(this.#octaveContinuations ?? [])]
+        .filter(
+          ([element, row]) =>
+            !row.starts &&
+            state.elements.includes(element as NoteChordOrRestElementType)
+        )
+        .map(([, row]) => row),
+    ];
+    for (const { raisesPitch, rowY } of rows) {
       if (raisesPitch !== above) {
         continue;
       }
-      const rowY = this.#octaveSignRowY(span, raisesPitch, voiceKey, state);
       if (raisesPitch && rowY < 0) {
         overflow = Math.max(overflow, Math.ceil(-rowY) + 2);
       } else if (!raisesPitch && rowY > STAFF_TRANSCRIPTION_HEIGHT) {
@@ -4004,7 +4226,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    const tupletTop = this.#tupletExtremeY(state, true);
+    const tupletTop = this.#tupletExtremeY(state, true, true);
     if (tupletTop !== null) {
       consider(tupletTop);
     }
@@ -4029,7 +4251,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   ): number | null {
     let bottom: number | null = null;
 
-    const tupletBottom = this.#tupletExtremeY(state, false);
+    const tupletBottom = this.#tupletExtremeY(state, false, true);
     if (tupletBottom !== null) {
       bottom = tupletBottom;
     }

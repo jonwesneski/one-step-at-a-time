@@ -1460,6 +1460,472 @@ export const ThreeStaveHandDistribution: Story = {
   `,
 };
 
+// Both hands transposed under one common beam: each staff takes its own
+// octave sign, and the left hand's sits in the gap between its staff and the
+// beam, which rises clear of it.
+export const DoubleStemmedBeamBothHandsOctave: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="6/8">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+            octave-shift="8va"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="6"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="6"
+            duration="sixteenth"
+            beam-group="g2"
+            octave-stop
+          ></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note
+            note="F"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+            octave-shift="8va"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="F"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+            octave-stop
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// The right hand sits low over ledger lines, leaving no room in the usual
+// gap for the left hand's octave line, the beam and long-enough stems: the
+// gap between the staves widens instead of the line moving toward the right
+// hand. The right hand plays at pitch, so the line also breaks around it.
+export const DoubleStemmedBeamOctaveTightGap: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="6/8">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note
+            note="F"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+            octave-shift="8va"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="F"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+            octave-stop
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note note="E" octave="4" duration="quarter"></music-note>
+          <music-note note="D" octave="4" duration="quarter"></music-note>
+          <music-note note="C" octave="4" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+          <music-note note="F" octave="4" duration="quarter"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// One hand transposed under a common beam: the right hand's line is
+// authored as one span, but it breaks around the left hand's notes so they
+// aren't read as transposed too — each run restates the sign.
+export const DoubleStemmedBeamOneHandOctave: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="2/4">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="E"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+            octave-shift="8va"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="A"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="sixteenth"
+            beam-group="g2"
+            octave-stop
+          ></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// Both hands play every beat, so the right hand's line can't avoid the left
+// hand's notes: the left hand is marked loco instead, placed before its first
+// note rather than under the beam.
+export const DoubleStemmedBeamOctaveWithLoco: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="3/8">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note
+            note="E"
+            octave="6"
+            duration="eighth"
+            beam-group="g1"
+            octave-shift="8va"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="6"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="6"
+            duration="eighth"
+            beam-group="g1"
+            octave-stop
+          ></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note
+            note="F"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+            loco
+          ></music-note>
+          <music-note
+            note="F"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="F"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// The left hand's line continues from the previous bar over a common beam:
+// the beam clears it there too, and it breaks around the right hand's
+// untransposed notes like a line that starts in the bar.
+export const DoubleStemmedBeamOctaveAcrossMeasures: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="6/8">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note note="G" octave="5" duration="quarter"></music-note>
+          <music-note note="B" octave="5" duration="quarter"></music-note>
+          <music-note note="D" octave="6" duration="quarter"></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note
+            note="F"
+            octave="4"
+            duration="quarter"
+            octave-shift="8va"
+          ></music-note>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="6"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="6"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="treble">
+          <music-note
+            note="F"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="F"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g2"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g2"
+            octave-stop
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const Planned: Story = {
   render: () => html`
     <p>
@@ -1468,10 +1934,7 @@ export const Planned: Story = {
       &amp; Keyboard Techniques&rdquo;. Note clusters (Cowell-style
       black-key/white-key/chromatic notation) also appear frequently in keyboard
       writing but are a general-purpose notation, not keyboard-specific &mdash;
-      tracked as its own row in <code>TODO.md</code>. Double-stemmed beams
-      (<code>beam-group</code>) do not yet steer hairpins or octave-sign lines
-      around the shared beam; see &ldquo;Known Incomplete Areas&rdquo; in
-      <code>CLAUDE.md</code>.
+      tracked as its own row in <code>TODO.md</code>.
     </p>
   `,
 };

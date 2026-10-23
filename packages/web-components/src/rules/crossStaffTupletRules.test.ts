@@ -7,6 +7,7 @@ import {
 import {
   classifyCrossStaffTupletLayout,
   CrossStaffTupletEntry,
+  crossStaffTupletGapBand,
   CrossStaffTupletMember,
   resolveCrossStaffTupletGapBaseY,
   resolveCrossStaffTupletGroups,
@@ -303,5 +304,16 @@ describe('resolveCrossStaffTupletGapBaseY', () => {
     });
 
     expect(baseY).toBe(150);
+  });
+
+  it('reports the band itself, empty when stems crowd the gap', () => {
+    expect(
+      crossStaffTupletGapBand({
+        topGapEdgeY: 100,
+        bottomGapEdgeY: 200,
+        topExtremeY: 170,
+        bottomExtremeY: 130,
+      })
+    ).toEqual({ upper: 170 + clearance, lower: 130 - clearance });
   });
 });

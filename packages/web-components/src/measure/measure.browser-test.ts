@@ -17,10 +17,13 @@ import {
   MUSIC_VOICE,
 } from '../utils/consts';
 import {
+  DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_BEAM_CLEARANCE_PX,
   HAIRPIN_MIN_ROUTE_SLANT_RADIANS,
+  HAIRPIN_NOTE_CLEARANCE_PX,
   HAIRPIN_ROUTE_OUTSIDE_CLEARANCE_PX,
+  OCTAVE_SIGN_BEAM_CLEARANCE_PX,
   REST_BEAM_CLEARANCE_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
@@ -5631,5 +5634,484 @@ test.describe(`${MUSIC_MEASURE} hairpins angled around a double-stemmed beam`, (
     expect(
       snapshot.staffHairpinLocalYs[0].every((y) => y < STAFF_TOP_LINE_Y)
     ).toBe(true);
+  });
+});
+
+type OctaveBeamRect = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+type OctaveBeamSnapshot = {
+  staves: {
+    container: { top: number; bottom: number };
+    marginTop: string;
+    octave: { kind: string; rect: OctaveBeamRect }[];
+    heads: OctaveBeamRect[];
+  }[];
+  beamPolygons: Point[][];
+  tupletRects: OctaveBeamRect[];
+  hairpinEdges: [Point, Point][];
+};
+
+// Measure-relative geometry of a two-staff measure's octave signs, beams,
+// noteheads and gap decorations.
+async function snapshotOctaveBeam(page: Page): Promise<OctaveBeamSnapshot> {
+  return page.evaluate((measureTag) => {
+    const measure = document.querySelector(measureTag);
+    if (measure === null || measure.shadowRoot === null) {
+      throw new Error('measure not ready');
+    }
+    const measureRect = measure.getBoundingClientRect();
+    const relative = (rect: DOMRect) => ({
+      left: rect.left - measureRect.left,
+      right: rect.right - measureRect.left,
+      top: rect.top - measureRect.top,
+      bottom: rect.bottom - measureRect.top,
+    });
+    const staves = Array.from(measure.children).filter(
+      (child) => child.shadowRoot?.querySelector('.staff-container') != null
+    ) as HTMLElement[];
+    return {
+      staves: staves.map((staff) => ({
+        container: relative(
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- filtered above
+          staff
+            .shadowRoot!.querySelector('.staff-container')!
+            .getBoundingClientRect()
+        ),
+        marginTop: staff.style.marginTop,
+        octave: Array.from(
+          staff.shadowRoot?.querySelectorAll('.octave-signs-container > *') ??
+            []
+        ).map((shape) => ({
+          kind: shape.getAttribute('class') ?? '',
+          rect: relative(shape.getBoundingClientRect()),
+        })),
+        heads: Array.from(
+          staff.querySelectorAll('music-note:not(music-chord music-note)')
+        ).flatMap((note) =>
+          Array.from(note.shadowRoot?.querySelectorAll('.head') ?? []).map(
+            (head) => relative(head.getBoundingClientRect())
+          )
+        ),
+      })),
+      beamPolygons: Array.from(
+        measure.shadowRoot.querySelectorAll<SVGPolygonElement>(
+          '.double-stemmed-beams-overlay .double-stemmed-beam'
+        )
+      ).map((polygon) =>
+        Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+          const point = polygon.points.getItem(i);
+          return { x: point.x, y: point.y };
+        })
+      ),
+      tupletRects: Array.from(
+        measure.shadowRoot.querySelectorAll(
+          '.cross-staff-tuplets-overlay line, .cross-staff-tuplets-overlay text'
+        )
+      ).map((shape) => relative(shape.getBoundingClientRect())),
+      hairpinEdges: Array.from(
+        measure.shadowRoot.querySelectorAll(
+          '.shared-dynamics-overlay .hairpin path'
+        )
+      ).map((path) => {
+        const [, x1, y1, , x2, y2] = (path.getAttribute('d') ?? '').split(' ');
+        return [
+          { x: Number(x1), y: Number(y1) },
+          { x: Number(x2), y: Number(y2) },
+        ] as [Point, Point];
+      }),
+    };
+  }, MUSIC_MEASURE);
+}
+
+// The octave-sign shapes on the side of a staff that faces the gap.
+const gapSideSigns = (
+  snapshot: OctaveBeamSnapshot,
+  staffIndex: number,
+  side: 'above' | 'below'
+) => {
+  const { container, octave } = snapshot.staves[staffIndex];
+  return octave
+    .map((shape) => shape.rect)
+    .filter((rect) => {
+      const centerY = (rect.top + rect.bottom) / 2;
+      return side === 'above'
+        ? centerY < container.top
+        : centerY > container.bottom;
+    });
+};
+
+const overlapsX = (a: OctaveBeamRect, b: OctaveBeamRect) =>
+  a.left < b.right && b.left < a.right;
+
+// Smallest vertical gap between any beam slice and any sign it overlaps
+// horizontally — signs below the beam when `signsBelow`, above otherwise.
+const beamToSignGap = (
+  snapshot: OctaveBeamSnapshot,
+  signs: OctaveBeamRect[],
+  signsBelow: boolean
+): number => {
+  let gap = Infinity;
+  for (const slice of snapshot.beamPolygons.flatMap((polygon) =>
+    sliceConvexPolygon(polygon, 2)
+  )) {
+    for (const sign of signs) {
+      if (overlapsX(slice, sign)) {
+        gap = Math.min(
+          gap,
+          signsBelow ? sign.top - slice.bottom : slice.top - sign.bottom
+        );
+      }
+    }
+  }
+  return gap;
+};
+
+const hidden = (duration: DurationType, count = 1) =>
+  `<${MUSIC_REST} duration="${duration}" hidden></${MUSIC_REST}>`.repeat(count);
+
+const beamed = (
+  pitches: `${Note}${Octave}`[],
+  duration: DurationType,
+  group: string,
+  first = '',
+  last = ''
+) =>
+  pitches
+    .map((pitch, i) =>
+      note(
+        pitch,
+        duration,
+        [
+          `beam-group="${group}"`,
+          i === 0 ? first : '',
+          i === pitches.length - 1 ? last : '',
+        ].join(' ')
+      )
+    )
+    .join('');
+
+const keyboardMeasure = (
+  top: string,
+  bottom: string,
+  { time = '6/8', bottomClef = 'treble' } = {}
+) =>
+  `<${MUSIC_MEASURE}>
+    <${MUSIC_STAFF} clef="treble" group="grand" time="${time}">${top}</${MUSIC_STAFF}>
+    <${MUSIC_STAFF} clef="${bottomClef}" time="${time}">${bottom}</${MUSIC_STAFF}>
+  </${MUSIC_MEASURE}>`;
+
+// Both hands transposed under common beams, the left hand's line in the gap.
+const bothHandsOctave = keyboardMeasure(
+  hidden('sixteenth', 3) +
+    beamed(['G5', 'B5', 'D6'], 'sixteenth', 'g1', 'octave-shift="8va"') +
+    hidden('sixteenth', 3) +
+    beamed(['G5', 'B5', 'D6'], 'sixteenth', 'g2', '', 'octave-stop'),
+  beamed(['F4', 'A4', 'C5'], 'sixteenth', 'g1', 'octave-shift="8va"') +
+    hidden('sixteenth', 3) +
+    beamed(['F4', 'A4', 'C5'], 'sixteenth', 'g2', '', 'octave-stop') +
+    hidden('sixteenth', 3)
+);
+
+test.describe(`${MUSIC_MEASURE} octave signs with double-stemmed beams`, () => {
+  test("keeps the lower staff's octave line next to its staff and lifts the beam clear of it", async ({
+    page,
+  }) => {
+    await buildGrandStaffMeasure(page, bothHandsOctave, 700);
+    const snapshot = await snapshotOctaveBeam(page);
+
+    const signs = gapSideSigns(snapshot, 1, 'above');
+    expect(signs.length).toBeGreaterThan(0);
+    expect(beamToSignGap(snapshot, signs, true)).toBeGreaterThanOrEqual(
+      OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5
+    );
+    expect(snapshot.staves[1].marginTop).toBe('');
+
+    // The line keeps the row it has with no shared beam at all, rather than
+    // moving toward the other hand.
+    const lineOffset = (shot: OctaveBeamSnapshot) =>
+      shot.staves[1].container.top -
+      (shot.staves[1].octave.find(
+        (shape) => shape.kind === 'octave-extension-line'
+      )?.rect.top ?? NaN);
+    await buildGrandStaffMeasure(
+      page,
+      bothHandsOctave.replace(/beam-group="g\d"/g, ''),
+      700
+    );
+    expect(
+      Math.abs(
+        lineOffset(snapshot) - lineOffset(await snapshotOctaveBeam(page))
+      )
+    ).toBeLessThan(0.5);
+  });
+
+  test("a tuplet numeral hanging off the shared beam doesn't push the octave line toward the other hand", async ({
+    page,
+  }) => {
+    const triplet = (wrapped: boolean) => {
+      const notes = beamed(
+        ['F4', 'A4', 'C5'],
+        'eighth',
+        'g1',
+        'octave-shift="8va"',
+        'octave-stop'
+      );
+      return wrapped
+        ? `<${MUSIC_TUPLET} ratio="3">${notes}</${MUSIC_TUPLET}>`
+        : notes;
+    };
+    const lineOffset = async (wrapped: boolean) => {
+      await buildGrandStaffMeasure(
+        page,
+        keyboardMeasure(
+          hidden('quarter') + beamed(['G5', 'B5'], 'eighth', 'g1'),
+          triplet(wrapped) + hidden('quarter'),
+          { time: '2/4' }
+        ),
+        600
+      );
+      const snapshot = await snapshotOctaveBeam(page);
+      const line = snapshot.staves[1].octave.find(
+        (shape) => shape.kind === 'octave-extension-line'
+      );
+      return snapshot.staves[1].container.top - (line?.rect.top ?? NaN);
+    };
+
+    const plain = await lineOffset(false);
+    expect(Math.abs((await lineOffset(true)) - plain)).toBeLessThan(0.5);
+  });
+
+  test("drops the beam below the upper staff's bassa line", async ({
+    page,
+  }) => {
+    await buildGrandStaffMeasure(
+      page,
+      keyboardMeasure(
+        beamed(
+          ['G4', 'G4', 'G4'],
+          'eighth',
+          'g1',
+          'octave-shift="8vb"',
+          'octave-stop'
+        ) + hidden('eighth', 3),
+        hidden('eighth', 3) + beamed(['E4', 'E4', 'E4'], 'eighth', 'g1'),
+        { bottomClef: 'bass' }
+      ),
+      700
+    );
+    const snapshot = await snapshotOctaveBeam(page);
+
+    const signs = gapSideSigns(snapshot, 0, 'below');
+    expect(signs.length).toBeGreaterThan(0);
+    expect(beamToSignGap(snapshot, signs, false)).toBeGreaterThanOrEqual(
+      OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5
+    );
+  });
+
+  test("widens the gap when the other hand's stems can't give up enough length, and releases it", async ({
+    page,
+  }) => {
+    await buildGrandStaffMeasure(
+      page,
+      keyboardMeasure(
+        hidden('sixteenth', 3) +
+          beamed(['C4', 'C4', 'C4'], 'sixteenth', 'g1') +
+          hidden('sixteenth', 3) +
+          beamed(['C4', 'C4', 'C4'], 'sixteenth', 'g2'),
+        beamed(['F4', 'A4', 'C5'], 'sixteenth', 'g1', 'octave-shift="8va"') +
+          hidden('sixteenth', 3) +
+          beamed(['F4', 'A4', 'C5'], 'sixteenth', 'g2', '', 'octave-stop') +
+          hidden('sixteenth', 3)
+      ),
+      700
+    );
+    const snapshot = await snapshotOctaveBeam(page);
+
+    expect(parseFloat(snapshot.staves[1].marginTop)).toBeGreaterThan(0);
+    expect(
+      beamToSignGap(snapshot, gapSideSigns(snapshot, 1, 'above'), true)
+    ).toBeGreaterThanOrEqual(OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5);
+    const slices = snapshot.beamPolygons.flatMap((polygon) =>
+      sliceConvexPolygon(polygon, 2)
+    );
+    for (const head of snapshot.staves[0].heads) {
+      const centerX = (head.left + head.right) / 2;
+      const nearestLevelTop = Math.min(
+        ...slices
+          .filter((slice) => slice.left <= centerX && centerX <= slice.right)
+          .map((slice) => slice.top)
+      );
+      expect(nearestLevelTop - head.bottom).toBeGreaterThanOrEqual(
+        DOUBLE_STEMMED_BEAM_MIN_STEM_PX - 1
+      );
+    }
+
+    await page.evaluate(
+      ({ measureTag }) => {
+        document
+          .querySelector(`${measureTag} music-staff:nth-of-type(2) music-note`)
+          ?.removeAttribute('octave-shift');
+      },
+      { measureTag: MUSIC_MEASURE }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect((await snapshotOctaveBeam(page)).staves[1].marginTop).toBe('');
+  });
+
+  test("breaks a one-hand line around the other hand's notes of the shared beam", async ({
+    page,
+  }) => {
+    await buildGrandStaffMeasure(
+      page,
+      keyboardMeasure(
+        hidden('sixteenth') +
+          beamed(['E5', 'A5', 'C6'], 'sixteenth', 'g1', 'octave-shift="8va"') +
+          hidden('sixteenth', 2) +
+          beamed(['A5', 'C6'], 'sixteenth', 'g2', '', 'octave-stop'),
+        beamed(['A4'], 'sixteenth', 'g1') +
+          hidden('sixteenth', 3) +
+          beamed(['G4', 'C5'], 'sixteenth', 'g2') +
+          hidden('sixteenth', 2),
+        { time: '2/4' }
+      ),
+      700
+    );
+    const snapshot = await snapshotOctaveBeam(page);
+
+    const signs = snapshot.staves[0].octave.filter(
+      (shape) => shape.kind === 'octave-sign'
+    );
+    expect(signs.length).toBe(2);
+    const leftHandHeads = snapshot.staves[1].heads.slice(1);
+    for (const line of snapshot.staves[0].octave.filter(
+      (shape) => shape.kind === 'octave-extension-line'
+    )) {
+      for (const head of leftHandHeads) {
+        expect(overlapsX(line.rect, head)).toBe(false);
+      }
+    }
+  });
+
+  test('keeps one line when both hands are transposed', async ({ page }) => {
+    await buildGrandStaffMeasure(page, bothHandsOctave, 700);
+    const snapshot = await snapshotOctaveBeam(page);
+
+    expect(
+      snapshot.staves[0].octave.filter((shape) => shape.kind === 'octave-sign')
+        .length
+    ).toBe(1);
+  });
+
+  test('warns when the other hand shares every beat, unless that staff is marked loco', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    const sharedBeats = (loco: boolean) =>
+      keyboardMeasure(
+        beamed(
+          ['E6', 'E6', 'E6'],
+          'eighth',
+          'g1',
+          'octave-shift="8va"',
+          'octave-stop'
+        ),
+        beamed(['F5', 'F5', 'F5'], 'eighth', 'g1', loco ? 'loco' : ''),
+        { time: '3/8' }
+      );
+
+    await buildGrandStaffMeasure(page, sharedBeats(false), 500);
+    expect(warnings.some((text) => text.includes('loco'))).toBe(true);
+
+    warnings.length = 0;
+    await buildGrandStaffMeasure(page, sharedBeats(true), 500);
+    expect(warnings.some((text) => text.includes('loco'))).toBe(false);
+    const snapshot = await snapshotOctaveBeam(page);
+    expect(
+      snapshot.staves[0].octave.filter((shape) => shape.kind === 'octave-sign')
+        .length
+    ).toBe(1);
+    const locoLabel = snapshot.staves[1].octave.find(
+      (shape) => shape.kind === 'octave-loco-label'
+    );
+    expect(locoLabel?.rect.right ?? Infinity).toBeLessThan(
+      snapshot.staves[1].heads[0].left
+    );
+  });
+
+  test('a cross-staff tuplet bracket in the gap stays clear of a gap-side octave line', async ({
+    page,
+  }) => {
+    await buildGrandStaffMeasure(
+      page,
+      keyboardMeasure(
+        `<${MUSIC_TUPLET} ratio="3" tuplet-group="t1">${
+          note('A4', 'quarter') + note('G5', 'quarter') + hidden('quarter')
+        }</${MUSIC_TUPLET}>${hidden('half')}`,
+        `<${MUSIC_TUPLET} ratio="3" tuplet-group="t1">${
+          hidden('half') +
+          note('F3', 'quarter', 'octave-shift="8va" octave-stop')
+        }</${MUSIC_TUPLET}>${hidden('half')}`,
+        { time: '4/4', bottomClef: 'bass' }
+      ),
+      500
+    );
+    const snapshot = await snapshotOctaveBeam(page);
+
+    const signs = gapSideSigns(snapshot, 1, 'above');
+    expect(signs.length).toBeGreaterThan(0);
+    expect(snapshot.tupletRects.length).toBeGreaterThan(0);
+    for (const bracket of snapshot.tupletRects) {
+      for (const sign of signs) {
+        const overlaps =
+          overlapsX(bracket, sign) &&
+          bracket.top < sign.bottom &&
+          sign.top < bracket.bottom;
+        expect(overlaps).toBe(false);
+      }
+    }
+  });
+
+  test('a shared hairpin steps around a gap-side octave line', async ({
+    page,
+  }) => {
+    await buildGrandStaffMeasure(
+      page,
+      grandStaff(
+        note('C5', 'quarter', 'dynamic="p" dynamic-shared crescendo="start"') +
+          note('D5', 'quarter') +
+          note('E5', 'quarter') +
+          note('F5', 'quarter', 'dynamic="f" crescendo="end"'),
+        note('E4', 'half', 'octave-shift="8va"') +
+          note('F4', 'half', 'octave-stop')
+      )
+    );
+    const snapshot = await snapshotOctaveBeam(page);
+
+    const signs = gapSideSigns(snapshot, 1, 'above');
+    expect(signs.length).toBeGreaterThan(0);
+    expect(snapshot.hairpinEdges.length).toBeGreaterThan(0);
+    // The same clearance a shared hairpin keeps from noteheads.
+    for (const [start, end] of snapshot.hairpinEdges) {
+      for (const sign of signs) {
+        const padded = {
+          left: sign.left - HAIRPIN_NOTE_CLEARANCE_PX + 1,
+          right: sign.right + HAIRPIN_NOTE_CLEARANCE_PX - 1,
+          top: sign.top - HAIRPIN_NOTE_CLEARANCE_PX + 1,
+          bottom: sign.bottom + HAIRPIN_NOTE_CLEARANCE_PX - 1,
+        };
+        expect(segmentIntersectsRect(start, end, padded)).toBe(false);
+      }
+    }
   });
 });

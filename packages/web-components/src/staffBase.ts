@@ -47,6 +47,7 @@ export const _MaybeHTMLElement: any =
 
 const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
 const ROW_ALIGNMENT_SOURCE = 'row-alignment';
+const GAP_CLEARANCE_SOURCE = 'gap-clearance';
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
@@ -401,6 +402,16 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
    */
   alignVerticalSpace(space: VerticalBand): boolean {
     return this.#verticalSpace.reserve(ROW_ALIGNMENT_SOURCE, space);
+  }
+
+  /**
+   * Extra room the ancestor `<music-measure>` needs on this staff's gap side
+   * so what it places between the staves (a double-stemmed beam, a tuplet
+   * bracket) fits beside a gap-side octave sign, which stays next to its own
+   * staff. Returns whether the margin changed.
+   */
+  reserveGapClearance(space: VerticalBand): boolean {
+    return this.#verticalSpace.reserve(GAP_CLEARANCE_SOURCE, space);
   }
 
   protected drawConnectorsWhenStandalone(): void {

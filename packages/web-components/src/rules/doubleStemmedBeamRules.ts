@@ -197,6 +197,159 @@ export function resolveDoubleStemmedBeamLine(
   };
 }
 
+/**
+ * The beam line's Y at `x`, extrapolating past `[firstX, lastX]` (a
+ * fractional beam's stub reaches slightly past its one real note).
+ */
+export function doubleStemmedBeamYAtX(
+  line: DoubleStemmedBeamLine,
+  firstX: number,
+  lastX: number,
+  x: number
+): number {
+  const run = lastX - firstX;
+  return run === 0
+    ? line.yAtFirstX
+    : line.yAtFirstX + ((line.yAtLastX - line.yAtFirstX) * (x - firstX)) / run;
+}
+
+/**
+ * Something drawn with the beam, following its line over `[left, right]`:
+ * the primary, a secondary level, or a tuplet numeral hanging off it.
+ * Offsets are from the beam line's Y at the same x.
+ */
+export type DoubleStemmedBeamAttachedShape = {
+  left: number;
+  right: number;
+  topOffset: number;
+  bottomOffset: number;
+};
+
+/**
+ * A gap-side octave sign the beam must clear. `staff` is the staff it
+ * belongs to: a `'bottom'` sign sits between its staff and the beam, so the
+ * beam stays above it; a `'top'` sign, below its staff, keeps the beam below.
+ */
+export type DoubleStemmedBeamKeepOut = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  staff: DoubleStemmedBeamSegmentSide;
+};
+
+/** A member's notehead edge facing the beam, for the minimum-stem bound. */
+export type DoubleStemmedBeamStemLimit = {
+  x: number;
+  stemUp: boolean;
+  headEdgeY: number;
+};
+
+export type DoubleStemmedBeamClearance = {
+  /** Vertical translation to apply to the beam line (positive = down). */
+  shift: number;
+  /**
+   * Gap height missing (positive) or to spare (negative) for the beam to
+   * clear every keep-out with minimum stems on both hands.
+   */
+  deficit: number;
+  /** The staff whose margin absorbs `deficit`; null when no keep-out applies. */
+  reserveOn: DoubleStemmedBeamSegmentSide | null;
+};
+
+/**
+ * Moves the shared beam (translation only, slope kept) clear of gap-side
+ * octave signs, which stay next to their own staff: an octave sign applies
+ * only to the stave it is placed against, so it never moves toward the other
+ * hand. The move stops where a stem would get shorter than `minStemLength`
+ * (never worse than it already is); what is still missing is the `deficit`
+ * the caller widens the gap by. No overlapping keep-out leaves the beam
+ * untouched.
+ */
+export function resolveDoubleStemmedBeamClearance(input: {
+  line: DoubleStemmedBeamLine;
+  firstX: number;
+  lastX: number;
+  /** The primary and every secondary/fractional level. */
+  beamShapes: readonly DoubleStemmedBeamAttachedShape[];
+  /** Drawn off the beam but not reached by stems, e.g. a tuplet numeral. */
+  hangingShapes: readonly DoubleStemmedBeamAttachedShape[];
+  keepOuts: readonly DoubleStemmedBeamKeepOut[];
+  stemLimits: readonly DoubleStemmedBeamStemLimit[];
+  clearance: number;
+  minStemLength: number;
+}): DoubleStemmedBeamClearance {
+  const yAt = (x: number) =>
+    doubleStemmedBeamYAtX(input.line, input.firstX, input.lastX, x);
+
+  let keepLower = -Infinity;
+  let keepUpper = Infinity;
+  let constrainsBottom = false;
+  let constrainsTop = false;
+  for (const keepOut of input.keepOuts) {
+    for (const shape of [...input.beamShapes, ...input.hangingShapes]) {
+      const left = Math.max(keepOut.left, shape.left);
+      const right = Math.min(keepOut.right, shape.right);
+      if (left > right) {
+        continue;
+      }
+      for (const x of [left, right]) {
+        if (keepOut.staff === 'bottom') {
+          keepUpper = Math.min(
+            keepUpper,
+            keepOut.top - input.clearance - (yAt(x) + shape.bottomOffset)
+          );
+          constrainsBottom = true;
+        } else {
+          keepLower = Math.max(
+            keepLower,
+            keepOut.bottom + input.clearance - (yAt(x) + shape.topOffset)
+          );
+          constrainsTop = true;
+        }
+      }
+    }
+  }
+  if (!constrainsBottom && !constrainsTop) {
+    return { shift: 0, deficit: 0, reserveOn: null };
+  }
+
+  // A stem's visible length ends at the beam level nearest its notehead.
+  let stemLower = -Infinity;
+  let stemUpper = Infinity;
+  for (const limit of input.stemLimits) {
+    const levels = input.beamShapes.filter(
+      (shape) => shape.left <= limit.x && limit.x <= shape.right
+    );
+    if (levels.length === 0) {
+      continue;
+    }
+    if (limit.stemUp) {
+      const nearOffset = Math.max(...levels.map((shape) => shape.bottomOffset));
+      stemUpper = Math.min(
+        stemUpper,
+        limit.headEdgeY - input.minStemLength - (yAt(limit.x) + nearOffset)
+      );
+    } else {
+      const nearOffset = Math.min(...levels.map((shape) => shape.topOffset));
+      stemLower = Math.max(
+        stemLower,
+        limit.headEdgeY + input.minStemLength - (yAt(limit.x) + nearOffset)
+      );
+    }
+  }
+
+  const lower = Math.max(keepLower, Math.min(0, stemLower));
+  const upper = Math.min(keepUpper, Math.max(0, stemUpper));
+  const deficit = lower - upper;
+  return {
+    shift:
+      deficit > 0 ? (lower + upper) / 2 : Math.max(lower, Math.min(upper, 0)),
+    deficit,
+    reserveOn: constrainsBottom ? 'bottom' : 'top',
+  };
+}
+
 /** Which staff a secondary/fractional beam segment stacks toward. */
 export type DoubleStemmedBeamSegmentSide = 'top' | 'bottom';
 

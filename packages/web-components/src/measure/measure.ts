@@ -2,24 +2,33 @@ import {
   type ArpeggioEntry,
   resolveArpeggioSpans,
 } from '../rules/arpeggioRules';
-import { computeBeamLevelStructure } from '../rules/beamStructureRules';
+import {
+  BeamLineDescriptor,
+  computeBeamLevelStructure,
+} from '../rules/beamStructureRules';
 import {
   type ObstacleRect,
   sliceConvexPolygon,
 } from '../rules/connectorPlacementRules';
 import {
   type CrossStaffTupletEntry,
+  crossStaffTupletGapBand,
   type CrossStaffTupletRole,
   resolveCrossStaffTupletGapBaseY,
   resolveCrossStaffTupletGroups,
 } from '../rules/crossStaffTupletRules';
 import {
   classifyAutoRestStaffSide,
+  DoubleStemmedBeamAttachedShape,
   DoubleStemmedBeamEntry,
+  DoubleStemmedBeamGroup,
+  DoubleStemmedBeamLine,
   DoubleStemmedBeamMember,
   DoubleStemmedBeamPoint,
   DoubleStemmedBeamSegmentPosition,
   DoubleStemmedBeamSegmentSide,
+  doubleStemmedBeamYAtX,
+  resolveDoubleStemmedBeamClearance,
   resolveDoubleStemmedBeamGroups,
   resolveDoubleStemmedBeamLine,
   resolveGroupSecondaryBeamSide,
@@ -43,6 +52,10 @@ import {
   resolveSharedHairpinY,
   type StaffHairpinDefaults,
 } from '../rules/hairpinPlacementRules';
+import {
+  resolveCrossStaffOctaveBreaks,
+  resolveOctaveSpans,
+} from '../rules/octaveRules';
 import { restToYCoordinate } from '../rules/restRules';
 import {
   resolveSharedStemPairs,
@@ -87,6 +100,7 @@ import {
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_TUPLET,
+  MUSIC_VOICE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
@@ -116,6 +130,7 @@ import {
   BRACKET_STAFF_GAP_PX,
   BRACKET_TOP_OFFSET_PX,
   BRACKET_WIDTH_PX,
+  DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_BASELINE_Y,
   EMPTY_MEASURE_FLEX_BASIS_PX,
   FRACTIONAL_BEAM_WIDTH_PX,
@@ -124,6 +139,7 @@ import {
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
   MEASURE_NUMBER_FONT_SIZE,
   MIN_REST_NOTE_CLEARANCE_PX,
+  OCTAVE_SIGN_BEAM_CLEARANCE_PX,
   REST_BEAM_CLEARANCE_PX,
   REST_STEM_AVOIDANCE_NUDGE_PX,
   REST_STEM_AVOIDANCE_THRESHOLD_PX,
@@ -137,6 +153,8 @@ import {
   STAFF_LINE_START,
   STEM_OVERLAP_PX,
   TUPLET_HOOK_LENGTH_PX,
+  TUPLET_NUMERAL_BEAM_GAP_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
@@ -167,6 +185,10 @@ const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
 // did — verified empirically against the full browser-test suite, not
 // derived analytically.
 const CONNECTOR_TOP_PX = 33;
+
+// Beat offsets are sums of exact binary fractions, apart from tuplet
+// ratios; this only absorbs floating-point noise.
+const SAME_BEAT_TOLERANCE = 1e-6;
 
 const OVERLAY_SOURCE = 'overlay';
 const MEASURE_DYNAMICS_SOURCE = 'measure-dynamics';
@@ -213,6 +235,55 @@ function staffSlotTopsPx(staves: readonly StaffElementBaseType[]): number[] {
   });
 }
 
+// Records the margin one gap side of `staff` needs to make up `deficit` px
+// of missing gap (negative: to spare). Margin-independent: a margin already
+// widened for it shows up as spare gap, so the sum stays put between passes.
+function addGapNeed(
+  needs: Map<StaffElementBaseType, VerticalBand>,
+  staff: StaffElementBaseType,
+  side: 'top' | 'bottom',
+  deficit: number
+): void {
+  const applied =
+    parseFloat(
+      side === 'top' ? staff.style.marginTop : staff.style.marginBottom
+    ) || 0;
+  const needed = Math.max(0, Math.ceil(applied + deficit));
+  const band = needs.get(staff) ?? { top: 0, bottom: 0 };
+  needs.set(staff, { ...band, [side]: Math.max(band[side], needed) });
+}
+
+// A beam-group member inside a <music-tuplet> keeps its own staff's numeral,
+// which the staff hangs off the shared beam on its stem side
+// (staffClassicalBase.ts#tupletExtremeY's numeral offset) — so it moves with
+// the beam and has to clear what the beam clears.
+function hangingTupletNumeralShapes(
+  memberGeometries: readonly {
+    element: Element;
+    stemUp: boolean;
+    point: { x: number };
+  }[]
+): DoubleStemmedBeamAttachedShape[] {
+  const byTuplet = new Map<Element, { xs: number[]; stemUp: boolean }>();
+  for (const { element, stemUp, point } of memberGeometries) {
+    const tuplet = element.closest(MUSIC_TUPLET);
+    if (tuplet === null) {
+      continue;
+    }
+    const entry = byTuplet.get(tuplet) ?? { xs: [], stemUp };
+    entry.xs.push(point.x);
+    byTuplet.set(tuplet, entry);
+  }
+  const near = BEAM_THICKNESS_PX + TUPLET_NUMERAL_BEAM_GAP_PX;
+  const far = near + TUPLET_NUMERAL_FONT_SIZE;
+  return Array.from(byTuplet.values(), ({ xs, stemUp }) => ({
+    left: Math.min(...xs),
+    right: Math.max(...xs),
+    topOffset: stemUp ? -far : near,
+    bottomOffset: stemUp ? -near : far,
+  }));
+}
+
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
    * One bar of music. Groups one or more staves (a single staff, or a grand
@@ -256,6 +327,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // suppressed forever with nothing left to un-suppress it.
     #sharedStemSuppressedElements = new Set<NoteOrChordElementType>();
     #verticalSpace = new VerticalSpaceReservations(this);
+    // See applyOctaveContinuationCoverage/applyOctaveContinuationRects.
+    #octaveContinuationCoverage = new Map<
+      Element,
+      readonly (readonly NoteChordOrRestElementType[])[]
+    >();
+    // Relative to each staff's top line (see applyOctaveContinuationRects).
+    #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
     #onStaffMinWidth = (event: Event): void => {
       const customEvent = event as CustomEvent<{
         minWidth: number;
@@ -319,6 +397,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Also re-run after anything that redraws the beams or cross-staff
     // tuplets this pass avoids, so each registration below follows theirs.
     #boundRedrawMeasureDynamics = () => this.#redrawMeasureDynamics();
+    #boundRedrawGapPasses = () => this.#redrawGapPasses();
 
     constructor() {
       super();
@@ -467,6 +546,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
       );
+      // The staff redraws its octave signs first (it sits nearer the note
+      // the event bubbles from); the beam and gap decorations then step
+      // around the new ones.
+      this.addEventListener(
+        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawGapPasses
+      );
       this.addEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawMeasureDynamics
@@ -542,6 +628,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawGapPasses
       );
       this.removeEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
@@ -1334,6 +1424,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const obstacles: ObstacleRect[] = [
         ...entryObstacles.entries.flatMap((entry) => entry.glyphRects),
         ...this.#crossStaffTupletRects(measureRect),
+        ...staves.flatMap((staff, staffIndex) => [
+          ...(staffIndex > 0
+            ? this.#octaveSignRects(staff, 'above', measureRect)
+            : []),
+          ...(staffIndex < staves.length - 1
+            ? this.#octaveSignRects(staff, 'below', measureRect)
+            : []),
+        ]),
       ];
       const stems = collectStemRects(this, measureRect);
       const partnerOf = (staffIndex: number) =>
@@ -1770,7 +1868,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #crossStaffTupletRects(measureRect: DOMRect): ObstacleRect[] {
       const shapes =
         this.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
-          '.cross-staff-tuplets-overlay path, .cross-staff-tuplets-overlay text'
+          '.cross-staff-tuplets-overlay line, .cross-staff-tuplets-overlay text'
         ) ?? [];
       return Array.from(shapes, (shape) => {
         const rect = shape.getBoundingClientRect();
@@ -1781,6 +1879,43 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           bottom: rect.bottom - measureRect.top,
         };
       }).filter((rect) => rect.right > rect.left || rect.bottom > rect.top);
+    }
+
+    // A staff's octave-sign shapes on one side of its lines, measure-relative.
+    // The side facing a partner staff is the gap, where a sign stays next to
+    // its own staff and the shared beam, tuplet brackets and shared dynamics
+    // step around it.
+    #octaveSignRects(
+      staff: StaffElementBaseType,
+      side: 'above' | 'below',
+      measureRect: DOMRect
+    ): ObstacleRect[] {
+      const staffRect = this.#staffContainerRect(staff);
+      const shapes =
+        staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+          '.octave-signs-container .octave-sign, .octave-signs-container .octave-extension-line, .octave-signs-container .octave-corner, .octave-signs-container .octave-loco-label'
+        ) ?? [];
+      const own = Array.from(shapes, (shape) => shape.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 || rect.height > 0)
+        .map((rect) => ({
+          left: rect.left - measureRect.left,
+          right: rect.right - measureRect.left,
+          top: rect.top - measureRect.top,
+          bottom: rect.bottom - measureRect.top,
+        }));
+      const staffTop = staffRect.top - measureRect.top;
+      const staffBottom = staffRect.bottom - measureRect.top;
+      const continued = (this.#octaveContinuationRects.get(staff) ?? []).map(
+        (rect) => ({
+          ...rect,
+          top: rect.top + staffTop,
+          bottom: rect.bottom + staffTop,
+        })
+      );
+      return [...own, ...continued].filter((rect) => {
+        const centerY = (rect.top + rect.bottom) / 2;
+        return side === 'above' ? centerY < staffTop : centerY > staffBottom;
+      });
     }
 
     // Current re-entry depth per guarded redraw pass — see #guardedRedraw.
@@ -1928,10 +2063,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ).crossStaffTupletRoles = rolesByStaffIndex.get(staffIndex) ?? null;
       });
 
+      const clearanceByStaff = new Map<StaffElementBaseType, VerticalBand>();
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.cross-staff-tuplets-overlay'
       );
       if (!overlay) {
+        this.#applyGapClearance('tuplets', clearanceByStaff, staves);
         return;
       }
       overlay.replaceChildren();
@@ -1988,16 +2125,71 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           Math.min(...startHeads.map((rect) => rect.left)) - measureRect.left;
         const endX =
           Math.max(...endHeads.map((rect) => rect.right)) - measureRect.left;
-        const baseY = resolveCrossStaffTupletGapBaseY({
+        // A gap-side octave sign over the bracket's span reaches into the
+        // gap like the notes do, and stays next to its own staff.
+        const overSpan = (rects: ObstacleRect[]) =>
+          rects.filter((rect) => rect.right >= startX && rect.left <= endX);
+        const topSigns = overSpan(
+          this.#octaveSignRects(
+            staves[group.topStaffIndex],
+            'below',
+            measureRect
+          )
+        );
+        const bottomSigns = overSpan(
+          this.#octaveSignRects(
+            staves[group.bottomStaffIndex],
+            'above',
+            measureRect
+          )
+        );
+        const topNotesY = reachIntoGap(group.topTuplet, true);
+        const bottomNotesY = reachIntoGap(group.bottomTuplet, false);
+        const notesOnly = {
           topGapEdgeY:
             this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
             measureRect.top,
           bottomGapEdgeY:
             this.#staffContainerRect(staves[group.bottomStaffIndex]).top -
             measureRect.top,
-          topExtremeY: reachIntoGap(group.topTuplet, true),
-          bottomExtremeY: reachIntoGap(group.bottomTuplet, false),
-        });
+          topExtremeY: topNotesY,
+          bottomExtremeY: bottomNotesY,
+        };
+        const gapInput = {
+          ...notesOnly,
+          topExtremeY:
+            topSigns.length === 0
+              ? topNotesY
+              : Math.max(
+                  topNotesY ?? -Infinity,
+                  ...topSigns.map(
+                    (rect) => rect.bottom + OCTAVE_SIGN_BEAM_CLEARANCE_PX
+                  )
+                ),
+          bottomExtremeY:
+            bottomSigns.length === 0
+              ? bottomNotesY
+              : Math.min(
+                  bottomNotesY ?? Infinity,
+                  ...bottomSigns.map(
+                    (rect) => rect.top - OCTAVE_SIGN_BEAM_CLEARANCE_PX
+                  )
+                ),
+        };
+        const baseY = resolveCrossStaffTupletGapBaseY(gapInput);
+        // Widen the gap by what the octave signs take from the bracket's
+        // band — never for crowding the notes alone cause.
+        const band = crossStaffTupletGapBand(gapInput);
+        const notesBand = crossStaffTupletGapBand(notesOnly);
+        if (band.lower < notesBand.lower || band.upper > notesBand.upper) {
+          const onBottom = band.lower < notesBand.lower;
+          addGapNeed(
+            clearanceByStaff,
+            staves[onBottom ? group.bottomStaffIndex : group.topStaffIndex],
+            onBottom ? 'top' : 'bottom',
+            band.upper - band.lower
+          );
+        }
 
         const geometry: TupletBracketGeometry = {
           group: {
@@ -2022,6 +2214,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         };
         overlay.appendChild(createTupletBracketSvg(geometry));
       }
+      this.#applyGapClearance('tuplets', clearanceByStaff, staves);
     }
 
     // Real DOM entries gathering for beam-group resolution — shared by
@@ -2132,6 +2325,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           overridesByStaffIndex.get(staffIndex) ?? null;
       });
 
+      const octaveBreaks = this.#crossStaffOctaveBreaks(
+        staves,
+        perStaffElements,
+        groups
+      );
+      staves.forEach((staff, staffIndex) => {
+        (
+          staff as unknown as {
+            crossStaffOctaveBreakAfter: ReadonlySet<NoteChordOrRestElementType> | null;
+          }
+        ).crossStaffOctaveBreakAfter = octaveBreaks.get(staffIndex) ?? null;
+      });
+
       // A cross-staff-beamed member that's also inside a <music-tuplet>
       // needs its own staff's tuplet numeral/bracket to clear the real
       // shared beam, not a plain staff-coord derivation — populated per
@@ -2159,8 +2365,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           overlay.removeChild(overlay.firstChild);
         }
       }
+      const clearanceByStaff = new Map<StaffElementBaseType, VerticalBand>();
+      const applyBeamClearance = () =>
+        this.#applyGapClearance('beams', clearanceByStaff, staves);
+
       if (groups.length === 0 || !overlay) {
         applyCrossStaffTupletBeamY();
+        applyBeamClearance();
         return;
       }
 
@@ -2227,22 +2438,120 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           continue;
         }
 
-        const line = resolveDoubleStemmedBeamLine(
+        const resolvedLine = resolveDoubleStemmedBeamLine(
           memberGeometries.map((g) => g.point),
           topGapEdgeY,
           bottomGapEdgeY
         );
         const firstX = memberGeometries[0].point.x;
         const lastX = memberGeometries[memberGeometries.length - 1].point.x;
-        const run = lastX - firstX;
-        // Linear interpolation (extrapolates past [firstX, lastX] too, same
-        // as a same-staff beam's own primaryBeamYAt — a fractional beam's
-        // stub end reaches slightly past its one real note).
+
+        // Secondary/fractional beams (mixed durations within the group) —
+        // computeBeamLevelStructure is the same pure level-by-level run
+        // detection a same-staff beam group uses (rules/beamStructureRules.ts),
+        // fed this group's own non-rest members' flag counts in order; its
+        // local indices line up 1:1 with memberGeometries. Resolved before
+        // the beam's final height, since the stack is part of what has to
+        // clear a gap-side octave sign.
+        const beamCounts = memberGeometries.map(
+          (g) => durationToFlagCountMap.get(g.element.duration) ?? 0
+        );
+        const { secondaryBeams, fractionalBeams } =
+          computeBeamLevelStructure(beamCounts);
+        const segments = [...secondaryBeams, ...fractionalBeams];
+        const groupSide = this.#secondaryBeamSide(
+          segments,
+          memberGeometries,
+          group.topStaffIndex,
+          resolvedLine
+        );
+        const layerDirection = groupSide === 'top' ? -1 : 1;
+        const beamStep = BEAM_THICKNESS_PX + BEAM_GAP_PX;
+        const segmentXRange = (segment: BeamLineDescriptor) => {
+          let x1 = memberGeometries[segment.fromNoteIndex].point.x;
+          let x2 = memberGeometries[segment.toNoteIndex].point.x;
+          if (segment.fractionalBeamSide === 'left') {
+            x1 -= FRACTIONAL_BEAM_WIDTH_PX;
+          } else if (segment.fractionalBeamSide === 'right') {
+            x2 += FRACTIONAL_BEAM_WIDTH_PX;
+          }
+          return { x1, x2 };
+        };
+
+        // A gap-side octave sign stays next to its own staff (it applies
+        // only to the stave it is placed against), so the beam moves
+        // instead — and the gap widens when the other hand's stems can't
+        // give up enough length.
+        const clearance = resolveDoubleStemmedBeamClearance({
+          line: resolvedLine,
+          firstX,
+          lastX,
+          beamShapes: [
+            {
+              left: firstX,
+              right: lastX,
+              topOffset: 0,
+              bottomOffset: BEAM_THICKNESS_PX,
+            },
+            ...segments.map((segment) => {
+              const { x1, x2 } = segmentXRange(segment);
+              const levelOffset = segment.beamLevel * layerDirection * beamStep;
+              return {
+                left: x1,
+                right: x2,
+                topOffset: levelOffset,
+                bottomOffset: levelOffset + BEAM_THICKNESS_PX,
+              };
+            }),
+          ],
+          hangingShapes: hangingTupletNumeralShapes(memberGeometries),
+          keepOuts: [
+            ...this.#octaveSignRects(
+              staves[group.topStaffIndex],
+              'below',
+              measureRect
+            ).map((rect) => ({ ...rect, staff: 'top' as const })),
+            ...this.#octaveSignRects(
+              staves[group.bottomStaffIndex],
+              'above',
+              measureRect
+            ).map((rect) => ({ ...rect, staff: 'bottom' as const })),
+          ],
+          stemLimits: memberGeometries.flatMap(({ element, stemUp, point }) => {
+            const heads = this.#headRects(element);
+            if (heads.length === 0) {
+              return [];
+            }
+            const headEdgeY = stemUp
+              ? Math.min(...heads.map((head) => head.top))
+              : Math.max(...heads.map((head) => head.bottom));
+            return [
+              { x: point.x, stemUp, headEdgeY: headEdgeY - measureRect.top },
+            ];
+          }),
+          clearance: OCTAVE_SIGN_BEAM_CLEARANCE_PX,
+          minStemLength: DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
+        });
+        if (clearance.reserveOn !== null) {
+          const staff =
+            staves[
+              clearance.reserveOn === 'bottom'
+                ? group.bottomStaffIndex
+                : group.topStaffIndex
+            ];
+          addGapNeed(
+            clearanceByStaff,
+            staff,
+            clearance.reserveOn === 'bottom' ? 'top' : 'bottom',
+            clearance.deficit
+          );
+        }
+        const line: DoubleStemmedBeamLine = {
+          yAtFirstX: resolvedLine.yAtFirstX + clearance.shift,
+          yAtLastX: resolvedLine.yAtLastX + clearance.shift,
+        };
         const beamYAtX = (x: number): number =>
-          run === 0
-            ? line.yAtFirstX
-            : line.yAtFirstX +
-              ((line.yAtLastX - line.yAtFirstX) * (x - firstX)) / run;
+          doubleStemmedBeamYAtX(line, firstX, lastX, x);
 
         for (const { element, staffIndex, stemUp, point } of memberGeometries) {
           const beamY = beamYAtX(point.x);
@@ -2419,58 +2728,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
         }
 
-        // Secondary/fractional beams (mixed durations within the group) —
-        // computeBeamLevelStructure is the same pure level-by-level run
-        // detection a same-staff beam group uses (rules/beamStructureRules.ts),
-        // fed this group's own non-rest members' flag counts in order; its
-        // local indices line up 1:1 with memberGeometries.
-        const beamCounts = memberGeometries.map(
-          (g) => durationToFlagCountMap.get(g.element.duration) ?? 0
-        );
-        const { secondaryBeams, fractionalBeams } =
-          computeBeamLevelStructure(beamCounts);
-        const segments = [...secondaryBeams, ...fractionalBeams];
         if (segments.length === 0) {
           continue;
         }
-
-        const membersForSide: DoubleStemmedBeamMember[] = memberGeometries.map(
-          (g) => ({
-            staffIndex: g.staffIndex,
-            entryIndex: 0,
-            isRest: false,
-          })
-        );
-        const lastLocalIndex = memberGeometries.length - 1;
-        const segmentSides = segments.map((segment) => {
-          const position: DoubleStemmedBeamSegmentPosition =
-            segment.fromNoteIndex === 0
-              ? 'start'
-              : segment.toNoteIndex === lastLocalIndex
-              ? 'end'
-              : 'middle';
-          return resolveSecondaryBeamVerticalSide(
-            segment,
-            membersForSide,
-            group.topStaffIndex,
-            position
-          );
-        });
-        // "Keep all secondary beams on the same side" — tie-broken toward
-        // the group's own pitch-contour lean (which way the primary beam
-        // itself slopes); a perfectly horizontal beam has no such lean, so
-        // 'bottom' is an arbitrary but deterministic default there.
-        const tieBreakSide: DoubleStemmedBeamSegmentSide =
-          line.yAtLastX < line.yAtFirstX
-            ? 'top'
-            : line.yAtLastX > line.yAtFirstX
-            ? 'bottom'
-            : 'bottom';
-        const groupSide = resolveGroupSecondaryBeamSide(
-          segmentSides,
-          tieBreakSide
-        );
-        const layerDirection = groupSide === 'top' ? -1 : 1;
 
         // A member on the group's resolved secondary side already reaches
         // every level on its way to the primary (that side's stems and the
@@ -2502,8 +2762,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           if (memberSide === groupSide) {
             continue;
           }
-          const levelOffset =
-            level * layerDirection * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+          const levelOffset = level * layerDirection * beamStep;
           const targetY = beamYAtX(point.x) + levelOffset + STEM_OVERLAP_PX;
           const extension = stemUp
             ? point.naturalY - targetY
@@ -2512,17 +2771,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
 
         for (const segment of segments) {
-          const levelOffset =
-            segment.beamLevel *
-            layerDirection *
-            (BEAM_THICKNESS_PX + BEAM_GAP_PX);
-          let x1 = memberGeometries[segment.fromNoteIndex].point.x;
-          let x2 = memberGeometries[segment.toNoteIndex].point.x;
-          if (segment.fractionalBeamSide === 'left') {
-            x1 -= FRACTIONAL_BEAM_WIDTH_PX;
-          } else if (segment.fractionalBeamSide === 'right') {
-            x2 += FRACTIONAL_BEAM_WIDTH_PX;
-          }
+          const levelOffset = segment.beamLevel * layerDirection * beamStep;
+          const { x1, x2 } = segmentXRange(segment);
           overlay.appendChild(
             createDoubleStemmedBeamPolygon(
               x1,
@@ -2535,6 +2785,164 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       applyCrossStaffTupletBeamY();
+      applyBeamClearance();
+    }
+
+    // Where each staff's octave lines break so a one-hand line encloses only
+    // its own notes of a shared beam (rules/octaveRules.ts
+    // #resolveCrossStaffOctaveBreaks), keyed by staff index. The other hand's
+    // note is "transposed" when its own staff's octave line covers it; on
+    // the same beat as a spanned note no break helps, so that staff should
+    // be marked `loco` instead.
+    #crossStaffOctaveBreaks(
+      staves: readonly StaffElementBaseType[],
+      perStaffElements: readonly NoteChordOrRestElementType[][],
+      groups: readonly DoubleStemmedBeamGroup[]
+    ): Map<number, Set<NoteChordOrRestElementType>> {
+      const breaks = new Map<number, Set<NoteChordOrRestElementType>>();
+      if (groups.length === 0) {
+        return breaks;
+      }
+      const elementOf = (member: { staffIndex: number; entryIndex: number }) =>
+        perStaffElements[member.staffIndex][member.entryIndex];
+      const groupsOf = new Map<
+        NoteChordOrRestElementType,
+        DoubleStemmedBeamGroup
+      >();
+      for (const group of groups) {
+        for (const member of group.members) {
+          groupsOf.set(elementOf(member), group);
+        }
+      }
+
+      const spansByStaff = perStaffElements.map((elements, staffIndex) => {
+        const byVoice = new Map<Element | null, NoteChordOrRestElementType[]>();
+        for (const element of elements) {
+          const voice = element.closest(MUSIC_VOICE);
+          byVoice.set(voice, [...(byVoice.get(voice) ?? []), element]);
+        }
+        return [
+          ...Array.from(byVoice.values()).flatMap((voiceElements) =>
+            resolveOctaveSpans(voiceElements).spans.map((span) =>
+              span.members.map((member) => voiceElements[member.index])
+            )
+          ),
+          ...(this.#octaveContinuationCoverage.get(staves[staffIndex]) ?? []),
+        ];
+      });
+      const transposed = new Set(spansByStaff.flat(2));
+      // Beats, not x: "between" and "on the same beat" are questions of time,
+      // and a beat offset doesn't depend on whether both staves have been
+      // laid out yet.
+      const beatOf = (
+        element: NoteChordOrRestElementType,
+        staffIndex: number
+      ): number | null => {
+        if (element.nodeName === MUSIC_REST_NODE) {
+          return null;
+        }
+        const staff = staves[staffIndex] as StaffElementBaseType & {
+          beatOffsetOf?: (element: Element) => number | null;
+        };
+        return staff.beatOffsetOf?.(element) ?? null;
+      };
+
+      spansByStaff.forEach((spans, staffIndex) => {
+        for (const spanElements of spans) {
+          const pitched = spanElements.flatMap((element) => {
+            const beat = beatOf(element, staffIndex);
+            return beat === null ? [] : [{ element, beat }];
+          });
+          const shared = new Set(
+            pitched.flatMap(({ element }) => {
+              const group = groupsOf.get(element);
+              return group === undefined ? [] : [group];
+            })
+          );
+          if (shared.size === 0) {
+            continue;
+          }
+          const otherMembers = Array.from(shared).flatMap((group) =>
+            group.members.filter((member) => member.staffIndex !== staffIndex)
+          );
+          const otherHand = otherMembers.map(elementOf);
+          const { breakAfter, sharesBeat } = resolveCrossStaffOctaveBreaks(
+            pitched.map(({ beat }) => beat),
+            otherMembers.flatMap((member) => {
+              const element = elementOf(member);
+              const beat = beatOf(element, member.staffIndex);
+              return beat === null
+                ? []
+                : [{ beat, transposed: transposed.has(element) }];
+            }),
+            SAME_BEAT_TOLERANCE
+          );
+          if (breakAfter.length > 0) {
+            const staffBreaks = breaks.get(staffIndex) ?? new Set();
+            for (const k of breakAfter) {
+              staffBreaks.add(pitched[k].element);
+            }
+            breaks.set(staffIndex, staffBreaks);
+          }
+          if (
+            sharesBeat &&
+            !otherHand.some(
+              (element) =>
+                element.nodeName !== MUSIC_REST_NODE &&
+                (element as NoteOrChordElementType).loco
+            )
+          ) {
+            console.warn(
+              `[music-measure] an octave line covers the other hand's notes on the same beat in beam-group "${
+                Array.from(shared)[0].id
+              }"; mark the other staff loco so its pitch isn't read as transposed`
+            );
+          }
+        }
+      });
+      return breaks;
+    }
+
+    // "Keep all secondary beams on the same side" — each segment's own side
+    // (rules/doubleStemmedBeamRules.ts#resolveSecondaryBeamVerticalSide),
+    // then one majority side for the group, tie-broken toward the primary
+    // beam's own slope; a perfectly horizontal beam has no such lean, so
+    // 'bottom' is an arbitrary but deterministic default there.
+    #secondaryBeamSide(
+      segments: readonly BeamLineDescriptor[],
+      memberGeometries: readonly { staffIndex: number }[],
+      topStaffIndex: number,
+      line: DoubleStemmedBeamLine
+    ): DoubleStemmedBeamSegmentSide {
+      const membersForSide: DoubleStemmedBeamMember[] = memberGeometries.map(
+        (g) => ({
+          staffIndex: g.staffIndex,
+          entryIndex: 0,
+          isRest: false,
+        })
+      );
+      const lastLocalIndex = memberGeometries.length - 1;
+      const segmentSides = segments.map((segment) => {
+        const position: DoubleStemmedBeamSegmentPosition =
+          segment.fromNoteIndex === 0
+            ? 'start'
+            : segment.toNoteIndex === lastLocalIndex
+            ? 'end'
+            : 'middle';
+        return resolveSecondaryBeamVerticalSide(
+          segment,
+          membersForSide,
+          topStaffIndex,
+          position
+        );
+      });
+      const tieBreakSide: DoubleStemmedBeamSegmentSide =
+        line.yAtLastX < line.yAtFirstX
+          ? 'top'
+          : line.yAtLastX > line.yAtFirstX
+          ? 'bottom'
+          : 'bottom';
+      return resolveGroupSecondaryBeamSide(segmentSides, tieBreakSide);
     }
 
     // shared-stem-for: both hands occasionally playing the same beat
@@ -2852,6 +3260,130 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // source becomes this measure's margin; returns whether it changed.
     reserveVerticalSpace(source: string, space: VerticalBand): boolean {
       return this.#verticalSpace.reserve(source, space);
+    }
+
+    // An octave line continuing from an earlier measure is drawn by the
+    // ancestor <music-composition>, which this measure can't see. It hands
+    // over, per staff, the runs of elements such a line covers here (before
+    // drawing, so octave breaks account for them) and then the drawn shapes
+    // (so gap passes step around them). Each returns whether anything changed,
+    // in which case the gap passes have already re-run.
+    applyOctaveContinuationCoverage(
+      coverage: ReadonlyMap<
+        Element,
+        readonly (readonly NoteChordOrRestElementType[])[]
+      >
+    ): boolean {
+      const current = this.#octaveContinuationCoverage;
+      const unchanged =
+        current.size === coverage.size &&
+        [...coverage].every(([staff, runs]) => {
+          const before = current.get(staff);
+          return (
+            before !== undefined &&
+            before.length === runs.length &&
+            runs.every(
+              (run, i) =>
+                run.length === before[i].length &&
+                run.every((element, j) => element === before[i][j])
+            )
+          );
+        });
+      if (unchanged) {
+        return false;
+      }
+      this.#octaveContinuationCoverage = new Map(coverage);
+      this.#redrawGapPasses();
+      return true;
+    }
+
+    applyOctaveContinuationRects(
+      measureRects: ReadonlyMap<Element, readonly ObstacleRect[]>
+    ): boolean {
+      // Kept relative to their staff's lines: a gap pass that widens the gap
+      // moves the staff, and the shapes drawn against it move with it before
+      // the composition redraws them.
+      const measureTop = this.getBoundingClientRect().top;
+      const rects = new Map(
+        Array.from(measureRects, ([staff, staffRects]) => {
+          const staffTop =
+            this.#staffContainerRect(staff as StaffElementBaseType).top -
+            measureTop;
+          return [
+            staff,
+            staffRects.map((rect) => ({
+              ...rect,
+              top: rect.top - staffTop,
+              bottom: rect.bottom - staffTop,
+            })),
+          ] as const;
+        })
+      );
+      const current = this.#octaveContinuationRects;
+      const close = (a: number, b: number) => Math.abs(a - b) < 0.5;
+      const unchanged =
+        current.size === rects.size &&
+        [...rects].every(([staff, staffRects]) => {
+          const before = current.get(staff);
+          return (
+            before !== undefined &&
+            before.length === staffRects.length &&
+            staffRects.every(
+              (rect, i) =>
+                close(rect.left, before[i].left) &&
+                close(rect.right, before[i].right) &&
+                close(rect.top, before[i].top) &&
+                close(rect.bottom, before[i].bottom)
+            )
+          );
+        });
+      if (unchanged) {
+        return false;
+      }
+      this.#octaveContinuationRects = new Map(rects);
+      this.#redrawGapPasses();
+      return true;
+    }
+
+    // Gap each pass needs widened, by staff (see addGapNeed). Every pass
+    // re-reports on each run, so a staff takes the largest current need.
+    #gapClearanceByPass = new Map<
+      string,
+      ReadonlyMap<StaffElementBaseType, VerticalBand>
+    >();
+
+    #applyGapClearance(
+      pass: string,
+      needs: ReadonlyMap<StaffElementBaseType, VerticalBand>,
+      staves: readonly StaffElementBaseType[]
+    ) {
+      this.#gapClearanceByPass.set(pass, needs);
+      let changed = false;
+      for (const staff of staves) {
+        // A staff parsed from markup before its definition has run is not
+        // upgraded yet, so it has no methods.
+        if (typeof staff.reserveGapClearance !== 'function') {
+          continue;
+        }
+        const band = { top: 0, bottom: 0 };
+        for (const passNeeds of this.#gapClearanceByPass.values()) {
+          const need = passNeeds.get(staff);
+          band.top = Math.max(band.top, need?.top ?? 0);
+          band.bottom = Math.max(band.bottom, need?.bottom ?? 0);
+        }
+        changed = staff.reserveGapClearance(band) || changed;
+      }
+      if (changed) {
+        this.#redrawGapPasses();
+      }
+    }
+
+    // Everything placed in the gap between staves, in dependency order.
+    #redrawGapPasses() {
+      this.#redrawDoubleStemmedBeams();
+      this.#redrawCrossStaffTuplets();
+      this.#redrawMeasureDynamics();
+      this.#redrawConnectors();
     }
   }
 

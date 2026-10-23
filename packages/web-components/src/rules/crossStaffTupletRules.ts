@@ -252,34 +252,46 @@ export function classifyCrossStaffTupletLayout<TElement>(
   };
 }
 
-/**
- * The `gap` layout's bracket line Y: centred in the band that keeps the
- * hooks and numeral clear of both staves and of every member's stem tip
- * pointing into the gap. Falls back to the gap's own centre when that band
- * is empty (stems crowding the gap) — the indication still belongs between
- * the hands.
- */
-export function resolveCrossStaffTupletGapBaseY({
-  topGapEdgeY,
-  bottomGapEdgeY,
-  topExtremeY,
-  bottomExtremeY,
-}: {
+export type CrossStaffTupletGapInput = {
   topGapEdgeY: number;
   bottomGapEdgeY: number;
   /** Lowest point any top-staff member reaches into the gap, or null. */
   topExtremeY: number | null;
   /** Highest point any bottom-staff member reaches into the gap, or null. */
   bottomExtremeY: number | null;
-}): number {
+};
+
+/**
+ * The band the `gap` layout's bracket line may sit in: keeping the hooks and
+ * numeral clear of both staves and of every member's stem tip pointing into
+ * the gap. Empty (`upper > lower`) when stems crowd the gap.
+ */
+export function crossStaffTupletGapBand({
+  topGapEdgeY,
+  bottomGapEdgeY,
+  topExtremeY,
+  bottomExtremeY,
+}: CrossStaffTupletGapInput): { upper: number; lower: number } {
   const clearance =
     TUPLET_STAFF_CLEARANCE_PX +
     Math.max(TUPLET_HOOK_LENGTH_PX, TUPLET_NUMERAL_FONT_SIZE / 2);
-  const upper = Math.max(topGapEdgeY, topExtremeY ?? -Infinity) + clearance;
-  const lower =
-    Math.min(bottomGapEdgeY, bottomExtremeY ?? Infinity) - clearance;
+  return {
+    upper: Math.max(topGapEdgeY, topExtremeY ?? -Infinity) + clearance,
+    lower: Math.min(bottomGapEdgeY, bottomExtremeY ?? Infinity) - clearance,
+  };
+}
+
+/**
+ * The `gap` layout's bracket line Y: centred in crossStaffTupletGapBand.
+ * Falls back to the gap's own centre when that band is empty — the
+ * indication still belongs between the hands.
+ */
+export function resolveCrossStaffTupletGapBaseY(
+  input: CrossStaffTupletGapInput
+): number {
+  const { upper, lower } = crossStaffTupletGapBand(input);
   if (upper <= lower) {
     return (upper + lower) / 2;
   }
-  return (topGapEdgeY + bottomGapEdgeY) / 2;
+  return (input.topGapEdgeY + input.bottomGapEdgeY) / 2;
 }

@@ -2,9 +2,13 @@ import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
 import type { BeamLineDescriptor } from './beamStructureRules';
 import {
   classifyAutoRestStaffSide,
+  DoubleStemmedBeamAttachedShape,
   DoubleStemmedBeamEntry,
+  DoubleStemmedBeamKeepOut,
   DoubleStemmedBeamMember,
   DoubleStemmedBeamPoint,
+  doubleStemmedBeamYAtX,
+  resolveDoubleStemmedBeamClearance,
   resolveDoubleStemmedBeamGroups,
   resolveDoubleStemmedBeamLine,
   resolveGroupSecondaryBeamSide,
@@ -238,6 +242,182 @@ function seg(
 ): BeamLineDescriptor {
   return { fromNoteIndex, toNoteIndex, beamLevel };
 }
+
+describe('doubleStemmedBeamYAtX', () => {
+  it('interpolates and extrapolates along the line', () => {
+    const line = { yAtFirstX: 100, yAtLastX: 80 };
+    expect(doubleStemmedBeamYAtX(line, 0, 100, 50)).toBe(90);
+    expect(doubleStemmedBeamYAtX(line, 0, 100, 110)).toBe(78);
+  });
+
+  it('is flat when the line has no run', () => {
+    expect(
+      doubleStemmedBeamYAtX({ yAtFirstX: 40, yAtLastX: 40 }, 10, 10, 99)
+    ).toBe(40);
+  });
+});
+
+describe('resolveDoubleStemmedBeamClearance', () => {
+  // Primary beam 8px thick, from x=0 to x=100, rising from Y=100 to Y=90.
+  const line = { yAtFirstX: 100, yAtLastX: 90 };
+  const primary: DoubleStemmedBeamAttachedShape = {
+    left: 0,
+    right: 100,
+    topOffset: 0,
+    bottomOffset: 8,
+  };
+  const base = {
+    line,
+    firstX: 0,
+    lastX: 100,
+    beamShapes: [primary],
+    hangingShapes: [],
+    stemLimits: [],
+    clearance: 5,
+    minStemLength: 20,
+  };
+  const keepOut = (
+    overrides: Partial<DoubleStemmedBeamKeepOut>
+  ): DoubleStemmedBeamKeepOut => ({
+    left: 0,
+    right: 100,
+    top: 120,
+    bottom: 130,
+    staff: 'bottom',
+    ...overrides,
+  });
+
+  it('leaves the beam alone with no keep-outs', () => {
+    expect(
+      resolveDoubleStemmedBeamClearance({ ...base, keepOuts: [] })
+    ).toEqual({ shift: 0, deficit: 0, reserveOn: null });
+  });
+
+  it('ignores a keep-out outside the beam span', () => {
+    expect(
+      resolveDoubleStemmedBeamClearance({
+        ...base,
+        keepOuts: [keepOut({ left: 150, right: 200, top: 95 })],
+      }).reserveOn
+    ).toBeNull();
+  });
+
+  it('leaves a beam that already clears a bottom-staff sign in place', () => {
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [keepOut({ top: 120 })],
+    });
+    expect(result.shift).toBe(0);
+    expect(result.reserveOn).toBe('bottom');
+    expect(result.deficit).toBe(-Infinity);
+  });
+
+  it('lifts the beam above a bottom-staff sign, bound by its lowest point', () => {
+    // Beam bottom at x=0 is 108; the sign's top at 110 needs 105 → lift 3.
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [keepOut({ top: 110 })],
+    });
+    expect(result.shift).toBe(-3);
+  });
+
+  it('only checks where the sign overlaps the beam', () => {
+    // Over x ∈ [50, 100] the beam's lowest point is 103, exactly the 5px
+    // clearance above the sign's top of 108.
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [keepOut({ left: 50, right: 300, top: 108 })],
+    });
+    expect(result.shift).toBe(0);
+  });
+
+  it('drops the beam below a top-staff sign', () => {
+    // Beam top at x=100 is 90; the sign's bottom at 93 plus clearance needs
+    // 98 → drop 8.
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [keepOut({ top: 80, bottom: 93, staff: 'top' })],
+    });
+    expect(result.shift).toBe(8);
+    expect(result.reserveOn).toBe('top');
+  });
+
+  it('counts the secondary stack and a hanging numeral as part of the beam', () => {
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      hangingShapes: [{ left: 0, right: 40, topOffset: 12, bottomOffset: 20 }],
+      keepOuts: [keepOut({ top: 130 })],
+    });
+    // The secondary's bottom at x=0 is 120, still 5px clear of 125.
+    expect(result.shift).toBe(0);
+    const tighter = resolveDoubleStemmedBeamClearance({
+      ...base,
+      hangingShapes: [{ left: 0, right: 40, topOffset: 12, bottomOffset: 20 }],
+      keepOuts: [keepOut({ top: 118 })],
+    });
+    // 118 - 5 - 120 → lift 7, more than the primary alone (118 - 5 - 108 = 5).
+    expect(tighter.shift).toBe(-7);
+  });
+
+  it('stops at the minimum stem and reports the missing gap', () => {
+    // Clearing the sign (top 100) needs a lift of 13, which would leave a
+    // stem-down member's notehead at 75 only 12px from the beam at x=0; the
+    // minimum of 20 allows a lift of 5, so 8px of gap is missing.
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [keepOut({ top: 100 })],
+      stemLimits: [{ x: 0, stemUp: false, headEdgeY: 75 }],
+    });
+    expect(result.deficit).toBe(8);
+    expect(result.reserveOn).toBe('bottom');
+    expect(result.shift).toBe(-9);
+  });
+
+  it('never shortens a stem that is already below the minimum', () => {
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [keepOut({ top: 100 })],
+      stemLimits: [{ x: 0, stemUp: false, headEdgeY: 90 }],
+    });
+    expect(result.deficit).toBe(13);
+    expect(result.shift).toBe(-6.5);
+  });
+
+  it('measures a stem to the beam level nearest its notehead', () => {
+    const input = {
+      ...base,
+      keepOuts: [keepOut({ top: 100 })],
+      stemLimits: [{ x: 0, stemUp: false, headEdgeY: 60 }],
+    };
+    // Against the primary alone the stem-down member could give up 20px; a
+    // secondary stacked toward it (top at 88 instead of 100) leaves only 8,
+    // short of the 13px lift.
+    expect(resolveDoubleStemmedBeamClearance(input).deficit).toBe(-7);
+    expect(
+      resolveDoubleStemmedBeamClearance({
+        ...input,
+        beamShapes: [
+          primary,
+          { left: 0, right: 100, topOffset: -12, bottomOffset: -4 },
+        ],
+      }).deficit
+    ).toBe(5);
+  });
+
+  it('reports the overlap when signs on both staves squeeze the beam', () => {
+    const result = resolveDoubleStemmedBeamClearance({
+      ...base,
+      keepOuts: [
+        keepOut({ top: 105 }),
+        keepOut({ top: 80, bottom: 95, staff: 'top' }),
+      ],
+    });
+    // Needs a lift of at least 8 for the bottom sign and a drop of at least
+    // 10 for the top one.
+    expect(result.deficit).toBe(18);
+    expect(result.reserveOn).toBe('bottom');
+  });
+});
 
 describe('resolveSecondaryBeamVerticalSide', () => {
   const TOP = 0;

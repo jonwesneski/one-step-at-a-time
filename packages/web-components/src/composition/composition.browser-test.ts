@@ -23,6 +23,7 @@ import {
 } from '../utils/consts';
 import {
   HAIRPIN_BEAM_CLEARANCE_PX,
+  OCTAVE_SIGN_BEAM_CLEARANCE_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
@@ -2471,6 +2472,245 @@ test.describe('octave sign continuation across measures', () => {
   });
 });
 
+test.describe('octave line across a barline: one line per system', () => {
+  const quarter = (pitch: `${Note}${Octave}`, extra = ''): string =>
+    `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+      -1
+    )}" duration="quarter" ${extra}></${MUSIC_NOTE}>`;
+  const measures = (laterPitch: `${Note}${Octave}` = 'A5'): string =>
+    `<${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble">${
+      quarter('C5') +
+      quarter('D5') +
+      quarter('E5') +
+      quarter('F5', 'octave-shift="8va"')
+    }</${MUSIC_STAFF}></${MUSIC_MEASURE}><${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble">${
+      quarter('G5') +
+      quarter(laterPitch) +
+      quarter('B5') +
+      quarter('C6', 'octave-stop')
+    }</${MUSIC_STAFF}></${MUSIC_MEASURE}>`;
+
+  async function build(page: Page, html: string, hostWidth: number) {
+    await page.evaluate(
+      ({ markup, width }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = `${width}px`;
+        const template = document.createElement('template');
+        template.innerHTML = markup;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { markup: html, width: hostWidth }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  // Client geometry of the line the starting staff draws and of what the
+  // composition draws after it.
+  async function readLine(page: Page) {
+    return page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const start = staves[0];
+      const rect = (element: Element) => {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top };
+      };
+      const overlay = document
+        .querySelector('music-composition')
+        ?.shadowRoot?.querySelector('.octave-continuation-overlay');
+      const laterHeads = Array.from(
+        staves[1]?.querySelectorAll('music-note') ?? []
+      )
+        .flatMap((note) =>
+          Array.from(note.shadowRoot?.querySelectorAll('.head') ?? [])
+        )
+        .map((head) => head.getBoundingClientRect().top);
+      return {
+        startLines: Array.from(
+          start.shadowRoot?.querySelectorAll(
+            '.octave-signs-container .octave-extension-line'
+          ) ?? []
+        ).map(rect),
+        startCorners:
+          start.shadowRoot?.querySelectorAll(
+            '.octave-signs-container .octave-corner'
+          ).length ?? 0,
+        startStaffRight: start.getBoundingClientRect().right,
+        startStaffTop:
+          start.shadowRoot
+            ?.querySelector('.staff-container')
+            ?.getBoundingClientRect().top ?? 0,
+        overlayLines: Array.from(
+          overlay?.querySelectorAll('.octave-extension-line') ?? []
+        ).map(rect),
+        overlayCorners: overlay?.querySelectorAll('.octave-corner').length ?? 0,
+        overlaySigns:
+          overlay?.querySelectorAll('g.octave-continuation-sign').length ?? 0,
+        overlayTop: Math.min(
+          ...Array.from(overlay?.children ?? []).map(
+            (shape) => shape.getBoundingClientRect().top
+          )
+        ),
+        startStaffBottomLine:
+          start.shadowRoot
+            ?.querySelector('.staff-container')
+            ?.getBoundingClientRect().bottom ?? 0,
+        laterHeadsTop: laterHeads.length > 0 ? Math.min(...laterHeads) : null,
+      };
+    });
+  }
+
+  type LineReading = Awaited<ReturnType<typeof readLine>>;
+
+  const expectOneConnectedLine = (line: LineReading) => {
+    expect(line.startCorners).toBe(0);
+    expect(line.startLines.length).toBe(1);
+    expect(line.startLines[0].right).toBeGreaterThanOrEqual(
+      line.startStaffRight - 2
+    );
+    expect(line.overlaySigns).toBe(0);
+    expect(line.overlayCorners).toBe(1);
+    expect(
+      Math.abs(line.overlayLines[0].top - line.startLines[0].top)
+    ).toBeLessThan(0.5);
+  };
+
+  const expectOpenAtSystemBreak = (line: LineReading) => {
+    expect(line.startCorners).toBe(0);
+    expect(line.startLines[0].right).toBeGreaterThanOrEqual(
+      line.startStaffRight - 2
+    );
+    expect(line.overlaySigns).toBe(1);
+    expect(line.overlayCorners).toBe(1);
+  };
+
+  test('runs on through the barline at one height, with a corner only where it stops', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+
+    expectOneConnectedLine(await readLine(page));
+    expect(
+      warnings.some((text) => text.includes('no matching octave-stop'))
+    ).toBe(false);
+  });
+
+  test('a high note later in the system lifts the whole line', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+    const plain = await readLine(page);
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures(
+        'A6'
+      )}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+    const lifted = await readLine(page);
+
+    expectOneConnectedLine(lifted);
+    // Measured from the staff, which itself moves down to make headroom.
+    expect(lifted.startLines[0].top - lifted.startStaffTop).toBeLessThan(
+      plain.startLines[0].top - plain.startStaffTop - 1
+    );
+    expect(lifted.overlayLines[0].top).toBeLessThan(lifted.laterHeadsTop ?? 0);
+  });
+
+  test('at a system break the first row ends open and the next restates the sign', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      220
+    );
+
+    expectOpenAtSystemBreak(await readLine(page));
+  });
+
+  test('a second system lifted over a high note makes room above itself, clear of the first', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures(
+        'A6'
+      )}</${MUSIC_COMPOSITION}>`,
+      220
+    );
+    const line = await readLine(page);
+
+    expectOpenAtSystemBreak(line);
+    expect(line.overlayTop).toBeGreaterThan(line.startStaffBottomLine);
+    expect(line.overlayLines[0].top).toBeLessThan(line.laterHeadsTop ?? 0);
+  });
+
+  test('follows the rows as the composition is resized', async ({ page }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+    expectOneConnectedLine(await readLine(page));
+
+    await resizeHost(page, 220);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expectOpenAtSystemBreak(await readLine(page));
+
+    await resizeHost(page, 1200);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expectOneConnectedLine(await readLine(page));
+  });
+
+  test('a standalone measure, with nothing to continue into, still closes and warns', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    await build(
+      page,
+      `<${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble" time="4/4">${
+        quarter('C5') +
+        quarter('D5') +
+        quarter('E5') +
+        quarter('F5', 'octave-shift="8va"')
+      }</${MUSIC_STAFF}></${MUSIC_MEASURE}>`,
+      600
+    );
+
+    expect((await readLine(page)).startCorners).toBe(1);
+    expect(
+      warnings.some((text) => text.includes('no matching octave-stop'))
+    ).toBe(true);
+  });
+});
+
 test.describe(`${MUSIC_COMPOSITION} cross-staff slurs (grand staff)`, () => {
   // composition.ts's own #redrawConnectors() collects note-like elements
   // across every staff in every measure with no staff filter, so a slur
@@ -3782,5 +4022,192 @@ test.describe(`${MUSIC_COMPOSITION} first paint`, () => {
         expect(Math.abs(value - settled[i])).toBeLessThanOrEqual(0.5);
       });
     });
+  });
+});
+
+test.describe(`${MUSIC_COMPOSITION} octave continuation over a double-stemmed beam`, () => {
+  const sixteenth = (
+    pitch: `${Note}${Octave}`,
+    group: string,
+    extra = ''
+  ): string =>
+    `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+      -1
+    )}" duration="sixteenth" beam-group="${group}" ${extra}></${MUSIC_NOTE}>`;
+  const spacers = (count: number): string =>
+    `<${MUSIC_REST} duration="sixteenth" hidden></${MUSIC_REST}>`.repeat(count);
+  const quarter = (pitch: `${Note}${Octave}`, extra = ''): string =>
+    `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+      -1
+    )}" duration="quarter" ${extra}></${MUSIC_NOTE}>`;
+
+  // The left hand's 8va starts in bar 1 and runs over two common-beam groups
+  // in bar 2, where the right hand plays at pitch between them.
+  const markup = `
+    <${MUSIC_MEASURE}>
+      <${MUSIC_STAFF} clef="treble" group="grand">${
+    quarter('G5') + quarter('B5') + quarter('D6')
+  }</${MUSIC_STAFF}>
+      <${MUSIC_STAFF} clef="treble">${
+    quarter('F4', 'octave-shift="8va"') + quarter('A4') + quarter('C5')
+  }</${MUSIC_STAFF}>
+    </${MUSIC_MEASURE}>
+    <${MUSIC_MEASURE}>
+      <${MUSIC_STAFF} clef="treble" group="grand">${
+    spacers(3) +
+    sixteenth('G5', 'g1') +
+    sixteenth('B5', 'g1') +
+    sixteenth('D6', 'g1') +
+    spacers(3) +
+    sixteenth('G5', 'g2') +
+    sixteenth('B5', 'g2') +
+    sixteenth('D6', 'g2')
+  }</${MUSIC_STAFF}>
+      <${MUSIC_STAFF} clef="treble">${
+    sixteenth('F4', 'g1') +
+    sixteenth('A4', 'g1') +
+    sixteenth('C5', 'g1') +
+    spacers(3) +
+    sixteenth('F4', 'g2') +
+    sixteenth('A4', 'g2') +
+    sixteenth('C5', 'g2', 'octave-stop') +
+    spacers(3)
+  }</${MUSIC_STAFF}>
+    </${MUSIC_MEASURE}>`;
+
+  async function buildAt(page: Page, width: number) {
+    await page.evaluate(
+      ({ compositionTag, html, hostWidth }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = `${hostWidth}px`;
+        const template = document.createElement('template');
+        template.innerHTML = `<${compositionTag} time="6/8">${html}</${compositionTag}>`;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { compositionTag: MUSIC_COMPOSITION, html: markup, hostWidth: width }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test('settles when the bars wrap, so the beam widens the gap a bounded amount', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    const readMargins = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll('music-staff')).map(
+          (staff) => (staff as HTMLElement).style.marginTop
+        )
+      );
+    // Where the second bar wraps, its beam rises steeply under the
+    // continuing line, so the gap has to widen.
+    for (const width of [400, 420, 440, 460, 480]) {
+      await buildAt(page, width);
+      const margins = await readMargins();
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+      expect(await readMargins()).toEqual(margins);
+    }
+    expect(warnings.some((text) => text.includes('did not converge'))).toBe(
+      false
+    );
+  });
+
+  test('the beam clears a continuing gap-side line, which breaks around the other hand', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, html }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const template = document.createElement('template');
+        template.innerHTML = `<${compositionTag} time="6/8">${html}</${compositionTag}>`;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { compositionTag: MUSIC_COMPOSITION, html: markup }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const snapshot = await page.evaluate(
+      ({ compositionTag, measureTag }) => {
+        const composition = document.querySelector(compositionTag);
+        const measure = document.querySelectorAll(measureTag)[1];
+        const overlay = composition?.shadowRoot?.querySelector(
+          '.octave-continuation-overlay'
+        );
+        const staff = measure?.querySelectorAll('music-staff')[1];
+        const container = staff?.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect();
+        if (!measure?.shadowRoot || !overlay || !container) {
+          throw new Error('composition not ready');
+        }
+        const measureRect = measure.getBoundingClientRect();
+        const relative = (rect: DOMRect) => ({
+          left: rect.left - measureRect.left,
+          right: rect.right - measureRect.left,
+          top: rect.top - measureRect.top,
+          bottom: rect.bottom - measureRect.top,
+        });
+        return {
+          restatedSigns: Array.from(
+            overlay.querySelectorAll(':scope > .octave-sign')
+          ).length,
+          corners: overlay.querySelectorAll('.octave-corner').length,
+          shapes: Array.from(overlay.children)
+            .map((shape) => relative(shape.getBoundingClientRect()))
+            .filter(
+              (rect) =>
+                rect.right > 0 &&
+                rect.left < measureRect.width &&
+                (rect.top + rect.bottom) / 2 < container.top - measureRect.top
+            ),
+          beamPolygons: Array.from(
+            measure.shadowRoot.querySelectorAll<SVGPolygonElement>(
+              '.double-stemmed-beams-overlay .double-stemmed-beam'
+            )
+          ).map((polygon) =>
+            Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+              const point = polygon.points.getItem(i);
+              return { x: point.x, y: point.y };
+            })
+          ),
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION, measureTag: MUSIC_MEASURE }
+    );
+
+    expect(snapshot.restatedSigns).toBe(1);
+    expect(snapshot.corners).toBe(2);
+    expect(snapshot.shapes.length).toBeGreaterThan(0);
+    expect(snapshot.beamPolygons.length).toBeGreaterThan(0);
+    let gap = Infinity;
+    for (const slice of snapshot.beamPolygons.flatMap((polygon) =>
+      sliceConvexPolygon(polygon, 2)
+    )) {
+      for (const shape of snapshot.shapes) {
+        if (slice.left < shape.right && shape.left < slice.right) {
+          gap = Math.min(gap, shape.top - slice.bottom);
+        }
+      }
+    }
+    expect(gap).toBeGreaterThanOrEqual(OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5);
   });
 });

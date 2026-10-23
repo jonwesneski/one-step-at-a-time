@@ -14,6 +14,7 @@ import {
 import {
   isOctaveRaise,
   type OctaveMeasureBoundary,
+  type OctaveSpan,
   resolveOctaveContinuationSegments,
   resolveOctaveSpans,
 } from '../rules/octaveRules';
@@ -38,6 +39,7 @@ import type {
 import type {
   HairpinKind,
   MeasureNumberDisplay,
+  OctaveShiftAmount,
   VoiceNumber,
 } from '../types/theory';
 import {
@@ -47,6 +49,7 @@ import {
   createOctaveCornerSvg,
   createOctaveExtensionLineSvg,
   createOctaveLocoLabelSvg,
+  createOctaveSignSvg,
   createTrillContinuationSignSvg,
   createTrillLineSvg,
   createTrillNotchSvg,
@@ -75,6 +78,7 @@ import {
   MUSIC_MEASURE_NODE,
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
+  MUSIC_REST_NODE,
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
@@ -92,6 +96,8 @@ import {
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
   OCTAVE_SIGN_BELOW_STAFF_Y,
+  OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
+  OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_LINE_GAP_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
   STAFF_TOP_LINE_Y,
@@ -123,17 +129,72 @@ const TRILL_LINE_ROOT_Y_OFFSET =
   NOTE_HEAD_Y_OFFSET_CORRECTION -
   TRILL_ABOVE_STAFF_GAP_PX;
 
-// Bridges the staff-local octave-sign Y constants (staffClassicalBase.ts's
-// own-measure render pass) into this file's root/page coordinate space, the
-// same way TRILL_LINE_ROOT_Y_OFFSET does for the trill line above — so a
-// cross-measure continuation segment lines up exactly with whatever the
-// starting measure's own staff-local render already drew.
-const OCTAVE_SIGN_ABOVE_ROOT_Y_OFFSET =
-  STAFF_Y_PADDING + OCTAVE_SIGN_ABOVE_STAFF_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
-const OCTAVE_SIGN_BELOW_ROOT_Y_OFFSET =
-  STAFF_Y_PADDING + OCTAVE_SIGN_BELOW_STAFF_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
-
 const ROW_OVERLAY_SOURCE = 'row-overlay';
+
+// The measure an octave line crossing a barline starts in, which its own
+// staff draws.
+type OctaveSpanStart = {
+  staff: HTMLElement;
+  element: NoteChordOrRestElementType;
+  rowIndex: number;
+  /** That measure's elements the line runs over, in order. */
+  covered: NoteChordOrRestElementType[];
+};
+
+// One measure's share of an octave line that started in an earlier measure.
+type OctaveContinuation = {
+  staff: HTMLElement;
+  span: OctaveSpan;
+  start: OctaveSpanStart;
+  rowIndex: number;
+  raisesPitch: boolean;
+  isRowWrap: boolean;
+  restatesSign: boolean;
+  /** This measure's elements the line runs over, in order. */
+  covered: NoteChordOrRestElementType[];
+  /** The element whose corner closes the span here; null runs to the barline. */
+  stopElement: NoteChordOrRestElementType | null;
+  /**
+   * The line's row in this system, in the staff's local coordinates (see
+   * #applyOctaveRowHeights); null until resolved or when no measure in the
+   * system gave one.
+   */
+  rowY: number | null;
+};
+
+// A classical staff's octave-row hooks, duck-typed like reserveMeasureSpace
+// below.
+type OctaveRowSource = HTMLElement & {
+  octaveRowY?: (
+    elements: readonly Element[],
+    amount: OctaveShiftAmount
+  ) => number | null;
+  octaveLocalToClientY?: (y: number) => number;
+  octaveContinuations?: ReadonlyMap<
+    Element,
+    { rowY: number; raisesPitch: boolean; starts: boolean }
+  > | null;
+};
+
+// <music-measure>'s continuation hand-off and a staff's octave breaks,
+// duck-typed like reserveMeasureSpace below.
+type OctaveContinuationReceiver = HTMLElement & {
+  applyOctaveContinuationCoverage?: (
+    coverage: ReadonlyMap<
+      Element,
+      readonly (readonly NoteChordOrRestElementType[])[]
+    >
+  ) => boolean;
+  applyOctaveContinuationRects?: (
+    rects: ReadonlyMap<
+      Element,
+      readonly { left: number; right: number; top: number; bottom: number }[]
+    >
+  ) => boolean;
+};
+type OctaveBreakSource = HTMLElement & {
+  crossStaffOctaveBreakAfter?: ReadonlySet<Element> | null;
+};
 
 // <music-measure>'s reserveVerticalSpace, duck-typed so this file needn't
 // import the measure class.
@@ -471,13 +532,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         )) {
           staff.respaceToCurrentWidth();
         }
+        const octaveContinuations = this.#resolveOctaveContinuations();
+        this.#applyOctaveRowHeights(octaveContinuations);
+        this.#applyOctaveContinuationCoverage(octaveContinuations);
         this.#redrawConnectors();
         if (this.#reserveRowOverlaySpace()) {
           this.#redrawConnectors();
         }
         this.#redrawHairpins();
         this.#redrawTrills();
-        this.#redrawOctaveSigns();
+        // A measure stepping its beams or gap decorations around a drawn
+        // continuation moves what connectors and hairpins avoid.
+        if (this.#redrawOctaveSigns(octaveContinuations)) {
+          this.#redrawConnectors();
+          this.#redrawHairpins();
+        }
       });
     }
 
@@ -1169,23 +1238,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // 2-3 independent voices each needing their own span-tracking track; and
     // no tie-chain walk at all — an octave span has no tie chain, its
     // startIndex/stopIndex are already fully resolved by resolveOctaveSpans.
-    #redrawOctaveSigns() {
-      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
-        '.octave-continuation-overlay'
-      );
-      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
-        '.composition-wrapper'
-      );
-      if (!overlay || !wrapper) {
-        return;
-      }
-
-      while (overlay.firstChild) {
-        overlay.removeChild(overlay.firstChild);
-      }
-
-      const rootRect = wrapper.getBoundingClientRect();
-
+    //
+    // Resolved apart from drawing so each measure learns which of its
+    // elements a continuing line covers before its gap passes run (see
+    // <music-measure>'s applyOctaveContinuationCoverage).
+    #resolveOctaveContinuations(): OctaveContinuation[] {
+      const continuations: OctaveContinuation[] = [];
       for (const track of this.#buildStaffTracks()) {
         if (track.length < 2) {
           continue;
@@ -1229,6 +1287,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           for (const span of spans) {
+            const startElement = globalElements[span.startIndex] as
+              | NoteElementType
+              | ChordElementType;
             const segments = resolveOctaveContinuationSegments(
               measureBoundaries,
               span
@@ -1236,88 +1297,308 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             if (segments.length === 0) {
               continue;
             }
-
-            const startElement = globalElements[span.startIndex] as
-              | NoteElementType
-              | ChordElementType;
-            const restatesSign =
-              startElement.octaveContinuation !== 'line-only';
-            const raisesPitch = isOctaveRaise(span.amount);
-
+            const startMeasureIndex = segments[0].measureIndex - 1;
+            const start: OctaveSpanStart = {
+              staff: track[startMeasureIndex].staff,
+              element: startElement,
+              rowIndex: track[startMeasureIndex].rowIndex,
+              covered: globalElements.slice(
+                span.startIndex,
+                measureBoundaries[startMeasureIndex].endIndex
+              ),
+            };
             for (const segment of segments) {
               const { staff, rowIndex } = track[segment.measureIndex];
-              const isRowWrap =
-                rowIndex !== track[segment.measureIndex - 1].rowIndex;
-
-              const staffRect = staff.getBoundingClientRect();
-              const y =
-                staffRect.top -
-                rootRect.top +
-                (raisesPitch
-                  ? OCTAVE_SIGN_ABOVE_ROOT_Y_OFFSET
-                  : OCTAVE_SIGN_BELOW_ROOT_Y_OFFSET);
-              const notesAreaLeft = this.#computeNotesAreaLeftForStaff(
+              const { startIndex, endIndex } =
+                measureBoundaries[segment.measureIndex];
+              const stopIndex =
+                segment.stopAtLocalIndex === null
+                  ? endIndex
+                  : startIndex + segment.stopAtLocalIndex + 1;
+              continuations.push({
                 staff,
-                rootRect
-              );
-
-              let lineStartX = notesAreaLeft;
-              if (isRowWrap && restatesSign) {
-                const { element: sign, width: signWidth } =
-                  createOctaveContinuationSignSvg(
-                    span.amount,
-                    span.mode,
-                    notesAreaLeft,
-                    y,
-                    true
-                  );
-                overlay.appendChild(sign);
-                lineStartX =
-                  notesAreaLeft + signWidth + OCTAVE_SIGN_LINE_GAP_PX;
-              }
-
-              // The corner terminator (when this segment closes the span)
-              // and the line's own end share the same X — matches the
-              // starting measure's own-measure render, where the extension
-              // line and corner both land at stopNoteX + trailing gap.
-              let lineEndX: number;
-              if (segment.stopAtLocalIndex !== null) {
-                const measureStart =
-                  measureBoundaries[segment.measureIndex].startIndex;
-                const stopElement =
-                  globalElements[measureStart + segment.stopAtLocalIndex];
-                lineEndX =
-                  stopElement.getBoundingClientRect().right -
-                  rootRect.left +
-                  OCTAVE_SIGN_TRAILING_GAP_PX;
-              } else {
-                // Runs to this row's own last barline, never beyond — the
-                // staff element's own right edge is that barline position.
-                lineEndX = staffRect.right - rootRect.left;
-              }
-
-              overlay.appendChild(
-                createOctaveExtensionLineSvg(lineStartX, lineEndX, y)
-              );
-
-              if (segment.stopAtLocalIndex !== null) {
-                overlay.appendChild(
-                  createOctaveCornerSvg(lineEndX, y, raisesPitch)
-                );
-                if (span.closedBy === 'loco') {
-                  overlay.appendChild(
-                    createOctaveLocoLabelSvg(
-                      lineEndX + OCTAVE_LOCO_GAP_PX,
-                      y,
-                      false
-                    )
-                  );
-                }
-              }
+                span,
+                start,
+                rowIndex,
+                rowY: null,
+                raisesPitch: isOctaveRaise(span.amount),
+                isRowWrap:
+                  rowIndex !== track[segment.measureIndex - 1].rowIndex,
+                restatesSign: startElement.octaveContinuation !== 'line-only',
+                covered: globalElements.slice(startIndex, stopIndex),
+                stopElement:
+                  segment.stopAtLocalIndex === null
+                    ? null
+                    : globalElements[stopIndex - 1],
+              });
             }
           }
         }
       }
+      return continuations;
+    }
+
+    // One height per system for each line crossing a barline: the most
+    // outward row any of its measures in that system needs (each staff
+    // computes its own share with its usual clearance). The starting staff
+    // is told so its part runs on to its barline at that height; the
+    // continuations are drawn at it, and the staves they pass over make
+    // headroom for them. A new system starts fresh, so each row
+    // gets its own height. Staves of one track share local coordinates
+    // within a row, since row alignment matches their margins.
+    #applyOctaveRowHeights(continuations: readonly OctaveContinuation[]): void {
+      const bySpan = new Map<OctaveSpanStart, OctaveContinuation[]>();
+      for (const continuation of continuations) {
+        bySpan.set(continuation.start, [
+          ...(bySpan.get(continuation.start) ?? []),
+          continuation,
+        ]);
+      }
+
+      const rowsByStaff = new Map<
+        Element,
+        Map<Element, { rowY: number; raisesPitch: boolean; starts: boolean }>
+      >();
+      const addRow = (
+        staff: Element,
+        element: Element | undefined,
+        row: { rowY: number; raisesPitch: boolean; starts: boolean }
+      ) => {
+        if (element === undefined) {
+          return;
+        }
+        const staffRows = rowsByStaff.get(staff) ?? new Map();
+        staffRows.set(element, row);
+        rowsByStaff.set(staff, staffRows);
+      };
+      for (const [start, segments] of bySpan) {
+        const { amount } = segments[0].span;
+        const raisesPitch = isOctaveRaise(amount);
+        const rowYs = new Map<number, number>();
+        for (const piece of [start, ...segments]) {
+          const y =
+            (piece.staff as OctaveRowSource).octaveRowY?.(
+              piece.covered,
+              amount
+            ) ?? null;
+          if (y === null) {
+            continue;
+          }
+          const current = rowYs.get(piece.rowIndex);
+          rowYs.set(
+            piece.rowIndex,
+            current === undefined
+              ? y
+              : raisesPitch
+              ? Math.min(current, y)
+              : Math.max(current, y)
+          );
+        }
+        for (const segment of segments) {
+          segment.rowY = rowYs.get(segment.rowIndex) ?? null;
+          if (segment.rowY !== null) {
+            addRow(segment.staff, segment.covered[0], {
+              rowY: segment.rowY,
+              raisesPitch,
+              starts: false,
+            });
+          }
+        }
+        const startRowY = rowYs.get(start.rowIndex);
+        if (startRowY !== undefined) {
+          addRow(start.staff, start.element, {
+            rowY: startRowY,
+            raisesPitch,
+            starts: true,
+          });
+        }
+      }
+
+      for (const staff of Array.from(
+        this.querySelectorAll<OctaveRowSource>(STAFF_TAGS)
+      )) {
+        if ('octaveContinuations' in staff) {
+          staff.octaveContinuations = rowsByStaff.get(staff) ?? null;
+        }
+      }
+    }
+
+    #measures(): HTMLElement[] {
+      return Array.from(this.querySelectorAll<HTMLElement>(MUSIC_MEASURE));
+    }
+
+    #applyOctaveContinuationCoverage(
+      continuations: readonly OctaveContinuation[]
+    ): void {
+      const byMeasure = new Map<
+        Element,
+        Map<Element, NoteChordOrRestElementType[][]>
+      >();
+      for (const { staff, covered } of continuations) {
+        const measure = staff.closest(MUSIC_MEASURE);
+        if (measure === null) {
+          continue;
+        }
+        const byStaff = byMeasure.get(measure) ?? new Map();
+        byStaff.set(staff, [...(byStaff.get(staff) ?? []), covered]);
+        byMeasure.set(measure, byStaff);
+      }
+      for (const measure of this.#measures()) {
+        (
+          measure as OctaveContinuationReceiver
+        ).applyOctaveContinuationCoverage?.(
+          byMeasure.get(measure) ?? new Map()
+        );
+      }
+    }
+
+    // Draws every continuation, broken where its staff's measure breaks a
+    // one-hand line around the other hand's notes of a shared beam (the
+    // staff's crossStaffOctaveBreakAfter), then hands each measure what was
+    // drawn over it. Returns whether any measure moved its gap content in
+    // response, so the caller can redraw what reads it.
+    #redrawOctaveSigns(continuations: readonly OctaveContinuation[]): boolean {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.octave-continuation-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return false;
+      }
+
+      while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+      }
+
+      const rootRect = wrapper.getBoundingClientRect();
+      const drawnByMeasure = new Map<
+        Element,
+        Map<Element, SVGGraphicsElement[]>
+      >();
+
+      for (const continuation of continuations) {
+        const { staff, span, raisesPitch, stopElement } = continuation;
+        const drawn: SVGGraphicsElement[] = [];
+        const draw = (element: SVGGraphicsElement) => {
+          overlay.appendChild(element);
+          drawn.push(element);
+        };
+
+        const toClientY = (staff as OctaveRowSource).octaveLocalToClientY;
+        if (toClientY === undefined) {
+          continue;
+        }
+        const staffRect = staff.getBoundingClientRect();
+        // Read through the staff's own transform at draw time, so a staff a
+        // gap pass has since moved is followed.
+        const y =
+          toClientY.call(
+            staff,
+            continuation.rowY ??
+              (raisesPitch
+                ? OCTAVE_SIGN_ABOVE_STAFF_Y
+                : OCTAVE_SIGN_BELOW_STAFF_Y)
+          ) - rootRect.top;
+        const notesAreaLeft = this.#computeNotesAreaLeftForStaff(
+          staff,
+          rootRect
+        );
+
+        let lineStartX = notesAreaLeft;
+        if (continuation.isRowWrap && continuation.restatesSign) {
+          const { element: sign, width: signWidth } =
+            createOctaveContinuationSignSvg(
+              span.amount,
+              span.mode,
+              notesAreaLeft,
+              y,
+              true
+            );
+          draw(sign);
+          lineStartX = notesAreaLeft + signWidth + OCTAVE_SIGN_LINE_GAP_PX;
+        }
+
+        const breaks =
+          (staff as OctaveBreakSource).crossStaffOctaveBreakAfter ?? null;
+        const pitched = continuation.covered.filter(
+          (element) => element.nodeName !== MUSIC_REST_NODE
+        );
+        pitched.forEach((element, k) => {
+          if (!breaks?.has(element) || k === pitched.length - 1) {
+            return;
+          }
+          const breakX =
+            element.getBoundingClientRect().right -
+            rootRect.left +
+            OCTAVE_SIGN_TRAILING_GAP_PX;
+          draw(createOctaveExtensionLineSvg(lineStartX, breakX, y));
+          draw(createOctaveCornerSvg(breakX, y, raisesPitch));
+          const signX =
+            pitched[k + 1].getBoundingClientRect().left -
+            rootRect.left -
+            OCTAVE_SIGN_LEADING_GAP_PX -
+            OCTAVE_SIGN_ESTIMATED_WIDTH_PX;
+          draw(createOctaveSignSvg(span.amount, signX, y, span.mode));
+          lineStartX = signX + OCTAVE_SIGN_ESTIMATED_WIDTH_PX;
+        });
+
+        // The corner terminator (when this segment closes the span) and the
+        // line's own end share the same X — matches the starting measure's
+        // own-measure render, where the extension line and corner both land
+        // at stopNoteX + trailing gap. With no stop here the line runs to this
+        // row's own last barline, never beyond — the staff element's own
+        // right edge is that barline position.
+        const lineEndX =
+          stopElement === null
+            ? staffRect.right - rootRect.left
+            : stopElement.getBoundingClientRect().right -
+              rootRect.left +
+              OCTAVE_SIGN_TRAILING_GAP_PX;
+        draw(createOctaveExtensionLineSvg(lineStartX, lineEndX, y));
+        if (stopElement !== null) {
+          draw(createOctaveCornerSvg(lineEndX, y, raisesPitch));
+          if (span.closedBy === 'loco') {
+            draw(
+              createOctaveLocoLabelSvg(lineEndX + OCTAVE_LOCO_GAP_PX, y, false)
+            );
+          }
+        }
+
+        const measure = staff.closest(MUSIC_MEASURE);
+        if (measure !== null) {
+          const byStaff = drawnByMeasure.get(measure) ?? new Map();
+          byStaff.set(staff, [...(byStaff.get(staff) ?? []), ...drawn]);
+          drawnByMeasure.set(measure, byStaff);
+        }
+      }
+
+      let changed = false;
+      for (const measure of this.#measures()) {
+        const measureRect = measure.getBoundingClientRect();
+        const rects = new Map(
+          Array.from(drawnByMeasure.get(measure) ?? [], ([staff, drawn]) => [
+            staff,
+            drawn.map((element) => {
+              const rect = element.getBoundingClientRect();
+              return {
+                left: rect.left - measureRect.left,
+                right: rect.right - measureRect.left,
+                top: rect.top - measureRect.top,
+                bottom: rect.bottom - measureRect.top,
+              };
+            }),
+          ])
+        );
+        changed =
+          ((
+            measure as OctaveContinuationReceiver
+          ).applyOctaveContinuationRects?.(rects) ??
+            false) ||
+          changed;
+      }
+      return changed;
     }
 
     #updateDescribeVisibility() {

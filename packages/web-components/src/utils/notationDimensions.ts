@@ -208,6 +208,14 @@ export const STEM_OVERLAP_PX = STAFF_LINE_SPACING * 0.2;
 export const REST_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
 
 /**
+ * Shortest stem (px, notehead edge to beam) a double-stemmed beam may leave
+ * when it moves to clear a gap-side octave sign; past it the gap widens.
+ * About 2.5 spaces from the notehead centre, the usual beamed-stem floor.
+ * = 2 × STAFF_LINE_SPACING
+ */
+export const DOUBLE_STEMMED_BEAM_MIN_STEM_PX = STAFF_LINE_SPACING * 2;
+
+/**
  * Minimum real clearance (px) kept between a cross-staff rest's own glyph
  * and the nearest actual notehead on an adjacent staff — the rest and the
  * note it "hugs" toward (or, for a centered rest, either staff's nearest
@@ -1081,6 +1089,22 @@ export const OCTAVE_SIGN_PROSE_FONT_SIZE_PX = STAFF_LINE_SPACING * 0.9;
 
 /** Gap (px) between the corner terminator and a `loco`-closed span's label. */
 export const OCTAVE_LOCO_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Estimated width (px) of the standalone "(loco)" label — six italic
+ * characters at about half an em each.
+ * = 3 × OCTAVE_SIGN_PROSE_FONT_SIZE_PX
+ */
+export const OCTAVE_LOCO_ESTIMATED_WIDTH_PX =
+  OCTAVE_SIGN_PROSE_FONT_SIZE_PX * 3;
+
+/**
+ * Clearance (px) kept between a gap-side octave sign and a double-stemmed
+ * beam (or anything hanging off it), and between that sign and other
+ * mid-system decorations stepping around it.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const OCTAVE_SIGN_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
 // ─── Octave signs: cross-measure/system-break continuation (Phase 2) ───────
 

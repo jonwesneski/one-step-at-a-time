@@ -4,9 +4,11 @@ import {
   isOctaveRaise,
   type OctaveMeasureBoundary,
   type OctaveSpan,
+  resolveCrossStaffOctaveBreaks,
   resolveOctaveContinuationSegments,
   resolveOctaveSpanExtremalStaffY,
   resolveOctaveSpans,
+  splitOctaveSpanIntoRuns,
 } from './octaveRules';
 
 const EIGHT_VA: OctaveShiftAmount = '8va';
@@ -373,5 +375,87 @@ describe('isOctaveRaise', () => {
     expect(isOctaveRaise('8vb')).toBe(false);
     expect(isOctaveRaise('15mb')).toBe(false);
     expect(isOctaveRaise('22mb')).toBe(false);
+  });
+});
+
+describe('resolveCrossStaffOctaveBreaks', () => {
+  it("breaks between groups where the other hand's untransposed notes fall", () => {
+    // Right-hand line over two groups (at 20/30 and 70/80); the left hand
+    // plays at 10 and at 50/60, between them.
+    expect(
+      resolveCrossStaffOctaveBreaks(
+        [20, 30, 70, 80],
+        [
+          { beat: 10, transposed: false },
+          { beat: 50, transposed: false },
+          { beat: 60, transposed: false },
+        ],
+        2
+      )
+    ).toEqual({ breakAfter: [1], sharesBeat: false });
+  });
+
+  it('keeps one line when the other hand is transposed too', () => {
+    expect(
+      resolveCrossStaffOctaveBreaks(
+        [20, 30, 70, 80],
+        [
+          { beat: 50, transposed: true },
+          { beat: 60, transposed: true },
+        ],
+        2
+      )
+    ).toEqual({ breakAfter: [], sharesBeat: false });
+  });
+
+  it('reports notes sounding on the same beat, which no break can avoid', () => {
+    expect(
+      resolveCrossStaffOctaveBreaks(
+        [20, 40, 60],
+        [
+          { beat: 20.5, transposed: false },
+          { beat: 40, transposed: false },
+          { beat: 60, transposed: false },
+        ],
+        2
+      )
+    ).toEqual({ breakAfter: [], sharesBeat: true });
+  });
+});
+
+describe('splitOctaveSpanIntoRuns', () => {
+  const span: OctaveSpan = {
+    amount: EIGHT_VA,
+    mode: 'sign',
+    startIndex: 0,
+    stopIndex: 5,
+    members: [
+      { index: 0, isRest: false },
+      { index: 1, isRest: false },
+      { index: 2, isRest: true },
+      { index: 3, isRest: true },
+      { index: 4, isRest: false },
+      { index: 5, isRest: false },
+    ],
+    closedBy: 'loco',
+  };
+
+  it('returns the span itself with no breaks', () => {
+    expect(splitOctaveSpanIntoRuns(span, new Set())).toEqual([span]);
+  });
+
+  it('resumes at the next pitched member and keeps the close reason on the last run', () => {
+    const runs = splitOctaveSpanIntoRuns(span, new Set([1]));
+    expect(
+      runs.map((run) => [run.startIndex, run.stopIndex, run.closedBy])
+    ).toEqual([
+      [0, 1, 'octave-stop'],
+      [4, 5, 'loco'],
+    ]);
+    expect(runs[1].members.map((member) => member.index)).toEqual([4, 5]);
+  });
+
+  it("ignores a break on the span's own last member", () => {
+    expect(splitOctaveSpanIntoRuns(span, new Set([5]))).toHaveLength(1);
   });
 });
