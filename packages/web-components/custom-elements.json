@@ -1561,8 +1561,77 @@
             },
             {
               "kind": "method",
+              "name": "#resolveOctaveContinuations",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OctaveContinuation[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyOctaveRowHeights",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "continuations",
+                  "type": {
+                    "text": "readonly OctaveContinuation[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#measures",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyOctaveContinuationCoverage",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "continuations",
+                  "type": {
+                    "text": "readonly OctaveContinuation[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#redrawOctaveSigns",
-              "privacy": "private"
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "continuations",
+                  "type": {
+                    "text": "readonly OctaveContinuation[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1842,6 +1911,18 @@
             },
             {
               "kind": "field",
+              "name": "#octaveContinuationCoverage",
+              "privacy": "private",
+              "default": "new Map< Element, readonly (readonly NoteChordOrRestElementType[])[] >()"
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuationRects",
+              "privacy": "private",
+              "default": "new Map<Element, readonly ObstacleRect[]>()"
+            },
+            {
+              "kind": "field",
               "name": "#onStaffMinWidth",
               "privacy": "private"
             },
@@ -1886,6 +1967,11 @@
             {
               "kind": "field",
               "name": "#boundRedrawMeasureDynamics",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundRedrawGapPasses",
               "privacy": "private"
             },
             {
@@ -2277,6 +2363,36 @@
               ]
             },
             {
+              "kind": "method",
+              "name": "#octaveSignRects",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ObstacleRect[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "StaffElementBaseType"
+                  }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "'above' | 'below'"
+                  }
+                },
+                {
+                  "name": "measureRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
+            },
+            {
               "kind": "field",
               "name": "#redrawDepths",
               "privacy": "private",
@@ -2330,6 +2446,72 @@
               "kind": "method",
               "name": "#redrawDoubleStemmedBeamsImpl",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#crossStaffOctaveBreaks",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<number, Set<NoteChordOrRestElementType>>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly StaffElementBaseType[]"
+                  }
+                },
+                {
+                  "name": "perStaffElements",
+                  "type": {
+                    "text": "readonly NoteChordOrRestElementType[][]"
+                  }
+                },
+                {
+                  "name": "groups",
+                  "type": {
+                    "text": "readonly DoubleStemmedBeamGroup[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#secondaryBeamSide",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DoubleStemmedBeamSegmentSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "segments",
+                  "type": {
+                    "text": "readonly BeamLineDescriptor[]"
+                  }
+                },
+                {
+                  "name": "memberGeometries",
+                  "type": {
+                    "text": "readonly { staffIndex: number }[]"
+                  }
+                },
+                {
+                  "name": "topStaffIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "line",
+                  "type": {
+                    "text": "DoubleStemmedBeamLine"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -2412,6 +2594,76 @@
                   }
                 }
               ]
+            },
+            {
+              "kind": "method",
+              "name": "applyOctaveContinuationCoverage",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "coverage",
+                  "type": {
+                    "text": "ReadonlyMap<\n        Element,\n        readonly (readonly NoteChordOrRestElementType[])[]\n      >"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "applyOctaveContinuationRects",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measureRects",
+                  "type": {
+                    "text": "ReadonlyMap<Element, readonly ObstacleRect[]>"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "field",
+              "name": "#gapClearanceByPass",
+              "privacy": "private",
+              "default": "new Map< string, ReadonlyMap<StaffElementBaseType, VerticalBand> >()"
+            },
+            {
+              "kind": "method",
+              "name": "#applyGapClearance",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "pass",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "needs",
+                  "type": {
+                    "text": "ReadonlyMap<StaffElementBaseType, VerticalBand>"
+                  }
+                },
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly StaffElementBaseType[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawGapPasses",
+              "privacy": "private"
             }
           ],
           "attributes": [
@@ -3815,6 +4067,32 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffOctaveBreakAfter",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<Element, OctaveContinuationRow> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -3834,6 +4112,16 @@
                 "text": "number[]"
               },
               "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#beatOffsetByElement",
+              "privacy": "private",
+              "default": "new Map<Element, number>()",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -4176,6 +4464,76 @@
               "type": {
                 "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
               },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffOctaveBreakAfter",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuations",
+              "type": {
+                "text": "ReadonlyMap<\n    Element,\n    OctaveContinuationRow\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveRowY",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "readonly Element[]"
+                  }
+                },
+                {
+                  "name": "amount",
+                  "type": {
+                    "text": "OctaveShiftAmount"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveLocalToClientY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -4709,6 +5067,27 @@
             },
             {
               "kind": "method",
+              "name": "beatOffsetOf",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "noteToYCoordinate",
               "privacy": "public",
               "return": {
@@ -5000,6 +5379,68 @@
                   "optional": true,
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveRunLayouts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ run: OctaveSpan; y: number; continues: boolean }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "spans",
+                  "type": {
+                    "text": "readonly OctaveSpan[]"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSpanRuns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OctaveSpan[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -5428,6 +5869,10 @@
                   "type": {
                     "text": "boolean"
                   }
+                },
+                {
+                  "name": "skipSharedBeamNumerals",
+                  "default": "false"
                 }
               ],
               "inheritedFrom": {
@@ -6334,6 +6779,28 @@
                 }
               ],
               "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveGapClearance",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -7085,6 +7552,28 @@
             },
             {
               "kind": "method",
+              "name": "reserveGapClearance",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
               "return": {
@@ -7787,6 +8276,32 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffOctaveBreakAfter",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<Element, OctaveContinuationRow> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -7806,6 +8321,16 @@
                 "text": "number[]"
               },
               "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#beatOffsetByElement",
+              "privacy": "private",
+              "default": "new Map<Element, number>()",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -8148,6 +8673,76 @@
               "type": {
                 "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
               },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffOctaveBreakAfter",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuations",
+              "type": {
+                "text": "ReadonlyMap<\n    Element,\n    OctaveContinuationRow\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveRowY",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "readonly Element[]"
+                  }
+                },
+                {
+                  "name": "amount",
+                  "type": {
+                    "text": "OctaveShiftAmount"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveLocalToClientY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -8672,6 +9267,27 @@
             },
             {
               "kind": "method",
+              "name": "beatOffsetOf",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "noteToYCoordinate",
               "privacy": "public",
               "return": {
@@ -8963,6 +9579,68 @@
                   "optional": true,
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveRunLayouts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ run: OctaveSpan; y: number; continues: boolean }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "spans",
+                  "type": {
+                    "text": "readonly OctaveSpan[]"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSpanRuns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OctaveSpan[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -9391,6 +10069,10 @@
                   "type": {
                     "text": "boolean"
                   }
+                },
+                {
+                  "name": "skipSharedBeamNumerals",
+                  "default": "false"
                 }
               ],
               "inheritedFrom": {
@@ -10283,6 +10965,28 @@
                 }
               ],
               "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveGapClearance",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
