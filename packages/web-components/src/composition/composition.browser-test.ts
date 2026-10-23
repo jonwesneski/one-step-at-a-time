@@ -3660,3 +3660,127 @@ test.describe(`${MUSIC_COMPOSITION} hairpins across measures on a grand staff`, 
     });
   });
 });
+
+test.describe(`${MUSIC_COMPOSITION} first paint`, () => {
+  test('a hand-crossing phrase slur paints in its settled shape on the first frame it appears', async ({
+    page,
+  }) => {
+    const leg = (
+      staffNotes: [`${Note}${Octave}`, boolean][],
+      restsFirst: boolean
+    ): string => {
+      const rests = `<${MUSIC_REST} duration="eighth"></${MUSIC_REST}>`.repeat(
+        4
+      );
+      const notes = staffNotes
+        .map(([pitch, inPhrase]) =>
+          hairpinNote(pitch, 'eighth', inPhrase ? 'slur-group="phrase1"' : '')
+        )
+        .join('');
+      return restsFirst ? rests + notes : notes + rests;
+    };
+    const markup = [
+      grandStaffMeasure(
+        leg(
+          [
+            ['D4', false],
+            ['F4', false],
+            ['A4', false],
+            ['D5', true],
+          ],
+          true
+        ),
+        leg(
+          [
+            ['F2', true],
+            ['A2', false],
+            ['D3', false],
+            ['F3', false],
+          ],
+          false
+        )
+      ),
+      grandStaffMeasure(
+        leg(
+          [
+            ['A4', false],
+            ['C5', false],
+            ['E5', false],
+            ['G5', true],
+          ],
+          true
+        ),
+        leg(
+          [
+            ['C3', true],
+            ['E3', false],
+            ['A3', false],
+            ['C4', false],
+          ],
+          false
+        )
+      ),
+    ].join('');
+
+    await page.evaluate(
+      ({ html, compositionTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '868px';
+        const record = window as unknown as { firstPaths?: string[] };
+        const tick = () => {
+          const paths = Array.from(
+            document
+              .querySelector(compositionTag)
+              ?.shadowRoot?.querySelectorAll('.connectors-overlay path') ?? []
+          ).map((path) => path.getAttribute('d') ?? '');
+          if (paths.length > 0) {
+            record.firstPaths = paths;
+            return;
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        const template = document.createElement('template');
+        template.innerHTML = `<${compositionTag} time="4/4">${html}</${compositionTag}>`;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { html: markup, compositionTag: MUSIC_COMPOSITION }
+    );
+    for (let cycle = 0; cycle < 5; cycle++) {
+      await waitForRedrawCycle(page);
+    }
+
+    const { firstPaths, settledPaths } = await page.evaluate(
+      (compositionTag) => ({
+        firstPaths:
+          (window as unknown as { firstPaths?: string[] }).firstPaths ?? [],
+        settledPaths: Array.from(
+          document
+            .querySelector(compositionTag)
+            ?.shadowRoot?.querySelectorAll('.connectors-overlay path') ?? []
+        ).map((path) => path.getAttribute('d') ?? ''),
+      }),
+      MUSIC_COMPOSITION
+    );
+
+    const numbers = (d: string) =>
+      d
+        .split(/[ ,MC]+/)
+        .filter((token) => token !== '')
+        .map(Number);
+    expect(firstPaths.length).toBe(3);
+    expect(firstPaths.length).toBe(settledPaths.length);
+    firstPaths.forEach((d, index) => {
+      const first = numbers(d);
+      const settled = numbers(settledPaths[index]);
+      expect(first.length).toBe(settled.length);
+      first.forEach((value, i) => {
+        expect(Math.abs(value - settled[i])).toBeLessThanOrEqual(0.5);
+      });
+    });
+  });
+});

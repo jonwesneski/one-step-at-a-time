@@ -5951,7 +5951,7 @@
               },
               "privacy": "protected",
               "readonly": true,
-              "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "default": "new ResizeObserver((entries) => { this.#respaceIfWidthChanged(entries[0].contentRect.width); })",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -6047,6 +6047,41 @@
                 "text": "[BeatsInMeasure, BeatTypeInMeasure]"
               },
               "privacy": "protected",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "respaceToCurrentWidth",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#respaceIfWidthChanged",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -6660,7 +6695,7 @@
               },
               "privacy": "protected",
               "readonly": true,
-              "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "default": "new ResizeObserver((entries) => { this.#respaceIfWidthChanged(entries[0].contentRect.width); })",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -6756,6 +6791,41 @@
                 "text": "[BeatsInMeasure, BeatTypeInMeasure]"
               },
               "privacy": "protected",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "respaceToCurrentWidth",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#respaceIfWidthChanged",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -9830,7 +9900,7 @@
               },
               "privacy": "protected",
               "readonly": true,
-              "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "default": "new ResizeObserver((entries) => { this.#respaceIfWidthChanged(entries[0].contentRect.width); })",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -9926,6 +9996,41 @@
                 "text": "[BeatsInMeasure, BeatTypeInMeasure]"
               },
               "privacy": "protected",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "respaceToCurrentWidth",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#respaceIfWidthChanged",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"

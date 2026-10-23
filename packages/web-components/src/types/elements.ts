@@ -490,6 +490,7 @@ export interface IStaffElementBase {
   readonly staffLineCount: number;
   readonly contentVerticalSpace: VerticalBand;
   alignVerticalSpace(space: VerticalBand): boolean;
+  respaceToCurrentWidth(): void;
 }
 
 export interface IStaffElement extends IStaffElementBase {

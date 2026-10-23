@@ -454,9 +454,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.#redrawScheduled = true;
+      // Passes that move notes run before every pass that draws from note
+      // positions, so the frame paints connectors, hairpins, trills and octave
+      // signs from final geometry instead of correcting them a frame later: a
+      // staff showing or hiding its clef/key/time re-lays itself out at once,
+      // and the measure widths that change as a result are re-spaced here
+      // rather than in the next ResizeObserver callback.
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#alignRowStaffSpace();
+        this.#updateDescribeVisibility();
+        this.#updateClefContinuity();
+        this.#updateTimeSignatureContinuity();
+        for (const staff of Array.from(
+          this.querySelectorAll<StaffElementBaseType>(STAFF_TAGS)
+        )) {
+          staff.respaceToCurrentWidth();
+        }
         this.#redrawConnectors();
         if (this.#reserveRowOverlaySpace()) {
           this.#redrawConnectors();
@@ -464,9 +478,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawHairpins();
         this.#redrawTrills();
         this.#redrawOctaveSigns();
-        this.#updateDescribeVisibility();
-        this.#updateClefContinuity();
-        this.#updateTimeSignatureContinuity();
       });
     }
 

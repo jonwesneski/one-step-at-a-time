@@ -98,11 +98,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     this.#lastStaffWidth = 0;
     this.staffResizeObserver = new ResizeObserver((entries) => {
-      const newWidth = entries[0].contentRect.width;
-      if (newWidth !== this.#lastStaffWidth) {
-        this.#lastStaffWidth = newWidth;
-        this.onStaffResize();
-      }
+      this.#respaceIfWidthChanged(entries[0].contentRect.width);
     });
 
     this.effectiveTimeSig = this.convertTotimeInts(
@@ -111,6 +107,30 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected abstract onStaffResize(): void;
+
+  // Called by an ancestor <music-composition> after a pass that can change
+  // measure widths (showing/hiding a clef, key or time signature), so this
+  // staff re-spaces before the ancestor draws connectors from its note
+  // positions, rather than in the next ResizeObserver callback, after that
+  // frame has already painted stale connectors. The observer then sees an
+  // unchanged width and does nothing.
+  respaceToCurrentWidth(): void {
+    const style = getComputedStyle(this.staffContainer);
+    this.#respaceIfWidthChanged(
+      this.staffContainer.getBoundingClientRect().width -
+        parseFloat(style.borderLeftWidth) -
+        parseFloat(style.borderRightWidth) -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight)
+    );
+  }
+
+  #respaceIfWidthChanged(width: number): void {
+    if (width !== this.#lastStaffWidth) {
+      this.#lastStaffWidth = width;
+      this.onStaffResize();
+    }
+  }
 
   get group(): StaffGroupType | null {
     return parseStaffGroup(this.getAttribute('group'));
