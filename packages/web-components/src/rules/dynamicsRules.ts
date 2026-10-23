@@ -4,13 +4,14 @@ import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
 } from '../types/elements';
-import type { HairpinKind } from '../types/theory';
-import { MUSIC_REST_NODE } from '../utils/consts';
+import type { DynamicMarking, HairpinKind } from '../types/theory';
+import { HAIRPIN_KINDS, MUSIC_REST_NODE } from '../utils/consts';
 import {
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+import type { HairpinEndpointText } from './hairpinPlacementRules';
 
 const ROW_TOLERANCE_PX = 5;
 
@@ -38,65 +39,75 @@ export function pairHairpins(
   elements: NoteChordOrRestElementType[],
   noteXPositions: ReadonlyMap<number, number>
 ): HairpinPair[] {
+  return pairHairpinsWithLeftovers(elements, noteXPositions).pairs;
+}
+
+export type HairpinEndpoint = {
+  kind: HairpinKind;
+  element: NoteOrChordElementType;
+  index: number;
+};
+
+export type HairpinPairing = {
+  pairs: HairpinPair[];
+  unpairedStarts: HairpinEndpoint[];
+  orphanEnds: HairpinEndpoint[];
+};
+
+// `warnOrphans: false` is for a caller that sees only part of the music — an
+// end whose start sits on another staff or in another measure is expected
+// there, and is paired by whichever ancestor sees both.
+export function pairHairpinsWithLeftovers(
+  elements: NoteChordOrRestElementType[],
+  noteXPositions: ReadonlyMap<number, number>,
+  { warnOrphans = true }: { warnOrphans?: boolean } = {}
+): HairpinPairing {
   const pairs: HairpinPair[] = [];
+  const orphanEnds: HairpinEndpoint[] = [];
   const openStarts = new Map<HairpinKind, OpenHairpinStart>();
 
   elements.forEach((element, index) => {
     const noteOrChord = element as INoteElement | IChordElement;
-    const crescendo = 'crescendo' in noteOrChord ? noteOrChord.crescendo : null;
-    const decrescendo =
-      'decrescendo' in noteOrChord ? noteOrChord.decrescendo : null;
-
-    // A rest never has crescendo/decrescendo, so reaching either 'start'/'end'
+    // A rest never has crescendo/decrescendo, so reaching a 'start'/'end'
     // branch below guarantees element is actually a note or chord.
     const noteOrChordElement = element as NoteOrChordElementType;
 
-    if (crescendo === 'start') {
-      openHairpinStart(openStarts, 'crescendo', noteOrChordElement, index);
-    } else if (crescendo === 'end') {
-      const start = openStarts.get('crescendo');
-      if (start !== undefined) {
-        pairs.push(
-          buildHairpinPair(
-            'crescendo',
-            start,
-            { element: noteOrChordElement, index },
-            elements,
-            noteXPositions
-          )
-        );
-        openStarts.delete('crescendo');
-      } else {
-        console.warn(
-          `[dynamicsRules] orphan crescendo end (no matching start)`
-        );
+    for (const kind of HAIRPIN_KINDS) {
+      const role = kind in noteOrChord ? noteOrChord[kind] : null;
+      if (role === 'start') {
+        openHairpinStart(openStarts, kind, noteOrChordElement, index);
+        continue;
       }
-    }
-
-    if (decrescendo === 'start') {
-      openHairpinStart(openStarts, 'decrescendo', noteOrChordElement, index);
-    } else if (decrescendo === 'end') {
-      const start = openStarts.get('decrescendo');
+      if (role !== 'end') {
+        continue;
+      }
+      const start = openStarts.get(kind);
       if (start !== undefined) {
         pairs.push(
           buildHairpinPair(
-            'decrescendo',
+            kind,
             start,
             { element: noteOrChordElement, index },
             elements,
             noteXPositions
           )
         );
-        openStarts.delete('decrescendo');
-      } else {
-        console.warn(
-          `[dynamicsRules] orphan decrescendo end (no matching start)`
-        );
+        openStarts.delete(kind);
+        continue;
+      }
+      orphanEnds.push({ kind, element: noteOrChordElement, index });
+      if (warnOrphans) {
+        console.warn(`[dynamicsRules] orphan ${kind} end (no matching start)`);
       }
     }
   });
 
-  return pairs;
+  const unpairedStarts = [...openStarts].map(([kind, start]) => ({
+    kind,
+    element: start.element,
+    index: start.index,
+  }));
+  return { pairs, unpairedStarts, orphanEnds };
 }
 
 // Only one open start per kind is representable — the model has no explicit
@@ -149,38 +160,17 @@ function buildHairpinPair(
     };
   }
 
-  const startMarking = start.element.dynamic;
-  const endMarking = end.element.dynamic;
-
   // Dynamic text is rendered centered at noteX + NOTE_SVG_WIDTH/2 (see
-  // #renderDynamics' centerX) — the shift must clear that text's actual edge,
-  // not the note's raw edge, or the hairpin still runs under the glyph.
-  let startX = rawStartX;
-  let endX = rawEndX;
-  if (startMarking !== null) {
-    const startTextCenterX = rawStartX + NOTE_SVG_WIDTH / 2;
-    startX = Math.max(
-      startX,
-      startTextCenterX +
-        (startMarking.length * DYNAMICS_CHAR_WIDTH_PX) / 2 +
-        HAIRPIN_DYNAMIC_GAP_PX
-    );
-  }
-  if (endMarking !== null) {
-    const endTextCenterX =
-      (noteXPositions.get(end.index) ?? 0) + NOTE_SVG_WIDTH / 2;
-    endX = Math.min(
-      endX,
-      endTextCenterX -
-        (endMarking.length * DYNAMICS_CHAR_WIDTH_PX) / 2 -
-        HAIRPIN_DYNAMIC_GAP_PX
-    );
-  }
-
-  const endpointCollision = endX <= startX;
-  if (endpointCollision) {
-    startX = rawStartX;
-    endX = rawEndX;
+  // #renderDynamics' centerX).
+  const span = computeHairpinXSpan({
+    rawStartX,
+    rawEndX,
+    startTextCenterX: rawStartX + NOTE_SVG_WIDTH / 2,
+    endTextCenterX: (noteXPositions.get(end.index) ?? 0) + NOTE_SVG_WIDTH / 2,
+    startMarking: start.element.dynamic,
+    endMarking: end.element.dynamic,
+  });
+  if (span.collided) {
     errors.push(
       `Hairpin (${kind}) overlaps a dynamic marking and cannot be cleanly positioned.`
     );
@@ -202,10 +192,114 @@ function buildHairpinPair(
     kind,
     startElement: start.element,
     endElement: end.element,
-    startX,
-    endX,
+    startX: span.startX,
+    endX: span.endX,
     errors,
   };
+}
+
+export type PositionedHairpinEndpoint = HairpinEndpoint & { x: number };
+
+// Pairs a hairpin left open on one staff with an end left over on its
+// partner staff — a shared (both-hands) hairpin starting in one hand and
+// ending in the other. Each start, left to right, takes the nearest unused
+// end of its kind at or after it.
+export function pairSharedHairpinsAcrossStaves(
+  starts: readonly PositionedHairpinEndpoint[],
+  ends: readonly PositionedHairpinEndpoint[]
+): { start: PositionedHairpinEndpoint; end: PositionedHairpinEndpoint }[] {
+  const unused = new Set(ends);
+  const pairs: {
+    start: PositionedHairpinEndpoint;
+    end: PositionedHairpinEndpoint;
+  }[] = [];
+  for (const start of [...starts].sort((a, b) => a.x - b.x)) {
+    let nearest: PositionedHairpinEndpoint | null = null;
+    for (const end of unused) {
+      if (end.kind !== start.kind || end.x < start.x) {
+        continue;
+      }
+      if (nearest === null || end.x < nearest.x) {
+        nearest = end;
+      }
+    }
+    if (nearest !== null) {
+      unused.delete(nearest);
+      pairs.push({ start, end: nearest });
+    }
+  }
+  return pairs;
+}
+
+export type HairpinXSpanInput = {
+  rawStartX: number;
+  rawEndX: number;
+  startTextCenterX: number;
+  endTextCenterX: number;
+  startMarking: DynamicMarking | null;
+  endMarking: DynamicMarking | null;
+};
+
+// Pulls each end inward past its endpoint dynamic's estimated text edge, so
+// the wedge never runs under the glyph. Works in any 1:1 px frame. On a
+// resulting crossover it falls back to the raw ends and flags `collided`.
+export function computeHairpinXSpan({
+  rawStartX,
+  rawEndX,
+  startTextCenterX,
+  endTextCenterX,
+  startMarking,
+  endMarking,
+}: HairpinXSpanInput): { startX: number; endX: number; collided: boolean } {
+  let startX = rawStartX;
+  let endX = rawEndX;
+  if (startMarking !== null) {
+    startX = Math.max(
+      startX,
+      startTextCenterX +
+        (startMarking.length * DYNAMICS_CHAR_WIDTH_PX) / 2 +
+        HAIRPIN_DYNAMIC_GAP_PX
+    );
+  }
+  if (endMarking !== null) {
+    endX = Math.min(
+      endX,
+      endTextCenterX -
+        (endMarking.length * DYNAMICS_CHAR_WIDTH_PX) / 2 -
+        HAIRPIN_DYNAMIC_GAP_PX
+    );
+  }
+  if (endX <= startX) {
+    return { startX: rawStartX, endX: rawEndX, collided: true };
+  }
+  return { startX, endX, collided: false };
+}
+
+// Spans for hairpins linked end to start on one staff. `texts` holds one
+// endpoint dynamic per chain element (hairpins + 1): element k ends hairpin
+// k-1 and starts hairpin k, so a joint's dynamic is the same text for both.
+export function resolveChainSpans(
+  hairpins: readonly { rawStartX: number; rawEndX: number }[],
+  texts: readonly (HairpinEndpointText | null)[]
+): {
+  startX: number;
+  endX: number;
+  startText: HairpinEndpointText | null;
+  endText: HairpinEndpointText | null;
+}[] {
+  return hairpins.map((hairpin, index) => {
+    const startText = texts[index] ?? null;
+    const endText = texts[index + 1] ?? null;
+    const span = computeHairpinXSpan({
+      rawStartX: hairpin.rawStartX,
+      rawEndX: hairpin.rawEndX,
+      startTextCenterX: startText?.centerX ?? 0,
+      endTextCenterX: endText?.centerX ?? 0,
+      startMarking: startText?.marking ?? null,
+      endMarking: endText?.marking ?? null,
+    });
+    return { startX: span.startX, endX: span.endX, startText, endText };
+  });
 }
 
 export type HairpinSegment = {

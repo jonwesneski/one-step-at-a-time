@@ -12,7 +12,10 @@ import { computeBeatOffsets } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
-import { pairHairpins } from './rules/dynamicsRules';
+import {
+  type HairpinPair,
+  pairHairpinsWithLeftovers,
+} from './rules/dynamicsRules';
 import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
@@ -20,6 +23,13 @@ import {
   computeGraceFootprintWidth,
   computeGraceLayout,
 } from './rules/graceRules';
+import type {
+  CrossStaffDynamicsOverride,
+  DynamicsPlacement,
+  DynamicsSide,
+  StaffHairpinDefaults,
+  StaffHairpinPlacement,
+} from './rules/hairpinPlacementRules';
 import { computeAllowedElementCount } from './rules/measureRules';
 import {
   isOctaveRaise,
@@ -87,6 +97,7 @@ import type {
   NoteChordOrRestElementType,
   NoteElementType,
   NoteLetterOctave,
+  NoteOrChordElementType,
   RestElementType,
   TupletElementType,
   YCoordinates,
@@ -508,6 +519,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     TupletElementType,
     CrossStaffTupletRole
   > | null = null;
+  #crossStaffDynamicsOverrides: ReadonlyMap<
+    NoteOrChordElementType,
+    CrossStaffDynamicsOverride
+  > | null = null;
   #clefMarkers: ClefMarkerPlacement[] = [];
   // Voice 1's own beat-offsets (whole-note fraction), snapshotted once per
   // #renderNotes() pass — the shared coordinate space #clefMarkers'
@@ -833,6 +848,106 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     this.#crossStaffTupletBeamY = value;
     this.#renderNotes();
+  }
+
+  // Set by the ancestor <music-measure> for hairpins and markings it places
+  // with both staves' geometry (measure.ts#redrawMeasureDynamics): 'measure'
+  // hands drawing over to it, 'above'/'below' force this staff's own row.
+  // Compared by content, like crossStaffBeamStemOverrides. Only a forced side
+  // changes vertical space, so only that needs a full re-layout; handing a
+  // hairpin over redraws just the dynamics containers, firing no events.
+  get crossStaffDynamicsOverrides(): ReadonlyMap<
+    NoteOrChordElementType,
+    CrossStaffDynamicsOverride
+  > | null {
+    return this.#crossStaffDynamicsOverrides;
+  }
+
+  set crossStaffDynamicsOverrides(
+    value: ReadonlyMap<
+      NoteOrChordElementType,
+      CrossStaffDynamicsOverride
+    > | null
+  ) {
+    const current = this.#crossStaffDynamicsOverrides;
+    const elements = new Set([
+      ...(current?.keys() ?? []),
+      ...(value?.keys() ?? []),
+    ]);
+    let changed = false;
+    let sideChanged = false;
+    for (const element of elements) {
+      const before = current?.get(element);
+      const after = value?.get(element);
+      if (
+        before?.hairpin === after?.hairpin &&
+        before?.marking === after?.marking &&
+        (before === undefined) === (after === undefined)
+      ) {
+        continue;
+      }
+      changed = true;
+      const forcesSide = (placement: DynamicsPlacement | null | undefined) =>
+        placement === 'above' || placement === 'below';
+      if (
+        forcesSide(before?.hairpin) ||
+        forcesSide(before?.marking) ||
+        forcesSide(after?.hairpin) ||
+        forcesSide(after?.marking)
+      ) {
+        sideChanged = true;
+      }
+    }
+    if (!changed) {
+      return;
+    }
+    this.#crossStaffDynamicsOverrides = value;
+    if (sideChanged) {
+      this.#renderNotes();
+      return;
+    }
+    this.#boundRenderDynamics();
+  }
+
+  // Where this staff would draw each of its hairpins with no
+  // crossStaffDynamicsOverrides in effect. The measure decides placement
+  // from this, so it must never reflect an override, or a forced side would
+  // feed back into the next decision.
+  hairpinDefaultsForMeasure(): StaffHairpinDefaults {
+    const result: StaffHairpinDefaults = {
+      pairs: [],
+      unpairedStarts: [],
+      orphanEnds: [],
+    };
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const side = this.#defaultDynamicsSide(voiceKey, state);
+      const placement: StaffHairpinPlacement = {
+        kind: 'crescendo',
+        side,
+        baselineClientY: this.#dynamicsLocalToClientY(
+          voiceKey,
+          this.#dynamicsBaselineFor(state, side === 'above')
+        ),
+      };
+      const pairing = pairHairpinsWithLeftovers(
+        state.elements,
+        state.noteXPositions,
+        { warnOrphans: false }
+      );
+      for (const pair of pairing.pairs) {
+        result.pairs.push({
+          ...placement,
+          kind: pair.kind,
+          startElement: pair.startElement,
+          endElement: pair.endElement,
+        });
+      }
+      for (const start of pairing.unpairedStarts) {
+        result.unpairedStarts.push({ ...placement, ...start });
+      }
+      result.orphanEnds.push(...pairing.orphanEnds);
+    }
+    return result;
   }
 
   constructor() {
@@ -2762,7 +2877,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // set of markings/hairpins alongside the stale ones instead of
     // replacing them.
     container.innerHTML = '';
-    const baselineY = this.#dynamicsBaselineForVoice(voiceKey, state);
+    const defaultSide = this.#defaultDynamicsSide(voiceKey, state);
+    const baselineFor = (side: DynamicsSide) =>
+      this.#dynamicsBaselineForSide(voiceKey, state, side);
     for (let i = 0; i < state.elements.length; i++) {
       const element = state.elements[i];
       if (element.nodeName === MUSIC_REST_NODE) {
@@ -2771,13 +2888,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const noteOrChord = element as INoteElement | IChordElement;
       // `dynamic-shared` moves this marking to a measure-level overlay
       // centered between this staff and its neighbor (see
-      // measure.ts#redrawSharedDynamics) instead of this staff's own local
+      // measure.ts#redrawMeasureDynamics) instead of this staff's own local
       // placement — never render both.
-      if (noteOrChord.dynamic !== null && !noteOrChord.dynamicShared) {
+      const markingSide = this.#markingPlacement(
+        element as NoteOrChordElementType,
+        defaultSide
+      );
+      if (
+        noteOrChord.dynamic !== null &&
+        !noteOrChord.dynamicShared &&
+        markingSide !== 'measure'
+      ) {
         const noteX = state.noteXPositions.get(i) ?? 0;
         const centerX = noteX + NOTE_SVG_WIDTH / 2;
         container.appendChild(
-          createDynamicMarkingSvg(noteOrChord.dynamic, centerX, baselineY)
+          createDynamicMarkingSvg(
+            noteOrChord.dynamic,
+            centerX,
+            baselineFor(markingSide)
+          )
         );
       }
 
@@ -2792,24 +2921,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             createDynamicMarkingSvg(
               noteOrChord.graceDynamic,
               firstGraceHeadX,
-              baselineY
+              baselineFor(defaultSide)
             )
           );
         }
       }
     }
 
-    const pairs = pairHairpins(state.elements, state.noteXPositions);
-    for (const pair of pairs) {
+    for (const pair of this.#pairVoiceHairpins(state).pairs) {
       if (pair.errors.length > 0) {
         console.warn(pair.errors);
+      }
+      const side = this.#hairpinPlacement(pair, defaultSide);
+      if (side === 'measure') {
+        continue;
       }
       container.appendChild(
         createHairpinSvg(
           pair.kind,
           pair.startX,
           pair.endX,
-          baselineY,
+          baselineFor(side),
           HAIRPIN_OPEN_HEIGHT
         )
       );
@@ -3560,15 +3692,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // (whose nominal baseline sits comfortably inside the fixed canvas),
     // DYNAMICS_ABOVE_BASELINE_Y sits close to the top edge even with no
     // cross-voice clamping at all — the glyph's own ascent (DYNAMICS_FONT_SIZE,
-    // same approximation #dynamicsBaselineForVoice itself uses) has to be
+    // same approximation #dynamicsBaselineFor itself uses) has to be
     // subtracted here too, or an ordinary up-voice dynamic would poke past
     // y=0 by default.
-    if (
-      this.#hasDynamicsContent(state) &&
-      this.#dynamicsPlacedAbove(voiceKey, state)
-    ) {
+    if (this.#dynamicsSidesInUse(voiceKey, state).has('above')) {
       const topY =
-        this.#dynamicsBaselineForVoice(voiceKey, state) - DYNAMICS_FONT_SIZE;
+        this.#dynamicsBaselineForSide(voiceKey, state, 'above') -
+        DYNAMICS_FONT_SIZE;
       if (topY < 0) {
         budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
@@ -3578,24 +3708,48 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // Cheap attribute-presence check, not geometry — noteXPositions (what
-  // pairHairpins needs to actually pair a hairpin) aren't resolved yet at
-  // the point in #spaceElements() the budget estimators run, but
-  // crescendo/decrescendo presence alone is enough to know a hairpin will
-  // draw for this voice. Shared by both the above- and below-staff budget
-  // estimates.
-  #hasDynamicsContent(state: VoiceRenderState): boolean {
-    return state.elements.some((element) => {
+  // pairing a hairpin needs) aren't resolved yet at the point in
+  // #spaceElements() the budget estimators run, but crescendo/decrescendo
+  // presence alone is enough to know a hairpin will draw for this voice.
+  // Hairpins and markings the measure moved count toward their forced side,
+  // or toward no side when the measure draws them itself.
+  #dynamicsSidesInUse(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): Set<DynamicsSide> {
+    const defaultSide = this.#defaultDynamicsSide(voiceKey, state);
+    const sides = new Set<DynamicsSide>();
+    const add = (placement: DynamicsPlacement) => {
+      if (placement !== 'measure') {
+        sides.add(placement);
+      }
+    };
+    for (const element of state.elements) {
       if (element.nodeName === MUSIC_REST_NODE) {
-        return false;
+        continue;
       }
       const noteOrChord = element as INoteElement | IChordElement;
-      return (
-        noteOrChord.dynamic !== null ||
-        noteOrChord.graceDynamic !== null ||
-        noteOrChord.crescendo !== null ||
-        noteOrChord.decrescendo !== null
+      const override = this.#crossStaffDynamicsOverrides?.get(
+        element as NoteOrChordElementType
       );
-    });
+      if (noteOrChord.dynamic !== null && !noteOrChord.dynamicShared) {
+        add(override?.marking ?? defaultSide);
+      }
+      if (noteOrChord.graceDynamic !== null) {
+        sides.add(defaultSide);
+      }
+      const startsHairpin =
+        noteOrChord.crescendo === 'start' ||
+        noteOrChord.decrescendo === 'start';
+      const endsHairpin =
+        noteOrChord.crescendo === 'end' || noteOrChord.decrescendo === 'end';
+      if (startsHairpin) {
+        add(override?.hairpin ?? defaultSide);
+      } else if (endsHairpin && override === undefined) {
+        sides.add(defaultSide);
+      }
+    }
+    return sides;
   }
 
   // Below-staff mirror of #estimateAboveStaffBudget — a down-stem tuplet
@@ -3612,12 +3766,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.#octaveSignVerticalOverflow(voiceKey, state, false)
       );
 
-      if (
-        this.#hasDynamicsContent(state) &&
-        !this.#dynamicsPlacedAbove(voiceKey, state)
-      ) {
+      if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
         const overflow =
-          this.#dynamicsBaselineForVoice(voiceKey, state) -
+          this.#dynamicsBaselineForSide(voiceKey, state, 'below') -
           STAFF_TRANSCRIPTION_HEIGHT;
         if (overflow > 0) {
           budget = Math.max(budget, Math.ceil(overflow) + 2);
@@ -3858,12 +4009,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       consider(tupletTop);
     }
 
-    if (
-      this.#hasDynamicsContent(state) &&
-      this.#dynamicsPlacedAbove(voiceKey, state)
-    ) {
+    if (this.#dynamicsSidesInUse(voiceKey, state).has('above')) {
       consider(
-        this.#dynamicsBaselineForVoice(voiceKey, state) - DYNAMICS_FONT_SIZE
+        this.#dynamicsBaselineForSide(voiceKey, state, 'above') -
+          DYNAMICS_FONT_SIZE
       );
     }
 
@@ -3885,11 +4034,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       bottom = tupletBottom;
     }
 
-    if (
-      this.#hasDynamicsContent(state) &&
-      !this.#dynamicsPlacedAbove(voiceKey, state)
-    ) {
-      const dynamicsBottom = this.#dynamicsBaselineForVoice(voiceKey, state);
+    if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
+      const dynamicsBottom = this.#dynamicsBaselineForSide(
+        voiceKey,
+        state,
+        'below'
+      );
       bottom =
         bottom === null ? dynamicsBottom : Math.max(bottom, dynamicsBottom);
     }
@@ -3901,7 +4051,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // `indices` in `state` — the actual notehead+stem extent, not a nominal
   // staff-relative offset. Returns null when none of the indices resolve to
   // a real Y (e.g. all rests). Shared by #tupletVerticalOverflow and
-  // #dynamicsBaselineForVoice.
+  // #dynamicsBaselineFor.
   // Which side a tuplet group's bracket is forced to, if any — read by both
   // the render pass and #tupletExtremeY so the reserved space and the drawn
   // bracket agree. A cross-staff role outranks the wrapper's own `placement`,
@@ -4017,6 +4167,113 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       state.direction === 'up'
     );
   }
+  #dynamicsLocalToClientY(voiceKey: VoiceKey, y: number): number {
+    const matrix = this.#dynamicsContainers.get(voiceKey)?.getScreenCTM?.();
+    if (matrix) {
+      return matrix.d * y + matrix.f;
+    }
+    return this.transcribeContainer.getBoundingClientRect().top + y;
+  }
+
+  #defaultDynamicsSide(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): DynamicsSide {
+    return this.#dynamicsPlacedAbove(voiceKey, state) ? 'above' : 'below';
+  }
+
+  #markingPlacement(
+    element: NoteOrChordElementType,
+    defaultSide: DynamicsSide
+  ): DynamicsPlacement {
+    return (
+      this.#crossStaffDynamicsOverrides?.get(element)?.marking ?? defaultSide
+    );
+  }
+
+  #hairpinPlacement(
+    pair: HairpinPair,
+    defaultSide: DynamicsSide
+  ): DynamicsPlacement {
+    return (
+      this.#crossStaffDynamicsOverrides?.get(pair.startElement)?.hairpin ??
+      defaultSide
+    );
+  }
+
+  // An end whose start sits on the other staff, or in another measure, is
+  // expected whenever an ancestor can see both — only a staff on its own
+  // (or alone in its measure) treats it as an authoring mistake.
+  #pairVoiceHairpins(state: VoiceRenderState) {
+    const measure = this.closest(MUSIC_MEASURE);
+    const hasSiblingStaff =
+      measure !== null &&
+      Array.from<Element>(measure.children).filter((child) =>
+        isStaffNodeName(child.nodeName)
+      ).length > 1;
+    const warnOrphans =
+      this.closest(MUSIC_COMPOSITION) === null && !hasSiblingStaff;
+    return pairHairpinsWithLeftovers(state.elements, state.noteXPositions, {
+      warnOrphans,
+    });
+  }
+
+  // A row the measure forced to the side opposite this voice's own clears
+  // the notes' real stems: those stems point away from it, so the
+  // conservative every-stem-toward-this-side clamp would float it far
+  // from the notes.
+  #dynamicsBaselineForSide(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    side: DynamicsSide
+  ): number {
+    return this.#dynamicsBaselineFor(
+      state,
+      side === 'above',
+      side !== this.#defaultDynamicsSide(voiceKey, state)
+    );
+  }
+
+  // The outermost real extent of the voice toward one side: a stem tip where
+  // the stem points that way, otherwise the notehead's own edge.
+  #extremeRealExtentY(
+    state: VoiceRenderState,
+    placeAbove: boolean
+  ): number | null {
+    let extreme: number | null = null;
+    const consider = (y: number) => {
+      extreme =
+        extreme === null
+          ? y
+          : placeAbove
+          ? Math.min(extreme, y)
+          : Math.max(extreme, y);
+    };
+    state.elements.forEach((element, index) => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return;
+      }
+      if (state.stemDirections[index] === placeAbove) {
+        const tip = this.#extremeStemTipY(state, [index], placeAbove);
+        if (tip !== null) {
+          consider(tip);
+        }
+        return;
+      }
+      const headYs =
+        element.nodeName === MUSIC_NOTE_NODE
+          ? [state.noteStaffYCoords.get(element as NoteElementType)]
+          : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
+      for (const headY of headYs) {
+        if (headY === undefined) {
+          continue;
+        }
+        const centerY = STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+        consider(centerY + ((placeAbove ? -1 : 1) * STAFF_LINE_SPACING) / 2);
+      }
+    });
+    return extreme;
+  }
 
   // DYNAMICS_BASELINE_Y/DYNAMICS_ABOVE_BASELINE_Y alone are only a safe
   // default when the voice's notes sit close to the staff. Clamps past the
@@ -4027,16 +4284,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // less) rather than tracking each element's real stem direction
   // separately. Computed once per voice, not per-marking, so a passage
   // with several dynamics keeps one visually consistent row.
-  #dynamicsBaselineForVoice(
-    voiceKey: VoiceKey,
-    state: VoiceRenderState
+  #dynamicsBaselineFor(
+    state: VoiceRenderState,
+    placeAbove: boolean,
+    realStems = false
   ): number {
-    const placeAbove = this.#dynamicsPlacedAbove(voiceKey, state);
-    const extremeStemTipY = this.#extremeStemTipY(
-      state,
-      state.elements.keys(),
-      placeAbove
-    );
+    const extremeStemTipY = realStems
+      ? this.#extremeRealExtentY(state, placeAbove)
+      : this.#extremeStemTipY(state, state.elements.keys(), placeAbove);
 
     // `extremeStemTipY` is where the stem tip ends, but the value fed into
     // createDynamicMarkingSvg is the text's own BASELINE, not its edge —

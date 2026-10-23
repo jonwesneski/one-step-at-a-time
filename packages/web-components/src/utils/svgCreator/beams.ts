@@ -60,6 +60,12 @@ export type NoteYPosition = {
    * must be ≤ this value; for stem-down it must be ≥ this value.
    */
   chordClearanceY?: number;
+  /**
+   * Only needed for chords: the distance (px) from the notehead that owns the
+   * stem to the notehead nearest the beam. The beam is fitted to a stem
+   * measured from that nearer notehead, as a single note's would be.
+   */
+  chordSpread?: number;
 };
 
 interface NoteData {
@@ -90,6 +96,7 @@ class BeamGroupRenderer {
   #beamLines: BeamLine[];
   #stemUp: boolean;
   #chordClearanceY: ReadonlyArray<number | null>;
+  #chordSpreads: ReadonlyArray<number>;
   #beamVerticalOffset = 0;
   #globalIndices: readonly number[];
   readonly svgGroup: SVGGElement;
@@ -99,6 +106,7 @@ class BeamGroupRenderer {
     beamLines: BeamLine[],
     stemUp: boolean,
     chordClearanceY: ReadonlyArray<number | null>,
+    chordSpreads: ReadonlyArray<number>,
     globalIndices: readonly number[],
     svgGroup: SVGGElement
   ) {
@@ -106,6 +114,7 @@ class BeamGroupRenderer {
     this.#beamLines = beamLines;
     this.#stemUp = stemUp;
     this.#chordClearanceY = chordClearanceY;
+    this.#chordSpreads = chordSpreads;
     this.#globalIndices = globalIndices;
     this.svgGroup = svgGroup;
   }
@@ -205,8 +214,14 @@ class BeamGroupRenderer {
     const delta =
       this.#notes[localIndex].y - this.#primaryBeamYAtNote(localIndex);
     // Subtract STEM_OVERLAP_PX so the tip sits slightly inside the beam polygon
-    // rather than exactly at its edge, preventing sub-pixel rendering gaps.
-    return (this.#stemUp ? delta : -delta) - STEM_OVERLAP_PX;
+    // rather than exactly at its edge, preventing sub-pixel rendering gaps. A
+    // chord's tip was fitted from its notehead nearest the beam, but its stem
+    // extends from the notehead that owns it, so the spread is added back.
+    return (
+      (this.#stemUp ? delta : -delta) -
+      STEM_OVERLAP_PX +
+      this.#chordSpreads[localIndex]
+    );
   }
 
   /**
@@ -293,6 +308,7 @@ class BeamGroup {
   #globalIndices: number[];
   #stemUp = true;
   #chordClearanceY: Array<number | null>;
+  #chordSpreads: number[];
 
   constructor(flagCounts: number[], globalIndices: number[]) {
     this.#notes = flagCounts.map((beamCount) => ({
@@ -302,6 +318,7 @@ class BeamGroup {
     }));
     this.#globalIndices = globalIndices;
     this.#chordClearanceY = new Array(flagCounts.length).fill(null);
+    this.#chordSpreads = new Array(flagCounts.length).fill(0);
     // Beam structure is derived only from flag counts and computed once at
     // construction. Only x/y coordinates change at render/resize time.
     const { primaryBeam, secondaryBeams, fractionalBeams } =
@@ -324,7 +341,8 @@ class BeamGroup {
     globalIndex: number,
     y: number,
     stemUp: boolean,
-    chordClearanceY?: number
+    chordClearanceY?: number,
+    chordSpread = 0
   ): void {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
@@ -334,7 +352,9 @@ class BeamGroup {
     const tipOffset = stemUp
       ? NOTE_STEM_TIP_Y_OFFSET
       : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    this.#notes[localIndex].y = y + tipOffset;
+    this.#notes[localIndex].y =
+      y + tipOffset + (stemUp ? -chordSpread : chordSpread);
+    this.#chordSpreads[localIndex] = chordSpread;
     if (chordClearanceY !== undefined) {
       this.#chordClearanceY[localIndex] = chordClearanceY;
     }
@@ -357,6 +377,7 @@ class BeamGroup {
       beamLines,
       this.#stemUp,
       this.#chordClearanceY,
+      this.#chordSpreads,
       this.#globalIndices,
       svgGroup
     );
@@ -644,7 +665,7 @@ export class BeamsBuilder {
       const pos = noteYPositions[i];
       if (pos === null) continue;
       for (const group of this.#groups) {
-        group.setY(i, pos.y, pos.stemUp, pos.chordClearanceY);
+        group.setY(i, pos.y, pos.stemUp, pos.chordClearanceY, pos.chordSpread);
       }
     }
     const groupRenderers = this.#groups.map((g) => g.buildRenderer());

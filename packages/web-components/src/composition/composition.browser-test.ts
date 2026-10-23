@@ -5,6 +5,11 @@ import {
   waitForRedrawCycle,
 } from '../../test-fixtures/helpers';
 import {
+  segmentIntersectsRect,
+  sliceConvexPolygon,
+} from '../rules/connectorPlacementRules';
+import type { Note, Octave } from '../types/theory';
+import {
   COMMON_ATTRIBUTES,
   MUSIC_COMPOSITION,
   MUSIC_LYRICS,
@@ -16,7 +21,11 @@ import {
   MUSIC_STAFF_VOCAL,
   MUSIC_TUPLET,
 } from '../utils/consts';
-import { VERTICAL_OVERFLOW_CLEARANCE_PX } from '../utils/notationDimensions';
+import {
+  HAIRPIN_BEAM_CLEARANCE_PX,
+  SLUR_BEAM_SLICE_WIDTH_PX,
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
+} from '../utils/notationDimensions';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -3370,5 +3379,284 @@ test.describe(`${MUSIC_COMPOSITION} row staff alignment`, () => {
       m.staffTops[0] - m.measureTop;
     expect(offset(wrapped[2])).toBeLessThan(offset(aligned[2]));
     expect(offset(wrapped[0])).toBeCloseTo(offset(aligned[0]), 0);
+  });
+});
+
+type Point = { x: number; y: number };
+
+type CompositionHairpinSnapshot = {
+  hairpins: [Point, Point][][];
+  markings: { text: string; y: number }[];
+  measureMarkingCount: number;
+  gaps: { top: number; bottom: number }[];
+  beamPolygons: Point[][];
+};
+
+const hairpinNote = (
+  pitch: `${Note}${Octave}`,
+  duration: string,
+  attributes = ''
+): string =>
+  `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+    -1
+  )}" duration="${duration}" ${attributes}></${MUSIC_NOTE}>`;
+
+const grandStaffMeasure = (treble: string, bass: string): string =>
+  `<${MUSIC_MEASURE}>
+    <${MUSIC_STAFF} clef="treble" group="grand">${treble}</${MUSIC_STAFF}>
+    <${MUSIC_STAFF} clef="bass">${bass}</${MUSIC_STAFF}>
+  </${MUSIC_MEASURE}>`;
+
+async function buildHairpinComposition(
+  page: Page,
+  measures: string[],
+  width: number
+): Promise<string[]> {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning') {
+      warnings.push(message.text());
+    }
+  });
+  await page.evaluate(
+    ({ html, hostWidth }) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = `${hostWidth}px`;
+      host.innerHTML = html;
+    },
+    {
+      html: `<${MUSIC_COMPOSITION} time="4/4">${measures.join(
+        ''
+      )}</${MUSIC_COMPOSITION}>`,
+      hostWidth: width,
+    }
+  );
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+  return warnings;
+}
+
+async function snapshotCompositionHairpins(
+  page: Page
+): Promise<CompositionHairpinSnapshot> {
+  return page.evaluate((compositionTag) => {
+    const composition = document.querySelector(compositionTag);
+    const wrapper = composition?.shadowRoot?.querySelector(
+      '.composition-wrapper'
+    );
+    if (!composition || !wrapper) {
+      throw new Error('composition not ready');
+    }
+    const root = wrapper.getBoundingClientRect();
+    const toRoot = (x: number, y: number, matrix: DOMMatrix | null) => {
+      const point = matrix
+        ? new DOMPoint(x, y).matrixTransform(matrix)
+        : new DOMPoint(x, y);
+      return { x: point.x - root.left, y: point.y - root.top };
+    };
+    const hairpins = Array.from(
+      composition.shadowRoot?.querySelectorAll(
+        '.connectors-overlay .hairpin'
+      ) ?? []
+    ).map((hairpin) =>
+      Array.from(hairpin.querySelectorAll<SVGPathElement>('path')).map(
+        (path) => {
+          const [, x1, y1, , x2, y2] = (path.getAttribute('d') ?? '').split(
+            ' '
+          );
+          const matrix = path.getScreenCTM();
+          return [
+            toRoot(Number(x1), Number(y1), matrix),
+            toRoot(Number(x2), Number(y2), matrix),
+          ] as [Point, Point];
+        }
+      )
+    );
+    const gaps = Array.from(composition.querySelectorAll('music-measure')).map(
+      (measure) => {
+        const containers = Array.from(measure.children).map((staff) =>
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- every child is a rendered staff
+          staff
+            .shadowRoot!.querySelector('.staff-container')!
+            .getBoundingClientRect()
+        );
+        return {
+          top: containers[0].bottom - root.top,
+          bottom: containers[1].top - root.top,
+        };
+      }
+    );
+    const beamPolygons = Array.from(
+      composition.querySelectorAll('music-measure')
+    ).flatMap((measure) =>
+      Array.from(
+        measure.shadowRoot?.querySelectorAll<SVGPolygonElement>(
+          '.double-stemmed-beam'
+        ) ?? []
+      ).map((polygon) => {
+        const matrix = polygon.getScreenCTM();
+        return Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+          const point = polygon.points.getItem(i);
+          return toRoot(point.x, point.y, matrix);
+        });
+      })
+    );
+    const markings = Array.from(
+      composition.shadowRoot?.querySelectorAll<SVGTextElement>(
+        '.connectors-overlay .dynamic-marking'
+      ) ?? []
+    ).map((text) => ({
+      text: text.textContent ?? '',
+      y: toRoot(
+        Number(text.getAttribute('x')),
+        Number(text.getAttribute('y')),
+        text.getScreenCTM()
+      ).y,
+    }));
+    const measureMarkingCount = Array.from(
+      composition.querySelectorAll('music-measure')
+    ).reduce(
+      (count, measure) =>
+        count +
+        (measure.shadowRoot?.querySelectorAll('.dynamic-marking').length ?? 0),
+      0
+    );
+    return { hairpins, gaps, beamPolygons, markings, measureMarkingCount };
+  }, MUSIC_COMPOSITION);
+}
+
+const hairpinCentreY = (edges: [Point, Point][]): number => {
+  const ys = edges.flatMap(([a, b]) => [a.y, b.y]);
+  return (Math.min(...ys) + Math.max(...ys)) / 2;
+};
+
+test.describe(`${MUSIC_COMPOSITION} hairpins across measures on a grand staff`, () => {
+  test('each hand pairs its own hairpin across the barline', async ({
+    page,
+  }) => {
+    const warnings = await buildHairpinComposition(
+      page,
+      [
+        grandStaffMeasure(
+          hairpinNote('C5', 'whole', 'crescendo="start"'),
+          hairpinNote('C3', 'whole', 'crescendo="start"')
+        ),
+        grandStaffMeasure(
+          hairpinNote('E5', 'whole', 'crescendo="end"'),
+          hairpinNote('E3', 'whole', 'crescendo="end"')
+        ),
+      ],
+      900
+    );
+
+    const snapshot = await snapshotCompositionHairpins(page);
+
+    expect(snapshot.hairpins.length).toBe(2);
+    expect(
+      warnings.filter(
+        (text) => text.includes('start dropped') || text.includes('orphan')
+      )
+    ).toEqual([]);
+  });
+
+  test('a shared hairpin across a barline sits in the gap clear of a double-stemmed beam', async ({
+    page,
+  }) => {
+    await buildHairpinComposition(
+      page,
+      [
+        grandStaffMeasure(
+          hairpinNote(
+            'C5',
+            'half',
+            'dynamic="p" dynamic-shared crescendo="start"'
+          ) + hairpinNote('D5', 'half'),
+          hairpinNote('C3', 'whole')
+        ),
+        grandStaffMeasure(
+          hairpinNote('A5', 'eighth', 'beam-group="g1"') +
+            hairpinNote('B5', 'eighth', 'beam-group="g1"') +
+            hairpinNote('C6', 'eighth', 'beam-group="g1"') +
+            hairpinNote(
+              'D6',
+              'eighth',
+              'beam-group="g1" dynamic="f" dynamic-shared crescendo="end"'
+            ) +
+            hairpinNote('E5', 'half'),
+          hairpinNote('E2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('F2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('G2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('A2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('C3', 'half')
+        ),
+      ],
+      900
+    );
+
+    const snapshot = await snapshotCompositionHairpins(page);
+
+    expect(snapshot.beamPolygons.length).toBeGreaterThan(0);
+    expect(snapshot.hairpins.length).toBe(1);
+    const centreY = hairpinCentreY(snapshot.hairpins[0]);
+    expect(centreY).toBeGreaterThan(snapshot.gaps[0].top);
+    expect(centreY).toBeLessThan(snapshot.gaps[0].bottom);
+    expect(snapshot.measureMarkingCount).toBe(0);
+    expect(snapshot.markings.map((marking) => marking.text).sort()).toEqual([
+      'f',
+      'p',
+    ]);
+    for (const marking of snapshot.markings) {
+      expect(marking.y).toBeCloseTo(centreY, 1);
+    }
+    const beams = snapshot.beamPolygons
+      .flatMap((polygon) =>
+        sliceConvexPolygon(polygon, SLUR_BEAM_SLICE_WIDTH_PX)
+      )
+      .map((slice) => ({
+        ...slice,
+        top: slice.top - HAIRPIN_BEAM_CLEARANCE_PX + 1,
+        bottom: slice.bottom + HAIRPIN_BEAM_CLEARANCE_PX - 1,
+      }));
+    for (const [from, to] of snapshot.hairpins[0]) {
+      expect(beams.some((rect) => segmentIntersectsRect(from, to, rect))).toBe(
+        false
+      );
+    }
+  });
+
+  test('a shared hairpin across a system break sits in each row’s own gap', async ({
+    page,
+  }) => {
+    await buildHairpinComposition(
+      page,
+      [
+        grandStaffMeasure(
+          hairpinNote('C5', 'half') +
+            hairpinNote('D5', 'half', 'dynamic-shared decrescendo="start"'),
+          hairpinNote('C3', 'whole')
+        ),
+        grandStaffMeasure(
+          hairpinNote('E5', 'half', 'decrescendo="end"') +
+            hairpinNote('F5', 'half'),
+          hairpinNote('E3', 'whole')
+        ),
+      ],
+      260
+    );
+
+    const snapshot = await snapshotCompositionHairpins(page);
+
+    expect(snapshot.gaps[1].top).toBeGreaterThan(snapshot.gaps[0].bottom);
+    expect(snapshot.hairpins.length).toBe(2);
+    snapshot.hairpins.forEach((edges, rowIndex) => {
+      const centreY = hairpinCentreY(edges);
+      expect(centreY).toBeGreaterThan(snapshot.gaps[rowIndex].top);
+      expect(centreY).toBeLessThan(snapshot.gaps[rowIndex].bottom);
+    });
   });
 });

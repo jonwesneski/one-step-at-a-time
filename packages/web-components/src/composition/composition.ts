@@ -1,10 +1,21 @@
 import { getClefRenderData } from '../rules/clefRules';
-import { pairHairpins, resolveHairpinSegments } from '../rules/dynamicsRules';
+import type { ObstacleRect } from '../rules/connectorPlacementRules';
+import {
+  type HairpinEndpoint,
+  pairHairpinsWithLeftovers,
+  pairSharedHairpinsAcrossStaves,
+  resolveHairpinSegments,
+} from '../rules/dynamicsRules';
+import {
+  dynamicTextCenterClearOfStems,
+  type HairpinEndpointText,
+  resolveSharedHairpinY,
+} from '../rules/hairpinPlacementRules';
 import {
   isOctaveRaise,
+  type OctaveMeasureBoundary,
   resolveOctaveContinuationSegments,
   resolveOctaveSpans,
-  type OctaveMeasureBoundary,
 } from '../rules/octaveRules';
 import {
   resolveTrillContinuationSegments,
@@ -20,10 +31,17 @@ import type {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
+  NoteLikeElementType,
+  NoteOrChordElementType,
   StaffElementBaseType,
 } from '../types/elements';
-import type { MeasureNumberDisplay, VoiceNumber } from '../types/theory';
+import type {
+  HairpinKind,
+  MeasureNumberDisplay,
+  VoiceNumber,
+} from '../types/theory';
 import {
+  createDynamicMarkingSvg,
   createHairpinSvg,
   createOctaveContinuationSignSvg,
   createOctaveCornerSvg,
@@ -40,6 +58,8 @@ import {
   collectEntryObstacles,
   collectNoteLikeElements,
   collectPhraseSlurPairs,
+  collectStemRects,
+  type EntryObstacles,
   pairConnectors,
   partitionByVoice,
   resolveDoubleStemmedBeamConnectorContext,
@@ -68,6 +88,7 @@ import {
   COURTESY_CLEF_MARGIN_RIGHT_PX,
   COURTESY_CLEF_SCALE,
   DYNAMICS_BASELINE_Y,
+  HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
   OCTAVE_SIGN_BELOW_STAFF_Y,
@@ -86,6 +107,10 @@ import {
   flattenStaffSlotElements,
 } from '../utils/slotElements';
 import { measureVerticalExtents } from '../utils/verticalSpace';
+
+// Larger than any real measure width, so a measure-major ordinal never lets
+// x within one measure overtake the next measure.
+const MEASURE_ORDINAL_STRIDE = 1_000_000;
 
 // The trill line's own local Y offset from the top of its staff (see
 // staffClassicalBase.ts#redrawTrillLines) — reused here so a cross-measure
@@ -657,6 +682,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return staffRect.top - rootRect.top + DYNAMICS_BASELINE_Y;
     }
 
+    // Hairpins whose two ends sit in different measures. Each staff track
+    // (every measure's Nth staff, see #buildStaffTracks) and voice pairs on
+    // its own, so one hand's start never takes the other hand's end. A start
+    // still open afterwards may end on the partner track — the other hand of
+    // a grand staff; a shared (both-hands) one is drawn in that row's gap,
+    // clear of beams, like measure.ts#redrawMeasureDynamics within a measure.
     #redrawHairpins() {
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.connectors-overlay'
@@ -668,27 +699,96 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      const staffSelector = `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`;
       const selector = `${MUSIC_NOTE}[crescendo], ${MUSIC_NOTE}[decrescendo], ${MUSIC_CHORD}[crescendo], ${MUSIC_CHORD}[decrescendo]`;
-      const elements = Array.from(
-        this.querySelectorAll(selector)
-      ) as NoteChordOrRestElementType[];
+      const tracks = this.#buildStaffTracks();
+      const measureOrder = new Map<Element, number>();
+      tracks.flat().forEach(({ staff }) => {
+        const measure = staff.closest(MUSIC_MEASURE);
+        if (measure !== null && !measureOrder.has(measure)) {
+          measureOrder.set(measure, measureOrder.size);
+        }
+      });
+      // A composition-wide ordering for cross-track pairing: measure first,
+      // then x within it.
+      const ordinal = (element: Element) =>
+        (measureOrder.get(element.closest(MUSIC_MEASURE) ?? element) ?? 0) *
+          MEASURE_ORDINAL_STRIDE +
+        element.getBoundingClientRect().left;
 
-      if (elements.length === 0) {
-        return;
+      const pairs: {
+        kind: HairpinKind;
+        startElement: NoteOrChordElementType;
+        endElement: NoteOrChordElementType;
+      }[] = [];
+      const leftovers = tracks.map((track) => {
+        const elements = track.flatMap(({ staff }) =>
+          Array.from(staff.querySelectorAll(selector))
+        ) as NoteLikeElementType[];
+        const unpairedStarts: HairpinEndpoint[] = [];
+        const orphanEnds: HairpinEndpoint[] = [];
+        for (const voiceElements of partitionByVoice(elements).values()) {
+          const pairing = pairHairpinsWithLeftovers(
+            voiceElements as NoteChordOrRestElementType[],
+            new Map(),
+            { warnOrphans: false }
+          );
+          pairs.push(
+            ...pairing.pairs.map((pair) => ({
+              kind: pair.kind,
+              startElement: pair.startElement,
+              endElement: pair.endElement,
+            }))
+          );
+          unpairedStarts.push(...pairing.unpairedStarts);
+          orphanEnds.push(...pairing.orphanEnds);
+        }
+        return { unpairedStarts, orphanEnds };
+      });
+      leftovers.forEach(({ unpairedStarts }, trackIndex) => {
+        const partnerTrackIndex =
+          trackIndex + 1 < tracks.length ? trackIndex + 1 : trackIndex - 1;
+        if (partnerTrackIndex < 0) {
+          return;
+        }
+        const partnerEnds = leftovers[partnerTrackIndex].orphanEnds;
+        const crossTrackPairs = pairSharedHairpinsAcrossStaves(
+          unpairedStarts.map((start) => ({
+            ...start,
+            x: ordinal(start.element),
+          })),
+          partnerEnds.map((end) => ({ ...end, x: ordinal(end.element) }))
+        );
+        for (const { start, end } of crossTrackPairs) {
+          partnerEnds.splice(
+            partnerEnds.findIndex((other) => other.element === end.element),
+            1
+          );
+          pairs.push({
+            kind: start.kind,
+            startElement: start.element,
+            endElement: end.element,
+          });
+        }
+      });
+      for (const { orphanEnds } of leftovers) {
+        for (const end of orphanEnds) {
+          console.warn(
+            `[dynamicsRules] orphan ${end.kind} end (no matching start)`
+          );
+        }
       }
 
-      // Cross-staff geometry here comes from resolveHairpinSegments() below
-      // (via getBoundingClientRect), not from pairHairpins' own startX/endX —
-      // an empty positions map is fine since those fields go unused.
-      const pairs = pairHairpins(elements, new Map());
       const rootRect = wrapper.getBoundingClientRect();
+      let entryObstacles: EntryObstacles | null = null;
+      let stems: ObstacleRect[] | null = null;
+      const staffSelector = `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`;
 
       for (const pair of pairs) {
-        const startElement = pair.startElement;
-        const endElement = pair.endElement;
+        const { startElement, endElement } = pair;
 
-        // Skip intra-staff pairs — they are already rendered by the staff itself
+        // Skip pairs drawn elsewhere: intra-staff ones by the staff itself,
+        // and a shared (both-hands) one within one measure by that measure
+        // (measure.ts#redrawMeasureDynamics).
         const startStaff = startElement.closest(
           staffSelector
         ) as HTMLElement | null;
@@ -698,19 +798,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (startStaff !== null && startStaff === endStaff) {
           continue;
         }
+        const startMeasure = startElement.closest(MUSIC_MEASURE);
+        if (
+          startElement.dynamicShared &&
+          startMeasure !== null &&
+          startMeasure === endElement.closest(MUSIC_MEASURE)
+        ) {
+          continue;
+        }
 
         const startRect = startElement.getBoundingClientRect();
         const endRect = endElement.getBoundingClientRect();
 
+        // Row membership compares the measures' tops: a note's own top moves
+        // with its pitch, and a staff's with its place in the system.
+        const rowTop = (element: Element, fallback: DOMRect) =>
+          (element.closest(MUSIC_MEASURE)?.getBoundingClientRect() ?? fallback)
+            .top - rootRect.top;
         const startBounds = {
           left: startRect.left - rootRect.left,
           right: startRect.right - rootRect.left,
-          top: startRect.top - rootRect.top,
+          top: rowTop(startElement, startRect),
         };
         const endBounds = {
           left: endRect.left - rootRect.left,
           right: endRect.right - rootRect.left,
-          top: endRect.top - rootRect.top,
+          top: rowTop(endElement, endRect),
         };
 
         const startCenterY = this.#getDynamicsBaselineY(startElement, rootRect);
@@ -727,7 +840,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           : this.#computeNotesAreaLeft(rootRect);
 
         const segments = resolveHairpinSegments(
-          pair,
+          { ...pair, startX: 0, endX: 0, errors: [] },
           startBounds,
           endBounds,
           startCenterY,
@@ -736,20 +849,138 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           pairRowRight
         );
 
-        for (const segment of segments) {
+        const sharedText = (
+          element: NoteOrChordElementType,
+          include: boolean,
+          awayDirection: -1 | 1
+        ): HairpinEndpointText | null => {
+          const staff = element.closest(staffSelector) as HTMLElement | null;
+          const gap = this.#sharedHairpinGap(staff, rootRect);
+          if (!include || element.dynamic === null || gap === null) {
+            return null;
+          }
+          stems ??= collectStemRects(this, rootRect);
+          return {
+            marking: element.dynamic,
+            centerX: dynamicTextCenterClearOfStems(
+              this.#headCenterX(element, rootRect),
+              element.dynamic,
+              stems,
+              gap,
+              awayDirection
+            ),
+          };
+        };
+        const startText = sharedText(
+          startElement,
+          startElement.dynamicShared,
+          -1
+        );
+        const endText = sharedText(
+          endElement,
+          startElement.dynamicShared && endElement.dynamicShared,
+          1
+        );
+
+        segments.forEach((segment, segmentIndex) => {
+          let centerY = segment.centerY;
+          const segmentStartText = segmentIndex === 0 ? startText : null;
+          const segmentEndText =
+            segmentIndex === segments.length - 1 ? endText : null;
+          if (startElement.dynamicShared) {
+            entryObstacles ??= collectEntryObstacles(
+              this,
+              rootRect,
+              Array.from(this.querySelectorAll(MUSIC_MEASURE)),
+              { excludeGlyphSelector: '.stem' }
+            );
+            const segmentStaff =
+              segmentIndex === segments.length - 1 ? endStaff : startStaff;
+            const gap = this.#sharedHairpinGap(segmentStaff, rootRect);
+            if (gap !== null) {
+              centerY =
+                resolveSharedHairpinY({
+                  kind: segment.kind,
+                  startX: segment.startX,
+                  endX: segment.endX,
+                  openHeight: HAIRPIN_OPEN_HEIGHT,
+                  topGapEdgeY: gap.topGapEdgeY,
+                  bottomGapEdgeY: gap.bottomGapEdgeY,
+                  beamSlices: entryObstacles.beamSlices,
+                  obstacles: entryObstacles.entries.flatMap(
+                    (entry) => entry.glyphRects
+                  ),
+                  startText: segmentStartText,
+                  endText: segmentEndText,
+                }) ?? centerY;
+            }
+            for (const text of [segmentStartText, segmentEndText]) {
+              if (text !== null) {
+                overlay.appendChild(
+                  createDynamicMarkingSvg(text.marking, text.centerX, centerY)
+                );
+              }
+            }
+          }
           overlay.appendChild(
             createHairpinSvg(
               segment.kind,
               segment.startX,
               segment.endX,
-              segment.centerY,
+              centerY,
               undefined,
               segment.openAtStart,
               segment.openAtEnd
             )
           );
-        }
+        });
       }
+    }
+
+    #headCenterX(element: NoteOrChordElementType, rootRect: DOMRect): number {
+      const heads = Array.from(
+        element.shadowRoot?.querySelectorAll('.head') ?? [],
+        (head) => head.getBoundingClientRect()
+      );
+      if (heads.length === 0) {
+        const rect = element.getBoundingClientRect();
+        return rect.left + rect.width / 2 - rootRect.left;
+      }
+      return (
+        heads.reduce((sum, rect) => sum + rect.left + rect.width / 2, 0) /
+          heads.length -
+        rootRect.left
+      );
+    }
+
+    // The gap between `staff` and its partner in the same measure — the next
+    // staff down, or the one above for a measure's last staff.
+    #sharedHairpinGap(
+      staff: HTMLElement | null,
+      rootRect: DOMRect
+    ): { topGapEdgeY: number; bottomGapEdgeY: number } | null {
+      const measure = staff?.closest(MUSIC_MEASURE);
+      if (!staff || !measure) {
+        return null;
+      }
+      const staves = Array.from(measure.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as HTMLElement[];
+      const index = staves.indexOf(staff);
+      const partner = staves[index + 1 < staves.length ? index + 1 : index - 1];
+      if (!partner || partner === staff) {
+        return null;
+      }
+      const containerRect = (element: HTMLElement) =>
+        element.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect() ?? element.getBoundingClientRect();
+      const [upper, lower] =
+        staves.indexOf(partner) > index ? [staff, partner] : [partner, staff];
+      return {
+        topGapEdgeY: containerRect(upper).bottom - rootRect.top,
+        bottomGapEdgeY: containerRect(lower).top - rootRect.top,
+      };
     }
 
     // Groups every measure's Nth staff (by ordinal position) into its own

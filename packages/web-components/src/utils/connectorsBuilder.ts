@@ -1012,7 +1012,8 @@ const toRootSpace = (rect: DOMRect, rootRect: DOMRect): ObstacleRect => ({
 
 const collectGlyphRects = (
   element: Element,
-  rootRect: DOMRect
+  rootRect: DOMRect,
+  excludeGlyphSelector: string | null
 ): ObstacleRect[] => {
   const shapes = Array.from(
     element.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
@@ -1021,7 +1022,10 @@ const collectGlyphRects = (
   );
   const rects: ObstacleRect[] = [];
   for (const shape of shapes) {
-    if (shape.classList.contains('head-hit-zone')) {
+    if (
+      shape.classList.contains('head-hit-zone') ||
+      (excludeGlyphSelector !== null && shape.matches(excludeGlyphSelector))
+    ) {
       continue;
     }
     const rect = shape.getBoundingClientRect();
@@ -1071,10 +1075,12 @@ const staffIndexOf = (element: Element): number => {
 
 // `measureElements` are the measures whose double-stemmed beam overlays
 // belong to this redraw (a <music-measure> is not its own descendant).
+// `excludeGlyphSelector` leaves out glyphs a caller may cross, e.g. stems.
 export const collectEntryObstacles = (
   root: ParentNode,
   rootRect: DOMRect,
-  measureElements: readonly Element[]
+  measureElements: readonly Element[],
+  { excludeGlyphSelector = null }: { excludeGlyphSelector?: string | null } = {}
 ): EntryObstacles => {
   const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden])`;
   const entries: EntryGeometry[] = Array.from(
@@ -1087,7 +1093,7 @@ export const collectEntryObstacles = (
       centerX: rect.left + rect.width / 2 - rootRect.left,
       rowTop: getRowTop(element as NoteLikeElementType, rootRect),
       staffIndex: staffIndexOf(element),
-      glyphRects: collectGlyphRects(element, rootRect),
+      glyphRects: collectGlyphRects(element, rootRect, excludeGlyphSelector),
     };
   });
 
@@ -1114,6 +1120,21 @@ export const collectEntryObstacles = (
 
   return { entries, beamSlices };
 };
+
+// Every rendered stem under `root`, in root-rect space.
+export const collectStemRects = (
+  root: ParentNode,
+  rootRect: DOMRect
+): ObstacleRect[] =>
+  Array.from(
+    root.querySelectorAll(
+      `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}`
+    )
+  ).flatMap((element) =>
+    Array.from(element.shadowRoot?.querySelectorAll('.stem') ?? []).map(
+      (stem) => toRootSpace(stem.getBoundingClientRect(), rootRect)
+    )
+  );
 
 export type ConnectorsBuildOptions = {
   rootRect: DOMRect;

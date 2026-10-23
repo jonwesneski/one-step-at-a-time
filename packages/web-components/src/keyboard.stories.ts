@@ -878,6 +878,520 @@ export const SharedDynamicBetweenStaves: Story = {
   `,
 };
 
+export const SharedHairpinBetweenStaves: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="C"
+            octave="5"
+            duration="half"
+            dynamic="p"
+            dynamic-shared
+            crescendo="start"
+          ></music-note>
+          <music-note note="E" octave="5" duration="half"></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-note note="C" octave="3" duration="half"></music-note>
+          <music-note
+            note="G"
+            octave="3"
+            duration="half"
+            dynamic="f"
+            crescendo="end"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// A hairpin for both hands stays mid-system under the shared beam, crossing
+// stems but never the beam, rather than moving outside the system.
+export const DoubleStemmedBeamWithSharedHairpin: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="2/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="2/4"
+        >
+          <music-note
+            note="C"
+            octave="5"
+            duration="thirtysecond"
+            beam-group="g1"
+            dynamic="p"
+            dynamic-shared
+            crescendo="start"
+          ></music-note>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-chord duration="thirtysecond" beam-group="g1"
+            ><music-note
+              note="B"
+              octave="5"
+              duration="thirtysecond"
+            ></music-note
+            ><music-note
+              note="C"
+              octave="6"
+              duration="thirtysecond"
+            ></music-note
+          ></music-chord>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-note
+            note="E"
+            octave="5"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-note
+            note="C"
+            octave="5"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-chord duration="quarter" dynamic="ff" crescendo="end"
+            ><music-note note="F" octave="4" duration="quarter"></music-note
+            ><music-note note="G" octave="4" duration="quarter"></music-note
+            ><music-note note="C" octave="5" duration="quarter"></music-note
+          ></music-chord>
+        </music-staff>
+        <music-staff clef="treble" key-sig="C" mode="major" time="2/4">
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-note
+            note="F"
+            octave="4"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="4"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-note
+            note="B"
+            octave="3"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="thirtysecond" hidden></music-rest>
+          <music-note
+            note="F"
+            octave="4"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="quarter" hidden></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// A one-hand hairpin obstructed by a double-stemmed group angles through
+// its own stave — one end outside it, the other in the gap — rather than
+// moving outside the system, far from the notes. Needs a composition about
+// 850px wide or more: narrower, the beam's high end sits too close to the
+// stave to leave room, and the hairpin keeps its row below the system.
+export const DoubleStemmedBeamWithAngledHairpin: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="3/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="3/4"
+        >
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-chord duration="sixteenth" beam-group="g1"
+            ><music-note note="E" octave="5" duration="sixteenth"></music-note
+            ><music-note note="B" octave="5" duration="sixteenth"></music-note
+          ></music-chord>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="eighth" hidden></music-rest>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="3/4">
+          <music-note
+            note="D"
+            octave="2"
+            duration="sixteenth"
+            beam-group="g1"
+            crescendo="start"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="2"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="3"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-chord
+            duration="sixteenth"
+            stem-direction="down"
+            dynamic="ff"
+            crescendo="end"
+            decrescendo="start"
+            ><music-note note="C" octave="3" duration="sixteenth"></music-note
+            ><music-note note="Eb" octave="3" duration="sixteenth"></music-note
+          ></music-chord>
+          <music-note
+            note="G"
+            octave="2"
+            duration="sixteenth"
+            decrescendo="end"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// When the group climbs and falls back, its beam lies flat across the gap and
+// leaves no room for an angled hairpin under it, so the hairpin keeps its own
+// row below the system.
+export const DoubleStemmedBeamHairpinFallback: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="3/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="3/4"
+        >
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-chord duration="sixteenth" beam-group="g1"
+            ><music-note note="E" octave="5" duration="sixteenth"></music-note
+            ><music-note note="B" octave="5" duration="sixteenth"></music-note
+          ></music-chord>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="3/4">
+          <music-note
+            note="D"
+            octave="2"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="2"
+            duration="sixteenth"
+            beam-group="g1"
+            crescendo="start"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="3"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-chord
+            duration="sixteenth"
+            stem-direction="down"
+            dynamic="ff"
+            crescendo="end"
+            decrescendo="start"
+            ><music-note note="C" octave="3" duration="sixteenth"></music-note
+            ><music-note note="Eb" octave="3" duration="sixteenth"></music-note
+          ></music-chord>
+          <music-note
+            note="B"
+            octave="3"
+            duration="sixteenth"
+            beam-group="g1"
+            decrescendo="end"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="3"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// A short right-hand hairpin under a beam that crosses the middle of the gap
+// has no room there and is too short to angle, so it moves above the system.
+// A short right-hand hairpin under a beam that crosses the middle of the gap
+// has no room there and is too short to angle, so it moves above the system.
+export const DoubleStemmedBeamTrebleHairpinAbove: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="4/4"
+        >
+          <music-note
+            note="A"
+            octave="5"
+            duration="thirtysecond"
+            beam-group="g1"
+            dynamic="p"
+            crescendo="start"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="5"
+            duration="thirtysecond"
+            beam-group="g1"
+            dynamic="f"
+            crescendo="end"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="6"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="4/4">
+          <music-note
+            note="E"
+            octave="2"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="F"
+            octave="2"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="2"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="2"
+            duration="thirtysecond"
+            beam-group="g1"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// A shared hairpin crossing a barline stays in the gap between the hands,
+// stepping clear of the next measure's double-stemmed beam.
+export const SharedHairpinAcrossMeasures: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note
+            note="C"
+            octave="5"
+            duration="half"
+            dynamic="p"
+            dynamic-shared
+            crescendo="start"
+          ></music-note>
+          <music-note note="D" octave="5" duration="half"></music-note>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note
+            note="A"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="5"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="6"
+            duration="eighth"
+            beam-group="g1"
+            dynamic="f"
+            dynamic-shared
+            crescendo="end"
+          ></music-note>
+          <music-note note="E" octave="5" duration="half"></music-note>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note
+            note="E"
+            octave="2"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="F"
+            octave="2"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="2"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="2"
+            duration="eighth"
+            beam-group="g1"
+          ></music-note>
+          <music-note note="C" octave="3" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// Split at a system break, each half of a shared hairpin sits in its own
+// row's gap.
+export const SharedHairpinAcrossSystemBreak: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="4/4" max-width="320">
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note note="C" octave="5" duration="half"></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="half"
+            dynamic="f"
+            dynamic-shared
+            decrescendo="start"
+          ></music-note>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" group="grand">
+          <music-note
+            note="E"
+            octave="5"
+            duration="half"
+            dynamic="p"
+            dynamic-shared
+            decrescendo="end"
+          ></music-note>
+          <music-note note="F" octave="5" duration="half"></music-note>
+        </music-staff>
+        <music-staff clef="bass">
+          <music-note note="E" octave="3" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 export const PerVoiceDynamicsOnOneHand: Story = {
   render: () => html`
     <music-staff clef="treble" key-sig="C" mode="major" time="4/4">

@@ -920,7 +920,7 @@
               "type": {
                 "text": "boolean"
               },
-              "description": "Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone chord falls back to no rendering rather than guessing a position."
+              "description": "Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement."
             },
             {
               "name": "crescendo",
@@ -1172,7 +1172,7 @@
               "type": {
                 "text": "StemDirection"
               },
-              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. Setting it inconsistently across notes/chords that end up sharing one same-staff beam group produces a visibly wrong stem attachment for the inconsistent member(s) — set it the same way on every element of one intended-uniform group."
+              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
             },
             {
               "type": {
@@ -1495,6 +1495,54 @@
               "kind": "method",
               "name": "#redrawHairpins",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#headCenterX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#sharedHairpinGap",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ topGapEdgeY: number; bottomGapEdgeY: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "HTMLElement | null"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1837,7 +1885,7 @@
             },
             {
               "kind": "field",
-              "name": "#boundRedrawSharedDynamics",
+              "name": "#boundRedrawMeasureDynamics",
               "privacy": "private"
             },
             {
@@ -2155,8 +2203,78 @@
             },
             {
               "kind": "method",
-              "name": "#redrawSharedDynamics",
+              "name": "#redrawMeasureDynamics",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawMeasureDynamicsImpl",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#pushDynamicsOverrides",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly ClassicalStaffElement[]"
+                  }
+                },
+                {
+                  "name": "plan",
+                  "type": {
+                    "text": "MeasureDynamicsPlan"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#planMeasureDynamics",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "MeasureDynamicsPlan"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly ClassicalStaffElement[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#doubleStemmedBeamSlices",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ObstacleRect[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#crossStaffTupletRects",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ObstacleRect[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measureRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
             },
             {
               "kind": "field",
@@ -2331,6 +2449,10 @@
           },
           "tagName": "music-measure",
           "customElement": true
+        },
+        {
+          "kind": "variable",
+          "name": "centerX"
         }
       ],
       "exports": [
@@ -3067,7 +3189,7 @@
               "type": {
                 "text": "boolean"
               },
-              "description": "Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone note falls back to no rendering rather than guessing a position."
+              "description": "Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement."
             },
             {
               "name": "crescendo",
@@ -3319,7 +3441,7 @@
               "type": {
                 "text": "StemDirection"
               },
-              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. Setting it inconsistently across notes that end up sharing one same-staff beam group produces a visibly wrong stem attachment for the inconsistent member(s) — set it the same way on every note of one intended-uniform group."
+              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
             },
             {
               "type": {
@@ -3680,6 +3802,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffDynamicsOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -4029,6 +4164,30 @@
               "name": "crossStaffTupletBeamY",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffDynamicsOverrides",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "hairpinDefaultsForMeasure",
+              "return": {
+                "type": {
+                  "text": "StaffHairpinDefaults"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5180,14 +5339,20 @@
             },
             {
               "kind": "method",
-              "name": "#hasDynamicsContent",
+              "name": "#dynamicsSidesInUse",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "boolean"
+                  "text": "Set<DynamicsSide>"
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "state",
                   "type": {
@@ -5530,7 +5695,136 @@
             },
             {
               "kind": "method",
-              "name": "#dynamicsBaselineForVoice",
+              "name": "#dynamicsLocalToClientY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#defaultDynamicsSide",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markingPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hairpinPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "pair",
+                  "type": {
+                    "text": "HairpinPair"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#pairVoiceHairpins",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineForSide",
               "privacy": "private",
               "return": {
                 "type": {
@@ -5549,6 +5843,72 @@
                   "type": {
                     "text": "VoiceRenderState"
                   }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#extremeRealExtentY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "realStems",
+                  "default": "false"
                 }
               ],
               "inheritedFrom": {
@@ -7344,6 +7704,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffDynamicsOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -7693,6 +8066,30 @@
               "name": "crossStaffTupletBeamY",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffDynamicsOverrides",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "hairpinDefaultsForMeasure",
+              "return": {
+                "type": {
+                  "text": "StaffHairpinDefaults"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -8835,14 +9232,20 @@
             },
             {
               "kind": "method",
-              "name": "#hasDynamicsContent",
+              "name": "#dynamicsSidesInUse",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "boolean"
+                  "text": "Set<DynamicsSide>"
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "state",
                   "type": {
@@ -9185,7 +9588,136 @@
             },
             {
               "kind": "method",
-              "name": "#dynamicsBaselineForVoice",
+              "name": "#dynamicsLocalToClientY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#defaultDynamicsSide",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markingPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hairpinPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "pair",
+                  "type": {
+                    "text": "HairpinPair"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#pairVoiceHairpins",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineForSide",
               "privacy": "private",
               "return": {
                 "type": {
@@ -9204,6 +9736,72 @@
                   "type": {
                     "text": "VoiceRenderState"
                   }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#extremeRealExtentY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "realStems",
+                  "default": "false"
                 }
               ],
               "inheritedFrom": {

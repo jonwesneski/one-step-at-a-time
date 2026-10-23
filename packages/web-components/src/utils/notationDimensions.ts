@@ -491,8 +491,7 @@ export const DYNAMICS_ABOVE_BASELINE_Y =
   STAFF_TOP_LINE_Y - STAFF_LINE_SPACING * 2;
 
 /**
- * Half-height (px) of the open end of a hairpin wedge.
- * The full open span is 2 × HAIRPIN_OPEN_HEIGHT, matching 2 staff spaces (20 px).
+ * Full spread (px) of the open end of a hairpin wedge — one staff space.
  * = STAFF_LINE_SPACING  (= 10)
  */
 export const HAIRPIN_OPEN_HEIGHT = STAFF_LINE_SPACING;
@@ -520,6 +519,58 @@ export const DYNAMICS_CHAR_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.65;
  * an adjacent hairpin's start/end point.
  */
 export const HAIRPIN_DYNAMIC_GAP_PX = 4;
+
+/**
+ * Share of DYNAMICS_FONT_SIZE a dynamic glyph reaches above / below its
+ * baseline, for estimating its box. Bold italic dynamics have tall ascenders
+ * and almost no descent.
+ */
+export const DYNAMICS_TEXT_ASCENT_RATIO = 0.75;
+export const DYNAMICS_TEXT_DESCENT_RATIO = 0.25;
+
+/**
+ * Shallowest slant (radians) an angled hairpin may take — 10°, enough to read
+ * as distinct from the horizontal staff lines it crosses even over a widely
+ * spaced passage.
+ */
+export const HAIRPIN_MIN_ROUTE_SLANT_RADIANS = Math.PI / 18;
+
+/** Steepest slant (radians) an angled hairpin may take — 45°. */
+export const HAIRPIN_MAX_ROUTE_SLANT_RADIANS = Math.PI / 4;
+
+/**
+ * Slant (radians) an angled hairpin aims for among valid routes — 30°, close
+ * to the conventional engraved example of one angled through a stave.
+ */
+export const HAIRPIN_PREFERRED_ROUTE_SLANT_RADIANS = Math.PI / 6;
+
+/**
+ * Minimum gap (px) between a hairpin (or its endpoint dynamic) and any beam.
+ * = 0.5 × STAFF_LINE_SPACING  (= 5, same as SLUR_OBSTACLE_CLEARANCE_PX)
+ */
+export const HAIRPIN_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Minimum gap (px) between a hairpin and a notehead or other non-stem glyph.
+ * = 0.3 × STAFF_LINE_SPACING  (= 3)
+ */
+export const HAIRPIN_NOTE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How far (px) an angled hairpin's outside end sits past the stave's far
+ * line, beyond its own half-opening.
+ * = 1.5 × STAFF_LINE_SPACING  (= 15)
+ */
+export const HAIRPIN_ROUTE_OUTSIDE_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Step (px) between candidate hairpin Ys when searching for a clear placement.
+ * = 0.5 × STAFF_LINE_SPACING  (= 5)
+ */
+export const HAIRPIN_ROUTE_SEARCH_STEP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Outward steps tried for an angled hairpin's outside end before giving up. */
+export const HAIRPIN_ROUTE_MAX_SEARCH_STEPS = 6;
 
 // ─── Tuplets ──────────────────────────────────────────────────────────────────
 

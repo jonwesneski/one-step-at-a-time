@@ -27,6 +27,7 @@ export { createDoubleFlatSvg } from './doubleFlat';
 export { createDoubleSharpSvg } from './doubleSharp';
 export { createDoubleStemmedBeamPolygon } from './doubleStemmedBeams';
 export {
+  createAngledHairpinSvg,
   createDynamicMarkingSvg,
   createHairpinSvg,
   createVerticalHairpinSvg,

@@ -132,6 +132,7 @@ declare module 'react' {
         'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
+        'dynamic-shared'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -180,6 +181,7 @@ declare module 'react' {
         'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
+        'dynamic-shared'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;

@@ -8,6 +8,7 @@ import type {
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
+import type { HairpinKind } from '../types/theory';
 import {
   MUSIC_CHORD,
   MUSIC_NOTE,
@@ -19,7 +20,15 @@ import {
   HAIRPIN_DYNAMIC_GAP_PX,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
-import { pairHairpins, resolveHairpinSegments } from './dynamicsRules';
+import {
+  computeHairpinXSpan,
+  pairHairpins,
+  pairHairpinsWithLeftovers,
+  pairSharedHairpinsAcrossStaves,
+  resolveChainSpans,
+  resolveHairpinSegments,
+  type PositionedHairpinEndpoint,
+} from './dynamicsRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -330,6 +339,146 @@ describe('pairHairpins', () => {
     // Falls back to raw bounds — no dynamic-shift math applied.
     expect(pairs[0].startX).toBe(0);
     expect(pairs[0].endX).toBe(100 + NOTE_SVG_WIDTH);
+  });
+});
+
+describe('pairHairpinsWithLeftovers', () => {
+  it('reports starts left open and ends with no start', () => {
+    const elements = makeElements([
+      { decrescendo: 'end' },
+      { crescendo: 'start' },
+      {},
+    ]);
+
+    const result = pairHairpinsWithLeftovers(elements, makeXPositions(3), {
+      warnOrphans: false,
+    });
+
+    expect(result.pairs).toEqual([]);
+    expect(result.unpairedStarts).toEqual([
+      { kind: 'crescendo', element: elements[1], index: 1 },
+    ]);
+    expect(result.orphanEnds).toEqual([
+      { kind: 'decrescendo', element: elements[0], index: 0 },
+    ]);
+  });
+
+  it('only warns about an orphan end when asked to', () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleSpy.mockClear();
+    const elements = makeElements([{ crescendo: 'end' }]);
+
+    pairHairpinsWithLeftovers(elements, makeXPositions(1), {
+      warnOrphans: false,
+    });
+    expect(consoleSpy).not.toHaveBeenCalled();
+
+    pairHairpinsWithLeftovers(elements, makeXPositions(1));
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('orphan crescendo end')
+    );
+    consoleSpy.mockRestore();
+  });
+});
+
+describe('pairSharedHairpinsAcrossStaves', () => {
+  const endpoint = (
+    kind: HairpinKind,
+    x: number
+  ): PositionedHairpinEndpoint => ({
+    kind,
+    element: makeNote(),
+    index: 0,
+    x,
+  });
+
+  it('pairs each start with the nearest same-kind end at or after it', () => {
+    const start = endpoint('crescendo', 50);
+    const near = endpoint('crescendo', 120);
+    const far = endpoint('crescendo', 300);
+    const before = endpoint('crescendo', 10);
+    const otherKind = endpoint('decrescendo', 60);
+
+    expect(
+      pairSharedHairpinsAcrossStaves([start], [far, before, otherKind, near])
+    ).toEqual([{ start, end: near }]);
+  });
+
+  it('never gives one end to two starts', () => {
+    const first = endpoint('crescendo', 0);
+    const second = endpoint('crescendo', 40);
+    const end = endpoint('crescendo', 100);
+
+    expect(pairSharedHairpinsAcrossStaves([second, first], [end])).toEqual([
+      { start: first, end },
+    ]);
+  });
+});
+
+describe('resolveChainSpans', () => {
+  it('gives a joint dynamic one position in both hairpins it joins', () => {
+    const joint = { marking: 'ff' as const, centerX: 212 };
+    const [crescendo, diminuendo] = resolveChainSpans(
+      [
+        { rawStartX: 0, rawEndX: 200 },
+        { rawStartX: 190, rawEndX: 320 },
+      ],
+      [null, joint, null]
+    );
+
+    expect(crescendo.endText).toBe(joint);
+    expect(diminuendo.startText).toBe(joint);
+    expect(crescendo.endX).toBe(
+      joint.centerX - DYNAMICS_CHAR_WIDTH_PX - HAIRPIN_DYNAMIC_GAP_PX
+    );
+    expect(diminuendo.startX).toBe(
+      joint.centerX + DYNAMICS_CHAR_WIDTH_PX + HAIRPIN_DYNAMIC_GAP_PX
+    );
+  });
+});
+
+describe('computeHairpinXSpan', () => {
+  it('returns the raw ends when neither endpoint has a dynamic', () => {
+    expect(
+      computeHairpinXSpan({
+        rawStartX: 10,
+        rawEndX: 200,
+        startTextCenterX: 26,
+        endTextCenterX: 184,
+        startMarking: null,
+        endMarking: null,
+      })
+    ).toEqual({ startX: 10, endX: 200, collided: false });
+  });
+
+  it('pulls each end inward past its endpoint text edge', () => {
+    const span = computeHairpinXSpan({
+      rawStartX: 10,
+      rawEndX: 200,
+      startTextCenterX: 26,
+      endTextCenterX: 184,
+      startMarking: 'pp',
+      endMarking: 'f',
+    });
+
+    expect(span).toEqual({
+      startX: 26 + DYNAMICS_CHAR_WIDTH_PX + HAIRPIN_DYNAMIC_GAP_PX,
+      endX: 184 - DYNAMICS_CHAR_WIDTH_PX / 2 - HAIRPIN_DYNAMIC_GAP_PX,
+      collided: false,
+    });
+  });
+
+  it('falls back to the raw ends and flags a collision when the shrunk ends cross', () => {
+    expect(
+      computeHairpinXSpan({
+        rawStartX: 10,
+        rawEndX: 40,
+        startTextCenterX: 20,
+        endTextCenterX: 30,
+        startMarking: 'ff',
+        endMarking: 'pp',
+      })
+    ).toEqual({ startX: 10, endX: 40, collided: true });
   });
 });
 

@@ -4,6 +4,10 @@ import {
 } from '../rules/arpeggioRules';
 import { computeBeamLevelStructure } from '../rules/beamStructureRules';
 import {
+  type ObstacleRect,
+  sliceConvexPolygon,
+} from '../rules/connectorPlacementRules';
+import {
   type CrossStaffTupletEntry,
   type CrossStaffTupletRole,
   resolveCrossStaffTupletGapBaseY,
@@ -21,6 +25,24 @@ import {
   resolveGroupSecondaryBeamSide,
   resolveSecondaryBeamVerticalSide,
 } from '../rules/doubleStemmedBeamRules';
+import {
+  computeHairpinXSpan,
+  pairSharedHairpinsAcrossStaves,
+  resolveChainSpans,
+} from '../rules/dynamicsRules';
+import {
+  type CrossStaffDynamicsOverride,
+  type DynamicsSide,
+  dynamicTextCenterClearOfStems,
+  estimateDynamicTextBox,
+  type HairpinEndpointText,
+  type HairpinPoint,
+  hairpinWedgeEdges,
+  isHorizontalHairpinClear,
+  resolveAngledHairpinRoute,
+  resolveSharedHairpinY,
+  type StaffHairpinDefaults,
+} from '../rules/hairpinPlacementRules';
 import { restToYCoordinate } from '../rules/restRules';
 import {
   resolveSharedStemPairs,
@@ -44,15 +66,17 @@ import type {
   StaffElementBaseType,
   TupletElementType,
 } from '../types/elements';
-import type { HairpinKind } from '../types/theory';
+import type { DynamicMarking, HairpinKind } from '../types/theory';
 import {
   appendArpeggioHairpin,
   COMMON_ATTRIBUTES,
+  createAngledHairpinSvg,
   createArpeggioSvg,
   createBraceSvg,
   createBracketSvg,
   createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
+  createHairpinSvg,
   createSharedStemLine,
   createTupletBracketSvg,
   isStaffNodeName,
@@ -74,6 +98,7 @@ import {
   collectEntryObstacles,
   collectNoteLikeElements,
   collectPhraseSlurPairs,
+  collectStemRects,
   isInnerVoiceMember,
   pairConnectors,
   partitionByVoice,
@@ -91,8 +116,10 @@ import {
   BRACKET_STAFF_GAP_PX,
   BRACKET_TOP_OFFSET_PX,
   BRACKET_WIDTH_PX,
+  DYNAMICS_BASELINE_Y,
   EMPTY_MEASURE_FLEX_BASIS_PX,
   FRACTIONAL_BEAM_WIDTH_PX,
+  HAIRPIN_OPEN_HEIGHT,
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
   MEASURE_NUMBER_FONT_SIZE,
@@ -101,6 +128,8 @@ import {
   REST_STEM_AVOIDANCE_NUDGE_PX,
   REST_STEM_AVOIDANCE_THRESHOLD_PX,
   SHARED_STEM_MISALIGNMENT_WARN_PX,
+  SLUR_BEAM_SLICE_WIDTH_PX,
+  STAFF_BOTTOM_LINE_Y,
   STAFF_BOTTOM_MARGIN,
   STAFF_LABEL_FONT_SIZE,
   STAFF_LABEL_LEFT_MARGIN_PX,
@@ -140,6 +169,29 @@ const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
 const CONNECTOR_TOP_PX = 33;
 
 const OVERLAY_SOURCE = 'overlay';
+const MEASURE_DYNAMICS_SOURCE = 'measure-dynamics';
+
+type ClassicalStaffElement = StaffElementBaseType & {
+  hairpinDefaultsForMeasure(): StaffHairpinDefaults;
+  crossStaffDynamicsOverrides: ReadonlyMap<
+    NoteOrChordElementType,
+    CrossStaffDynamicsOverride
+  > | null;
+};
+
+type MeasureDynamicsPlan = {
+  overrides: Map<
+    ClassicalStaffElement,
+    Map<NoteOrChordElementType, CrossStaffDynamicsOverride>
+  >;
+  hairpins: {
+    kind: HairpinKind;
+    start: HairpinPoint;
+    end: HairpinPoint;
+    angled: boolean;
+  }[];
+  markings: { marking: DynamicMarking; centerX: number; y: number }[];
+};
 
 function staffSlotHeightPx(staff: StaffElementBaseType): number {
   return staff.staffHeight + 2;
@@ -230,9 +282,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // *after* double-stemmed beams — a slur may need to read the real,
       // already-drawn beam polygon to avoid crossing it (Chapter G).
       this.#redrawArpeggios();
-      this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
       this.#redrawCrossStaffTuplets();
+      this.#redrawMeasureDynamics();
       this.#redrawConnectors();
       this.#redrawSharedStems();
     };
@@ -252,7 +304,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // only ever dispatches BEAM_GROUP_ATTRIBUTE_CHANGE — the resulting stem
     // override, once pushed onto each staff, still triggers that staff's own
     // full #renderNotes() (real geometry follows from there), same shape as
-    // #boundRedrawSharedDynamics below.
+    // #boundRedrawMeasureDynamics below.
     #boundRedrawDoubleStemmedBeams = () => this.#redrawDoubleStemmedBeams();
     // Same shape as #boundRedrawDoubleStemmedBeams above, for
     // shared-stem-for pairs.
@@ -264,7 +316,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Likewise, a `dynamic`/`dynamic-shared` attribute change only ever
     // dispatches DYNAMIC_ATTRIBUTE_CHANGE (staffClassicalBase.ts's own
     // listener re-runs its local #renderDynamics, not a full layout pass).
-    #boundRedrawSharedDynamics = () => this.#redrawSharedDynamics();
+    // Also re-run after anything that redraws the beams or cross-staff
+    // tuplets this pass avoids, so each registration below follows theirs.
+    #boundRedrawMeasureDynamics = () => this.#redrawMeasureDynamics();
 
     constructor() {
       super();
@@ -349,6 +403,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundRedrawCrossStaffTuplets
       );
       this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawMeasureDynamics
+      );
+      this.addEventListener(
+        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedrawMeasureDynamics
+      );
+      this.addEventListener(
         STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
         this.#boundLayoutSystemDecorations
       );
@@ -383,11 +445,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.addEventListener(
         NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
-        this.#boundRedrawSharedDynamics
+        this.#boundRedrawMeasureDynamics
       );
       this.addEventListener(
         NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.addEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawMeasureDynamics
       );
       // Registered after the beams listener above, for the same reason as
       // the NOTES_POSITIONED pair — a beam-group membership change can
@@ -400,6 +466,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener(
         NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.addEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawMeasureDynamics
       );
       this.addEventListener(
         NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
@@ -443,7 +513,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.removeEventListener(
         NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
-        this.#boundRedrawSharedDynamics
+        this.#boundRedrawMeasureDynamics
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawMeasureDynamics
+      );
+      this.removeEventListener(
+        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedrawMeasureDynamics
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+        this.#boundRedrawMeasureDynamics
+      );
+      this.removeEventListener(
+        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+        this.#boundRedrawMeasureDynamics
       );
       this.removeEventListener(
         NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
@@ -659,8 +745,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                case is composition.ts's own #redrawConnectors); see
                staffBase.ts#drawConnectorsWhenStandalone's escalation -->
           <svg class="connectors-overlay"></svg>
-          <!-- dynamic-shared markings, centered between two sibling
-               staves — see #redrawSharedDynamics -->
+          <!-- dynamic-shared markings and hairpins, centered between two
+               sibling staves — see #redrawMeasureDynamics -->
           <svg class="shared-dynamics-overlay"></svg>
           <!-- the shared beam polygon for a cross-staff double-stemmed
                group, spanning both staves' gap — see
@@ -704,9 +790,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#renderMeasureNumber(isFirstInRow, isLastInRow);
       staffConnector.classList.toggle('hidden', !isFirstInRow);
       this.#redrawArpeggios();
-      this.#redrawSharedDynamics();
       this.#redrawDoubleStemmedBeams();
       this.#redrawCrossStaffTuplets();
+      this.#redrawMeasureDynamics();
       this.#redrawConnectors();
     }
 
@@ -1155,71 +1241,546 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#verticalSpace.reserve(OVERLAY_SOURCE, overflow);
     }
 
-    // A `dynamic-shared` note/chord suppresses its own staff-local dynamic
-    // rendering (staffClassicalBase.ts#renderDynamics) in favor of one drawn
-    // here, centered in the vertical gap between this staff and its nearest
-    // sibling staff — e.g. a keyboard dynamic marking both hands at once.
-    // Unlike #redrawConnectors, this never defers to composition.ts (there is
-    // no composition-level equivalent — a measure's own staves are always the
-    // right unit for "the gap between two staves").
-    #redrawSharedDynamics() {
+    // Dynamics that need both staves' geometry: `dynamic-shared` markings and
+    // hairpins (both hands) centred in the gap between two staves, clear of
+    // every beam. Runs after beams and cross-staff tuplets, whose drawn shapes
+    // it avoids, and before connectors. Never defers to composition.ts — a
+    // measure's own staves are always the unit for "the gap between two
+    // staves"; composition.ts skips the same-measure pairs drawn here.
+    // Placement is decided first and pushed onto each staff
+    // (crossStaffDynamicsOverrides) so it stops drawing what moves here; a
+    // forced side re-lays that staff out, so the plan is resolved again from
+    // fresh geometry before drawing.
+    #redrawMeasureDynamics() {
+      this.#guardedRedraw('measure dynamics', () =>
+        this.#redrawMeasureDynamicsImpl()
+      );
+    }
+
+    #redrawMeasureDynamicsImpl() {
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.shared-dynamics-overlay'
       );
       if (!overlay) {
         return;
       }
-      while (overlay.firstChild) {
-        overlay.removeChild(overlay.firstChild);
-      }
+      const staves = (
+        Array.from(this.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as StaffElementBaseType[]
+      ).filter(
+        (staff): staff is ClassicalStaffElement =>
+          typeof (staff as Partial<ClassicalStaffElement>)
+            .hairpinDefaultsForMeasure === 'function'
+      );
 
-      const staves = Array.from(this.children).filter((el) =>
-        isStaffNodeName(el.nodeName)
-      ) as StaffElementBaseType[];
+      this.#pushDynamicsOverrides(staves, this.#planMeasureDynamics(staves));
+      const plan = this.#planMeasureDynamics(staves);
+      this.#pushDynamicsOverrides(staves, plan);
+
+      overlay.replaceChildren();
+      for (const hairpin of plan.hairpins) {
+        overlay.appendChild(
+          hairpin.angled
+            ? createAngledHairpinSvg(hairpin.kind, hairpin.start, hairpin.end)
+            : createHairpinSvg(
+                hairpin.kind,
+                hairpin.start.x,
+                hairpin.end.x,
+                hairpin.start.y
+              )
+        );
+      }
+      for (const marking of plan.markings) {
+        overlay.appendChild(
+          createDynamicMarkingSvg(marking.marking, marking.centerX, marking.y)
+        );
+      }
+      const rect = this.getBoundingClientRect();
+      const [overflow] = computeBandOverflow(
+        [{ top: rect.top, bottom: rect.bottom }],
+        measureVerticalExtents(overlay, '.hairpin path, .dynamic-marking'),
+        VERTICAL_OVERFLOW_CLEARANCE_PX
+      );
+      this.#verticalSpace.reserve(MEASURE_DYNAMICS_SOURCE, overflow);
+    }
+
+    #pushDynamicsOverrides(
+      staves: readonly ClassicalStaffElement[],
+      plan: MeasureDynamicsPlan
+    ) {
+      for (const staff of staves) {
+        staff.crossStaffDynamicsOverrides = plan.overrides.get(staff) ?? null;
+      }
+    }
+
+    #planMeasureDynamics(
+      staves: readonly ClassicalStaffElement[]
+    ): MeasureDynamicsPlan {
+      const plan: MeasureDynamicsPlan = {
+        overrides: new Map(),
+        hairpins: [],
+        markings: [],
+      };
       if (staves.length < 2) {
-        return;
+        return plan;
       }
 
       const measureRect = this.getBoundingClientRect();
-      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
-
-      staves.forEach((staff, staffIndex) => {
-        const neighborIndex =
-          staffIndex + 1 < staves.length ? staffIndex + 1 : staffIndex - 1;
-        const neighbor = staves[neighborIndex];
-        if (!neighbor) {
-          return;
+      const entryObstacles = collectEntryObstacles(this, measureRect, [this], {
+        excludeGlyphSelector: '.stem',
+      });
+      const beamSlices = entryObstacles.beamSlices;
+      const obstacles: ObstacleRect[] = [
+        ...entryObstacles.entries.flatMap((entry) => entry.glyphRects),
+        ...this.#crossStaffTupletRects(measureRect),
+      ];
+      const stems = collectStemRects(this, measureRect);
+      const partnerOf = (staffIndex: number) =>
+        staffIndex + 1 < staves.length ? staffIndex + 1 : staffIndex - 1;
+      const gapBetween = (staffIndex: number, otherIndex: number) => {
+        const upper = staves[Math.min(staffIndex, otherIndex)];
+        const lower = staves[Math.max(staffIndex, otherIndex)];
+        return {
+          topGapEdgeY: this.#staffContainerRect(upper).bottom - measureRect.top,
+          bottomGapEdgeY: this.#staffContainerRect(lower).top - measureRect.top,
+          belowSystemY:
+            this.#staffContainerRect(lower).bottom -
+            measureRect.top +
+            DYNAMICS_BASELINE_Y -
+            STAFF_BOTTOM_LINE_Y,
+        };
+      };
+      const override = (
+        staff: ClassicalStaffElement,
+        element: NoteOrChordElementType,
+        change: Partial<CrossStaffDynamicsOverride>
+      ) => {
+        let staffOverrides = plan.overrides.get(staff);
+        if (staffOverrides === undefined) {
+          staffOverrides = new Map();
+          plan.overrides.set(staff, staffOverrides);
         }
-        const staffRect = staff.getBoundingClientRect();
-        const neighborRect = neighbor.getBoundingClientRect();
-        const gapMidY =
-          neighborIndex > staffIndex
-            ? (staffRect.bottom + neighborRect.top) / 2
-            : (neighborRect.bottom + staffRect.top) / 2;
+        staffOverrides.set(element, {
+          hairpin: null,
+          marking: null,
+          ...staffOverrides.get(element),
+          ...change,
+        });
+      };
+      const textCenterX = (
+        element: NoteOrChordElementType,
+        marking: DynamicMarking,
+        awayDirection: -1 | 1,
+        gap: { topGapEdgeY: number; bottomGapEdgeY: number }
+      ) => {
+        const heads = this.#headRects(element);
+        const rect = element.getBoundingClientRect();
+        const centerX =
+          heads.length === 0
+            ? rect.left + rect.width / 2 - measureRect.left
+            : heads.reduce((sum, r) => sum + r.left + r.width / 2, 0) /
+                heads.length -
+              measureRect.left;
+        return dynamicTextCenterClearOfStems(
+          centerX,
+          marking,
+          stems,
+          gap,
+          awayDirection
+        );
+      };
+      const leftX = (element: NoteOrChordElementType) =>
+        element.getBoundingClientRect().left - measureRect.left;
+      const spanFor = (
+        start: NoteOrChordElementType,
+        end: NoteOrChordElementType,
+        gap: { topGapEdgeY: number; bottomGapEdgeY: number }
+      ) => {
+        const startText = start.dynamic
+          ? {
+              marking: start.dynamic,
+              centerX: textCenterX(start, start.dynamic, -1, gap),
+            }
+          : null;
+        const endText = end.dynamic
+          ? {
+              marking: end.dynamic,
+              centerX: textCenterX(end, end.dynamic, 1, gap),
+            }
+          : null;
+        const span = computeHairpinXSpan({
+          rawStartX: leftX(start),
+          rawEndX: end.getBoundingClientRect().right - measureRect.left,
+          startTextCenterX: startText?.centerX ?? 0,
+          endTextCenterX: endText?.centerX ?? 0,
+          startMarking: startText?.marking ?? null,
+          endMarking: endText?.marking ?? null,
+        });
+        return { startX: span.startX, endX: span.endX, startText, endText };
+      };
+      const placeHairpin = (
+        kind: HairpinKind,
+        start: HairpinPoint,
+        end: HairpinPoint,
+        angled: boolean
+      ) => {
+        plan.hairpins.push({ kind, start, end, angled });
+        const [upper, lower] = hairpinWedgeEdges(
+          kind,
+          start,
+          end,
+          HAIRPIN_OPEN_HEIGHT
+        );
+        obstacles.push(
+          ...sliceConvexPolygon(
+            [upper[0], upper[1], lower[1], lower[0]],
+            SLUR_BEAM_SLICE_WIDTH_PX
+          )
+        );
+      };
+      const placeText = (text: HairpinEndpointText | null, y: number) => {
+        if (text !== null) {
+          plan.markings.push({ ...text, y });
+          obstacles.push(estimateDynamicTextBox(text.marking, text.centerX, y));
+        }
+      };
 
-        const elements = Array.from(
-          staff.querySelectorAll(elementSelector)
-        ) as NoteOrChordElementType[];
-        for (const element of elements) {
-          if (element.dynamic === null || !element.dynamicShared) {
-            continue;
+      const defaults = staves.map((staff) => staff.hairpinDefaultsForMeasure());
+      const sharedPairs: {
+        kind: HairpinKind;
+        start: NoteOrChordElementType;
+        end: NoteOrChordElementType;
+        startStaffIndex: number;
+        endStaffIndex: number;
+      }[] = [];
+      defaults.forEach((staffDefaults, staffIndex) => {
+        for (const pair of staffDefaults.pairs) {
+          if (pair.startElement.dynamicShared) {
+            sharedPairs.push({
+              kind: pair.kind,
+              start: pair.startElement,
+              end: pair.endElement,
+              startStaffIndex: staffIndex,
+              endStaffIndex: staffIndex,
+            });
           }
-          const heads = this.#headRects(element);
-          if (heads.length === 0) {
-            continue;
-          }
-          const centerX =
-            heads.reduce((sum, r) => sum + r.left + r.width / 2, 0) /
-            heads.length;
-          overlay.appendChild(
-            createDynamicMarkingSvg(
-              element.dynamic,
-              centerX - measureRect.left,
-              gapMidY - measureRect.top
-            )
-          );
+        }
+        const partnerIndex = partnerOf(staffIndex);
+        const crossStaffPairs = pairSharedHairpinsAcrossStaves(
+          staffDefaults.unpairedStarts
+            .filter((start) => start.element.dynamicShared)
+            .map((start) => ({ ...start, x: leftX(start.element) })),
+          defaults[partnerIndex].orphanEnds.map((end) => ({
+            ...end,
+            x: leftX(end.element),
+          }))
+        );
+        for (const { start, end } of crossStaffPairs) {
+          sharedPairs.push({
+            kind: start.kind,
+            start: start.element,
+            end: end.element,
+            startStaffIndex: staffIndex,
+            endStaffIndex: partnerIndex,
+          });
         }
       });
+
+      const placedEndpoints = new Set<NoteOrChordElementType>();
+      // A shared hairpin leaving this measure is drawn, with its shared
+      // dynamics, by composition.ts#redrawHairpins.
+      if (this.closest(MUSIC_COMPOSITION) !== null) {
+        const pairedHere = new Set(
+          sharedPairs.flatMap((pair) => [pair.start, pair.end])
+        );
+        for (const staffDefaults of defaults) {
+          for (const endpoint of [
+            ...staffDefaults.unpairedStarts,
+            ...staffDefaults.orphanEnds,
+          ]) {
+            if (
+              endpoint.element.dynamicShared &&
+              !pairedHere.has(endpoint.element)
+            ) {
+              placedEndpoints.add(endpoint.element);
+            }
+          }
+        }
+      }
+      for (const pair of sharedPairs) {
+        const gap = gapBetween(
+          pair.startStaffIndex,
+          pair.startStaffIndex === pair.endStaffIndex
+            ? partnerOf(pair.startStaffIndex)
+            : pair.endStaffIndex
+        );
+        const { startX, endX, startText, endText } = spanFor(
+          pair.start,
+          pair.end,
+          gap
+        );
+        const y =
+          resolveSharedHairpinY({
+            kind: pair.kind,
+            startX,
+            endX,
+            openHeight: HAIRPIN_OPEN_HEIGHT,
+            topGapEdgeY: gap.topGapEdgeY,
+            bottomGapEdgeY: gap.bottomGapEdgeY,
+            beamSlices,
+            obstacles,
+            startText,
+            endText,
+          }) ?? gap.belowSystemY;
+
+        override(staves[pair.startStaffIndex], pair.start, {
+          hairpin: 'measure',
+          marking: 'measure',
+        });
+        override(staves[pair.endStaffIndex], pair.end, { marking: 'measure' });
+        placeHairpin(pair.kind, { x: startX, y }, { x: endX, y }, false);
+        placedEndpoints.add(pair.start);
+        placedEndpoints.add(pair.end);
+        placeText(startText, y);
+        placeText(endText, y);
+      }
+
+      // A one-hand hairpin under a double-stemmed group. Hairpins linked end
+      // to start on one staff (a crescendo into a diminuendo) form a chain
+      // that is placed as one. A chain whose default row sits in the gap and
+      // clears every beam stays put. Otherwise the first hairpin is angled
+      // through its own stave (one end outside it, the other in the gap)
+      // with the rest continuing level from its gap end. If no such route
+      // exists, a gap-side chain moves outside the system and an outside one
+      // keeps its default row.
+      const doubleStemmedSlices = this.#doubleStemmedBeamSlices();
+      staves.forEach((staff, staffIndex) => {
+        const partnerIndex = partnerOf(staffIndex);
+        if (partnerIndex < 0) {
+          return;
+        }
+        const staffRole = staffIndex < partnerIndex ? 'top' : 'bottom';
+        const gapSide: DynamicsSide = staffRole === 'top' ? 'below' : 'above';
+        const outsideSide: DynamicsSide =
+          staffRole === 'top' ? 'above' : 'below';
+        const gap = gapBetween(staffIndex, partnerIndex);
+        const staffRect = this.#staffContainerRect(staff);
+        const staffTopLineY = staffRect.top - measureRect.top;
+        const staffBottomLineY = staffRect.bottom - measureRect.top;
+        const partnerRect = this.#staffContainerRect(staves[partnerIndex]);
+        const systemTop =
+          Math.min(staffRect.top, partnerRect.top) - measureRect.top;
+        const systemBottom =
+          Math.max(staffRect.bottom, partnerRect.bottom) - measureRect.top;
+        const groupSlices = doubleStemmedSlices.filter((slice) => {
+          const middle = (slice.top + slice.bottom) / 2;
+          return middle > systemTop && middle < systemBottom;
+        });
+        if (groupSlices.length === 0) {
+          return;
+        }
+
+        const pairs = defaults[staffIndex].pairs.filter(
+          (pair) => !pair.startElement.dynamicShared
+        );
+        const byStart = new Map(pairs.map((pair) => [pair.startElement, pair]));
+        const heads = pairs.filter(
+          (pair) =>
+            !pairs.some((other) => other.endElement === pair.startElement)
+        );
+        for (const head of heads) {
+          const chain = [head];
+          for (
+            let next = byStart.get(head.endElement);
+            next !== undefined && !chain.includes(next);
+            next = byStart.get(next.endElement)
+          ) {
+            chain.push(next);
+          }
+          const chainElements = [
+            head.startElement,
+            ...chain.map((pair) => pair.endElement),
+          ];
+          const spans = resolveChainSpans(
+            chain.map((pair) => ({
+              rawStartX: leftX(pair.startElement),
+              rawEndX:
+                pair.endElement.getBoundingClientRect().right -
+                measureRect.left,
+            })),
+            chainElements.map((element, index) =>
+              element.dynamic === null
+                ? null
+                : {
+                    marking: element.dynamic,
+                    centerX: textCenterX(
+                      element,
+                      element.dynamic,
+                      index === 0 ? -1 : 1,
+                      gap
+                    ),
+                  }
+            )
+          );
+          const overlapsGroup = spans.some((span) =>
+            groupSlices.some(
+              (slice) => slice.right > span.startX && slice.left < span.endX
+            )
+          );
+          if (!overlapsGroup) {
+            continue;
+          }
+
+          const levelChainClear = (y: number, from: number) =>
+            chain.slice(from).every((pair, offset) => {
+              const span = spans[from + offset];
+              return isHorizontalHairpinClear({
+                kind: pair.kind,
+                startX: span.startX,
+                endX: span.endX,
+                y,
+                openHeight: HAIRPIN_OPEN_HEIGHT,
+                beamSlices,
+                obstacles,
+                startText: from + offset === 0 ? span.startText : null,
+                endText: span.endText,
+              });
+            });
+          const defaultY = head.baselineClientY - measureRect.top;
+          const defaultInGap =
+            defaultY - HAIRPIN_OPEN_HEIGHT / 2 > gap.topGapEdgeY &&
+            defaultY + HAIRPIN_OPEN_HEIGHT / 2 < gap.bottomGapEdgeY;
+          if (
+            head.side === gapSide &&
+            defaultInGap &&
+            levelChainClear(defaultY, 0)
+          ) {
+            continue;
+          }
+
+          const route = resolveAngledHairpinRoute({
+            kind: head.kind,
+            startX: spans[0].startX,
+            endX: spans[0].endX,
+            openHeight: HAIRPIN_OPEN_HEIGHT,
+            staffRole,
+            staffTopLineY,
+            staffBottomLineY,
+            otherStaffGapEdgeY:
+              staffRole === 'top' ? gap.bottomGapEdgeY : gap.topGapEdgeY,
+            beamSlices,
+            obstacles,
+            startText: spans[0].startText,
+            endText: spans[0].endText,
+          });
+          if (route !== null && levelChainClear(route.end.y, 1)) {
+            placeHairpin(head.kind, route.start, route.end, true);
+            placeText(spans[0].startText, route.start.y);
+            placeText(spans[0].endText, route.end.y);
+            override(staff, head.startElement, {
+              hairpin: 'measure',
+              marking: 'measure',
+            });
+            override(staff, head.endElement, { marking: 'measure' });
+            chain.slice(1).forEach((pair, offset) => {
+              const span = spans[offset + 1];
+              const y = route.end.y;
+              placeHairpin(
+                pair.kind,
+                { x: span.startX, y },
+                { x: span.endX, y },
+                false
+              );
+              placeText(span.endText, y);
+              override(staff, pair.startElement, { hairpin: 'measure' });
+              override(staff, pair.endElement, { marking: 'measure' });
+            });
+            continue;
+          }
+
+          if (head.side === gapSide) {
+            for (const pair of chain) {
+              override(staff, pair.startElement, {
+                hairpin: outsideSide,
+                marking: outsideSide,
+              });
+              override(staff, pair.endElement, { marking: outsideSide });
+            }
+          }
+        }
+      });
+
+      staves.forEach((staff, staffIndex) => {
+        const gap = gapBetween(staffIndex, partnerOf(staffIndex));
+        const elements = Array.from(
+          staff.querySelectorAll(
+            `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`
+          )
+        ) as NoteOrChordElementType[];
+        for (const element of elements) {
+          if (
+            element.dynamic === null ||
+            !element.dynamicShared ||
+            placedEndpoints.has(element)
+          ) {
+            continue;
+          }
+          const centerX = textCenterX(element, element.dynamic, -1, gap);
+          const text = { marking: element.dynamic, centerX };
+          const y =
+            resolveSharedHairpinY({
+              kind: 'crescendo',
+              startX: centerX,
+              endX: centerX,
+              openHeight: 0,
+              topGapEdgeY: gap.topGapEdgeY,
+              bottomGapEdgeY: gap.bottomGapEdgeY,
+              beamSlices,
+              obstacles,
+              startText: text,
+              endText: null,
+            }) ?? (gap.topGapEdgeY + gap.bottomGapEdgeY) / 2;
+          placeText(text, y);
+        }
+      });
+
+      return plan;
+    }
+
+    // Measure-relative, since the overlay is 1:1 with this host.
+    #doubleStemmedBeamSlices(): ObstacleRect[] {
+      const polygons =
+        this.shadowRoot?.querySelectorAll<SVGPolygonElement>(
+          '.double-stemmed-beams-overlay .double-stemmed-beam'
+        ) ?? [];
+      return Array.from(polygons).flatMap((polygon) =>
+        sliceConvexPolygon(
+          Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+            const point = polygon.points.getItem(i);
+            return { x: point.x, y: point.y };
+          }),
+          SLUR_BEAM_SLICE_WIDTH_PX
+        )
+      );
+    }
+
+    // A cross-staff tuplet bracket centred in the gap is drawn before this
+    // pass, so a shared dynamic must step around it.
+    #crossStaffTupletRects(measureRect: DOMRect): ObstacleRect[] {
+      const shapes =
+        this.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+          '.cross-staff-tuplets-overlay path, .cross-staff-tuplets-overlay text'
+        ) ?? [];
+      return Array.from(shapes, (shape) => {
+        const rect = shape.getBoundingClientRect();
+        return {
+          left: rect.left - measureRect.left,
+          right: rect.right - measureRect.left,
+          top: rect.top - measureRect.top,
+          bottom: rect.bottom - measureRect.top,
+        };
+      }).filter((rect) => rect.right > rect.left || rect.bottom > rect.top);
     }
 
     // Current re-entry depth per guarded redraw pass — see #guardedRedraw.

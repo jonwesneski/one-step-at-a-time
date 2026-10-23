@@ -81,6 +81,14 @@ export function buildBeamsRenderer(
         (d, i) => crossStaffStemOverrides.get(elements[i]) ?? d
       )
     : baseStemDirections;
+  if (crossStaffStemOverrides) {
+    applyOverridesToWholeBeamGroups(
+      elements,
+      beamsBuilder,
+      crossStaffStemOverrides,
+      stemDirections
+    );
+  }
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {
@@ -127,6 +135,8 @@ export function buildBeamsRenderer(
         y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
         stemUp,
         chordClearanceY,
+        chordSpread:
+          Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates),
       };
     }
   );
@@ -136,4 +146,41 @@ export function buildBeamsRenderer(
     beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
     stemDirections,
   };
+}
+
+// A same-staff beam is drawn with one stem direction, so a direction forced
+// on any member applies to every member; the first forced member in the
+// group wins a conflict. Cross-staff double-stemmed members never form a
+// same-staff group (externallyBeamedIndices), so their own overrides stay
+// per element.
+function applyOverridesToWholeBeamGroups(
+  elements: NoteChordOrRestElementType[],
+  beamsBuilder: BeamsBuilder,
+  overrides: ReadonlyMap<NoteChordOrRestElementType, boolean>,
+  stemDirections: boolean[]
+): void {
+  const visited = new Set<number>();
+  for (let i = 0; i < elements.length; i++) {
+    const group = beamsBuilder.beamGroupFor(i);
+    if (group === null || visited.has(i)) {
+      continue;
+    }
+    group.forEach((index) => visited.add(index));
+    const forced = group
+      .map((index) => overrides.get(elements[index]))
+      .filter((direction): direction is boolean => direction !== undefined);
+    if (forced.length === 0) {
+      continue;
+    }
+    if (forced.some((direction) => direction !== forced[0])) {
+      console.warn(
+        `[beamRules] beamed notes force conflicting stem directions; using the first one (${
+          forced[0] ? 'up' : 'down'
+        }) for the whole beam`
+      );
+    }
+    for (const index of group) {
+      stemDirections[index] = forced[0];
+    }
+  }
 }

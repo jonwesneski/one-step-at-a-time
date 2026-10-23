@@ -12,7 +12,13 @@ import {
   MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_TUPLET,
+  STAFF_EVENTS,
 } from './utils/consts';
+import {
+  DYNAMICS_BASELINE_Y,
+  STAFF_TOP_LINE_Y,
+} from './utils/notationDimensions';
+import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -153,6 +159,121 @@ describe('staffClassicalBase', () => {
       );
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('crossStaffDynamicsOverrides', () => {
+    function makeNote(attrs: Record<string, string>) {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', `${5 satisfies Octave}`);
+      for (const [key, value] of Object.entries(attrs)) {
+        note.setAttribute(key, value);
+      }
+      return note;
+    }
+
+    function renderStaffWithHairpin() {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      document.body.appendChild(staff);
+      const notes = [
+        makeNote({ crescendo: 'start', dynamic: 'p' }),
+        makeNote({}),
+        makeNote({ crescendo: 'end', dynamic: 'f' }),
+      ];
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => notes;
+      slot.dispatchEvent(new Event('slotchange'));
+      return { staff, start: notes[0], end: notes[2] };
+    }
+
+    const hairpinYs = (staff: any): number[] =>
+      Array.from<SVGPathElement>(
+        staff.shadowRoot.querySelectorAll('.hairpin path')
+      ).flatMap((path) => {
+        const [, , y1, , , y2] = (path.getAttribute('d') ?? '').split(' ');
+        return [Number(y1), Number(y2)];
+      });
+
+    const markingTexts = (staff: any): string[] =>
+      Array.from<SVGTextElement>(
+        staff.shadowRoot.querySelectorAll('.dynamic-marking')
+      ).map((text) => text.textContent ?? '');
+
+    const overrides = (
+      entries: [unknown, CrossStaffDynamicsOverride][]
+    ): Map<unknown, CrossStaffDynamicsOverride> => new Map(entries);
+
+    it('draws neither the hairpin nor its markings when the measure takes them over', () => {
+      const { staff, start, end } = renderStaffWithHairpin();
+      expect(staff.shadowRoot.querySelectorAll('.hairpin').length).toBe(1);
+
+      staff.crossStaffDynamicsOverrides = overrides([
+        [start, { hairpin: 'measure', marking: 'measure' }],
+        [end, { hairpin: null, marking: 'measure' }],
+      ]);
+
+      expect(staff.shadowRoot.querySelectorAll('.hairpin').length).toBe(0);
+      expect(markingTexts(staff)).toEqual([]);
+    });
+
+    it('draws a hairpin forced above the stave above its top line', () => {
+      const { staff, start, end } = renderStaffWithHairpin();
+      expect(hairpinYs(staff).every((y) => y > STAFF_TOP_LINE_Y)).toBe(true);
+
+      staff.crossStaffDynamicsOverrides = overrides([
+        [start, { hairpin: 'above', marking: 'above' }],
+        [end, { hairpin: null, marking: 'above' }],
+      ]);
+
+      const ys = hairpinYs(staff);
+      expect(ys.length).toBe(4);
+      expect(ys.every((y) => y < STAFF_TOP_LINE_Y)).toBe(true);
+    });
+
+    it('re-lays out only when a forced side changes, never for an identical map', () => {
+      const { staff, start } = renderStaffWithHairpin();
+      const listener = jest.fn();
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, listener);
+
+      staff.crossStaffDynamicsOverrides = overrides([
+        [start, { hairpin: 'measure', marking: null }],
+      ]);
+      expect(listener).not.toHaveBeenCalled();
+
+      staff.crossStaffDynamicsOverrides = overrides([
+        [start, { hairpin: 'above', marking: null }],
+      ]);
+      const relayouts = listener.mock.calls.length;
+      expect(relayouts).toBeGreaterThan(0);
+
+      staff.crossStaffDynamicsOverrides = overrides([
+        [start, { hairpin: 'above', marking: null }],
+      ]);
+      expect(listener.mock.calls.length).toBe(relayouts);
+    });
+
+    it('reports its default placement regardless of overrides', () => {
+      const { staff, start, end } = renderStaffWithHairpin();
+      const defaults = staff.hairpinDefaultsForMeasure();
+      expect(defaults.pairs).toEqual([
+        expect.objectContaining({
+          kind: 'crescendo',
+          side: 'below',
+          startElement: start,
+          endElement: end,
+        }),
+      ]);
+      expect(defaults.pairs[0].baselineClientY).toBeGreaterThanOrEqual(
+        DYNAMICS_BASELINE_Y
+      );
+
+      staff.crossStaffDynamicsOverrides = overrides([
+        [start, { hairpin: 'above', marking: 'above' }],
+      ]);
+
+      expect(staff.hairpinDefaultsForMeasure()).toEqual(defaults);
     });
   });
 
