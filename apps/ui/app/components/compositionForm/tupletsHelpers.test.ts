@@ -12,6 +12,7 @@ import {
   setTuplet,
   setTupletPlacement,
   tupletCandidate,
+  tupletOfEntries,
 } from './tupletsHelpers';
 import type { CompositionStructure, MusicEntry, Selection } from './types';
 import { isPitchedEntry } from './types';
@@ -282,6 +283,37 @@ describe('cross-staff tuplets', () => {
       hideRests: false,
     });
     expect(linked.entriesById.r1).not.toMatchObject({ hidden: true });
+  });
+
+  it('unlinks the former partner when a new pair takes over one side', () => {
+    const base = buildCrossStaff();
+    const structure: CompositionStructure = {
+      ...base,
+      measuresById: { m1: { id: 'm1', staffIds: ['s1', 's2', 's3'] } },
+      stavesById: {
+        ...base.stavesById,
+        s3: buildSingleVoiceStaff('s3', ['h', 'i', 'r3'], { type: 'bass' }),
+      },
+      entriesById: {
+        ...base.entriesById,
+        h: { id: 'h', type: 'note', value: 'C', duration: 'quarter' },
+        i: { id: 'i', type: 'note', value: 'D', duration: 'quarter' },
+        r3: { id: 'r3', type: 'rest', duration: 'quarter' },
+      },
+    };
+    const upper = crossStaffTupletCandidate(both, structure)!;
+    const linked = setCrossStaffTuplet(structure, upper, '3');
+
+    const lower = crossStaffTupletCandidate(
+      { ...both, entryIds: ['r2', 'f', 'h', 'i', 'r3'] },
+      linked
+    )!;
+    const relinked = setCrossStaffTuplet(linked, lower, '3');
+
+    expect(crossStaffTupletOf(relinked, lower)).not.toBeNull();
+    expect(
+      tupletOfEntries(relinked, ['a', 'g', 'r1'])?.crossStaffGroupId
+    ).toBeNull();
   });
 
   it('unlinks when one side no longer matches', () => {

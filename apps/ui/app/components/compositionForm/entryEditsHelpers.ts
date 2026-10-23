@@ -30,8 +30,8 @@ export function applyEntryUpdate(
   if (!structure.entriesById[entry.id]) {
     return structure;
   }
-  return pruneInvalidNotationLinks(
-    pruneBrokenTies({
+  return pruneBrokenTies(
+    pruneInvalidNotationLinks({
       ...structure,
       entriesById: {
         ...structure.entriesById,

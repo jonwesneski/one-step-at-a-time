@@ -1,7 +1,7 @@
 import type { DurationType } from '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
-import { staffOfEntry } from './connectorsHelpers';
 import { adjacentStaffPair } from './crossStaffHelpers';
+import { staffOfEntry } from './entryLocationHelpers';
 import type { CompositionStructure, MusicEntry, Selection } from './types';
 
 // Double-stemmed (cross-staff) beam groups for the composition form. Mirrors

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { canTie } from './connectorsHelpers';
 import { removeSelectionFromStructure } from './deleteSelectionHelpers';
+import { applyEntryUpdate } from './entryEditsHelpers';
 import {
   DEFAULT_OCTAVE_SPAN_SETTINGS,
+  isOctaveSpanMember,
   octaveAmountFits,
   octaveSpanCandidate,
   octaveSpanContaining,
@@ -277,6 +280,80 @@ describe('resolveOctaveAttributes', () => {
     });
     expect(attributes.get('f')).toEqual({ loco: true });
   });
+
+  it('suppresses a standalone loco on a span member', () => {
+    const structure = buildStructure();
+    structure.entriesById.a = { ...note('a', 6), loco: true };
+    structure.entriesById.b = { ...note('b', 6), loco: true };
+    const applied = upsertOctaveSpan(
+      structure,
+      { startEntryId: 'a', endEntryId: 'd' },
+      settings('8va')
+    )!;
+    const attributes = resolveOctaveAttributes(applied);
+    expect(attributes.get('a')).not.toHaveProperty('loco');
+    expect(attributes.has('b')).toBe(false);
+    expect(isOctaveSpanMember(applied, 'b')).toBe(true);
+    expect(isOctaveSpanMember(applied, 'e')).toBe(false);
+  });
+});
+
+describe('ties across an octave line', () => {
+  // a, b tied C6s; the line covers only a, so a is written C5.
+  function tiedAcrossEdge(): CompositionStructure {
+    const structure = buildStructure();
+    const tied: CompositionStructure = {
+      ...structure,
+      connectorsById: {
+        t: { id: 't', kind: 'tie', startEntryId: 'a', endEntryId: 'b' },
+      },
+      connectorOrder: ['t'],
+    };
+    return upsertOctaveSpan(
+      tied,
+      { startEntryId: 'a', endEntryId: 'a' },
+      settings('8va')
+    )!;
+  }
+
+  it('compares sounding pitch, so the tie stays valid and survives an edit', () => {
+    const applied = tiedAcrossEdge();
+    expect(octaveOf(applied, 'a')).toBe(5);
+    expect(canTie(applied, { startEntryId: 'a', endEntryId: 'b' })).toBe(true);
+
+    const edited = applyEntryUpdate(applied, note('f', 5));
+    expect(edited.connectorOrder).toEqual(['t']);
+  });
+
+  it('rejects equal written pitches that sound an octave apart', () => {
+    const applied = tiedAcrossEdge();
+    const sameWritten = applyEntryUpdate(applied, note('b', 5));
+    expect(canTie(sameWritten, { startEntryId: 'a', endEntryId: 'b' })).toBe(
+      false
+    );
+    expect(sameWritten.connectorOrder).toEqual([]);
+  });
+
+  it('compares chords by sounding pitch too', () => {
+    const structure = buildStructure();
+    const chord = (id: string): MusicEntry => ({
+      id,
+      type: 'chord',
+      notes: [
+        { value: 'C', octave: 6 },
+        { value: 'E', octave: 6 },
+      ],
+      duration: 'quarter',
+    });
+    structure.entriesById.a = chord('a');
+    structure.entriesById.b = chord('b');
+    const applied = upsertOctaveSpan(
+      structure,
+      { startEntryId: 'a', endEntryId: 'a' },
+      settings('8va')
+    )!;
+    expect(canTie(applied, { startEntryId: 'a', endEntryId: 'b' })).toBe(true);
+  });
 });
 
 describe('cleanup', () => {
@@ -310,13 +387,99 @@ describe('cleanup', () => {
     expect(deleted.octaveSpansById).toEqual({});
   });
 
-  it('swaps endpoints a reorder inverted', () => {
+  it('keeps a member that a reorder lands at its own span edge', () => {
     const applied = withSpan('a', 'b');
     const reordered = moveEntryInVoice(applied, 's1', 's1-v1', 'a', 2);
     expect(onlySpan(reordered)).toMatchObject({
       startEntryId: 'b',
       endEntryId: 'a',
     });
+    expect(octaveOf(reordered, 'a')).toBe(5);
+  });
+
+  it('re-pitches a member a reorder moves out of its span', () => {
+    const applied = withSpan('a', 'b');
+    const reordered = moveEntryInVoice(applied, 's1', 's1-v1', 'a', 4);
+    expect(onlySpan(reordered)).toMatchObject({
+      startEntryId: 'b',
+      endEntryId: 'b',
+    });
+    expect(octaveOf(reordered, 'a')).toBe(6);
+  });
+
+  // a, b sound C4 under 8vb; c, d sound C5 under 8va.
+  function adjacentSpans(): CompositionStructure {
+    const structure = buildStructure();
+    structure.entriesById.a = note('a', 4);
+    structure.entriesById.b = note('b', 4);
+    structure.entriesById.c = note('c', 5);
+    structure.entriesById.d = note('d', 5);
+    const first = upsertOctaveSpan(
+      structure,
+      { startEntryId: 'a', endEntryId: 'b' },
+      settings('8vb')
+    )!;
+    return upsertOctaveSpan(
+      first,
+      { startEntryId: 'c', endEntryId: 'd' },
+      settings('8va')
+    )!;
+  }
+
+  it('moves a note into the span it lands inside, never overlapping two', () => {
+    const reordered = moveEntryInVoice(adjacentSpans(), 's1', 's1-v1', 'a', 3);
+
+    expect(reordered.stavesById.s1.voicesById['s1-v1'].entryIds).toEqual([
+      'b',
+      'c',
+      'a',
+      'd',
+    ]);
+    const ranges = Object.values(reordered.octaveSpansById).map((span) => [
+      span.startEntryId,
+      span.endEntryId,
+    ]);
+    expect(ranges).toEqual([
+      ['b', 'b'],
+      ['c', 'd'],
+    ]);
+    expect(octaveOf(reordered, 'a')).toBe(3);
+  });
+
+  it('rejects a reorder whose re-pitch would leave the octave range', () => {
+    const structure = buildStructure();
+    structure.entriesById.c = note('c', 5);
+    structure.entriesById.d = note('d', 5);
+    const first = upsertOctaveSpan(
+      structure,
+      { startEntryId: 'a', endEntryId: 'b' },
+      settings('8va')
+    )!;
+    const both = upsertOctaveSpan(
+      first,
+      { startEntryId: 'c', endEntryId: 'd' },
+      settings('8vb')
+    )!;
+    expect(moveEntryInVoice(both, 's1', 's1-v1', 'a', 3)).toBe(both);
+  });
+
+  it('drops a span sharing a member with one kept before it', () => {
+    const applied = withSpan('a', 'b');
+    const overlapping: CompositionStructure = {
+      ...applied,
+      octaveSpansById: {
+        ...applied.octaveSpansById,
+        late: {
+          ...onlySpan(applied),
+          id: 'late',
+          startEntryId: 'b',
+          endEntryId: 'd',
+        },
+      },
+    };
+    expect(
+      Object.keys(pruneInvalidOctaveSpans(overlapping).octaveSpansById)
+    ).toEqual([onlySpan(applied).id]);
   });
 
   it('drops a span whose endpoints no longer share a track', () => {

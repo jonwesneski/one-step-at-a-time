@@ -17,7 +17,7 @@ import {
   remainingDuration,
   staffOfEntryId,
 } from './measureCapacityHelpers';
-import { isOctaveSpanEnd, octaveSpanCandidate } from './octaveHelpers';
+import { isOctaveSpanMember, octaveSpanCandidate } from './octaveHelpers';
 import { OctaveInput } from './OctaveInput';
 import {
   phraseSlurCandidate,
@@ -254,7 +254,7 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           voiceOrder={editableEntryVoiceContext?.staff.voiceOrder ?? []}
           currentVoiceId={editableEntryVoiceContext?.voiceId ?? null}
           canShareDynamic={canShareDynamic(structure, editableEntry.id)}
-          canTakeLoco={!isOctaveSpanEnd(structure, editableEntry.id)}
+          canTakeLoco={!isOctaveSpanMember(structure, editableEntry.id)}
         />
       ),
     });

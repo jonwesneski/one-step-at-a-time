@@ -1,4 +1,4 @@
-import { staffOfEntry } from './connectorsHelpers';
+import { staffOfEntry } from './entryLocationHelpers';
 import { CAPACITY_EPSILON, entryFactor } from './measureCapacityHelpers';
 import type {
   ChordEntry,

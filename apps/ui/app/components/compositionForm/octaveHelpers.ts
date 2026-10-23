@@ -10,7 +10,7 @@ import {
   resolveEntryOctaves,
   resolveNoteOctave,
 } from './clefsHelpers';
-import { flattenEntryOrder, staffOfEntry } from './connectorsHelpers';
+import { flattenEntryOrder, staffOfEntry } from './entryLocationHelpers';
 import type {
   CompositionStructure,
   MusicEntry,
@@ -141,6 +141,18 @@ export function octaveSpanContaining(
       return wanted.every((id) => members.includes(id));
     }) ?? null
   );
+}
+
+// How many octaves above its written pitch `entryId` sounds — what a pitch
+// comparison across an octave line's edge (a tie) has to add back.
+export function soundingOctaveShift(
+  structure: CompositionStructure,
+  entryId: string
+): number {
+  const span = Object.values(structure.octaveSpansById).find((candidate) =>
+    spanMembers(structure, candidate).includes(entryId)
+  );
+  return span ? SOUNDING_OCTAVES_ABOVE_WRITTEN[span.amount] : 0;
 }
 
 function shiftOctave(octave: number, delta: number): Octave | null {
@@ -335,35 +347,95 @@ export function octaveSpansWithoutEntries(
   return octaveSpansById;
 }
 
-// Drops spans whose endpoints no longer share a track (a staff removed above
-// them, a voice move) and swaps endpoints a reorder inverted. No pitches move:
-// there is no longer a well-defined member run to restore.
+// Called with the structure before and after `movedEntryId` changes place in
+// its voice. Every other member keeps its span. The moved entry joins the span
+// it now sits inside — or stays in its own when it lands right at that span's
+// edge — and is rewritten to keep sounding where it did. Null when that
+// rewrite would leave the supported octave range.
+export function octaveSpansAfterMove(
+  before: CompositionStructure,
+  after: CompositionStructure,
+  movedEntryId: string
+): CompositionStructure | null {
+  if (!isNoteOrChord(before.entriesById[movedEntryId])) {
+    return after;
+  }
+  const ownSpan = Object.values(before.octaveSpansById).find((span) =>
+    spanMembers(before, span).includes(movedEntryId)
+  );
+  const octaveSpansById = octaveSpansWithoutEntries(
+    before,
+    new Set([movedEntryId])
+  );
+  const next = { ...after, octaveSpansById };
+
+  const landedInside = Object.values(octaveSpansById).some((span) =>
+    spanMembers(next, span).includes(movedEntryId)
+  );
+  if (!landedInside && ownSpan) {
+    const remaining = octaveSpansById[ownSpan.id];
+    if (!remaining) {
+      octaveSpansById[ownSpan.id] = {
+        ...ownSpan,
+        startEntryId: movedEntryId,
+        endEntryId: movedEntryId,
+      };
+    } else {
+      const length = spanMembers(next, remaining).length;
+      const leading = octaveSpanMemberIds(next, {
+        startEntryId: movedEntryId,
+        endEntryId: remaining.endEntryId,
+      });
+      const trailing = octaveSpanMemberIds(next, {
+        startEntryId: remaining.startEntryId,
+        endEntryId: movedEntryId,
+      });
+      if (leading?.length === length + 1) {
+        octaveSpansById[ownSpan.id] = {
+          ...remaining,
+          startEntryId: movedEntryId,
+        };
+      } else if (trailing?.length === length + 1) {
+        octaveSpansById[ownSpan.id] = {
+          ...remaining,
+          endEntryId: movedEntryId,
+        };
+      }
+    }
+  }
+
+  return transposeMembers(
+    next,
+    [movedEntryId],
+    soundingOctaveShift(before, movedEntryId) -
+      soundingOctaveShift(next, movedEntryId)
+  );
+}
+
+// Drops spans whose endpoints no longer share a track in order (a staff
+// removed above them, a voice move), then any span sharing a member with one
+// kept before it. No pitches move: there is no longer a well-defined member
+// run to restore.
 export function pruneInvalidOctaveSpans(
   structure: CompositionStructure
 ): CompositionStructure {
   let changed = false;
+  const claimed = new Set<string>();
   const octaveSpansById: Record<string, NormalizedOctaveSpan> = {};
   for (const span of Object.values(structure.octaveSpansById)) {
-    if (
-      !isNoteOrChord(structure.entriesById[span.startEntryId]) ||
-      !isNoteOrChord(structure.entriesById[span.endEntryId])
-    ) {
+    const members =
+      isNoteOrChord(structure.entriesById[span.startEntryId]) &&
+      isNoteOrChord(structure.entriesById[span.endEntryId])
+        ? octaveSpanMemberIds(structure, span)
+        : null;
+    if (!members || members.some((id) => claimed.has(id))) {
       changed = true;
       continue;
     }
-    if (octaveSpanMemberIds(structure, span)) {
-      octaveSpansById[span.id] = span;
-      continue;
+    for (const id of members) {
+      claimed.add(id);
     }
-    const swapped = {
-      ...span,
-      startEntryId: span.endEntryId,
-      endEntryId: span.startEntryId,
-    };
-    changed = true;
-    if (octaveSpanMemberIds(structure, swapped)) {
-      octaveSpansById[span.id] = swapped;
-    }
+    octaveSpansById[span.id] = span;
   }
   return changed ? { ...structure, octaveSpansById } : structure;
 }
@@ -394,21 +466,32 @@ export function resolveOctaveAttributes(
       span.end === 'loco' ? { loco: true } : { 'octave-stop': true }
     );
   }
+  // A standalone `loco` would close the line at that element, so only the
+  // span's own end setting may label a member.
+  const spanned = new Set(
+    Object.values(structure.octaveSpansById).flatMap((span) =>
+      spanMembers(structure, span)
+    )
+  );
   for (const entry of Object.values(structure.entriesById)) {
-    if ((entry.type === 'note' || entry.type === 'chord') && entry.loco) {
+    if (
+      (entry.type === 'note' || entry.type === 'chord') &&
+      entry.loco &&
+      !spanned.has(entry.id)
+    ) {
       patch(entry.id, { loco: true });
     }
   }
   return result;
 }
 
-// Whether `entryId` already closes a span — the standalone-loco toggle is
-// hidden there, since the span's own end setting owns that label.
-export function isOctaveSpanEnd(
+// Whether `entryId` sits under a span — the standalone-loco toggle is hidden
+// there (see resolveOctaveAttributes).
+export function isOctaveSpanMember(
   structure: CompositionStructure,
   entryId: string
 ): boolean {
-  return Object.values(structure.octaveSpansById).some(
-    (span) => span.endEntryId === entryId
+  return Object.values(structure.octaveSpansById).some((span) =>
+    spanMembers(structure, span).includes(entryId)
   );
 }

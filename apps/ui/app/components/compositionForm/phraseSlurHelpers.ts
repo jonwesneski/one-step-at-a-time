@@ -1,13 +1,14 @@
-import { staffOfEntry } from './connectorsHelpers';
 import { entryOnset } from './crossStaffHelpers';
+import { staffOfEntry } from './entryLocationHelpers';
 import { CAPACITY_EPSILON } from './measureCapacityHelpers';
 import type { CompositionStructure, MusicEntry, Selection } from './types';
 
 // Cross-staff phrase slurs (`slur-group`): one continuous slur over a line
-// passed between the hands. The library joins a group's members in rendered
-// x order (connectorsBuilder.ts#collectPhraseSlurPairs) and expects only the
-// breakpoints to carry the key — the first and last note of each one-staff
-// leg — so the user selects the whole passage and this file derives them.
+// passed between the hands. The library joins a group's members in measure
+// order, then rendered x order (connectorsBuilder.ts#collectPhraseSlurPairs),
+// and expects only the breakpoints to carry the key — the first and last note
+// of each one-staff leg — so the user selects the whole passage and this file
+// derives them.
 
 export type PhraseSlurCandidate = {
   startEntryId: string;

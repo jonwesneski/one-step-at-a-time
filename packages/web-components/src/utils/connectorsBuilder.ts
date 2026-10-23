@@ -237,9 +237,10 @@ export const collectArpeggioTiePairs = (root: ParentNode): ConnectorPair[] => {
   return pairs;
 };
 
-// Collects every note/chord sharing a slur-group id, orders them by real
-// rendered x (temporal order — same-beat entries land at the same x by
-// construction, see SVG Coordinate System in CLAUDE.md), and produces one
+// Collects every note/chord sharing a slur-group id, orders them by measure
+// and then real rendered x (temporal order — same-beat entries land at the
+// same x by construction, see SVG Coordinate System in CLAUDE.md; x restarts
+// on each system, so it can't order measures on its own), and produces one
 // ordinary ConnectorPair per consecutive pair — each flows through
 // buildConnectorSvgs exactly like any other slur pair. Grand-staff/classical
 // specific (note/chord only) — mirrors beam-group's own N:M shared-key
@@ -270,6 +271,12 @@ export const collectPhraseSlurPairs = (root: ParentNode): ConnectorPair[] => {
     }
   }
 
+  const measureIndex = new Map(
+    Array.from(root.querySelectorAll(MUSIC_MEASURE)).map((measure, index) => [
+      measure,
+      index,
+    ])
+  );
   const pairs: ConnectorPair[] = [];
   for (const [groupId, members] of groups) {
     if (members.length < 2) {
@@ -279,10 +286,14 @@ export const collectPhraseSlurPairs = (root: ParentNode): ConnectorPair[] => {
       continue;
     }
     const ordered = consecutivePhrasePairs(
-      members.map((member) => ({
-        item: member,
-        x: member.getBoundingClientRect().left,
-      }))
+      members.map((member) => {
+        const measure = member.closest(MUSIC_MEASURE);
+        return {
+          item: member,
+          measureIndex: (measure && measureIndex.get(measure)) ?? 0,
+          x: member.getBoundingClientRect().left,
+        };
+      })
     );
     for (const [start, end] of ordered) {
       pairs.push({ kind: 'slur', start, end, nestingLevel: 0 });

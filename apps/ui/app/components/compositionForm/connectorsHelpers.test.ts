@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   canTie,
   connectorBetween,
-  flattenEntryOrder,
   isConnectableSelection,
   pruneBrokenTies,
   pruneConnectorsForEntries,
@@ -10,6 +9,7 @@ import {
   resolveConnectorAttributes,
   upsertConnector,
 } from './connectorsHelpers';
+import { flattenEntryOrder } from './entryLocationHelpers';
 import {
   buildMultiVoiceStaff,
   buildSingleVoiceStaff,

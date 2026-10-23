@@ -109,15 +109,18 @@ drops an invalid link, so the editor never stores one:
 `pruneInvalid*` pass and is called last by every mutation that can move,
 delete, or re-time entries (`applyEntryUpdate`, `removeSelectionFromStructure`,
 `moveEntryInVoice`/`moveEntryToVoice`, `removeVoiceFromStaff`, `rebar`, the
-`setTuplet` mutator). A new link type adds its own `pruneInvalid*` to that
-list.
+`setTuplet` mutator), followed only by `pruneBrokenTies` where ties are
+re-checked, since tie validity reads octave spans. A new link type adds its
+own `pruneInvalid*` to that list.
 
 **Octave spans store written pitch.** Applying one keeps its members sounding
 where they were, so written octaves move opposite to the shift (8va: one
 down); removing it or changing the amount moves them back
 (`octaveHelpers.ts`). Deleting an endpoint shrinks the span to the notes left
 (`octaveSpansWithoutEntries`, computed on the structure _before_ the delete)
-rather than re-pitching anything.
+rather than re-pitching anything. A reordered entry joins the span it lands
+in and is re-pitched to keep its sound (`octaveSpansAfterMove`); ties compare
+sounding pitch (`soundingOctaveShift`), so a tie may cross a line's edge.
 
 A staff's entries are one level deeper than the diagram above shows:
 `voiceOrder: string[]` (ascending = voice 1..3, position IS the voice number,

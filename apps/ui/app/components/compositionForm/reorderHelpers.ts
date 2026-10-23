@@ -1,10 +1,13 @@
 import {
-  flattenEntryOrder,
   pruneBrokenTies,
   pruneConnectorsForEntries,
 } from './connectorsHelpers';
+import { flattenEntryOrder } from './entryLocationHelpers';
 import { pruneInvalidNotationLinks } from './notationLinksHelpers';
-import { octaveSpansWithoutEntries } from './octaveHelpers';
+import {
+  octaveSpansAfterMove,
+  octaveSpansWithoutEntries,
+} from './octaveHelpers';
 import type { CompositionStructure, NormalizedVoice } from './types';
 import { isPitchedEntry } from './types';
 
@@ -46,24 +49,30 @@ export function moveEntryInVoice(
     ...without.slice(insertAt),
   ];
 
-  let next: CompositionStructure = {
-    ...structure,
-    stavesById: {
-      ...structure.stavesById,
-      [staffId]: {
-        ...staff,
-        voicesById: {
-          ...staff.voicesById,
-          [voiceId]: { ...voice, entryIds },
+  const moved = octaveSpansAfterMove(
+    structure,
+    {
+      ...structure,
+      stavesById: {
+        ...structure.stavesById,
+        [staffId]: {
+          ...staff,
+          voicesById: {
+            ...staff.voicesById,
+            [voiceId]: { ...voice, entryIds },
+          },
         },
       },
     },
-  };
+    entryId
+  );
+  if (!moved) {
+    return structure;
+  }
 
-  next = dissolveDiscontiguousTuplets(next, staffId, voiceId);
+  let next = dissolveDiscontiguousTuplets(moved, staffId, voiceId);
   next = normalizeConnectorEndpointOrder(next);
-  next = pruneBrokenTies(next);
-  return pruneInvalidNotationLinks(next);
+  return pruneBrokenTies(pruneInvalidNotationLinks(next));
 }
 
 // Moves an entry to a different voice of the same staff — a genuinely
@@ -138,8 +147,7 @@ export function moveEntryToVoice(
   // just ties (pruneBrokenTies alone leaves slurs/hairpins as dangling
   // stored state that silently stops rendering).
   next = pruneConnectorsForEntries(next, new Set([entryId]));
-  next = pruneBrokenTies(next);
-  return pruneInvalidNotationLinks(next);
+  return pruneBrokenTies(pruneInvalidNotationLinks(next));
 }
 
 // A tuplet must be a single uninterrupted run of 2+ entries in one voice (the

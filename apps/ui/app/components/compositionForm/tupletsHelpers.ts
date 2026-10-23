@@ -335,7 +335,8 @@ function setRestsHidden(
 
 // Brackets both runs as one cross-staff tuplet (`ratio`), hiding the rests
 // inside them when `hideRests`; `ratio === null` removes both tuplets and
-// shows those rests again.
+// shows those rests again. A tuplet replaced on one side unlinks its former
+// partner.
 export function setCrossStaffTuplet(
   structure: CompositionStructure,
   candidate: CrossStaffTupletCandidate,
@@ -348,7 +349,7 @@ export function setCrossStaffTuplet(
     for (const run of candidate.runs) {
       next = setTuplet(next, run.entryIds, null);
     }
-    return next;
+    return pruneInvalidCrossStaffTuplets(next);
   }
 
   let next = structure;
@@ -363,7 +364,7 @@ export function setCrossStaffTuplet(
       tupletsById[tuplet.id] = { ...tuplet, crossStaffGroupId };
     }
   }
-  next = { ...next, tupletsById };
+  next = pruneInvalidCrossStaffTuplets({ ...next, tupletsById });
   return hideRests ? setRestsHidden(next, allEntryIds, true) : next;
 }
 

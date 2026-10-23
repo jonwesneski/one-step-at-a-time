@@ -1,21 +1,14 @@
 import { effectiveClefOfEntry, resolveEntryOctaves } from './clefsHelpers';
+import { flattenEntryOrder, staffOfEntry } from './entryLocationHelpers';
+import { soundingOctaveShift } from './octaveHelpers';
 import type {
   ChordNote,
   CompositionStructure,
   ConnectorKind,
   ConnectorRole,
   NormalizedConnector,
-  NormalizedStaff,
   Selection,
-  StaffType,
 } from './types';
-
-// Every entry in `staff`, in voice order — inlined rather than imported from
-// voiceHelpers.ts (which itself needs pruneBrokenTies below for its own
-// cascade cleanup) to keep that dependency one-directional.
-function staffEntryIds(staff: NormalizedStaff): string[] {
-  return staff.voiceOrder.flatMap((id) => staff.voicesById[id].entryIds);
-}
 
 // Tie/slur resolution for the composition form. Mirrors the pairing rules of
 // packages/web-components' connectorsBuilder (pairConnectors): connectors are
@@ -40,80 +33,6 @@ export type ConnectorEntryAttributes = {
 const HAIRPIN_KINDS: ConnectorKind[] = ['crescendo', 'decrescendo'];
 export function isHairpinKind(kind: ConnectorKind): boolean {
   return HAIRPIN_KINDS.includes(kind);
-}
-
-type EntryStaffContext = {
-  measureId: string;
-  measureIndex: number;
-  staffId: string;
-  staffIndex: number;
-  staffType: StaffType;
-  voiceId: string;
-  voiceIndex: number;
-};
-
-// All entry ids in the order packages/web-components sees them — measure, then
-// staff, then entry — i.e. the order a `querySelectorAll` over the rendered tree
-// returns, which is what connector pairing keys off.
-export function flattenEntryOrder(structure: CompositionStructure): string[] {
-  const order: string[] = [];
-  for (const measureId of structure.measureOrder) {
-    const measure = structure.measuresById[measureId];
-    if (!measure) {
-      continue;
-    }
-    for (const staffId of measure.staffIds) {
-      const staff = structure.stavesById[staffId];
-      if (!staff) {
-        continue;
-      }
-      order.push(...staffEntryIds(staff));
-    }
-  }
-  return order;
-}
-
-export function staffOfEntry(
-  structure: CompositionStructure,
-  entryId: string
-): EntryStaffContext | null {
-  for (
-    let measureIndex = 0;
-    measureIndex < structure.measureOrder.length;
-    measureIndex++
-  ) {
-    const measureId = structure.measureOrder[measureIndex];
-    const measure = structure.measuresById[measureId];
-    if (!measure) {
-      continue;
-    }
-    for (
-      let staffIndex = 0;
-      staffIndex < measure.staffIds.length;
-      staffIndex++
-    ) {
-      const staffId = measure.staffIds[staffIndex];
-      const staff = structure.stavesById[staffId];
-      if (!staff) {
-        continue;
-      }
-      const voiceIndex = staff.voiceOrder.findIndex((voiceId) =>
-        staff.voicesById[voiceId].entryIds.includes(entryId)
-      );
-      if (voiceIndex !== -1) {
-        return {
-          measureId,
-          measureIndex,
-          staffId,
-          staffIndex,
-          staffType: staff.type,
-          voiceId: staff.voiceOrder[voiceIndex],
-          voiceIndex,
-        };
-      }
-    }
-  }
-  return null;
 }
 
 // Interprets a selection as a tie/slur candidate. Returns the ordered outer
@@ -195,9 +114,10 @@ export function connectorBetween(
 }
 
 // True when a tie (a single sustained pitch) is musically valid between the
-// endpoints: same pitch(es), and the two entries are immediately consecutive —
-// within one staff, or the last note of one staff and the first note of the
-// same voice in the very next measure.
+// endpoints: same sounding pitch(es) — so a tie across an octave line's edge
+// joins different written octaves — and the two entries are immediately
+// consecutive — within one staff, or the last note of one staff and the first
+// note of the same voice in the very next measure.
 export function canTie(
   structure: CompositionStructure,
   endpoints: ConnectorEndpoints
@@ -213,23 +133,25 @@ export function canTie(
   if (start.type !== end.type) {
     return false;
   }
+  const soundingOctaves = (notes: ChordNote[], entryId: string) => {
+    const shift = soundingOctaveShift(structure, entryId);
+    return resolveEntryOctaves(
+      effectiveClefOfEntry(structure, entryId),
+      notes
+    ).map((octave) => octave + shift);
+  };
   if (start.type === 'note' && end.type === 'note') {
-    const startClef = effectiveClefOfEntry(structure, endpoints.startEntryId);
-    const endClef = effectiveClefOfEntry(structure, endpoints.endEntryId);
     if (
       start.value !== end.value ||
-      resolveEntryOctaves(startClef, [start])[0] !==
-        resolveEntryOctaves(endClef, [end])[0]
+      soundingOctaves([start], endpoints.startEntryId)[0] !==
+        soundingOctaves([end], endpoints.endEntryId)[0]
     ) {
       return false;
     }
   }
   if (start.type === 'chord' && end.type === 'chord') {
     const key = (notes: ChordNote[], entryId: string) => {
-      const octaves = resolveEntryOctaves(
-        effectiveClefOfEntry(structure, entryId),
-        notes
-      );
+      const octaves = soundingOctaves(notes, entryId);
       return notes
         .map((n, i) => `${n.value}${octaves[i]}`)
         .sort()
