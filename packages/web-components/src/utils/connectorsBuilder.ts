@@ -1,19 +1,46 @@
 import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
+import {
+  computeNestingLevels,
+  consecutivePhrasePairs,
+  CurvePoint,
+  isCurveObscured,
+  isInnerVoicePosition,
+  ObstacleRect,
+  oppositeSide,
+  pickChordToneSide,
+  pickCrossStaffSlurSide,
+  pickStemSide,
+  resolveRectClearingBulgeHeight,
+  resolveSlurCurve,
+  sliceConvexPolygon,
+  slurAnchorKind,
+  SlurCurveResolution,
+} from '../rules/connectorPlacementRules';
+import {
+  DoubleStemmedBeamEntry,
+  DoubleStemmedBeamGroup,
+  resolveDoubleStemmedBeamGroups,
+} from '../rules/doubleStemmedBeamRules';
 import { computeGraceFootprintWidth } from '../rules/graceRules';
 import type {
   ArpeggioElementType,
   ChordElementType,
   ConnectorRole,
+  NoteChordOrRestElementType,
   NoteElementType,
   NoteLikeElementType,
+  NoteOrChordElementType,
+  StaffElementBaseType,
 } from '../types/elements';
 import { GlissandoHint, VoiceNumber } from '../types/theory';
 import {
+  isStaffNodeName,
   MUSIC_ARPEGGIO,
   MUSIC_CHORD,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_VOICE,
   MUSIC_VOICE_NODE,
   STAFF_TAGS,
@@ -22,11 +49,19 @@ import {
   ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
   ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
   ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+  CROSS_STAFF_SLUR_BULGE_SPAN_RATIO,
   LAISSEZ_VIBRER_CURVE_LENGTH_PX,
+  SLUR_BEAM_SLICE_WIDTH_PX,
+  SLUR_BEYOND_BEAM_CLEARANCE_PX,
+  SLUR_CONTROL_HEIGHT_MAX_RATIO,
+  SLUR_OBSTACLE_CLEARANCE_PX,
+  SLUR_STEM_END_CLEARANCE_PX,
+  STAFF_LINE_SPACING,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
 import { parseGlissandoHint } from './parsers';
 import {
+  BULGE_STEP_PX,
   computeWrittenTrillNoteWidth,
   createCurveSvg,
   createOpenTieSvg,
@@ -202,6 +237,60 @@ export const collectArpeggioTiePairs = (root: ParentNode): ConnectorPair[] => {
   return pairs;
 };
 
+// Collects every note/chord sharing a slur-group id, orders them by real
+// rendered x (temporal order — same-beat entries land at the same x by
+// construction, see SVG Coordinate System in CLAUDE.md), and produces one
+// ordinary ConnectorPair per consecutive pair — each flows through
+// buildConnectorSvgs exactly like any other slur pair. Grand-staff/classical
+// specific (note/chord only) — mirrors beam-group's own N:M shared-key
+// shape rather than slur's single-valued start/end pair, since a "phrase
+// slur" spanning more than 2 breakpoints needs a note (the last note of
+// one leg, first of the next) to be simultaneously an end and a start,
+// which `slur`'s single attribute value and pairConnectors's LIFO stack
+// cannot express. Callers concat this with
+// pairConnectors(...)/collectArpeggioTiePairs(root), same shape as the
+// latter is already concatenated in today.
+export const collectPhraseSlurPairs = (root: ParentNode): ConnectorPair[] => {
+  const selector = `${MUSIC_NOTE}[slur-group]:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}[slur-group]`;
+  const elements = Array.from(
+    root.querySelectorAll(selector)
+  ) as NoteLikeElementType[];
+
+  const groups = new Map<string, NoteLikeElementType[]>();
+  for (const element of elements) {
+    const groupId = element.getAttribute('slur-group');
+    if (groupId === null) {
+      continue;
+    }
+    const bucket = groups.get(groupId);
+    if (bucket) {
+      bucket.push(element);
+    } else {
+      groups.set(groupId, [element]);
+    }
+  }
+
+  const pairs: ConnectorPair[] = [];
+  for (const [groupId, members] of groups) {
+    if (members.length < 2) {
+      console.warn(
+        `[connectorsBuilder] slur-group "${groupId}" has only one member; nothing to connect`
+      );
+      continue;
+    }
+    const ordered = consecutivePhrasePairs(
+      members.map((member) => ({
+        item: member,
+        x: member.getBoundingClientRect().left,
+      }))
+    );
+    for (const [start, end] of ordered) {
+      pairs.push({ kind: 'slur', start, end, nestingLevel: 0 });
+    }
+  }
+  return pairs;
+};
+
 const readRole = (
   element: HTMLElement,
   attribute: string
@@ -356,20 +445,15 @@ export const pairConnectors = (
     }
   }
 
-  return indexedPairs.map((pair) => ({
+  const nestingLevels = computeNestingLevels(indexedPairs);
+  return indexedPairs.map((pair, index) => ({
     kind: pair.kind,
     start: pair.start,
     end: pair.end,
     laissezVibrer: pair.laissezVibrer,
     lvToneIndex: pair.lvToneIndex,
     label: pair.label,
-    nestingLevel: indexedPairs.filter(
-      (other) =>
-        other !== pair &&
-        other.kind === pair.kind &&
-        other.startIndex > pair.startIndex &&
-        other.endIndex < pair.endIndex
-    ).length,
+    nestingLevel: nestingLevels[index],
   }));
 };
 
@@ -416,11 +500,15 @@ const computeAnchorAtSpecificY = (
   };
 };
 
+// `sideAware` places the anchor on `bulge`'s side of the notehead; otherwise
+// a plain note or chord anchors opposite its stem (a tie or same-staff slur,
+// whose side already is opposite the stem).
 const computeAnchor = (
   note: NoteLikeElementType,
   rootRect: DOMRect,
   bulge: CurveBulge,
-  noteheadOffsetPx: number
+  noteheadOffsetPx: number,
+  sideAware = false
 ): Anchor => {
   // Notes inside a chord have no layout box — anchor via parent chord geometry.
   if (
@@ -465,9 +553,8 @@ const computeAnchor = (
     if (yCoords && yCoords.length > 0) {
       const noteheadY =
         bulge === 'above' ? Math.min(...yCoords) : Math.max(...yCoords);
-      const edgeOffset = chordElement.stemUp
-        ? noteheadOffsetPx
-        : -noteheadOffsetPx;
+      const offsetBelow = sideAware ? bulge === 'below' : chordElement.stemUp;
+      const edgeOffset = offsetBelow ? noteheadOffsetPx : -noteheadOffsetPx;
       y = rect.top - rootRect.top + noteheadY + edgeOffset;
     } else {
       y =
@@ -484,13 +571,70 @@ const computeAnchor = (
     const noteheadCenterPx =
       computeYHeadOffset(noteEl.stemUp, noteEl.duration, noteEl.noFlags) -
       NOTE_HEAD_Y_OFFSET_CORRECTION;
-    const edgeOffset = noteEl.stemUp ? noteheadOffsetPx : -noteheadOffsetPx;
+    const offsetBelow = sideAware ? bulge === 'below' : noteEl.stemUp;
+    const edgeOffset = offsetBelow ? noteheadOffsetPx : -noteheadOffsetPx;
     y = rect.top - rootRect.top + noteheadCenterPx + edgeOffset;
   }
 
   return {
     x: centerX,
     y,
+    rowTop: getRowTop(note, rootRect),
+  };
+};
+
+// A slur's stem-end anchor — used instead of computeAnchor's notehead
+// anchor when the notehead anchor would be obscured by (or too close to) a
+// double-stemmed beam, or unconditionally for an inner-voice beam-group
+// member (see isInnerVoiceMember) whose ordinary opposite-of-stem territory
+// is occupied by another voice sharing its staff. Pulled back SLUR_STEM_END_CLEARANCE_PX from the true tip — the
+// bare tip itself is exactly where the beam (or that other voice's own
+// content) sits, so anchoring precisely at it would touch it, not clear
+// it. Returns null when the note has no real stem (a whole note, or
+// standalone/degraded rendering with no shadow DOM) — callers fall back to
+// computeAnchor in that case.
+const computeStemEndAnchor = (
+  note: NoteLikeElementType,
+  rootRect: DOMRect
+): Anchor | null => {
+  const stem = note.shadowRoot?.querySelector<SVGGraphicsElement>('.stem');
+  if (!stem) {
+    return null;
+  }
+  const rect = stem.getBoundingClientRect();
+  const stemUp = (note as NoteElementType | ChordElementType).stemUp;
+  const tipY = stemUp
+    ? rect.top + SLUR_STEM_END_CLEARANCE_PX
+    : rect.bottom - SLUR_STEM_END_CLEARANCE_PX;
+  return {
+    x: rect.left + rect.width / 2 - rootRect.left,
+    y: tipY - rootRect.top,
+    rowTop: getRowTop(note, rootRect),
+  };
+};
+
+// A cross-staff slur endpoint anchor past the stem's own tip, on the far side
+// from the notehead — used when the stem points toward the slur's side (see
+// rules/connectorPlacementRules.ts#slurAnchorKind), so the curve clears that
+// note's own beam or flag instead of reaching through it to the notehead.
+// Returns null when the note has no real stem — callers fall back to the
+// notehead anchor.
+const computeBeyondBeamAnchor = (
+  note: NoteLikeElementType,
+  rootRect: DOMRect
+): Anchor | null => {
+  const stem = note.shadowRoot?.querySelector<SVGGraphicsElement>('.stem');
+  if (!stem) {
+    return null;
+  }
+  const rect = stem.getBoundingClientRect();
+  const stemUp = (note as NoteElementType | ChordElementType).stemUp;
+  const tipY = stemUp
+    ? rect.top - SLUR_BEYOND_BEAM_CLEARANCE_PX
+    : rect.bottom + SLUR_BEYOND_BEAM_CLEARANCE_PX;
+  return {
+    x: rect.left + rect.width / 2 - rootRect.left,
+    y: tipY - rootRect.top,
     rowTop: getRowTop(note, rootRect),
   };
 };
@@ -543,44 +687,17 @@ const computeChordToneAnchor = (
 const sameRow = (a: Anchor, b: Anchor): boolean =>
   Math.abs(a.rowTop - b.rowTop) <= ROW_TOLERANCE_PX;
 
-// `createCurveSvg`'s control point is the horizontal midpoint, so x is linear
-// in t. Returns the tie curve's y at a given x, or null when x is outside the
-// span.
-const tieCurveYAt = (
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  bulge: CurveBulge,
-  x: number
-): number | null => {
-  const span = to.x - from.x;
-  if (span === 0) {
-    return null;
-  }
-  const t = (x - from.x) / span;
-  if (t <= 0 || t >= 1) {
-    return null;
-  }
-  const midY =
-    (from.y + to.y) / 2 + (bulge === 'above' ? -1 : 1) * DEFAULT_BULGE_HEIGHT;
-  const mt = 1 - t;
-  return mt * mt * from.y + 2 * mt * t * midY + t * t * to.y;
+// True when two notes belong to different <music-staff>-family ancestors —
+// a genuine cross-staff pair (e.g. a hand-crossing passage's slur), as
+// opposed to two notes that merely happen to be far apart on one staff.
+const onDifferentStaves = (
+  a: NoteLikeElementType,
+  b: NoteLikeElementType
+): boolean => {
+  const staffA = a.closest(STAFF_TAGS);
+  const staffB = b.closest(STAFF_TAGS);
+  return staffA !== null && staffB !== null && staffA !== staffB;
 };
-
-// True when a notehead centre in `obstacles` lies close enough to the tie curve
-// to be obscured — the tie should then be divided into two open stubs.
-const tieIsObscured = (
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  bulge: CurveBulge,
-  obstacles: readonly { x: number; y: number }[]
-): boolean =>
-  obstacles.some((obstacle) => {
-    const curveY = tieCurveYAt(from, to, bulge, obstacle.x);
-    return (
-      curveY !== null &&
-      Math.abs(curveY - obstacle.y) <= ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX
-    );
-  });
 
 // Notehead centre (root-rect space) of a note-like element, preferring the real
 // rendered `.head` rect over the element's own (tall) layout box.
@@ -679,62 +796,554 @@ const tieStartTrillNudgePx = (note: NoteLikeElementType): number => {
   return nudge;
 };
 
-const pickBulge = (note: NoteLikeElementType): CurveBulge => {
-  // Stems up → notehead on the staff, bulge above (opposite side of stem tip? no,
-  // ties/slurs bulge AWAY from the stem — stems up = curve below; stems down = curve above).
-  // For guitar tab there are no stems, default to above.
-  if (note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE) {
-    return 'above';
-  }
+// For notes inside a chord, stemUp is set on the chord element, not the note.
+const stemSourceOf = (note: NoteLikeElementType): NoteLikeElementType =>
+  note.tagName.toLowerCase() === MUSIC_NOTE &&
+  note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
+    ? (note.parentElement as unknown as NoteLikeElementType)
+    : note;
 
-  // For notes inside a chord, stemUp is set on the chord element, not the note.
-  const sourceElement =
-    note.tagName.toLowerCase() === MUSIC_NOTE &&
-    note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
-      ? note.parentElement
-      : note;
+const pickBulge = (note: NoteLikeElementType): CurveBulge =>
+  pickStemSide({
+    stemUp: Boolean(
+      (stemSourceOf(note) as NoteElementType | ChordElementType).stemUp
+    ),
+    isGuitarNote: note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE,
+  });
 
-  const stemUp = (sourceElement as NoteElementType | ChordElementType).stemUp;
-  return stemUp ? 'below' : 'above';
-};
-
-// For chord ties: each note's tie curves outward from the chord's vertical midpoint
-// (top notes curve above, bottom notes curve below). This is position-based, not
-// stem-based — standard engraving practice.
 const pickChordNoteBulge = (
   chord: NoteLikeElementType,
   yCoords: readonly number[],
   index: number
-): CurveBulge => {
-  if (yCoords.length <= 1) {
-    return pickBulge(chord);
+): CurveBulge => pickChordToneSide(yCoords, index, pickBulge(chord));
+
+// True when element is a real, non-outermost voice sharing its own staff
+// with another concurrently-sounding voice — "when a double-stemmed group
+// is an inner part" per the reference engraving material's own
+// articulation-placement rule (see measure.ts#redrawDoubleStemmedBeams'
+// articulationAnchorsToStem write-back, which this mirrors for slur
+// stem-end anchoring). A staff with zero or one <music-voice> children is
+// never "inner" (the ordinary single-voice case); voice 1 (the first
+// <music-voice> sibling) is the canonical outer voice and is never "inner"
+// either, mirroring how the rest of this codebase already treats voice 1
+// as the staff's own primary timeline (see Voices in
+// packages/web-components/CLAUDE.md). Exported (not a measure.ts-only
+// private method) since composition.ts's own #redrawConnectors needs the
+// exact same check for a composition-wide slur.
+export function isInnerVoiceMember(
+  element: NoteOrChordElementType,
+  staff: StaffElementBaseType
+): boolean {
+  const voiceParent = element.closest(MUSIC_VOICE);
+  if (!voiceParent) {
+    return false;
   }
-  const minY = Math.min(...yCoords);
-  const maxY = Math.max(...yCoords);
-  const midY = (minY + maxY) / 2;
-  if (yCoords[index] < midY) {
-    return 'above';
+  const voiceSiblings = Array.from(staff.children).filter(
+    (el) => el.nodeName === MUSIC_VOICE_NODE
+  );
+  return isInnerVoicePosition(
+    voiceSiblings.indexOf(voiceParent),
+    voiceSiblings.length
+  );
+}
+
+// Resolves double-stemmed beam-group context for slur placement (Chapter
+// G), across one or more <music-measure> elements — a double-stemmed beam
+// group is always scoped to a single measure's own two sibling staves, but
+// a slur whose endpoints belong to one can be drawn either by that
+// measure's own #redrawConnectors (a standalone measure) or by an
+// ancestor <music-composition>'s own composition-wide equivalent — both
+// need the exact same per-measure resolution, so this takes a *list* of
+// measures (a single-element list for the standalone case) and aggregates
+// across all of them, converting every real rect into the single `rootRect`
+// space the caller's own buildConnectorSvgs call will use (the caller's
+// own root, not any individual measure's).
+export function resolveDoubleStemmedBeamConnectorContext(
+  measureElements: readonly Element[],
+  rootRect: DOMRect
+): {
+  beamRects: DOMRect[];
+  elementToGroup: Map<NoteChordOrRestElementType, DoubleStemmedBeamGroup>;
+  innerVoiceStemAnchorElements: Set<NoteLikeElementType>;
+} {
+  const beamRects: DOMRect[] = [];
+  const elementToGroup = new Map<
+    NoteChordOrRestElementType,
+    DoubleStemmedBeamGroup
+  >();
+  const innerVoiceStemAnchorElements = new Set<NoteLikeElementType>();
+
+  const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined, ${MUSIC_REST}:defined`;
+
+  for (const measureElement of measureElements) {
+    const staves = Array.from(measureElement.children).filter((el) =>
+      isStaffNodeName(el.nodeName)
+    ) as StaffElementBaseType[];
+    const perStaffElements: NoteChordOrRestElementType[][] = staves.map(
+      (staff) =>
+        Array.from(
+          staff.querySelectorAll(elementSelector)
+        ) as NoteChordOrRestElementType[]
+    );
+    const entries: DoubleStemmedBeamEntry[] = perStaffElements.flatMap(
+      (elements, staffIndex) =>
+        elements.map((element, entryIndex) => ({
+          staffIndex,
+          entryIndex,
+          beamGroup: element.beamGroup,
+          nodeName: element.nodeName,
+        }))
+    );
+    // Warnings are intentionally not logged here — the ancestor
+    // <music-measure>'s own #redrawDoubleStemmedBeams (which every caller
+    // of this function runs first — see the ordering dependency documented
+    // on measure.ts#redrawConnectors/#doubleStemmedBeamRects) already logs
+    // them for this same redraw cycle; logging them again here would just
+    // double every warning.
+    const { groups } = resolveDoubleStemmedBeamGroups(entries);
+
+    for (const group of groups) {
+      for (const member of group.members) {
+        if (member.isRest) {
+          continue;
+        }
+        const element = perStaffElements[member.staffIndex][member.entryIndex];
+        elementToGroup.set(element, group);
+        if (
+          isInnerVoiceMember(
+            element as NoteOrChordElementType,
+            staves[member.staffIndex]
+          )
+        ) {
+          innerVoiceStemAnchorElements.add(
+            element as unknown as NoteLikeElementType
+          );
+        }
+      }
+    }
+
+    const beamOverlay = measureElement.shadowRoot?.querySelector(
+      '.double-stemmed-beams-overlay'
+    );
+    if (beamOverlay) {
+      for (const polygon of Array.from(
+        beamOverlay.querySelectorAll('.double-stemmed-beam')
+      )) {
+        const rect = polygon.getBoundingClientRect();
+        beamRects.push(
+          new DOMRect(
+            rect.left - rootRect.left,
+            rect.top - rootRect.top,
+            rect.width,
+            rect.height
+          )
+        );
+      }
+    }
   }
-  if (yCoords[index] > midY) {
-    return 'below';
-  }
-  return pickBulge(chord);
+
+  return { beamRects, elementToGroup, innerVoiceStemAnchorElements };
+}
+
+export type SlurGroupStaves = {
+  topStaffIndex: number;
+  bottomStaffIndex: number;
 };
+
+// Slur pairs both of whose endpoints belong to the same resolved
+// double-stemmed beam-group. Such a slur is placed over the group's two
+// staves like any cross-staff slur, even when both endpoints sit on one
+// staff, so the group's own majority decides its side. Keyed by the exact
+// pair object the caller then passes to buildConnectorSvgs.
+export function resolveSlurGroupPlacement(
+  pairs: readonly ConnectorPair[],
+  elementToGroup: ReadonlyMap<
+    NoteChordOrRestElementType,
+    DoubleStemmedBeamGroup
+  >
+): Map<ConnectorPair, SlurGroupStaves> {
+  const groupSlurStaves = new Map<ConnectorPair, SlurGroupStaves>();
+  for (const pair of pairs) {
+    if (pair.kind !== 'slur') {
+      continue;
+    }
+    const startGroup = elementToGroup.get(
+      pair.start as unknown as NoteChordOrRestElementType
+    );
+    const endGroup = elementToGroup.get(
+      pair.end as unknown as NoteChordOrRestElementType
+    );
+    if (startGroup && startGroup === endGroup) {
+      groupSlurStaves.set(pair, {
+        topStaffIndex: startGroup.topStaffIndex,
+        bottomStaffIndex: startGroup.bottomStaffIndex,
+      });
+    }
+  }
+  return groupSlurStaves;
+}
+
+export type EntryGeometry = {
+  element: Element;
+  isRest: boolean;
+  centerX: number;
+  rowTop: number;
+  staffIndex: number;
+  glyphRects: ObstacleRect[];
+};
+
+// Everything a cross-staff slur must not touch, in root-rect space: each
+// note/chord/rest's own rendered glyphs, plus every per-staff and
+// double-stemmed beam (sliced so a sloped beam keeps its outline).
+export type EntryObstacles = {
+  entries: EntryGeometry[];
+  beamSlices: ObstacleRect[];
+};
+
+const OBSTACLE_GLYPH_SELECTOR =
+  'path, ellipse, line, rect, polygon, polyline, circle, text';
+
+const toRootSpace = (rect: DOMRect, rootRect: DOMRect): ObstacleRect => ({
+  left: rect.left - rootRect.left,
+  top: rect.top - rootRect.top,
+  right: rect.right - rootRect.left,
+  bottom: rect.bottom - rootRect.top,
+});
+
+const collectGlyphRects = (
+  element: Element,
+  rootRect: DOMRect,
+  excludeGlyphSelector: string | null
+): ObstacleRect[] => {
+  const shapes = Array.from(
+    element.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+      OBSTACLE_GLYPH_SELECTOR
+    ) ?? []
+  );
+  const rects: ObstacleRect[] = [];
+  for (const shape of shapes) {
+    if (
+      shape.classList.contains('head-hit-zone') ||
+      (excludeGlyphSelector !== null && shape.matches(excludeGlyphSelector))
+    ) {
+      continue;
+    }
+    const rect = shape.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      continue;
+    }
+    rects.push(toRootSpace(rect, rootRect));
+  }
+  return rects;
+};
+
+const collectBeamSlices = (
+  polygon: SVGGraphicsElement,
+  rootRect: DOMRect
+): ObstacleRect[] => {
+  const points = (polygon as SVGPolygonElement).points;
+  const matrix =
+    typeof polygon.getScreenCTM === 'function' ? polygon.getScreenCTM() : null;
+  if (!points || points.numberOfItems === 0 || matrix === null) {
+    const rect = polygon.getBoundingClientRect();
+    return rect.width === 0 && rect.height === 0
+      ? []
+      : [toRootSpace(rect, rootRect)];
+  }
+  const corners: CurvePoint[] = [];
+  for (let i = 0; i < points.numberOfItems; i++) {
+    const point = points.getItem(i);
+    const screen = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    corners.push({
+      x: screen.x - rootRect.left,
+      y: screen.y - rootRect.top,
+    });
+  }
+  return sliceConvexPolygon(corners, SLUR_BEAM_SLICE_WIDTH_PX);
+};
+
+const staffIndexOf = (element: Element): number => {
+  const staff = element.closest(STAFF_TAGS);
+  const parent = staff?.parentElement;
+  if (!staff || !parent) {
+    return -1;
+  }
+  return Array.from(parent.children)
+    .filter((child) => isStaffNodeName(child.nodeName))
+    .indexOf(staff);
+};
+
+// `measureElements` are the measures whose double-stemmed beam overlays
+// belong to this redraw (a <music-measure> is not its own descendant).
+// `excludeGlyphSelector` leaves out glyphs a caller may cross, e.g. stems.
+export const collectEntryObstacles = (
+  root: ParentNode,
+  rootRect: DOMRect,
+  measureElements: readonly Element[],
+  { excludeGlyphSelector = null }: { excludeGlyphSelector?: string | null } = {}
+): EntryObstacles => {
+  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden])`;
+  const entries: EntryGeometry[] = Array.from(
+    root.querySelectorAll(selector)
+  ).map((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      element,
+      isRest: element.tagName.toLowerCase() === MUSIC_REST,
+      centerX: rect.left + rect.width / 2 - rootRect.left,
+      rowTop: getRowTop(element as NoteLikeElementType, rootRect),
+      staffIndex: staffIndexOf(element),
+      glyphRects: collectGlyphRects(element, rootRect, excludeGlyphSelector),
+    };
+  });
+
+  const beamPolygons: SVGGraphicsElement[] = [];
+  for (const staff of Array.from(root.querySelectorAll(STAFF_TAGS))) {
+    beamPolygons.push(
+      ...Array.from(
+        staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>('.beam') ?? []
+      )
+    );
+  }
+  for (const measure of measureElements) {
+    beamPolygons.push(
+      ...Array.from(
+        measure.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+          '.double-stemmed-beam'
+        ) ?? []
+      )
+    );
+  }
+  const beamSlices = beamPolygons.flatMap((polygon) =>
+    collectBeamSlices(polygon, rootRect)
+  );
+
+  return { entries, beamSlices };
+};
+
+// Every rendered stem under `root`, in root-rect space.
+export const collectStemRects = (
+  root: ParentNode,
+  rootRect: DOMRect
+): ObstacleRect[] =>
+  Array.from(
+    root.querySelectorAll(
+      `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}`
+    )
+  ).flatMap((element) =>
+    Array.from(element.shadowRoot?.querySelectorAll('.stem') ?? []).map(
+      (stem) => toRootSpace(stem.getBoundingClientRect(), rootRect)
+    )
+  );
 
 export type ConnectorsBuildOptions = {
   rootRect: DOMRect;
   rowLeft: number;
   rowRight: number;
+  // Real double-stemmed-beam polygon rects (root-rect-relative — same
+  // space every anchor in this module uses), already drawn by the
+  // ancestor <music-measure> before this runs (ordering dependency:
+  // measure.ts#redrawConnectors must run after #redrawDoubleStemmedBeams).
+  // A same-staff slur whose curve would otherwise cross one gets pushed
+  // further out; cross-staff slurs avoid them via `entryObstacles`.
+  beamRects?: readonly DOMRect[];
+  // Slur pairs placed over a double-stemmed beam-group's two staves — see
+  // resolveSlurGroupPlacement.
+  groupSlurStaves?: ReadonlyMap<ConnectorPair, SlurGroupStaves>;
+  // Inner-voice double-stemmed-beam members (see isInnerVoiceMember): their
+  // ordinary opposite-of-stem territory is occupied by another voice, so a
+  // slur endpoint on one anchors at its stem end instead of its notehead.
+  innerVoiceElements?: ReadonlySet<NoteLikeElementType>;
+  // Glyph and beam geometry for cross-staff slur placement — see
+  // collectEntryObstacles. Without it a cross-staff slur still picks its side
+  // and anchors, but has nothing to steer around.
+  entryObstacles?: EntryObstacles;
 };
+
+const centerXOf = (element: Element, rootRect: DOMRect): number => {
+  const rect = element.getBoundingClientRect();
+  return rect.left + rect.width / 2 - rootRect.left;
+};
+
+const countNotesPerStaffInSpan = (
+  pair: ConnectorPair,
+  staves: SlurGroupStaves,
+  entries: readonly EntryGeometry[],
+  rootRect: DOMRect
+): { top: number; bottom: number } => {
+  const startX = centerXOf(stemSourceOf(pair.start), rootRect);
+  const endX = centerXOf(stemSourceOf(pair.end), rootRect);
+  const minX = Math.min(startX, endX) - 1;
+  const maxX = Math.max(startX, endX) + 1;
+  const rowTop = getRowTop(pair.start, rootRect);
+  let top = 0;
+  let bottom = 0;
+  for (const entry of entries) {
+    if (
+      entry.isRest ||
+      entry.centerX < minX ||
+      entry.centerX > maxX ||
+      Math.abs(entry.rowTop - rowTop) > ROW_TOLERANCE_PX
+    ) {
+      continue;
+    }
+    if (entry.staffIndex === staves.topStaffIndex) {
+      top++;
+    } else if (entry.staffIndex === staves.bottomStaffIndex) {
+      bottom++;
+    }
+  }
+  return { top, bottom };
+};
+
+const CROSS_STAFF_SLUR_EXTRA_HEIGHT_PX = STAFF_LINE_SPACING * 6;
+
+// A slur spanning two staves (or a double-stemmed beam-group's two staves),
+// placed by the rules in rules/connectorPlacementRules.ts: the majority
+// staff's side (above on an even split), both anchors on that side, and a
+// shape that keeps clear of every other entry — switching to the other side
+// only when that one is clear and the preferred one is not.
+const buildCrossStaffSlurSvgs = (
+  pair: ConnectorPair,
+  staves: SlurGroupStaves,
+  options: ConnectorsBuildOptions
+): SVGGElement[] => {
+  const { rootRect, rowLeft, rowRight, innerVoiceElements, entryObstacles } =
+    options;
+  const entries = entryObstacles?.entries ?? [];
+  const counts = countNotesPerStaffInSpan(pair, staves, entries, rootRect);
+  const preferredSide = pickCrossStaffSlurSide(counts.top, counts.bottom);
+
+  const endpointOwners = new Set<Element>([
+    stemSourceOf(pair.start),
+    stemSourceOf(pair.end),
+  ]);
+  const obstacles = [
+    ...entries
+      .filter((entry) => !endpointOwners.has(entry.element))
+      .flatMap((entry) => entry.glyphRects),
+    ...(entryObstacles?.beamSlices ?? []),
+  ];
+
+  const anchorFor = (note: NoteLikeElementType, side: CurveBulge): Anchor => {
+    const stemSource = stemSourceOf(note);
+    const kind = slurAnchorKind({
+      stemUp: Boolean(
+        (stemSource as NoteElementType | ChordElementType).stemUp
+      ),
+      side,
+      isInnerVoice: innerVoiceElements?.has(note) ?? false,
+      hasStem: Boolean(stemSource.shadowRoot?.querySelector('.stem')),
+    });
+    const notehead = () =>
+      computeAnchor(note, rootRect, side, SLUR_NOTEHEAD_OFFSET_PX, true);
+    if (kind === 'stem-end') {
+      return computeStemEndAnchor(stemSource, rootRect) ?? notehead();
+    }
+    if (kind === 'beyond-stem') {
+      return computeBeyondBeamAnchor(stemSource, rootRect) ?? notehead();
+    }
+    return notehead();
+  };
+
+  let chosen: {
+    side: CurveBulge;
+    start: Anchor;
+    end: Anchor;
+    curve: SlurCurveResolution;
+  } | null = null;
+  for (const side of [preferredSide, oppositeSide(preferredSide)]) {
+    const start = anchorFor(pair.start, side);
+    const end = anchorFor(pair.end, side);
+    if (!sameRow(start, end)) {
+      return [
+        createCurveSvg({
+          from: { x: start.x, y: start.y },
+          to: { x: rowRight, y: start.y },
+          bulge: side,
+        }),
+        createCurveSvg({
+          from: { x: rowLeft, y: end.y },
+          to: { x: end.x, y: end.y },
+          bulge: side,
+        }),
+      ];
+    }
+    const span = Math.abs(end.x - start.x);
+    const floorHeight = Math.max(
+      DEFAULT_BULGE_HEIGHT,
+      span * CROSS_STAFF_SLUR_BULGE_SPAN_RATIO
+    );
+    const curve = resolveSlurCurve(start, end, side, obstacles, {
+      minHeight: 0,
+      floorHeight,
+      maxHeight: Math.max(
+        span * SLUR_CONTROL_HEIGHT_MAX_RATIO,
+        floorHeight + CROSS_STAFF_SLUR_EXTRA_HEIGHT_PX
+      ),
+      step: BULGE_STEP_PX / 2,
+      clearance: SLUR_OBSTACLE_CLEARANCE_PX,
+    });
+    if (chosen === null || curve.collisions < chosen.curve.collisions) {
+      chosen = { side, start, end, curve };
+    }
+    if (curve.collisions === 0) {
+      break;
+    }
+  }
+  if (chosen === null) {
+    return [];
+  }
+  return [
+    createCurveSvg({
+      from: { x: chosen.start.x, y: chosen.start.y },
+      to: { x: chosen.end.x, y: chosen.end.y },
+      bulge: chosen.side,
+      controlHeights: chosen.curve.controlHeights,
+    }),
+  ];
+};
+
+const MAX_BEAM_AVOIDANCE_STEPS = 6;
 
 export const buildConnectorSvgs = (
   pairs: readonly ConnectorPair[],
   options: ConnectorsBuildOptions
 ): SVGGElement[] => {
-  const { rootRect, rowLeft, rowRight } = options;
+  const {
+    rootRect,
+    rowLeft,
+    rowRight,
+    beamRects = [],
+    groupSlurStaves,
+    innerVoiceElements,
+  } = options;
   const elements: SVGGElement[] = [];
 
   for (const pair of pairs) {
+    if (pair.kind === 'slur') {
+      const groupStaves = groupSlurStaves?.get(pair);
+      if (groupStaves) {
+        elements.push(...buildCrossStaffSlurSvgs(pair, groupStaves, options));
+        continue;
+      }
+      if (onDifferentStaves(pair.start, pair.end)) {
+        const startStaffIndex = staffIndexOf(pair.start);
+        const endStaffIndex = staffIndexOf(pair.end);
+        elements.push(
+          ...buildCrossStaffSlurSvgs(
+            pair,
+            {
+              topStaffIndex: Math.min(startStaffIndex, endStaffIndex),
+              bottomStaffIndex: Math.max(startStaffIndex, endStaffIndex),
+            },
+            options
+          )
+        );
+        continue;
+      }
+    }
+
     const startBulge = pickBulge(pair.start);
     const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
     const style =
@@ -812,7 +1421,16 @@ export const buildConnectorSvgs = (
           .map((runNote) => noteheadCenter(runNote, rootRect)),
       ];
 
-      if (tieIsObscured(startAnchor, endAnchor, toneBulge, obstacles)) {
+      if (
+        isCurveObscured(
+          startAnchor,
+          endAnchor,
+          toneBulge,
+          DEFAULT_BULGE_HEIGHT,
+          obstacles,
+          ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX
+        )
+      ) {
         const halfSpan = Math.abs(endAnchor.x - startAnchor.x) / 2;
         const stubLength = Math.max(
           2,
@@ -919,21 +1537,40 @@ export const buildConnectorSvgs = (
 
     const noteheadOffsetPx =
       pair.kind === 'slur' ? SLUR_NOTEHEAD_OFFSET_PX : TIE_NOTEHEAD_OFFSET_PX;
-    const startAnchor = computeAnchor(
-      pair.start,
-      rootRect,
-      startBulge,
-      noteheadOffsetPx
-    );
+
+    // A same-staff slur endpoint anchors at the real stem tip instead of the
+    // notehead when it's an inner-voice double-stemmed-beam member (its
+    // ordinary opposite-of-stem territory is occupied by another voice), or
+    // when the notehead anchor would land inside a double-stemmed beam.
+    const resolveSlurAwareAnchor = (
+      note: NoteLikeElementType,
+      bulge: CurveBulge
+    ): Anchor => {
+      const notehead = computeAnchor(note, rootRect, bulge, noteheadOffsetPx);
+      if (pair.kind !== 'slur') {
+        return notehead;
+      }
+      const forceStemEnd = innerVoiceElements?.has(note) ?? false;
+      const obscured =
+        !forceStemEnd &&
+        beamRects.some(
+          (rect) =>
+            notehead.x >= rect.left &&
+            notehead.x <= rect.right &&
+            notehead.y >= rect.top &&
+            notehead.y <= rect.bottom
+        );
+      if (forceStemEnd || obscured) {
+        return computeStemEndAnchor(note, rootRect) ?? notehead;
+      }
+      return notehead;
+    };
+
+    const startAnchor = resolveSlurAwareAnchor(pair.start, startBulge);
     if (pair.kind === 'tie') {
       startAnchor.x += tieStartTrillNudgePx(pair.start);
     }
-    const endAnchor = computeAnchor(
-      pair.end,
-      rootRect,
-      endBulge,
-      noteheadOffsetPx
-    );
+    const endAnchor = resolveSlurAwareAnchor(pair.end, endBulge);
 
     // A glissando's hint label always sits above the line, regardless of the
     // notes' stem direction — a fixed annotation position, unlike a slur or
@@ -942,6 +1579,19 @@ export const buildConnectorSvgs = (
     const renderEndBulge = pair.kind === 'glissando' ? 'above' : endBulge;
 
     if (sameRow(startAnchor, endAnchor)) {
+      const baseBulgeHeight =
+        DEFAULT_BULGE_HEIGHT + pair.nestingLevel * BULGE_STEP_PX;
+      const bulgeHeight =
+        pair.kind === 'slur'
+          ? resolveRectClearingBulgeHeight(
+              startAnchor,
+              endAnchor,
+              renderStartBulge,
+              baseBulgeHeight,
+              beamRects,
+              { step: BULGE_STEP_PX, maxSteps: MAX_BEAM_AVOIDANCE_STEPS }
+            )
+          : undefined;
       elements.push(
         createCurveSvg({
           from: { x: startAnchor.x, y: startAnchor.y },
@@ -950,6 +1600,7 @@ export const buildConnectorSvgs = (
           label,
           style,
           nestingLevel: pair.nestingLevel,
+          bulgeHeight,
         })
       );
       continue;

@@ -29,6 +29,10 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+  StemDirection,
   StressType,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -60,6 +64,10 @@ import {
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseOctaveContinuationMode,
+  parseOctaveDisplayMode,
+  parseOctaveShiftAmount,
+  parseStemDirection,
   parseStress,
   parseTieValue,
   parseTrillContinuationMode,
@@ -88,7 +96,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
    * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
    * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
-   * @attr {boolean} dynamic-shared - Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone note falls back to no rendering rather than guessing a position.
+   * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
    * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
    * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
    * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -116,6 +124,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this note (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
    * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
    * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
+   * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note).
+   * @attr {OctaveDisplayMode} octave-mode - Set on the note that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
+   * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this note (inclusive).
+   * @attr {boolean} loco - Closes the currently open octave-transposition span at this note, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
+   * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.
+   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
+   * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
+   * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
+   * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -163,12 +180,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'trill-finish',
         'trill-finish-octave',
         'trill-finish-slur',
+        'octave-shift',
+        'octave-mode',
+        'octave-stop',
+        'loco',
+        'octave-continuation',
+        'beam-group',
+        'shared-stem-for',
+        'slur-group',
+        'stem-direction',
       ];
     }
 
     #stemUp = true;
     #stemExtension = 0;
     #trillSignExtraLift = 0;
+    #articulationAnchorsToStem = false;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -257,6 +284,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#trillSignExtraLift = v;
+      this.#scheduleRender();
+    }
+
+    get articulationAnchorsToStem(): boolean {
+      return this.#articulationAnchorsToStem;
+    }
+    set articulationAnchorsToStem(v: boolean) {
+      if (v === this.#articulationAnchorsToStem) {
+        return;
+      }
+      this.#articulationAnchorsToStem = v;
       this.#scheduleRender();
     }
 
@@ -443,6 +481,60 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.removeAttribute('arpeggio-for');
       } else {
         this.setAttribute('arpeggio-for', value);
+      }
+    }
+
+    // `id` shared by every element across a measure's two adjacent grand-staff
+    // staves that joins one cross-staff double-stemmed beam group. Resolved
+    // by the ancestor <music-measure>.
+    get beamGroup(): string | null {
+      return this.getAttribute('beam-group');
+    }
+    set beamGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('beam-group');
+      } else {
+        this.setAttribute('beam-group', value);
+      }
+    }
+
+    // `id` shared by every breakpoint note of one continuous multi-leg
+    // cross-staff phrase slur. Resolved by the ancestor <music-measure> /
+    // <music-composition>.
+    get slurGroup(): string | null {
+      return this.getAttribute('slur-group');
+    }
+    set slurGroup(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('slur-group');
+      } else {
+        this.setAttribute('slur-group', value);
+      }
+    }
+
+    // Author override for stemUp, independent of pitch. null = today's
+    // pitch-driven/voice/beam-group resolution, unchanged.
+    get stemDirection(): StemDirection | null {
+      return parseStemDirection(this.getAttribute('stem-direction'));
+    }
+    set stemDirection(value: StemDirection | null) {
+      if (value === null) {
+        this.removeAttribute('stem-direction');
+      } else {
+        this.setAttribute('stem-direction', value);
+      }
+    }
+
+    // `id` of the other-staff element this note shares a single stem with.
+    // Resolved by the ancestor <music-measure>.
+    get sharedStemFor(): string | null {
+      return this.getAttribute('shared-stem-for');
+    }
+    set sharedStemFor(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('shared-stem-for');
+      } else {
+        this.setAttribute('shared-stem-for', value);
       }
     }
 
@@ -760,6 +852,67 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    // Starts an octave-transposition span at this note. The ancestor staff
+    // resolves the span over its own element stream — see
+    // NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE in attributeChangedCallback.
+    get octaveShift(): OctaveShiftAmount | null {
+      return parseOctaveShiftAmount(this.getAttribute('octave-shift'));
+    }
+    set octaveShift(value: OctaveShiftAmount | null) {
+      if (value === null) {
+        this.removeAttribute('octave-shift');
+      } else {
+        this.setAttribute('octave-shift', value);
+      }
+    }
+
+    // Display mode for the span this note starts. Resolved to 'sign' at
+    // span-open time by rules/octaveRules.ts, not here — see
+    // parseOctaveDisplayMode.
+    get octaveMode(): OctaveDisplayMode | null {
+      return parseOctaveDisplayMode(this.getAttribute('octave-mode'));
+    }
+    set octaveMode(value: OctaveDisplayMode | null) {
+      if (value === null) {
+        this.removeAttribute('octave-mode');
+      } else {
+        this.setAttribute('octave-mode', value);
+      }
+    }
+
+    get octaveStop(): boolean {
+      return this.hasAttribute('octave-stop');
+    }
+    set octaveStop(value: boolean) {
+      if (value) {
+        this.setAttribute('octave-stop', '');
+      } else {
+        this.removeAttribute('octave-stop');
+      }
+    }
+
+    get loco(): boolean {
+      return this.hasAttribute('loco');
+    }
+    set loco(value: boolean) {
+      if (value) {
+        this.setAttribute('loco', '');
+      } else {
+        this.removeAttribute('loco');
+      }
+    }
+
+    // Meaningful only on the octave-span-starting element — controls the
+    // system-break restatement, resolved by the ancestor composition.
+    get octaveContinuation(): OctaveContinuationMode {
+      return parseOctaveContinuationMode(
+        this.getAttribute('octave-continuation')
+      );
+    }
+    set octaveContinuation(value: OctaveContinuationMode) {
+      this.setAttribute('octave-continuation', value);
+    }
+
     batchUpdate(fn: () => void): void {
       this.#batchDepth++;
       try {
@@ -819,7 +972,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'slur' ||
         name === 'lv-label' ||
         name === 'glissando' ||
-        name === 'glissando-hint'
+        name === 'glissando-hint' ||
+        name === 'slur-group'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
@@ -830,7 +984,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'note' || name === 'octave') {
+      if (name === 'note' || name === 'octave' || name === 'stem-direction') {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -917,6 +1071,52 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           })
         );
         this.render();
+        return;
+      }
+
+      if (
+        name === 'octave-shift' ||
+        name === 'octave-mode' ||
+        name === 'octave-stop' ||
+        name === 'loco' ||
+        name === 'octave-continuation'
+      ) {
+        // The ancestor staff resolves octave-transposition spans over its
+        // own element stream and redraws the sign/line/corner in its own
+        // overlay — nothing renders locally in this note's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (name === 'beam-group') {
+        // The ancestor measure resolves cross-staff double-stemmed beam
+        // groups over both staves' element streams; nothing renders locally
+        // in this note's own shadow DOM.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+        return;
+      }
+
+      if (name === 'shared-stem-for') {
+        // The ancestor measure resolves shared-stem pairs across both
+        // staves, suppresses each end's own local stem (noStem — that
+        // property's own setter re-renders this note), and draws the real
+        // connecting stem itself; nothing else to do locally here.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
         return;
       }
 
@@ -1023,6 +1223,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             : null,
         staffY: this.#staffY,
         trillSignExtraLift: this.#trillSignExtraLift,
+        articulationAnchorsToStem: this.#articulationAnchorsToStem,
       });
 
       if (this.#staffY !== null) {

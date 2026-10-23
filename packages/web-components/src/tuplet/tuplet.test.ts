@@ -3,12 +3,13 @@
  */
 import '../note/index';
 import '../staff/index';
-import { TupletElementType } from '../types/elements';
+import { NoteElementType, TupletElementType } from '../types/elements';
 import type {
   DurationType,
   Note,
   Octave,
   TimeSignature,
+  TupletPlacement,
   TupletRatio,
 } from '../types/theory';
 import {
@@ -16,7 +17,12 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF,
   MUSIC_TUPLET,
+  TUPLET_EVENTS,
 } from '../utils/consts';
+import {
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_TOP_LINE_Y,
+} from '../utils/notationDimensions';
 import './index';
 
 afterEach(() => {
@@ -47,6 +53,48 @@ describe(MUSIC_TUPLET, () => {
     expect(element.getAttribute('ratio')).toBe('7');
     expect(element.ratio).toBe('7');
   });
+
+  it('round-trips tuplet-group as a plain string attribute', () => {
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
+
+    expect(element.tupletGroup).toBeNull();
+    element.tupletGroup = 't1';
+    expect(element.getAttribute('tuplet-group')).toBe('t1');
+    element.tupletGroup = null;
+    expect(element.hasAttribute('tuplet-group')).toBe(false);
+  });
+
+  it('round-trips valid placement values and rejects invalid ones', () => {
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
+
+    expect(element.placement).toBeNull();
+    element.placement = 'below' satisfies TupletPlacement;
+    expect(element.getAttribute('placement')).toBe('below');
+    expect(element.placement).toBe('below');
+    element.setAttribute('placement', 'sideways');
+    expect(element.placement).toBeNull();
+    element.placement = null;
+    expect(element.hasAttribute('placement')).toBe(false);
+  });
+
+  it.each(['ratio', 'tuplet-group', 'placement'])(
+    'dispatches a bubbling, composed TUPLET_EVENTS.ATTRIBUTE_CHANGE when %s changes',
+    (attribute) => {
+      const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+      document.body.appendChild(element);
+      const listener = jest.fn();
+      document.body.addEventListener(TUPLET_EVENTS.ATTRIBUTE_CHANGE, listener);
+
+      element.setAttribute(attribute, attribute === 'ratio' ? '5' : 'above');
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      const event = listener.mock.calls[0][0] as CustomEvent;
+      expect(event.bubbles).toBe(true);
+      expect(event.composed).toBe(true);
+    }
+  );
 
   it('has no shadow root (pure grouping wrapper, no self-rendering)', () => {
     const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
@@ -154,5 +202,114 @@ describe('staff integration', () => {
       staff.shadowRoot.querySelector('.tuplets-container');
     const tupletGroup = tupletsContainer?.querySelector('.tuplet-group');
     expect(tupletGroup).not.toBeNull();
+  });
+
+  it.each([
+    [null, true],
+    ['below' satisfies TupletPlacement, false],
+  ] as const)(
+    'placement=%s draws the numeral above the staff = %s for stem-up notes',
+    (placement, numeralAboveStaff) => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4' satisfies TimeSignature);
+      document.body.appendChild(staff);
+
+      const tuplet = document.createElement(MUSIC_TUPLET) as TupletElementType;
+      tuplet.setAttribute('ratio', '3' satisfies TupletRatio);
+      if (placement !== null) {
+        tuplet.setAttribute('placement', placement);
+      }
+      for (let i = 0; i < 3; i++) {
+        const note = document.createElement(MUSIC_NOTE);
+        note.setAttribute('note', 'E' satisfies Note);
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        note.setAttribute('duration', 'quarter' satisfies DurationType);
+        tuplet.appendChild(note);
+      }
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [tuplet];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      const numeralY = Number(
+        staff.shadowRoot
+          .querySelector('.tuplets-container .tuplet-numeral')
+          .getAttribute('y')
+      );
+      if (numeralAboveStaff) {
+        expect(numeralY).toBeLessThan(STAFF_TOP_LINE_Y);
+      } else {
+        expect(numeralY).toBeGreaterThan(STAFF_BOTTOM_LINE_Y);
+      }
+    }
+  );
+
+  describe('crossStaffTupletRoles', () => {
+    function renderTriplet(octave: Octave) {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4' satisfies TimeSignature);
+      document.body.appendChild(staff);
+
+      const tuplet = document.createElement(MUSIC_TUPLET) as TupletElementType;
+      tuplet.setAttribute('ratio', '3' satisfies TupletRatio);
+      const notes: NoteElementType[] = [];
+      for (let i = 0; i < 3; i++) {
+        const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+        note.setAttribute('note', 'E' satisfies Note);
+        note.setAttribute('octave', `${octave}`);
+        note.setAttribute('duration', 'quarter' satisfies DurationType);
+        tuplet.appendChild(note);
+        notes.push(note);
+      }
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [tuplet];
+      slot.dispatchEvent(new Event('slotchange'));
+      return { staff, tuplet, notes };
+    }
+
+    it("forces its members' stems and suppresses the bracket when another level draws it", () => {
+      const { staff, tuplet, notes } = renderTriplet(4);
+      expect(notes.every((note) => note.stemUp)).toBe(true);
+
+      staff.crossStaffTupletRoles = new Map([
+        [tuplet, { stemUp: false, rendering: 'suppressed' }],
+      ]);
+
+      expect(notes.every((note) => !note.stemUp)).toBe(true);
+      expect(
+        staff.shadowRoot.querySelector('.tuplets-container .tuplet-group')
+      ).toBeNull();
+    });
+
+    it("draws the bracket on the role's forced side, outranking the wrapper's own placement", () => {
+      const { staff, tuplet } = renderTriplet(5);
+      tuplet.setAttribute('placement', 'below' satisfies TupletPlacement);
+
+      staff.crossStaffTupletRoles = new Map([
+        [tuplet, { stemUp: false, rendering: 'above' }],
+      ]);
+
+      const numeralY = Number(
+        staff.shadowRoot
+          .querySelector('.tuplets-container .tuplet-numeral')
+          .getAttribute('y')
+      );
+      expect(numeralY).toBeLessThan(STAFF_TOP_LINE_Y);
+    });
+
+    it('releases everything when the role map is cleared', () => {
+      const { staff, tuplet, notes } = renderTriplet(4);
+      staff.crossStaffTupletRoles = new Map([
+        [tuplet, { stemUp: false, rendering: 'suppressed' }],
+      ]);
+
+      staff.crossStaffTupletRoles = null;
+
+      expect(notes.every((note) => note.stemUp)).toBe(true);
+      expect(
+        staff.shadowRoot.querySelector('.tuplets-container .tuplet-group')
+      ).not.toBeNull();
+    });
   });
 });

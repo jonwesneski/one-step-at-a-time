@@ -11,7 +11,12 @@ import type {
   Octave,
   TimeSignature,
 } from '../types/theory';
-import { COMMON_ATTRIBUTES, MUSIC_NOTE, MUSIC_STAFF } from '../utils/consts';
+import {
+  COMMON_ATTRIBUTES,
+  MUSIC_NOTE,
+  MUSIC_STAFF,
+  NOTE_EVENTS,
+} from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   GRACE_SCALE,
@@ -1498,6 +1503,193 @@ describe('trill', () => {
         noteElement.shadowRoot?.querySelector('.trill-finish-notes')
       ).not.toBeNull();
     });
+  });
+});
+
+describe('octave shift', () => {
+  it('round-trips octave-shift and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveShift).toBeNull();
+    noteElement.octaveShift = '8va';
+    expect(noteElement.getAttribute('octave-shift')).toBe('8va');
+    expect(noteElement.octaveShift).toBe('8va');
+
+    noteElement.setAttribute('octave-shift', 'nope');
+    expect(noteElement.octaveShift).toBeNull();
+
+    noteElement.octaveShift = '15mb';
+    noteElement.octaveShift = null;
+    expect(noteElement.getAttribute('octave-shift')).toBeNull();
+  });
+
+  it('round-trips octave-stop as a boolean presence attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveStop).toBe(false);
+    noteElement.octaveStop = true;
+    expect(noteElement.getAttribute('octave-stop')).toBe('');
+    expect(noteElement.octaveStop).toBe(true);
+    noteElement.octaveStop = false;
+    expect(noteElement.getAttribute('octave-stop')).toBeNull();
+  });
+
+  it('round-trips octave-mode and rejects unknown values', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.octaveMode).toBeNull();
+    noteElement.octaveMode = 'col';
+    expect(noteElement.getAttribute('octave-mode')).toBe('col');
+    expect(noteElement.octaveMode).toBe('col');
+
+    noteElement.setAttribute('octave-mode', 'nope');
+    expect(noteElement.octaveMode).toBeNull();
+
+    noteElement.octaveMode = 'sign';
+    noteElement.octaveMode = null;
+    expect(noteElement.getAttribute('octave-mode')).toBeNull();
+  });
+
+  it('round-trips loco as a boolean presence attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.loco).toBe(false);
+    noteElement.loco = true;
+    expect(noteElement.getAttribute('loco')).toBe('');
+    expect(noteElement.loco).toBe(true);
+    noteElement.loco = false;
+    expect(noteElement.getAttribute('loco')).toBeNull();
+  });
+});
+
+describe('beam group', () => {
+  it('round-trips beam-group as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.beamGroup).toBeNull();
+    noteElement.beamGroup = 'rh-lh-1';
+    expect(noteElement.getAttribute('beam-group')).toBe('rh-lh-1');
+    expect(noteElement.beamGroup).toBe('rh-lh-1');
+
+    noteElement.beamGroup = null;
+    expect(noteElement.getAttribute('beam-group')).toBeNull();
+  });
+
+  it('dispatches BEAM_GROUP_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.beamGroup = 'rh-lh-1';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('shared stem', () => {
+  it('round-trips shared-stem-for as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.sharedStemFor).toBeNull();
+    noteElement.sharedStemFor = 'bass-c3';
+    expect(noteElement.getAttribute('shared-stem-for')).toBe('bass-c3');
+    expect(noteElement.sharedStemFor).toBe('bass-c3');
+
+    noteElement.sharedStemFor = null;
+    expect(noteElement.getAttribute('shared-stem-for')).toBeNull();
+  });
+
+  it('dispatches SHARED_STEM_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.sharedStemFor = 'bass-c3';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('slur group', () => {
+  it('round-trips slur-group as a plain string attribute', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.slurGroup).toBeNull();
+    noteElement.slurGroup = 'phrase1';
+    expect(noteElement.getAttribute('slur-group')).toBe('phrase1');
+    expect(noteElement.slurGroup).toBe('phrase1');
+
+    noteElement.slurGroup = null;
+    expect(noteElement.getAttribute('slur-group')).toBeNull();
+  });
+
+  it('dispatches CONNECTOR_ATTRIBUTE_CHANGE without re-rendering the note locally', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.slurGroup = 'phrase1';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('stem direction', () => {
+  it('round-trips stem-direction, rejecting an invalid value', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.stemDirection).toBeNull();
+    noteElement.stemDirection = 'up';
+    expect(noteElement.getAttribute('stem-direction')).toBe('up');
+    expect(noteElement.stemDirection).toBe('up');
+
+    noteElement.setAttribute('stem-direction', 'sideways');
+    expect(noteElement.stemDirection).toBeNull();
+
+    noteElement.stemDirection = null;
+    expect(noteElement.getAttribute('stem-direction')).toBeNull();
+  });
+
+  it('dispatches NOTE_Y_CHANGE (the same full-relayout event note/octave changes use)', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    noteElement.stemDirection = 'down';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('overrides the pitch-driven stem direction when set on a real staff', () => {
+    const staff = makeStaff();
+    // C4 (staffY=80 > 50) is pitch-driven stemUp=true by default.
+    const note = renderNote(staff, 'C', 4) as any;
+    expect(note.stemUp).toBe(true);
+
+    note.setAttribute('stem-direction', 'down');
+
+    expect(note.stemUp).toBe(false);
   });
 });
 

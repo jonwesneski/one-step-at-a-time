@@ -308,6 +308,62 @@ export type TrillContinuationMode = 'bracketed' | 'line-only';
 export type TrillFinishSlur = 'none' | 'to-main' | 'to-next' | 'both';
 
 /**
+ * Octave-transposition span amount: `8va`/`15ma`/`22ma` shift the written
+ * pitch up one/two/three octaves; `8vb`/`15mb`/`22mb` shift it down by the
+ * same amounts.
+ */
+export type OctaveShiftAmount =
+  | '8va'
+  | '8vb'
+  | '15ma'
+  | '15mb'
+  | '22ma'
+  | '22mb';
+
+/**
+ * Display mode for an octave-transposition span's label: `sign` (default)
+ * renders the bare numeral; `col` renders prose text ("col 8va"/"col 8va
+ * bassa") instead.
+ */
+export type OctaveDisplayMode = 'sign' | 'col';
+
+/**
+ * A rest's placement relative to a double-stemmed beam it's a member of
+ * (meaningless outside an active `beam-group`): `above`/`below` sit just
+ * above/below the shared beam itself (not a position within either staff's
+ * own line system); `centered` sits at the real vertical center of the gap
+ * between the two staves.
+ */
+export type RestStaffSide = 'above' | 'below' | 'centered';
+
+/**
+ * Author override for which side of the notes a tuplet's bracket/numeral
+ * sits on. Unset = the stem-direction majority vote (or, for a cross-staff
+ * `tuplet-group`, the side nearest its outer notes).
+ */
+export type TupletPlacement = 'above' | 'below';
+
+/**
+ * Author override for a note/chord's stem direction, independent of its
+ * pitch-driven default. Unset (null) leaves today's resolution unchanged
+ * (pitch-driven, or a voice/beam-group policy when applicable). Setting it
+ * on only some members of a same-staff beamed run is the author's own
+ * responsibility to avoid — `BeamGroup` (`utils/svgCreator/beams.ts`) only
+ * ever renders one shared stem direction per group, so an inconsistent
+ * member renders with the wrong stem attachment.
+ */
+export type StemDirection = 'up' | 'down';
+
+/**
+ * Controls how an octave-transposition span's numeral restates itself after
+ * a system break: `'bracketed'` (default) redraws it in parentheses at the
+ * start of the new row; `'line-only'` lets the line resume with no restated
+ * numeral. Meaningless (ignored) at an ordinary same-row barline, where the
+ * line always resumes with no restatement regardless of this value.
+ */
+export type OctaveContinuationMode = 'bracketed' | 'line-only';
+
+/**
  * Tuplet ratio: either a bare actual count (`'3'` → triplet) or a full
  * `actual:normal` form (`'3:2'`).
  */

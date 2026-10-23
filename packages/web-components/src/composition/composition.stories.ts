@@ -275,6 +275,61 @@ export const CrossSystemTie: Story = {
   `,
 };
 
+// The line runs open to the end of the first system and restates its sign
+// in parentheses on the next; widen the canvas and the two halves join into
+// one straight line, lifted as a whole for the high A in the second bar.
+export const CrossSystemOctaveLine: Story = {
+  name: 'Cross System - Octave Line',
+  args: { keySig: 'C', mode: 'major', time: '4/4' },
+  render: (args) => html`
+    <div style="max-width: 200px;">
+      <music-composition
+        key-sig=${args.keySig}
+        mode=${args.mode}
+        time=${args.time}
+        measure-numbers=${args.measureNumbers}
+      >
+        <music-measure>
+          <music-staff
+            clef="treble"
+            key-sig=${args.keySig}
+            mode=${args.mode}
+            time=${args.time}
+          >
+            <music-note note="C" octave="5" duration="quarter"></music-note>
+            <music-note note="E" octave="5" duration="quarter"></music-note>
+            <music-note
+              note="G"
+              octave="5"
+              duration="quarter"
+              octave-shift="8va"
+            ></music-note>
+            <music-note note="C" octave="6" duration="quarter"></music-note>
+          </music-staff>
+        </music-measure>
+        <music-measure>
+          <music-staff
+            clef="treble"
+            key-sig=${args.keySig}
+            mode=${args.mode}
+            time=${args.time}
+          >
+            <music-note note="B" octave="5" duration="quarter"></music-note>
+            <music-note note="A" octave="6" duration="quarter"></music-note>
+            <music-note note="F" octave="5" duration="quarter"></music-note>
+            <music-note
+              note="E"
+              octave="5"
+              duration="quarter"
+              octave-stop
+            ></music-note>
+          </music-staff>
+        </music-measure>
+      </music-composition>
+    </div>
+  `,
+};
+
 export const CrossSystemHairpin: Story = {
   name: 'Cross System - Hairpin',
   render: (args) => html`

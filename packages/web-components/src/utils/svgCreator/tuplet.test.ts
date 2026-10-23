@@ -160,6 +160,35 @@ describe('createTupletBracketSvg', () => {
     expect(hookLines.length).toBe(2);
   });
 
+  it.each([
+    [undefined, [1, 1]],
+    [{ start: -1, end: 1 } as const, [-1, 1]],
+    [{ start: 1, end: -1 } as const, [1, -1]],
+  ])(
+    'points each hook its own way when hookDirections=%p',
+    (hookDirections, [expectedStart, expectedEnd]) => {
+      const geometry = makeBasicGeometry({
+        omitBracket: false,
+        angle: 0,
+        stemUp: true,
+        hookDirections,
+      });
+      const result = createTupletBracketSvg(geometry);
+
+      const hookDirection = (x: number) => {
+        const hook = Array.from(result.querySelectorAll('line')).find(
+          (l) =>
+            l.getAttribute('x1') === `${x}` && l.getAttribute('x2') === `${x}`
+        )!;
+        return Math.sign(
+          Number(hook.getAttribute('y2')) - Number(hook.getAttribute('y1'))
+        );
+      };
+      expect(hookDirection(geometry.startX)).toBe(expectedStart);
+      expect(hookDirection(geometry.endX)).toBe(expectedEnd);
+    }
+  );
+
   it('left arm ends before numeral gap center', () => {
     const geometry = makeBasicGeometry({ omitBracket: false, angle: 0 });
     const result = createTupletBracketSvg(geometry);

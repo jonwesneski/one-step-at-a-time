@@ -225,7 +225,25 @@
             },
             {
               "kind": "field",
+              "name": "#articulationAnchorsToStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#noStem",
               "privacy": "private",
               "type": {
                 "text": "boolean"
@@ -367,7 +385,21 @@
             },
             {
               "kind": "field",
+              "name": "articulationAnchorsToStem",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
               "name": "noFlags",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noStem",
               "type": {
                 "text": "boolean"
               }
@@ -480,6 +512,34 @@
             {
               "kind": "field",
               "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slurGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemDirection",
+              "type": {
+                "text": "StemDirection | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
               }
@@ -670,6 +730,41 @@
               }
             },
             {
+              "kind": "field",
+              "name": "octaveShift",
+              "type": {
+                "text": "OctaveShiftAmount | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveMode",
+              "type": {
+                "text": "OctaveDisplayMode | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveStop",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuation",
+              "type": {
+                "text": "OctaveContinuationMode"
+              }
+            },
+            {
               "kind": "method",
               "name": "batchUpdate",
               "return": {
@@ -825,7 +920,7 @@
               "type": {
                 "text": "boolean"
               },
-              "description": "Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone chord falls back to no rendering rather than guessing a position."
+              "description": "Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement."
             },
             {
               "name": "crescendo",
@@ -1017,6 +1112,69 @@
               "description": "Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`."
             },
             {
+              "name": "octave-shift",
+              "type": {
+                "text": "OctaveShiftAmount"
+              },
+              "description": "Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this chord: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone chord)."
+            },
+            {
+              "name": "octave-mode",
+              "type": {
+                "text": "OctaveDisplayMode"
+              },
+              "description": "Set on the chord that starts an octave-transposition span: `col` renders the span's label as prose (\"col 8va\"/\"col 8va bassa\" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`."
+            },
+            {
+              "name": "octave-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this chord (inclusive)."
+            },
+            {
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this chord, adding a \"loco\" label alongside the closing corner. With no open span, renders a standalone \"(loco)\" reminder instead."
+            },
+            {
+              "name": "octave-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span."
+            },
+            {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord)."
+            },
+            {
+              "name": "shared-stem-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord)."
+            },
+            {
+              "name": "slur-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every breakpoint note/chord of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone chord)."
+            },
+            {
+              "name": "stem-direction",
+              "type": {
+                "text": "StemDirection"
+              },
+              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+            },
+            {
               "type": {
                 "text": "Chord"
               },
@@ -1139,6 +1297,18 @@
             },
             {
               "kind": "field",
+              "name": "#rowSpaceMeasures",
+              "privacy": "private",
+              "default": "new Set<HTMLElement>()"
+            },
+            {
+              "kind": "field",
+              "name": "#rowAlignedStaves",
+              "privacy": "private",
+              "default": "new Set<StaffElementBaseType>()"
+            },
+            {
+              "kind": "field",
               "name": "#redrawScheduled",
               "privacy": "private",
               "type": {
@@ -1219,6 +1389,26 @@
               "kind": "method",
               "name": "#scheduleRedraw",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#reserveRowOverlaySpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#alignRowStaffSpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
             },
             {
               "kind": "method",
@@ -1308,6 +1498,54 @@
             },
             {
               "kind": "method",
+              "name": "#headCenterX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#sharedHairpinGap",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ topGapEdgeY: number; bottomGapEdgeY: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "HTMLElement | null"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#buildStaffTracks",
               "privacy": "private",
               "return": {
@@ -1320,6 +1558,80 @@
               "kind": "method",
               "name": "#redrawTrills",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#resolveOctaveContinuations",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OctaveContinuation[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyOctaveRowHeights",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "continuations",
+                  "type": {
+                    "text": "readonly OctaveContinuation[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#measures",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyOctaveContinuationCoverage",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "continuations",
+                  "type": {
+                    "text": "readonly OctaveContinuation[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawOctaveSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "continuations",
+                  "type": {
+                    "text": "readonly OctaveContinuation[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1587,6 +1899,30 @@
             },
             {
               "kind": "field",
+              "name": "#sharedStemSuppressedElements",
+              "privacy": "private",
+              "default": "new Set<NoteOrChordElementType>()"
+            },
+            {
+              "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations(this)"
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuationCoverage",
+              "privacy": "private",
+              "default": "new Map< Element, readonly (readonly NoteChordOrRestElementType[])[] >()"
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuationRects",
+              "privacy": "private",
+              "default": "new Map<Element, readonly ObstacleRect[]>()"
+            },
+            {
+              "kind": "field",
               "name": "#onStaffMinWidth",
               "privacy": "private"
             },
@@ -1605,12 +1941,37 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawCrossStaffTuplets",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundLayoutSystemDecorations",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundRedrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundRedrawSharedStems",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "#boundRedrawConnectors",
               "privacy": "private"
             },
             {
               "kind": "field",
-              "name": "#boundRedrawSharedDynamics",
+              "name": "#boundRedrawMeasureDynamics",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#boundRedrawGapPasses",
               "privacy": "private"
             },
             {
@@ -1654,6 +2015,20 @@
             {
               "kind": "method",
               "name": "#updateConnectorVisibility",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#firstInRow",
+              "privacy": "private",
+              "type": {
+                "text": "boolean | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#layoutSystemDecorations",
               "privacy": "private"
             },
             {
@@ -1735,12 +2110,412 @@
             },
             {
               "kind": "method",
+              "name": "#staffContainerRect",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DOMRect"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "StaffElementBaseType"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#restHuggingTargetY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "'above' | 'below'"
+                  }
+                },
+                {
+                  "name": "beamTopYReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "nearestHeadRect",
+                  "type": {
+                    "text": "DOMRect | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#pushYClearOfBand",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bandTop",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bandBottom",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "minY",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "maxY",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#restCenteredTargetY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "gapCenterReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "topGapEdgeReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bottomGapEdgeReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "beamTopYAtXReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "beamBottomYAtXReal",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "nearestHeadRect",
+                  "type": {
+                    "text": "DOMRect | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#stemRect",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DOMRect | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#redrawConnectors",
               "privacy": "private"
             },
             {
               "kind": "method",
-              "name": "#redrawSharedDynamics",
+              "name": "#reserveOverlaySpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "overlay",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawMeasureDynamics",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawMeasureDynamicsImpl",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#pushDynamicsOverrides",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly ClassicalStaffElement[]"
+                  }
+                },
+                {
+                  "name": "plan",
+                  "type": {
+                    "text": "MeasureDynamicsPlan"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#planMeasureDynamics",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "MeasureDynamicsPlan"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly ClassicalStaffElement[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#doubleStemmedBeamSlices",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ObstacleRect[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#crossStaffTupletRects",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ObstacleRect[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measureRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignRects",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ObstacleRect[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "StaffElementBaseType"
+                  }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "'above' | 'below'"
+                  }
+                },
+                {
+                  "name": "measureRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "field",
+              "name": "#redrawDepths",
+              "privacy": "private",
+              "default": "new Map<string, number>()"
+            },
+            {
+              "kind": "method",
+              "name": "#guardedRedraw",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "passName",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "redraw",
+                  "type": {
+                    "text": "() => void"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTuplets",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTupletsImpl",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#gatherDoubleStemmedBeamEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      staves: StaffElementBaseType[];\n      perStaffElements: NoteChordOrRestElementType[][];\n      entries: DoubleStemmedBeamEntry[];\n    }"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#redrawDoubleStemmedBeamsImpl",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#crossStaffOctaveBreaks",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<number, Set<NoteChordOrRestElementType>>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly StaffElementBaseType[]"
+                  }
+                },
+                {
+                  "name": "perStaffElements",
+                  "type": {
+                    "text": "readonly NoteChordOrRestElementType[][]"
+                  }
+                },
+                {
+                  "name": "groups",
+                  "type": {
+                    "text": "readonly DoubleStemmedBeamGroup[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#secondaryBeamSide",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DoubleStemmedBeamSegmentSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "segments",
+                  "type": {
+                    "text": "readonly BeamLineDescriptor[]"
+                  }
+                },
+                {
+                  "name": "memberGeometries",
+                  "type": {
+                    "text": "readonly { staffIndex: number }[]"
+                  }
+                },
+                {
+                  "name": "topStaffIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "line",
+                  "type": {
+                    "text": "DoubleStemmedBeamLine"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawSharedStems",
               "privacy": "private"
             },
             {
@@ -1796,6 +2571,99 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "reserveVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "applyOctaveContinuationCoverage",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "coverage",
+                  "type": {
+                    "text": "ReadonlyMap<\n        Element,\n        readonly (readonly NoteChordOrRestElementType[])[]\n      >"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "applyOctaveContinuationRects",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measureRects",
+                  "type": {
+                    "text": "ReadonlyMap<Element, readonly ObstacleRect[]>"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "field",
+              "name": "#gapClearanceByPass",
+              "privacy": "private",
+              "default": "new Map< string, ReadonlyMap<StaffElementBaseType, VerticalBand> >()"
+            },
+            {
+              "kind": "method",
+              "name": "#applyGapClearance",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "pass",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "needs",
+                  "type": {
+                    "text": "ReadonlyMap<StaffElementBaseType, VerticalBand>"
+                  }
+                },
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly StaffElementBaseType[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#redrawGapPasses",
+              "privacy": "private"
             }
           ],
           "attributes": [
@@ -1833,6 +2701,10 @@
           },
           "tagName": "music-measure",
           "customElement": true
+        },
+        {
+          "kind": "variable",
+          "name": "centerX"
         }
       ],
       "exports": [
@@ -1881,6 +2753,15 @@
                 "text": "number"
               },
               "default": "0"
+            },
+            {
+              "kind": "field",
+              "name": "#articulationAnchorsToStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
             },
             {
               "kind": "field",
@@ -2025,6 +2906,13 @@
             },
             {
               "kind": "field",
+              "name": "articulationAnchorsToStem",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
               "name": "noFlags",
               "type": {
                 "text": "boolean"
@@ -2145,6 +3033,34 @@
             {
               "kind": "field",
               "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slurGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemDirection",
+              "type": {
+                "text": "StemDirection | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
               }
@@ -2335,6 +3251,41 @@
               }
             },
             {
+              "kind": "field",
+              "name": "octaveShift",
+              "type": {
+                "text": "OctaveShiftAmount | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveMode",
+              "type": {
+                "text": "OctaveDisplayMode | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveStop",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuation",
+              "type": {
+                "text": "OctaveContinuationMode"
+              }
+            },
+            {
               "kind": "method",
               "name": "batchUpdate",
               "return": {
@@ -2490,7 +3441,7 @@
               "type": {
                 "text": "boolean"
               },
-              "description": "Renders `dynamic` centered in the gap between this staff and its next/previous sibling staff (e.g. a keyboard dynamic marking both hands) instead of at this staff's own local placement. Requires a `<music-measure>` (or `<music-composition>`) ancestor with an adjacent staff; a lone/standalone note falls back to no rendering rather than guessing a position."
+              "description": "Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement."
             },
             {
               "name": "crescendo",
@@ -2682,6 +3633,69 @@
               "description": "Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`."
             },
             {
+              "name": "octave-shift",
+              "type": {
+                "text": "OctaveShiftAmount"
+              },
+              "description": "Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note)."
+            },
+            {
+              "name": "octave-mode",
+              "type": {
+                "text": "OctaveDisplayMode"
+              },
+              "description": "Set on the note that starts an octave-transposition span: `col` renders the span's label as prose (\"col 8va\"/\"col 8va bassa\" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`."
+            },
+            {
+              "name": "octave-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this note (inclusive)."
+            },
+            {
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this note, adding a \"loco\" label alongside the closing corner. With no open span, renders a standalone \"(loco)\" reminder instead."
+            },
+            {
+              "name": "octave-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span."
+            },
+            {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
+            },
+            {
+              "name": "shared-stem-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
+            },
+            {
+              "name": "slur-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note)."
+            },
+            {
+              "name": "stem-direction",
+              "type": {
+                "text": "StemDirection"
+              },
+              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+            },
+            {
               "type": {
                 "text": "string"
               },
@@ -2724,6 +3738,20 @@
               }
             },
             {
+              "kind": "field",
+              "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "restStaffSide",
+              "type": {
+                "text": "RestStaffSide | null"
+              }
+            },
+            {
               "kind": "method",
               "name": "render",
               "privacy": "private",
@@ -2748,6 +3776,27 @@
                 "text": "DurationType"
               },
               "description": "Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`."
+            },
+            {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself."
+            },
+            {
+              "name": "rest-staff-side",
+              "type": {
+                "text": "RestStaffSide"
+              },
+              "description": "Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`."
+            },
+            {
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands.",
+              "name": "hidden"
             }
           ],
           "superclass": {
@@ -2966,6 +4015,84 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffBeamStemOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletBeamY",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffDynamicsOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffOctaveBreakAfter",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<Element, OctaveContinuationRow> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -2985,6 +4112,16 @@
                 "text": "number[]"
               },
               "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#beatOffsetByElement",
+              "privacy": "private",
+              "default": "new Map<Element, number>()",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -3083,6 +4220,19 @@
             },
             {
               "kind": "field",
+              "name": "#octaveSignsContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -3093,6 +4243,15 @@
             {
               "kind": "field",
               "name": "#boundRenderDynamics",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundRenderOctaveSigns",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -3260,6 +4419,133 @@
               "name": "timeChangeAtBoundary",
               "type": {
                 "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffBeamStemOverrides",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletBeamY",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffDynamicsOverrides",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffOctaveBreakAfter",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuations",
+              "type": {
+                "text": "ReadonlyMap<\n    Element,\n    OctaveContinuationRow\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveRowY",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "readonly Element[]"
+                  }
+                },
+                {
+                  "name": "amount",
+                  "type": {
+                    "text": "OctaveShiftAmount"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveLocalToClientY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "hairpinDefaultsForMeasure",
+              "return": {
+                "type": {
+                  "text": "StaffHairpinDefaults"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -3781,6 +5067,27 @@
             },
             {
               "kind": "method",
+              "name": "beatOffsetOf",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "noteToYCoordinate",
               "privacy": "public",
               "return": {
@@ -4003,6 +5310,137 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "raisesPitch",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderOctaveSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "optional": true,
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveRunLayouts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ run: OctaveSpan; y: number; continues: boolean }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "spans",
+                  "type": {
+                    "text": "readonly OctaveSpan[]"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSpanRuns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OctaveSpan[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -4342,14 +5780,20 @@
             },
             {
               "kind": "method",
-              "name": "#hasDynamicsContent",
+              "name": "#dynamicsSidesInUse",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "boolean"
+                  "text": "Set<DynamicsSide>"
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "state",
                   "type": {
@@ -4394,6 +5838,234 @@
                 },
                 {
                   "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "skipSharedBeamNumerals",
+                  "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherAboveStaffDecorationTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherBelowStaffDecorationBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletSideOverride",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "TupletPlacement | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#isTupletSuppressed",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletBracketAbove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#forcedSideTupletExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "above",
                   "type": {
                     "text": "boolean"
                   }
@@ -4468,7 +6140,136 @@
             },
             {
               "kind": "method",
-              "name": "#dynamicsBaselineForVoice",
+              "name": "#dynamicsLocalToClientY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#defaultDynamicsSide",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markingPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hairpinPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "pair",
+                  "type": {
+                    "text": "HairpinPair"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#pairVoiceHairpins",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineForSide",
               "privacy": "private",
               "return": {
                 "type": {
@@ -4487,6 +6288,72 @@
                   "type": {
                     "text": "VoiceRenderState"
                   }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#extremeRealExtentY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "realStems",
+                  "default": "false"
                 }
               ],
               "inheritedFrom": {
@@ -4529,7 +6396,7 @@
               },
               "privacy": "protected",
               "readonly": true,
-              "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "default": "new ResizeObserver((entries) => { this.#respaceIfWidthChanged(entries[0].contentRect.width); })",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -4588,6 +6455,16 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement, () => this.dispatchEvent( new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, { bubbles: true, composed: true, }) ) )",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#initialSlotSyncDone",
               "privacy": "private",
               "type": {
@@ -4615,6 +6492,41 @@
                 "text": "[BeatsInMeasure, BeatTypeInMeasure]"
               },
               "privacy": "protected",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "respaceToCurrentWidth",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#respaceIfWidthChanged",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -4811,8 +6723,107 @@
             },
             {
               "kind": "method",
+              "name": "reserveVerticalSpace",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "contentVerticalSpace",
+              "type": {
+                "text": "VerticalBand"
+              },
+              "description": "Room this staff's own content needs past its box — every reservation but\nthe row alignment below. Read by `<music-composition>` to line up the\nsame staff across every measure of a row.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "alignVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveGapClearance",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveStandaloneOverlaySpace",
+              "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"
@@ -5151,7 +7162,7 @@
               },
               "privacy": "protected",
               "readonly": true,
-              "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "default": "new ResizeObserver((entries) => { this.#respaceIfWidthChanged(entries[0].contentRect.width); })",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -5210,6 +7221,16 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement, () => this.dispatchEvent( new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, { bubbles: true, composed: true, }) ) )",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#initialSlotSyncDone",
               "privacy": "private",
               "type": {
@@ -5237,6 +7258,41 @@
                 "text": "[BeatsInMeasure, BeatTypeInMeasure]"
               },
               "privacy": "protected",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "respaceToCurrentWidth",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#respaceIfWidthChanged",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -5433,8 +7489,107 @@
             },
             {
               "kind": "method",
+              "name": "reserveVerticalSpace",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "contentVerticalSpace",
+              "type": {
+                "text": "VerticalBand"
+              },
+              "description": "Room this staff's own content needs past its box — every reservation but\nthe row alignment below. Read by `<music-composition>` to line up the\nsame staff across every measure of a row.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "alignVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveGapClearance",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveStandaloneOverlaySpace",
+              "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"
@@ -6069,6 +8224,84 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffBeamStemOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletBeamY",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffTupletRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffDynamicsOverrides",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossStaffOctaveBreakAfter",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#octaveContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<Element, OctaveContinuationRow> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#clefMarkers",
               "privacy": "private",
               "type": {
@@ -6088,6 +8321,16 @@
                 "text": "number[]"
               },
               "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#beatOffsetByElement",
+              "privacy": "private",
+              "default": "new Map<Element, number>()",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -6186,6 +8429,19 @@
             },
             {
               "kind": "field",
+              "name": "#octaveSignsContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -6196,6 +8452,15 @@
             {
               "kind": "field",
               "name": "#boundRenderDynamics",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundRenderOctaveSigns",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -6363,6 +8628,133 @@
               "name": "timeChangeAtBoundary",
               "type": {
                 "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffBeamStemOverrides",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TupletElementType,\n    CrossStaffTupletRole\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTupletBeamY",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    number\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffDynamicsOverrides",
+              "type": {
+                "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffOctaveBreakAfter",
+              "type": {
+                "text": "ReadonlySet<NoteChordOrRestElementType> | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuations",
+              "type": {
+                "text": "ReadonlyMap<\n    Element,\n    OctaveContinuationRow\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveRowY",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "readonly Element[]"
+                  }
+                },
+                {
+                  "name": "amount",
+                  "type": {
+                    "text": "OctaveShiftAmount"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "octaveLocalToClientY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "hairpinDefaultsForMeasure",
+              "return": {
+                "type": {
+                  "text": "StaffHairpinDefaults"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -6875,6 +9267,27 @@
             },
             {
               "kind": "method",
+              "name": "beatOffsetOf",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "noteToYCoordinate",
               "privacy": "public",
               "return": {
@@ -7097,6 +9510,137 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "raisesPitch",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderOctaveSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "optional": true,
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveRunLayouts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ run: OctaveSpan; y: number; continues: boolean }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "spans",
+                  "type": {
+                    "text": "readonly OctaveSpan[]"
+                  }
+                },
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSpanRuns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OctaveSpan[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "OctaveSpan"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -7436,14 +9980,20 @@
             },
             {
               "kind": "method",
-              "name": "#hasDynamicsContent",
+              "name": "#dynamicsSidesInUse",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "boolean"
+                  "text": "Set<DynamicsSide>"
                 }
               },
               "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "state",
                   "type": {
@@ -7488,6 +10038,234 @@
                 },
                 {
                   "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "skipSharedBeamNumerals",
+                  "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#octaveSignVerticalOverflow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherAboveStaffDecorationTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherBelowStaffDecorationBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletSideOverride",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "TupletPlacement | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#isTupletSuppressed",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletBracketAbove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#forcedSideTupletExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "above",
                   "type": {
                     "text": "boolean"
                   }
@@ -7562,7 +10340,136 @@
             },
             {
               "kind": "method",
-              "name": "#dynamicsBaselineForVoice",
+              "name": "#dynamicsLocalToClientY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#defaultDynamicsSide",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markingPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#hairpinPlacement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "DynamicsPlacement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "pair",
+                  "type": {
+                    "text": "HairpinPair"
+                  }
+                },
+                {
+                  "name": "defaultSide",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#pairVoiceHairpins",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineForSide",
               "privacy": "private",
               "return": {
                 "type": {
@@ -7581,6 +10488,72 @@
                   "type": {
                     "text": "VoiceRenderState"
                   }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#extremeRealExtentY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsBaselineFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "realStems",
+                  "default": "false"
                 }
               ],
               "inheritedFrom": {
@@ -7609,7 +10582,7 @@
               },
               "privacy": "protected",
               "readonly": true,
-              "default": "new ResizeObserver((entries) => { const newWidth = entries[0].contentRect.width; if (newWidth !== this.#lastStaffWidth) { this.#lastStaffWidth = newWidth; this.onStaffResize(); } })",
+              "default": "new ResizeObserver((entries) => { this.#respaceIfWidthChanged(entries[0].contentRect.width); })",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -7668,6 +10641,16 @@
             },
             {
               "kind": "field",
+              "name": "#verticalSpace",
+              "privacy": "private",
+              "default": "new VerticalSpaceReservations( this as unknown as HTMLElement, () => this.dispatchEvent( new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, { bubbles: true, composed: true, }) ) )",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#initialSlotSyncDone",
               "privacy": "private",
               "type": {
@@ -7695,6 +10678,41 @@
                 "text": "[BeatsInMeasure, BeatTypeInMeasure]"
               },
               "privacy": "protected",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "respaceToCurrentWidth",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#respaceIfWidthChanged",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "width",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -7891,8 +10909,107 @@
             },
             {
               "kind": "method",
+              "name": "reserveVerticalSpace",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "contentVerticalSpace",
+              "type": {
+                "text": "VerticalBand"
+              },
+              "description": "Room this staff's own content needs past its box — every reservation but\nthe row alignment below. Read by `<music-composition>` to line up the\nsame staff across every measure of a row.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "alignVerticalSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Sets the margin this staff takes so it lines up with its counterparts in\nthe other measures of its row. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveGapClearance",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveStandaloneOverlaySpace",
+              "privacy": "private",
               "return": {
                 "type": {
                   "text": "void"
@@ -8023,11 +11140,32 @@
             },
             {
               "kind": "field",
+              "name": "tupletGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "placement",
+              "type": {
+                "text": "TupletPlacement | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "flatElements",
               "type": {
                 "text": "NoteChordOrRestElementType[]"
               },
               "readonly": true
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
             }
           ],
           "attributes": [
@@ -8037,6 +11175,20 @@
                 "text": "TupletRatio"
               },
               "description": "Tuplet ratio: a bare count like `3` or a full `actual:normal` form like `3:2`. Defaults to `3`."
+            },
+            {
+              "name": "tuplet-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by one `<music-tuplet>` on each of a measure's two adjacent grand-staff staves, joining them into one tuplet that spans both hands (single-line passage-work with no shared beam). Each wrapper holds its own staff's share of the tuplet's time — use `<music-rest hidden>` for the beats the other hand plays. Requires a `<music-measure>` ancestor; standalone, each wrapper renders as an ordinary tuplet."
+            },
+            {
+              "name": "placement",
+              "type": {
+                "text": "TupletPlacement"
+              },
+              "description": "Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes)."
             }
           ],
           "superclass": {

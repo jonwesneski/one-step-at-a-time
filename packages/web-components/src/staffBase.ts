@@ -1,3 +1,4 @@
+import { computeBandOverflow, VerticalBand } from './rules/verticalSpaceRules';
 import {
   BeatsInMeasure,
   BeatTypeInMeasure,
@@ -9,6 +10,7 @@ import {
   buildConnectorSvgs,
   collectArpeggioTiePairs,
   collectNoteLikeElements,
+  collectPhraseSlurPairs,
   pairConnectors,
   partitionByVoice,
 } from './utils/connectorsBuilder';
@@ -26,8 +28,13 @@ import {
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
   STAFF_WRAPPER_MIN_HEIGHT,
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from './utils/notationDimensions';
 import { parseStaffGroup } from './utils/parsers';
+import {
+  measureVerticalExtents,
+  VerticalSpaceReservations,
+} from './utils/verticalSpace';
 
 // Runtime-safe fallback for environments without `HTMLElement` (SSR/Node). Prevents errrors if loaded in SSR
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis.HTMLElement isn't typed as a class constructor
@@ -37,6 +44,10 @@ export const _MaybeHTMLElement: any =
     ? // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis.HTMLElement isn't typed as a class constructor
       (globalThis as any).HTMLElement
     : class {};
+
+const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
+const ROW_ALIGNMENT_SOURCE = 'row-alignment';
+const GAP_CLEARANCE_SOURCE = 'gap-clearance';
 
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
@@ -56,6 +67,18 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected readonly transcribeContainer: SVGSVGElement;
   #standaloneConnectorsOverlay: SVGSVGElement;
+  // A margin change moves this staff's lines, so the ancestor measure
+  // re-lays its brace/barline/labels against them.
+  #verticalSpace = new VerticalSpaceReservations(
+    this as unknown as HTMLElement,
+    () =>
+      this.dispatchEvent(
+        new CustomEvent(STAFF_EVENTS.VERTICAL_SPACE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      )
+  );
   // True once a slotchange (real or the deferred synthetic kick) has been
   // handled — guards against rendering the initial content twice.
   #initialSlotSyncDone = false;
@@ -76,11 +99,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
     this.#lastStaffWidth = 0;
     this.staffResizeObserver = new ResizeObserver((entries) => {
-      const newWidth = entries[0].contentRect.width;
-      if (newWidth !== this.#lastStaffWidth) {
-        this.#lastStaffWidth = newWidth;
-        this.onStaffResize();
-      }
+      this.#respaceIfWidthChanged(entries[0].contentRect.width);
     });
 
     this.effectiveTimeSig = this.convertTotimeInts(
@@ -89,6 +108,30 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected abstract onStaffResize(): void;
+
+  // Called by an ancestor <music-composition> after a pass that can change
+  // measure widths (showing/hiding a clef, key or time signature), so this
+  // staff re-spaces before the ancestor draws connectors from its note
+  // positions, rather than in the next ResizeObserver callback, after that
+  // frame has already painted stale connectors. The observer then sees an
+  // unchanged width and does nothing.
+  respaceToCurrentWidth(): void {
+    const style = getComputedStyle(this.staffContainer);
+    this.#respaceIfWidthChanged(
+      this.staffContainer.getBoundingClientRect().width -
+        parseFloat(style.borderLeftWidth) -
+        parseFloat(style.borderRightWidth) -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight)
+    );
+  }
+
+  #respaceIfWidthChanged(width: number): void {
+    if (width !== this.#lastStaffWidth) {
+      this.#lastStaffWidth = width;
+      this.onStaffResize();
+    }
+  }
 
   get group(): StaffGroupType | null {
     return parseStaffGroup(this.getAttribute('group'));
@@ -337,12 +380,48 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
   }
 
+  // Content drawn past this staff's box reserves room under its own `source`
+  // key; the largest reservation per side becomes the host's margin, so it
+  // participates in page layout. Each source re-reports on every recompute.
+  protected reserveVerticalSpace(source: string, space: VerticalBand): void {
+    this.#verticalSpace.reserve(source, space);
+  }
+
+  /**
+   * Room this staff's own content needs past its box — every reservation but
+   * the row alignment below. Read by `<music-composition>` to line up the
+   * same staff across every measure of a row.
+   */
+  get contentVerticalSpace(): VerticalBand {
+    return this.#verticalSpace.reservedExcluding(ROW_ALIGNMENT_SOURCE);
+  }
+
+  /**
+   * Sets the margin this staff takes so it lines up with its counterparts in
+   * the other measures of its row. Returns whether the margin changed.
+   */
+  alignVerticalSpace(space: VerticalBand): boolean {
+    return this.#verticalSpace.reserve(ROW_ALIGNMENT_SOURCE, space);
+  }
+
+  /**
+   * Extra room the ancestor `<music-measure>` needs on this staff's gap side
+   * so what it places between the staves (a double-stemmed beam, a tuplet
+   * bracket) fits beside a gap-side octave sign, which stays next to its own
+   * staff. Returns whether the margin changed.
+   */
+  reserveGapClearance(space: VerticalBand): boolean {
+    return this.#verticalSpace.reserve(GAP_CLEARANCE_SOURCE, space);
+  }
+
   protected drawConnectorsWhenStandalone(): void {
     // A <music-measure> or <music-composition> ancestor owns connector
     // drawing once present — it can see this staff's siblings, which a lone
     // staff cannot, so a cross-staff pair (e.g. a slur from one hand of a
-    // grand staff to the other) can only ever be paired at that level.
+    // grand staff to the other) can only ever be paired at that level. That
+    // ancestor also owns the room its connectors need.
     if (this.closest(MUSIC_COMPOSITION) || this.closest(MUSIC_MEASURE)) {
+      this.#verticalSpace.release(STANDALONE_OVERLAY_SOURCE);
       return;
     }
 
@@ -353,12 +432,15 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     const root = this as unknown as ParentNode;
-    const byVoice = partitionByVoice(collectNoteLikeElements(root));
+    const noteLikeElements = collectNoteLikeElements(root);
+    const byVoice = partitionByVoice(noteLikeElements);
     const pairs = [
       ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
       ...collectArpeggioTiePairs(root),
+      ...collectPhraseSlurPairs(root),
     ];
     if (pairs.length === 0) {
+      this.#verticalSpace.release(STANDALONE_OVERLAY_SOURCE);
       return;
     }
 
@@ -371,6 +453,21 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     for (const svg of svgs) {
       this.#standaloneConnectorsOverlay.appendChild(svg);
     }
+    this.#reserveStandaloneOverlaySpace();
+  }
+
+  // The overlay moves with this host, so growing the margin needs no redraw.
+  #reserveStandaloneOverlaySpace(): void {
+    const rect = (this as unknown as HTMLElement).getBoundingClientRect();
+    const [overflow] = computeBandOverflow(
+      [{ top: rect.top, bottom: rect.bottom }],
+      measureVerticalExtents(
+        this.#standaloneConnectorsOverlay,
+        '.connector path'
+      ),
+      VERTICAL_OVERFLOW_CLEARANCE_PX
+    );
+    this.#verticalSpace.reserve(STANDALONE_OVERLAY_SOURCE, overflow);
   }
 
   disconnectedCallback(): void {

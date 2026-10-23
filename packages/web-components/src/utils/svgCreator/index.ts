@@ -14,6 +14,7 @@ export {
 export { BeamsBuilder, type NoteYPosition } from './beams';
 export { createChordSvg } from './chord';
 export {
+  BULGE_STEP_PX,
   createCurveSvg,
   createOpenTieSvg,
   DEFAULT_BULGE_HEIGHT,
@@ -24,7 +25,9 @@ export {
 } from './curve';
 export { createDoubleFlatSvg } from './doubleFlat';
 export { createDoubleSharpSvg } from './doubleSharp';
+export { createDoubleStemmedBeamPolygon } from './doubleStemmedBeams';
 export {
+  createAngledHairpinSvg,
   createDynamicMarkingSvg,
   createHairpinSvg,
   createVerticalHairpinSvg,
@@ -57,7 +60,15 @@ export {
   stemUpTipYPx,
   trillSignLeftX,
 } from './note';
+export {
+  createOctaveContinuationSignSvg,
+  createOctaveCornerSvg,
+  createOctaveExtensionLineSvg,
+  createOctaveLocoLabelSvg,
+  createOctaveSignSvg,
+} from './octaveSigns';
 export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
+export { createSharedStemLine } from './sharedStem';
 export { createSharpSvg } from './sharp';
 export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';

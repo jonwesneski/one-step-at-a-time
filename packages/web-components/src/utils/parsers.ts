@@ -14,7 +14,12 @@ import type {
   MeasureNumberDisplay,
   Note,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -31,8 +36,13 @@ import {
   GRACE_SLURS,
   GRACE_TYPES,
   MEASURE_NUMBER_DISPLAYS,
+  OCTAVE_CONTINUATION_MODES,
+  OCTAVE_DISPLAY_MODES,
+  OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
+  REST_STAFF_SIDES,
   STAFF_GROUPS,
+  STEM_DIRECTIONS,
   STRESSES,
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
@@ -55,6 +65,13 @@ const VALID_TRILL_CONTINUATION_MODES = new Set<string>(
   TRILL_CONTINUATION_MODES
 );
 const VALID_TRILL_FINISH_SLURS = new Set<string>(TRILL_FINISH_SLURS);
+const VALID_OCTAVE_SHIFT_AMOUNTS = new Set<string>(OCTAVE_SHIFT_AMOUNTS);
+const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
+const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
+const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
+const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
+  OCTAVE_CONTINUATION_MODES
+);
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
 const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
 
@@ -189,6 +206,61 @@ export const parseTrillFinishSlur = (value: string | null): TrillFinishSlur => {
     return value as TrillFinishSlur;
   }
   return 'to-main';
+};
+
+// No default: unlike parseTrillLineMode's 'auto', there is no sensible
+// fallback amount for an unset/invalid octave-shift value.
+export const parseOctaveShiftAmount = (
+  value: string | null
+): OctaveShiftAmount | null => {
+  if (value !== null && VALID_OCTAVE_SHIFT_AMOUNTS.has(value)) {
+    return value as OctaveShiftAmount;
+  }
+  return null;
+};
+
+// No default: the 'sign' fallback is applied at span-open time in
+// rules/octaveRules.ts, not here — an element with no octaveShift of its own
+// has no span to default the mode of.
+export const parseOctaveDisplayMode = (
+  value: string | null
+): OctaveDisplayMode | null => {
+  if (value !== null && VALID_OCTAVE_DISPLAY_MODES.has(value)) {
+    return value as OctaveDisplayMode;
+  }
+  return null;
+};
+
+// No default: null means "no author override," resolved separately by the
+// ancestor <music-measure> auto-classifying by beat position when this rest
+// is a member of an active beam-group (see rules/doubleStemmedBeamRules.ts).
+export const parseRestStaffSide = (
+  value: string | null
+): RestStaffSide | null => {
+  if (value !== null && VALID_REST_STAFF_SIDES.has(value)) {
+    return value as RestStaffSide;
+  }
+  return null;
+};
+
+// No default: null means "no author override," resolved by today's
+// existing pitch-driven/voice/beam-group stem direction logic unchanged.
+export const parseStemDirection = (
+  value: string | null
+): StemDirection | null => {
+  if (value !== null && VALID_STEM_DIRECTIONS.has(value)) {
+    return value as StemDirection;
+  }
+  return null;
+};
+
+export const parseOctaveContinuationMode = (
+  value: string | null
+): OctaveContinuationMode => {
+  if (value !== null && VALID_OCTAVE_CONTINUATION_MODES.has(value)) {
+    return value as OctaveContinuationMode;
+  }
+  return 'bracketed';
 };
 
 export const parseGraceType = (value: string | null): GraceType | null => {

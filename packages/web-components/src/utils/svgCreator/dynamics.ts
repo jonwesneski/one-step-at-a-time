@@ -1,3 +1,8 @@
+import {
+  hairpinWedgeEdges,
+  type HairpinPoint,
+  type HairpinWedgeEdges,
+} from '../../rules/hairpinPlacementRules';
 import type { DynamicMarking, HairpinKind } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -57,42 +62,48 @@ export function createHairpinSvg(
   openAtStart = false,
   openAtEnd = false
 ): SVGGElement {
-  const group = document.createElementNS(SVG_NS, 'g');
+  const group = createHairpinGroup(
+    hairpinWedgeEdges(
+      kind,
+      { x: startX, y: centerY },
+      { x: endX, y: centerY },
+      openHeight,
+      openAtStart,
+      openAtEnd
+    )
+  );
   group.classList.add('hairpin');
+  return group;
+}
 
-  const halfHeight = openHeight / 2;
+/**
+ * Renders a hairpin wedge whose axis runs from `start` to `end` at any slant,
+ * with each end's opening perpendicular to that axis.
+ */
+export function createAngledHairpinSvg(
+  kind: HairpinKind,
+  start: HairpinPoint,
+  end: HairpinPoint,
+  openHeight: number = HAIRPIN_OPEN_HEIGHT
+): SVGGElement {
+  const group = createHairpinGroup(
+    hairpinWedgeEdges(kind, start, end, openHeight)
+  );
+  group.classList.add('hairpin', 'hairpin-angled');
+  return group;
+}
 
-  let topPath: string;
-  let bottomPath: string;
-
-  if (kind === 'crescendo') {
-    const leftTopY = openAtStart ? centerY - halfHeight / 2 : centerY;
-    const leftBottomY = openAtStart ? centerY + halfHeight / 2 : centerY;
-    topPath = `M ${startX} ${leftTopY} L ${endX} ${centerY - halfHeight}`;
-    bottomPath = `M ${startX} ${leftBottomY} L ${endX} ${centerY + halfHeight}`;
-  } else {
-    const leftTopY = openAtStart
-      ? centerY - halfHeight / 2
-      : centerY - halfHeight;
-    const leftBottomY = openAtStart
-      ? centerY + halfHeight / 2
-      : centerY + halfHeight;
-    const rightTopY = openAtEnd ? centerY - halfHeight / 2 : centerY;
-    const rightBottomY = openAtEnd ? centerY + halfHeight / 2 : centerY;
-    topPath = `M ${startX} ${leftTopY} L ${endX} ${rightTopY}`;
-    bottomPath = `M ${startX} ${leftBottomY} L ${endX} ${rightBottomY}`;
-  }
-
-  for (const d of [topPath, bottomPath]) {
+function createHairpinGroup(edges: HairpinWedgeEdges): SVGGElement {
+  const group = document.createElementNS(SVG_NS, 'g');
+  for (const [from, to] of edges) {
     const line = document.createElementNS(SVG_NS, 'path');
-    line.setAttribute('d', d);
+    line.setAttribute('d', `M ${from.x} ${from.y} L ${to.x} ${to.y}`);
     line.setAttribute('fill', 'none');
     line.setAttribute('stroke', 'currentColor');
     line.setAttribute('stroke-width', `${HAIRPIN_STROKE_WIDTH}`);
     line.setAttribute('stroke-linecap', 'round');
     group.appendChild(line);
   }
-
   return group;
 }
 

@@ -53,7 +53,7 @@ Short melodic decorations applied to a note.
 |          | Name                            | Symbol / Notation            | Description                                                                                                                                                                                                                                                          |
 | -------- | ------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | &#x2611; | Trill                           | `tr` or `tr~~~`              | Rapid alternation between the note and the one above                                                                                                                                                                                                                 |
-| &#x2610; | Trill with ending               | `tr` + turn                  | Trill that resolves with a turn figure                                                                                                                                                                                                                               |
+| &#x2611; | Trill with ending               | `tr` + turn                  | Trill that resolves with a turn figure                                                                                                                                                                                                                               |
 | &#x2610; | Mordent (Lower)                 | `ð†©`                        | Quick lower-neighbor figure (note â†’ below â†’ note)                                                                                                                                                                                                                |
 | &#x2610; | Inverted Mordent (Upper)        | `ð†ª`                        | Quick upper-neighbor figure (note â†’ above â†’ note)                                                                                                                                                                                                                |
 | &#x2610; | Turn                            | `âˆž` or `ð„Ž`               | Four-note figure: above â†’ note â†’ below â†’ note                                                                                                                                                                                                                  |
@@ -127,7 +127,7 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 | &#x2610; | Growl            | `growl`               | Sing into instrument while playing           |
 | &#x2610; | Multiphonics     | Special notation      | Produce multiple pitches simultaneously      |
 | &#x2610; | Half-valve       | `(+)` or special mark | Depress valve halfway for microtone/effect   |
-| &#x2610; | Glissando        | `gliss.`              | Slide between pitches (trombones especially) |
+| &#x2611; | Glissando        | `gliss.`              | Slide between pitches (trombones especially) |
 | &#x2610; | Stopped (Horn)   | `+`                   | Hand stops bell (French Horn)                |
 | &#x2610; | Open (Horn)      | `o`                   | Remove hand from bell                        |
 | &#x2610; | Mute             | `con sord.`           | Use a mute                                   |
@@ -160,11 +160,11 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 
 |          | Name                 | Symbol          | Description                  |
 | -------- | -------------------- | --------------- | ---------------------------- |
-| &#x2610; | Sharp                | `â™¯`           | Raise pitch one semitone     |
-| &#x2610; | Flat                 | `â™­`           | Lower pitch one semitone     |
-| &#x2610; | Natural              | `â™®`           | Cancel previous accidental   |
-| &#x2610; | Double Sharp         | `ð„ª`           | Raise pitch two semitones    |
-| &#x2610; | Double Flat          | `ð„«`           | Lower pitch two semitones    |
+| &#x2611; | Sharp                | `â™¯`           | Raise pitch one semitone     |
+| &#x2611; | Flat                 | `â™­`           | Lower pitch one semitone     |
+| &#x2611; | Natural              | `â™®`           | Cancel previous accidental   |
+| &#x2611; | Double Sharp         | `ð„ª`           | Raise pitch two semitones    |
+| &#x2611; | Double Flat          | `ð„«`           | Lower pitch two semitones    |
 | &#x2610; | Quarter-tone Sharp   | `â†‘â™¯` or `+` | Raise by a quarter tone      |
 | &#x2610; | Quarter-tone Flat    | `â†“â™­` or `-` | Lower by a quarter tone      |
 | &#x2610; | Three-quarter Sharp  | Special symbol  | Raise by three quarter tones |
@@ -182,8 +182,8 @@ These alter the rhythmic length of a note.
 | &#x2610; | Dot              | `.` after note      | Adds 50% of note's value             |
 | &#x2610; | Double Dot       | `..` after note     | Adds 75% of note's value             |
 | &#x2610; | Triple Dot       | `...` after note    | Adds 87.5% of note's value           |
-| &#x2610; | Tie              | Curved line         | Extends note across a barline        |
-| &#x2610; | Tuplet / Triplet | Bracket with number | Groups of notes in irregular rhythms |
+| &#x2611; | Tie              | Curved line         | Extends note across a barline        |
+| &#x2611; | Tuplet / Triplet | Bracket with number | Groups of notes in irregular rhythms |
 | &#x2611; | Fermata          | `ð„`                | Hold the note longer than written    |
 | &#x2610; | Short Fermata    | Pointed fermata     | Shorter than normal fermata          |
 | &#x2610; | Long Fermata     | Square fermata      | Longer than normal fermata           |
@@ -198,7 +198,7 @@ These alter the rhythmic length of a note.
 | &#x2611; | Slur                | Curved line over notes  | Play notes legato (connected)              |
 | &#x2611; | Tie                 | Curved line, same pitch | Extends note duration                      |
 | &#x2611; | Laissez vibrer      | Open-ended curved line  | Let the note ring (`tie="laissez-vibrer"`) |
-| &#x2610; | Phrase Mark         | Long curved line        | Groups a musical phrase visually           |
+| &#x2611; | Phrase Mark         | Long curved line        | Groups a musical phrase visually           |
 | &#x2611; | Hairpin Crescendo   | `<` hairpin             | Get louder over a span of notes            |
 | &#x2611; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes            |
 | &#x2610; | Niente              | `n` or circle at end    | Fade to/from silence                       |
@@ -236,29 +236,29 @@ These alter the rhythmic length of a note.
 | &#x2610; | `ð„‹`     | Segno               | Marker for D.S.               |
 | &#x2610; | `ð„Œ`     | Coda                | A separated closing section   |
 | &#x2610; | `al Coda` | To the Coda         | Jump to the Coda symbol       |
-| &#x2610; | `8va`     | Ottava alta         | Play one octave higher        |
-| &#x2610; | `8vb`     | Ottava bassa        | Play one octave lower         |
-| &#x2610; | `15ma`    | Two octaves higher  | Play two octaves higher       |
+| &#x2611; | `8va`     | Ottava alta         | Play one octave higher        |
+| &#x2611; | `8vb`     | Ottava bassa        | Play one octave lower         |
+| &#x2611; | `15ma`    | Two octaves higher  | Play two octaves higher       |
 
 ---
 
 ## 13. Special / Extended Techniques
 
-| Name             | Context        | Description                                 |
-| ---------------- | -------------- | ------------------------------------------- |
-| Multiphonics     | Wind/Voice     | Produce multiple pitches at once            |
-| Sprechstimme     | Voice          | Half-sung, half-spoken                      |
-| Cluster          | Keyboard       | Play a dense group of adjacent notes        |
-| Prepared Piano   | Piano          | Objects placed on strings to alter tone     |
-| Con sordino      | Strings/Brass  | Play with a mute                            |
-| Senza sordino    | Strings/Brass  | Play without a mute                         |
-| Sul ponticello   | Strings        | Near the bridge                             |
-| Sul tasto        | Strings        | Over the fingerboard                        |
-| Ordinario (ord.) | Any            | Return to normal playing technique          |
-| Loco             | Any            | Play as written (cancel 8va etc.)           |
-| Flautando        | Strings        | Flute-like, light bowing                    |
-| JetÃ©            | Strings        | Throw the bow for multiple bouncing strokes |
-| Flageolet        | Strings/Guitar | Natural harmonic; light airy tone           |
+|          | Name             | Context        | Description                                 |
+| -------- | ---------------- | -------------- | ------------------------------------------- |
+| &#x2610; | Multiphonics     | Wind/Voice     | Produce multiple pitches at once            |
+| &#x2610; | Sprechstimme     | Voice          | Half-sung, half-spoken                      |
+| &#x2610; | Cluster          | Keyboard       | Play a dense group of adjacent notes        |
+| &#x2610; | Prepared Piano   | Piano          | Objects placed on strings to alter tone     |
+| &#x2610; | Con sordino      | Strings/Brass  | Play with a mute                            |
+| &#x2610; | Senza sordino    | Strings/Brass  | Play without a mute                         |
+| &#x2610; | Sul ponticello   | Strings        | Near the bridge                             |
+| &#x2610; | Sul tasto        | Strings        | Over the fingerboard                        |
+| &#x2610; | Ordinario (ord.) | Any            | Return to normal playing technique          |
+| &#x2611; | Loco             | Any            | Play as written (cancel 8va etc.)           |
+| &#x2610; | Flautando        | Strings        | Flute-like, light bowing                    |
+| &#x2610; | JetÃ©            | Strings        | Throw the bow for multiple bouncing strokes |
+| &#x2610; | Flageolet        | Strings/Guitar | Natural harmonic; light airy tone           |
 
 # Staff Annotations (Above & Below the Staff) List
 
@@ -278,7 +278,7 @@ They are broken into two positional zones: **Above Staff** and **Below Staff**, 
 | &#x2610; | **Rehearsal Marks**        | Letters or numbers used to reference sections during rehearsal        |
 | &#x2610; | **Chord Symbols**          | Chord names written above or below for harmonic reference             |
 | &#x2610; | **Figured Bass**           | Numbers below the bass line indicating harmony (Baroque style)        |
-| &#x2610; | **Lyrics / Text Underlay** | Sung text placed beneath notes                                        |
+| &#x2611; | **Lyrics / Text Underlay** | Sung text placed beneath notes                                        |
 | &#x2610; | **Fingering**              | Numbers indicating which finger to use                                |
 | &#x2610; | **Score Directives**       | Instructions that redirect playback/flow (D.C., D.S., Coda, etc.)     |
 
@@ -320,7 +320,7 @@ Used for navigation during rehearsal. Usually large and boxed or circled.
 | -------- | -------------------------- | --------------------------- | -------------------------------------- |
 | &#x2610; | Letter                     | `A`, `B`, `C`               | Sequential alphabetical markers        |
 | &#x2610; | Number                     | `1`, `2`, `3`               | Sequential numerical markers           |
-| &#x2610; | Measure number             | `m. 32`                     | Refers to a specific bar number        |
+| &#x2611; | Measure number             | `m. 32`                     | Refers to a specific bar number        |
 | &#x2610; | Section name               | `Verse`, `Chorus`, `Bridge` | Informal or popular-music style labels |
 | &#x2610; | Rehearsal number in box    | `[5]`                       | Standard orchestral style              |
 | &#x2610; | Rehearsal letter in circle | `â’¶`                       | Alternative style                      |
@@ -386,7 +386,7 @@ Instructions for how to physically produce the sound. These are specific to the 
 | &#x2610; | `cup mute`               | Brass          | Specific mute type                 |
 | &#x2610; | `harmon mute`            | Brass          | Specific mute type (wah effect)    |
 | &#x2610; | `open`                   | Brass          | Remove mute / open bell            |
-| &#x2610; | `loco`                   | Any            | Cancel 8va â€” play as written     |
+| &#x2611; | `loco`                   | Any            | Cancel 8va â€” play as written     |
 | &#x2610; | `ad lib.`                | Any            | At performer's discretion          |
 | &#x2610; | `sim.` / `simile`        | Any            | Continue in the same manner        |
 
@@ -398,10 +398,10 @@ Horizontal lines with a text indicator that shift pitch by octaves.
 
 |          | Marking            | Direction   | Meaning                             |
 | -------- | ------------------ | ----------- | ----------------------------------- |
-| &#x2610; | `8va -------`      | Above staff | Play one octave higher than written |
-| &#x2610; | `8vb -------`      | Below staff | Play one octave lower than written  |
-| &#x2610; | `15ma -------`     | Above staff | Play two octaves higher             |
-| &#x2610; | `15mb -------`     | Below staff | Play two octaves lower              |
+| &#x2611; | `8va -------`      | Above staff | Play one octave higher than written |
+| &#x2611; | `8vb -------`      | Below staff | Play one octave lower than written  |
+| &#x2611; | `15ma -------`     | Above staff | Play two octaves higher             |
+| &#x2611; | `15mb -------`     | Below staff | Play two octaves lower              |
 | &#x2610; | `8` (with bracket) | Above/below | Shorthand for the same              |
 
 ---
@@ -605,13 +605,13 @@ Can appear above or below depending on the instrument/score.
 | &#x2610; | Rehearsal marks               | Above â€” system-wide                                 |
 | &#x2610; | Expression text               | Above staff                                           |
 | &#x2610; | Technique text                | Above staff                                           |
-| &#x2610; | 8va / 15ma                    | Above staff                                           |
+| &#x2611; | 8va / 15ma                    | Above staff                                           |
 | &#x2610; | Chord symbols                 | Above staff (lead sheets) / Below staff (some styles) |
-| &#x2610; | Trill marks                   | Above staff                                           |
+| &#x2611; | Trill marks                   | Above staff                                           |
 | &#x2610; | Volta brackets                | Above staff                                           |
 | &#x2610; | Score directives (D.C., Coda) | Above staff                                           |
-| &#x2610; | Dynamics                      | Below staff (usually)                                 |
-| &#x2610; | Lyrics                        | Below staff                                           |
+| &#x2611; | Dynamics                      | Below staff (usually)                                 |
+| &#x2611; | Lyrics                        | Below staff                                           |
 | &#x2610; | Figured bass                  | Below staff                                           |
 | &#x2610; | Pedal markings                | Below staff                                           |
 | &#x2610; | Rhythm/slash notation labels  | Below or within staff                                 |

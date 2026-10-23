@@ -29,7 +29,9 @@ export function buildBeamsRenderer(
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
   arpeggioRunIndices: ReadonlySet<number> = new Set(),
   elementBeatOffsets?: number[],
-  stemDirectionsOverride?: boolean[]
+  stemDirectionsOverride?: boolean[],
+  externallyBeamedIndices?: ReadonlySet<number>,
+  crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -44,7 +46,8 @@ export function buildBeamsRenderer(
     elements,
     timeSig,
     elementDurationFactors,
-    elementBeatOffsets
+    elementBeatOffsets,
+    externallyBeamedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -52,7 +55,7 @@ export function buildBeamsRenderer(
   // math below depends on stem direction, so swapping directions after
   // construction would leave stale geometry — this must happen before
   // noteYPositions is built, not after.
-  const stemDirections =
+  const baseStemDirections =
     stemDirectionsOverride ??
     determineStemDirections(
       elements,
@@ -60,6 +63,32 @@ export function buildBeamsRenderer(
       noteStaffYCoords,
       chordStaffYCoords
     );
+  // crossStaffStemOverrides (the ancestor <music-measure>'s own
+  // double-stemmed-beam resolution) is a sparse overlay applied on top of
+  // whichever base policy above produced — it needs BeamsBuilder's own
+  // beam-group data (via determineStemDirections) to exist first, so it
+  // can't be folded into stemDirectionsOverride itself without duplicating
+  // that construction at the call site. Keyed by the element itself, not a
+  // positional index: the ancestor <music-measure> resolves it from a
+  // staff-flat DOM traversal, but `elements` here is this one voice's own
+  // local array (staffClassicalBase.ts#buildVoiceRenderState) — those two
+  // index spaces only coincide for a single-voice staff, so an index-keyed
+  // map would silently misapply on a multi-voice one. Object identity
+  // sidesteps the mismatch entirely, since both sides reference the same
+  // live DOM elements.
+  const stemDirections = crossStaffStemOverrides
+    ? baseStemDirections.map(
+        (d, i) => crossStaffStemOverrides.get(elements[i]) ?? d
+      )
+    : baseStemDirections;
+  if (crossStaffStemOverrides) {
+    applyOverridesToWholeBeamGroups(
+      elements,
+      beamsBuilder,
+      crossStaffStemOverrides,
+      stemDirections
+    );
+  }
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {
@@ -106,6 +135,8 @@ export function buildBeamsRenderer(
         y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
         stemUp,
         chordClearanceY,
+        chordSpread:
+          Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates),
       };
     }
   );
@@ -115,4 +146,41 @@ export function buildBeamsRenderer(
     beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
     stemDirections,
   };
+}
+
+// A same-staff beam is drawn with one stem direction, so a direction forced
+// on any member applies to every member; the first forced member in the
+// group wins a conflict. Cross-staff double-stemmed members never form a
+// same-staff group (externallyBeamedIndices), so their own overrides stay
+// per element.
+function applyOverridesToWholeBeamGroups(
+  elements: NoteChordOrRestElementType[],
+  beamsBuilder: BeamsBuilder,
+  overrides: ReadonlyMap<NoteChordOrRestElementType, boolean>,
+  stemDirections: boolean[]
+): void {
+  const visited = new Set<number>();
+  for (let i = 0; i < elements.length; i++) {
+    const group = beamsBuilder.beamGroupFor(i);
+    if (group === null || visited.has(i)) {
+      continue;
+    }
+    group.forEach((index) => visited.add(index));
+    const forced = group
+      .map((index) => overrides.get(elements[index]))
+      .filter((direction): direction is boolean => direction !== undefined);
+    if (forced.length === 0) {
+      continue;
+    }
+    if (forced.some((direction) => direction !== forced[0])) {
+      console.warn(
+        `[beamRules] beamed notes force conflicting stem directions; using the first one (${
+          forced[0] ? 'up' : 'down'
+        }) for the whole beam`
+      );
+    }
+    for (const index of group) {
+      stemDirections[index] = forced[0];
+    }
+  }
 }

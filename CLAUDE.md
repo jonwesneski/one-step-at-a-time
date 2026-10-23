@@ -38,7 +38,7 @@ one-step-at-a-time/
 - **Verified-true but undiagnosed constraints are allowed if flagged honestly** — e.g. "import order matters here; root cause not diagnosed" is acceptable when the constraint is real and load-bearing. Don't silently omit it, and don't fabricate a false explanation.
 - **JSDoc comment blocks with `@param`/`@returns`** are only expected on symbols that are part of a package's actual public npm surface (e.g. `packages/web-components`'s custom elements, exported types, `types.d.ts` JSX declarations) — not on internal-only exports. Elsewhere, treat JSDoc under the same "only if non-obvious" rule as regular comments — no boilerplate `@param` restating the type/name.
 - **TODO comments are allowed only if they describe a real future constraint/trigger** (e.g. "revisit when X ships Y"). Vague deferrals ("may revisit this", "todo: fix later") are not allowed.
-- **No verbosity for its own sake** — keep comments as short as the point requires. Length is fine when the subject is genuinely complex, not otherwise.
+- **No verbosity for its own sake** — keep comments as short as the point requires; 1-2 concise sentences. Length is fine when the subject is genuinely complex, not otherwise.
 - **eslint-disable justification comments follow the same bar** — state the actual reason the rule doesn't apply, not a content-free assertion (`-- it's okay`).
 
 # CI Error Guidelines

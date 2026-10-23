@@ -192,6 +192,162 @@ export const MAX_STEM_SHORTENING_PX =
  */
 export const STEM_OVERLAP_PX = STAFF_LINE_SPACING * 0.2;
 
+/**
+ * Preferred clearance (px) between a rest's own glyph and the near edge of
+ * a double-stemmed beam it's placed against (`restStaffSide` 'above'/
+ * 'below') — a rest cutting through the beam itself would obscure the
+ * rhythm. Used at full strength when there's room; when the nearest real
+ * notehead on that side leaves less headroom than this, measure.ts scales
+ * it down (see MIN_REST_NOTE_CLEARANCE_PX below) rather than pushing the
+ * rest past a comfortable distance from the beam and into the notehead —
+ * increasing this value moves a 'below' rest *closer* to a note further
+ * below it, not further away, so it is not the lever for "too close to an
+ * adjacent note"; MIN_REST_NOTE_CLEARANCE_PX is.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const REST_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Minimum gap (px) between a double-stemmed member's notehead and the beam
+ * level nearest it; the beam moves to keep it, and past that the gap widens.
+ * The usual free-stem floor for a two-beam note.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const DOUBLE_STEMMED_BEAM_MIN_STEM_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Minimum real clearance (px) kept between a cross-staff rest's own glyph
+ * and the nearest actual notehead on an adjacent staff — the rest and the
+ * note it "hugs" toward (or, for a centered rest, either staff's nearest
+ * note) are frequently at the very same X (same beat), so a flat
+ * beam-relative offset alone can't guarantee this; measure.ts checks real
+ * geometry and enforces this floor directly.
+ * = STAFF_LINE_SPACING
+ */
+export const MIN_REST_NOTE_CLEARANCE_PX = STAFF_LINE_SPACING;
+
+/**
+ * Real X distance (px) below which a cross-staff rest's nearest real
+ * member counts as "the same beat" for horizontal-collision purposes — a
+ * hugging/centered rest that shares its X with a real note's own stem
+ * (the common case: it's either the note it precedes or the note it's
+ * centered against) visually sits right on top of that stem regardless of
+ * how much *vertical* clearance it has, since the stem spans the entire
+ * distance between the notehead and the beam. When within this distance,
+ * measure.ts nudges the rest left by REST_STEM_AVOIDANCE_NUDGE_PX instead.
+ * A rest and a note genuinely at the same beat still differ by roughly
+ * STAFF_LINE_SPACING in their own real center-X (their SVG boxes aren't
+ * the same width), so this is set well past that natural baseline gap —
+ * a tighter threshold flickers on/off across redraw passes as layout
+ * settles, verified empirically against the real rendered story.
+ * = 2.5 × STAFF_LINE_SPACING
+ */
+export const REST_STEM_AVOIDANCE_THRESHOLD_PX = STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Leftward horizontal nudge (px) applied to a cross-staff rest whose
+ * natural X would otherwise sit on top of a real note's own stem (see
+ * REST_STEM_AVOIDANCE_THRESHOLD_PX) — left, not right, since the rest is
+ * conventionally the note it "precedes," so shifting earlier reads
+ * naturally rather than displacing it past the note it's beside.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const REST_STEM_AVOIDANCE_NUDGE_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * Stroke width (px) of the real stem line `measure.ts#redrawSharedStems`
+ * draws directly between two real noteheads on adjacent staves that share
+ * one stem (`shared-stem-for`) — matches a normal note's own rendered stem
+ * width (`STEM_WIDTH` in `svgCreator/note.ts`, 22 units in its 600-unit
+ * space at `NOTE_SCALE`), since this line stands in for both ends' now
+ * locally-suppressed stems and shouldn't look thicker or thinner than one.
+ * = 0.12 × STAFF_LINE_SPACING
+ */
+export const SHARED_STEM_WIDTH_PX = STAFF_LINE_SPACING * 0.12;
+
+/**
+ * Real X distance (px) beyond which a `shared-stem-for` pair's two
+ * noteheads count as landing at meaningfully different beats — same-beat
+ * entries on sibling staves land at the same X by construction (the
+ * measure's beat-proportional spacing formula runs identically on every
+ * staff), so a gap this size signals a real authoring mistake (not a
+ * layout fix) worth a console warning rather than a silently-skewed line.
+ * = STAFF_LINE_SPACING
+ */
+export const SHARED_STEM_MISALIGNMENT_WARN_PX = STAFF_LINE_SPACING;
+
+/**
+ * Tolerance (px) for treating two `crossStaffTupletBeamY` values as
+ * unchanged. That value is a live-`getBoundingClientRect()`-derived delta,
+ * re-measured on every double-stemmed-beam redraw — comparing it with exact
+ * equality lets harmless sub-pixel layout jitter between passes register as
+ * "changed" every time, re-triggering a full staff re-render (and, via the
+ * NOTES_POSITIONED event it dispatches, the ancestor measure's own redraw)
+ * forever. 0.5px sits comfortably below anything visually meaningful (the
+ * smallest real quantities this value composes with are STEM_OVERLAP_PX
+ * (2px) and BEAM_THICKNESS_PX (8px)) and comfortably above realistic
+ * layout-engine jitter.
+ */
+export const CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX = 0.5;
+
+/**
+ * Pull-back (px) from a slur's real stem-tip anchor, back toward the
+ * notehead, when anchoring at the stem end instead of the notehead — the
+ * bare tip itself is exactly where a double-stemmed beam (or another
+ * voice's own content) sits, so anchoring precisely at it would touch that,
+ * not clear it. Similar order of magnitude to SLUR_NOTEHEAD_OFFSET_PX.
+ * = 0.9 × STAFF_LINE_SPACING
+ */
+export const SLUR_STEM_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Minimum curve height (as a fraction of a slur's own real horizontal span)
+ * for a cross-staff slur — a fixed DEFAULT_BULGE_HEIGHT reads as a
+ * near-straight diagonal once the span reaches the width of a whole
+ * grand-staff hand-crossing passage.
+ */
+export const CROSS_STAFF_SLUR_BULGE_SPAN_RATIO = 0.1;
+
+/**
+ * Clearance (px) past a note's own real stem tip, on the far side from the
+ * notehead, for a cross-staff slur endpoint whose stem points toward the
+ * slur's side (see connectorsBuilder.ts#computeBeyondBeamAnchor).
+ * Comfortably past a beam's own thickness (BEAM_THICKNESS_PX, 8px) so the
+ * anchor lands visibly clear of the drawn beam or flag.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const SLUR_BEYOND_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * Minimum gap (px) a cross-staff slur keeps from every other entry's glyphs
+ * (noteheads, stems, flags, rests, ledger lines, beams) so it visibly does
+ * not touch them.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const SLUR_OBSTACLE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Upper bound of a cross-staff slur's control-point height search, as a
+ * fraction of its own real horizontal span — keeps the obstacle search
+ * bounded; a slur that can't clear within it falls back to the least-colliding
+ * shape.
+ */
+export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
+
+/**
+ * Width (px) of the vertical slices a beam polygon is cut into for slur
+ * obstacle tests, so a sloped beam keeps its real outline instead of
+ * collapsing to its bounding box.
+ */
+export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
+
+/**
+ * Gap (px) kept between content drawn past its host's or row's edge and that
+ * edge, once the host grows its margin to make room.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const VERTICAL_OVERFLOW_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Describe area (clef, key signature, time signature) ─────────────────────
 
 /**
@@ -343,8 +499,7 @@ export const DYNAMICS_ABOVE_BASELINE_Y =
   STAFF_TOP_LINE_Y - STAFF_LINE_SPACING * 2;
 
 /**
- * Half-height (px) of the open end of a hairpin wedge.
- * The full open span is 2 × HAIRPIN_OPEN_HEIGHT, matching 2 staff spaces (20 px).
+ * Full spread (px) of the open end of a hairpin wedge — one staff space.
  * = STAFF_LINE_SPACING  (= 10)
  */
 export const HAIRPIN_OPEN_HEIGHT = STAFF_LINE_SPACING;
@@ -372,6 +527,58 @@ export const DYNAMICS_CHAR_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.65;
  * an adjacent hairpin's start/end point.
  */
 export const HAIRPIN_DYNAMIC_GAP_PX = 4;
+
+/**
+ * Share of DYNAMICS_FONT_SIZE a dynamic glyph reaches above / below its
+ * baseline, for estimating its box. Bold italic dynamics have tall ascenders
+ * and almost no descent.
+ */
+export const DYNAMICS_TEXT_ASCENT_RATIO = 0.75;
+export const DYNAMICS_TEXT_DESCENT_RATIO = 0.25;
+
+/**
+ * Shallowest slant (radians) an angled hairpin may take — 10°, enough to read
+ * as distinct from the horizontal staff lines it crosses even over a widely
+ * spaced passage.
+ */
+export const HAIRPIN_MIN_ROUTE_SLANT_RADIANS = Math.PI / 18;
+
+/** Steepest slant (radians) an angled hairpin may take — 45°. */
+export const HAIRPIN_MAX_ROUTE_SLANT_RADIANS = Math.PI / 4;
+
+/**
+ * Slant (radians) an angled hairpin aims for among valid routes — 30°, close
+ * to the conventional engraved example of one angled through a stave.
+ */
+export const HAIRPIN_PREFERRED_ROUTE_SLANT_RADIANS = Math.PI / 6;
+
+/**
+ * Minimum gap (px) between a hairpin (or its endpoint dynamic) and any beam.
+ * = 0.5 × STAFF_LINE_SPACING  (= 5, same as SLUR_OBSTACLE_CLEARANCE_PX)
+ */
+export const HAIRPIN_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Minimum gap (px) between a hairpin and a notehead or other non-stem glyph.
+ * = 0.3 × STAFF_LINE_SPACING  (= 3)
+ */
+export const HAIRPIN_NOTE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How far (px) an angled hairpin's outside end sits past the stave's far
+ * line, beyond its own half-opening.
+ * = 1.5 × STAFF_LINE_SPACING  (= 15)
+ */
+export const HAIRPIN_ROUTE_OUTSIDE_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Step (px) between candidate hairpin Ys when searching for a clear placement.
+ * = 0.5 × STAFF_LINE_SPACING  (= 5)
+ */
+export const HAIRPIN_ROUTE_SEARCH_STEP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Outward steps tried for an angled hairpin's outside end before giving up. */
+export const HAIRPIN_ROUTE_MAX_SEARCH_STEPS = 6;
 
 // ─── Tuplets ──────────────────────────────────────────────────────────────────
 
@@ -798,3 +1005,130 @@ export const TRILL_PARENTHESIS_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.25;
 
 /** Horizontal bow depth (px) of each parenthesis curve. */
 export const TRILL_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;
+
+// ─── Octave signs ───────────────────────────────────────────────────────────
+// Own-measure only (Phase 0): a numeral + optional va/ma suffix, a dashed
+// extension line, and a corner terminator, rendered at a fixed nominal Y
+// clear of the staff. Starting values — tune visually in Storybook.
+
+/** Rendered height (px) of the octave-sign numeral — 1.5 staff-spaces tall. */
+export const OCTAVE_SIGN_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Scale applied to the va/ma suffix relative to the numeral — a smaller
+ * superscript-style companion glyph, not a second full-size numeral.
+ */
+export const OCTAVE_SIGN_SUFFIX_SCALE = 0.6;
+
+/**
+ * Estimated width (px) per numeral character (italic serif). Mirrors
+ * DYNAMICS_CHAR_WIDTH_PX's estimate-don't-measure approach — used to
+ * position the va/ma suffix flush after the numeral.
+ */
+export const OCTAVE_SIGN_CHAR_WIDTH_PX = OCTAVE_SIGN_FONT_SIZE_PX * 0.65;
+
+/**
+ * Conservative estimated width (px) of a whole octave sign (numeral +
+ * suffix), covering the widest case — a 2-digit numeral ("15"/"22") plus its
+ * 2-letter suffix at OCTAVE_SIGN_SUFFIX_SCALE — so leftward-reserving layout
+ * code doesn't need to measure the actual rendered text.
+ */
+export const OCTAVE_SIGN_ESTIMATED_WIDTH_PX =
+  OCTAVE_SIGN_CHAR_WIDTH_PX * (2 + 2 * OCTAVE_SIGN_SUFFIX_SCALE);
+
+/**
+ * Fixed nominal Y position (px, note-coordinate space) for a pitch-raising
+ * (sopra) span's numeral/line. One half-space further from the staff than
+ * DYNAMICS_ABOVE_BASELINE_Y, so the two decorations don't land on the exact
+ * same row by default even though Phase 0 doesn't yet read the real
+ * above-staff budget.
+ * = STAFF_TOP_LINE_Y − 2.5 × STAFF_LINE_SPACING
+ */
+export const OCTAVE_SIGN_ABOVE_STAFF_Y =
+  STAFF_TOP_LINE_Y - STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Fixed nominal Y position (px, note-coordinate space) for a pitch-lowering
+ * (bassa) span's numeral/line — mirrors OCTAVE_SIGN_ABOVE_STAFF_Y below the
+ * staff.
+ * = STAFF_BOTTOM_LINE_Y + 2.5 × STAFF_LINE_SPACING
+ */
+export const OCTAVE_SIGN_BELOW_STAFF_Y =
+  STAFF_BOTTOM_LINE_Y + STAFF_LINE_SPACING * 2.5;
+
+/** Gap (px) between the octave sign's own right edge and the first affected note's left edge. */
+export const OCTAVE_SIGN_LEADING_GAP_PX = STAFF_LINE_SPACING;
+
+/** Gap (px) between the last affected note's own right edge and the corner terminator. */
+export const OCTAVE_SIGN_TRAILING_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Size (px) of each stroke in the corner terminator — mirrors
+ * TRILL_NOTCH_HEIGHT_PX's scale for a small end-of-span glyph.
+ */
+export const OCTAVE_SIGN_CORNER_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Extra breathing room (px) between the octave sign's row and a real
+ * notehead's own edge, once content-awareness pushes the row past its fixed
+ * nominal position to avoid a genuine collision — added on top of the real
+ * notehead radius (NOTE_HEAD_RADIUS_PX, utils/svgCreator/note.ts) at the
+ * call site, not baked in here.
+ */
+export const OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Font size (px) for the octave-sign feature's prose text — the `col`-mode
+ * label ("col 8va bassa") and the `loco` label ("(loco)"/"loco"). Both are
+ * short italic annotations at the same visual weight, so they share one
+ * constant rather than two independently-tuned near-duplicates. Smaller than
+ * OCTAVE_SIGN_FONT_SIZE_PX since it renders a multi-word phrase, not a single
+ * stylized numeral glyph.
+ */
+export const OCTAVE_SIGN_PROSE_FONT_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Gap (px) between the corner terminator and a `loco`-closed span's label. */
+export const OCTAVE_LOCO_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Estimated width (px) of the standalone "(loco)" label — six italic
+ * characters at about half an em each.
+ * = 3 × OCTAVE_SIGN_PROSE_FONT_SIZE_PX
+ */
+export const OCTAVE_LOCO_ESTIMATED_WIDTH_PX =
+  OCTAVE_SIGN_PROSE_FONT_SIZE_PX * 3;
+
+/**
+ * Clearance (px) kept between a gap-side octave sign and a double-stemmed
+ * beam (or anything hanging off it), and between that sign and other
+ * mid-system decorations stepping around it.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const OCTAVE_SIGN_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Octave signs: cross-measure/system-break continuation (Phase 2) ───────
+
+/**
+ * Gap (px) between a row-wrap restated octave-sign numeral and the resumed
+ * extension line — mirrors TRILL_SIGN_LINE_GAP_PX's role for trill's own
+ * restated sign.
+ */
+export const OCTAVE_SIGN_LINE_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Stroke width (px) of the row-wrap continuation sign's wrapping
+ * parentheses — a fixed pixel value, not staff-relative, mirroring
+ * TRILL_PARENTHESIS_STROKE_WIDTH's own choice for the same reason (a stroke
+ * shouldn't visibly thicken/thin as the staff scales).
+ */
+export const OCTAVE_CONTINUATION_PARENTHESIS_STROKE_WIDTH = 1.2;
+
+/** Horizontal gap (px) between a continuation-sign parenthesis and the numeral/label it wraps. */
+export const OCTAVE_CONTINUATION_PARENTHESIS_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/** Extra vertical reach (px) of each continuation-sign parenthesis stroke past the numeral's own top/bottom edge. */
+export const OCTAVE_CONTINUATION_PARENTHESIS_OVERSHOOT_PX =
+  STAFF_LINE_SPACING * 0.25;
+
+/** Horizontal bow depth (px) of each continuation-sign parenthesis curve. */
+export const OCTAVE_CONTINUATION_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;

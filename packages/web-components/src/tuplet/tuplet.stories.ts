@@ -107,6 +107,26 @@ export const BelowStaff: Story = {
   `,
 };
 
+// Consecutive tuplets read most easily when all sit on one side: the second
+// group's stems point down (its majority would put it below), and
+// `placement="above"` keeps it in line with the first.
+export const ForcedPlacement: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="2/4">
+      <music-tuplet ratio="3" placement="above">
+        <music-note note="E" octave="4" duration="eighth"></music-note>
+        <music-note note="F" octave="4" duration="eighth"></music-note>
+        <music-note note="G" octave="4" duration="eighth"></music-note>
+      </music-tuplet>
+      <music-tuplet ratio="3" placement="above">
+        <music-note note="D" octave="5" duration="eighth"></music-note>
+        <music-note note="C" octave="5" duration="eighth"></music-note>
+        <music-note note="B" octave="4" duration="eighth"></music-note>
+      </music-tuplet>
+    </music-staff>
+  `,
+};
+
 export const NestedTuplet: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">

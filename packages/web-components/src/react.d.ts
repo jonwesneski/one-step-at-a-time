@@ -27,13 +27,19 @@ import type {
   Mode,
   Note,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TieValue,
   TimeSignature,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletPlacement,
   TupletRatio,
   VocalType,
 } from '@one-step-at-a-time/web-components';
@@ -101,10 +107,15 @@ declare module 'react' {
       };
       'music-rest': WebComponentNoChildrenProps & {
         duration?: DurationType;
+        'beam-group'?: string;
+        'rest-staff-side'?: RestStaffSide;
+        hidden?: boolean;
       };
       'music-voice': WebComponentProps;
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
+        'tuplet-group'?: string;
+        placement?: TupletPlacement;
       };
       'music-arpeggio': WebComponentProps & {
         'run-duration'?: DurationType;
@@ -121,6 +132,7 @@ declare module 'react' {
         'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
+        'dynamic-shared'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -148,6 +160,15 @@ declare module 'react' {
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
         'trill-finish-slur'?: TrillFinishSlur;
+        'octave-shift'?: OctaveShiftAmount;
+        'octave-mode'?: OctaveDisplayMode;
+        'octave-stop'?: boolean;
+        loco?: boolean;
+        'octave-continuation'?: OctaveContinuationMode;
+        'beam-group'?: string;
+        'shared-stem-for'?: string;
+        'slur-group'?: string;
+        'stem-direction'?: StemDirection;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -160,6 +181,7 @@ declare module 'react' {
         'glissando-hint'?: GlissandoHint;
         for?: string;
         dynamic?: DynamicMarking;
+        'dynamic-shared'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -187,6 +209,15 @@ declare module 'react' {
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
         'trill-finish-slur'?: TrillFinishSlur;
+        'octave-shift'?: OctaveShiftAmount;
+        'octave-mode'?: OctaveDisplayMode;
+        'octave-stop'?: boolean;
+        loco?: boolean;
+        'octave-continuation'?: OctaveContinuationMode;
+        'beam-group'?: string;
+        'shared-stem-for'?: string;
+        'slur-group'?: string;
+        'stem-direction'?: StemDirection;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

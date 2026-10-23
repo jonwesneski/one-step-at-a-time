@@ -1,3 +1,4 @@
+import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
   AccidentalType,
   ArpeggioType,
@@ -16,12 +17,18 @@ import type {
   Note,
   NoteLetter,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TimeSignature,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletPlacement,
   TupletRatio,
 } from './theory';
 
@@ -53,11 +60,38 @@ export interface INoteElement {
   note: Note;
   octave: Octave | null;
   stemUp: boolean;
+  // Author override for stemUp, independent of pitch. Unset (null) leaves
+  // today's pitch-driven/voice/beam-group resolution unchanged. Setting it
+  // inconsistently across notes that end up sharing one same-staff beam
+  // group is the author's own responsibility to avoid (see StemDirection).
+  stemDirection: StemDirection | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
+  // `id` shared by every element across a measure's two adjacent grand-staff
+  // staves that joins one cross-staff double-stemmed beam group.
+  beamGroup: string | null;
+  // `id` of the other-staff element this one shares a single stem with —
+  // both hands occasionally playing the same beat simultaneously in
+  // otherwise single-part writing. Resolved by the ancestor
+  // <music-measure>, which suppresses each end's own local stem (noStem)
+  // and draws one real stem line between the two real notehead positions.
+  sharedStemFor: string | null;
+  // Set by the ancestor <music-measure> to true when this element is a
+  // double-stemmed beam-group member on an inner voice (a real second
+  // <music-voice> sharing its staff) — anchors its articulation marks at
+  // its own real stem-tip position instead of the notehead, so they land
+  // right next to the shared beam rather than on the outer voice's own
+  // territory. false on every other element (outer voice, single-voice
+  // staff, or not a beam-group member at all). Not an attribute.
+  articulationAnchorsToStem: boolean;
   tie: TieValue | null;
   slur: ConnectorRole | null;
+  // `id` shared by every breakpoint note/chord of one continuous multi-leg
+  // cross-staff phrase slur (the first/last note of each leg, never the
+  // notes still covered by their own staff's ordinary beam). Resolved by
+  // the ancestor <music-measure> / <music-composition>.
+  slurGroup: string | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
@@ -176,6 +210,26 @@ export interface INoteElement {
   // Key-signature-resolved accidentals for the trill-finish pitches, set by
   // the staff — same fallback shape as `resolvedGraceAccidentals`.
   resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null;
+  // Starts an octave-transposition span at this element. A repeated value
+  // while a span carrying that same value is already open is a no-op that
+  // continues the existing span rather than restarting a new one.
+  octaveShift: OctaveShiftAmount | null;
+  // Display mode for the span this element starts: `sign` (default, bare
+  // numeral) or `col` (prose "col 8va"/"col 8va bassa" label). Meaningless
+  // without a matching octaveShift.
+  octaveMode: OctaveDisplayMode | null;
+  // Closes the currently open octave-transposition span at this element,
+  // inclusive.
+  octaveStop: boolean;
+  // Closes the currently open octave-transposition span at this element,
+  // rendering a "loco" label alongside the closing corner — or, with no open
+  // span, a standalone "(loco)" reminder.
+  loco: boolean;
+  // Meaningful only on the element that started the octave-transposition
+  // span — controls the system-break restatement, resolved by the ancestor
+  // composition. Ignored at an ordinary same-row barline, where the line
+  // always resumes silently regardless of this value.
+  octaveContinuation: OctaveContinuationMode;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
@@ -195,12 +249,26 @@ export interface IChordElement {
   chord: Chord | null;
   readonly notes: ChordNote[];
   stemUp: boolean;
+  // See INoteElement.stemDirection.
+  stemDirection: StemDirection | null;
   stemExtension: number;
   noFlags: boolean;
+  noStem: boolean;
+  // See INoteElement.beamGroup.
+  beamGroup: string | null;
+  // See INoteElement.sharedStemFor.
+  sharedStemFor: string | null;
+  // See INoteElement.articulationAnchorsToStem.
+  articulationAnchorsToStem: boolean;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;
   slur: ConnectorRole | null;
+  // `id` shared by every breakpoint note/chord of one continuous multi-leg
+  // cross-staff phrase slur (the first/last note of each leg, never the
+  // notes still covered by their own staff's ordinary beam). Resolved by
+  // the ancestor <music-measure> / <music-composition>.
+  slurGroup: string | null;
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
@@ -319,6 +387,26 @@ export interface IChordElement {
   // Key-signature-resolved accidentals for the trill-finish pitches, set by
   // the staff — same fallback shape as `resolvedGraceAccidentals`.
   resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null;
+  // Starts an octave-transposition span at this element. A repeated value
+  // while a span carrying that same value is already open is a no-op that
+  // continues the existing span rather than restarting a new one.
+  octaveShift: OctaveShiftAmount | null;
+  // Display mode for the span this element starts: `sign` (default, bare
+  // numeral) or `col` (prose "col 8va"/"col 8va bassa" label). Meaningless
+  // without a matching octaveShift.
+  octaveMode: OctaveDisplayMode | null;
+  // Closes the currently open octave-transposition span at this element,
+  // inclusive.
+  octaveStop: boolean;
+  // Closes the currently open octave-transposition span at this element,
+  // rendering a "loco" label alongside the closing corner — or, with no open
+  // span, a standalone "(loco)" reminder.
+  loco: boolean;
+  // Meaningful only on the element that started the octave-transposition
+  // span — controls the system-break restatement, resolved by the ancestor
+  // composition. Ignored at an ordinary same-row barline, where the line
+  // always resumes silently regardless of this value.
+  octaveContinuation: OctaveContinuationMode;
   batchUpdate(fn: () => void): void;
 }
 
@@ -338,6 +426,15 @@ export interface IGuitarNoteElement {
 
 export interface IRestElement {
   duration: DurationType;
+  // Correlation key only — a rest never contributes to the beam polygon, but
+  // shares INoteElement.beamGroup's `id` shape so a double-stemmed group can
+  // tell "this rest belongs to me" for rest-placement purposes.
+  beamGroup: string | null;
+  // Author override for a rest that's a member of an active beam-group;
+  // meaningless (inert) otherwise. Unset (null) = auto-classified by the
+  // ancestor <music-measure> from the rest's position among its group's
+  // members, re-derived on every render rather than persisted here.
+  restStaffSide: RestStaffSide | null;
 }
 
 export interface IClefElement {
@@ -346,6 +443,8 @@ export interface IClefElement {
 
 export interface ITupletElement {
   ratio: TupletRatio;
+  tupletGroup: string | null;
+  placement: TupletPlacement | null;
   readonly flatElements: NoteChordOrRestElementType[];
 }
 
@@ -389,6 +488,10 @@ export interface IStaffElementBase {
   time: TimeSignature;
   readonly staffHeight: number;
   readonly staffLineCount: number;
+  readonly contentVerticalSpace: VerticalBand;
+  alignVerticalSpace(space: VerticalBand): boolean;
+  reserveGapClearance(space: VerticalBand): boolean;
+  respaceToCurrentWidth(): void;
 }
 
 export interface IStaffElement extends IStaffElementBase {

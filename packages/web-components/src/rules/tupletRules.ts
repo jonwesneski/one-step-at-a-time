@@ -4,7 +4,7 @@ import {
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
-import { TupletRatio } from '../types/theory';
+import { TupletPlacement, TupletRatio } from '../types/theory';
 import {
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
@@ -23,6 +23,8 @@ import {
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
+  NOTE_HEAD_RADIUS_PX,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
@@ -37,6 +39,7 @@ export type ParsedTupletRatio = {
 };
 
 export type TupletGroup = {
+  element: TupletElementType;
   /** Flat indices into the flattened elements array (after expanding tuplets). */
   indices: number[];
   parsedRatio: ParsedTupletRatio;
@@ -55,6 +58,8 @@ export type TupletBracketGeometry = {
   numeralX: number;
   numeralY: number;
   hookLength: number;
+  /** Per-end hook direction (+1 down, -1 up), for a cross-staff bracket whose ends point at different staves. Defaults to toward the notes on the bracket's own side. */
+  hookDirections?: { start: 1 | -1; end: 1 | -1 };
 };
 
 export function defaultNormalCount(actual: number): number {
@@ -167,6 +172,7 @@ export function buildTupletGroups(
   const groups: TupletGroup[] = [];
   for (const [tupletElement, indices] of tupletToIndices) {
     groups.push({
+      element: tupletElement,
       indices,
       parsedRatio: parseTupletRatio(tupletElement.ratio),
       nestingLevel: computeNestingLevel(tupletElement),
@@ -194,6 +200,87 @@ export function getStaffYForIndex(
     }
   }
   return null;
+}
+
+/**
+ * This note/chord's own natural (unbeamed) stem-tip Y, in the staff's local
+ * coordinate space — the same quantity computeTupletBracketGeometry's own
+ * `beamTipYForIndex` falls back to when no beam renderer covers `index`,
+ * factored out so a caller with a real, externally-resolved beam Y (e.g.
+ * measure.ts, for a cross-staff double-stemmed beam) can add its own offset
+ * to a value guaranteed to align with this staff's own coordinate space,
+ * without duplicating the offset formula. Uses this note's own actual
+ * rendered direction (`stemDirections[index]`), not a group-level vote —
+ * right for a single note's own real tip, unlike the bracket/gap-clearance
+ * uses elsewhere in this file that intentionally use the group's vote.
+ */
+export function naturalStemTipY(
+  index: number,
+  elements: NoteChordOrRestElementType[],
+  stemDirections: boolean[],
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+): number | null {
+  const staffY = getStaffYForIndex(
+    index,
+    elements,
+    stemDirections,
+    noteStaffYCoords,
+    chordStaffYCoords
+  );
+  if (staffY === null) {
+    return null;
+  }
+  const stemUp = stemDirections[index];
+  const yHeadOffset = stemUp
+    ? NOTE_Y_HEAD_OFFSET_STEM_UP
+    : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+  const stemTipOffset = stemUp
+    ? NOTE_STEM_TIP_Y_OFFSET
+    : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
+  return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+}
+
+/**
+ * Whether a tuplet's bracket/numeral sits above its notes: an explicit
+ * `sideOverride` wins, otherwise the stems' majority vote (a tie goes up).
+ */
+export function resolveTupletBracketAbove(
+  indices: readonly number[],
+  stemDirections: readonly boolean[],
+  sideOverride: TupletPlacement | null
+): boolean {
+  if (sideOverride !== null) {
+    return sideOverride === 'above';
+  }
+  const upVotes = indices.filter((i) => stemDirections[i] === true).length;
+  return upVotes >= indices.length / 2;
+}
+
+// The outer edge, toward `above`'s side, of this note/chord's outermost
+// notehead on that side, in the staff's local coordinate space.
+export function noteheadEdgeY(
+  index: number,
+  elements: NoteChordOrRestElementType[],
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
+  above: boolean
+): number | null {
+  const element = elements[index];
+  let staffY: number | undefined;
+  if (element.nodeName === MUSIC_NOTE_NODE) {
+    staffY = noteStaffYCoords.get(element as NoteElementType);
+  } else if (element.nodeName !== MUSIC_REST_NODE) {
+    const ys = chordStaffYCoords.get(element as ChordElementType);
+    if (ys && ys.length > 0) {
+      staffY = above ? Math.min(...ys) : Math.max(...ys);
+    }
+  }
+  if (staffY === undefined) {
+    return null;
+  }
+  const centerY = STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+  return above ? centerY - NOTE_HEAD_RADIUS_PX : centerY + NOTE_HEAD_RADIUS_PX;
 }
 
 /**
@@ -227,7 +314,11 @@ export function computeTupletBracketGeometry(
   // The numeral/bracket sits clear of the beam, so it reads the real beam line
   // rather than re-deriving it from staff coords (which misses the beam's
   // vertical offset). Defaults to the staff-coord derivation.
-  primaryBeamYForIndex: (index: number) => number | null = () => null
+  primaryBeamYForIndex: (index: number) => number | null = () => null,
+  // Forces the bracket's side regardless of the stem vote. A note whose
+  // stem points away from the forced side is cleared by its notehead, not
+  // by a stem tip on the bracket's side it doesn't have.
+  sideOverride: TupletPlacement | null = null
 ): TupletBracketGeometry | null {
   if (group.indices.length < 2) {
     return null;
@@ -242,18 +333,22 @@ export function computeTupletBracketGeometry(
     return null;
   }
 
-  // Majority vote for stem direction
-  const upVotes = group.indices.filter(
-    (i) => stemDirections[i] === true
-  ).length;
-  const stemUp = upVotes >= group.indices.length / 2;
+  const stemUp = resolveTupletBracketAbove(
+    group.indices,
+    stemDirections,
+    sideOverride
+  );
 
   // Omit bracket when all notes are beamed and no rests are present, and this
   // group has no inner (child) tuplet groups that need an enclosing bracket.
+  // A side forced onto the noteheads has no beam to sit beside, so it keeps
+  // its bracket.
   const omitBracket =
     !hasInnerGroups &&
     group.indices.every((i) => beamedIndices.has(i)) &&
-    group.indices.every((i) => elements[i].nodeName !== MUSIC_REST_NODE);
+    group.indices.every((i) => elements[i].nodeName !== MUSIC_REST_NODE) &&
+    (sideOverride === null ||
+      group.indices.every((i) => stemDirections[i] === stemUp));
 
   const startX = Math.max(0, firstX - NOTE_SVG_WIDTH / 2);
   const endX = lastX + NOTE_SVG_WIDTH / 2;
@@ -354,7 +449,16 @@ export function computeTupletBracketGeometry(
 
     const extremeStemTipY = nonRestIndicesForClamping.reduce(
       (worst, i) => {
-        const tipY = beamTipYForIndex(i);
+        const tipY =
+          sideOverride !== null && stemDirections[i] !== stemUp
+            ? noteheadEdgeY(
+                i,
+                elements,
+                noteStaffYCoords,
+                chordStaffYCoords,
+                stemUp
+              )
+            : beamTipYForIndex(i);
         if (tipY === null) {
           return worst;
         }

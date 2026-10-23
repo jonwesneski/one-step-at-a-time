@@ -5,15 +5,28 @@ import {
   waitForRedrawCycle,
 } from '../../test-fixtures/helpers';
 import {
+  segmentIntersectsRect,
+  sliceConvexPolygon,
+} from '../rules/connectorPlacementRules';
+import type { Note, Octave } from '../types/theory';
+import {
   COMMON_ATTRIBUTES,
   MUSIC_COMPOSITION,
   MUSIC_LYRICS,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
+  MUSIC_TUPLET,
 } from '../utils/consts';
+import {
+  HAIRPIN_BEAM_CLEARANCE_PX,
+  OCTAVE_SIGN_BEAM_CLEARANCE_PX,
+  SLUR_BEAM_SLICE_WIDTH_PX,
+  VERTICAL_OVERFLOW_CLEARANCE_PX,
+} from '../utils/notationDimensions';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -2257,6 +2270,447 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
   });
 });
 
+test.describe('octave sign continuation across measures', () => {
+  // Measure 1: 3 quarter fillers + an octave-shift="8va" quarter (4 beats).
+  // Measure 2: a quarter carrying octave-stop (closing the span there) + a
+  // quarter + a half (4 beats). Unlike trill, an octave span needs no tie
+  // chain to carry across the barline — resolveOctaveSpans just keeps the
+  // span open until an explicit octave-stop (or loco, or a differing
+  // octave-shift) closes it, however many elements later that is.
+  async function buildOctaveSpanAcrossMeasures(
+    page: Page,
+    hostWidth: number,
+    octaveContinuation?: 'bracketed' | 'line-only'
+  ): Promise<void> {
+    await page.evaluate(
+      ({
+        compositionTag,
+        measureTag,
+        staffTag,
+        noteTag,
+        continuation,
+        hostWidthPx,
+      }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = `${hostWidthPx}px`;
+
+        const composition = document.createElement(compositionTag);
+
+        const measure1 = document.createElement(measureTag);
+        const staff1 = document.createElement(staffTag);
+        for (const [note, octave] of [
+          ['C', '5'],
+          ['D', '5'],
+          ['E', '5'],
+        ] as const) {
+          const n = document.createElement(noteTag);
+          n.setAttribute('note', note);
+          n.setAttribute('octave', octave);
+          n.setAttribute('duration', 'quarter');
+          staff1.appendChild(n);
+        }
+        const spanStart = document.createElement(noteTag);
+        spanStart.setAttribute('note', 'F');
+        spanStart.setAttribute('octave', '5');
+        spanStart.setAttribute('duration', 'quarter');
+        spanStart.setAttribute('octave-shift', '8va');
+        if (continuation) {
+          spanStart.setAttribute('octave-continuation', continuation);
+        }
+        staff1.appendChild(spanStart);
+        measure1.appendChild(staff1);
+
+        const measure2 = document.createElement(measureTag);
+        const staff2 = document.createElement(staffTag);
+        const spanStop = document.createElement(noteTag);
+        spanStop.setAttribute('note', 'G');
+        spanStop.setAttribute('octave', '5');
+        spanStop.setAttribute('duration', 'quarter');
+        spanStop.setAttribute('octave-stop', '');
+        staff2.appendChild(spanStop);
+        const filler = document.createElement(noteTag);
+        filler.setAttribute('note', 'A');
+        filler.setAttribute('octave', '5');
+        filler.setAttribute('duration', 'quarter');
+        staff2.appendChild(filler);
+        const lastFiller = document.createElement(noteTag);
+        lastFiller.setAttribute('note', 'B');
+        lastFiller.setAttribute('octave', '5');
+        lastFiller.setAttribute('duration', 'half');
+        staff2.appendChild(lastFiller);
+        measure2.appendChild(staff2);
+
+        composition.appendChild(measure1);
+        composition.appendChild(measure2);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        continuation: octaveContinuation,
+        hostWidthPx: hostWidth,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  async function readOctaveContinuationOverlay(page: Page) {
+    return page.evaluate((compositionTag) => {
+      const composition = document.querySelector(compositionTag);
+      if (composition === null || composition.shadowRoot === null) {
+        throw new Error('composition not ready');
+      }
+      const overlay = composition.shadowRoot.querySelector(
+        '.octave-continuation-overlay'
+      );
+      const wrapper = composition.shadowRoot.querySelector(
+        '.composition-wrapper'
+      );
+      if (overlay === null || wrapper === null) {
+        throw new Error('overlay or wrapper missing');
+      }
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const lines = Array.from(
+        overlay.querySelectorAll('.octave-extension-line')
+      ) as SVGLineElement[];
+      const corners = Array.from(
+        overlay.querySelectorAll('.octave-corner')
+      ) as SVGPathElement[];
+      const signs = Array.from(
+        overlay.querySelectorAll('g.octave-continuation-sign')
+      ) as SVGGElement[];
+      const staves = Array.from(
+        composition.querySelectorAll('music-staff')
+      ) as HTMLElement[];
+      const secondStaffRect = staves[1].getBoundingClientRect();
+      return {
+        lineCount: lines.length,
+        cornerCount: corners.length,
+        signCount: signs.length,
+        parenthesisCountInSign:
+          signs[0]?.querySelectorAll('.octave-continuation-parenthesis')
+            .length ?? 0,
+        signNumeralCountInSign:
+          signs[0]?.querySelectorAll('.octave-sign-numeral').length ?? 0,
+        signRight: signs[0]
+          ? signs[0].getBoundingClientRect().right - wrapperRect.left
+          : null,
+        lineLeft: lines[0]
+          ? lines[0].getBoundingClientRect().left - wrapperRect.left
+          : null,
+        cornerLeft: corners[0]
+          ? corners[0].getBoundingClientRect().left - wrapperRect.left
+          : null,
+        secondStaffLeft: secondStaffRect.left - wrapperRect.left,
+        secondStaffRight: secondStaffRect.right - wrapperRect.left,
+      };
+    }, MUSIC_COMPOSITION);
+  }
+
+  test('the line continues across the barline and the corner terminator lands in the later measure, on the same row', async ({
+    page,
+  }) => {
+    await buildOctaveSpanAcrossMeasures(page, 1200);
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.lineCount).toBe(1);
+    expect(result.cornerCount).toBe(1);
+    expect(result.signCount).toBe(0);
+    // The resumed line starts at or after the second measure's own left
+    // edge (it begins inside that measure's notes area, past the barline).
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThanOrEqual(
+      result.secondStaffLeft - 1
+    );
+    // The corner terminator lands within the second measure's own bounds,
+    // near the octave-stop note rather than at the row's far right edge.
+    expect(result.cornerLeft).not.toBeNull();
+    expect(result.cornerLeft as number).toBeGreaterThanOrEqual(
+      result.secondStaffLeft - 1
+    );
+    expect(result.cornerLeft as number).toBeLessThan(result.secondStaffRight);
+  });
+
+  test('restates a bracketed numeral at the start of a new row (default)', async ({
+    page,
+  }) => {
+    await buildOctaveSpanAcrossMeasures(page, 220);
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.lineCount).toBe(1);
+    expect(result.cornerCount).toBe(1);
+    expect(result.signCount).toBe(1);
+    expect(result.parenthesisCountInSign).toBe(2);
+    expect(result.signNumeralCountInSign).toBe(1);
+    // The line resumes clear of the restated sign's own right edge.
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.signRight).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThan(
+      result.signRight as number
+    );
+  });
+
+  test('`octave-continuation="line-only"` suppresses the restated numeral at a row wrap', async ({
+    page,
+  }) => {
+    await buildOctaveSpanAcrossMeasures(page, 220, 'line-only');
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.lineCount).toBe(1);
+    expect(result.cornerCount).toBe(1);
+    expect(result.signCount).toBe(0);
+    // With no sign to clear, the line starts right at the new row's own
+    // notes area, same as the same-row case.
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThanOrEqual(
+      result.secondStaffLeft - 1
+    );
+  });
+});
+
+test.describe('octave line across a barline: one line per system', () => {
+  const quarter = (pitch: `${Note}${Octave}`, extra = ''): string =>
+    `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+      -1
+    )}" duration="quarter" ${extra}></${MUSIC_NOTE}>`;
+  const measures = (laterPitch: `${Note}${Octave}` = 'A5'): string =>
+    `<${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble">${
+      quarter('C5') +
+      quarter('D5') +
+      quarter('E5') +
+      quarter('F5', 'octave-shift="8va"')
+    }</${MUSIC_STAFF}></${MUSIC_MEASURE}><${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble">${
+      quarter('G5') +
+      quarter(laterPitch) +
+      quarter('B5') +
+      quarter('C6', 'octave-stop')
+    }</${MUSIC_STAFF}></${MUSIC_MEASURE}>`;
+
+  async function build(page: Page, html: string, hostWidth: number) {
+    await page.evaluate(
+      ({ markup, width }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = `${width}px`;
+        const template = document.createElement('template');
+        template.innerHTML = markup;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { markup: html, width: hostWidth }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  // Client geometry of the line the starting staff draws and of what the
+  // composition draws after it.
+  async function readLine(page: Page) {
+    return page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const start = staves[0];
+      const rect = (element: Element) => {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top };
+      };
+      const overlay = document
+        .querySelector('music-composition')
+        ?.shadowRoot?.querySelector('.octave-continuation-overlay');
+      const laterHeads = Array.from(
+        staves[1]?.querySelectorAll('music-note') ?? []
+      )
+        .flatMap((note) =>
+          Array.from(note.shadowRoot?.querySelectorAll('.head') ?? [])
+        )
+        .map((head) => head.getBoundingClientRect().top);
+      return {
+        startLines: Array.from(
+          start.shadowRoot?.querySelectorAll(
+            '.octave-signs-container .octave-extension-line'
+          ) ?? []
+        ).map(rect),
+        startCorners:
+          start.shadowRoot?.querySelectorAll(
+            '.octave-signs-container .octave-corner'
+          ).length ?? 0,
+        startStaffRight: start.getBoundingClientRect().right,
+        startStaffTop:
+          start.shadowRoot
+            ?.querySelector('.staff-container')
+            ?.getBoundingClientRect().top ?? 0,
+        overlayLines: Array.from(
+          overlay?.querySelectorAll('.octave-extension-line') ?? []
+        ).map(rect),
+        overlayCorners: overlay?.querySelectorAll('.octave-corner').length ?? 0,
+        overlaySigns:
+          overlay?.querySelectorAll('g.octave-continuation-sign').length ?? 0,
+        overlayTop: Math.min(
+          ...Array.from(overlay?.children ?? []).map(
+            (shape) => shape.getBoundingClientRect().top
+          )
+        ),
+        startStaffBottomLine:
+          start.shadowRoot
+            ?.querySelector('.staff-container')
+            ?.getBoundingClientRect().bottom ?? 0,
+        laterHeadsTop: laterHeads.length > 0 ? Math.min(...laterHeads) : null,
+      };
+    });
+  }
+
+  type LineReading = Awaited<ReturnType<typeof readLine>>;
+
+  const expectOneConnectedLine = (line: LineReading) => {
+    expect(line.startCorners).toBe(0);
+    expect(line.startLines.length).toBe(1);
+    expect(line.startLines[0].right).toBeGreaterThanOrEqual(
+      line.startStaffRight - 2
+    );
+    expect(line.overlaySigns).toBe(0);
+    expect(line.overlayCorners).toBe(1);
+    expect(
+      Math.abs(line.overlayLines[0].top - line.startLines[0].top)
+    ).toBeLessThan(0.5);
+  };
+
+  const expectOpenAtSystemBreak = (line: LineReading) => {
+    expect(line.startCorners).toBe(0);
+    expect(line.startLines[0].right).toBeGreaterThanOrEqual(
+      line.startStaffRight - 2
+    );
+    expect(line.overlaySigns).toBe(1);
+    expect(line.overlayCorners).toBe(1);
+  };
+
+  test('runs on through the barline at one height, with a corner only where it stops', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+
+    expectOneConnectedLine(await readLine(page));
+    expect(
+      warnings.some((text) => text.includes('no matching octave-stop'))
+    ).toBe(false);
+  });
+
+  test('a high note later in the system lifts the whole line', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+    const plain = await readLine(page);
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures(
+        'A6'
+      )}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+    const lifted = await readLine(page);
+
+    expectOneConnectedLine(lifted);
+    // Measured from the staff, which itself moves down to make headroom.
+    expect(lifted.startLines[0].top - lifted.startStaffTop).toBeLessThan(
+      plain.startLines[0].top - plain.startStaffTop - 1
+    );
+    expect(lifted.overlayLines[0].top).toBeLessThan(lifted.laterHeadsTop ?? 0);
+  });
+
+  test('at a system break the first row ends open and the next restates the sign', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      220
+    );
+
+    expectOpenAtSystemBreak(await readLine(page));
+  });
+
+  test('a second system lifted over a high note makes room above itself, clear of the first', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures(
+        'A6'
+      )}</${MUSIC_COMPOSITION}>`,
+      220
+    );
+    const line = await readLine(page);
+
+    expectOpenAtSystemBreak(line);
+    expect(line.overlayTop).toBeGreaterThan(line.startStaffBottomLine);
+    expect(line.overlayLines[0].top).toBeLessThan(line.laterHeadsTop ?? 0);
+  });
+
+  test('follows the rows as the composition is resized', async ({ page }) => {
+    await build(
+      page,
+      `<${MUSIC_COMPOSITION} time="4/4">${measures()}</${MUSIC_COMPOSITION}>`,
+      1200
+    );
+    expectOneConnectedLine(await readLine(page));
+
+    await resizeHost(page, 220);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expectOpenAtSystemBreak(await readLine(page));
+
+    await resizeHost(page, 1200);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expectOneConnectedLine(await readLine(page));
+  });
+
+  test('a standalone measure, with nothing to continue into, still closes and warns', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    await build(
+      page,
+      `<${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble" time="4/4">${
+        quarter('C5') +
+        quarter('D5') +
+        quarter('E5') +
+        quarter('F5', 'octave-shift="8va"')
+      }</${MUSIC_STAFF}></${MUSIC_MEASURE}>`,
+      600
+    );
+
+    expect((await readLine(page)).startCorners).toBe(1);
+    expect(
+      warnings.some((text) => text.includes('no matching octave-stop'))
+    ).toBe(true);
+  });
+});
+
 test.describe(`${MUSIC_COMPOSITION} cross-staff slurs (grand staff)`, () => {
   // composition.ts's own #redrawConnectors() collects note-like elements
   // across every staff in every measure with no staff filter, so a slur
@@ -2756,5 +3210,1004 @@ test.describe(`${MUSIC_COMPOSITION} measure width sharing`, () => {
     const uncappedRows = await readMeasureRowCount(page);
 
     expect(uncappedRows).toBeLessThan(cappedRows);
+  });
+});
+
+// A row whose slur rises above it grows every one of its measures by the same
+// margin, so the arc stays on the page and the row's measures stay aligned.
+test.describe(`${MUSIC_COMPOSITION} row spacing for connectors`, () => {
+  // Replica of keyboard.stories.ts's HandCrossingPassageChained: the first
+  // phrase segment climbs over the treble rests, well above the row.
+  async function buildChainedHandCrossing(page: Page): Promise<void> {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag, restTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '1000px';
+        const composition = document.createElement(compositionTag);
+
+        const fill = (
+          staff: Element,
+          items: (string | null)[],
+          slurGroupAt: number
+        ): void => {
+          items.forEach((item, index) => {
+            if (item === null) {
+              const rest = document.createElement(restTag);
+              rest.setAttribute('duration', 'eighth');
+              staff.appendChild(rest);
+              return;
+            }
+            const note = document.createElement(noteTag);
+            note.setAttribute('note', item[0]);
+            note.setAttribute('octave', item[1]);
+            note.setAttribute('duration', 'eighth');
+            if (index === slurGroupAt) {
+              note.setAttribute('slur-group', 'phrase1');
+            }
+            staff.appendChild(note);
+          });
+        };
+
+        const legs: [(string | null)[], (string | null)[]][] = [
+          [
+            [null, null, null, null, 'D4', 'F4', 'A4', 'D5'],
+            ['F2', 'A2', 'D3', 'F3', null, null, null, null],
+          ],
+          [
+            [null, null, null, null, 'A4', 'C5', 'E5', 'G5'],
+            ['C3', 'E3', 'A3', 'C4', null, null, null, null],
+          ],
+        ];
+        for (const [trebleItems, bassItems] of legs) {
+          const measure = document.createElement(measureTag);
+          const treble = document.createElement(staffTag);
+          treble.setAttribute('clef', 'treble');
+          treble.setAttribute('group', 'grand');
+          fill(treble, trebleItems, 7);
+          const bass = document.createElement(staffTag);
+          bass.setAttribute('clef', 'bass');
+          fill(bass, bassItems, 0);
+          measure.appendChild(treble);
+          measure.appendChild(bass);
+          composition.appendChild(measure);
+        }
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        restTag: MUSIC_REST,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  const readLayout = (page: Page) =>
+    page.evaluate(
+      ({ compositionTag, measureTag }) => {
+        const composition = document.querySelector(compositionTag);
+        if (composition === null || composition.shadowRoot === null) {
+          throw new Error('composition not ready');
+        }
+        const paths = Array.from(
+          composition.shadowRoot.querySelectorAll(
+            '.connectors-overlay .connector path'
+          )
+        );
+        const measures = Array.from(
+          document.querySelectorAll<HTMLElement>(measureTag)
+        );
+        return {
+          compositionTop: composition.getBoundingClientRect().top,
+          pathTops: paths.map((path) => path.getBoundingClientRect().top),
+          measureTops: measures.map(
+            (measure) => measure.getBoundingClientRect().top
+          ),
+          margins: measures.map((measure) => ({
+            top: measure.style.marginTop,
+            bottom: measure.style.marginBottom,
+          })),
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION, measureTag: MUSIC_MEASURE }
+    );
+
+  test('a slur rising above its row grows that row, keeping the arc on the page and the row aligned', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const layout = await readLayout(page);
+
+    expect(layout.pathTops.length).toBe(3);
+    for (const top of layout.pathTops) {
+      expect(top).toBeGreaterThanOrEqual(
+        layout.compositionTop + VERTICAL_OVERFLOW_CLEARANCE_PX - 1
+      );
+    }
+
+    // Both measures share one row: same non-empty margin, same top.
+    expect(layout.margins[0].top).not.toBe('');
+    expect(layout.margins[1].top).toBe(layout.margins[0].top);
+    expect(
+      Math.abs(layout.measureTops[0] - layout.measureTops[1])
+    ).toBeLessThan(1);
+  });
+
+  test('the reserved margin is stable across further redraws', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const first = await readLayout(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const second = await readLayout(page);
+
+    expect(second.margins).toEqual(first.margins);
+    expect(second.pathTops).toEqual(first.pathTops);
+  });
+
+  const marginTopPx = (margin: { top: string }): number =>
+    parseFloat(margin.top || '0');
+
+  test('removing every slur releases the reserved margin', async ({ page }) => {
+    await buildChainedHandCrossing(page);
+    const before = await readLayout(page);
+    expect(marginTopPx(before.margins[0])).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      for (const note of Array.from(
+        document.querySelectorAll('music-note[slur-group]')
+      )) {
+        note.removeAttribute('slur-group');
+      }
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await readLayout(page);
+
+    expect(after.pathTops).toHaveLength(0);
+    expect(after.margins).toEqual([
+      { top: '', bottom: '' },
+      { top: '', bottom: '' },
+    ]);
+  });
+
+  test('dropping the tallest slur shrinks the margin instead of keeping the old value', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const before = await readLayout(page);
+
+    // F2 starts the first segment (F2 to D5), the arc that climbs over the
+    // treble rests; D5 to C3 to G5 remain.
+    await page.evaluate(() => {
+      const firstBass = document
+        .querySelectorAll('music-measure')[0]
+        .querySelectorAll('music-staff')[1]
+        .querySelector('music-note[slur-group]');
+      firstBass?.removeAttribute('slur-group');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await readLayout(page);
+
+    expect(after.pathTops).toHaveLength(2);
+    expect(marginTopPx(after.margins[0])).toBeLessThan(
+      marginTopPx(before.margins[0])
+    );
+    expect(after.margins[1]).toEqual(after.margins[0]);
+  });
+
+  test('a measure moved out of the composition releases the row margin it was given', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    const before = await readLayout(page);
+    expect(marginTopPx(before.margins[1])).toBeGreaterThan(0);
+
+    const moved = await page.evaluate(async () => {
+      const host = document.getElementById('host');
+      const measure =
+        document.querySelectorAll<HTMLElement>('music-measure')[1];
+      if (!host || !measure) {
+        throw new Error('fixture missing');
+      }
+      // Strip its slurs so the measure's own standalone pass has nothing to
+      // reserve; only the composition's stale reservation could remain.
+      for (const note of Array.from(
+        measure.querySelectorAll('music-note[slur-group]')
+      )) {
+        note.removeAttribute('slur-group');
+      }
+      host.appendChild(measure);
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
+      return {
+        top: measure.style.marginTop,
+        bottom: measure.style.marginBottom,
+      };
+    });
+
+    expect(moved).toEqual({ top: '', bottom: '' });
+  });
+
+  test('a row whose slurs stay inside it gets no extra margin', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        const composition = document.createElement(compositionTag);
+        const measure = document.createElement(measureTag);
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        ['E', 'F', 'G', 'A'].forEach((value, index, all) => {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', value);
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'quarter');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === all.length - 1) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        });
+        measure.appendChild(staff);
+        composition.appendChild(measure);
+        host.appendChild(composition);
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const layout = await readLayout(page);
+
+    expect(layout.pathTops.length).toBe(1);
+    expect(layout.margins).toEqual([{ top: '', bottom: '' }]);
+  });
+});
+
+test.describe(`${MUSIC_COMPOSITION} row staff alignment`, () => {
+  // Measure 1's treble triplet (stems up) brackets above its staff; measure
+  // 2's bass triplet (stems down) brackets below its staff; measure 3 has no
+  // headroom of its own.
+  async function buildRow(page: Page) {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag, tupletTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const note = (pitch: string, octave: string, duration: string) =>
+          `<${noteTag} note="${pitch}" octave="${octave}" duration="${duration}"></${noteTag}>`;
+        const triplet = (pitch: string, octave: string) =>
+          `<${tupletTag} ratio="3">${[0, 1, 2]
+            .map(() => note(pitch, octave, 'quarter'))
+            .join('')}</${tupletTag}>`;
+        const measure = (treble: string, bass: string) =>
+          `<${measureTag}>
+            <${staffTag} clef="treble" group="grand">${treble}</${staffTag}>
+            <${staffTag} clef="bass">${bass}</${staffTag}>
+          </${measureTag}>`;
+        host.innerHTML = `<${compositionTag} time="2/4">
+          ${measure(triplet('E', '4'), note('C', '3', 'half'))}
+          ${measure(note('C', '5', 'half'), triplet('A', '3'))}
+          ${measure(note('C', '5', 'half'), note('C', '3', 'half'))}
+        </${compositionTag}>`;
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        tupletTag: MUSIC_TUPLET,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  // Each measure's [treble, bass] staff-line tops, and its own row top.
+  async function readStaffTops(page: Page) {
+    return page.evaluate(
+      (measureTag) =>
+        Array.from(document.querySelectorAll(measureTag)).map((measure) => ({
+          measureTop: measure.getBoundingClientRect().top,
+          staffTops: Array.from(measure.children).map(
+            (staff) =>
+              staff.shadowRoot
+                ?.querySelector('.staff-container')
+                ?.getBoundingClientRect().top ?? NaN
+          ),
+        })),
+      MUSIC_MEASURE
+    );
+  }
+
+  test("each staff lines up across a row's measures, at the largest headroom any of them needs", async ({
+    page,
+  }) => {
+    await buildRow(page);
+
+    const measures = await readStaffTops(page);
+    expect(new Set(measures.map((m) => Math.round(m.measureTop))).size).toBe(1);
+    for (const staffIndex of [0, 1]) {
+      const tops = measures.map((m) => m.staffTops[staffIndex]);
+      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1);
+    }
+  });
+
+  test('alignment is released once the headroom that caused it is gone', async ({
+    page,
+  }) => {
+    await buildRow(page);
+    const before = await readStaffTops(page);
+
+    await page.evaluate(
+      ({ tupletTag }) => {
+        for (const tuplet of Array.from(document.querySelectorAll(tupletTag))) {
+          const staff = tuplet.parentElement;
+          tuplet.remove();
+          const note = document.createElement('music-note');
+          note.setAttribute('note', 'C');
+          note.setAttribute(
+            'octave',
+            staff?.getAttribute('clef') === 'bass' ? '3' : '5'
+          );
+          note.setAttribute('duration', 'half');
+          staff?.appendChild(note);
+        }
+      },
+      { tupletTag: MUSIC_TUPLET }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const after = await readStaffTops(page);
+    const margins = await page.evaluate(
+      (staffTag) =>
+        Array.from(document.querySelectorAll(staffTag)).map(
+          (staff) =>
+            `${(staff as HTMLElement).style.marginTop}|${
+              (staff as HTMLElement).style.marginBottom
+            }`
+        ),
+      MUSIC_STAFF
+    );
+    expect(margins.every((margin) => margin === '|')).toBe(true);
+    // Measure 3 never needed headroom; it moves up once the row stops
+    // aligning to measure 1's.
+    expect(after[2].staffTops[0]).toBeLessThan(before[2].staffTops[0]);
+  });
+
+  test("rows align independently — a measure that wraps no longer takes its old row's headroom", async ({
+    page,
+  }) => {
+    await buildRow(page);
+    const aligned = await readStaffTops(page);
+
+    await resizeHost(page, 150);
+    await waitForRedrawCycle(page);
+
+    const wrapped = await readStaffTops(page);
+    const rowTops = new Set(wrapped.map((m) => Math.round(m.measureTop)));
+    expect(rowTops.size).toBe(3);
+    // Measure 3 now sits alone on its row: its treble lines sit at the
+    // top-of-row offset with no borrowed headroom.
+    const offset = (m: { measureTop: number; staffTops: number[] }) =>
+      m.staffTops[0] - m.measureTop;
+    expect(offset(wrapped[2])).toBeLessThan(offset(aligned[2]));
+    expect(offset(wrapped[0])).toBeCloseTo(offset(aligned[0]), 0);
+  });
+});
+
+type Point = { x: number; y: number };
+
+type CompositionHairpinSnapshot = {
+  hairpins: [Point, Point][][];
+  markings: { text: string; y: number }[];
+  measureMarkingCount: number;
+  gaps: { top: number; bottom: number }[];
+  beamPolygons: Point[][];
+};
+
+const hairpinNote = (
+  pitch: `${Note}${Octave}`,
+  duration: string,
+  attributes = ''
+): string =>
+  `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+    -1
+  )}" duration="${duration}" ${attributes}></${MUSIC_NOTE}>`;
+
+const grandStaffMeasure = (treble: string, bass: string): string =>
+  `<${MUSIC_MEASURE}>
+    <${MUSIC_STAFF} clef="treble" group="grand">${treble}</${MUSIC_STAFF}>
+    <${MUSIC_STAFF} clef="bass">${bass}</${MUSIC_STAFF}>
+  </${MUSIC_MEASURE}>`;
+
+async function buildHairpinComposition(
+  page: Page,
+  measures: string[],
+  width: number
+): Promise<string[]> {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning') {
+      warnings.push(message.text());
+    }
+  });
+  await page.evaluate(
+    ({ html, hostWidth }) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = `${hostWidth}px`;
+      host.innerHTML = html;
+    },
+    {
+      html: `<${MUSIC_COMPOSITION} time="4/4">${measures.join(
+        ''
+      )}</${MUSIC_COMPOSITION}>`,
+      hostWidth: width,
+    }
+  );
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+  return warnings;
+}
+
+async function snapshotCompositionHairpins(
+  page: Page
+): Promise<CompositionHairpinSnapshot> {
+  return page.evaluate((compositionTag) => {
+    const composition = document.querySelector(compositionTag);
+    const wrapper = composition?.shadowRoot?.querySelector(
+      '.composition-wrapper'
+    );
+    if (!composition || !wrapper) {
+      throw new Error('composition not ready');
+    }
+    const root = wrapper.getBoundingClientRect();
+    const toRoot = (x: number, y: number, matrix: DOMMatrix | null) => {
+      const point = matrix
+        ? new DOMPoint(x, y).matrixTransform(matrix)
+        : new DOMPoint(x, y);
+      return { x: point.x - root.left, y: point.y - root.top };
+    };
+    const hairpins = Array.from(
+      composition.shadowRoot?.querySelectorAll(
+        '.connectors-overlay .hairpin'
+      ) ?? []
+    ).map((hairpin) =>
+      Array.from(hairpin.querySelectorAll<SVGPathElement>('path')).map(
+        (path) => {
+          const [, x1, y1, , x2, y2] = (path.getAttribute('d') ?? '').split(
+            ' '
+          );
+          const matrix = path.getScreenCTM();
+          return [
+            toRoot(Number(x1), Number(y1), matrix),
+            toRoot(Number(x2), Number(y2), matrix),
+          ] as [Point, Point];
+        }
+      )
+    );
+    const gaps = Array.from(composition.querySelectorAll('music-measure')).map(
+      (measure) => {
+        const containers = Array.from(measure.children).map((staff) =>
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- every child is a rendered staff
+          staff
+            .shadowRoot!.querySelector('.staff-container')!
+            .getBoundingClientRect()
+        );
+        return {
+          top: containers[0].bottom - root.top,
+          bottom: containers[1].top - root.top,
+        };
+      }
+    );
+    const beamPolygons = Array.from(
+      composition.querySelectorAll('music-measure')
+    ).flatMap((measure) =>
+      Array.from(
+        measure.shadowRoot?.querySelectorAll<SVGPolygonElement>(
+          '.double-stemmed-beam'
+        ) ?? []
+      ).map((polygon) => {
+        const matrix = polygon.getScreenCTM();
+        return Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+          const point = polygon.points.getItem(i);
+          return toRoot(point.x, point.y, matrix);
+        });
+      })
+    );
+    const markings = Array.from(
+      composition.shadowRoot?.querySelectorAll<SVGTextElement>(
+        '.connectors-overlay .dynamic-marking'
+      ) ?? []
+    ).map((text) => ({
+      text: text.textContent ?? '',
+      y: toRoot(
+        Number(text.getAttribute('x')),
+        Number(text.getAttribute('y')),
+        text.getScreenCTM()
+      ).y,
+    }));
+    const measureMarkingCount = Array.from(
+      composition.querySelectorAll('music-measure')
+    ).reduce(
+      (count, measure) =>
+        count +
+        (measure.shadowRoot?.querySelectorAll('.dynamic-marking').length ?? 0),
+      0
+    );
+    return { hairpins, gaps, beamPolygons, markings, measureMarkingCount };
+  }, MUSIC_COMPOSITION);
+}
+
+const hairpinCentreY = (edges: [Point, Point][]): number => {
+  const ys = edges.flatMap(([a, b]) => [a.y, b.y]);
+  return (Math.min(...ys) + Math.max(...ys)) / 2;
+};
+
+test.describe(`${MUSIC_COMPOSITION} hairpins across measures on a grand staff`, () => {
+  test('each hand pairs its own hairpin across the barline', async ({
+    page,
+  }) => {
+    const warnings = await buildHairpinComposition(
+      page,
+      [
+        grandStaffMeasure(
+          hairpinNote('C5', 'whole', 'crescendo="start"'),
+          hairpinNote('C3', 'whole', 'crescendo="start"')
+        ),
+        grandStaffMeasure(
+          hairpinNote('E5', 'whole', 'crescendo="end"'),
+          hairpinNote('E3', 'whole', 'crescendo="end"')
+        ),
+      ],
+      900
+    );
+
+    const snapshot = await snapshotCompositionHairpins(page);
+
+    expect(snapshot.hairpins.length).toBe(2);
+    expect(
+      warnings.filter(
+        (text) => text.includes('start dropped') || text.includes('orphan')
+      )
+    ).toEqual([]);
+  });
+
+  test('a shared hairpin across a barline sits in the gap clear of a double-stemmed beam', async ({
+    page,
+  }) => {
+    await buildHairpinComposition(
+      page,
+      [
+        grandStaffMeasure(
+          hairpinNote(
+            'C5',
+            'half',
+            'dynamic="p" dynamic-shared crescendo="start"'
+          ) + hairpinNote('D5', 'half'),
+          hairpinNote('C3', 'whole')
+        ),
+        grandStaffMeasure(
+          hairpinNote('A5', 'eighth', 'beam-group="g1"') +
+            hairpinNote('B5', 'eighth', 'beam-group="g1"') +
+            hairpinNote('C6', 'eighth', 'beam-group="g1"') +
+            hairpinNote(
+              'D6',
+              'eighth',
+              'beam-group="g1" dynamic="f" dynamic-shared crescendo="end"'
+            ) +
+            hairpinNote('E5', 'half'),
+          hairpinNote('E2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('F2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('G2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('A2', 'eighth', 'beam-group="g1"') +
+            hairpinNote('C3', 'half')
+        ),
+      ],
+      900
+    );
+
+    const snapshot = await snapshotCompositionHairpins(page);
+
+    expect(snapshot.beamPolygons.length).toBeGreaterThan(0);
+    expect(snapshot.hairpins.length).toBe(1);
+    const centreY = hairpinCentreY(snapshot.hairpins[0]);
+    expect(centreY).toBeGreaterThan(snapshot.gaps[0].top);
+    expect(centreY).toBeLessThan(snapshot.gaps[0].bottom);
+    expect(snapshot.measureMarkingCount).toBe(0);
+    expect(snapshot.markings.map((marking) => marking.text).sort()).toEqual([
+      'f',
+      'p',
+    ]);
+    for (const marking of snapshot.markings) {
+      expect(marking.y).toBeCloseTo(centreY, 1);
+    }
+    const beams = snapshot.beamPolygons
+      .flatMap((polygon) =>
+        sliceConvexPolygon(polygon, SLUR_BEAM_SLICE_WIDTH_PX)
+      )
+      .map((slice) => ({
+        ...slice,
+        top: slice.top - HAIRPIN_BEAM_CLEARANCE_PX + 1,
+        bottom: slice.bottom + HAIRPIN_BEAM_CLEARANCE_PX - 1,
+      }));
+    for (const [from, to] of snapshot.hairpins[0]) {
+      expect(beams.some((rect) => segmentIntersectsRect(from, to, rect))).toBe(
+        false
+      );
+    }
+  });
+
+  test('a shared hairpin across a system break sits in each row’s own gap', async ({
+    page,
+  }) => {
+    await buildHairpinComposition(
+      page,
+      [
+        grandStaffMeasure(
+          hairpinNote('C5', 'half') +
+            hairpinNote('D5', 'half', 'dynamic-shared decrescendo="start"'),
+          hairpinNote('C3', 'whole')
+        ),
+        grandStaffMeasure(
+          hairpinNote('E5', 'half', 'decrescendo="end"') +
+            hairpinNote('F5', 'half'),
+          hairpinNote('E3', 'whole')
+        ),
+      ],
+      260
+    );
+
+    const snapshot = await snapshotCompositionHairpins(page);
+
+    expect(snapshot.gaps[1].top).toBeGreaterThan(snapshot.gaps[0].bottom);
+    expect(snapshot.hairpins.length).toBe(2);
+    snapshot.hairpins.forEach((edges, rowIndex) => {
+      const centreY = hairpinCentreY(edges);
+      expect(centreY).toBeGreaterThan(snapshot.gaps[rowIndex].top);
+      expect(centreY).toBeLessThan(snapshot.gaps[rowIndex].bottom);
+    });
+  });
+});
+
+test.describe(`${MUSIC_COMPOSITION} first paint`, () => {
+  test('a hand-crossing phrase slur paints in its settled shape on the first frame it appears', async ({
+    page,
+  }) => {
+    const leg = (
+      staffNotes: [`${Note}${Octave}`, boolean][],
+      restsFirst: boolean
+    ): string => {
+      const rests = `<${MUSIC_REST} duration="eighth"></${MUSIC_REST}>`.repeat(
+        4
+      );
+      const notes = staffNotes
+        .map(([pitch, inPhrase]) =>
+          hairpinNote(pitch, 'eighth', inPhrase ? 'slur-group="phrase1"' : '')
+        )
+        .join('');
+      return restsFirst ? rests + notes : notes + rests;
+    };
+    const markup = [
+      grandStaffMeasure(
+        leg(
+          [
+            ['D4', false],
+            ['F4', false],
+            ['A4', false],
+            ['D5', true],
+          ],
+          true
+        ),
+        leg(
+          [
+            ['F2', true],
+            ['A2', false],
+            ['D3', false],
+            ['F3', false],
+          ],
+          false
+        )
+      ),
+      grandStaffMeasure(
+        leg(
+          [
+            ['A4', false],
+            ['C5', false],
+            ['E5', false],
+            ['G5', true],
+          ],
+          true
+        ),
+        leg(
+          [
+            ['C3', true],
+            ['E3', false],
+            ['A3', false],
+            ['C4', false],
+          ],
+          false
+        )
+      ),
+    ].join('');
+
+    await page.evaluate(
+      ({ html, compositionTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '868px';
+        const record = window as unknown as { firstPaths?: string[] };
+        const tick = () => {
+          const paths = Array.from(
+            document
+              .querySelector(compositionTag)
+              ?.shadowRoot?.querySelectorAll('.connectors-overlay path') ?? []
+          ).map((path) => path.getAttribute('d') ?? '');
+          if (paths.length > 0) {
+            record.firstPaths = paths;
+            return;
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        const template = document.createElement('template');
+        template.innerHTML = `<${compositionTag} time="4/4">${html}</${compositionTag}>`;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { html: markup, compositionTag: MUSIC_COMPOSITION }
+    );
+    for (let cycle = 0; cycle < 5; cycle++) {
+      await waitForRedrawCycle(page);
+    }
+
+    const { firstPaths, settledPaths } = await page.evaluate(
+      (compositionTag) => ({
+        firstPaths:
+          (window as unknown as { firstPaths?: string[] }).firstPaths ?? [],
+        settledPaths: Array.from(
+          document
+            .querySelector(compositionTag)
+            ?.shadowRoot?.querySelectorAll('.connectors-overlay path') ?? []
+        ).map((path) => path.getAttribute('d') ?? ''),
+      }),
+      MUSIC_COMPOSITION
+    );
+
+    const numbers = (d: string) =>
+      d
+        .split(/[ ,MC]+/)
+        .filter((token) => token !== '')
+        .map(Number);
+    expect(firstPaths.length).toBe(3);
+    expect(firstPaths.length).toBe(settledPaths.length);
+    firstPaths.forEach((d, index) => {
+      const first = numbers(d);
+      const settled = numbers(settledPaths[index]);
+      expect(first.length).toBe(settled.length);
+      first.forEach((value, i) => {
+        expect(Math.abs(value - settled[i])).toBeLessThanOrEqual(0.5);
+      });
+    });
+  });
+});
+
+test.describe(`${MUSIC_COMPOSITION} octave continuation over a double-stemmed beam`, () => {
+  const sixteenth = (
+    pitch: `${Note}${Octave}`,
+    group: string,
+    extra = ''
+  ): string =>
+    `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+      -1
+    )}" duration="sixteenth" beam-group="${group}" ${extra}></${MUSIC_NOTE}>`;
+  const spacers = (count: number): string =>
+    `<${MUSIC_REST} duration="sixteenth" hidden></${MUSIC_REST}>`.repeat(count);
+  const quarter = (pitch: `${Note}${Octave}`, extra = ''): string =>
+    `<${MUSIC_NOTE} note="${pitch.slice(0, -1)}" octave="${pitch.slice(
+      -1
+    )}" duration="quarter" ${extra}></${MUSIC_NOTE}>`;
+
+  // The left hand's 8va starts in bar 1 and runs over two common-beam groups
+  // in bar 2, where the right hand plays at pitch between them.
+  const markup = `
+    <${MUSIC_MEASURE}>
+      <${MUSIC_STAFF} clef="treble" group="grand">${
+    quarter('G5') + quarter('B5') + quarter('D6')
+  }</${MUSIC_STAFF}>
+      <${MUSIC_STAFF} clef="treble">${
+    quarter('F4', 'octave-shift="8va"') + quarter('A4') + quarter('C5')
+  }</${MUSIC_STAFF}>
+    </${MUSIC_MEASURE}>
+    <${MUSIC_MEASURE}>
+      <${MUSIC_STAFF} clef="treble" group="grand">${
+    spacers(3) +
+    sixteenth('G5', 'g1') +
+    sixteenth('B5', 'g1') +
+    sixteenth('D6', 'g1') +
+    spacers(3) +
+    sixteenth('G5', 'g2') +
+    sixteenth('B5', 'g2') +
+    sixteenth('D6', 'g2')
+  }</${MUSIC_STAFF}>
+      <${MUSIC_STAFF} clef="treble">${
+    sixteenth('F4', 'g1') +
+    sixteenth('A4', 'g1') +
+    sixteenth('C5', 'g1') +
+    spacers(3) +
+    sixteenth('F4', 'g2') +
+    sixteenth('A4', 'g2') +
+    sixteenth('C5', 'g2', 'octave-stop') +
+    spacers(3)
+  }</${MUSIC_STAFF}>
+    </${MUSIC_MEASURE}>`;
+
+  async function buildAt(page: Page, width: number) {
+    await page.evaluate(
+      ({ compositionTag, html, hostWidth }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = `${hostWidth}px`;
+        const template = document.createElement('template');
+        template.innerHTML = `<${compositionTag} time="6/8">${html}</${compositionTag}>`;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { compositionTag: MUSIC_COMPOSITION, html: markup, hostWidth: width }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test('settles when the bars wrap, so the beam widens the gap a bounded amount', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    const readMargins = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll('music-staff')).map(
+          (staff) => (staff as HTMLElement).style.marginTop
+        )
+      );
+    // Where the second bar wraps, its beam rises steeply under the
+    // continuing line, so the gap has to widen.
+    for (const width of [400, 420, 440, 460, 480]) {
+      await buildAt(page, width);
+      const margins = await readMargins();
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+      expect(await readMargins()).toEqual(margins);
+    }
+    expect(warnings.some((text) => text.includes('did not converge'))).toBe(
+      false
+    );
+  });
+
+  test('the beam clears a continuing gap-side line, which breaks around the other hand', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, html }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const template = document.createElement('template');
+        template.innerHTML = `<${compositionTag} time="6/8">${html}</${compositionTag}>`;
+        host.appendChild(document.importNode(template.content, true));
+      },
+      { compositionTag: MUSIC_COMPOSITION, html: markup }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const snapshot = await page.evaluate(
+      ({ compositionTag, measureTag }) => {
+        const composition = document.querySelector(compositionTag);
+        const measure = document.querySelectorAll(measureTag)[1];
+        const overlay = composition?.shadowRoot?.querySelector(
+          '.octave-continuation-overlay'
+        );
+        const staff = measure?.querySelectorAll('music-staff')[1];
+        const container = staff?.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect();
+        if (!measure?.shadowRoot || !overlay || !container) {
+          throw new Error('composition not ready');
+        }
+        const measureRect = measure.getBoundingClientRect();
+        const relative = (rect: DOMRect) => ({
+          left: rect.left - measureRect.left,
+          right: rect.right - measureRect.left,
+          top: rect.top - measureRect.top,
+          bottom: rect.bottom - measureRect.top,
+        });
+        return {
+          restatedSigns: Array.from(
+            overlay.querySelectorAll(':scope > .octave-sign')
+          ).length,
+          corners: overlay.querySelectorAll('.octave-corner').length,
+          shapes: Array.from(overlay.children)
+            .map((shape) => relative(shape.getBoundingClientRect()))
+            .filter(
+              (rect) =>
+                rect.right > 0 &&
+                rect.left < measureRect.width &&
+                (rect.top + rect.bottom) / 2 < container.top - measureRect.top
+            ),
+          beamPolygons: Array.from(
+            measure.shadowRoot.querySelectorAll<SVGPolygonElement>(
+              '.double-stemmed-beams-overlay .double-stemmed-beam'
+            )
+          ).map((polygon) =>
+            Array.from({ length: polygon.points.numberOfItems }, (_, i) => {
+              const point = polygon.points.getItem(i);
+              return { x: point.x, y: point.y };
+            })
+          ),
+        };
+      },
+      { compositionTag: MUSIC_COMPOSITION, measureTag: MUSIC_MEASURE }
+    );
+
+    expect(snapshot.restatedSigns).toBe(1);
+    expect(snapshot.corners).toBe(2);
+    expect(snapshot.shapes.length).toBeGreaterThan(0);
+    expect(snapshot.beamPolygons.length).toBeGreaterThan(0);
+    let gap = Infinity;
+    for (const slice of snapshot.beamPolygons.flatMap((polygon) =>
+      sliceConvexPolygon(polygon, 2)
+    )) {
+      for (const shape of snapshot.shapes) {
+        if (slice.left < shape.right && shape.left < slice.right) {
+          gap = Math.min(gap, shape.top - slice.bottom);
+        }
+      }
+    }
+    expect(gap).toBeGreaterThanOrEqual(OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5);
   });
 });
