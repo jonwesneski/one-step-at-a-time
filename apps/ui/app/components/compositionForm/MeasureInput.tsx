@@ -1,6 +1,5 @@
 import '@one-step-at-a-time/web-components';
 import { useFormContext } from 'react-hook-form';
-import { AnchoredTabPanel } from './AnchoredTabPanel';
 import { beamGroupCandidate } from './beamGroupHelpers';
 import { ClefEntryInput } from './ClefEntryInput';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
@@ -8,6 +7,7 @@ import { ConnectorInput } from './ConnectorInput';
 import { isConnectableSelection } from './connectorsHelpers';
 import { CrossStaffBeamInput } from './CrossStaffBeamInput';
 import { canShareDynamic, sharedStemCandidate } from './crossStaffHelpers';
+import { DockedTabPanel } from './DockedTabPanel';
 import { EntryEditInput } from './EntryEditInput';
 import { GraceInput } from './GraceInput';
 import { MeasureBasicInput } from './MeasureBasicInput';
@@ -70,9 +70,6 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
         ) < -1e-9
     );
   });
-  const containsSelectedStaff = measure.staffIds.some((id) =>
-    session.selection.staffIds.includes(id)
-  );
 
   const selectedStaffIdsInMeasure = measure.staffIds.filter((id) =>
     session.selection.staffIds.includes(id)
@@ -283,19 +280,7 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
       ref={(el: HTMLElement | null) => registerMeasureRef(measureId, el)}
       className={`cursor-pointer rounded transition-shadow ${
         isMeasureSelected ? 'rainbow-selected' : ''
-      } ${isOverfull ? 'outline-2 outline-red-500' : ''} ${
-        isMeasureSelected ||
-        containsSelectedStaff ||
-        connectorEndpoints ||
-        editableEntry ||
-        showOctave ||
-        showCrossStaffBeam ||
-        showSharedStem ||
-        showPhraseSlur ||
-        showTuplet
-          ? 'pb-10'
-          : ''
-      }`}
+      } ${isOverfull ? 'outline-2 outline-red-500' : ''}`}
       onClick={() => selectMeasure(measureId)}
     >
       {isOverfull && (
@@ -316,7 +301,7 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           timeSignature={timeSignature}
         />
       ))}
-      {tabs.length > 0 && <AnchoredTabPanel tabs={tabs} />}
+      {tabs.length > 0 && <DockedTabPanel tabs={tabs} />}
     </music-measure>
   );
 }

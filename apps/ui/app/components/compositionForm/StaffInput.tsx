@@ -7,9 +7,9 @@ import { AddChordInput } from './AddChordInput';
 import { AddClefInput } from './AddClefInput';
 import { AddNoteInput } from './AddNoteInput';
 import { AddRestInput } from './AddRestInput';
-import { AnchoredTabPanel } from './AnchoredTabPanel';
 import { effectiveClefOfEntry } from './clefsHelpers';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
+import { DockedTabPanel } from './DockedTabPanel';
 import { serializeGrace } from './graceHelpers';
 import { remainingDuration } from './measureCapacityHelpers';
 import { resolveTupletRuns } from './tupletsHelpers';
@@ -244,7 +244,7 @@ export function StaffInput({
         {voiceNodes}
       </music-staff>
       {isSelected && (
-        <AnchoredTabPanel
+        <DockedTabPanel
           tabs={[
             {
               label: 'Note',

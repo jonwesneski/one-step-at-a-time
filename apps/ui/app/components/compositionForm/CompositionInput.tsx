@@ -111,8 +111,14 @@ function CompositionFormBody({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [undo, redo, deleteSelected, session.selection]);
 
+  // The docked editor panel covers the bottom of the window while anything
+  // is selected; this lets the last row of the score scroll above it.
+  const dockPadding = isSelectionEmpty(session.selection)
+    ? ''
+    : 'pb-[25vh] md:pb-[40vh]';
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className={`flex flex-col gap-4 ${dockPadding}`}>
       <div className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
         <BasicInfoInput />
       </div>

@@ -184,7 +184,7 @@ it snapshots.
 
 **3. `CompositionFormSessionContext`** holds state that is **not** part of the
 submitted composition and **not** undoable: the current `selection`, which
-`AnchoredTabPanel` tab is open, the last-used entry type. Shallow-merged via
+`DockedTabPanel` tab is open, the last-used entry type. Shallow-merged via
 `setSession(patch)`. It also owns the DOM ref maps (measure/staff/entry elements)
 used for hit-testing, and forwards the mutators from `CompositionInput`. Put
 transient editor UI state here; put anything that should survive undo/redo or a
@@ -214,19 +214,25 @@ future save in `CompositionStructure`.
   starts from empty staff/measure whitespace. Same deferred-capture + threshold +
   post-drag click-swallow as the marquee, so a plain click still selects.
 
-**5. `AnchoredTabPanel` — every entry/structure editor lives here.** Any control
+**5. `DockedTabPanel` — every entry/structure editor lives here.** Any control
 that edits a measure, staff, entry, or connector renders as a **tab in this panel**,
 never as an inline panel elsewhere. The exceptions are the root form fields
 (`BasicInfoInput`), the Undo/Redo/Delete toolbar, and `MeterChangeDialog` (a
-modal, not a tab — see piece 9) — none are selection-contextual. It's a floating
-panel (bottom sheet on mobile, popover
-anchored under the selection on desktop) whose tabs are just an array of
+modal, not a tab — see piece 9) — none are selection-contextual. It's docked
+full-width to the bottom of the window on every screen size (a fixed 25vh on
+mobile; up to 40vh on desktop, sized to its content), with a sideways-scrolling
+tab row and a vertically scrolling body. Its tabs are just an array of
 `{ label, content }`; callers build the array conditionally and pass it, and the
 active tab is remembered by label in `session.entryPanelTab`.
 
 - **Selection-scoped** editors mount their tab from `MeasureInput` (measure- or
-  entry-scoped) or `StaffInput` (staff-scoped). The owning component adds `pb-10`
-  to its `<music-*>` element to reserve room for the panel.
+  entry-scoped) or `StaffInput` (staff-scoped). `CompositionFormBody` pads the
+  page bottom by the dock's height whenever the selection is non-empty, so the
+  last row of the score can scroll above it.
+- Each mounting component renders its own panel instance, all in the same docked
+  spot — when several are open at once (e.g. two selected staves each show their
+  own Note/Chord/… panel alongside the measure's), they stack and only the last
+  is visible.
 - An editor that **spans measures** (e.g. `ConnectorInput` for a cross-barline tie)
   mounts from the `MeasureInput` that holds the selection's **start** node, so
   exactly one panel shows.
@@ -378,7 +384,7 @@ Use as a menu, not a mandatory sequence.
 4. **Mutator** → a function in `CompositionInput.tsx` that builds the next
    structure and calls `record(next)`; thread it through the provider `on*` prop
    and the context value.
-5. **UI panel** → `<Feature>Input.tsx`, always as an `AnchoredTabPanel` tab (never
+5. **UI panel** → `<Feature>Input.tsx`, always as an `DockedTabPanel` tab (never
    inline). Selection-scoped → a tab from `MeasureInput`/`StaffInput`. Spans
    measures → a tab from the `MeasureInput` holding the selection's start node.
 6. **Selection** → decide what selection makes it available; extend `selectEntry`
