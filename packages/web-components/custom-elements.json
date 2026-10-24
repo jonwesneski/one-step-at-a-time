@@ -2128,6 +2128,24 @@
             },
             {
               "kind": "method",
+              "name": "#staffLineBands",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ top: number; bottom: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly StaffElementBaseType[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#restHuggingTargetY",
               "privacy": "private",
               "return": {
