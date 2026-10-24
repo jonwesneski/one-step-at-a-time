@@ -49,6 +49,7 @@ function buildStructure(
     entriesById,
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById,
   };
 }
@@ -155,6 +156,7 @@ describe('availableForDuration', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     // Freeing e2 (0.25) in its own voice leaves 1 - 0 = 1 available to it —

@@ -23,6 +23,7 @@ import {
 } from './connectorsBuilder';
 import {
   MUSIC_GUITAR_NOTE,
+  MUSIC_MEASURE,
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_STAFF,
@@ -195,6 +196,25 @@ describe('collectPhraseSlurPairs', () => {
     expect(pairs[1].end).toBe(notes[2]);
     expect(pairs[2].start).toBe(notes[2]);
     expect(pairs[2].end).toBe(notes[3]);
+  });
+
+  it('connects across a system break in measure order, not x order', () => {
+    const root = document.createElement('div');
+    const firstMeasure = document.createElement(MUSIC_MEASURE);
+    const secondMeasure = document.createElement(MUSIC_MEASURE);
+    const rowOneStart = makePositionedNote({ 'slur-group': 'phrase1' }, 400);
+    const rowOneEnd = makePositionedNote({ 'slur-group': 'phrase1' }, 700);
+    const rowTwo = makePositionedNote({ 'slur-group': 'phrase1' }, 40);
+    firstMeasure.append(rowOneStart, rowOneEnd);
+    secondMeasure.append(rowTwo);
+    root.append(firstMeasure, secondMeasure);
+
+    const pairs = collectPhraseSlurPairs(root);
+
+    expect(pairs.map((pair) => [pair.start, pair.end])).toEqual([
+      [rowOneStart, rowOneEnd],
+      [rowOneEnd, rowTwo],
+    ]);
   });
 
   it('warns and skips a group with only one member', () => {

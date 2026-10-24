@@ -54,14 +54,17 @@ export function pickChordToneSide(
 }
 
 /**
- * Pairs each consecutive member of one `slur-group` phrase in real x order —
- * the staff listed first in the DOM does not always hold the temporally-first
- * breakpoint.
+ * Pairs each consecutive member of one `slur-group` phrase in measure order,
+ * then real x order within a measure — the staff listed first in the DOM does
+ * not always hold the temporally-first breakpoint, and x restarts on each
+ * system.
  */
 export function consecutivePhrasePairs<T>(
-  members: readonly { item: T; x: number }[]
+  members: readonly { item: T; measureIndex: number; x: number }[]
 ): [T, T][] {
-  const ordered = [...members].sort((a, b) => a.x - b.x);
+  const ordered = [...members].sort(
+    (a, b) => a.measureIndex - b.measureIndex || a.x - b.x
+  );
   const pairs: [T, T][] = [];
   for (let i = 0; i < ordered.length - 1; i++) {
     pairs.push([ordered[i].item, ordered[i + 1].item]);

@@ -1,4 +1,4 @@
-import { Button, Select } from '@/design-system';
+import { Button, Checkbox, Select } from '@/design-system';
 import type {
   DurationType,
   Note,
@@ -13,6 +13,7 @@ import {
   STRESSES,
 } from '@one-step-at-a-time/web-components';
 import type { ChordNote, EntryMarkings } from './types';
+import { STEM_DIRECTION_OPTIONS } from './types';
 
 // Shared pitch / octave / duration / chord-note controls used by the Add* panels
 // (AddNoteInput / AddChordInput / AddRestInput) and by EntryEditInput.
@@ -99,16 +100,18 @@ export function DurationSelect({
 
 const NONE = 'none';
 
-function OptionalSelect<T extends string>({
+export function OptionalSelect<T extends string>({
   label,
   options,
   value,
   onChange,
+  noneLabel = 'none',
 }: {
   label: string;
   options: readonly T[];
   value: T | null | undefined;
   onChange: (value: T | null) => void;
+  noneLabel?: string;
 }) {
   return (
     <label className="flex flex-col gap-0.5">
@@ -119,7 +122,7 @@ function OptionalSelect<T extends string>({
           onChange(e.target.value === NONE ? null : (e.target.value as T))
         }
       >
-        <option value={NONE}>none</option>
+        <option value={NONE}>{noneLabel}</option>
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -130,14 +133,22 @@ function OptionalSelect<T extends string>({
   );
 }
 
-// dynamic / articulation / stress — the expression marks shared by notes and
-// chords. Edits are merged onto the entry by the caller.
+// dynamic / articulation / stress / stem — the marks shared by notes and
+// chords. Edits are merged onto the entry by the caller. `canShareDynamic`
+// offers the both-hands toggle; `showStemDirection` is false where the
+// ancestor measure owns the stem (a cross-staff beam member).
 export function MarkingsFields({
   markings,
   onChange,
+  canShareDynamic = false,
+  showStemDirection = true,
+  canTakeLoco = false,
 }: {
   markings: EntryMarkings;
   onChange: (patch: EntryMarkings) => void;
+  canShareDynamic?: boolean;
+  showStemDirection?: boolean;
+  canTakeLoco?: boolean;
 }) {
   return (
     <>
@@ -147,6 +158,13 @@ export function MarkingsFields({
         value={markings.dynamic}
         onChange={(dynamic) => onChange({ dynamic })}
       />
+      {(canShareDynamic || markings.dynamicShared) && (
+        <Checkbox
+          label="Shared between hands"
+          checked={markings.dynamicShared ?? false}
+          onChange={(e) => onChange({ dynamicShared: e.target.checked })}
+        />
+      )}
       <OptionalSelect
         label="Articulation"
         options={ARTICULATIONS}
@@ -159,6 +177,22 @@ export function MarkingsFields({
         value={markings.stress}
         onChange={(stress) => onChange({ stress })}
       />
+      {showStemDirection && (
+        <OptionalSelect
+          label="Stem"
+          options={STEM_DIRECTION_OPTIONS}
+          value={markings.stemDirection}
+          onChange={(stemDirection) => onChange({ stemDirection })}
+          noneLabel="auto"
+        />
+      )}
+      {canTakeLoco && (
+        <Checkbox
+          label="(loco) reminder"
+          checked={markings.loco ?? false}
+          onChange={(e) => onChange({ loco: e.target.checked })}
+        />
+      )}
     </>
   );
 }

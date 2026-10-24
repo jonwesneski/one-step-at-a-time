@@ -10,12 +10,28 @@ import type {
   Mode,
   Note,
   Octave,
+  OctaveContinuationMode,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+  RestStaffSide,
   StaffGroupType,
+  StemDirection,
   StressType,
   TimeSignature,
+  TupletPlacement,
   TupletRatio,
 } from '@one-step-at-a-time/web-components';
-import { DURATIONS, MODES, TIMES } from '@one-step-at-a-time/web-components';
+import {
+  DURATIONS,
+  MODES,
+  OCTAVE_CONTINUATION_MODES,
+  OCTAVE_DISPLAY_MODES,
+  OCTAVE_SHIFT_AMOUNTS,
+  REST_STAFF_SIDES,
+  STEM_DIRECTIONS,
+  TIMES,
+  TUPLET_PLACEMENTS,
+} from '@one-step-at-a-time/web-components';
 
 export type { ConnectorRole };
 
@@ -24,6 +40,12 @@ export type { ConnectorRole };
 // circle-of-fifths subset with no library equivalent.
 export { DURATIONS as DURATION_OPTIONS, TIMES as TIME_SIGNATURE_OPTIONS };
 export const MODE_OPTIONS = MODES;
+export const STEM_DIRECTION_OPTIONS = STEM_DIRECTIONS;
+export const REST_STAFF_SIDE_OPTIONS = REST_STAFF_SIDES;
+export const TUPLET_PLACEMENT_OPTIONS = TUPLET_PLACEMENTS;
+export const OCTAVE_SHIFT_AMOUNT_OPTIONS = OCTAVE_SHIFT_AMOUNTS;
+export const OCTAVE_DISPLAY_MODE_OPTIONS = OCTAVE_DISPLAY_MODES;
+export const OCTAVE_CONTINUATION_MODE_OPTIONS = OCTAVE_CONTINUATION_MODES;
 
 export type StaffType = 'treble' | 'bass';
 
@@ -51,6 +73,25 @@ export type EntryMarkings = {
   articulation?: ArticulationType | null;
   stress?: StressType | null;
   grace?: GraceGroup | null;
+  stemDirection?: StemDirection | null;
+  // `dynamic` (and any hairpin this entry starts) applies to both hands —
+  // drawn once, in the gap between this staff and its partner.
+  dynamicShared?: boolean;
+  // A standalone "(loco)" reminder. A span's own closing loco is
+  // NormalizedOctaveSpan.end instead.
+  loco?: boolean;
+};
+
+// Cross-staff links shared by notes and chords, each mapping 1:1 to a library
+// attribute. `beamGroupId` (`beam-group`) and `slurGroupId` (`slur-group`)
+// are N:M shared keys across the members on two adjacent staves;
+// `sharedStemWithEntryId` (`shared-stem-for`) points at the other staff's
+// entry and is written on the lower staff's end. Validity is enforced by
+// notationLinksHelpers.ts#pruneInvalidNotationLinks.
+export type CrossStaffLinks = {
+  beamGroupId?: string | null;
+  slurGroupId?: string | null;
+  sharedStemWithEntryId?: string | null;
 };
 
 // A note/chord/rest belongs to at most one tuplet, referenced by id. The
@@ -60,6 +101,7 @@ export type EntryMarkings = {
 export type TupletMembership = { tupletId?: string | null };
 
 export type NoteEntry = EntryMarkings &
+  CrossStaffLinks &
   TupletMembership & {
     id: string;
     type: 'note';
@@ -68,6 +110,7 @@ export type NoteEntry = EntryMarkings &
     duration: DurationType;
   };
 export type ChordEntry = EntryMarkings &
+  CrossStaffLinks &
   TupletMembership & {
     id: string;
     type: 'chord';
@@ -78,6 +121,13 @@ export type RestEntry = TupletMembership & {
   id: string;
   type: 'rest';
   duration: DurationType;
+  // Keeps its beat time but draws nothing — a spacer, e.g. for the other
+  // hand's beats inside a cross-staff tuplet.
+  hidden?: boolean;
+  // A rest inside a cross-staff beam: membership only (it never joins the
+  // beam line), plus where it sits against that beam.
+  beamGroupId?: string | null;
+  restStaffSide?: RestStaffSide | null;
 };
 // A mid-stream clef change. Lives in a voice's `entryIds` like any entry
 // (always voice 1's — see NormalizedStaff's own doc comment), but carries no
@@ -150,7 +200,30 @@ export type NormalizedConnector = {
 // A tuplet grouping a contiguous run of entries in one voice. Which entries and
 // in what order is derived from the entries carrying this id in that voice's
 // `entryIds`.
-export type NormalizedTuplet = { id: string; ratio: TupletRatio };
+export type NormalizedTuplet = {
+  id: string;
+  ratio: TupletRatio;
+  placement?: TupletPlacement | null;
+  // Shared with the one tuplet on the adjacent staff it joins into a single
+  // cross-staff tuplet (`tuplet-group`).
+  crossStaffGroupId?: string | null;
+};
+
+// An octave-transposition line over a run of one staff track's voice (same
+// staff index + voice index), possibly across barlines. Members are every
+// entry between the endpoints on that track. Pitches are stored as written:
+// applying a span moves its members' written octaves so they keep sounding
+// where they were (octaveHelpers.ts).
+export type OctaveSpanEnd = 'stop' | 'loco';
+export type NormalizedOctaveSpan = {
+  id: string;
+  amount: OctaveShiftAmount;
+  mode: OctaveDisplayMode;
+  continuation: OctaveContinuationMode;
+  end: OctaveSpanEnd;
+  startEntryId: string;
+  endEntryId: string;
+};
 
 // The undoable structural slice. `timeSig` lives here (not just on the root form
 // values) so a time signature change — which also re-bars the music — is one undo
@@ -164,6 +237,7 @@ export type CompositionStructure = {
   connectorsById: Record<string, NormalizedConnector>;
   connectorOrder: string[];
   tupletsById: Record<string, NormalizedTuplet>;
+  octaveSpansById: Record<string, NormalizedOctaveSpan>;
 };
 
 export type Selection = {

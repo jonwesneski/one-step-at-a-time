@@ -53,9 +53,9 @@ describe('consecutivePhrasePairs', () => {
   it('pairs neighbors in x order, not input order', () => {
     expect(
       consecutivePhrasePairs([
-        { item: 'c', x: 300 },
-        { item: 'a', x: 100 },
-        { item: 'b', x: 200 },
+        { item: 'c', measureIndex: 0, x: 300 },
+        { item: 'a', measureIndex: 0, x: 100 },
+        { item: 'b', measureIndex: 0, x: 200 },
       ])
     ).toEqual([
       ['a', 'b'],
@@ -63,8 +63,23 @@ describe('consecutivePhrasePairs', () => {
     ]);
   });
 
+  it('orders by measure before x, so a wrapped system follows the one above', () => {
+    expect(
+      consecutivePhrasePairs([
+        { item: 'row2', measureIndex: 1, x: 40 },
+        { item: 'row1', measureIndex: 0, x: 700 },
+        { item: 'row1Earlier', measureIndex: 0, x: 500 },
+      ])
+    ).toEqual([
+      ['row1Earlier', 'row1'],
+      ['row1', 'row2'],
+    ]);
+  });
+
   it('returns nothing for a single member', () => {
-    expect(consecutivePhrasePairs([{ item: 'a', x: 0 }])).toEqual([]);
+    expect(
+      consecutivePhrasePairs([{ item: 'a', measureIndex: 0, x: 0 }])
+    ).toEqual([]);
   });
 });
 

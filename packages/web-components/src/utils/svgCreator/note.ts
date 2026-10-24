@@ -17,6 +17,7 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
   STAFF_TOP_LINE_Y,
   STEM_OVERLAP_PX,
@@ -98,11 +99,11 @@ export type NoteProps = {
   articulation?: ArticulationType | null;
   stress?: StressType | null;
   // Set by the ancestor <music-measure> — see
-  // INoteElement.articulationAnchorsToStem. When true, articulation marks
-  // anchor to this note's own real stem tip (already known locally from
-  // stemUp/stemExtension/duration — no coordinates need to cross from
-  // measure.ts) instead of the notehead.
-  articulationAnchorsToStem?: boolean;
+  // INoteElement.articulationStemAnchorBeamLevels. When non-null, articulation
+  // marks anchor next to the beam this note's stem reaches (derived locally
+  // from stemUp/stemExtension/duration plus that beam-level count — no
+  // coordinates need to cross from measure.ts) instead of the notehead.
+  articulationStemAnchorBeamLevels?: number | null;
   arpeggio?: ArpeggioType | null;
   arpeggioHairpin?: HairpinKind | null;
   arpeggioHairpinFrom?: DynamicMarking | null;
@@ -166,7 +167,7 @@ export const createNoteSvg = ({
   accidental,
   articulation,
   stress,
-  articulationAnchorsToStem = false,
+  articulationStemAnchorBeamLevels = null,
   arpeggio,
   arpeggioHairpin = null,
   arpeggioHairpinFrom = null,
@@ -200,7 +201,7 @@ export const createNoteSvg = ({
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
 
   // Stem — computed unconditionally (not just inside the `!noStem` block
-  // below) so articulationAnchorsToStem can reuse the same tip position the
+  // below) so articulationStemAnchorBeamLevels can reuse the same tip position the
   // stem itself is drawn to; an inner-voice double-stemmed member always
   // has a real stem anyway (noStem is for shared-stem/chord-internal
   // suppression, unrelated).
@@ -370,9 +371,16 @@ export const createNoteSvg = ({
     stemUp,
     noteHeadCenterX: Number(headXStartStr),
     noteHeadCenterY: Number(headYStartStr),
-    stemAnchor: articulationAnchorsToStem
-      ? stemBeamJunctionPosition(stemUp, duration, noFlags, stemExtension)
-      : null,
+    stemAnchor:
+      articulationStemAnchorBeamLevels !== null
+        ? stemBeamJunctionPosition(
+            stemUp,
+            duration,
+            noFlags,
+            stemExtension,
+            articulationStemAnchorBeamLevels
+          )
+        : null,
   });
   if (articulationMarks) {
     g.appendChild(articulationMarks);
@@ -519,17 +527,23 @@ export function stemTipPosition(
 // is only STEM_OVERLAP_PX past its own near surface. A mark placed at the
 // raw tip would therefore often render underneath the beam's fill — this
 // walks back from the tip, toward the notehead, by exactly that hidden
-// distance, landing right at the beam's real visible edge.
+// distance, landing right at the beam's real visible edge. beamLevels
+// secondary/fractional levels between the tip and the notehead add one
+// beam step each: whether they stack toward this notehead (the stem passes
+// through them) or away from it (the stem is extended out to them), the
+// surface facing the notehead is that many steps nearer the notehead than
+// the tip's own level.
 export function stemBeamJunctionPosition(
   stemUp: boolean,
   duration: DurationType,
   noFlags: boolean,
-  stemExtension: number
+  stemExtension: number,
+  beamLevels = 0
 ): { x: number; y: number } {
   const { x, y } = stemTipPosition(stemUp, duration, noFlags, stemExtension);
-  const hiddenPastSurfacePx = stemUp
-    ? BEAM_THICKNESS_PX - STEM_OVERLAP_PX
-    : STEM_OVERLAP_PX;
+  const hiddenPastSurfacePx =
+    (stemUp ? BEAM_THICKNESS_PX - STEM_OVERLAP_PX : STEM_OVERLAP_PX) +
+    beamLevels * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
   const towardNoteSign = stemUp ? 1 : -1;
   return { x, y: y + (towardNoteSign * hiddenPastSurfacePx) / NOTE_SCALE };
 }

@@ -54,6 +54,7 @@ import {
   createTrillLineSvg,
   createTrillNotchSvg,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  octaveSignWidth,
 } from '../utils';
 import {
   buildConnectorSvgs,
@@ -96,7 +97,7 @@ import {
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
   OCTAVE_SIGN_BELOW_STAFF_Y,
-  OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
+  OCTAVE_SIGN_CORNER_PX,
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_LINE_GAP_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
@@ -1506,6 +1507,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           rootRect
         );
 
+        const signWidth = octaveSignWidth(span.amount, span.mode);
         let lineStartX = notesAreaLeft;
         if (continuation.isRowWrap && continuation.restatesSign) {
           const { element: sign, width: signWidth } =
@@ -1539,9 +1541,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             pitched[k + 1].getBoundingClientRect().left -
             rootRect.left -
             OCTAVE_SIGN_LEADING_GAP_PX -
-            OCTAVE_SIGN_ESTIMATED_WIDTH_PX;
+            signWidth;
           draw(createOctaveSignSvg(span.amount, signX, y, span.mode));
-          lineStartX = signX + OCTAVE_SIGN_ESTIMATED_WIDTH_PX;
+          lineStartX = signX + signWidth;
         });
 
         // The corner terminator (when this segment closes the span) and the
@@ -1549,13 +1551,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // own-measure render, where the extension line and corner both land
         // at stopNoteX + trailing gap. With no stop here the line runs to this
         // row's own last barline, never beyond — the staff element's own
-        // right edge is that barline position.
-        const lineEndX =
+        // right edge is that barline position. Never short of lineStartX
+        // plus the corner's backward-drawn foot: a restated label wider than
+        // the room before the stop note would otherwise send the line and
+        // corner back across it.
+        const lineEndX = Math.max(
+          lineStartX + OCTAVE_SIGN_CORNER_PX,
           stopElement === null
             ? staffRect.right - rootRect.left
             : stopElement.getBoundingClientRect().right -
-              rootRect.left +
-              OCTAVE_SIGN_TRAILING_GAP_PX;
+                rootRect.left +
+                OCTAVE_SIGN_TRAILING_GAP_PX
+        );
         draw(createOctaveExtensionLineSvg(lineStartX, lineEndX, y));
         if (stopElement !== null) {
           draw(createOctaveCornerSvg(lineEndX, y, raisesPitch));

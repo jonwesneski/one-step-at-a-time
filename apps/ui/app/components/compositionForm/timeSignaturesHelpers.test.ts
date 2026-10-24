@@ -1,12 +1,12 @@
 import type { TimeSignature } from '@one-step-at-a-time/web-components';
 import { describe, expect, it } from 'vitest';
+import { buildSingleVoiceStaff } from './test-fixtures/voiceFixtures';
 import {
   effectiveTimeSignatures,
   timeSignatureAt,
   timeSignatureOfEntry,
   timeSignatureRegionAt,
 } from './timeSignaturesHelpers';
-import { buildSingleVoiceStaff } from './test-fixtures/voiceFixtures';
 import type { CompositionStructure, NormalizedMeasure } from './types';
 
 function structureOf(
@@ -27,6 +27,7 @@ function structureOf(
     entriesById: {},
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }

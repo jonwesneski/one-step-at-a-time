@@ -225,12 +225,12 @@
             },
             {
               "kind": "field",
-              "name": "#articulationAnchorsToStem",
+              "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               },
-              "default": "false"
+              "default": "null"
             },
             {
               "kind": "field",
@@ -385,9 +385,9 @@
             },
             {
               "kind": "field",
-              "name": "articulationAnchorsToStem",
+              "name": "articulationStemAnchorBeamLevels",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               }
             },
             {
@@ -2756,12 +2756,12 @@
             },
             {
               "kind": "field",
-              "name": "#articulationAnchorsToStem",
+              "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               },
-              "default": "false"
+              "default": "null"
             },
             {
               "kind": "field",
@@ -2906,9 +2906,9 @@
             },
             {
               "kind": "field",
-              "name": "articulationAnchorsToStem",
+              "name": "articulationStemAnchorBeamLevels",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               }
             },
             {
