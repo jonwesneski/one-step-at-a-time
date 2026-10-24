@@ -17,6 +17,7 @@ import {
   MUSIC_VOICE,
 } from '../utils/consts';
 import {
+  BRACKET_LINE_OVERHANG_PX,
   DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_BEAM_CLEARANCE_PX,
@@ -724,6 +725,39 @@ test.describe(`${MUSIC_MEASURE} group connectors`, () => {
     expect(rects.hookBottom as number).toBeGreaterThan(
       (rects.lastStaffLineBottom as number) + 2
     );
+  });
+
+  test("a bracket's stem overhangs the first and last staff lines by the same amount", async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, ['bracket', null]);
+    const edges = await page.evaluate(
+      ({ measureTag, staffTag }) => {
+        const measure = document.querySelector(measureTag);
+        const stem = measure?.shadowRoot
+          ?.querySelector('.group-connectors svg.bracket rect')
+          ?.getBoundingClientRect();
+        const lines = Array.from(measure?.querySelectorAll(staffTag) ?? []).map(
+          (staff) =>
+            staff.shadowRoot
+              ?.querySelector('.staff-container')
+              ?.getBoundingClientRect()
+        );
+        const first = lines[0];
+        const last = lines[lines.length - 1];
+        if (!stem || !first || !last) {
+          throw new Error('bracket not ready');
+        }
+        return {
+          above: first.top - stem.top,
+          below: stem.bottom - last.bottom,
+        };
+      },
+      { measureTag: MUSIC_MEASURE, staffTag: MUSIC_STAFF }
+    );
+
+    expect(edges.above).toBeCloseTo(BRACKET_LINE_OVERHANG_PX, 0);
+    expect(edges.below).toBeCloseTo(BRACKET_LINE_OVERHANG_PX, 0);
   });
 
   test('a grand-staff pair connector height matches its 2 staves, not the whole measure', async ({
@@ -5215,6 +5249,79 @@ test.describe(`${MUSIC_MEASURE} system decorations follow staff margins`, () => 
     ] as const) {
       expect(Math.abs(withHeadroom[key] - plain[key])).toBeLessThan(1);
     }
+    // Flush, not merely unchanged: the barline and brace start on the first
+    // staff's top line and end on the last staff's bottom line.
+    for (const offsets of [plain, withHeadroom]) {
+      for (const key of [
+        'braceTop',
+        'braceBottom',
+        'barlineTop',
+        'barlineBottom',
+      ] as const) {
+        expect(Math.abs(offsets[key])).toBeLessThan(0.5);
+      }
+    }
+  });
+
+  test('the system barline is flush with the outer staff lines of a three-staff composition row', async ({
+    page,
+  }) => {
+    await page.evaluate(
+      ({ compositionTag, measureTag, staffTag, noteTag, chordTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = '400px';
+        host.innerHTML = `<${compositionTag} key-sig="D" mode="major" time="4/4">
+          <${measureTag}>
+            <${staffTag} clef="treble">
+              <${chordTag} duration="eighth"><${noteTag} note="A" octave="4"></${noteTag}><${noteTag} note="E" octave="4"></${noteTag}></${chordTag}>
+              <${chordTag} duration="eighth"><${noteTag} note="A" octave="4"></${noteTag}><${noteTag} note="E" octave="4"></${noteTag}></${chordTag}>
+              <${noteTag} note="D" octave="4" duration="quarter"></${noteTag}>
+            </${staffTag}>
+            <${staffTag} clef="bass">
+              <${noteTag} note="A" duration="quarter"></${noteTag}>
+            </${staffTag}>
+            <${staffTag} clef="treble"></${staffTag}>
+          </${measureTag}>
+        </${compositionTag}>`;
+      },
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        measureTag: MUSIC_MEASURE,
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        chordTag: MUSIC_CHORD,
+      }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const offsets = await page.evaluate((measureTag) => {
+      const measure = document.querySelector(measureTag);
+      const staves = Array.from(measure?.children ?? []);
+      const lines = staves.map((staff) =>
+        staff.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect()
+      );
+      const barline = measure?.shadowRoot
+        ?.querySelector('.staff-connector')
+        ?.getBoundingClientRect();
+      const first = lines[0];
+      const last = lines[lines.length - 1];
+      if (!barline || !first || !last || lines.length !== 3) {
+        throw new Error('barline not ready');
+      }
+      return {
+        top: barline.top - first.top,
+        bottom: barline.bottom - last.bottom,
+      };
+    }, MUSIC_MEASURE);
+
+    expect(Math.abs(offsets.top)).toBeLessThan(0.5);
+    expect(Math.abs(offsets.bottom)).toBeLessThan(0.5);
   });
 });
 
