@@ -769,22 +769,12 @@ export const BRACKET_WIDTH_PX =
   STAFF_LINE_SPACING * 1.876 + BRACKET_LEFT_MARGIN_PX;
 
 /**
- * Additional upward shift (px) applied to a bracket connector's top (and,
- * since its height is unchanged, its bottom follows automatically) beyond
- * the shared CONNECTOR_TOP_PX baseline used by the barline/brace — a
- * bracket's hook needs to curl clearly above/below the staves it groups,
- * not just blend into the top/bottom staff line. Brace-only connectors are
- * unaffected. Starting value — tune visually in Storybook.
+ * How far (px) a bracket's stem runs past the outer staff lines, at each end
+ * equally — so its hooks curl clearly clear of the staves it groups rather
+ * than blending into the top/bottom line. Braces sit flush. Starting value —
+ * tune visually in Storybook.
  */
-export const BRACKET_TOP_OFFSET_PX = STAFF_LINE_SPACING * 0.5;
-
-/**
- * Extra height (px) added to a bracket connector's overall span, split
- * evenly between the top and bottom shift — on top of BRACKET_TOP_OFFSET_PX
- * — so both hooks clear their staff lines by a bit more margin. Brace-only
- * connectors are unaffected. Starting value — tune visually in Storybook.
- */
-export const BRACKET_EXTRA_HEIGHT_PX = STAFF_LINE_SPACING * 0.5;
+export const BRACKET_LINE_OVERHANG_PX = STAFF_LINE_SPACING * 0.25;
 
 /**
  * Thickness (px) of a bracket connector's straight stem, drawn as a plain
@@ -830,7 +820,7 @@ export const MEASURE_NUMBER_FONT_SIZE = STAFF_LINE_SPACING * 0.9;
 
 /**
  * Vertical gap (px) between a measure number's own baseline and
- * CONNECTOR_TOP_PX (measure.ts) — keeps it clear of the staff itself.
+ * MEASURE_NUMBER_TOP_PX (measure.ts) — keeps it clear of the staff itself.
  * Starting value — tune visually in Storybook.
  */
 export const MEASURE_NUMBER_BOTTOM_MARGIN_PX = STAFF_LINE_SPACING * 0.5;
@@ -1028,15 +1018,6 @@ export const OCTAVE_SIGN_SUFFIX_SCALE = 0.6;
 export const OCTAVE_SIGN_CHAR_WIDTH_PX = OCTAVE_SIGN_FONT_SIZE_PX * 0.65;
 
 /**
- * Conservative estimated width (px) of a whole octave sign (numeral +
- * suffix), covering the widest case — a 2-digit numeral ("15"/"22") plus its
- * 2-letter suffix at OCTAVE_SIGN_SUFFIX_SCALE — so leftward-reserving layout
- * code doesn't need to measure the actual rendered text.
- */
-export const OCTAVE_SIGN_ESTIMATED_WIDTH_PX =
-  OCTAVE_SIGN_CHAR_WIDTH_PX * (2 + 2 * OCTAVE_SIGN_SUFFIX_SCALE);
-
-/**
  * Fixed nominal Y position (px, note-coordinate space) for a pitch-raising
  * (sopra) span's numeral/line. One half-space further from the staff than
  * DYNAMICS_ABOVE_BASELINE_Y, so the two decorations don't land on the exact
@@ -1091,12 +1072,19 @@ export const OCTAVE_SIGN_PROSE_FONT_SIZE_PX = STAFF_LINE_SPACING * 0.9;
 export const OCTAVE_LOCO_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Estimated width (px) of the standalone "(loco)" label — six italic
- * characters at about half an em each.
- * = 3 × OCTAVE_SIGN_PROSE_FONT_SIZE_PX
+ * Estimated width (px) per character of octave-sign prose text (italic
+ * serif, about half an em).
+ * = 0.5 × OCTAVE_SIGN_PROSE_FONT_SIZE_PX
+ */
+export const OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX =
+  OCTAVE_SIGN_PROSE_FONT_SIZE_PX * 0.5;
+
+/**
+ * Estimated width (px) of the standalone "(loco)" label.
+ * = 6 × OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX
  */
 export const OCTAVE_LOCO_ESTIMATED_WIDTH_PX =
-  OCTAVE_SIGN_PROSE_FONT_SIZE_PX * 3;
+  OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX * 6;
 
 /**
  * Clearance (px) kept between a gap-side octave sign and a double-stemmed

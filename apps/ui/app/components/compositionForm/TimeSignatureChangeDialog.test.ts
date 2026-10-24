@@ -34,6 +34,7 @@ function structure(
     entriesById,
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }

@@ -68,6 +68,7 @@ function build(
     entriesById,
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }

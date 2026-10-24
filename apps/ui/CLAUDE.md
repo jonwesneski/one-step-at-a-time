@@ -93,8 +93,34 @@ nodes, every id a `crypto.randomUUID()`.
 timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef)
 measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin, by entry id)
 measuresById: Record<id, { staffIds, time? }>   connectorOrder: string[]
-stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tupletsById: Record<id, { ratio }>
+stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tupletsById: Record<id, { ratio, placement, crossStaffGroupId }>
+                                           octaveSpansById: Record<id, NormalizedOctaveSpan> (8va/15ma… lines, by entry id)
 ```
+
+**Cross-entry notation links** mirror the library's own attribute shapes rather
+than inventing collections: N:M shared keys live on the entries
+(`beamGroupId` → `beam-group`, `slurGroupId` → `slur-group`, like `tupletId`),
+a 1:1 link points at the partner entry (`sharedStemWithEntryId` →
+`shared-stem-for`, written on the lower staff's entry, which is why every
+entry renders `id={entry.id}`), and a span with metadata gets its own
+collection (`octaveSpansById`, like connectors). The library warns about and
+drops an invalid link, so the editor never stores one:
+`notationLinksHelpers.ts#pruneInvalidNotationLinks` runs every per-feature
+`pruneInvalid*` pass and is called last by every mutation that can move,
+delete, or re-time entries (`applyEntryUpdate`, `removeSelectionFromStructure`,
+`moveEntryInVoice`/`moveEntryToVoice`, `removeVoiceFromStaff`, `rebar`, the
+`setTuplet` mutator), followed only by `pruneBrokenTies` where ties are
+re-checked, since tie validity reads octave spans. A new link type adds its
+own `pruneInvalid*` to that list.
+
+**Octave spans store written pitch.** Applying one keeps its members sounding
+where they were, so written octaves move opposite to the shift (8va: one
+down); removing it or changing the amount moves them back
+(`octaveHelpers.ts`). Deleting an endpoint shrinks the span to the notes left
+(`octaveSpansWithoutEntries`, computed on the structure _before_ the delete)
+rather than re-pitching anything. A reordered entry joins the span it lands
+in and is re-pitched to keep its sound (`octaveSpansAfterMove`); ties compare
+sounding pitch (`soundingOctaveShift`), so a tie may cross a line's edge.
 
 A staff's entries are one level deeper than the diagram above shows:
 `voiceOrder: string[]` (ascending = voice 1..3, position IS the voice number,
@@ -135,8 +161,12 @@ field directly — you'd skip undo history.
 - Mutators (`addMeasure`, `addStaff`, `setStaffGroup`, `addVoice`, `removeVoice`,
   `moveEntryToVoice`, `addEntry`, `setConnector`, …) are defined in
   `CompositionInput.tsx`, passed into `CompositionFormSessionProvider` as `on*`
-  props, and re-exposed through `useCompositionFormSession()`. Add a new mutator
-  the same way. A mutator whose effect can invalidate the current selection
+  props, and re-exposed through `useCompositionFormSession()`. A mutator that is
+  just one pure structure-in/structure-out helper doesn't need that threading:
+  call `editStructure((s) => helper(s, …))` from the panel — it records one undo
+  step, and nothing when the helper returns its input unchanged (the Octave,
+  Cross-staff Beam, Shared Stem, Phrase Slur and cross-staff Tuplet panels all
+  work this way). A mutator whose effect can invalidate the current selection
   (deletes/moves ids the selection references) gets a small wrapper defined
   _inside_ the provider instead of a raw pass-through — see `removeVoice`
   (drops now-dangling entry ids from `session.selection` after the delete) and
@@ -154,7 +184,7 @@ it snapshots.
 
 **3. `CompositionFormSessionContext`** holds state that is **not** part of the
 submitted composition and **not** undoable: the current `selection`, which
-`AnchoredTabPanel` tab is open, the last-used entry type. Shallow-merged via
+`DockedTabPanel` tab is open, the last-used entry type. Shallow-merged via
 `setSession(patch)`. It also owns the DOM ref maps (measure/staff/entry elements)
 used for hit-testing, and forwards the mutators from `CompositionInput`. Put
 transient editor UI state here; put anything that should survive undo/redo or a
@@ -184,19 +214,25 @@ future save in `CompositionStructure`.
   starts from empty staff/measure whitespace. Same deferred-capture + threshold +
   post-drag click-swallow as the marquee, so a plain click still selects.
 
-**5. `AnchoredTabPanel` — every entry/structure editor lives here.** Any control
+**5. `DockedTabPanel` — every entry/structure editor lives here.** Any control
 that edits a measure, staff, entry, or connector renders as a **tab in this panel**,
 never as an inline panel elsewhere. The exceptions are the root form fields
 (`BasicInfoInput`), the Undo/Redo/Delete toolbar, and `MeterChangeDialog` (a
-modal, not a tab — see piece 9) — none are selection-contextual. It's a floating
-panel (bottom sheet on mobile, popover
-anchored under the selection on desktop) whose tabs are just an array of
+modal, not a tab — see piece 9) — none are selection-contextual. It's docked
+full-width to the bottom of the window on every screen size (a fixed 25vh on
+mobile; up to 40vh on desktop, sized to its content), with a sideways-scrolling
+tab row and a vertically scrolling body. Its tabs are just an array of
 `{ label, content }`; callers build the array conditionally and pass it, and the
 active tab is remembered by label in `session.entryPanelTab`.
 
 - **Selection-scoped** editors mount their tab from `MeasureInput` (measure- or
-  entry-scoped) or `StaffInput` (staff-scoped). The owning component adds `pb-10`
-  to its `<music-*>` element to reserve room for the panel.
+  entry-scoped) or `StaffInput` (staff-scoped). `CompositionFormBody` pads the
+  page bottom by the dock's height whenever the selection is non-empty, so the
+  last row of the score can scroll above it.
+- Each mounting component renders its own panel instance, all in the same docked
+  spot — when several are open at once (e.g. two selected staves each show their
+  own Note/Chord/… panel alongside the measure's), they stack and only the last
+  is visible.
 - An editor that **spans measures** (e.g. `ConnectorInput` for a cross-barline tie)
   mounts from the `MeasureInput` that holds the selection's **start** node, so
   exactly one panel shows.
@@ -227,8 +263,10 @@ app only has to handle well-formed data since it's the sole writer.
 **8. Cascade cleanup on delete.** `removeSelectionFromStructure`
 (`deleteSelectionHelpers.ts`) computes the ids to remove, then rebuilds every collection
 without them **and** repairs anything left dangling — a group that dropped below 2
-staves, a connector whose endpoint is gone. Any new collection that references
-node ids needs its own filter here, plus a `deleteSelectionHelpers.test.ts` case.
+staves, a connector whose endpoint is gone — finishing with
+`pruneInvalidNotationLinks`. Any new collection that references node ids needs its
+own filter here (or a `pruneInvalid*` pass in `notationLinksHelpers.ts`), plus a
+test.
 
 **9. Time signature is positional; measure capacity is enforced.**
 
@@ -313,18 +351,23 @@ CompositionInput                       owns useForm + useUndoRedo + all mutators
       └─ CompositionFormBody            watches root values; Undo/Redo/Delete bar; MeterChangeDialog; renders:
          └─ DragSelectOverlay           marquee selection
             └─ <music-composition>
-               ├─ MeasureInput ×N  → <music-measure time=meter>   (+ Add Staff / Group Staves / Ties & Slurs / Time Signature panels)
+               ├─ MeasureInput ×N  → <music-measure time=meter>   (+ Measure / Group Staves / Connections / Edit / Grace / Octave / Tuplet / Cross-staff Beam / Shared Stem / Phrase Slur panels)
                │   └─ StaffInput ×M → <music-staff>     (+ Staff Entries panel)
-               │       └─ <music-note> / <music-chord> / <music-rest>   (tie/slur/id/for from useConnectorAttributes)
+               │       └─ <music-note> / <music-chord> / <music-rest>   (id = entry id; tie/slur/for from useConnectorAttributes; octave-* from useOctaveAttributes; beam-group / shared-stem-for / slur-group / stem-direction / … straight off the entry)
                └─ "Add Measure" button
 ```
 
-Worked examples of the full pattern: **staff groups** (commit `ab52d52` —
-`staffGroupsHelpers.ts`, `StaffGroupInput.tsx`, cleanup in `deleteSelectionHelpers.ts`),
-**ties/slurs** (`connectorsHelpers.ts`, `ConnectorInput.tsx`, `useCompositionStructure.ts`),
-and **positional time signatures + rebar** (piece 9 — `timeSignaturesHelpers.ts`,
-`rebarHelpers.ts`, `durationHelpers.ts`, `MeterChangeDialog.tsx`, `MeasureMeterInput.tsx`;
-first field on `CompositionStructure` and first modal in the app).
+Worked examples of the full pattern: **cross-staff notation** (`beamGroupHelpers.ts`
+
+- `CrossStaffBeamInput.tsx`, `crossStaffHelpers.ts` shared stems + `SharedStemInput.tsx`,
+  `phraseSlurHelpers.ts` + `PhraseSlurInput.tsx`, cross-staff tuplets in `tupletsHelpers.ts`
+- `TupletInput.tsx`, all validated by `notationLinksHelpers.ts`), **octave spans**
+  (`octaveHelpers.ts`, `OctaveInput.tsx`), **staff groups** (commit `ab52d52` —
+  `staffGroupsHelpers.ts`, `StaffGroupInput.tsx`, cleanup in `deleteSelectionHelpers.ts`),
+  **ties/slurs** (`connectorsHelpers.ts`, `ConnectorInput.tsx`, `useCompositionStructure.ts`),
+  and **positional time signatures + rebar** (piece 9 — `timeSignaturesHelpers.ts`,
+  `rebarHelpers.ts`, `durationHelpers.ts`, `MeterChangeDialog.tsx`, `MeasureMeterInput.tsx`;
+  first field on `CompositionStructure` and first modal in the app).
 
 ## Adding a feature to the Create form
 
@@ -341,7 +384,7 @@ Use as a menu, not a mandatory sequence.
 4. **Mutator** → a function in `CompositionInput.tsx` that builds the next
    structure and calls `record(next)`; thread it through the provider `on*` prop
    and the context value.
-5. **UI panel** → `<Feature>Input.tsx`, always as an `AnchoredTabPanel` tab (never
+5. **UI panel** → `<Feature>Input.tsx`, always as an `DockedTabPanel` tab (never
    inline). Selection-scoped → a tab from `MeasureInput`/`StaffInput`. Spans
    measures → a tab from the `MeasureInput` holding the selection's start node.
 6. **Selection** → decide what selection makes it available; extend `selectEntry`

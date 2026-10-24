@@ -3,6 +3,8 @@ import { useMemo } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 import type { ConnectorEntryAttributes } from './connectorsHelpers';
 import { resolveConnectorAttributes } from './connectorsHelpers';
+import type { OctaveEntryAttributes } from './octaveHelpers';
+import { resolveOctaveAttributes } from './octaveHelpers';
 import { effectiveTimeSignatures } from './timeSignaturesHelpers';
 import type { CompositionFormValues, CompositionStructure } from './types';
 
@@ -17,6 +19,7 @@ export function useCompositionStructure(): CompositionStructure {
   const connectorsById = useWatch({ control, name: 'connectorsById' });
   const connectorOrder = useWatch({ control, name: 'connectorOrder' });
   const tupletsById = useWatch({ control, name: 'tupletsById' });
+  const octaveSpansById = useWatch({ control, name: 'octaveSpansById' });
 
   return useMemo(
     () => ({
@@ -28,6 +31,7 @@ export function useCompositionStructure(): CompositionStructure {
       connectorsById,
       connectorOrder,
       tupletsById,
+      octaveSpansById,
     }),
     [
       timeSig,
@@ -38,6 +42,7 @@ export function useCompositionStructure(): CompositionStructure {
       connectorsById,
       connectorOrder,
       tupletsById,
+      octaveSpansById,
     ]
   );
 }
@@ -49,6 +54,12 @@ export function useConnectorAttributes(): Map<
 > {
   const structure = useCompositionStructure();
   return useMemo(() => resolveConnectorAttributes(structure), [structure]);
+}
+
+// Per-entry octave-shift/-stop/loco attributes, keyed by entry id.
+export function useOctaveAttributes(): Map<string, OctaveEntryAttributes> {
+  const structure = useCompositionStructure();
+  return useMemo(() => resolveOctaveAttributes(structure), [structure]);
 }
 
 // Effective time signature of every measure, keyed by measure id.

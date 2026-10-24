@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
-  resolveTupletRuns,
-  setTuplet,
-  tupletCandidate,
-} from './tupletsHelpers';
-import {
   buildMultiVoiceStaff,
   buildSingleVoiceStaff,
 } from './test-fixtures/voiceFixtures';
+import {
+  crossStaffTupletCandidate,
+  crossStaffTupletOf,
+  pruneInvalidCrossStaffTuplets,
+  resolveTupletRuns,
+  setCrossStaffTuplet,
+  setTuplet,
+  setTupletPlacement,
+  tupletCandidate,
+  tupletOfEntries,
+} from './tupletsHelpers';
 import type { CompositionStructure, MusicEntry, Selection } from './types';
 import { isPitchedEntry } from './types';
 
@@ -46,6 +52,7 @@ function buildStructure(): CompositionStructure {
     },
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }
@@ -130,6 +137,7 @@ describe('tupletCandidate', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     expect(tupletCandidate(sel(['e2', 'e3']), structure)).toBeNull();
@@ -165,5 +173,161 @@ describe('setTuplet', () => {
     next = setTuplet(next, ['e1', 'e2'], null);
     expect(next.tupletsById).toEqual({});
     expect(tupletIdOf(next.entriesById, 'e3')).toBeNull();
+  });
+});
+
+describe('setTupletPlacement', () => {
+  it('sets and clears the bracket side', () => {
+    const withTuplet = setTuplet(buildStructure(), ['e1', 'e2', 'e3'], '3');
+    const tupletId = tupletIdOf(withTuplet.entriesById, 'e1') as string;
+
+    const above = setTupletPlacement(withTuplet, tupletId, 'above');
+    expect(above.tupletsById[tupletId].placement).toBe('above');
+
+    const cleared = setTupletPlacement(above, tupletId, null);
+    expect(cleared.tupletsById[tupletId].placement).toBeNull();
+  });
+
+  it('returns the structure unchanged for an unknown tuplet or no-op', () => {
+    const structure = buildStructure();
+    expect(setTupletPlacement(structure, 'missing', 'above')).toBe(structure);
+  });
+
+  it('keeps the bracket side when the tuplet is re-ratioed', () => {
+    const withTuplet = setTuplet(buildStructure(), ['e1', 'e2', 'e3'], '3');
+    const tupletId = tupletIdOf(withTuplet.entriesById, 'e1') as string;
+    const below = setTupletPlacement(withTuplet, tupletId, 'below');
+
+    const reRatioed = setTuplet(below, ['e1', 'e2', 'e3'], '5');
+    const newId = tupletIdOf(reRatioed.entriesById, 'e1') as string;
+    expect(reRatioed.tupletsById[newId]).toMatchObject({
+      ratio: '5',
+      placement: 'below',
+    });
+  });
+});
+
+describe('cross-staff tuplets', () => {
+  // 2/4, like the library's CrossStaffTupletWithoutBeam story:
+  //   treble s1: A G (quarters) + rest  |  bass s2: half rest + F (quarter)
+  function buildCrossStaff(): CompositionStructure {
+    return {
+      timeSig: '2/4',
+      measureOrder: ['m1'],
+      measuresById: { m1: { id: 'm1', staffIds: ['s1', 's2'] } },
+      stavesById: {
+        s1: buildSingleVoiceStaff('s1', ['a', 'g', 'r1']),
+        s2: buildSingleVoiceStaff('s2', ['r2', 'f'], { type: 'bass' }),
+      },
+      entriesById: {
+        a: { id: 'a', type: 'note', value: 'A', duration: 'quarter' },
+        g: { id: 'g', type: 'note', value: 'G', duration: 'quarter' },
+        r1: { id: 'r1', type: 'rest', duration: 'quarter' },
+        r2: { id: 'r2', type: 'rest', duration: 'half' },
+        f: { id: 'f', type: 'note', value: 'F', duration: 'quarter' },
+      },
+      connectorsById: {},
+      connectorOrder: [],
+      tupletsById: {},
+      octaveSpansById: {},
+    };
+  }
+  const both: Selection = {
+    measureIds: [],
+    staffIds: [],
+    entryIds: ['f', 'a', 'g', 'r1', 'r2'],
+  };
+
+  it('pairs one run per adjacent staff, top first', () => {
+    const candidate = crossStaffTupletCandidate(both, buildCrossStaff());
+    expect(candidate).toEqual({
+      measureId: 'm1',
+      runs: [
+        { staffId: 's1', voiceId: 's1-v1', entryIds: ['a', 'g', 'r1'] },
+        { staffId: 's2', voiceId: 's2-v1', entryIds: ['r2', 'f'] },
+      ],
+    });
+  });
+
+  it('rejects unequal totals and a staff with only rests', () => {
+    const structure = buildCrossStaff();
+    expect(
+      crossStaffTupletCandidate(
+        { ...both, entryIds: ['a', 'g', 'r2', 'f'] },
+        structure
+      )
+    ).toBeNull();
+    structure.entriesById.f = { id: 'f', type: 'rest', duration: 'quarter' };
+    expect(crossStaffTupletCandidate(both, structure)).toBeNull();
+  });
+
+  it('links two tuplets and hides the rests; removing undoes both', () => {
+    const structure = buildCrossStaff();
+    const candidate = crossStaffTupletCandidate(both, structure)!;
+    const linked = setCrossStaffTuplet(structure, candidate, '3');
+    const pair = crossStaffTupletOf(linked, candidate);
+    expect(pair).not.toBeNull();
+    expect(pair![0].crossStaffGroupId).toBe(pair![1].crossStaffGroupId);
+    expect(linked.entriesById.r1).toMatchObject({ hidden: true });
+    expect(linked.entriesById.r2).toMatchObject({ hidden: true });
+
+    const removed = setCrossStaffTuplet(linked, candidate, null);
+    expect(removed.tupletsById).toEqual({});
+    expect(removed.entriesById.r1).toMatchObject({ hidden: false });
+  });
+
+  it('keeps rests visible when asked', () => {
+    const structure = buildCrossStaff();
+    const candidate = crossStaffTupletCandidate(both, structure)!;
+    const linked = setCrossStaffTuplet(structure, candidate, '3', {
+      hideRests: false,
+    });
+    expect(linked.entriesById.r1).not.toMatchObject({ hidden: true });
+  });
+
+  it('unlinks the former partner when a new pair takes over one side', () => {
+    const base = buildCrossStaff();
+    const structure: CompositionStructure = {
+      ...base,
+      measuresById: { m1: { id: 'm1', staffIds: ['s1', 's2', 's3'] } },
+      stavesById: {
+        ...base.stavesById,
+        s3: buildSingleVoiceStaff('s3', ['h', 'i', 'r3'], { type: 'bass' }),
+      },
+      entriesById: {
+        ...base.entriesById,
+        h: { id: 'h', type: 'note', value: 'C', duration: 'quarter' },
+        i: { id: 'i', type: 'note', value: 'D', duration: 'quarter' },
+        r3: { id: 'r3', type: 'rest', duration: 'quarter' },
+      },
+    };
+    const upper = crossStaffTupletCandidate(both, structure)!;
+    const linked = setCrossStaffTuplet(structure, upper, '3');
+
+    const lower = crossStaffTupletCandidate(
+      { ...both, entryIds: ['r2', 'f', 'h', 'i', 'r3'] },
+      linked
+    )!;
+    const relinked = setCrossStaffTuplet(linked, lower, '3');
+
+    expect(crossStaffTupletOf(relinked, lower)).not.toBeNull();
+    expect(
+      tupletOfEntries(relinked, ['a', 'g', 'r1'])?.crossStaffGroupId
+    ).toBeNull();
+  });
+
+  it('unlinks when one side no longer matches', () => {
+    const structure = buildCrossStaff();
+    const candidate = crossStaffTupletCandidate(both, structure)!;
+    const linked = setCrossStaffTuplet(structure, candidate, '3');
+    expect(pruneInvalidCrossStaffTuplets(linked)).toBe(linked);
+
+    const reRatioed = pruneInvalidCrossStaffTuplets(
+      setTuplet(linked, ['a', 'g', 'r1'], '5')
+    );
+    expect(crossStaffTupletOf(reRatioed, candidate)).toBeNull();
+    expect(
+      Object.values(reRatioed.tupletsById).every((t) => !t.crossStaffGroupId)
+    ).toBe(true);
   });
 });

@@ -66,6 +66,7 @@ export {
   createOctaveExtensionLineSvg,
   createOctaveLocoLabelSvg,
   createOctaveSignSvg,
+  octaveSignWidth,
 } from './octaveSigns';
 export { createRestSvg, REST_Y_SVG_CENTER, type RestProps } from './rest';
 export { createSharedStemLine } from './sharedStem';

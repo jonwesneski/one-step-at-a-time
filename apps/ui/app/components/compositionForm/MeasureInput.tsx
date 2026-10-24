@@ -1,10 +1,13 @@
 import '@one-step-at-a-time/web-components';
 import { useFormContext } from 'react-hook-form';
-import { AnchoredTabPanel } from './AnchoredTabPanel';
+import { beamGroupCandidate } from './beamGroupHelpers';
 import { ClefEntryInput } from './ClefEntryInput';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
 import { ConnectorInput } from './ConnectorInput';
 import { isConnectableSelection } from './connectorsHelpers';
+import { CrossStaffBeamInput } from './CrossStaffBeamInput';
+import { canShareDynamic, sharedStemCandidate } from './crossStaffHelpers';
+import { DockedTabPanel } from './DockedTabPanel';
 import { EntryEditInput } from './EntryEditInput';
 import { GraceInput } from './GraceInput';
 import { MeasureBasicInput } from './MeasureBasicInput';
@@ -14,10 +17,19 @@ import {
   remainingDuration,
   staffOfEntryId,
 } from './measureCapacityHelpers';
+import { isOctaveSpanMember, octaveSpanCandidate } from './octaveHelpers';
+import { OctaveInput } from './OctaveInput';
+import {
+  phraseSlurCandidate,
+  phraseSlurMemberIds,
+  selectedPhraseSlurId,
+} from './phraseSlurHelpers';
+import { PhraseSlurInput } from './PhraseSlurInput';
+import { SharedStemInput } from './SharedStemInput';
 import { StaffGroupInput } from './StaffGroupInput';
 import { StaffInput } from './StaffInput';
 import { TupletInput } from './TupletInput';
-import { tupletCandidate } from './tupletsHelpers';
+import { crossStaffTupletCandidate, tupletCandidate } from './tupletsHelpers';
 import type { CompositionFormValues } from './types';
 import { isSingleEntrySelection } from './types';
 import {
@@ -58,9 +70,6 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
         ) < -1e-9
     );
   });
-  const containsSelectedStaff = measure.staffIds.some((id) =>
-    session.selection.staffIds.includes(id)
-  );
 
   const selectedStaffIdsInMeasure = measure.staffIds.filter((id) =>
     session.selection.staffIds.includes(id)
@@ -112,8 +121,53 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
   // A tuplet groups entries within one staff — offered by the measure holding
   // that staff.
   const tupletTarget = tupletCandidate(session.selection, structure);
+  const crossStaffTupletTarget = crossStaffTupletCandidate(
+    session.selection,
+    structure
+  );
   const showTuplet =
-    tupletTarget !== null && measure.staffIds.includes(tupletTarget.staffId);
+    (tupletTarget !== null &&
+      measure.staffIds.includes(tupletTarget.staffId)) ||
+    crossStaffTupletTarget?.measureId === measureId;
+
+  // An octave line can cross barlines — offered by the measure holding its
+  // start, like the connector panel.
+  const octaveRange = octaveSpanCandidate(session.selection, structure);
+  const showOctave =
+    octaveRange !== null &&
+    measure.staffIds.some((sid) => {
+      const staff = structure.stavesById[sid];
+      return (
+        staff !== undefined &&
+        staffEntryIds(staff).includes(octaveRange.startEntryId)
+      );
+    });
+
+  const beamCandidate = beamGroupCandidate(session.selection, structure);
+  const showCrossStaffBeam = beamCandidate?.measureId === measureId;
+  const measureHoldsEntry = (entryId: string) =>
+    measure.staffIds.some((sid) => {
+      const staff = structure.stavesById[sid];
+      return staff !== undefined && staffEntryIds(staff).includes(entryId);
+    });
+
+  // A phrase slur crosses staves and barlines — offered by the measure
+  // holding its first selected note (or, to remove an existing phrase, its
+  // first selected member).
+  const phraseCandidate = phraseSlurCandidate(session.selection, structure);
+  const existingPhraseId = selectedPhraseSlurId(session.selection, structure);
+  const phraseAnchorId =
+    phraseCandidate?.startEntryId ??
+    (existingPhraseId
+      ? session.selection.entryIds.find((id) =>
+          phraseSlurMemberIds(structure, existingPhraseId).includes(id)
+        )
+      : undefined);
+  const showPhraseSlur =
+    phraseAnchorId !== undefined && measureHoldsEntry(phraseAnchorId);
+
+  const sharedStemPair = sharedStemCandidate(session.selection, structure);
+  const showSharedStem = sharedStemPair?.measureId === measureId;
 
   const tabs = [];
   if (isMeasureSelected) {
@@ -138,6 +192,31 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           staffIds={selectedStaffIdsInMeasure}
         />
       ),
+    });
+  }
+  if (showCrossStaffBeam && beamCandidate) {
+    tabs.push({
+      label: 'Cross-staff Beam',
+      content: (
+        <CrossStaffBeamInput candidate={beamCandidate} structure={structure} />
+      ),
+    });
+  }
+  if (showPhraseSlur) {
+    tabs.push({
+      label: 'Phrase Slur',
+      content: (
+        <PhraseSlurInput
+          candidate={phraseCandidate}
+          existingSlurGroupId={existingPhraseId}
+        />
+      ),
+    });
+  }
+  if (showSharedStem && sharedStemPair) {
+    tabs.push({
+      label: 'Shared Stem',
+      content: <SharedStemInput pair={sharedStemPair} structure={structure} />,
     });
   }
   if (connectorEndpoints) {
@@ -171,6 +250,8 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           staffId={editableEntryVoiceContext?.staff.id ?? null}
           voiceOrder={editableEntryVoiceContext?.staff.voiceOrder ?? []}
           currentVoiceId={editableEntryVoiceContext?.voiceId ?? null}
+          canShareDynamic={canShareDynamic(structure, editableEntry.id)}
+          canTakeLoco={!isOctaveSpanMember(structure, editableEntry.id)}
         />
       ),
     });
@@ -180,6 +261,12 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
         content: <GraceInput entry={editableEntry} />,
       });
     }
+  }
+  if (showOctave && octaveRange) {
+    tabs.push({
+      label: 'Octave',
+      content: <OctaveInput range={octaveRange} structure={structure} />,
+    });
   }
   if (showTuplet) {
     tabs.push({
@@ -193,15 +280,7 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
       ref={(el: HTMLElement | null) => registerMeasureRef(measureId, el)}
       className={`cursor-pointer rounded transition-shadow ${
         isMeasureSelected ? 'rainbow-selected' : ''
-      } ${isOverfull ? 'outline-2 outline-red-500' : ''} ${
-        isMeasureSelected ||
-        containsSelectedStaff ||
-        connectorEndpoints ||
-        editableEntry ||
-        showTuplet
-          ? 'pb-10'
-          : ''
-      }`}
+      } ${isOverfull ? 'outline-2 outline-red-500' : ''}`}
       onClick={() => selectMeasure(measureId)}
     >
       {isOverfull && (
@@ -222,7 +301,7 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           timeSignature={timeSignature}
         />
       ))}
-      {tabs.length > 0 && <AnchoredTabPanel tabs={tabs} />}
+      {tabs.length > 0 && <DockedTabPanel tabs={tabs} />}
     </music-measure>
   );
 }

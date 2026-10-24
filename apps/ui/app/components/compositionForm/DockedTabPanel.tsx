@@ -1,15 +1,15 @@
 import { useCompositionFormSession } from './CompositionFormSessionContext';
 
-interface AnchoredTabPanelTab {
+interface DockedTabPanelTab {
   label: string;
   content: React.ReactNode;
 }
 
-interface AnchoredTabPanelProps {
-  tabs: AnchoredTabPanelTab[];
+interface DockedTabPanelProps {
+  tabs: DockedTabPanelTab[];
 }
 
-export function AnchoredTabPanel({ tabs }: AnchoredTabPanelProps) {
+export function DockedTabPanel({ tabs }: DockedTabPanelProps) {
   const { session, setSession } = useCompositionFormSession();
 
   const activeLabel = tabs.some((t) => t.label === session.entryPanelTab)
@@ -19,15 +19,15 @@ export function AnchoredTabPanel({ tabs }: AnchoredTabPanelProps) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 w-full h-[25vh] md:absolute md:bottom-auto md:top-full md:left-1/2 md:h-auto md:w-72 md:-translate-x-1/2 md:mt-1 z-20 shadow-lg bg-white flex flex-col"
+      className="fixed bottom-0 left-0 w-full h-[25vh] md:h-auto md:max-h-[40vh] z-20 bg-white shadow-lg border-t border-zinc-200 flex flex-col"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex border-b border-zinc-200 shrink-0">
+      <div className="flex shrink-0 overflow-x-auto border-b border-zinc-200">
         {tabs.map((t) => (
           <button
             key={t.label}
             type="button"
-            className={`px-4 py-2 text-sm cursor-pointer bg-transparent border-0 ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm cursor-pointer bg-transparent border-0 ${
               t.label === activeTab.label
                 ? 'border-b-2 border-blue-600 text-blue-600 font-medium'
                 : 'text-zinc-500 hover:text-zinc-700'
@@ -38,7 +38,7 @@ export function AnchoredTabPanel({ tabs }: AnchoredTabPanelProps) {
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-auto">{activeTab.content}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto">{activeTab.content}</div>
     </div>
   );
 }

@@ -7,9 +7,9 @@ import { AddChordInput } from './AddChordInput';
 import { AddClefInput } from './AddClefInput';
 import { AddNoteInput } from './AddNoteInput';
 import { AddRestInput } from './AddRestInput';
-import { AnchoredTabPanel } from './AnchoredTabPanel';
 import { effectiveClefOfEntry } from './clefsHelpers';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
+import { DockedTabPanel } from './DockedTabPanel';
 import { serializeGrace } from './graceHelpers';
 import { remainingDuration } from './measureCapacityHelpers';
 import { resolveTupletRuns } from './tupletsHelpers';
@@ -21,6 +21,7 @@ import type {
 import {
   useCompositionStructure,
   useConnectorAttributes,
+  useOctaveAttributes,
 } from './useCompositionStructure';
 import { useEntryDrag } from './useEntryDrag';
 import { VoiceInput } from './VoiceInput';
@@ -50,6 +51,7 @@ export function StaffInput({
     addEntry,
   } = useCompositionFormSession();
   const connectorAttrs = useConnectorAttributes();
+  const octaveAttrs = useOctaveAttributes();
   const structure = useCompositionStructure();
   const { onEntryPointerDown } = useEntryDrag();
 
@@ -125,9 +127,14 @@ export function StaffInput({
         slur: connector?.slur,
         crescendo: connector?.crescendo,
         decrescendo: connector?.decrescendo,
-        id: connector?.id,
         for: connector?.for,
         dynamic: entry.dynamic ?? undefined,
+        'dynamic-shared': entry.dynamicShared || undefined,
+        'stem-direction': entry.stemDirection ?? undefined,
+        'beam-group': entry.beamGroupId ?? undefined,
+        'shared-stem-for': entry.sharedStemWithEntryId ?? undefined,
+        'slur-group': entry.slurGroupId ?? undefined,
+        ...octaveAttrs.get(entry.id),
         articulation: entry.articulation ?? undefined,
         stress: entry.stress ?? undefined,
         ...serializeGrace(entry.grace),
@@ -141,6 +148,7 @@ export function StaffInput({
         return (
           <music-note
             key={entry.id}
+            id={entry.id}
             ref={setRef}
             note={entry.value}
             octave={entry.octave ?? undefined}
@@ -152,6 +160,7 @@ export function StaffInput({
       return (
         <music-chord
           key={entry.id}
+          id={entry.id}
           ref={setRef}
           duration={entry.duration}
           {...marks}
@@ -175,8 +184,12 @@ export function StaffInput({
       return (
         <music-rest
           key={entry.id}
+          id={entry.id}
           ref={(el: HTMLElement | null) => registerEntryRef(entry.id, el)}
           duration={entry.duration}
+          hidden={entry.hidden || undefined}
+          beam-group={entry.beamGroupId ?? undefined}
+          rest-staff-side={entry.restStaffSide ?? undefined}
           className={entryClass}
           onClick={handleEntryClick}
           onPointerDown={handleEntryPointerDown}
@@ -200,9 +213,14 @@ export function StaffInput({
       if (run.tupletId === null) {
         return runNodes;
       }
-      const ratio = structure.tupletsById[run.tupletId]?.ratio;
+      const tuplet = structure.tupletsById[run.tupletId];
       return (
-        <music-tuplet key={run.tupletId} ratio={ratio}>
+        <music-tuplet
+          key={run.tupletId}
+          ratio={tuplet?.ratio}
+          placement={tuplet?.placement ?? undefined}
+          tuplet-group={tuplet?.crossStaffGroupId ?? undefined}
+        >
           {runNodes}
         </music-tuplet>
       );
@@ -226,7 +244,7 @@ export function StaffInput({
         {voiceNodes}
       </music-staff>
       {isSelected && (
-        <AnchoredTabPanel
+        <DockedTabPanel
           tabs={[
             {
               label: 'Note',

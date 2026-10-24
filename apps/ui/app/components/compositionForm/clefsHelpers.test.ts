@@ -21,6 +21,7 @@ function structureWith(entryIds: string[]): CompositionStructure {
     },
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }
@@ -75,6 +76,7 @@ describe('effectiveClefOfEntry', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     expect(effectiveClefOfEntry(structure, 'n3')).toBe('treble');
@@ -109,6 +111,7 @@ describe('effectiveClefOfEntry', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     expect(effectiveClefOfEntry(structure, 'n4')).toBe('bass');

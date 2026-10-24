@@ -1,6 +1,7 @@
 import { IRestElement } from '../types/elements';
 import { DurationType, RestStaffSide } from '../types/theory';
 import { MUSIC_REST, NOTE_EVENTS } from '../utils/consts';
+import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 import { parseRestStaffSide } from '../utils/parsers';
 import { createRestSvg } from '../utils/svgCreator/rest';
 
@@ -68,6 +69,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     connectedCallback(): void {
+      upgradeShadowedProperties(this);
       this.render();
     }
 

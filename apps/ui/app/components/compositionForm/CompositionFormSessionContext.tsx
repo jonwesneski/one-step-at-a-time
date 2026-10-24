@@ -100,6 +100,13 @@ type CompositionFormSessionContextValue = {
     family: ConnectorKind[]
   ) => void;
   setTuplet: (entryIds: string[], ratio: TupletRatio | null) => void;
+  // Records `transform(current)` as one undo step; a transform that returns
+  // its input unchanged records nothing. For feature mutators that are a
+  // single pure structure-in/structure-out helper, so each doesn't need its
+  // own `on*` prop threaded through CompositionInput.
+  editStructure: (
+    transform: (structure: CompositionStructure) => CompositionStructure
+  ) => void;
   requestTimeSignatureChange: (request: PendingTimeSignatureChange) => void;
   confirmTimeSignatureChange: (rewrite: boolean) => void;
   cancelTimeSignatureChange: () => void;
@@ -277,6 +284,17 @@ export function CompositionFormSessionProvider({
     [setSession]
   );
 
+  const editStructure = useCallback(
+    (transform: (structure: CompositionStructure) => CompositionStructure) => {
+      const current = getStructure();
+      const next = transform(current);
+      if (next !== current) {
+        recordStructure(next);
+      }
+    },
+    [getStructure, recordStructure]
+  );
+
   const deleteSelected = useCallback(() => {
     if (isSelectionEmpty(session.selection)) return;
     recordStructure(
@@ -365,6 +383,7 @@ export function CompositionFormSessionProvider({
         reorderEntry: onReorderEntry,
         setConnector: onSetConnector,
         setTuplet: onSetTuplet,
+        editStructure,
         requestTimeSignatureChange,
         confirmTimeSignatureChange,
         cancelTimeSignatureChange,

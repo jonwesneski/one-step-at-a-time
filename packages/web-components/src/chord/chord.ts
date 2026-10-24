@@ -82,6 +82,7 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
+import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -205,7 +206,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemUp = true;
     #stemExtension = 0;
     #trillSignExtraLift = 0;
-    #articulationAnchorsToStem = false;
+    #articulationStemAnchorBeamLevels: number | null = null;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -300,14 +301,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
-    get articulationAnchorsToStem(): boolean {
-      return this.#articulationAnchorsToStem;
+    get articulationStemAnchorBeamLevels(): number | null {
+      return this.#articulationStemAnchorBeamLevels;
     }
-    set articulationAnchorsToStem(v: boolean) {
-      if (v === this.#articulationAnchorsToStem) {
+    set articulationStemAnchorBeamLevels(v: number | null) {
+      if (v === this.#articulationStemAnchorBeamLevels) {
         return;
       }
-      this.#articulationAnchorsToStem = v;
+      this.#articulationStemAnchorBeamLevels = v;
       this.#scheduleRender();
     }
 
@@ -946,6 +947,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     connectedCallback(): void {
+      upgradeShadowedProperties(this);
       this.render();
       this.#childObserver = new MutationObserver(() => {
         this.#scheduleRender();
@@ -1224,7 +1226,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteAccidentals: this.#noteAccidentals,
           articulation: this.articulation,
           stress: this.stress,
-          articulationAnchorsToStem: this.#articulationAnchorsToStem,
+          articulationStemAnchorBeamLevels:
+            this.#articulationStemAnchorBeamLevels,
           graceNotes: this.#buildGraceDescriptors(this.notes),
           graceType: this.graceType,
           graceDuration: this.graceDuration,

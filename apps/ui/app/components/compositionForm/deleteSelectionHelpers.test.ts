@@ -40,6 +40,7 @@ function buildStructure(): CompositionStructure {
       c2: { id: 'c2', kind: 'slur', startEntryId: 'e4', endEntryId: 'e6' },
     },
     connectorOrder: ['c1', 'c2'],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }
@@ -157,6 +158,7 @@ describe('removeSelectionFromStructure', () => {
         e5: tupleted('e5', 't1'),
         e6: tupleted('e6', 't1'),
       },
+      octaveSpansById: {},
       tupletsById: { t1: { id: 't1', ratio: '3' } },
     };
 
@@ -181,6 +183,7 @@ describe('removeSelectionFromStructure', () => {
         e5: tupleted('e5', 't1'),
         e6: tupleted('e6', 't1'),
       },
+      octaveSpansById: {},
       tupletsById: { t1: { id: 't1', ratio: '3' } },
     };
 
@@ -239,6 +242,7 @@ describe('removeSelectionFromStructure', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
 

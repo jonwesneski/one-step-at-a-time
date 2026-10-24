@@ -77,6 +77,7 @@ import {
 } from '../utils';
 import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES, STAFF_TAGS } from '../utils/consts';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -195,7 +196,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemUp = true;
     #stemExtension = 0;
     #trillSignExtraLift = 0;
-    #articulationAnchorsToStem = false;
+    #articulationStemAnchorBeamLevels: number | null = null;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -287,14 +288,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
-    get articulationAnchorsToStem(): boolean {
-      return this.#articulationAnchorsToStem;
+    get articulationStemAnchorBeamLevels(): number | null {
+      return this.#articulationStemAnchorBeamLevels;
     }
-    set articulationAnchorsToStem(v: boolean) {
-      if (v === this.#articulationAnchorsToStem) {
+    set articulationStemAnchorBeamLevels(v: number | null) {
+      if (v === this.#articulationStemAnchorBeamLevels) {
         return;
       }
-      this.#articulationAnchorsToStem = v;
+      this.#articulationStemAnchorBeamLevels = v;
       this.#scheduleRender();
     }
 
@@ -935,6 +936,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     connectedCallback(): void {
+      upgradeShadowedProperties(this);
       this.render();
     }
 
@@ -1223,7 +1225,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             : null,
         staffY: this.#staffY,
         trillSignExtraLift: this.#trillSignExtraLift,
-        articulationAnchorsToStem: this.#articulationAnchorsToStem,
+        articulationStemAnchorBeamLevels:
+          this.#articulationStemAnchorBeamLevels,
       });
 
       if (this.#staffY !== null) {

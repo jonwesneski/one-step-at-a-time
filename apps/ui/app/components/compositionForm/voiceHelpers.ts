@@ -1,4 +1,6 @@
 import { pruneConnectorsForEntries } from './connectorsHelpers';
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
+import { octaveSpansWithoutEntries } from './octaveHelpers';
 import type {
   CompositionStructure,
   NormalizedStaff,
@@ -120,13 +122,16 @@ export function removeVoiceFromStaff(
     ])
   );
 
-  return pruneConnectorsForEntries(
-    {
-      ...structure,
-      stavesById,
-      entriesById,
-      tupletsById,
-    },
-    removedEntryIds
+  return pruneInvalidNotationLinks(
+    pruneConnectorsForEntries(
+      {
+        ...structure,
+        stavesById,
+        entriesById,
+        tupletsById,
+        octaveSpansById: octaveSpansWithoutEntries(structure, removedEntryIds),
+      },
+      removedEntryIds
+    )
   );
 }

@@ -59,6 +59,7 @@ describe('addVoiceToStaff', () => {
       entriesById: {},
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
   }
@@ -107,6 +108,7 @@ describe('removeVoiceFromStaff', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
   }
@@ -183,6 +185,7 @@ describe('removeVoiceFromStaff', () => {
       entriesById: { e1: note('e1') },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     const next = removeVoiceFromStaff(s, 's1', 's1-v1');

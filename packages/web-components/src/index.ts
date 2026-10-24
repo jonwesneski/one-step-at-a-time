@@ -1,3 +1,4 @@
+import './arpeggio';
 import './chord';
 import './clef';
 import './composition';
@@ -6,7 +7,6 @@ import './staff'; // order of import matters for some reason, otherwise <note> c
 import './staffGuitarTab';
 import './staffVocal';
 import './tuplet';
-import './arpeggio';
 import './voice';
 
 import './guitarNote';
@@ -41,10 +41,16 @@ export {
   GRACE_TYPES,
   MODES,
   NOTES,
+  OCTAVE_CONTINUATION_MODES,
+  OCTAVE_DISPLAY_MODES,
+  OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
+  REST_STAFF_SIDES,
   STAFF_GROUPS,
+  STEM_DIRECTIONS,
   STRESSES,
   TIMES,
+  TUPLET_PLACEMENTS,
   TUPLET_RATIOS,
   VOICES,
 } from './utils/consts';

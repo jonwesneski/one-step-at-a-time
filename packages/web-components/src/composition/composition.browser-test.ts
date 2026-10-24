@@ -8,7 +8,12 @@ import {
   segmentIntersectsRect,
   sliceConvexPolygon,
 } from '../rules/connectorPlacementRules';
-import type { Note, Octave } from '../types/theory';
+import type {
+  Note,
+  Octave,
+  OctaveDisplayMode,
+  OctaveShiftAmount,
+} from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_COMPOSITION,
@@ -2280,7 +2285,9 @@ test.describe('octave sign continuation across measures', () => {
   async function buildOctaveSpanAcrossMeasures(
     page: Page,
     hostWidth: number,
-    octaveContinuation?: 'bracketed' | 'line-only'
+    octaveContinuation?: 'bracketed' | 'line-only',
+    octaveShift: OctaveShiftAmount = '8va',
+    octaveMode: OctaveDisplayMode = 'sign'
   ): Promise<void> {
     await page.evaluate(
       ({
@@ -2290,6 +2297,8 @@ test.describe('octave sign continuation across measures', () => {
         noteTag,
         continuation,
         hostWidthPx,
+        shift,
+        mode,
       }) => {
         const host = document.getElementById('host');
         if (host === null) {
@@ -2317,7 +2326,8 @@ test.describe('octave sign continuation across measures', () => {
         spanStart.setAttribute('note', 'F');
         spanStart.setAttribute('octave', '5');
         spanStart.setAttribute('duration', 'quarter');
-        spanStart.setAttribute('octave-shift', '8va');
+        spanStart.setAttribute('octave-shift', shift);
+        spanStart.setAttribute('octave-mode', mode);
         if (continuation) {
           spanStart.setAttribute('octave-continuation', continuation);
         }
@@ -2355,6 +2365,8 @@ test.describe('octave sign continuation across measures', () => {
         noteTag: MUSIC_NOTE,
         continuation: octaveContinuation,
         hostWidthPx: hostWidth,
+        shift: octaveShift,
+        mode: octaveMode,
       }
     );
     await waitForRedrawCycle(page);
@@ -2386,6 +2398,10 @@ test.describe('octave sign continuation across measures', () => {
       const signs = Array.from(
         overlay.querySelectorAll('g.octave-continuation-sign')
       ) as SVGGElement[];
+      const signLabel = signs[0]?.querySelector('.octave-sign-col-label');
+      const rightParenthesis = signs[0]?.querySelectorAll(
+        '.octave-continuation-parenthesis'
+      )[1];
       const staves = Array.from(
         composition.querySelectorAll('music-staff')
       ) as HTMLElement[];
@@ -2401,6 +2417,12 @@ test.describe('octave sign continuation across measures', () => {
           signs[0]?.querySelectorAll('.octave-sign-numeral').length ?? 0,
         signRight: signs[0]
           ? signs[0].getBoundingClientRect().right - wrapperRect.left
+          : null,
+        colLabelRight: signLabel
+          ? signLabel.getBoundingClientRect().right - wrapperRect.left
+          : null,
+        rightParenthesisLeft: rightParenthesis
+          ? rightParenthesis.getBoundingClientRect().left - wrapperRect.left
           : null,
         lineLeft: lines[0]
           ? lines[0].getBoundingClientRect().left - wrapperRect.left
@@ -2451,6 +2473,29 @@ test.describe('octave sign continuation across measures', () => {
     expect(result.lineLeft).not.toBeNull();
     expect(result.signRight).not.toBeNull();
     expect(result.lineLeft as number).toBeGreaterThan(
+      result.signRight as number
+    );
+  });
+
+  test('a restated col-mode label sits fully inside its parentheses, and the line resumes after it', async ({
+    page,
+  }) => {
+    // The stop note is the new row's first note, closer to the row start
+    // than this long label reaches.
+    await buildOctaveSpanAcrossMeasures(page, 220, undefined, '15mb', 'col');
+    const result = await readOctaveContinuationOverlay(page);
+    expect(result.signCount).toBe(1);
+    expect(result.colLabelRight).not.toBeNull();
+    expect(result.rightParenthesisLeft).not.toBeNull();
+    expect(result.rightParenthesisLeft as number).toBeGreaterThanOrEqual(
+      result.colLabelRight as number
+    );
+    expect(result.lineLeft).not.toBeNull();
+    expect(result.lineLeft as number).toBeGreaterThan(
+      result.signRight as number
+    );
+    expect(result.cornerLeft).not.toBeNull();
+    expect(result.cornerLeft as number).toBeGreaterThan(
       result.signRight as number
     );
   });

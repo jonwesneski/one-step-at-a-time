@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   canTie,
   connectorBetween,
-  flattenEntryOrder,
   isConnectableSelection,
   pruneBrokenTies,
   pruneConnectorsForEntries,
@@ -10,6 +9,7 @@ import {
   resolveConnectorAttributes,
   upsertConnector,
 } from './connectorsHelpers';
+import { flattenEntryOrder } from './entryLocationHelpers';
 import {
   buildMultiVoiceStaff,
   buildSingleVoiceStaff,
@@ -40,6 +40,7 @@ function buildStructure(): CompositionStructure {
     },
     connectorsById: {},
     connectorOrder: [],
+    octaveSpansById: {},
     tupletsById: {},
   };
 }
@@ -116,6 +117,7 @@ describe('isConnectableSelection', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     expect(
@@ -227,6 +229,7 @@ describe('canTie', () => {
       },
       connectorsById: {},
       connectorOrder: [],
+      octaveSpansById: {},
       tupletsById: {},
     };
     // e1 is voice 1's last note; e4 is voice 2's first note in the next

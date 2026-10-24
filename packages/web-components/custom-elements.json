@@ -225,12 +225,12 @@
             },
             {
               "kind": "field",
-              "name": "#articulationAnchorsToStem",
+              "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               },
-              "default": "false"
+              "default": "null"
             },
             {
               "kind": "field",
@@ -385,9 +385,9 @@
             },
             {
               "kind": "field",
-              "name": "articulationAnchorsToStem",
+              "name": "articulationStemAnchorBeamLevels",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               }
             },
             {
@@ -2128,6 +2128,24 @@
             },
             {
               "kind": "method",
+              "name": "#staffLineBands",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ top: number; bottom: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly StaffElementBaseType[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#restHuggingTargetY",
               "privacy": "private",
               "return": {
@@ -2756,12 +2774,12 @@
             },
             {
               "kind": "field",
-              "name": "#articulationAnchorsToStem",
+              "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               },
-              "default": "false"
+              "default": "null"
             },
             {
               "kind": "field",
@@ -2906,9 +2924,9 @@
             },
             {
               "kind": "field",
-              "name": "articulationAnchorsToStem",
+              "name": "articulationStemAnchorBeamLevels",
               "type": {
-                "text": "boolean"
+                "text": "number | null"
               }
             },
             {

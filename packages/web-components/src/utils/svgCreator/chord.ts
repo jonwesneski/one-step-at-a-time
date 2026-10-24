@@ -92,7 +92,7 @@ export const createChordSvg = ({
   noteAccidentals,
   articulation,
   stress,
-  articulationAnchorsToStem = false,
+  articulationStemAnchorBeamLevels = null,
   graceNotes,
   graceType = 'acciaccatura',
   graceDuration = null,
@@ -404,14 +404,16 @@ export const createChordSvg = ({
     stemUp,
     noteHeadCenterX,
     noteHeadCenterY,
-    stemAnchor: articulationAnchorsToStem
-      ? stemBeamJunctionPosition(
-          stemUp,
-          duration,
-          noFlags,
-          effectiveStemExtension
-        )
-      : null,
+    stemAnchor:
+      articulationStemAnchorBeamLevels !== null
+        ? stemBeamJunctionPosition(
+            stemUp,
+            duration,
+            noFlags,
+            effectiveStemExtension,
+            articulationStemAnchorBeamLevels
+          )
+        : null,
   });
   if (articulationMarks) {
     const wrapper = document.createElementNS(SVG_NS, 'svg');

@@ -134,6 +134,7 @@ import {
   createTimeSignatureSvg,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  octaveSignWidth,
   TRILL_FINISH_HEAD_RY,
 } from './utils';
 import {
@@ -185,7 +186,6 @@ import {
   OCTAVE_SIGN_ABOVE_STAFF_Y,
   OCTAVE_SIGN_BELOW_STAFF_Y,
   OCTAVE_SIGN_CORNER_PX,
-  OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
@@ -3184,10 +3184,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       state
     )) {
       const startNoteX = state.noteXPositions.get(span.startIndex) ?? 0;
-      const signX =
-        startNoteX -
-        OCTAVE_SIGN_LEADING_GAP_PX -
-        OCTAVE_SIGN_ESTIMATED_WIDTH_PX;
+      const signWidth = octaveSignWidth(span.amount, span.mode);
+      const signX = startNoteX - OCTAVE_SIGN_LEADING_GAP_PX - signWidth;
       const stopNoteX = state.noteXPositions.get(span.stopIndex) ?? startNoteX;
       // + OCTAVE_SIGN_CORNER_PX accounts for the corner glyph's own foot
       // stroke, which draws backward from this anchor — without it, the
@@ -3213,7 +3211,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       );
       container.appendChild(
         createOctaveExtensionLineSvg(
-          signX + OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
+          signX + signWidth,
           continues ? width : endX,
           y
         )

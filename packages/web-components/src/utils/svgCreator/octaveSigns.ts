@@ -7,8 +7,8 @@ import {
   OCTAVE_CONTINUATION_PARENTHESIS_STROKE_WIDTH,
   OCTAVE_SIGN_CHAR_WIDTH_PX,
   OCTAVE_SIGN_CORNER_PX,
-  OCTAVE_SIGN_ESTIMATED_WIDTH_PX,
   OCTAVE_SIGN_FONT_SIZE_PX,
+  OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX,
   OCTAVE_SIGN_PROSE_FONT_SIZE_PX,
   OCTAVE_SIGN_SUFFIX_SCALE,
 } from '../notationDimensions';
@@ -33,6 +33,24 @@ function octaveColModeLabel(amount: OctaveShiftAmount): string {
   return amount.endsWith('a')
     ? `col ${numeral}${raiseSuffix}`
     : `col ${numeral}${raiseSuffix} bassa`;
+}
+
+/**
+ * Estimated rendered width (px) of the label createOctaveSignSvg draws for
+ * this amount and mode, so callers can place what follows it without
+ * measuring text.
+ */
+export function octaveSignWidth(
+  amount: OctaveShiftAmount,
+  mode: OctaveDisplayMode = 'sign'
+): number {
+  if (mode === 'col') {
+    return octaveColModeLabel(amount).length * OCTAVE_SIGN_PROSE_CHAR_WIDTH_PX;
+  }
+  return (
+    OCTAVE_SIGN_CHAR_WIDTH_PX *
+    (octaveSignNumeral(amount).length + 2 * OCTAVE_SIGN_SUFFIX_SCALE)
+  );
 }
 
 /**
@@ -222,9 +240,10 @@ export function createOctaveContinuationSignSvg(
   const wrapper = document.createElementNS(SVG_NS, 'g');
   wrapper.classList.add('octave-continuation-sign');
 
+  const signWidth = octaveSignWidth(amount, mode);
   if (!bracketed) {
     wrapper.appendChild(createOctaveSignSvg(amount, leftX, y, mode));
-    return { element: wrapper, width: OCTAVE_SIGN_ESTIMATED_WIDTH_PX };
+    return { element: wrapper, width: signWidth };
   }
 
   const centerY = y - OCTAVE_SIGN_FONT_SIZE_PX / 2;
@@ -238,7 +257,7 @@ export function createOctaveContinuationSignSvg(
     OCTAVE_CONTINUATION_PARENTHESIS_GAP_PX;
 
   wrapper.appendChild(createOctaveSignSvg(amount, x, y, mode));
-  x += OCTAVE_SIGN_ESTIMATED_WIDTH_PX + OCTAVE_CONTINUATION_PARENTHESIS_GAP_PX;
+  x += signWidth + OCTAVE_CONTINUATION_PARENTHESIS_GAP_PX;
 
   appendOctaveParenthesis(wrapper, x, centerY, halfHeight, 'right');
   x += OCTAVE_CONTINUATION_PARENTHESIS_STROKE_WIDTH;

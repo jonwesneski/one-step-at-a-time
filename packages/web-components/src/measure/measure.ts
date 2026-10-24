@@ -126,9 +126,8 @@ import {
   BEAM_THICKNESS_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
-  BRACKET_EXTRA_HEIGHT_PX,
+  BRACKET_LINE_OVERHANG_PX,
   BRACKET_STAFF_GAP_PX,
-  BRACKET_TOP_OFFSET_PX,
   BRACKET_WIDTH_PX,
   DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_BASELINE_Y,
@@ -146,11 +145,9 @@ import {
   SHARED_STEM_MISALIGNMENT_WARN_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
   STAFF_BOTTOM_LINE_Y,
-  STAFF_BOTTOM_MARGIN,
   STAFF_LABEL_FONT_SIZE,
   STAFF_LABEL_LEFT_MARGIN_PX,
   STAFF_LABEL_WIDTH_PX,
-  STAFF_LINE_START,
   STEM_OVERLAP_PX,
   TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_BEAM_GAP_PX,
@@ -163,28 +160,11 @@ import {
   VerticalSpaceReservations,
 } from '../utils/verticalSpace';
 
-// Per-staff vertical footprint within a measure's stacked staff children,
-// used both by the plain full-measure barline (#updateConnectorVisibility)
-// and group connectors (brace/bracket) to size/position their vertical
-// span. A staff's own slot height is derived from its actual rendered
-// height (staffSlotHeightPx) rather than assumed uniform, since staff types
-// differ (e.g. a 6-line guitar-tab staff vs. a 5-line classical staff) —
-// tied to the real staff geometry, plus a small empirically-measured +2
-// nudge closing a visible gap the clean derivation alone didn't fully
-// account for. STAFF_SLOT_GAP_PX (the fixed gap between staves) and
-// CONNECTOR_TOP_PX (a separate, still-empirical top-offset constant) don't
-// depend on staff height and stay as plain constants.
-const STAFF_SLOT_GAP_PX = STAFF_BOTTOM_MARGIN + STAFF_LINE_START - 2;
-// Recalibrated (was 51) when the measure-number stub before <slot> in the
-// template changed from a non-empty inline element (which occupied ~18px of
-// real flow height, quietly shifting every slotted staff down by that much)
-// to an always-absolutely-positioned one (which occupies none). Every
-// staff-relative position below (barline, brace/bracket, staff labels,
-// measure numbers) is calibrated against where the staff *actually* renders,
-// not a fixed assumption, so this had to move by the same 18px the staff
-// did — verified empirically against the full browser-test suite, not
-// derived analytically.
-const CONNECTOR_TOP_PX = 33;
+// Where a measure number's baseline anchor sits, measured down from the
+// measure's top — a fixed spot above the measure, not tied to the staff lines
+// (the system barline, brace/bracket and staff labels are, via
+// #staffLineBands).
+const MEASURE_NUMBER_TOP_PX = 33;
 
 // Beat offsets are sums of exact binary fractions, apart from tuplet
 // ratios; this only absorbs floating-point noise.
@@ -214,26 +194,6 @@ type MeasureDynamicsPlan = {
   }[];
   markings: { marking: DynamicMarking; centerX: number; y: number }[];
 };
-
-function staffSlotHeightPx(staff: StaffElementBaseType): number {
-  return staff.staffHeight + 2;
-}
-
-// Each staff's slot top, measured down from CONNECTOR_TOP_PX. A staff's
-// vertical-space margins (its own headroom, or its row alignment — see
-// utils/verticalSpace.ts) move its lines, so they're folded in here rather
-// than assumed zero.
-function staffSlotTopsPx(staves: readonly StaffElementBaseType[]): number[] {
-  let offset = 0;
-  return staves.map((staff) => {
-    const marginTop = parseFloat(staff.style.marginTop) || 0;
-    const marginBottom = parseFloat(staff.style.marginBottom) || 0;
-    const slotTop = offset + marginTop;
-    offset +=
-      marginTop + staffSlotHeightPx(staff) + STAFF_SLOT_GAP_PX + marginBottom;
-    return slotTop;
-  });
-}
 
 // Records the margin one gap side of `staff` needs to make up `deficit` px
 // of missing gap (negative: to spare). Margin-independent: a margin already
@@ -706,8 +666,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           /* A one-column grid so staves' vertical-space margins add up
              instead of collapsing: the first staff's top margin would
              otherwise escape through this box, and two staves' facing
-             margins would share space each needs. staffSlotTopsPx relies on
-             this. Not a flex column — a staff's own flex basis would become
+             margins would share space each needs. Not a flex column — a staff's own flex basis would become
              its height. */
           .measure-content {
             display: grid;
@@ -740,7 +699,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           .measure-numbers > * {
             position: absolute;
             left: 0;
-            top: ${CONNECTOR_TOP_PX - MEASURE_NUMBER_BOTTOM_MARGIN_PX}px;
+            top: ${MEASURE_NUMBER_TOP_PX - MEASURE_NUMBER_BOTTOM_MARGIN_PX}px;
             font-size: ${MEASURE_NUMBER_FONT_SIZE}px;
             transform: translateY(-100%);
             white-space: nowrap;
@@ -750,7 +709,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           .staff-connector {
             position: absolute;
             left: 0;
-            top: ${CONNECTOR_TOP_PX}px;
             width: 1px;
             background-color: currentColor;
             z-index: 5;
@@ -892,7 +850,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #firstInRow: boolean | null = null;
 
     // The barline, brace/bracket and staff labels, positioned against each
-    // staff's real slot (staffSlotTopsPx).
+    // staff's real lines (#staffLineBands).
     #layoutSystemDecorations() {
       if (this.#firstInRow === null) {
         return;
@@ -903,13 +861,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         isStaffNodeName(n.nodeName)
       ) as StaffElementBaseType[];
       if (staffConnector && staves.length > 0) {
-        const slotTops = staffSlotTopsPx(staves);
-        const lastIndex = staves.length - 1;
-        staffConnector.style.top = `${CONNECTOR_TOP_PX + slotTops[0]}px`;
+        const bands = this.#staffLineBands(staves);
+        const top = bands[0].top;
+        staffConnector.style.top = `${top}px`;
         staffConnector.style.height = `${
-          slotTops[lastIndex] +
-          staffSlotHeightPx(staves[lastIndex]) -
-          slotTops[0]
+          bands[bands.length - 1].bottom - top
         }px`;
       }
       this.#renderGroupConnectors(this.#firstInRow);
@@ -1155,6 +1111,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ?.querySelector('.staff-container')
           ?.getBoundingClientRect() ?? staff.getBoundingClientRect()
       );
+    }
+
+    // Each staff's outer lines (top of its top line, bottom of its bottom
+    // line) in this host's absolute-positioning frame — its padding box,
+    // since :host is position: relative.
+    #staffLineBands(
+      staves: readonly StaffElementBaseType[]
+    ): { top: number; bottom: number }[] {
+      const origin = this.getBoundingClientRect().top + this.clientTop;
+      return staves.map((staff) => {
+        const rect = this.#staffContainerRect(staff);
+        return { top: rect.top - origin, bottom: rect.bottom - origin };
+      });
     }
 
     // Resolves a beam-hugging rest's real target Y (measure-relative,
@@ -2466,6 +2435,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           resolvedLine
         );
         const layerDirection = groupSide === 'top' ? -1 : 1;
+        const deepestLevelByIndex = new Map<number, number>();
+        for (const segment of segments) {
+          for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
+            deepestLevelByIndex.set(
+              i,
+              Math.max(deepestLevelByIndex.get(i) ?? 0, segment.beamLevel)
+            );
+          }
+        }
         const beamStep = BEAM_THICKNESS_PX + BEAM_GAP_PX;
         const segmentXRange = (segment: BeamLineDescriptor) => {
           let x1 = memberGeometries[segment.fromNoteIndex].point.x;
@@ -2550,7 +2528,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const beamYAtX = (x: number): number =>
           doubleStemmedBeamYAtX(line, firstX, lastX, x);
 
-        for (const { element, staffIndex, stemUp, point } of memberGeometries) {
+        for (let i = 0; i < memberGeometries.length; i++) {
+          const { element, staffIndex, stemUp, point } = memberGeometries[i];
           const beamY = beamYAtX(point.x);
           // createDoubleStemmedBeamPolygon (below) always draws its
           // thickness growing downward from beamY, so beamY is the
@@ -2569,15 +2548,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
           // Inner-voice articulation anchor — svgCreator/articulations.ts
           // already knows this element's own real stem-tip position
-          // locally (from stemUp/stemExtension/duration, just written
-          // above), so this is purely a policy bit: true tells it to
-          // anchor marks there (next to the shared beam, on the stem's
-          // own side) instead of the ordinary notehead-relative default,
-          // which is what every outer-voice/single-voice member keeps.
-          element.articulationAnchorsToStem = isInnerVoiceMember(
+          // locally (from stemUp/stemExtension/duration), so all it needs
+          // from here is the policy (non-null: anchor next to the shared
+          // beam, on the stem's own side, instead of the ordinary
+          // notehead-relative default every outer-voice/single-voice member
+          // keeps) and how many secondary/fractional levels lie between the
+          // tip and the beam surface facing the notehead.
+          element.articulationStemAnchorBeamLevels = isInnerVoiceMember(
             element,
             staves[staffIndex]
-          );
+          )
+            ? deepestLevelByIndex.get(i) ?? 0
+            : null;
 
           // Tuplet numeral/bracket bridging — see crossStaffTupletBeamY on
           // StaffClassicalElementBase. Both beamY and point.naturalY (this
@@ -2739,15 +2721,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // in — mirrors "a note's stem always reaches the outermost beam
         // level it's part of." A plain member with no secondary/fractional
         // participation (deepest level 0) is untouched.
-        const deepestLevelByIndex = new Map<number, number>();
-        for (const segment of segments) {
-          for (let i = segment.fromNoteIndex; i <= segment.toNoteIndex; i++) {
-            deepestLevelByIndex.set(
-              i,
-              Math.max(deepestLevelByIndex.get(i) ?? 0, segment.beamLevel)
-            );
-          }
-        }
         for (let i = 0; i < memberGeometries.length; i++) {
           const level = deepestLevelByIndex.get(i);
           if (!level) {
@@ -3110,20 +3083,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // <music-composition>.
       this.classList.toggle('has-group-connector', groups.length > 0);
 
-      const slotTops = staffSlotTopsPx(staves);
+      const bands = this.#staffLineBands(staves);
       for (const { index, count, group } of groups) {
         const isGrandStaff = group === 'grand';
-        const bracketExtraHeight = isGrandStaff ? 0 : BRACKET_EXTRA_HEIGHT_PX;
+        const overhang = isGrandStaff ? 0 : BRACKET_LINE_OVERHANG_PX;
         const lastIndex = index + count - 1;
         const spanHeight =
-          slotTops[lastIndex] +
-          staffSlotHeightPx(staves[lastIndex]) -
-          slotTops[index] +
-          bracketExtraHeight;
-        const topOffset =
-          CONNECTOR_TOP_PX +
-          slotTops[index] -
-          (isGrandStaff ? 0 : BRACKET_TOP_OFFSET_PX + bracketExtraHeight / 2);
+          bands[lastIndex].bottom - bands[index].top + 2 * overhang;
+        const topOffset = bands[index].top - overhang;
 
         const glyph = isGrandStaff
           ? createBraceSvg(spanHeight)
@@ -3179,9 +3146,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ? Math.max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX)
         : 0;
 
-      const slotTops = staffSlotTopsPx(staves);
+      const bands = this.#staffLineBands(staves);
       staves.forEach((staff, staffIndex) => {
-        const slotHeight = staffSlotHeightPx(staff);
         if (staff.label) {
           const el = document.createElement('div');
           el.classList.add('staff-label');
@@ -3191,7 +3157,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             STAFF_LABEL_LEFT_MARGIN_PX
           )}px`;
           el.style.top = `${
-            CONNECTOR_TOP_PX + slotTops[staffIndex] + slotHeight / 2
+            (bands[staffIndex].top + bands[staffIndex].bottom) / 2
           }px`;
           el.textContent = staff.label;
           container.appendChild(el);

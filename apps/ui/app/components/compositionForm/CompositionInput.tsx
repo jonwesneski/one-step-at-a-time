@@ -26,6 +26,7 @@ import {
 import { DragSelectOverlay } from './DragSelectOverlay';
 import { applyEntryUpdate } from './entryEditsHelpers';
 import { MeasureInput } from './MeasureInput';
+import { pruneInvalidNotationLinks } from './notationLinksHelpers';
 import { rebar } from './rebarHelpers';
 import {
   moveEntryInVoice,
@@ -110,8 +111,14 @@ function CompositionFormBody({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [undo, redo, deleteSelected, session.selection]);
 
+  // The docked editor panel covers the bottom of the window while anything
+  // is selected; this lets the last row of the score scroll above it.
+  const dockPadding = isSelectionEmpty(session.selection)
+    ? ''
+    : 'pb-[25vh] md:pb-[40vh]';
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className={`flex flex-col gap-4 ${dockPadding}`}>
       <div className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
         <BasicInfoInput />
       </div>
@@ -165,6 +172,7 @@ export function CompositionInput() {
       connectorsById: {},
       connectorOrder: [],
       tupletsById: {},
+      octaveSpansById: {},
     },
   });
 
@@ -178,6 +186,7 @@ export function CompositionInput() {
       connectorsById: methods.getValues('connectorsById'),
       connectorOrder: methods.getValues('connectorOrder'),
       tupletsById: methods.getValues('tupletsById'),
+      octaveSpansById: methods.getValues('octaveSpansById'),
     }),
     [methods]
   );
@@ -192,6 +201,7 @@ export function CompositionInput() {
       methods.setValue('connectorsById', s.connectorsById);
       methods.setValue('connectorOrder', s.connectorOrder);
       methods.setValue('tupletsById', s.tupletsById);
+      methods.setValue('octaveSpansById', s.octaveSpansById);
     },
     [methods]
   );
@@ -428,7 +438,11 @@ export function CompositionInput() {
   }
 
   function setTuplet(entryIds: string[], ratio: TupletRatio | null) {
-    record(setTupletInStructure(getStructure(), entryIds, ratio));
+    record(
+      pruneInvalidNotationLinks(
+        setTupletInStructure(getStructure(), entryIds, ratio)
+      )
+    );
   }
 
   // A time signature change either re-bars the affected region (`rewrite`) — one
