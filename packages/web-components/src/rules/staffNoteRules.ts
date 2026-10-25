@@ -5,13 +5,13 @@ import {
 } from '../types/elements';
 import { BeamsBuilder } from '../utils';
 import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
-import { VoiceDirection } from './voiceRules';
 import {
   MIDDLE_STAFF_Y,
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
   STAFF_Y_STEP,
 } from '../utils/notationDimensions';
+import { VoiceDirection } from './voiceRules';
 
 export type LedgerLineWidth = 'single' | 'double';
 export type LedgerLine = { staffY: number; widthType: LedgerLineWidth };
@@ -182,7 +182,7 @@ export const getStaffYs = (
   return [];
 };
 
-const stemUpForYs = (ys: number[]): boolean => {
+export const stemUpForYs = (ys: number[]): boolean => {
   let maxDist = -1;
   let stemUp = true;
   for (const y of ys) {

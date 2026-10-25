@@ -1974,3 +1974,185 @@ describe('staff integration', () => {
     });
   });
 });
+
+describe(`${MUSIC_NOTE} notehead`, () => {
+  const renderNote = (attrs: Record<string, string>): NoteElementType => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    for (const [name, value] of Object.entries(attrs)) {
+      note.setAttribute(name, value);
+    }
+    document.body.appendChild(note);
+    return note;
+  };
+  const head = (note: NoteElementType) =>
+    note.shadowRoot?.querySelector('.head') as SVGElement | null;
+  const stem = (note: NoteElementType) =>
+    note.shadowRoot?.querySelector('.stem') as SVGLineElement | null;
+
+  it('defaults to the ellipse head', () => {
+    const note = renderNote({ duration: 'quarter' });
+    expect(note.notehead).toBe('normal');
+    expect(head(note)?.tagName).toBe('ellipse');
+  });
+
+  it('ignores an unknown notehead value', () => {
+    const note = renderNote({ duration: 'quarter', notehead: 'star' });
+    expect(note.notehead).toBe('normal');
+    expect(head(note)?.tagName).toBe('ellipse');
+  });
+
+  it.each([
+    ['x', 'quarter', 'x'],
+    ['x', 'half', 'circle-x'],
+    ['x', 'whole', 'circle-x'],
+    ['diamond', 'quarter', 'diamond-black'],
+    ['diamond', 'half', 'diamond-white'],
+    ['diamond-white', 'eighth', 'diamond-white'],
+    ['diamond-white', 'whole', 'diamond-white-wide'],
+    ['triangle-up', 'quarter', 'triangle-up-black'],
+    ['triangle-down', 'half', 'triangle-down-white'],
+  ])('draws %s %s as the %s glyph', (notehead, duration, glyph) => {
+    const note = renderNote({ duration, notehead });
+    const drawn = head(note);
+    expect(drawn?.tagName).toBe('path');
+    expect(drawn?.dataset.notehead).toBe(glyph);
+    expect(note.shadowRoot?.querySelector('.head-hit-zone')).not.toBeNull();
+  });
+
+  it('keeps the stem column where the ellipse head puts it', () => {
+    for (const stemUp of [true, false]) {
+      const normal = renderNote({ duration: 'quarter' });
+      normal.stemUp = stemUp;
+      for (const notehead of ['x', 'diamond', 'diamond-white']) {
+        const note = renderNote({ duration: 'quarter', notehead });
+        note.stemUp = stemUp;
+        expect(stem(note)?.getAttribute('x1')).toBe(
+          stem(normal)?.getAttribute('x1')
+        );
+      }
+    }
+  });
+
+  it('joins a stem-up cross at its upper arm tip and a stem-down one at its lower', () => {
+    const up = renderNote({ duration: 'quarter', notehead: 'x' });
+    up.stemUp = true;
+    const upHeadEnd = Number(stem(up)?.getAttribute('y2'));
+    const normalUp = renderNote({ duration: 'quarter' });
+    normalUp.stemUp = true;
+    expect(upHeadEnd).toBeLessThan(Number(stem(normalUp)?.getAttribute('y2')));
+
+    const down = renderNote({ duration: 'quarter', notehead: 'x' });
+    down.stemUp = false;
+    const normalDown = renderNote({ duration: 'quarter' });
+    normalDown.stemUp = false;
+    expect(Number(stem(down)?.getAttribute('y1'))).toBeGreaterThan(
+      Number(stem(normalDown)?.getAttribute('y1'))
+    );
+  });
+
+  it('shifts the accidental left of a head wider than the ellipse', () => {
+    const normal = renderNote({ note: 'C#', duration: 'half' });
+    const diamond = renderNote({
+      note: 'C#',
+      duration: 'half',
+      notehead: 'diamond-white',
+    });
+    const accidentalX = (note: NoteElementType) =>
+      Number(
+        note.shadowRoot?.querySelector('svg.note > svg')?.getAttribute('x')
+      );
+    expect(diamond.headLeftOverhangPx).toBeGreaterThan(0);
+    expect(accidentalX(diamond)).toBeCloseTo(
+      accidentalX(normal) - diamond.headLeftOverhangPx
+    );
+  });
+
+  it('draws ledger lines for crossed and diamond heads but never for triangles', () => {
+    for (const notehead of ['x', 'diamond']) {
+      const note = renderNote({ duration: 'quarter', notehead });
+      note.staffY = 0;
+      expect(
+        note.shadowRoot?.querySelectorAll('.ledger-line').length
+      ).toBeGreaterThan(0);
+    }
+    const triangle = renderNote({
+      duration: 'quarter',
+      notehead: 'triangle-up',
+    });
+    triangle.staffY = 0;
+    expect(triangle.shadowRoot?.querySelectorAll('.ledger-line')).toHaveLength(
+      0
+    );
+  });
+
+  it('forces a triangle stem away from its point', () => {
+    const up = renderNote({ duration: 'quarter', notehead: 'triangle-up' });
+    up.stemUp = true;
+    expect(up.stemUp).toBe(false);
+    const down = renderNote({ duration: 'quarter', notehead: 'triangle-down' });
+    down.stemUp = false;
+    expect(down.stemUp).toBe(true);
+  });
+
+  it('never draws an accidental on a triangle', () => {
+    const note = renderNote({
+      note: 'F#',
+      duration: 'quarter',
+      notehead: 'triangle-up',
+    });
+    expect(note.shadowRoot?.querySelector('svg.note > svg')).toBeNull();
+  });
+
+  it('warns once that a whole-note triangle reads better as two tied halves', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = renderNote({ duration: 'whole', notehead: 'triangle-up' });
+    note.stemUp = false;
+    note.stemUp = true;
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('two tied half notes')
+      )
+    ).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('draws grace noteheads aligned by index', () => {
+    const note = renderNote({
+      duration: 'quarter',
+      grace: 'D,E',
+      'grace-notehead': ',x',
+    });
+    expect(note.graceNotehead).toEqual([null, 'x']);
+    const graceHeads = Array.from(
+      note.shadowRoot?.querySelectorAll('.grace-head') ?? []
+    ) as SVGElement[];
+    expect(graceHeads.map((h) => h.tagName)).toEqual(['ellipse', 'path']);
+    expect(graceHeads[1].dataset.notehead).toBe('x');
+  });
+
+  it('warns about a triangle grace notehead', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = renderNote({
+      duration: 'quarter',
+      grace: 'D',
+      'grace-notehead': 'triangle-up',
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('not supported on a grace note')
+    );
+    expect(
+      (note.shadowRoot?.querySelector('.grace-head') as SVGElement).tagName
+    ).toBe('ellipse');
+    warn.mockRestore();
+  });
+
+  it('reflects the notehead property to the attribute', () => {
+    const note = renderNote({ duration: 'quarter' });
+    note.notehead = 'x';
+    expect(note.getAttribute('notehead')).toBe('x');
+    expect(head(note)?.tagName).toBe('path');
+    note.notehead = null;
+    expect(note.hasAttribute('notehead')).toBe(false);
+    expect(head(note)?.tagName).toBe('ellipse');
+  });
+});

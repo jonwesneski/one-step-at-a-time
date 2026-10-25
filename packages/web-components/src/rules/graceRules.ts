@@ -3,6 +3,7 @@ import {
   ArticulationType,
   Note,
   NoteLetter,
+  NoteheadType,
   Octave,
 } from '../types/theory';
 import {
@@ -15,6 +16,7 @@ import {
   GRACE_STEM_LENGTH_PX,
 } from '../utils/notationDimensions';
 import { parseAccidentalSuffix, suffixToType } from './accidentalRules';
+import { resolveGraceNoteheads } from './noteheadRules';
 
 export type GraceNoteDescriptor = {
   // Diatonic steps from the reference (main) pitch; positive = higher.
@@ -24,6 +26,8 @@ export type GraceNoteDescriptor = {
   relativeStaffSteps: number;
   accidental: AccidentalType | null;
   articulation: ArticulationType | null;
+  // Absent = normal.
+  notehead?: NoteheadType;
 };
 
 export type GraceLayout = {
@@ -60,8 +64,12 @@ export function buildGraceNoteDescriptors(
   graceOctaves: (Octave | null)[],
   referenceLetter: NoteLetter,
   referenceOctave: Octave,
-  graceArticulations: (ArticulationType | null)[] = []
+  graceArticulations: (ArticulationType | null)[] = [],
+  graceNoteheads: readonly (NoteheadType | null)[] | null = null
 ): GraceNoteDescriptor[] {
+  const noteheads = graceNoteheads
+    ? resolveGraceNoteheads(graceNoteheads, graceNotes.length)
+    : null;
   return graceNotes.map((graceNote, i) => {
     const letter = graceNote[0] as NoteLetter;
     const octave = graceOctaves[i] ?? referenceOctave;
@@ -74,6 +82,7 @@ export function buildGraceNoteDescriptors(
       ),
       accidental: graceAccidentalFromNote(graceNote),
       articulation: graceArticulations[i] ?? null,
+      ...(noteheads ? { notehead: noteheads[i] } : {}),
     };
   });
 }

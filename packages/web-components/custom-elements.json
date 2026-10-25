@@ -532,6 +532,29 @@
             },
             {
               "kind": "field",
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "headLeftOverhangPx",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "toneNoteheads",
+              "type": {
+                "text": "NoteheadType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "stemDirection",
               "type": {
                 "text": "StemDirection | null"
@@ -668,6 +691,13 @@
             },
             {
               "kind": "field",
+              "name": "graceNotehead",
+              "type": {
+                "text": "(NoteheadType | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "graceType",
               "type": {
                 "text": "GraceType"
@@ -800,6 +830,24 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#widestHeadExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      cxPx: number;\n      halfWidthPx: number;\n    }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "toneNoteheads",
+                  "type": {
+                    "text": "NoteheadType[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1173,6 +1221,20 @@
                 "text": "StemDirection"
               },
               "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+            },
+            {
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              },
+              "description": "Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` (\"harmonic\") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning)."
+            },
+            {
+              "name": "grace-notehead",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`."
             },
             {
               "type": {
@@ -2792,6 +2854,15 @@
             },
             {
               "kind": "field",
+              "name": "#lastNoteheadWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#noStem",
               "privacy": "private",
               "type": {
@@ -3071,6 +3142,21 @@
             },
             {
               "kind": "field",
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "headLeftOverhangPx",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "stemDirection",
               "type": {
                 "text": "StemDirection | null"
@@ -3203,6 +3289,13 @@
               "name": "graceArticulation",
               "type": {
                 "text": "(ArticulationType | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceNotehead",
+              "type": {
+                "text": "(NoteheadType | null)[] | null"
               }
             },
             {
@@ -3712,6 +3805,20 @@
                 "text": "StemDirection"
               },
               "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+            },
+            {
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              },
+              "description": "Notehead shape: `normal` (default); `x` (\"x-head\", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the \"harmonic\" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` (\"highest / lowest possible note\"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position."
+            },
+            {
+              "name": "grace-notehead",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`."
             },
             {
               "type": {
@@ -4870,6 +4977,40 @@
                   "name": "beatOffsets",
                   "type": {
                     "text": "number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#placeTriangles",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "noteStaffYCoords",
+                  "type": {
+                    "text": "Map<NoteElementType, number>"
+                  }
+                },
+                {
+                  "name": "chordStaffYCoords",
+                  "type": {
+                    "text": "Map<ChordElementType, number[]>"
                   }
                 }
               ],
@@ -9057,6 +9198,40 @@
                   "name": "beatOffsets",
                   "type": {
                     "text": "number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#placeTriangles",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "elements",
+                  "type": {
+                    "text": "NoteChordOrRestElementType[]"
+                  }
+                },
+                {
+                  "name": "noteStaffYCoords",
+                  "type": {
+                    "text": "Map<NoteElementType, number>"
+                  }
+                },
+                {
+                  "name": "chordStaffYCoords",
+                  "type": {
+                    "text": "Map<ChordElementType, number[]>"
                   }
                 }
               ],

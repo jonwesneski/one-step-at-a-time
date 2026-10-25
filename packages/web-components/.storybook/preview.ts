@@ -39,6 +39,7 @@ const preview: Preview = {
             'Trills',
             'Octave Signs',
             'Clef Changes',
+            'Noteheads',
             'Beams',
             'Voices',
           ],

@@ -106,8 +106,8 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 | &#x2610; | Slide Down          | `\`                  | Slide into note from above                       |
 | &#x2610; | Legato Slide        | `sl.` with line      | Slide without re-picking                         |
 | &#x2610; | Palm Mute           | `P.M. -----`         | Rest palm on strings near bridge                 |
-| &#x2610; | Natural Harmonic    | Diamond note head    | Lightly touch string at node point               |
-| &#x2610; | Artificial Harmonic | Note + diamond above | Fret a note, touch an octave node                |
+| &#x2611; | Natural Harmonic    | Diamond note head    | Lightly touch string at node point               |
+| &#x2611; | Artificial Harmonic | Note + diamond above | Fret a note, touch an octave node                |
 | &#x2610; | Tapping             | `T`                  | Right-hand finger taps the fretboard             |
 | &#x2610; | Whammy Bar Dip      | Notation + arrow     | Depress tremolo bar momentarily                  |
 | &#x2610; | Whammy Bar Vibrato  | Notation + wavy      | Vibrato using tremolo bar                        |

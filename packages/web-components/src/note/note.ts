@@ -6,9 +6,17 @@ import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
 } from '../rules/graceRules';
+import {
+  forcedStemUp,
+  suppressesAccidental,
+  suppressesLedgerLines,
+  triangleDurationWarning,
+  triangleUnsupportedWarning,
+} from '../rules/noteheadRules';
 import type {
   ConnectorRole,
   GraceArticulationsType,
+  GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
   INoteElement,
@@ -27,6 +35,7 @@ import type {
   HairpinKind,
   HairpinRole,
   Note,
+  NoteheadType,
   NoteLetter,
   Octave,
   OctaveContinuationMode,
@@ -51,6 +60,8 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   noteHeadCenter,
+  noteHeadGeometry,
+  noteHeadLeftOverhangPx,
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
@@ -59,11 +70,13 @@ import {
   parseGlissandoHint,
   parseGraceArticulations,
   parseGraceDuration,
+  parseGraceNoteheads,
   parseGraceNotes,
   parseGraceOctaves,
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseNotehead,
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
@@ -75,7 +88,13 @@ import {
   parseTrillLineMode,
   stemUpTipYPx,
 } from '../utils';
-import { MUSIC_NOTE, NOTE_EVENTS, OCTAVES, STAFF_TAGS } from '../utils/consts';
+import {
+  MUSIC_CHORD,
+  MUSIC_NOTE,
+  NOTE_EVENTS,
+  OCTAVES,
+  STAFF_TAGS,
+} from '../utils/consts';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
@@ -133,6 +152,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
    * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
    * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
+   * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
+   * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
    * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
@@ -190,6 +211,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'shared-stem-for',
         'slur-group',
         'stem-direction',
+        'notehead',
+        'grace-notehead',
       ];
     }
 
@@ -198,6 +221,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
     #noFlags = false;
+    #lastNoteheadWarning: string | null = null;
     #noStem = false;
     #renderArpeggioSign = true;
     #impliedArpeggio: ArpeggioType | null = null;
@@ -259,7 +283,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get stemUp(): boolean {
-      return this.#stemUp;
+      return forcedStemUp(this.notehead) ?? this.#stemUp;
     }
     set stemUp(v: boolean) {
       this.#stemUp = v;
@@ -513,6 +537,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get notehead(): NoteheadType {
+      return parseNotehead(this.getAttribute('notehead')) ?? 'normal';
+    }
+    set notehead(value: NoteheadType | null) {
+      if (value === null) {
+        this.removeAttribute('notehead');
+      } else {
+        this.setAttribute('notehead', value);
+      }
+    }
+
+    // See noteHeadLeftOverhangPx.
+    get headLeftOverhangPx(): number {
+      return noteHeadLeftOverhangPx(this.stemUp, this.duration, this.notehead);
+    }
+
     // Author override for stemUp, independent of pitch. null = today's
     // pitch-driven/voice/beam-group resolution, unchanged.
     get stemDirection(): StemDirection | null {
@@ -758,6 +798,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get graceNotehead(): (NoteheadType | null)[] | null {
+      return parseGraceNoteheads(this.getAttribute('grace-notehead'));
+    }
+    set graceNotehead(value: GraceNoteheadsType) {
+      const attr = graceListToAttr(value, parseGraceNoteheads);
+      if (attr === null) {
+        this.removeAttribute('grace-notehead');
+      } else {
+        this.setAttribute('grace-notehead', attr);
+      }
+    }
+
     get graceType(): GraceType {
       return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
     }
@@ -965,6 +1017,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'notehead' || name === 'grace-notehead') {
+        const warning =
+          name === 'notehead'
+            ? this.parentElement?.closest(MUSIC_CHORD)
+              ? triangleUnsupportedWarning([this.notehead], 'a chord tone')
+              : null
+            : triangleUnsupportedWarning(
+                this.graceNotehead ?? [],
+                'a grace note'
+              );
+        if (warning) {
+          console.warn(`[music-note] ${warning}`);
+        }
+      }
+
       if (!this.isConnected) {
         return;
       }
@@ -1132,6 +1199,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace' ||
         name === 'grace-octave' ||
         name === 'grace-articulation' ||
+        name === 'grace-notehead' ||
+        name === 'notehead' ||
         name === 'grace-type' ||
         name === 'grace-duration' ||
         name === 'grace-slur' ||
@@ -1147,7 +1216,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // lower end of a cross-staff span, whose wave the ancestor measure
         // draws. `trill-finish-slur` never changes the footprint itself but
         // shares this dispatch since the ancestor staff's cross-element
-        // "slur to next" pass depends on it too.
+        // "slur to next" pass depends on it too. `notehead` changes the
+        // head's width, and a triangle also moves the note and forces its
+        // stem.
         if (
           name === 'trill-note' &&
           newValue !== null &&
@@ -1182,8 +1253,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         </style>
       `;
 
+      const notehead = this.notehead;
+      const durationWarning = triangleDurationWarning(notehead, this.duration);
+      if (durationWarning && durationWarning !== this.#lastNoteheadWarning) {
+        console.warn(`[music-note] ${durationWarning}`);
+      }
+      this.#lastNoteheadWarning = durationWarning;
+      const stemUp = this.stemUp;
+
       let accidental: AccidentalType | undefined;
-      if (this.#showAccidental === undefined) {
+      if (suppressesAccidental(notehead)) {
+        accidental = undefined;
+      } else if (this.#showAccidental === undefined) {
         const suffix = this.note.slice(1);
         if (suffix === '##') {
           accidental = 'double-sharp';
@@ -1200,7 +1281,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const [noteSvg, yHeadOffset] = createNoteSvg({
         duration: this.duration,
-        stemUp: this.#stemUp,
+        stemUp,
+        notehead,
         stemExtension: this.#stemExtension,
         noFlags: this.#noFlags,
         noStem: this.#noStem,
@@ -1229,12 +1311,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           this.#articulationStemAnchorBeamLevels,
       });
 
-      if (this.#staffY !== null) {
+      if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
+        const { cx, halfWidth } = noteHeadGeometry(
+          stemUp,
+          this.duration,
+          this.#noFlags,
+          notehead
+        );
         addLedgerLines(
           noteSvg,
           [this.#staffY],
-          this.#stemUp,
-          yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY
+          stemUp,
+          yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY,
+          { cxPx: cx * NOTE_SCALE, halfWidthPx: halfWidth * NOTE_SCALE }
         );
       }
 
@@ -1307,7 +1396,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.graceOctave ?? [],
         this.note[0] as NoteLetter,
         this.octave ?? 4,
-        this.graceArticulation ?? []
+        this.graceArticulation ?? [],
+        this.graceNotehead
       );
       applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
 
@@ -1325,16 +1415,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           this.arpeggioHairpinTo
         );
       const { cx, cy } = noteHeadCenter(
-        this.#stemUp,
+        this.stemUp,
         this.duration,
-        this.#noFlags
+        this.#noFlags,
+        this.notehead
       );
       // Only used for a descending grace group's stem-tip slur anchoring
       // (see buildGraceSlur) — the real stem tip when this note is
       // stem-up, or the notehead itself when stem-down (no stem to
       // project to). Unused (and harmless to compute) otherwise.
       const mainSlurTargetXPx = cx * NOTE_SCALE;
-      const mainSlurTargetYPx = this.#stemUp
+      const mainSlurTargetYPx = this.stemUp
         ? stemUpTipYPx(this.#stemExtension)
         : cy * NOTE_SCALE;
       const graceGroup = createGraceNotesSvg({
@@ -1350,9 +1441,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         mainSlurTargetXPx,
         mainSlurTargetYPx,
         anchorRightXPx:
-          -accidentalFootprint - arpeggioFootprint - GRACE_MAIN_GAP_PX,
+          -accidentalFootprint -
+          arpeggioFootprint -
+          this.headLeftOverhangPx -
+          GRACE_MAIN_GAP_PX,
         mainAccidentalShown: accidental !== undefined,
-        mainStemUp: this.#stemUp,
+        mainStemUp: this.stemUp,
         mainStaffY: this.#staffY,
       });
       noteSvg.setAttribute('overflow', 'visible');
@@ -1381,9 +1475,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
 
       const { cx, cy } = noteHeadCenter(
-        this.#stemUp,
+        this.stemUp,
         this.duration,
-        this.#noFlags
+        this.#noFlags,
+        this.notehead
       );
       const { element } = createTrillFinishNotesSvg({
         trillFinishNotes,

@@ -25,6 +25,7 @@ import {
   BeamLineDescriptor,
   computeBeamLevelStructure,
 } from '../../rules/beamStructureRules';
+import { isTriangle } from '../../rules/noteheadRules';
 import {
   durationToFactor,
   durationToFlagCountMap,
@@ -43,6 +44,7 @@ import {
   MAX_STEM_SHORTENING_PX,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
+import { parseNotehead } from '../parsers';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
@@ -598,8 +600,11 @@ export class BeamsBuilder {
 
         const dur = (elements[i].dataset.duration ??
           elements[i].getAttribute('duration')) as DurationType;
+        // A triangle (undefined extreme pitch) always stands alone with its
+        // own flag.
         const flagCount =
-          elements[i].nodeName === MUSIC_REST_NODE
+          elements[i].nodeName === MUSIC_REST_NODE ||
+          isTriangle(parseNotehead(elements[i].getAttribute('notehead')))
             ? undefined
             : durationToFlagCountMap.get(dur);
 

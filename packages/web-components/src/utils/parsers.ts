@@ -13,6 +13,7 @@ import type {
   HairpinRole,
   MeasureNumberDisplay,
   Note,
+  NoteheadType,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -36,6 +37,7 @@ import {
   GRACE_SLURS,
   GRACE_TYPES,
   MEASURE_NUMBER_DISPLAYS,
+  NOTEHEADS,
   OCTAVE_CONTINUATION_MODES,
   OCTAVE_DISPLAY_MODES,
   OCTAVE_SHIFT_AMOUNTS,
@@ -53,6 +55,7 @@ const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
 const VALID_ARTICULATIONS = new Set<string>(ARTICULATIONS);
 const VALID_STRESSES = new Set<string>(STRESSES);
+const VALID_NOTEHEADS = new Set<string>(NOTEHEADS);
 const VALID_ARPEGGIOS = new Set<string>(ARPEGGIOS);
 const VALID_GRACE_TYPES = new Set<string>(GRACE_TYPES);
 const VALID_GRACE_DURATIONS = new Set<string>(GRACE_DURATIONS);
@@ -165,6 +168,13 @@ export const parseMeasureNumberDisplay = (
 export const parseStress = (value: string | null): StressType | null => {
   if (value !== null && VALID_STRESSES.has(value)) {
     return value as StressType;
+  }
+  return null;
+};
+
+export const parseNotehead = (value: string | null): NoteheadType | null => {
+  if (value !== null && VALID_NOTEHEADS.has(value)) {
+    return value as NoteheadType;
   }
   return null;
 };
@@ -342,6 +352,18 @@ export const parseGraceArticulations = (
   const tokens = value.split(',').map((token) => token.trim());
   return tokens.map((token) =>
     VALID_ARTICULATIONS.has(token) ? (token as ArticulationType) : null
+  );
+};
+
+export const parseGraceNoteheads = (
+  value: string | null
+): (NoteheadType | null)[] | null => {
+  if (value === null) {
+    return null;
+  }
+  const tokens = value.split(',').map((token) => token.trim());
+  return tokens.map((token) =>
+    VALID_NOTEHEADS.has(token) ? (token as NoteheadType) : null
   );
 };
 

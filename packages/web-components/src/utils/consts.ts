@@ -13,6 +13,7 @@ import type {
   MeasureNumberDisplay,
   Mode,
   Note,
+  NoteheadType,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -227,6 +228,15 @@ export const ARTICULATIONS: ArticulationType[] = [
 ];
 
 export const STRESSES: StressType[] = ['stressed', 'unstressed'];
+
+export const NOTEHEADS: NoteheadType[] = [
+  'normal',
+  'x',
+  'diamond',
+  'diamond-white',
+  'triangle-up',
+  'triangle-down',
+];
 
 /** Hairpin directions — used by the `arpeggio-hairpin` attribute (a dynamic
  * change drawn as a vertical wedge through the arpeggiated chord). */

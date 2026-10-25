@@ -230,6 +230,30 @@ export type ArticulationType =
 export type StressType = 'stressed' | 'unstressed';
 
 /**
+ * Notehead shape, named by shape because one shape carries different
+ * meanings on different instruments.
+ * - `normal`         the oval.
+ * - `x`              crossed head ("x-head"), circled at half-note length and
+ *                    longer. Read as a dead / muted (ghost) note, a cymbal or
+ *                    cross-stick, spoken text, or indefinite pitch.
+ * - `diamond`        black or white by duration: guitar harmonics, silently
+ *                    depressed piano keys.
+ * - `diamond-white`  white at every duration: the "harmonic" notehead for
+ *                    bowed strings and woodwinds; also multiphonics and
+ *                    unvoiced vocal sounds.
+ * - `triangle-up` /
+ *   `triangle-down`  "highest / lowest possible note". The staff places it
+ *                    outside the stave and forces the stem away from the tip.
+ */
+export type NoteheadType =
+  | 'normal'
+  | 'x'
+  | 'diamond'
+  | 'diamond-white'
+  | 'triangle-up'
+  | 'triangle-down';
+
+/**
  * Arpeggio (rolled / spread chord) sign, drawn as a vertical wavy line left of
  * the chord — left of any accidentals — spanning the top-to-bottom notehead
  * range, not the stems.

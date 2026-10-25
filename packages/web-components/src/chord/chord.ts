@@ -3,11 +3,16 @@ import {
   buildGraceNoteDescriptors,
   GraceNoteDescriptor,
 } from '../rules/graceRules';
+import {
+  resolveChordToneNoteheads,
+  triangleUnsupportedWarning,
+} from '../rules/noteheadRules';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import type {
   ChordNote,
   ConnectorRole,
   GraceArticulationsType,
+  GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
   IChordElement,
@@ -29,6 +34,7 @@ import type {
   HairpinKind,
   HairpinRole,
   Note,
+  NoteheadType,
   NoteLetter,
   Octave,
   OctaveContinuationMode,
@@ -46,6 +52,9 @@ import {
   createSempreArpeggiandoText,
   graceListToAttr,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  NOTE_SCALE,
+  noteHeadGeometry,
+  noteHeadLeftOverhangPx,
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
@@ -54,11 +63,13 @@ import {
   parseGlissandoHint,
   parseGraceArticulations,
   parseGraceDuration,
+  parseGraceNoteheads,
   parseGraceNotes,
   parseGraceOctaves,
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseNotehead,
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
@@ -138,6 +149,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
    * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
    * @attr {string} slur-group - `id` shared by every breakpoint note/chord of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone chord).
+   * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
+   * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.
    * @attr {StemDirection} stem-direction - Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
@@ -197,6 +210,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'shared-stem-for',
         'slur-group',
         'stem-direction',
+        'notehead',
+        'grace-notehead',
       ];
     }
 
@@ -525,6 +540,43 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get notehead(): NoteheadType {
+      return parseNotehead(this.getAttribute('notehead')) ?? 'normal';
+    }
+    set notehead(value: NoteheadType | null) {
+      if (value === null) {
+        this.removeAttribute('notehead');
+      } else {
+        this.setAttribute('notehead', value);
+      }
+    }
+
+    // The widest tone's overhang — see noteHeadLeftOverhangPx.
+    get headLeftOverhangPx(): number {
+      return Math.max(
+        0,
+        ...this.toneNoteheads.map((notehead) =>
+          noteHeadLeftOverhangPx(this.#stemUp, this.duration, notehead)
+        )
+      );
+    }
+
+    // Per tone, in `notes` order: a slotted <music-note>'s own notehead, else
+    // this chord's.
+    get toneNoteheads(): NoteheadType[] {
+      const noteElements = Array.from(this.querySelectorAll(MUSIC_NOTE));
+      const toneNoteheads =
+        noteElements.length > 0
+          ? noteElements.map((node) =>
+              parseNotehead(node.getAttribute('notehead'))
+            )
+          : this.notes.map(() => null);
+      return resolveChordToneNoteheads(
+        parseNotehead(this.getAttribute('notehead')),
+        toneNoteheads
+      );
+    }
+
     // See INoteElement.stemDirection.
     get stemDirection(): StemDirection | null {
       return parseStemDirection(this.getAttribute('stem-direction'));
@@ -769,6 +821,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get graceNotehead(): (NoteheadType | null)[] | null {
+      return parseGraceNoteheads(this.getAttribute('grace-notehead'));
+    }
+    set graceNotehead(value: GraceNoteheadsType) {
+      const attr = graceListToAttr(value, parseGraceNoteheads);
+      if (attr === null) {
+        this.removeAttribute('grace-notehead');
+      } else {
+        this.setAttribute('grace-notehead', attr);
+      }
+    }
+
     get graceType(): GraceType {
       return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
     }
@@ -952,7 +1016,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#childObserver = new MutationObserver(() => {
         this.#scheduleRender();
       });
-      this.#childObserver.observe(this, { childList: true });
+      this.#childObserver.observe(this, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['notehead'],
+      });
     }
 
     disconnectedCallback(): void {
@@ -983,6 +1052,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           this.removeAttribute('diminuendo');
         }
         return;
+      }
+
+      if (name === 'notehead' || name === 'grace-notehead') {
+        const warning =
+          name === 'notehead'
+            ? triangleUnsupportedWarning([this.notehead], 'a chord')
+            : triangleUnsupportedWarning(
+                this.graceNotehead ?? [],
+                'a grace note'
+              );
+        if (warning) {
+          console.warn(`[music-chord] ${warning}`);
+        }
       }
 
       if (!this.isConnected) {
@@ -1155,6 +1237,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'grace' ||
         name === 'grace-octave' ||
         name === 'grace-articulation' ||
+        name === 'grace-notehead' ||
+        name === 'notehead' ||
         name === 'grace-type' ||
         name === 'grace-duration' ||
         name === 'grace-slur' ||
@@ -1197,6 +1281,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     private render(): void {
+      const toneNoteheads = this.toneNoteheads;
       if (this.#staffYCoordinates) {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
@@ -1224,6 +1309,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemExtension: this.#stemExtension,
           qualifiedElementName: 'g',
           noteAccidentals: this.#noteAccidentals,
+          noteheads: toneNoteheads,
           articulation: this.articulation,
           stress: this.stress,
           articulationStemAnchorBeamLevels:
@@ -1241,7 +1327,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           chordSvg,
           this.#staffYCoordinates,
           this.#stemUp,
-          STAFF_Y_PADDING - NOTE_HEAD_Y_OFFSET_CORRECTION
+          STAFF_Y_PADDING - NOTE_HEAD_Y_OFFSET_CORRECTION,
+          this.#widestHeadExtent(toneNoteheads)
         );
 
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
@@ -1325,6 +1412,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           arpeggioHairpinTo: this.arpeggioHairpinTo,
           stemUp,
           noteAccidentals,
+          noteheads: toneNoteheads,
           noFlags: false,
           noStem: this.#noStem,
           stemExtension: 0,
@@ -1363,6 +1451,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     // Grace descriptors are relative to the chord's reference note (notes[0]).
+    // Ledger lines span the widest head in the chord.
+    #widestHeadExtent(toneNoteheads: NoteheadType[]): {
+      cxPx: number;
+      halfWidthPx: number;
+    } {
+      const geometries = (
+        toneNoteheads.length > 0 ? toneNoteheads : (['normal'] as const)
+      ).map((notehead) =>
+        noteHeadGeometry(this.#stemUp, this.duration, this.#noFlags, notehead)
+      );
+      const widest = geometries.reduce((a, b) =>
+        b.halfWidth > a.halfWidth ? b : a
+      );
+      return {
+        cxPx: widest.cx * NOTE_SCALE,
+        halfWidthPx: widest.halfWidth * NOTE_SCALE,
+      };
+    }
+
     #buildGraceDescriptors(notes: ChordNote[]): GraceNoteDescriptor[] | null {
       const graceNoteLetters = this.grace;
       if (graceNoteLetters === null || notes.length === 0) {
@@ -1373,7 +1480,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.graceOctave ?? [],
         notes[0].value[0] as NoteLetter,
         notes[0].octave ?? 4,
-        this.graceArticulation ?? []
+        this.graceArticulation ?? [],
+        this.graceNotehead
       );
       applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
       return graceNotes;
