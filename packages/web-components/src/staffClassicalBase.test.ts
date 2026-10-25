@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import './index';
+import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
 import { ChordElementType } from './types/elements';
 import type { Chord, Octave } from './types/theory';
 import {
@@ -15,10 +16,14 @@ import {
   STAFF_EVENTS,
 } from './utils/consts';
 import {
+  BASE_STEM_LENGTH_PX,
   DYNAMICS_BASELINE_Y,
+  MIDDLE_STAFF_Y,
+  STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
+  TRIANGLE_OUTSIDE_STAFF_PX,
+  TRIANGLE_RUN_CLEARANCE_PX,
 } from './utils/notationDimensions';
-import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -1114,5 +1119,112 @@ describe('staffClassicalBase', () => {
         ).toBeNull();
       });
     });
+  });
+});
+
+describe('staffClassicalBase triangle noteheads', () => {
+  const renderStaff = (
+    entries: Record<string, string>[],
+    clef = 'treble',
+    time = '4/4'
+  ) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, time);
+    staff.setAttribute('clef', clef);
+    document.body.appendChild(staff);
+    const elements = entries.map((attrs) => {
+      const { tag = MUSIC_NOTE, ...rest } = attrs;
+      const element = document.createElement(tag) as any;
+      for (const [name, value] of Object.entries(rest)) {
+        element.setAttribute(name, value);
+      }
+      return element;
+    });
+    staff.append(...elements);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => elements;
+    slot.dispatchEvent(new Event('slotchange'));
+    return elements;
+  };
+
+  it('places an isolated triangle outside the stave, stem pointing away', () => {
+    const [up] = renderStaff([
+      { duration: 'quarter', notehead: 'triangle-up' },
+    ]);
+    expect(up.staffY).toBe(STAFF_TOP_LINE_Y - TRIANGLE_OUTSIDE_STAFF_PX);
+    expect(up.stemUp).toBe(false);
+
+    document.body.innerHTML = '';
+    const [down] = renderStaff(
+      [{ duration: 'quarter', notehead: 'triangle-down' }],
+      'bass'
+    );
+    expect(down.staffY).toBe(STAFF_BOTTOM_LINE_Y + TRIANGLE_OUTSIDE_STAFF_PX);
+    expect(down.stemUp).toBe(true);
+  });
+
+  it('places a triangle beyond the run it follows', () => {
+    const elements = renderStaff(
+      [
+        { note: 'A', octave: '5', duration: 'sixteenth' },
+        { note: 'F', octave: '6', duration: 'sixteenth' },
+        { duration: 'sixteenth', notehead: 'triangle-up' },
+        { tag: MUSIC_REST, duration: 'sixteenth' },
+      ],
+      'treble',
+      '1/4'
+    );
+    const runTop = Math.min(elements[0].staffY, elements[1].staffY);
+    expect(elements[2].staffY).toBeLessThanOrEqual(
+      runTop - TRIANGLE_RUN_CLEARANCE_PX
+    );
+  });
+
+  it('never beams a triangle, so it keeps its own flag', () => {
+    const elements = renderStaff(
+      [
+        { note: 'A', octave: '5', duration: 'eighth' },
+        { duration: 'eighth', notehead: 'triangle-up' },
+      ],
+      'treble',
+      '1/4'
+    );
+    expect(elements[1].noFlags).toBe(false);
+  });
+
+  it('extends a triangle stem to reach the middle line', () => {
+    const [up] = renderStaff([
+      { duration: 'quarter', notehead: 'triangle-up' },
+    ]);
+    expect(up.stemExtension).toBeCloseTo(
+      MIDDLE_STAFF_Y - (up.staffY + BASE_STEM_LENGTH_PX)
+    );
+  });
+
+  it('ties a triangle to the previous triangle at the same height', () => {
+    const elements = renderStaff([
+      { note: 'C', octave: '6', duration: 'quarter' },
+      { duration: 'quarter', notehead: 'triangle-up', tie: 'start' },
+      { duration: 'half', notehead: 'triangle-up', tie: 'end' },
+    ]);
+    expect(elements[2].staffY).toBe(elements[1].staffY);
+  });
+
+  it('shows no accidental on a triangle and lets the staff overrule stem-direction', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const [note] = renderStaff([
+      {
+        note: 'F#',
+        duration: 'quarter',
+        notehead: 'triangle-up',
+        'stem-direction': 'up',
+      },
+    ]);
+    expect(note.showAccidental).toBeNull();
+    expect(note.stemUp).toBe(false);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('stem-direction="up" is ignored')
+    );
+    warn.mockRestore();
   });
 });

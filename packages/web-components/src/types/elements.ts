@@ -16,6 +16,7 @@ import type {
   Mode,
   Note,
   NoteLetter,
+  NoteheadType,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -54,6 +55,7 @@ export type GraceArticulationsType =
   | (ArticulationType | null)[]
   | string
   | null;
+export type GraceNoteheadsType = (NoteheadType | null)[] | string | null;
 
 export interface INoteElement {
   duration: DurationType;
@@ -65,6 +67,12 @@ export interface INoteElement {
   // inconsistently across notes that end up sharing one same-staff beam
   // group is the author's own responsibility to avoid (see StemDirection).
   stemDirection: StemDirection | null;
+  // Notehead shape; a triangle also forces stemUp and is placed by the staff.
+  // null removes the attribute (normal).
+  get notehead(): NoteheadType;
+  set notehead(value: NoteheadType | null);
+  // How far a glyph head reaches left of the ellipse head's edge (px).
+  readonly headLeftOverhangPx: number;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -187,6 +195,9 @@ export interface INoteElement {
   // (or a missing trailing slot) means no mark for that grace note.
   get graceArticulation(): (ArticulationType | null)[] | null;
   set graceArticulation(value: GraceArticulationsType);
+  // Per-grace notehead aligned by index with grace; an empty slot is normal.
+  get graceNotehead(): (NoteheadType | null)[] | null;
+  set graceNotehead(value: GraceNoteheadsType);
   graceType: GraceType;
   graceDuration: GraceDuration | null;
   graceSlur: GraceSlur;
@@ -254,6 +265,14 @@ export interface IChordElement {
   stemUp: boolean;
   // See INoteElement.stemDirection.
   stemDirection: StemDirection | null;
+  // Default for every tone; a slotted <music-note>'s own notehead overrides
+  // it. Triangles are not supported on chords.
+  get notehead(): NoteheadType;
+  set notehead(value: NoteheadType | null);
+  // Resolved per tone, in `notes` order.
+  readonly toneNoteheads: NoteheadType[];
+  // The widest tone's INoteElement.headLeftOverhangPx.
+  readonly headLeftOverhangPx: number;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -364,6 +383,9 @@ export interface IChordElement {
   // (or a missing trailing slot) means no mark for that grace note.
   get graceArticulation(): (ArticulationType | null)[] | null;
   set graceArticulation(value: GraceArticulationsType);
+  // Per-grace notehead aligned by index with grace; an empty slot is normal.
+  get graceNotehead(): (NoteheadType | null)[] | null;
+  set graceNotehead(value: GraceNoteheadsType);
   graceType: GraceType;
   graceDuration: GraceDuration | null;
   graceSlur: GraceSlur;

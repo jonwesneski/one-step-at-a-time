@@ -16,6 +16,7 @@ import type {
   GlissandoHint,
   GraceArticulationsType,
   GraceDuration,
+  GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
   GraceSlur,
@@ -26,6 +27,7 @@ import type {
   MeasureNumberDisplay,
   Mode,
   Note,
+  NoteheadType,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -147,6 +149,7 @@ declare module 'react' {
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;
+        'grace-notehead'?: GraceNoteheadsType;
         'grace-type'?: GraceType;
         'grace-duration'?: GraceDuration;
         'grace-slur'?: GraceSlur;
@@ -169,6 +172,7 @@ declare module 'react' {
         'shared-stem-for'?: string;
         'slur-group'?: string;
         'stem-direction'?: StemDirection;
+        notehead?: NoteheadType;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -196,6 +200,7 @@ declare module 'react' {
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
         'grace-articulation'?: GraceArticulationsType;
+        'grace-notehead'?: GraceNoteheadsType;
         'grace-type'?: GraceType;
         'grace-duration'?: GraceDuration;
         'grace-slur'?: GraceSlur;
@@ -218,6 +223,7 @@ declare module 'react' {
         'shared-stem-for'?: string;
         'slur-group'?: string;
         'stem-direction'?: StemDirection;
+        notehead?: NoteheadType;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

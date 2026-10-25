@@ -16,6 +16,10 @@
 //
 // A `:rotate90` suffix rotates the outline 90 degrees clockwise (a horizontal
 // glyph, e.g. a wiggle segment, becomes a vertical one running top to bottom).
+// An `:anchors` suffix also prints notehead stem anchors in the same
+// normalized space: stem-up = the rightmost on-curve point (ties -> topmost),
+// stem-down = the leftmost (ties -> bottommost). For an X these are the NE
+// and SW arm tips; for a diamond, its side corners.
 // It prints one ready-to-paste constant block per glyph. See the "Drawing /
 // SMuFL glyphs" section of README.md for the full workflow, and CLAUDE.md's
 // "Known Incomplete Areas" for provenance context. Per repo convention the
@@ -61,6 +65,15 @@ const CODEPOINTS = {
   wiggleTrillSlower: 0xeaa6,
   wiggleTrillSlowerStill: 0xeaa7,
   wiggleTrillSlowest: 0xeaa8,
+  noteheadXBlack: 0xe0a9,
+  noteheadCircleX: 0xe0b3,
+  noteheadDiamondWhole: 0xe0d8,
+  noteheadDiamondHalfWide: 0xe0da,
+  noteheadDiamondBlack: 0xe0db,
+  noteheadTriangleUpWhite: 0xe0bd,
+  noteheadTriangleUpBlack: 0xe0be,
+  noteheadTriangleDownWhite: 0xe0c6,
+  noteheadTriangleDownBlack: 0xe0c7,
 };
 
 const args = process.argv.slice(2);
@@ -87,6 +100,7 @@ const constName = (glyphName) =>
 for (const arg of args) {
   const [glyphName, ...modifiers] = arg.split(':');
   const rotate90 = modifiers.includes('rotate90');
+  const anchors = modifiers.includes('anchors');
   const codepoint = CODEPOINTS[glyphName];
   if (codepoint === undefined) {
     console.error(`unknown glyph "${glyphName}"`);
@@ -148,4 +162,22 @@ for (const arg of args) {
       rotate90 ? 'vertical' : 'horizontal'
     } axis`
   );
+
+  if (anchors) {
+    const points = path.commands
+      .filter((c) => c.type !== 'Z')
+      .map((c) => norm(c.x, c.y));
+    const stemUp = points.reduce((best, p) =>
+      p[0] > best[0] || (p[0] === best[0] && p[1] < best[1]) ? p : best
+    );
+    const stemDown = points.reduce((best, p) =>
+      p[0] < best[0] || (p[0] === best[0] && p[1] > best[1]) ? p : best
+    );
+    console.log(
+      `const ${base}_STEM_UP_ANCHOR = { x: ${stemUp[0]}, y: ${stemUp[1]} };`
+    );
+    console.log(
+      `const ${base}_STEM_DOWN_ANCHOR = { x: ${stemDown[0]}, y: ${stemDown[1]} };`
+    );
+  }
 }
