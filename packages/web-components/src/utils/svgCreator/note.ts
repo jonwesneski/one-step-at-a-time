@@ -24,10 +24,13 @@ import {
   ACCIDENTAL_SYMBOL_WIDTH,
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  BASE_STEM_LENGTH_PX,
   BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
+  FLAG_STEM_STEP_PX,
   STAFF_TOP_LINE_Y,
   STEM_OVERLAP_PX,
+  STEM_STROKE_WIDTH_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
@@ -56,16 +59,22 @@ export const NOTE_SCALE = NOTE_SVG_WIDTH / COORD_WIDTH;
 export const NOTE_SVG_HEIGHT = 60;
 export const NOTE_STEM_X_OFFSET = 365 * NOTE_SCALE; // stem x within a note SVG, stem-up (~19.47px)
 export const NOTE_STEM_X_OFFSET_STEM_DOWN = 247 * NOTE_SCALE; // stem x within a note SVG, stem-down (~13.17px)
-export const NOTE_Y_STEM_START = 100;
-export const NOTE_STEM_TIP_Y_OFFSET = NOTE_Y_STEM_START * NOTE_SCALE; // stem tip y for stem-up (~5.33px)
+const BASE_STEM_LENGTH = BASE_STEM_LENGTH_PX / NOTE_SCALE;
+// Notehead centre y for stem-up. Fixed independently of stem length, so a stem
+// length change moves only the tip and every head-position consumer holds.
+const STEM_UP_HEAD_Y = 700;
+export const NOTE_Y_STEM_START = STEM_UP_HEAD_Y - BASE_STEM_LENGTH;
+export const NOTE_STEM_TIP_Y_OFFSET = NOTE_Y_STEM_START * NOTE_SCALE; // stem tip y for stem-up (~2.33px)
 // Y offset used to align the notehead with a staff line when positioning the note SVG.
-// = Math.round(10 + (NOTE_Y_STEM_START + 760) * NOTE_SCALE). Must stay in sync with
-// createNoteSvg's yHeadOffset formula for the base stem length (no flag extension).
-export const NOTE_Y_HEAD_OFFSET_STEM_UP = 47; // Math.round(10 + 700 * (32/600))
-const BASE_STEM_LENGTH = 600; // ~32px at NOTE_SCALE (~4 staff line spaces)
+// Must stay in sync with createNoteSvg's yHeadOffset formula (no flag extension).
+export const NOTE_Y_HEAD_OFFSET_STEM_UP = Math.round(
+  10 + STEM_UP_HEAD_Y * NOTE_SCALE
+); // 47
 const STEM_WIDTH = 22;
 const HEAD_WIDTH = 80;
-const FLAG_Y_SPACING = 120;
+const FLAG_Y_SPACING = FLAG_STEM_STEP_PX / NOTE_SCALE;
+// A stem has room for two tails; each further tail lengthens it.
+const TAILS_WITHOUT_LENGTHENING = 2;
 // Y offset to align the notehead when stem is down (head is near the top of the SVG).
 export const NOTE_Y_HEAD_OFFSET_STEM_DOWN = Math.round(
   10 + HEAD_WIDTH * NOTE_SCALE
@@ -77,14 +86,16 @@ export const NOTE_HEAD_Y_OFFSET_CORRECTION = 10;
 export const NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN =
   (HEAD_WIDTH + BASE_STEM_LENGTH) * NOTE_SCALE;
 
+function flagStemExtensionUnits(flagCount: number): number {
+  return Math.max(0, flagCount - TAILS_WITHOUT_LENGTHENING) * FLAG_Y_SPACING;
+}
+
 /**
- * Extra pixels added to the stem-down tip offset for notes with more than one
- * flag. The note SVG extends the stem by (flagCount - 1) * FLAG_Y_SPACING
- * coordinate units for each additional flag beyond the first (sixteenth, 32nd,
- * etc.). This extension grows downward, so only stem-down beams are affected.
+ * Extra pixels of stem length a flagged note draws for its tails. The extension
+ * grows downward in the note SVG, so it moves a stem-down tip and a stem-up head.
  */
 export function flagStemExtensionPx(flagCount: number): number {
-  return flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING * NOTE_SCALE : 0;
+  return flagStemExtensionUnits(flagCount) * NOTE_SCALE;
 }
 
 // Notehead geometry in pixel space — used by ledgerLines.ts and chord.ts
@@ -212,9 +223,7 @@ export const createNoteSvg = ({
 
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
 
-  // Extend stem on larger flag counts
-  const flagStemExtension =
-    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
 
   // Stem — computed unconditionally (not just inside the `!noStem` block
   // below) so articulationStemAnchorBeamLevels can reuse the same tip position the
@@ -242,7 +251,10 @@ export const createNoteSvg = ({
       svg.setAttribute('overflow', 'visible');
     }
     stem.setAttribute('stroke', 'currentColor');
-    stem.setAttribute('stroke-width', STEM_WIDTH.toString());
+    stem.setAttribute(
+      'stroke-width',
+      (STEM_STROKE_WIDTH_PX / NOTE_SCALE).toString()
+    );
     g.appendChild(stem);
   }
 
@@ -542,8 +554,7 @@ export function noteHeadGeometry(
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
-  const flagStemExtension =
-    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
   const cy = stemUp ? yStemEnd : HEAD_WIDTH;
   const ellipseCx = stemUp ? xStart - 10 : xStart + STEM_WIDTH;
@@ -612,8 +623,7 @@ export function stemTipPosition(
 ): { x: number; y: number } {
   const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
-  const flagStemExtension =
-    !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
+  const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
   const stemExtensionInternal = stemExtension / NOTE_SCALE;
   return {
     x: stemUp ? xStart + HEAD_WIDTH - 15 : xStart + STEM_WIDTH - HEAD_WIDTH + 5,

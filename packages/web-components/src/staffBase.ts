@@ -27,6 +27,7 @@ import {
   STAFF_BOTTOM_MARGIN,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
+  STAFF_LINE_THICKNESS_PX,
   STAFF_WRAPPER_MIN_HEIGHT,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from './utils/notationDimensions';
@@ -245,9 +246,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           width: 100%;
           height: ${this.staffHeight}px;
           display: block;
-          border-top: 1px solid currentColor;
+          border-top: ${STAFF_LINE_THICKNESS_PX}px solid currentColor;
           border-right: 1px solid currentColor;
-          border-bottom: 1px solid currentColor;
+          border-bottom: ${STAFF_LINE_THICKNESS_PX}px solid currentColor;
           margin-top: ${STAFF_LINE_START}px;
           margin-bottom: ${STAFF_BOTTOM_MARGIN}px;
           pointer-events: none;
@@ -257,7 +258,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           position: absolute;
           left: 0;
           right: 0;
-          height: 0.5px;
+          height: ${STAFF_LINE_THICKNESS_PX}px;
           background: currentColor;
         }
 

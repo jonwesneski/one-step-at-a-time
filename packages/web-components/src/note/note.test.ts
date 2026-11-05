@@ -19,7 +19,10 @@ import {
 } from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
+  FLAG_STEM_STEP_PX,
   GRACE_SCALE,
+  STAFF_LINE_SPACING,
+  STAFF_LINE_THICKNESS_PX,
 } from '../utils/notationDimensions';
 import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
@@ -2201,5 +2204,68 @@ describe(`${MUSIC_NOTE} notehead`, () => {
     note.notehead = null;
     expect(note.hasAttribute('notehead')).toBe(false);
     expect(head(note)?.tagName).toBe('ellipse');
+  });
+});
+
+describe('stem length', () => {
+  const stemLengthPx = (note: NoteElementType) => {
+    const stem = note.shadowRoot?.querySelector('.stem');
+    return (
+      Math.abs(
+        Number(stem?.getAttribute('y2')) - Number(stem?.getAttribute('y1'))
+      ) * NOTE_SCALE
+    );
+  };
+  const renderNote = (duration: DurationType, stemUp = true) => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', duration);
+    document.body.appendChild(note);
+    note.stemUp = stemUp;
+    return note;
+  };
+
+  it.each([true, false])('is 3½ spaces by default (stemUp=%s)', (stemUp) => {
+    expect(stemLengthPx(renderNote('quarter', stemUp))).toBeCloseTo(
+      STAFF_LINE_SPACING * 3.5
+    );
+  });
+
+  it.each([true, false])(
+    'shortens with a negative extension (stemUp=%s)',
+    (stemUp) => {
+      const note = renderNote('eighth', stemUp);
+      note.stemExtension = STAFF_LINE_SPACING * -1;
+      expect(stemLengthPx(note)).toBeCloseTo(STAFF_LINE_SPACING * 2.5);
+    }
+  );
+
+  it.each([
+    ['eighth', 0],
+    ['sixteenth', 0],
+    ['thirtysecond', 1],
+    ['sixtyfourth', 2],
+  ] as [DurationType, number][])(
+    'gives %s tails room past the second',
+    (duration, extraSteps) => {
+      expect(stemLengthPx(renderNote(duration))).toBeCloseTo(
+        STAFF_LINE_SPACING * 3.5 + extraSteps * FLAG_STEM_STEP_PX
+      );
+    }
+  );
+
+  it('keeps the head at the same offset whatever the stem length', () => {
+    const note = renderNote('quarter');
+    const headY = note.shadowRoot?.querySelector('.head')?.getAttribute('cy');
+    note.stemExtension = STAFF_LINE_SPACING * -1;
+    expect(note.shadowRoot?.querySelector('.head')?.getAttribute('cy')).toBe(
+      headY
+    );
+  });
+
+  it('draws the stem thinner than a stave line', () => {
+    const stem = renderNote('quarter').shadowRoot?.querySelector('.stem');
+    const widthPx = Number(stem?.getAttribute('stroke-width')) * NOTE_SCALE;
+    expect(widthPx).toBeLessThan(STAFF_LINE_THICKNESS_PX);
+    expect(widthPx).toBeGreaterThan(STAFF_LINE_THICKNESS_PX / 2);
   });
 });

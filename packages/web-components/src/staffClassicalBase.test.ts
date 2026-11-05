@@ -19,7 +19,9 @@ import {
   BASE_STEM_LENGTH_PX,
   DYNAMICS_BASELINE_Y,
   MIDDLE_STAFF_Y,
+  MIN_STEM_LENGTH_PX,
   STAFF_BOTTOM_LINE_Y,
+  STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
@@ -1266,7 +1268,10 @@ describe('staffClassicalBase triangle noteheads', () => {
       ]);
       expect(f5.stemUp).toBe(true);
       expect(triangle.staffY).toBe(
-        f5.staffY - BASE_STEM_LENGTH_PX - TRIANGLE_RUN_CLEARANCE_PX
+        f5.staffY -
+          BASE_STEM_LENGTH_PX -
+          f5.stemExtension -
+          TRIANGLE_RUN_CLEARANCE_PX
       );
     });
 
@@ -1308,6 +1313,7 @@ describe('staffClassicalBase triangle noteheads', () => {
       expect(triangle.staffY).toBeCloseTo(
         sixteenth.staffY -
           BASE_STEM_LENGTH_PX -
+          sixteenth.stemExtension -
           flagStemExtensionPx(2) -
           TRIANGLE_RUN_CLEARANCE_PX
       );
@@ -1424,5 +1430,112 @@ describe('staffClassicalBase triangle noteheads', () => {
     expect(triangle.stemExtension).toBeCloseTo(
       MIDDLE_STAFF_Y - (triangle.staffY + BASE_STEM_LENGTH_PX)
     );
+  });
+});
+
+describe('staffClassicalBase stems', () => {
+  const renderStaff = (entries: Record<string, string>[], time = '4/4') => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, time);
+    staff.setAttribute('clef', 'treble');
+    document.body.appendChild(staff);
+    const elements = entries.map((attrs) => {
+      const { tag = MUSIC_NOTE, ...rest } = attrs;
+      const element = document.createElement(tag) as any;
+      for (const [name, value] of Object.entries(rest)) {
+        element.setAttribute(name, value);
+      }
+      return element;
+    });
+    staff.append(...elements);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => elements;
+    slot.dispatchEvent(new Event('slotchange'));
+    return elements;
+  };
+  const quarter = (note: string, octave: string) => ({
+    note,
+    octave,
+    duration: 'quarter',
+  });
+
+  it('continues surrounding stems on a centre-line note', () => {
+    const [, b4] = renderStaff([
+      quarter('G', '4'),
+      quarter('B', '4'),
+      quarter('A', '4'),
+    ]);
+    expect(b4.stemUp).toBe(true);
+  });
+
+  it('keeps a down-stem on a centre-line note among down-stems', () => {
+    const [, b4] = renderStaff([
+      quarter('D', '5'),
+      quarter('B', '4'),
+      quarter('C', '5'),
+    ]);
+    expect(b4.stemUp).toBe(false);
+  });
+
+  it('treats a neighbouring stem-direction as context', () => {
+    const [, b4] = renderStaff([
+      { ...quarter('G', '4'), 'stem-direction': 'down' },
+      quarter('B', '4'),
+    ]);
+    expect(b4.stemUp).toBe(false);
+  });
+
+  it("lets a centre-line note's own stem-direction win over context", () => {
+    const [, b4] = renderStaff([
+      quarter('G', '4'),
+      { ...quarter('B', '4'), 'stem-direction': 'down' },
+      quarter('A', '4'),
+    ]);
+    expect(b4.stemUp).toBe(false);
+  });
+
+  it('extends a stem to the middle line past the first ledger line', () => {
+    const [a5, c6, c4, a3] = renderStaff([
+      quarter('A', '5'),
+      quarter('C', '6'),
+      quarter('C', '4'),
+      quarter('A', '3'),
+    ]);
+    expect(a5.stemExtension).toBe(0);
+    expect(c6.stemExtension).toBe(
+      MIDDLE_STAFF_Y - c6.staffY - BASE_STEM_LENGTH_PX
+    );
+    expect(c4.stemExtension).toBe(0);
+    expect(a3.stemExtension).toBe(
+      a3.staffY - MIDDLE_STAFF_Y - BASE_STEM_LENGTH_PX
+    );
+  });
+
+  it('shortens a stem forced out of the stave, down to the minimum', () => {
+    const [c5, f5] = renderStaff([
+      { ...quarter('C', '5'), 'stem-direction': 'up' },
+      { ...quarter('F', '5'), 'stem-direction': 'up' },
+    ]);
+    expect(BASE_STEM_LENGTH_PX + c5.stemExtension).toBe(STAFF_LINE_SPACING * 3);
+    expect(BASE_STEM_LENGTH_PX + f5.stemExtension).toBe(MIN_STEM_LENGTH_PX);
+  });
+
+  it('leaves a stemless note with no extension', () => {
+    const [c6] = renderStaff([{ note: 'C', octave: '6', duration: 'whole' }]);
+    expect(c6.stemExtension).toBe(0);
+  });
+
+  it('measures a chord stem from the head nearest the open end', () => {
+    const [chord] = renderStaff([
+      {
+        tag: MUSIC_CHORD,
+        chord: 'C',
+        duration: 'quarter',
+        'stem-direction': 'down',
+      },
+    ]);
+    const lowestHead = Math.max(...chord.staffYCoordinates);
+    expect(lowestHead).toBeGreaterThan(MIDDLE_STAFF_Y);
+    expect(BASE_STEM_LENGTH_PX + chord.stemExtension).toBe(MIN_STEM_LENGTH_PX);
   });
 });

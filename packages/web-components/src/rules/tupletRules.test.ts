@@ -42,6 +42,7 @@ import {
   parseTupletRatio,
   resolveInnermostTuplet,
   resolveTupletBracketAbove,
+  stemTipYFromStaffY,
 } from './tupletRules';
 
 afterEach(() => {
@@ -1848,5 +1849,22 @@ describe('computeTupletBracketGeometry', () => {
     // stem-up: secondary beams grow downward (away from numeral), so beamStackOffset is
     // always BEAM_THICKNESS_PX. With identical note positions the numeralY should be equal.
     expect(thirtySecondResult.numeralY).toBeCloseTo(eighthResult.numeralY);
+  });
+});
+
+describe('stemTipYFromStaffY', () => {
+  it('moves the tip away from the head by the extension, either way', () => {
+    expect(stemTipYFromStaffY(50, true, 5)).toBe(
+      stemTipYFromStaffY(50, true) - 5
+    );
+    expect(stemTipYFromStaffY(50, false, 5)).toBe(
+      stemTipYFromStaffY(50, false) + 5
+    );
+  });
+
+  it('moves the tip back toward the head for a shortened stem', () => {
+    expect(stemTipYFromStaffY(50, true, -5)).toBe(
+      stemTipYFromStaffY(50, true) + 5
+    );
   });
 });

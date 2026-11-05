@@ -36,7 +36,6 @@ import {
   isTriangle,
   resolveStemTipY,
   resolveTriangleStaffYs,
-  triangleStemExtensionPx,
   type TrianglePlacementEntry,
 } from './rules/noteheadRules';
 import {
@@ -51,14 +50,15 @@ import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
 } from './rules/spacingRules';
-import {
-  determineVoiceStemDirections,
-  getStaffYs,
-} from './rules/staffNoteRules';
+import { getStaffYs } from './rules/staffNoteRules';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
 } from './rules/staffWidth';
+import {
+  determineVoiceStemDirections,
+  unbeamedStemExtensionPx,
+} from './rules/stemRules';
 import { durationToFlagCountMap } from './rules/theoryConsts';
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
@@ -76,6 +76,7 @@ import {
   naturalStemTipY,
   noteheadEdgeY,
   resolveTupletBracketAbove,
+  stemTipYFromStaffY,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -188,7 +189,6 @@ import {
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
   MID_STREAM_CLEF_Y_OFFSET,
-  MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
   OCTAVE_LOCO_ESTIMATED_WIDTH_PX,
@@ -227,11 +227,7 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   flagStemExtensionPx,
-  NOTE_STEM_TIP_Y_OFFSET,
-  NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
-  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
-  NOTE_Y_HEAD_OFFSET_STEM_UP,
   trillSignLeftX,
 } from './utils/svgCreator/note';
 import {
@@ -429,6 +425,10 @@ type VoiceRenderState = {
   beamsBuilder: BeamsBuilder | null;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null;
   stemDirections: boolean[];
+  // What each unbeamed stem draws beyond the base length, from the head it
+  // starts at (chord spread and tails included). 0 for beamed entries, whose
+  // tips come from the beam line, and for stemless ones.
+  unbeamedStemTipExtensionsPx: number[];
   beamedIndices: Set<number>;
   // Indices joined to a cross-staff double-stemmed beam group — their real
   // stemExtension is resolved and written directly by the ancestor
@@ -1740,16 +1740,47 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       externallyBeamedIndices,
       combinedStemOverrides
     );
+    // Beamed lengths come from the beam line and cross-staff ones from the
+    // ancestor <music-measure>, so only unbeamed stems take their rule length.
+    const hasOwnStem = (i: number): boolean => {
+      const { nodeName, duration } = elements[i];
+      return (
+        nodeName !== MUSIC_REST_NODE &&
+        !beamsBuilder.isBeamed(i) &&
+        duration !== 'whole' &&
+        duration !== 'double-whole'
+      );
+    };
+    const unbeamedExtensionPx = (i: number): number =>
+      hasOwnStem(i)
+        ? unbeamedStemExtensionPx(
+            getStaffYs(elements[i], noteStaffYCoords, chordStaffYCoords),
+            stemDirections[i],
+            durationToFlagCountMap.get(elements[i].duration) ?? 0
+          )
+        : 0;
     this.#placeTriangles(
       elements,
       noteStaffYCoords,
       chordStaffYCoords,
       (i) => ({
         stemUp: stemDirections[i],
-        stemExtensionPx: beamRenderer.stemExtension(i),
+        stemExtensionPx: beamRenderer.stemExtension(i) + unbeamedExtensionPx(i),
         noFlags: beamsBuilder.isBeamed(i),
       })
     );
+    const unbeamedExtensionsPx = elements.map((_, i) => unbeamedExtensionPx(i));
+    const unbeamedStemTipExtensionsPx = elements.map((element, i) => {
+      if (!hasOwnStem(i)) {
+        return 0;
+      }
+      const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      return (
+        unbeamedExtensionsPx[i] +
+        (Math.max(...headYs) - Math.min(...headYs)) +
+        flagStemExtensionPx(durationToFlagCountMap.get(element.duration) ?? 0)
+      );
+    });
 
     const beamedIndices = new Set(
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
@@ -1783,18 +1814,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
           if (!isExternallyBeamed) {
-            noteElement.stemExtension =
-              triangle && !isBeamed && staffY !== null
-                ? Math.max(
-                    extension,
-                    triangleStemExtensionPx(
-                      staffY,
-                      stemUp,
-                      MIDDLE_STAFF_Y,
-                      BASE_STEM_LENGTH_PX
-                    )
-                  )
-                : extension;
+            noteElement.stemExtension = isBeamed
+              ? extension
+              : unbeamedExtensionsPx[i];
           }
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental =
@@ -1830,7 +1852,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
           if (!isExternallyBeamed) {
-            chordElement.stemExtension = extension;
+            chordElement.stemExtension = isBeamed
+              ? extension
+              : unbeamedExtensionsPx[i];
           }
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
@@ -1855,6 +1879,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beamsBuilder,
       beamRenderer,
       stemDirections,
+      unbeamedStemTipExtensionsPx,
       beamedIndices,
       externallyBeamedIndices,
       externallyPositionedRestIndices,
@@ -3059,7 +3084,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           null,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group)
+          this.#tupletSideOverride(group),
+          (i) => state.unbeamedStemTipExtensionsPx[i]
         );
         if (geometry !== null) {
           innerGeometriesByGroup.set(group, geometry);
@@ -3099,7 +3125,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           outerBaseY,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group)
+          this.#tupletSideOverride(group),
+          (i) => state.unbeamedStemTipExtensionsPx[i]
         );
         if (geometry !== null) {
           allGeometries.push(geometry);
@@ -4467,7 +4494,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
               state.elements,
               state.stemDirections,
               state.noteStaffYCoords,
-              state.chordStaffYCoords
+              state.chordStaffYCoords,
+              state.unbeamedStemTipExtensionsPx[i]
             )
           : noteheadEdgeY(
               i,
@@ -4510,13 +4538,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (staffY === null) {
         continue;
       }
-      const yHeadOffset = stemUp
-        ? NOTE_Y_HEAD_OFFSET_STEM_UP
-        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-      const stemTipOffset = stemUp
-        ? NOTE_STEM_TIP_Y_OFFSET
-        : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-      const tipY = STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+      const tipY = stemTipYFromStaffY(
+        staffY,
+        stemUp,
+        state.stemDirections[i] === stemUp
+          ? state.unbeamedStemTipExtensionsPx[i]
+          : 0
+      );
       extreme = stemUp ? Math.min(extreme, tipY) : Math.max(extreme, tipY);
       anyResolved = true;
     }

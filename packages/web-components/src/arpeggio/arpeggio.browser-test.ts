@@ -138,7 +138,7 @@ test('written-out arpeggio run: stem-up stems lengthen for the beam stack and re
   const geometry = await runStemVsPrimaryBeam(page, true);
   expect(geometry).toHaveLength(4);
   for (const { stemLength, tipToPrimaryGap } of geometry) {
-    // A thirtysecond run stacks 3 beams toward the heads; the base 32px stem is
+    // A thirtysecond run stacks 3 beams toward the heads; the base stem is
     // too short — it must grow so the innermost beam still clears the notehead.
     expect(stemLength).toBeGreaterThan(40);
     expect(tipToPrimaryGap).toBeLessThan(4);

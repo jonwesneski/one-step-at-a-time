@@ -219,7 +219,8 @@ export function naturalStemTipY(
   elements: NoteChordOrRestElementType[],
   stemDirections: boolean[],
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
-  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
+  stemExtensionPx = 0
 ): number | null {
   const staffY = getStaffYForIndex(
     index,
@@ -231,14 +232,31 @@ export function naturalStemTipY(
   if (staffY === null) {
     return null;
   }
-  const stemUp = stemDirections[index];
+  return stemTipYFromStaffY(staffY, stemDirections[index], stemExtensionPx);
+}
+
+/**
+ * A stem's tip Y in the staff's local coordinate space, from the staff-Y of the
+ * head it starts at. `stemExtensionPx` is what it draws beyond the base length.
+ */
+export function stemTipYFromStaffY(
+  staffY: number,
+  stemUp: boolean,
+  stemExtensionPx = 0
+): number {
   const yHeadOffset = stemUp
     ? NOTE_Y_HEAD_OFFSET_STEM_UP
     : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
   const stemTipOffset = stemUp
     ? NOTE_STEM_TIP_Y_OFFSET
     : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-  return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+  return (
+    STAFF_Y_PADDING +
+    staffY -
+    yHeadOffset +
+    stemTipOffset +
+    (stemUp ? -stemExtensionPx : stemExtensionPx)
+  );
 }
 
 /**
@@ -318,7 +336,10 @@ export function computeTupletBracketGeometry(
   // Forces the bracket's side regardless of the stem vote. A note whose
   // stem points away from the forced side is cleared by its notehead, not
   // by a stem tip on the bracket's side it doesn't have.
-  sideOverride: TupletPlacement | null = null
+  sideOverride: TupletPlacement | null = null,
+  // What an unbeamed note's stem draws beyond the base length, so the bracket
+  // clears its real tip.
+  stemExtensionPxForIndex: (index: number) => number = () => 0
 ): TupletBracketGeometry | null {
   if (group.indices.length < 2) {
     return null;
@@ -425,13 +446,11 @@ export function computeTupletBracketGeometry(
     if (staffY === null) {
       return null;
     }
-    const yHeadOffset = stemUp
-      ? NOTE_Y_HEAD_OFFSET_STEM_UP
-      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-    const stemTipOffset = stemUp
-      ? NOTE_STEM_TIP_Y_OFFSET
-      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+    return stemTipYFromStaffY(
+      staffY,
+      stemUp,
+      stemDirections[idx] === stemUp ? stemExtensionPxForIndex(idx) : 0
+    );
   };
 
   // Push baseY outward past the extreme stem tip so the bracket never

@@ -10,10 +10,10 @@ Beam grouping implemented here:
   stream).
 - A rest always breaks the current run (no beaming over rests).
 - Notes in one beam group share a single stem direction, resolved from the
-  group's Y extremes (determineStemDirections in staffNoteRules.ts) — not
-  per-note.
-- The beam is linearly interpolated between the group's first and last note
-  Y, so it's horizontal when they match and slanted otherwise.
+  group's Y extremes (determineStemDirections in stemRules.ts) — not per-note.
+- The beam is linearly interpolated between the first and last note's stem
+  tips at their rule lengths (stemRules.ts#stemLengthAdjustPx), so it's
+  horizontal when they match and slanted otherwise.
 - Mixed durations produce a primary beam across the whole group plus
   secondary/fractional (partial-stub) beams for the faster subdivisions,
   built in BeamGroup#computeBeamStructure.
@@ -68,11 +68,20 @@ export type NoteYPosition = {
    * measured from that nearer notehead, as a single note's would be.
    */
   chordSpread?: number;
+  /**
+   * How much longer (px) than the base length this note's stem wants to be as
+   * a lone note (negative: shorter). Places the ends of the beam line.
+   */
+  stemLengthAdjustPx?: number;
 };
 
 interface NoteData {
   x: number;
+  // Stem tip at the base stem length; the length floor is measured from here.
   y: number;
+  // Stem tip at this note's rule length; the beam line runs between the first
+  // and last note's anchors.
+  beamAnchorY: number;
   /** Number of beams on this note (= flag count): 1 = eighth, 2 = sixteenth, etc. */
   beamCount: number;
 }
@@ -139,8 +148,9 @@ class BeamGroupRenderer {
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
     return (
-      first.y +
-      (last.y - first.y) * this.#beamProgressAt(localIndex) +
+      first.beamAnchorY +
+      (last.beamAnchorY - first.beamAnchorY) *
+        this.#beamProgressAt(localIndex) +
       this.#beamVerticalOffset
     );
   }
@@ -148,7 +158,7 @@ class BeamGroupRenderer {
   /**
    * Recomputes the vertical offset that shifts the whole beam line so that:
    *   1. The stem to the innermost beam is never shorter than
-   *      MIN_BEAM_STEM_LENGTH_PX. Inner beams stack toward the noteheads, so a
+   *      MIN_STEM_LENGTH_PX. Inner beams stack toward the noteheads, so a
    *      multi-beam group needs a longer stem to the primary beam than a single
    *      beam does — innerStackDepth accounts for that.
    *   2. The beam outer edge does not overlap non-extremal chord noteheads.
@@ -164,12 +174,13 @@ class BeamGroupRenderer {
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
     const unshiftedBeamYAt = (i: number) =>
-      first.y + (last.y - first.y) * this.#beamProgressAt(i);
+      first.beamAnchorY +
+      (last.beamAnchorY - first.beamAnchorY) * this.#beamProgressAt(i);
 
     // Constraint 1: minimum stem length, measured to the innermost beam.
     // STEM_OVERLAP_PX is subtracted inside stemExtension(), so both the trigger
     // and magnitude must account for it to guarantee the shortest stem to the
-    // innermost beam is exactly MIN_BEAM_STEM_LENGTH_PX in the worst case.
+    // innermost beam is exactly MIN_STEM_LENGTH_PX in the worst case.
     let shortestStemExtension = Infinity;
     for (let i = 0; i < this.#notes.length; i++) {
       const rawExtension = this.#stemUp
@@ -287,10 +298,11 @@ class BeamGroupRenderer {
   #primaryBeamYAt(x: number): number {
     const first = this.#notes[0];
     const last = this.#notes[this.#notes.length - 1];
-    if (first.x === last.x) return first.y + this.#beamVerticalOffset;
+    if (first.x === last.x) return first.beamAnchorY + this.#beamVerticalOffset;
     return (
-      first.y +
-      (last.y - first.y) * ((x - first.x) / (last.x - first.x)) +
+      first.beamAnchorY +
+      (last.beamAnchorY - first.beamAnchorY) *
+        ((x - first.x) / (last.x - first.x)) +
       this.#beamVerticalOffset
     );
   }
@@ -316,6 +328,7 @@ class BeamGroup {
     this.#notes = flagCounts.map((beamCount) => ({
       x: NaN,
       y: NaN,
+      beamAnchorY: NaN,
       beamCount,
     }));
     this.#globalIndices = globalIndices;
@@ -344,7 +357,8 @@ class BeamGroup {
     y: number,
     stemUp: boolean,
     chordClearanceY?: number,
-    chordSpread = 0
+    chordSpread = 0,
+    stemLengthAdjustPx = 0
   ): void {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) return;
@@ -354,8 +368,10 @@ class BeamGroup {
     const tipOffset = stemUp
       ? NOTE_STEM_TIP_Y_OFFSET
       : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    this.#notes[localIndex].y =
-      y + tipOffset + (stemUp ? -chordSpread : chordSpread);
+    const baseTipY = y + tipOffset + (stemUp ? -chordSpread : chordSpread);
+    this.#notes[localIndex].y = baseTipY;
+    this.#notes[localIndex].beamAnchorY =
+      baseTipY + (stemUp ? -stemLengthAdjustPx : stemLengthAdjustPx);
     this.#chordSpreads[localIndex] = chordSpread;
     if (chordClearanceY !== undefined) {
       this.#chordClearanceY[localIndex] = chordClearanceY;
@@ -672,7 +688,14 @@ export class BeamsBuilder {
       const pos = noteYPositions[i];
       if (pos === null) continue;
       for (const group of this.#groups) {
-        group.setY(i, pos.y, pos.stemUp, pos.chordClearanceY, pos.chordSpread);
+        group.setY(
+          i,
+          pos.y,
+          pos.stemUp,
+          pos.chordClearanceY,
+          pos.chordSpread,
+          pos.stemLengthAdjustPx
+        );
       }
     }
     const groupRenderers = this.#groups.map((g) => g.buildRenderer());

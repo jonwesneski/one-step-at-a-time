@@ -30,6 +30,7 @@ import {
   GRACE_SLASH_TIP_INSET_PX,
   STAFF_Y_STEP,
   STEM_OVERLAP_PX,
+  STEM_STROKE_WIDTH_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import { createArticulationMarks } from './articulations';
@@ -49,7 +50,7 @@ import {
 
 // Full-size stem stroke is 22 units in the note's 600-unit space (≈1.17px);
 // grace stems scale that down.
-const GRACE_STEM_STROKE_WIDTH = 22 * NOTE_SCALE * GRACE_SCALE;
+const GRACE_STEM_STROKE_WIDTH = STEM_STROKE_WIDTH_PX * GRACE_SCALE;
 // Horizontal offset from a grace head center to its stem (stem-up — grace
 // notes are always rendered stem-up).
 export const GRACE_STEM_X_FROM_HEAD_CENTER =

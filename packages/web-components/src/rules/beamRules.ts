@@ -18,7 +18,7 @@ import {
 import { MUSIC_NOTE_NODE } from '../utils/consts';
 import { STAFF_Y_PADDING } from '../utils/notationDimensions';
 import { durationContribution } from './beatRules';
-import { determineStemDirections } from './staffNoteRules';
+import { determineStemDirections, stemLengthAdjustPx } from './stemRules';
 import { durationToFlagCountMap } from './theoryConsts';
 
 export function buildBeamsRenderer(
@@ -61,7 +61,14 @@ export function buildBeamsRenderer(
       elements,
       beamsBuilder,
       noteStaffYCoords,
-      chordStaffYCoords
+      chordStaffYCoords,
+      {
+        timeSig,
+        beatOffsets:
+          elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors),
+        durations: elementDurationFactors,
+        forcedDirections: crossStaffStemOverrides,
+      }
     );
   // crossStaffStemOverrides (the ancestor <music-measure>'s own
   // double-stemmed-beam resolution) is a sparse overlay applied on top of
@@ -108,6 +115,10 @@ export function buildBeamsRenderer(
             (noteStaffYCoords.get(noteElement) ?? 0) -
             yHeadOffset,
           stemUp,
+          stemLengthAdjustPx: stemLengthAdjustPx(
+            [noteStaffYCoords.get(noteElement) ?? 0],
+            stemUp
+          ),
         };
       }
 
@@ -137,6 +148,7 @@ export function buildBeamsRenderer(
         chordClearanceY,
         chordSpread:
           Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates),
+        stemLengthAdjustPx: stemLengthAdjustPx(staffYCoordinates, stemUp),
       };
     }
   );
@@ -146,6 +158,15 @@ export function buildBeamsRenderer(
     beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
     stemDirections,
   };
+}
+
+function cumulativeOffsets(durations: readonly number[]): number[] {
+  let offset = 0;
+  return durations.map((duration) => {
+    const start = offset;
+    offset += duration;
+    return start;
+  });
 }
 
 // A same-staff beam is drawn with one stem direction, so a direction forced

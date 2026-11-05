@@ -1,5 +1,6 @@
 import { computeLedgerLines, LedgerLine } from '../../rules/staffNoteRules';
 import { SVG_NS } from '../consts';
+import { STAFF_LINE_THICKNESS_PX } from '../notationDimensions';
 import {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
   NOTE_HEAD_CX_STEM_DOWN_PX,
@@ -8,7 +9,6 @@ import {
 } from './note';
 
 const LEDGER_LINE_MARGIN = 6;
-const LEDGER_LINE_STROKE_WIDTH = '1';
 
 // Horizontal extent of the head the ledger lines pass through, in the note
 // SVG's pixel space; defaults to the ellipse head.
@@ -58,7 +58,7 @@ export function createLedgerLineElements(
     line.setAttribute('x2', x2.toString());
     line.setAttribute('y2', svgY.toString());
     line.setAttribute('stroke', 'currentColor');
-    line.setAttribute('stroke-width', LEDGER_LINE_STROKE_WIDTH);
+    line.setAttribute('stroke-width', `${STAFF_LINE_THICKNESS_PX}`);
 
     return line;
   });
