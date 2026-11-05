@@ -13,8 +13,8 @@ import { computeAdjacentDisplacements } from './rules/chordRules';
 import { getClefRenderData } from './rules/clefRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
-  type HairpinPair,
   pairHairpinsWithLeftovers,
+  type HairpinPair,
 } from './rules/dynamicsRules';
 import {
   applyResolvedGraceAccidentals,
@@ -31,6 +31,14 @@ import type {
   StaffHairpinPlacement,
 } from './rules/hairpinPlacementRules';
 import { computeAllowedElementCount } from './rules/measureRules';
+import {
+  forcedStemUp,
+  isTriangle,
+  resolveStemTipY,
+  resolveTriangleStaffYs,
+  triangleStemExtensionPx,
+  type TrianglePlacementEntry,
+} from './rules/noteheadRules';
 import {
   isOctaveRaise,
   OctaveSpan,
@@ -165,6 +173,7 @@ import {
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
   ARPEGGIO_TEXT_FONT_SIZE,
+  BASE_STEM_LENGTH_PX,
   BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
@@ -179,6 +188,7 @@ import {
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
   MID_STREAM_CLEF_Y_OFFSET,
+  MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   NOTES_AREA_LEFT_MARGIN,
   OCTAVE_LOCO_ESTIMATED_WIDTH_PX,
@@ -195,6 +205,8 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   TIME_SIG_Y_TRANSLATE,
+  TRIANGLE_OUTSIDE_STAFF_PX,
+  TRIANGLE_RUN_CLEARANCE_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
   TRILL_ACCIDENTAL_GAP_PX,
   TRILL_ACCIDENTAL_SCALE,
@@ -214,6 +226,7 @@ import {
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  flagStemExtensionPx,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
@@ -1504,7 +1517,88 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         );
       }
     }
+    this.#placeTriangles(elements, noteStaffYCoords, chordStaffYCoords);
     return { noteStaffYCoords, chordStaffYCoords };
+  }
+
+  // Triangles have no defined pitch: their Y replaces the pitch-derived one
+  // (see rules/noteheadRules.ts#resolveTriangleStaffYs). Runs twice per pass,
+  // because voice 3's direction heuristic reads these Ys before any stem is
+  // known: first against heads alone, then with `resolvedStem` once
+  // buildBeamsRenderer has settled directions and extensions. The second run
+  // only moves a triangle further out, so entries the first run saw but the
+  // second no longer has (moved to the 'combined' track) stay cleared.
+  #placeTriangles(
+    elements: NoteChordOrRestElementType[],
+    noteStaffYCoords: Map<NoteElementType, number>,
+    chordStaffYCoords: Map<ChordElementType, number[]>,
+    resolvedStem?: (index: number) => {
+      stemUp: boolean;
+      stemExtensionPx: number;
+      noFlags: boolean;
+    }
+  ): void {
+    if (
+      !elements.some(
+        (element) =>
+          element.nodeName === MUSIC_NOTE_NODE &&
+          isTriangle((element as NoteElementType).notehead)
+      )
+    ) {
+      return;
+    }
+    const entries = elements.map((element, i): TrianglePlacementEntry => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return { kind: 'break' };
+      }
+      if (element.nodeName === MUSIC_NOTE_NODE) {
+        const notehead = (element as NoteElementType).notehead;
+        if (notehead === 'triangle-up' || notehead === 'triangle-down') {
+          const previous = elements[i - 1];
+          return {
+            kind: 'triangle',
+            notehead,
+            tiedFromPrevious:
+              previous?.nodeName === MUSIC_NOTE_NODE &&
+              (previous as NoteElementType).tie === 'start',
+          };
+        }
+      }
+      const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      const stem = resolvedStem?.(i);
+      const duration = (element as NoteElementType | ChordElementType).duration;
+      return {
+        kind: 'pitched',
+        headYs,
+        stemTipY: stem
+          ? resolveStemTipY({
+              headYs,
+              stemUp: stem.stemUp,
+              stemless: duration === 'whole' || duration === 'double-whole',
+              noFlags: stem.noFlags,
+              stemExtensionPx: stem.stemExtensionPx,
+              baseStemLengthPx: BASE_STEM_LENGTH_PX,
+              flagExtensionPx: flagStemExtensionPx(
+                durationToFlagCountMap.get(duration) ?? 0
+              ),
+            })
+          : null,
+      };
+    });
+    const triangleYs = resolveTriangleStaffYs(entries, {
+      topLineY: STAFF_TOP_LINE_Y,
+      bottomLineY: STAFF_BOTTOM_LINE_Y,
+      outsideStaffPx: TRIANGLE_OUTSIDE_STAFF_PX,
+      runClearancePx: TRIANGLE_RUN_CLEARANCE_PX,
+    });
+    for (const [i, y] of triangleYs) {
+      const triangle = elements[i] as NoteElementType;
+      const firstRunY = noteStaffYCoords.get(triangle) ?? y;
+      const outerY = forcedStemUp(triangle.notehead)
+        ? Math.max(firstRunY, y)
+        : Math.min(firstRunY, y);
+      noteStaffYCoords.set(triangle, resolvedStem ? outerY : y);
+    }
   }
 
   // Builds one voice key's full VoiceRenderState: Y-coordinate resolution,
@@ -1583,7 +1677,23 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
       const stemDirection = (element as NoteElementType | ChordElementType)
         .stemDirection;
-      if (stemDirection !== null) {
+      const triangleStemUp =
+        element.nodeName === MUSIC_NOTE_NODE
+          ? forcedStemUp((element as NoteElementType).notehead)
+          : null;
+      if (triangleStemUp !== null) {
+        if (
+          stemDirection !== null &&
+          (stemDirection === 'up') !== triangleStemUp
+        ) {
+          console.warn(
+            `[music-note] stem-direction="${stemDirection}" is ignored: a ${
+              (element as NoteElementType).notehead
+            } notehead's stem always points away from its tip.`
+          );
+        }
+        authoredStemOverrides.set(element, triangleStemUp);
+      } else if (stemDirection !== null) {
         authoredStemOverrides.set(element, stemDirection === 'up');
       }
     }
@@ -1630,6 +1740,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       externallyBeamedIndices,
       combinedStemOverrides
     );
+    this.#placeTriangles(
+      elements,
+      noteStaffYCoords,
+      chordStaffYCoords,
+      (i) => ({
+        stemUp: stemDirections[i],
+        stemExtensionPx: beamRenderer.stemExtension(i),
+        noFlags: beamsBuilder.isBeamed(i),
+      })
+    );
 
     const beamedIndices = new Set(
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
@@ -1658,15 +1778,35 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // #spaceElements() via restToYCoordinate(duration, voiceRestContext)
       } else if (element.nodeName === MUSIC_NOTE_NODE) {
         const noteElement = element as NoteElementType;
+        const staffY = noteStaffYCoords.get(noteElement) ?? null;
+        const triangle = isTriangle(noteElement.notehead);
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
           if (!isExternallyBeamed) {
-            noteElement.stemExtension = extension;
+            noteElement.stemExtension =
+              triangle && !isBeamed && staffY !== null
+                ? Math.max(
+                    extension,
+                    triangleStemExtensionPx(
+                      staffY,
+                      stemUp,
+                      MIDDLE_STAFF_Y,
+                      BASE_STEM_LENGTH_PX
+                    )
+                  )
+                : extension;
           }
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental =
             accidentals.noteShowAccidentals.get(noteElement);
-          noteElement.staffY = noteStaffYCoords.get(noteElement) ?? null;
+          noteElement.staffY = staffY;
+          noteElement.nominalStaffY = triangle
+            ? this.#noteToYCoordinateAtBeatOffset(
+                noteElement.note,
+                noteElement.octave ?? 4,
+                beatOffsets[i]
+              )
+            : null;
           noteElement.resolvedGraceAccidentals =
             accidentals.graceShowAccidentals.get(noteElement) ?? null;
           noteElement.resolvedTrillFinishAccidentals =
@@ -2420,7 +2560,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    extent += computeGraceFootprintWidth(el.grace, el.resolvedGraceAccidentals);
+    extent += computeGraceFootprintWidth(
+      el.grace,
+      el.resolvedGraceAccidentals,
+      el.graceHeadLeftOverhangsPx
+    );
 
     const partner = crossStaffArpeggioPartner(el);
     // A span's wave variant may be authored solely on the partner end (the
@@ -2445,6 +2589,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       hairpin?.from ?? null,
       hairpin?.to ?? null
     );
+
+    // A glyph head wider than the ellipse pushes everything drawn left of it
+    // further left (see noteHeadLeftOverhangPx).
+    if (extent > 0) {
+      extent += el.headLeftOverhangPx;
+    }
 
     if (el.nodeName === MUSIC_CHORD_NODE && footprintArpeggio(el) !== null) {
       // A cluster chord's leftward-displaced second head only clears the entry's
@@ -2694,7 +2844,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
               xInBeamsContainer,
               leftwardWidth,
               noteOrChordForGrace.grace,
-              noteOrChordForGrace.resolvedGraceAccidentals
+              noteOrChordForGrace.resolvedGraceAccidentals,
+              noteOrChordForGrace.graceHeadLeftOverhangsPx
             )
           );
         }

@@ -3,6 +3,7 @@ import {
   computeGraceLayout,
   GraceNoteDescriptor,
 } from '../../rules/graceRules';
+import { resolveGraceNoteheads } from '../../rules/noteheadRules';
 import { computeLedgerLines } from '../../rules/staffNoteRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import type {
@@ -10,6 +11,7 @@ import type {
   GraceDuration,
   GraceSlur,
   GraceType,
+  NoteheadType,
   TrillFinishSlur,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
@@ -41,6 +43,8 @@ import {
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
   noteHeadCenter,
+  noteHeadGeometry,
+  noteHeadLeftOverhangPx,
 } from './note';
 
 // Full-size stem stroke is 22 units in the note's 600-unit space (≈1.17px);
@@ -183,7 +187,8 @@ function renderOrnamentNoteGroup(
           true,
           headXCenters[i],
           headYCenters[i],
-          i
+          i,
+          graceNotes[i].notehead
         )
       );
       const articulation = graceNotes[i].articulation;
@@ -214,7 +219,13 @@ function renderOrnamentNoteGroup(
       stem.setAttribute('x1', `${stemXs[i]}`);
       stem.setAttribute('y1', `${beamYs[i]}`);
       stem.setAttribute('x2', `${stemXs[i]}`);
-      stem.setAttribute('y2', `${headYCenters[i]}`);
+      stem.setAttribute(
+        'y2',
+        `${
+          headYCenters[i] +
+          graceStemAnchorOffsetY(writtenDuration, graceNotes[i].notehead)
+        }`
+      );
       stem.setAttribute('stroke', 'currentColor');
       stem.setAttribute('stroke-width', `${GRACE_STEM_STROKE_WIDTH}`);
       group.appendChild(stem);
@@ -259,7 +270,8 @@ function renderOrnamentNoteGroup(
         false,
         headXCenters[0],
         headYCenters[0],
-        0
+        0,
+        graceNotes[0].notehead
       )
     );
     const articulation = graceNotes[0].articulation;
@@ -495,13 +507,16 @@ export const TRILL_FINISH_HEAD_RY = GRACE_SCALE * NOTE_HEAD_RADIUS_PX * 0.75;
 
 // A grace head reuses the full note renderer at reduced scale. The wrapper
 // transform places the scaled head center at (xCenter, yCenter). Group heads
-// are stemless — the group draws shared stems and beams itself.
+// are stemless — the group draws shared stems and beams itself. The
+// translation uses the ellipse head's centre for every notehead so the stem
+// column (which a glyph head is anchored to) stays where the group's stems are.
 function buildGraceHead(
   duration: GraceDuration,
   stemless: boolean,
   xCenter: number,
   yCenter: number,
-  index: number
+  index: number,
+  notehead: NoteheadType = 'normal'
 ): SVGGElement {
   const [noteGroup] = createNoteSvg({
     duration,
@@ -509,6 +524,7 @@ function buildGraceHead(
     noStem: stemless,
     noFlags: stemless,
     qualifiedElementName: 'g',
+    notehead,
   });
   const { cx, cy } = noteHeadCenter(true, duration, stemless);
   const translateX = xCenter - GRACE_SCALE * cx * NOTE_SCALE;
@@ -556,6 +572,30 @@ function buildGraceHead(
 // is applied. The marks bypass createNoteSvg entirely, so that inner scale
 // must be added explicitly here or the marks render at raw 600-unit-space
 // size (~1/NOTE_SCALE too large, invisible against a clipped staff viewBox).
+// Per grace note, how far (px, at grace scale) its head reaches left of the
+// ellipse head's edge.
+export function graceHeadLeftOverhangsPx(
+  graceNoteheads: readonly (NoteheadType | null)[] | null,
+  graceCount: number,
+  graceDuration: GraceDuration | null
+): number[] {
+  return resolveGraceNoteheads(graceNoteheads ?? [], graceCount).map(
+    (notehead) =>
+      GRACE_SCALE *
+      noteHeadLeftOverhangPx(true, graceDuration ?? 'eighth', notehead)
+  );
+}
+
+// Pixel offset from a grace head's centre to where its stem meets the head
+// (non-zero only for a glyph head whose anchor sits off-centre).
+function graceStemAnchorOffsetY(
+  duration: GraceDuration,
+  notehead: NoteheadType = 'normal'
+): number {
+  const { anchorY, cy } = noteHeadGeometry(true, duration, true, notehead);
+  return GRACE_SCALE * (anchorY - cy) * NOTE_SCALE;
+}
+
 function buildGraceArticulation(
   articulation: ArticulationType,
   duration: GraceDuration,
@@ -837,7 +877,9 @@ function appendGraceAccidentals(
     symbolSvg.setAttribute('width', `${symbolWidth}px`);
     symbolSvg.setAttribute('height', `${symbolHeight}px`);
     const symbolRightEdge =
-      headXCenters[i] - GRACE_SCALE * (NOTE_HEAD_RADIUS_PX + 1);
+      headXCenters[i] -
+      GRACE_SCALE * (NOTE_HEAD_RADIUS_PX + 1) -
+      (graceNotes[i].headLeftOverhangPx ?? 0);
     symbolSvg.setAttribute('x', `${symbolRightEdge - symbolWidth}`);
     symbolSvg.setAttribute('y', `${headYCenters[i] - symbolHeight / 2}`);
     group.appendChild(symbolSvg);

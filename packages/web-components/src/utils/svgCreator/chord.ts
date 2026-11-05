@@ -17,6 +17,7 @@ import type {
   GraceSlur,
   GraceType,
   HairpinKind,
+  NoteheadType,
   TrillFinishSlur,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
@@ -41,12 +42,13 @@ import { createArticulationMarks } from './articulations';
 import { createGraceNotesSvg, createTrillFinishNotesSvg } from './graceNotes';
 import {
   createNoteSvg,
-  NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
   NOTE_SVG_WIDTH,
   noteHeadCenter,
+  noteHeadGeometry,
+  noteHeadLeftOverhangPx,
   stemBeamJunctionPosition,
   type NoteProps,
 } from './note';
@@ -60,6 +62,8 @@ type ChordProps = NoteProps & {
   arpeggioHairpinTo?: DynamicMarking | null;
   trill?: boolean;
   noteAccidentals?: (AccidentalType | null | undefined)[];
+  // Per tone, aligned with staffYCoordinates; missing entries are normal.
+  noteheads?: readonly NoteheadType[];
   // Grace notes are placed relative to the chord's reference note (notes[0],
   // which is staffYCoordinates[0] by index parity).
   graceNotes?: GraceNoteDescriptor[] | null;
@@ -90,6 +94,7 @@ export const createChordSvg = ({
   stemUp = true,
   stemExtension = 0,
   noteAccidentals,
+  noteheads = [],
   articulation,
   stress,
   articulationStemAnchorBeamLevels = null,
@@ -122,6 +127,13 @@ export const createChordSvg = ({
     ? stemExtension
     : Math.max(stemExtension, chordSpread);
 
+  const headLeftOverhang = Math.max(
+    0,
+    ...staffYCoordinates.map((_, i) =>
+      noteHeadLeftOverhangPx(stemUp, duration, noteheads[i] ?? 'normal')
+    )
+  );
+
   const displacements = computeAdjacentDisplacements(staffYCoordinates, stemUp);
   const displacementMap = new Map(
     displacements.map((d) => [d.noteIndex, d.xOffset])
@@ -145,6 +157,7 @@ export const createChordSvg = ({
       stemUp,
       stemExtension: isExtremal ? effectiveStemExtension : 0,
       qualifiedElementName: 'svg',
+      notehead: noteheads[i] ?? 'normal',
     });
     if (isExtremal) {
       extremalYOffset = yOffset;
@@ -193,7 +206,7 @@ export const createChordSvg = ({
         // yPixel is the notehead center in chord SVG space
         symbolSvg.setAttribute(
           'x',
-          `${placement.xOffset - ACCIDENTAL_NOTE_GAP}`
+          `${placement.xOffset - ACCIDENTAL_NOTE_GAP - headLeftOverhang}`
         );
         symbolSvg.setAttribute('y', `${placement.yPixel - symbolHeight / 2}`);
         svg.appendChild(symbolSvg);
@@ -231,9 +244,17 @@ export const createChordSvg = ({
   // Absolute left edge (chord-SVG coords) of the chord's leftmost column.
   // maxLeftHeadDisplacement is a leftward delta on an adjacent head, not a
   // coordinate, so subtract it from the real notehead-left edge.
-  const normalHeadLeftX =
-    noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE -
-    NOTE_HEAD_RADIUS_PX;
+  const normalHeadLeftX = Math.min(
+    ...(staffYCoordinates.length > 0 ? staffYCoordinates : [0]).map((_, i) => {
+      const { cx, halfWidth } = noteHeadGeometry(
+        stemUp,
+        duration,
+        noFlags,
+        noteheads[i] ?? 'normal'
+      );
+      return (cx - halfWidth) * NOTE_SCALE;
+    })
+  );
   let columnLeftX = normalHeadLeftX;
   if (maxLeftHeadDisplacement > 0) {
     columnLeftX = Math.min(
@@ -242,7 +263,10 @@ export const createChordSvg = ({
     );
   }
   if (anyAccidentalShown) {
-    columnLeftX = Math.min(columnLeftX, -accidentalColumnWidth);
+    columnLeftX = Math.min(
+      columnLeftX,
+      -accidentalColumnWidth - headLeftOverhang
+    );
   }
 
   // Grace notes — placed before the chord, left of its accidental column,

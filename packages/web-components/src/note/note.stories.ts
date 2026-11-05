@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index';
-import { ARTICULATIONS, DURATIONS, STRESSES } from '../utils';
+import { ARTICULATIONS, DURATIONS, NOTEHEADS, STRESSES } from '../utils';
 
 const meta: Meta = {
   title: 'Note',
@@ -20,6 +20,43 @@ export const Standalone: Story = {
     duration: { control: 'select', options: DURATIONS },
   },
   render: (args) => html`<music-note duration=${args.duration}></music-note>`,
+};
+
+export const WithNotehead: Story = {
+  args: {
+    duration: 'quarter',
+    notehead: 'x',
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+    notehead: { control: 'select', options: NOTEHEADS },
+  },
+  render: (args) => html`
+    <div style="padding: 40px">
+      <music-note
+        duration=${args.duration}
+        notehead=${args.notehead}
+      ></music-note>
+    </div>
+  `,
+};
+
+export const NoteheadGallery: Story = {
+  render: () => html`
+    <div
+      style="display: grid; grid-template-columns: repeat(5, 60px); gap: 24px; padding: 40px"
+    >
+      ${NOTEHEADS.map(
+        (notehead) => html`
+          <music-note duration="eighth" notehead=${notehead}></music-note>
+          <music-note duration="quarter" notehead=${notehead}></music-note>
+          <music-note duration="half" notehead=${notehead}></music-note>
+          <music-note duration="whole" notehead=${notehead}></music-note>
+          <music-note duration="double-whole" notehead=${notehead}></music-note>
+        `
+      )}
+    </div>
+  `,
 };
 
 export const WithArticulations: Story = {

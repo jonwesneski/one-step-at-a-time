@@ -37,12 +37,17 @@ export {
   createGraceNotesSvg,
   createOrnamentConnectorSlur,
   createTrillFinishNotesSvg,
+  graceHeadLeftOverhangsPx,
   TRILL_FINISH_HEAD_RY,
   type GraceNotesProps,
   type TrillFinishNotesProps,
   type TrillFinishNotesResult,
 } from './graceNotes';
-export { addLedgerLines, createLedgerLineElements } from './ledgerLines';
+export {
+  addLedgerLines,
+  createLedgerLineElements,
+  type LedgerHeadExtent,
+} from './ledgerLines';
 export { createNaturalSvg } from './natural';
 export {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
@@ -57,9 +62,17 @@ export {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   noteHeadCenter,
+  noteHeadGeometry,
+  noteHeadLeftOverhangPx,
   stemUpTipYPx,
   trillSignLeftX,
+  type NoteHeadGeometry,
 } from './note';
+export {
+  createNoteheadGlyphPath,
+  placeNoteheadGlyph,
+  type NoteheadPlacement,
+} from './noteheads';
 export {
   createOctaveContinuationSignSvg,
   createOctaveCornerSvg,

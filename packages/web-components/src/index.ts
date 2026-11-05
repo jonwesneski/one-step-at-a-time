@@ -19,6 +19,7 @@ export type { ParsedTupletRatio } from './rules/tupletRules';
 export type {
   ConnectorRole,
   GraceArticulationsType,
+  GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
   GuitarFret,
@@ -40,6 +41,7 @@ export {
   GRACE_SLURS,
   GRACE_TYPES,
   MODES,
+  NOTEHEADS,
   NOTES,
   OCTAVE_CONTINUATION_MODES,
   OCTAVE_DISPLAY_MODES,

@@ -1809,3 +1809,86 @@ describe('staff integration', () => {
     });
   });
 });
+
+describe(`${MUSIC_CHORD} notehead`, () => {
+  const heads = (chord: ChordElementType) =>
+    Array.from(
+      chord.shadowRoot?.querySelectorAll('.head') ?? []
+    ) as SVGElement[];
+
+  const chordWithChildren = (
+    children: Record<string, string>[],
+    chordAttrs: Record<string, string> = {}
+  ): ChordElementType => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('duration', 'quarter');
+    for (const [name, value] of Object.entries(chordAttrs)) {
+      chord.setAttribute(name, value);
+    }
+    for (const attrs of children) {
+      const note = document.createElement(MUSIC_NOTE);
+      for (const [name, value] of Object.entries(attrs)) {
+        note.setAttribute(name, value);
+      }
+      chord.appendChild(note);
+    }
+    document.body.appendChild(chord);
+    return chord;
+  };
+
+  it('applies the chord notehead to every tone of a named chord', () => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C' satisfies Chord);
+    chord.setAttribute('notehead', 'x');
+    document.body.appendChild(chord);
+    expect(chord.toneNoteheads).toEqual(['x', 'x', 'x']);
+    expect(heads(chord).map((h) => h.dataset.notehead)).toEqual([
+      'x',
+      'x',
+      'x',
+    ]);
+  });
+
+  it('lets a slotted note override its own tone (artificial harmonic)', () => {
+    const chord = chordWithChildren([
+      { note: 'C', octave: '5' },
+      { note: 'F', octave: '5', notehead: 'diamond-white' },
+    ]);
+    expect(chord.toneNoteheads).toEqual(['normal', 'diamond-white']);
+    expect(heads(chord).map((h) => h.tagName)).toEqual(['ellipse', 'path']);
+  });
+
+  it('re-renders when a slotted note changes its notehead', async () => {
+    const chord = chordWithChildren([
+      { note: 'C', octave: '5' },
+      { note: 'F', octave: '5' },
+    ]);
+    chord.querySelectorAll(MUSIC_NOTE)[1].setAttribute('notehead', 'x');
+    await Promise.resolve();
+    expect(heads(chord).map((h) => h.tagName)).toEqual(['ellipse', 'path']);
+  });
+
+  it('rejects a triangle notehead with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = chordWithChildren(
+      [
+        { note: 'C', octave: '5' },
+        { note: 'E', octave: '5' },
+      ],
+      { notehead: 'triangle-up' }
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('not supported on a chord')
+    );
+    expect(chord.toneNoteheads).toEqual(['normal', 'normal']);
+    warn.mockRestore();
+  });
+
+  it('reports the widest tone overhang', () => {
+    const chord = chordWithChildren([
+      { note: 'C', octave: '5' },
+      { note: 'F', octave: '5', notehead: 'diamond-white' },
+    ]);
+    expect(chord.headLeftOverhangPx).toBeGreaterThan(0);
+  });
+});

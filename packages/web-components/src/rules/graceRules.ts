@@ -1,8 +1,9 @@
-import {
+import type {
   AccidentalType,
   ArticulationType,
   Note,
   NoteLetter,
+  NoteheadType,
   Octave,
 } from '../types/theory';
 import {
@@ -13,8 +14,10 @@ import {
   GRACE_NOTE_ADVANCE_PX,
   GRACE_SCALE,
   GRACE_STEM_LENGTH_PX,
+  STAFF_Y_STEP,
 } from '../utils/notationDimensions';
 import { parseAccidentalSuffix, suffixToType } from './accidentalRules';
+import { resolveGraceNoteheads } from './noteheadRules';
 
 export type GraceNoteDescriptor = {
   // Diatonic steps from the reference (main) pitch; positive = higher.
@@ -24,6 +27,11 @@ export type GraceNoteDescriptor = {
   relativeStaffSteps: number;
   accidental: AccidentalType | null;
   articulation: ArticulationType | null;
+  // Absent = normal.
+  notehead?: NoteheadType;
+  // How far (px, at grace scale) this grace's head reaches left of the ellipse
+  // head's edge. Its accidental, when shown, moves left by this much.
+  headLeftOverhangPx?: number;
 };
 
 export type GraceLayout = {
@@ -60,8 +68,12 @@ export function buildGraceNoteDescriptors(
   graceOctaves: (Octave | null)[],
   referenceLetter: NoteLetter,
   referenceOctave: Octave,
-  graceArticulations: (ArticulationType | null)[] = []
+  graceArticulations: (ArticulationType | null)[] = [],
+  graceNoteheads: readonly (NoteheadType | null)[] | null = null
 ): GraceNoteDescriptor[] {
+  const noteheads = graceNoteheads
+    ? resolveGraceNoteheads(graceNoteheads, graceNotes.length)
+    : null;
   return graceNotes.map((graceNote, i) => {
     const letter = graceNote[0] as NoteLetter;
     const octave = graceOctaves[i] ?? referenceOctave;
@@ -74,6 +86,7 @@ export function buildGraceNoteDescriptors(
       ),
       accidental: graceAccidentalFromNote(graceNote),
       articulation: graceArticulations[i] ?? null,
+      ...(noteheads ? { notehead: noteheads[i] } : {}),
     };
   });
 }
@@ -95,6 +108,29 @@ export function applyResolvedGraceAccidentals(
   }
 }
 
+export function applyGraceHeadOverhangs(
+  graceNotes: GraceNoteDescriptor[],
+  overhangsPx: readonly number[]
+): void {
+  for (let i = 0; i < graceNotes.length; i++) {
+    graceNotes[i].headLeftOverhangPx = overhangsPx[i] ?? 0;
+  }
+}
+
+// relativeStaffSteps count from the host's nominal pitch but are applied to
+// its drawn head. When those differ (a triangle, placed outside the stave),
+// this keeps each ornament on its real staff position.
+export function rebaseGraceSteps(
+  graceNotes: GraceNoteDescriptor[],
+  hostStaffY: number,
+  hostNominalStaffY: number
+): void {
+  const offsetSteps = (hostStaffY - hostNominalStaffY) / STAFF_Y_STEP;
+  for (const graceNote of graceNotes) {
+    graceNote.relativeStaffSteps += offsetSteps;
+  }
+}
+
 // Width (px) an accidental column adds in front of a grace head, at grace scale.
 function graceAccidentalWidth(accidental: AccidentalType): number {
   return (
@@ -111,7 +147,9 @@ export function computeGraceLayout(
   let runningX = 0;
   for (const graceNote of graceNotes) {
     if (graceNote.accidental !== null) {
-      runningX += graceAccidentalWidth(graceNote.accidental);
+      runningX +=
+        graceAccidentalWidth(graceNote.accidental) +
+        (graceNote.headLeftOverhangPx ?? 0);
     }
     headXCenters.push(runningX + GRACE_NOTE_ADVANCE_PX / 2);
     runningX += GRACE_NOTE_ADVANCE_PX;
@@ -139,7 +177,8 @@ export function computeFirstGraceHeadX(
   noteX: number,
   leftwardWidth: number,
   graceNotes: Note[],
-  resolvedAccidentals?: (AccidentalType | null)[] | null
+  resolvedAccidentals?: (AccidentalType | null)[] | null,
+  headLeftOverhangsPx: readonly number[] = []
 ): number {
   if (graceNotes.length === 0) {
     return noteX - leftwardWidth;
@@ -152,7 +191,9 @@ export function computeFirstGraceHeadX(
     ? resolvedAccidentals[0]
     : graceAccidentalFromNote(graceNotes[0]);
   const firstAccidentalWidth =
-    firstAccidental !== null ? graceAccidentalWidth(firstAccidental) : 0;
+    firstAccidental !== null
+      ? graceAccidentalWidth(firstAccidental) + (headLeftOverhangsPx[0] ?? 0)
+      : 0;
   const firstHeadXCenter = firstAccidentalWidth + GRACE_NOTE_ADVANCE_PX / 2;
   return noteX - leftwardWidth + firstHeadXCenter;
 }
@@ -176,7 +217,8 @@ function hasUsableResolvedAccidentals(
 // resolved data isn't available, e.g. standalone (no staff) rendering.
 export function computeGraceFootprintWidth(
   graceNotes: Note[] | null,
-  resolvedAccidentals?: (AccidentalType | null)[] | null
+  resolvedAccidentals?: (AccidentalType | null)[] | null,
+  headLeftOverhangsPx: readonly number[] = []
 ): number {
   if (graceNotes === null || graceNotes.length === 0) {
     return 0;
@@ -191,7 +233,7 @@ export function computeGraceFootprintWidth(
       ? resolvedAccidentals[i]
       : graceAccidentalFromNote(graceNotes[i]);
     if (accidental !== null) {
-      width += graceAccidentalWidth(accidental);
+      width += graceAccidentalWidth(accidental) + (headLeftOverhangsPx[i] ?? 0);
     }
     width += GRACE_NOTE_ADVANCE_PX;
   }

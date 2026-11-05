@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index';
-import { ARTICULATIONS, DURATIONS, NOTES, OCTAVES } from '../utils';
+import { ARTICULATIONS, DURATIONS, NOTEHEADS, NOTES, OCTAVES } from '../utils';
 
 const CHORDS = [
   'Cmaj',
@@ -86,6 +86,36 @@ export const StandaloneWithNotes: Story = {
         duration=${args.duration}
       ></music-note>
     </music-chord>
+  `,
+};
+
+// A per-tone notehead: a normal stopped note plus a white diamond touched a
+// fourth above (artificial harmonic). The chord-level `notehead` applies to
+// every tone that doesn't set its own.
+export const WithNoteheads: Story = {
+  args: {
+    duration: 'half',
+    chordNotehead: 'normal',
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+    chordNotehead: {
+      control: 'select',
+      options: NOTEHEADS.filter((notehead) => !notehead.startsWith('triangle')),
+    },
+  },
+  render: (args) => html`
+    <music-staff clef="treble" time="4/4">
+      <music-chord duration=${args.duration} notehead=${args.chordNotehead}>
+        <music-note note="B" octave="4"></music-note>
+        <music-note note="E" octave="5" notehead="diamond-white"></music-note>
+      </music-chord>
+      <music-chord
+        chord="C"
+        duration=${args.duration}
+        notehead=${args.chordNotehead}
+      ></music-chord>
+    </music-staff>
   `,
 };
 

@@ -10,11 +10,20 @@ import {
 const LEDGER_LINE_MARGIN = 6;
 const LEDGER_LINE_STROKE_WIDTH = '1';
 
+// Horizontal extent of the head the ledger lines pass through, in the note
+// SVG's pixel space; defaults to the ellipse head.
+export type LedgerHeadExtent = { cxPx: number; halfWidthPx: number };
+
 export function createLedgerLineElements(
   ledgerLines: LedgerLine[],
   stemUp: boolean,
-  staffYPadding: number
+  staffYPadding: number,
+  head: LedgerHeadExtent = {
+    cxPx: stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX,
+    halfWidthPx: NOTE_HEAD_RADIUS_PX,
+  }
 ): SVGLineElement[] {
+  const { cxPx, halfWidthPx } = head;
   return ledgerLines.map((ledgerLine) => {
     const line = document.createElementNS(SVG_NS, 'line');
     line.classList.add('ledger-line');
@@ -25,25 +34,23 @@ export function createLedgerLineElements(
     let x2: number;
 
     if (stemUp) {
-      x1 = NOTE_HEAD_CX_STEM_UP_PX - NOTE_HEAD_RADIUS_PX - LEDGER_LINE_MARGIN;
+      x1 = cxPx - halfWidthPx - LEDGER_LINE_MARGIN;
       x2 =
         ledgerLine.widthType === 'double'
-          ? NOTE_HEAD_CX_STEM_UP_PX +
+          ? cxPx +
             ADJACENT_NOTE_X_DISPLACEMENT_PX +
-            NOTE_HEAD_RADIUS_PX +
+            halfWidthPx +
             LEDGER_LINE_MARGIN
-          : NOTE_HEAD_CX_STEM_UP_PX + NOTE_HEAD_RADIUS_PX + LEDGER_LINE_MARGIN;
+          : cxPx + halfWidthPx + LEDGER_LINE_MARGIN;
     } else {
-      x2 = NOTE_HEAD_CX_STEM_DOWN_PX + NOTE_HEAD_RADIUS_PX + LEDGER_LINE_MARGIN;
+      x2 = cxPx + halfWidthPx + LEDGER_LINE_MARGIN;
       x1 =
         ledgerLine.widthType === 'double'
-          ? NOTE_HEAD_CX_STEM_DOWN_PX -
+          ? cxPx -
             ADJACENT_NOTE_X_DISPLACEMENT_PX -
-            NOTE_HEAD_RADIUS_PX -
+            halfWidthPx -
             LEDGER_LINE_MARGIN
-          : NOTE_HEAD_CX_STEM_DOWN_PX -
-            NOTE_HEAD_RADIUS_PX -
-            LEDGER_LINE_MARGIN;
+          : cxPx - halfWidthPx - LEDGER_LINE_MARGIN;
     }
 
     line.setAttribute('x1', x1.toString());
@@ -61,7 +68,8 @@ export function addLedgerLines(
   svg: SVGElement | SVGGElement,
   staffYCoordinates: number[],
   stemUp: boolean,
-  staffYPadding: number
+  staffYPadding: number,
+  head?: LedgerHeadExtent
 ): void {
   const ledgerLines = computeLedgerLines(staffYCoordinates, stemUp);
   if (ledgerLines.length === 0) {
@@ -72,7 +80,8 @@ export function addLedgerLines(
   for (const el of createLedgerLineElements(
     ledgerLines,
     stemUp,
-    staffYPadding
+    staffYPadding,
+    head
   )) {
     svg.insertBefore(el, firstChild);
   }

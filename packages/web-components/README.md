@@ -96,8 +96,9 @@ the test tiers.
 
 Every notation symbol is drawn as SVG in `src/utils/svgCreator/`. Most glyphs
 (noteheads, stems, most accidentals) are hand-authored path data. A few
-engraving-heavy glyphs — the grand-staff brace/bracket, the arpeggio wiggle —
-are instead **extracted from a bundled reference font** and then hand-tuned:
+engraving-heavy glyphs — the grand-staff brace/bracket, the arpeggio wiggle,
+the non-`normal` noteheads — are instead **extracted from a bundled reference
+font** and then hand-tuned:
 
 1. `./download-smufl-font.sh` — fetches `smufl/Bravura.otf` + `smufl/bravura_metadata.json`
    (already committed; only needed on a fresh checkout or a font bump).
@@ -107,7 +108,13 @@ are instead **extracted from a bundled reference font** and then hand-tuned:
    `:rotate90` rotates a horizontal glyph to vertical), and prints one
    ready-to-paste block of `*_PATH_D` / `*_NATURAL_WIDTH` / `*_NATURAL_HEIGHT` /
    `*_ADVANCE` constants per glyph. Add new glyph codepoints to the `CODEPOINTS`
-   table in that script.
+   table in that script. An `:anchors` suffix also prints a notehead's
+   `*_STEM_UP_ANCHOR` / `*_STEM_DOWN_ANCHOR` (rightmost / leftmost outline
+   point). The noteheads in `svgCreator/noteheads.ts` came from
+   `noteheadXBlack:anchors noteheadCircleX:anchors noteheadDiamondWhole:anchors
+noteheadDiamondHalfWide:anchors noteheadDiamondBlack:anchors
+noteheadTriangleUpWhite noteheadTriangleUpBlack noteheadTriangleDownWhite
+noteheadTriangleDownBlack`.
 3. Paste the printed constants into the target `svgCreator/*.ts` file and commit.
 
 **The pasted constants are the source of truth and the only thing that ships.**

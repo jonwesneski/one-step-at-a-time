@@ -1,5 +1,11 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
+import {
+  forcedStemUp,
+  resolveNoteheadGlyph,
+  suppressesAccidental,
+  type NoteheadGlyph,
+} from '../../rules/noteheadRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import type {
   AccidentalType,
@@ -8,6 +14,7 @@ import type {
   DurationType,
   DynamicMarking,
   HairpinKind,
+  NoteheadType,
   StressType,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
@@ -30,6 +37,11 @@ import {
   isArpeggioWaveVariant,
 } from './arpeggio';
 import { createArticulationMarks } from './articulations';
+import {
+  createNoteheadGlyphPath,
+  placeNoteheadGlyph,
+  type NoteheadPlacement,
+} from './noteheads';
 import { createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -95,6 +107,8 @@ export type NoteProps = {
   stemUp?: boolean;
   stemExtension?: number; // used in beaming
   qualifiedElementName?: 'svg' | 'g';
+  // A triangle forces its own stem direction, overriding stemUp.
+  notehead?: NoteheadType;
   accidental?: AccidentalType;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
@@ -161,9 +175,10 @@ export const createNoteSvg = ({
   duration,
   noFlags = false,
   noStem = false,
-  stemUp = true,
+  stemUp: requestedStemUp = true,
   stemExtension = 0,
   qualifiedElementName = 'svg',
+  notehead = 'normal',
   accidental,
   articulation,
   stress,
@@ -177,6 +192,9 @@ export const createNoteSvg = ({
   staffY = null,
   trillSignExtraLift = 0,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
+  const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
+  const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
+  const leftOverhang = noteHeadLeftOverhangPx(stemUp, duration, notehead);
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
@@ -192,13 +210,11 @@ export const createNoteSvg = ({
   const g = document.createElementNS(SVG_NS, 'g');
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
-  const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
 
   // Extend stem on larger flag counts
   const flagStemExtension =
     !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
-  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
 
   // Stem — computed unconditionally (not just inside the `!noStem` block
   // below) so articulationStemAnchorBeamLevels can reuse the same tip position the
@@ -214,8 +230,8 @@ export const createNoteSvg = ({
   if (!noStem && duration !== 'whole' && duration !== 'double-whole') {
     // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
     // Stem-down: left side of head, head end at top (y1), tip at bottom (y2).
-    const stemY1 = stemUp ? stemTipY : HEAD_WIDTH;
-    const stemY2 = stemUp ? yStemEnd : stemTipY;
+    const stemY1 = stemUp ? stemTipY : headGeometry.anchorY;
+    const stemY2 = stemUp ? headGeometry.anchorY : stemTipY;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
@@ -296,10 +312,8 @@ export const createNoteSvg = ({
   }
 
   // Head
-  const headXStartStr = stemUp
-    ? (xStart - 10).toString()
-    : (xStart + STEM_WIDTH).toString();
-  const headYStartStr = stemUp ? yStemEnd.toString() : HEAD_WIDTH.toString();
+  const headXStartStr = headGeometry.cx.toString();
+  const headYStartStr = headGeometry.cy.toString();
   const headFill =
     duration === 'half' || duration === 'whole' || duration === 'double-whole'
       ? 'none'
@@ -311,38 +325,52 @@ export const createNoteSvg = ({
   headHitZone.classList.add('head-hit-zone');
   headHitZone.setAttribute('cx', headXStartStr);
   headHitZone.setAttribute('cy', headYStartStr);
-  headHitZone.setAttribute('rx', (HEAD_WIDTH * 1.5).toString());
-  headHitZone.setAttribute('ry', (HEAD_WIDTH * 0.75 * 1.5).toString());
-  headHitZone.setAttribute(
-    'transform',
-    `rotate(-30 ${headXStartStr} ${headYStartStr})`
-  );
+  headHitZone.setAttribute('rx', (headGeometry.halfWidth * 1.5).toString());
+  headHitZone.setAttribute('ry', (headGeometry.halfHeight * 1.5).toString());
+  if (!headGeometry.placement) {
+    headHitZone.setAttribute(
+      'transform',
+      `rotate(-30 ${headXStartStr} ${headYStartStr})`
+    );
+  }
   headHitZone.setAttribute('fill', 'transparent');
   headHitZone.setAttribute('stroke', 'none');
   g.appendChild(headHitZone);
 
-  const head = document.createElementNS(SVG_NS, 'ellipse');
-  head.classList.add('head');
-  head.setAttribute('cx', headXStartStr);
-  head.setAttribute('cy', headYStartStr);
-  head.setAttribute('rx', HEAD_WIDTH.toString());
-  head.setAttribute('ry', (HEAD_WIDTH * 0.75).toString());
-  head.setAttribute(
-    'transform',
-    `rotate(-30 ${headXStartStr} ${headYStartStr})`
-  );
-  head.setAttribute('stroke', 'currentColor');
-  head.setAttribute('fill', headFill);
-  head.setAttribute('stroke-width', '30');
-  g.appendChild(head);
+  if (headGeometry.glyph && headGeometry.placement) {
+    // Glyph outlines can reach past the 32x60 viewport (a stem-down
+    // diamond or triangle head rises above y = 0).
+    svg.setAttribute('overflow', 'visible');
+    const head = createNoteheadGlyphPath(
+      headGeometry.glyph,
+      headGeometry.placement
+    );
+    head.classList.add('head');
+    g.appendChild(head);
+  } else {
+    const head = document.createElementNS(SVG_NS, 'ellipse');
+    head.classList.add('head');
+    head.setAttribute('cx', headXStartStr);
+    head.setAttribute('cy', headYStartStr);
+    head.setAttribute('rx', HEAD_WIDTH.toString());
+    head.setAttribute('ry', (HEAD_WIDTH * 0.75).toString());
+    head.setAttribute(
+      'transform',
+      `rotate(-30 ${headXStartStr} ${headYStartStr})`
+    );
+    head.setAttribute('stroke', 'currentColor');
+    head.setAttribute('fill', headFill);
+    head.setAttribute('stroke-width', '30');
+    g.appendChild(head);
+  }
 
   if (duration === 'double-whole') {
-    const headCx = stemUp ? xStart - 10 : xStart + STEM_WIDTH;
-    const headCy = stemUp ? yStemEnd : HEAD_WIDTH;
-    const barHalfHeight = HEAD_WIDTH * 0.75 + 20;
+    const headCx = headGeometry.cx;
+    const headCy = headGeometry.cy;
+    const barHalfHeight = headGeometry.halfHeight + 20;
     const barY1 = headCy - barHalfHeight;
     const barY2 = headCy + barHalfHeight;
-    const barInnerGap = HEAD_WIDTH + 20;
+    const barInnerGap = headGeometry.halfWidth + 20;
     const barOuterGap = barInnerGap + STEM_WIDTH + 10;
 
     for (const xOffset of [
@@ -389,7 +417,11 @@ export const createNoteSvg = ({
 
   svg.appendChild(g);
 
-  if (accidental && qualifiedElementName === 'svg') {
+  if (
+    accidental &&
+    qualifiedElementName === 'svg' &&
+    !suppressesAccidental(notehead)
+  ) {
     const symbolWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental];
     const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[accidental];
     const yHeadCenter = stemUp
@@ -398,7 +430,10 @@ export const createNoteSvg = ({
 
     const symbolSvg = createAccidentalSvg(accidental);
 
-    symbolSvg.setAttribute('x', `${-(symbolWidth + ACCIDENTAL_NOTE_GAP)}`);
+    symbolSvg.setAttribute(
+      'x',
+      `${-(symbolWidth + ACCIDENTAL_NOTE_GAP + leftOverhang)}`
+    );
     symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(symbolSvg);
@@ -408,12 +443,15 @@ export const createNoteSvg = ({
     const headCenterY = stemUp
       ? NOTE_Y_HEAD_OFFSET_STEM_UP
       : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-    const headLeftX =
-      (stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX) -
-      NOTE_HEAD_RADIUS_PX;
-    const accidentalLeftX = accidental
-      ? -(ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP)
-      : headLeftX;
+    const headLeftX = (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE;
+    const accidentalLeftX =
+      accidental && !suppressesAccidental(notehead)
+        ? -(
+            ACCIDENTAL_SYMBOL_WIDTH[accidental] +
+            ACCIDENTAL_NOTE_GAP +
+            leftOverhang
+          )
+        : headLeftX;
     const signRightEdgeX = accidentalLeftX - ARPEGGIO_CHORD_GAP_PX;
     const sign = createArpeggioSvg({
       arpeggio,
@@ -465,26 +503,99 @@ export const createNoteSvg = ({
 export function computeYHeadOffset(
   stemUp: boolean,
   duration: DurationType,
-  noFlags: boolean
+  noFlags: boolean,
+  notehead: NoteheadType = 'normal'
 ): number {
-  const { cy } = noteHeadCenter(stemUp, duration, noFlags);
+  const { cy } = noteHeadCenter(stemUp, duration, noFlags, notehead);
   return Math.round(NOTE_HEAD_Y_OFFSET_CORRECTION + cy * NOTE_SCALE);
 }
 
 export function noteHeadCenter(
   stemUp: boolean,
   duration: DurationType,
-  noFlags: boolean
+  noFlags: boolean,
+  notehead: NoteheadType = 'normal'
 ): { cx: number; cy: number } {
+  const { cx, cy } = noteHeadGeometry(stemUp, duration, noFlags, notehead);
+  return { cx, cy };
+}
+
+export type NoteHeadGeometry = {
+  cx: number;
+  cy: number;
+  halfWidth: number;
+  halfHeight: number;
+  // Y at which the stem meets the head (the centre for the ellipse).
+  anchorY: number;
+  glyph: NoteheadGlyph | null;
+  placement: NoteheadPlacement | null;
+};
+
+// Notehead geometry in the 600-unit space. The stem column is the same for
+// every notehead; a glyph head is translated so its stem anchor lands on it.
+export function noteHeadGeometry(
+  requestedStemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean,
+  notehead: NoteheadType = 'normal'
+): NoteHeadGeometry {
+  const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   const flagStemExtension =
     !noFlags && flagCount > 1 ? (flagCount - 1) * FLAG_Y_SPACING : 0;
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
+  const cy = stemUp ? yStemEnd : HEAD_WIDTH;
+  const ellipseCx = stemUp ? xStart - 10 : xStart + STEM_WIDTH;
+  const glyph = resolveNoteheadGlyph(notehead, duration);
+  if (!glyph) {
+    return {
+      cx: ellipseCx,
+      cy,
+      halfWidth: HEAD_WIDTH,
+      halfHeight: HEAD_WIDTH * 0.75,
+      anchorY: cy,
+      glyph: null,
+      placement: null,
+    };
+  }
+  const placement = placeNoteheadGlyph({
+    glyph,
+    stemUp,
+    stemX: stemTipPosition(stemUp, duration, noFlags, 0).x,
+    stemWidth: STEM_WIDTH,
+    cy,
+    unitsPerPx: 1 / NOTE_SCALE,
+    centreX:
+      duration === 'whole' || duration === 'double-whole'
+        ? ellipseCx
+        : undefined,
+  });
   return {
-    cx: stemUp ? xStart - 10 : xStart + STEM_WIDTH,
-    cy: stemUp ? yStemEnd : HEAD_WIDTH,
+    cx: placement.cx,
+    cy,
+    halfWidth: placement.halfWidth,
+    halfHeight: placement.halfHeight,
+    anchorY: placement.anchorY,
+    glyph,
+    placement,
   };
+}
+
+// How far (px) a glyph head reaches left of where the ellipse head's left
+// edge would be. Accidentals, the arpeggio sign and grace notes are laid out
+// against the ellipse's edge, so they shift left by this much.
+export function noteHeadLeftOverhangPx(
+  stemUp: boolean,
+  duration: DurationType,
+  notehead: NoteheadType = 'normal'
+): number {
+  const ellipse = noteHeadGeometry(stemUp, duration, false);
+  const head = noteHeadGeometry(stemUp, duration, false, notehead);
+  return Math.max(
+    0,
+    (ellipse.cx - ellipse.halfWidth - (head.cx - head.halfWidth)) * NOTE_SCALE
+  );
 }
 
 // This note's own real stem-tip position (600-unit space) — the same

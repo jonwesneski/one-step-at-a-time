@@ -1120,3 +1120,47 @@ export const OCTAVE_CONTINUATION_PARENTHESIS_OVERSHOOT_PX =
 
 /** Horizontal bow depth (px) of each continuation-sign parenthesis curve. */
 export const OCTAVE_CONTINUATION_PARENTHESIS_BOW_PX = STAFF_LINE_SPACING * 0.3;
+
+// ─── Noteheads ──────────────────────────────────────────────────────────────
+
+/**
+ * Height (px) of a diamond notehead. Its top and bottom corners poke slightly
+ * past both stave lines when it sits in a space, so it reads apart from a
+ * minim.
+ * = 1.25 × STAFF_LINE_SPACING
+ */
+export const DIAMOND_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 1.25;
+
+/**
+ * Height (px) of a crossed (`x`) notehead — the cross fills one stave-space.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const X_HEAD_HEIGHT_PX = STAFF_LINE_SPACING;
+
+/**
+ * Height (px) of the circled-cross notehead used for half and longer `x`
+ * notes (same shape for minim and semibreve).
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const CIRCLE_X_HEAD_HEIGHT_PX = STAFF_LINE_SPACING;
+
+/**
+ * Height (px) of a triangular notehead — a little larger than a minim head.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const TRIANGLE_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * Distance (px) from the outer stave line to an isolated triangle's head
+ * centre — above the top line for `triangle-up`, below the bottom line for
+ * `triangle-down`.
+ * = 2.5 × STAFF_LINE_SPACING
+ */
+export const TRIANGLE_OUTSIDE_STAFF_PX = STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Distance (px) a triangle's head centre is placed beyond the furthest
+ * extent (heads and same-direction stem tips) of the run of notes it follows.
+ * = 2.5 × STAFF_LINE_SPACING
+ */
+export const TRIANGLE_RUN_CLEARANCE_PX = STAFF_LINE_SPACING * 2.5;
