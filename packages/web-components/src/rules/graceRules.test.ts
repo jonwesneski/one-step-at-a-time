@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { Note } from '../types/theory';
+import type { Note } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
@@ -10,14 +10,18 @@ import {
   GRACE_NOTE_ADVANCE_PX,
   GRACE_SCALE,
   GRACE_STEM_LENGTH_PX,
+  STAFF_Y_STEP,
 } from '../utils/notationDimensions';
 import {
+  applyGraceHeadOverhangs,
   buildGraceNoteDescriptors,
   computeFirstGraceHeadX,
   computeGraceBeamYs,
   computeGraceFootprintWidth,
   computeGraceLayout,
   diatonicStepsBetween,
+  rebaseGraceSteps,
+  type GraceNoteDescriptor,
 } from './graceRules';
 
 describe('diatonicStepsBetween', () => {
@@ -314,5 +318,63 @@ describe('computeGraceBeamYs', () => {
     }
     // Uniform raise keeps the beam parallel to the original line.
     expect(beamYs[2] - beamYs[0]).toBe(0);
+  });
+});
+
+describe('grace head overhangs', () => {
+  const sharp = {
+    relativeStaffSteps: 0,
+    accidental: 'sharp' as const,
+    articulation: null,
+  };
+  const plain = { relativeStaffSteps: 0, accidental: null, articulation: null };
+  const accidentalWidth =
+    GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
+
+  it('widens the layout only where an accidental is shown', () => {
+    const layout = computeGraceLayout([
+      { ...sharp, headLeftOverhangPx: 3 },
+      { ...plain, headLeftOverhangPx: 3 },
+    ]);
+    expect(layout.headXCenters[0]).toBeCloseTo(
+      accidentalWidth + 3 + GRACE_NOTE_ADVANCE_PX / 2
+    );
+    expect(layout.totalWidth).toBeCloseTo(
+      accidentalWidth + 3 + 2 * GRACE_NOTE_ADVANCE_PX
+    );
+  });
+
+  it('reserves the same width in the footprint', () => {
+    expect(computeGraceFootprintWidth(['F#', 'G'], null, [3, 3])).toBeCloseTo(
+      GRACE_MAIN_GAP_PX + accidentalWidth + 3 + 2 * GRACE_NOTE_ADVANCE_PX
+    );
+    expect(computeGraceFootprintWidth(['F', 'G'], null, [3, 3])).toBeCloseTo(
+      GRACE_MAIN_GAP_PX + 2 * GRACE_NOTE_ADVANCE_PX
+    );
+  });
+
+  it('moves the first head past its accidental and overhang', () => {
+    expect(computeFirstGraceHeadX(100, 40, ['F#'], null, [3])).toBeCloseTo(
+      60 + accidentalWidth + 3 + GRACE_NOTE_ADVANCE_PX / 2
+    );
+  });
+
+  it('copies overhangs onto the descriptors', () => {
+    const graces: GraceNoteDescriptor[] = [{ ...plain }, { ...plain }];
+    applyGraceHeadOverhangs(graces, [2]);
+    expect(graces.map((grace) => grace.headLeftOverhangPx)).toEqual([2, 0]);
+  });
+});
+
+describe('rebaseGraceSteps', () => {
+  it('keeps an ornament on its real staff position when the host head moved', () => {
+    const graces = [
+      { relativeStaffSteps: 3, accidental: null, articulation: null },
+    ];
+    // Nominal host at Y=80, drawn at Y=5: an ornament 3 steps above nominal.
+    rebaseGraceSteps(graces, 5, 80);
+    expect(5 - graces[0].relativeStaffSteps * STAFF_Y_STEP).toBe(
+      80 - 3 * STAFF_Y_STEP
+    );
   });
 });

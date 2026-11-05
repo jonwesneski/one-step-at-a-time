@@ -34,6 +34,7 @@ import { computeAllowedElementCount } from './rules/measureRules';
 import {
   forcedStemUp,
   isTriangle,
+  resolveStemTipY,
   resolveTriangleStaffYs,
   triangleStemExtensionPx,
   type TrianglePlacementEntry,
@@ -53,7 +54,6 @@ import {
 import {
   determineVoiceStemDirections,
   getStaffYs,
-  stemUpForYs,
 } from './rules/staffNoteRules';
 import {
   calculateStaffMinWidth,
@@ -226,6 +226,7 @@ import {
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  flagStemExtensionPx,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
@@ -1521,11 +1522,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // Triangles have no defined pitch: their Y replaces the pitch-derived one
-  // (see rules/noteheadRules.ts#resolveTriangleStaffYs).
+  // (see rules/noteheadRules.ts#resolveTriangleStaffYs). Runs twice per pass,
+  // because voice 3's direction heuristic reads these Ys before any stem is
+  // known: first against heads alone, then with `resolvedStem` once
+  // buildBeamsRenderer has settled directions and extensions. The second run
+  // only moves a triangle further out, so entries the first run saw but the
+  // second no longer has (moved to the 'combined' track) stay cleared.
   #placeTriangles(
     elements: NoteChordOrRestElementType[],
     noteStaffYCoords: Map<NoteElementType, number>,
-    chordStaffYCoords: Map<ChordElementType, number[]>
+    chordStaffYCoords: Map<ChordElementType, number[]>,
+    resolvedStem?: (index: number) => {
+      stemUp: boolean;
+      stemExtensionPx: number;
+      noFlags: boolean;
+    }
   ): void {
     if (
       !elements.some(
@@ -1540,7 +1551,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (element.nodeName === MUSIC_REST_NODE) {
         return { kind: 'break' };
       }
-      const noteOrChord = element as NoteElementType | ChordElementType;
       if (element.nodeName === MUSIC_NOTE_NODE) {
         const notehead = (element as NoteElementType).notehead;
         if (notehead === 'triangle-up' || notehead === 'triangle-down') {
@@ -1554,26 +1564,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           };
         }
       }
-      const headYs =
-        element.nodeName === MUSIC_NOTE_NODE
-          ? [noteStaffYCoords.get(element as NoteElementType) ?? 0]
-          : chordStaffYCoords.get(element as ChordElementType) ?? [];
-      const stemless =
-        noteOrChord.duration === 'whole' ||
-        noteOrChord.duration === 'double-whole';
-      const stemUp =
-        noteOrChord.stemDirection !== null
-          ? noteOrChord.stemDirection === 'up'
-          : stemUpForYs(headYs);
+      const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      const stem = resolvedStem?.(i);
+      const duration = (element as NoteElementType | ChordElementType).duration;
       return {
         kind: 'pitched',
         headYs,
-        stemTipY:
-          stemless || headYs.length === 0
-            ? null
-            : stemUp
-            ? Math.min(...headYs) - BASE_STEM_LENGTH_PX
-            : Math.max(...headYs) + BASE_STEM_LENGTH_PX,
+        stemTipY: stem
+          ? resolveStemTipY({
+              headYs,
+              stemUp: stem.stemUp,
+              stemless: duration === 'whole' || duration === 'double-whole',
+              noFlags: stem.noFlags,
+              stemExtensionPx: stem.stemExtensionPx,
+              baseStemLengthPx: BASE_STEM_LENGTH_PX,
+              flagExtensionPx: flagStemExtensionPx(
+                durationToFlagCountMap.get(duration) ?? 0
+              ),
+            })
+          : null,
       };
     });
     const triangleYs = resolveTriangleStaffYs(entries, {
@@ -1583,7 +1592,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       runClearancePx: TRIANGLE_RUN_CLEARANCE_PX,
     });
     for (const [i, y] of triangleYs) {
-      noteStaffYCoords.set(elements[i] as NoteElementType, y);
+      const triangle = elements[i] as NoteElementType;
+      const firstRunY = noteStaffYCoords.get(triangle) ?? y;
+      const outerY = forcedStemUp(triangle.notehead)
+        ? Math.max(firstRunY, y)
+        : Math.min(firstRunY, y);
+      noteStaffYCoords.set(triangle, resolvedStem ? outerY : y);
     }
   }
 
@@ -1726,6 +1740,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       externallyBeamedIndices,
       combinedStemOverrides
     );
+    this.#placeTriangles(
+      elements,
+      noteStaffYCoords,
+      chordStaffYCoords,
+      (i) => ({
+        stemUp: stemDirections[i],
+        stemExtensionPx: beamRenderer.stemExtension(i),
+        noFlags: beamsBuilder.isBeamed(i),
+      })
+    );
 
     const beamedIndices = new Set(
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
@@ -1773,10 +1797,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
                 : extension;
           }
           noteElement.noFlags = isBeamed;
-          noteElement.showAccidental = triangle
-            ? null
-            : accidentals.noteShowAccidentals.get(noteElement);
+          noteElement.showAccidental =
+            accidentals.noteShowAccidentals.get(noteElement);
           noteElement.staffY = staffY;
+          noteElement.nominalStaffY = triangle
+            ? this.#noteToYCoordinateAtBeatOffset(
+                noteElement.note,
+                noteElement.octave ?? 4,
+                beatOffsets[i]
+              )
+            : null;
           noteElement.resolvedGraceAccidentals =
             accidentals.graceShowAccidentals.get(noteElement) ?? null;
           noteElement.resolvedTrillFinishAccidentals =
@@ -2025,13 +2055,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }[] = [];
     for (const input of trackInputs.values()) {
       for (let i = 0; i < input.elements.length; i++) {
-        const element = input.elements[i];
-        if (
-          element.nodeName === MUSIC_NOTE_NODE &&
-          isTriangle((element as NoteElementType).notehead)
-        ) {
-          continue;
-        }
         mergedForAccidentals.push({
           element: input.elements[i],
           beatOffset: input.beatOffsets[i],
@@ -2537,7 +2560,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    extent += computeGraceFootprintWidth(el.grace, el.resolvedGraceAccidentals);
+    extent += computeGraceFootprintWidth(
+      el.grace,
+      el.resolvedGraceAccidentals,
+      el.graceHeadLeftOverhangsPx
+    );
 
     const partner = crossStaffArpeggioPartner(el);
     // A span's wave variant may be authored solely on the partner end (the
@@ -2817,7 +2844,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
               xInBeamsContainer,
               leftwardWidth,
               noteOrChordForGrace.grace,
-              noteOrChordForGrace.resolvedGraceAccidentals
+              noteOrChordForGrace.resolvedGraceAccidentals,
+              noteOrChordForGrace.graceHeadLeftOverhangsPx
             )
           );
         }

@@ -24,6 +24,11 @@ import {
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
 } from './utils/notationDimensions';
+import {
+  flagStemExtensionPx,
+  NOTE_SCALE,
+  noteHeadCenter,
+} from './utils/svgCreator/note';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -1226,5 +1231,198 @@ describe('staffClassicalBase triangle noteheads', () => {
       expect.stringContaining('stem-direction="up" is ignored')
     );
     warn.mockRestore();
+  });
+
+  describe('clearing the real stems of a run', () => {
+    const renderVoices = (voices: Record<string, string>[][]) => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+      const wrappers = voices.map(() => document.createElement('music-voice'));
+      const elements = voices.map((entries, v) =>
+        entries.map((attrs) => {
+          const note = document.createElement(MUSIC_NOTE) as any;
+          for (const [name, value] of Object.entries(attrs)) {
+            note.setAttribute(name, value);
+          }
+          wrappers[v].appendChild(note);
+          return note;
+        })
+      );
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => wrappers;
+      slot.dispatchEvent(new Event('slotchange'));
+      return elements;
+    };
+
+    it("clears a voice-1 stem the note's pitch alone wouldn't predict", () => {
+      const [[f5, triangle]] = renderVoices([
+        [
+          { note: 'F', octave: '5', duration: 'quarter' },
+          { duration: 'quarter', notehead: 'triangle-up' },
+          { note: 'C', octave: '5', duration: 'half' },
+        ],
+        [{ note: 'C', octave: '4', duration: 'whole' }],
+      ]);
+      expect(f5.stemUp).toBe(true);
+      expect(triangle.staffY).toBe(
+        f5.staffY - BASE_STEM_LENGTH_PX - TRIANGLE_RUN_CLEARANCE_PX
+      );
+    });
+
+    it('clears a beam group stem that points against its own pitch', () => {
+      const [e4, a5, triangle] = renderStaff(
+        [
+          { note: 'E', octave: '4', duration: 'eighth' },
+          { note: 'A', octave: '5', duration: 'eighth' },
+          { duration: 'quarter', notehead: 'triangle-down' },
+        ],
+        'treble',
+        '2/4'
+      );
+      // On its own the E4 would stem up, but the A5 sets the beam's direction.
+      expect(e4.stemUp).toBe(false);
+      expect(a5.stemUp).toBe(false);
+      expect(triangle.staffY).toBeCloseTo(
+        e4.staffY +
+          BASE_STEM_LENGTH_PX +
+          e4.stemExtension +
+          TRIANGLE_RUN_CLEARANCE_PX
+      );
+    });
+
+    it("includes a sixteenth's longer stem", () => {
+      const [sixteenth, triangle] = renderStaff(
+        [
+          {
+            note: 'A',
+            octave: '5',
+            duration: 'sixteenth',
+            'stem-direction': 'up',
+          },
+          { duration: 'sixteenth', notehead: 'triangle-up' },
+        ],
+        'treble',
+        '1/8'
+      );
+      expect(triangle.staffY).toBeCloseTo(
+        sixteenth.staffY -
+          BASE_STEM_LENGTH_PX -
+          flagStemExtensionPx(2) -
+          TRIANGLE_RUN_CLEARANCE_PX
+      );
+    });
+
+    it("includes a chord's spread", () => {
+      const [chord, triangle] = renderStaff(
+        [
+          {
+            tag: MUSIC_CHORD,
+            chord: 'C',
+            duration: 'quarter',
+            'stem-direction': 'up',
+          },
+          { duration: 'quarter', notehead: 'triangle-up' },
+        ],
+        'treble',
+        '2/4'
+      );
+      const top = Math.min(...chord.staffYCoordinates);
+      expect(triangle.staffY).toBe(
+        top - BASE_STEM_LENGTH_PX - TRIANGLE_RUN_CLEARANCE_PX
+      );
+    });
+  });
+
+  it('resolves grace and finishing accidentals on a triangle without letting its pitch change the measure', () => {
+    const elements = renderStaff([
+      { note: 'F#', octave: '4', duration: 'quarter' },
+      {
+        note: 'C#',
+        duration: 'quarter',
+        notehead: 'triangle-up',
+        grace: 'F',
+        'grace-octave': '4',
+      },
+      { note: 'C', octave: '4', duration: 'quarter' },
+    ]);
+    expect(elements[1].resolvedGraceAccidentals).toEqual(['natural']);
+    expect(elements[1].showAccidental).toBeNull();
+    // C# on the triangle never entered the measure's state.
+    expect(elements[2].showAccidental).toBeNull();
+  });
+
+  it('draws a triangle ornament at its real pitch', () => {
+    // Staff-relative Y of a host's ornament: everything in its transform that
+    // depends on where the host's head is drawn cancels out against staffY.
+    const ornamentY = (host: any, selector: string): number => {
+      const transform = host.shadowRoot
+        .querySelector(`${selector} .grace-note`)
+        .getAttribute('transform');
+      const translateY = Number(transform.match(/translate\(\S+ (\S+)\)/)[1]);
+      const { cy } = noteHeadCenter(host.stemUp, host.duration, host.noFlags);
+      return host.staffY + translateY - cy * NOTE_SCALE;
+    };
+    const ornaments = {
+      grace: 'F',
+      'grace-octave': '5',
+      'trill-finish': 'E',
+      'trill-finish-octave': '5',
+    };
+    const [triangle, normal] = renderStaff([
+      { duration: 'quarter', notehead: 'triangle-up', ...ornaments },
+      { note: 'C', octave: '4', duration: 'quarter', ...ornaments },
+    ]);
+    expect(triangle.staffY).not.toBe(normal.staffY);
+    expect(triangle.nominalStaffY).toBe(normal.staffY);
+    expect(normal.nominalStaffY).toBeNull();
+    expect(ornamentY(triangle, '.grace-notes')).toBeCloseTo(
+      ornamentY(normal, '.grace-notes')
+    );
+    expect(ornamentY(triangle, '.trill-finish-notes')).toBeCloseTo(
+      ornamentY(normal, '.trill-finish-notes')
+    );
+  });
+
+  it('keeps two chords with a triangle value beamed, drawn with normal heads', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const [first, second] = renderStaff(
+      [
+        {
+          tag: MUSIC_CHORD,
+          chord: 'C',
+          duration: 'eighth',
+          notehead: 'triangle-up',
+        },
+        {
+          tag: MUSIC_CHORD,
+          chord: 'C',
+          duration: 'eighth',
+          notehead: 'triangle-up',
+        },
+      ],
+      'treble',
+      '1/4'
+    );
+    warn.mockRestore();
+    expect(first.noFlags).toBe(true);
+    expect(second.noFlags).toBe(true);
+    expect(first.toneNoteheads).toEqual(['normal', 'normal', 'normal']);
+  });
+
+  it('never beams a triangle that names a beam-group', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const [triangle] = renderStaff([
+      {
+        duration: 'eighth',
+        notehead: 'triangle-up',
+        'beam-group': 'a',
+      },
+    ]);
+    warn.mockRestore();
+    expect(triangle.noFlags).toBe(false);
+    expect(triangle.stemExtension).toBeCloseTo(
+      MIDDLE_STAFF_Y - (triangle.staffY + BASE_STEM_LENGTH_PX)
+    );
   });
 });

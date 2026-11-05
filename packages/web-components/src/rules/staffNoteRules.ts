@@ -182,7 +182,7 @@ export const getStaffYs = (
   return [];
 };
 
-export const stemUpForYs = (ys: number[]): boolean => {
+const stemUpForYs = (ys: number[]): boolean => {
   let maxDist = -1;
   let stemUp = true;
   for (const y of ys) {

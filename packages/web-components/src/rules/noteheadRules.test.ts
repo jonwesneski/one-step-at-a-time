@@ -5,6 +5,7 @@ import {
   resolveChordToneNoteheads,
   resolveGraceNoteheads,
   resolveNoteheadGlyph,
+  resolveStemTipY,
   resolveTriangleStaffYs,
   suppressesAccidental,
   suppressesLedgerLines,
@@ -219,5 +220,72 @@ describe('triangleStemExtensionPx', () => {
 
   it('never shortens a stem that already reaches', () => {
     expect(triangleStemExtensionPx(25, false, 50, 32)).toBe(0);
+  });
+});
+
+describe('resolveStemTipY', () => {
+  const base = {
+    stemless: false,
+    noFlags: false,
+    stemExtensionPx: 0,
+    baseStemLengthPx: 32,
+    flagExtensionPx: 0,
+  };
+
+  it('measures a note stem from its head, either way', () => {
+    expect(resolveStemTipY({ ...base, headYs: [30], stemUp: true })).toBe(-2);
+    expect(resolveStemTipY({ ...base, headYs: [30], stemUp: false })).toBe(62);
+  });
+
+  it('has no tip without a stem or heads', () => {
+    expect(
+      resolveStemTipY({ ...base, headYs: [30], stemUp: true, stemless: true })
+    ).toBeNull();
+    expect(resolveStemTipY({ ...base, headYs: [], stemUp: true })).toBeNull();
+  });
+
+  it('adds beam extension but no flag length when beamed', () => {
+    expect(
+      resolveStemTipY({
+        ...base,
+        headYs: [30],
+        stemUp: true,
+        noFlags: true,
+        stemExtensionPx: 8,
+        flagExtensionPx: 6,
+      })
+    ).toBe(-10);
+  });
+
+  it('adds the extra length of a multi-flag stem when unbeamed', () => {
+    expect(
+      resolveStemTipY({
+        ...base,
+        headYs: [30],
+        stemUp: false,
+        flagExtensionPx: 6,
+      })
+    ).toBe(68);
+  });
+
+  it('carries an unbeamed chord stem past its spread', () => {
+    expect(resolveStemTipY({ ...base, headYs: [40, 20], stemUp: true })).toBe(
+      -12
+    );
+    expect(resolveStemTipY({ ...base, headYs: [40, 20], stemUp: false })).toBe(
+      72
+    );
+  });
+
+  it('starts a beamed chord stem at its far head, with only the beam extension', () => {
+    expect(
+      resolveStemTipY({
+        ...base,
+        headYs: [40, 20],
+        stemUp: true,
+        noFlags: true,
+        stemExtensionPx: 5,
+      })
+    ).toBe(3);
   });
 });

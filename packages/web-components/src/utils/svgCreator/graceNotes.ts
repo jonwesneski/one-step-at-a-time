@@ -3,6 +3,7 @@ import {
   computeGraceLayout,
   GraceNoteDescriptor,
 } from '../../rules/graceRules';
+import { resolveGraceNoteheads } from '../../rules/noteheadRules';
 import { computeLedgerLines } from '../../rules/staffNoteRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import type {
@@ -43,6 +44,7 @@ import {
   NOTE_STEM_X_OFFSET_STEM_DOWN,
   noteHeadCenter,
   noteHeadGeometry,
+  noteHeadLeftOverhangPx,
 } from './note';
 
 // Full-size stem stroke is 22 units in the note's 600-unit space (≈1.17px);
@@ -570,6 +572,20 @@ function buildGraceHead(
 // is applied. The marks bypass createNoteSvg entirely, so that inner scale
 // must be added explicitly here or the marks render at raw 600-unit-space
 // size (~1/NOTE_SCALE too large, invisible against a clipped staff viewBox).
+// Per grace note, how far (px, at grace scale) its head reaches left of the
+// ellipse head's edge.
+export function graceHeadLeftOverhangsPx(
+  graceNoteheads: readonly (NoteheadType | null)[] | null,
+  graceCount: number,
+  graceDuration: GraceDuration | null
+): number[] {
+  return resolveGraceNoteheads(graceNoteheads ?? [], graceCount).map(
+    (notehead) =>
+      GRACE_SCALE *
+      noteHeadLeftOverhangPx(true, graceDuration ?? 'eighth', notehead)
+  );
+}
+
 // Pixel offset from a grace head's centre to where its stem meets the head
 // (non-zero only for a glyph head whose anchor sits off-centre).
 function graceStemAnchorOffsetY(
@@ -861,7 +877,9 @@ function appendGraceAccidentals(
     symbolSvg.setAttribute('width', `${symbolWidth}px`);
     symbolSvg.setAttribute('height', `${symbolHeight}px`);
     const symbolRightEdge =
-      headXCenters[i] - GRACE_SCALE * (NOTE_HEAD_RADIUS_PX + 1);
+      headXCenters[i] -
+      GRACE_SCALE * (NOTE_HEAD_RADIUS_PX + 1) -
+      (graceNotes[i].headLeftOverhangPx ?? 0);
     symbolSvg.setAttribute('x', `${symbolRightEdge - symbolWidth}`);
     symbolSvg.setAttribute('y', `${headYCenters[i] - symbolHeight / 2}`);
     group.appendChild(symbolSvg);

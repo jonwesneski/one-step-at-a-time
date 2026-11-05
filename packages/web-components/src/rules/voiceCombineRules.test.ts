@@ -279,3 +279,73 @@ describe('detectCombinableGroups', () => {
     expect(groups.map((g) => g.beatOffset)).toEqual([0, 0.5]);
   });
 });
+
+describe('detectCombinableGroups with noteheads', () => {
+  const twoVoices = (
+    first: NoteElementType | ChordElementType,
+    second: NoteElementType | ChordElementType
+  ) =>
+    detectCombinableGroups(
+      new Map([
+        [1, voiceInput([first], [0])],
+        [2, voiceInput([second], [0])],
+      ])
+    );
+
+  const withNotehead = <T extends Element>(element: T, notehead: string): T => {
+    element.setAttribute('notehead', notehead);
+    return element;
+  };
+
+  it.each(['x', 'diamond', 'diamond-white', 'triangle-up', 'triangle-down'])(
+    'keeps matching %s notes in their own voices',
+    (notehead) => {
+      expect(
+        twoVoices(
+          withNotehead(note('C', 5), notehead),
+          withNotehead(note('A', 4), notehead)
+        )
+      ).toHaveLength(0);
+    }
+  );
+
+  it('keeps a chord with a non-normal chord notehead out', () => {
+    expect(
+      twoVoices(
+        withNotehead(
+          chord([
+            ['C', 5],
+            ['E', 5],
+          ]),
+          'x'
+        ),
+        note('A', 4)
+      )
+    ).toHaveLength(0);
+  });
+
+  it('keeps a chord with a slotted tone override out', () => {
+    const overridden = chord([
+      ['C', 5],
+      ['E', 5],
+    ]);
+    overridden.querySelectorAll(MUSIC_NOTE)[1].setAttribute('notehead', 'x');
+    expect(twoVoices(overridden, note('A', 4))).toHaveLength(0);
+  });
+
+  it('still combines normal notes, and a chord whose triangle value falls back to normal', () => {
+    expect(twoVoices(note('C', 5), note('A', 4))).toHaveLength(1);
+    expect(
+      twoVoices(
+        withNotehead(
+          chord([
+            ['C', 5],
+            ['E', 5],
+          ]),
+          'triangle-up'
+        ),
+        note('A', 4)
+      )
+    ).toHaveLength(1);
+  });
+});

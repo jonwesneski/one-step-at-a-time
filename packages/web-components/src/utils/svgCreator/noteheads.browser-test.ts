@@ -211,3 +211,108 @@ test('a tie joins two crossed heads', async ({ page }) => {
   expect(tie?.right ?? 0).toBeGreaterThanOrEqual(second.head.left - 2);
   expect(tie?.right ?? 0).toBeLessThanOrEqual(second.head.right + 2);
 });
+
+test('a grace accidental stays clear of a glyph head', async ({ page }) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="2/4">
+       <music-note note="C" octave="5" duration="quarter" grace="F#" grace-notehead="diamond-white"></music-note>
+       <music-note note="C" octave="5" duration="quarter" grace="G#"></music-note>
+     </music-staff>`
+  );
+  const gaps = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('music-note')).map((note) => {
+      const root = note.shadowRoot;
+      const accidental = root
+        ?.querySelector('.grace-accidental')
+        ?.getBoundingClientRect();
+      const head = root?.querySelector('.grace-head')?.getBoundingClientRect();
+      if (!accidental || !head) {
+        throw new Error('grace accidental or head missing');
+      }
+      return head.left - accidental.right;
+    })
+  );
+  // The gap to the sharp's box matches the ellipse's, at least as wide.
+  expect(gaps[0]).toBeGreaterThanOrEqual(gaps[1] - 0.5);
+});
+
+test('a glyph grace head without an accidental reserves no extra width', async ({
+  page,
+}) => {
+  const noteLeftWith = async (attrs: string): Promise<number> => {
+    await render(
+      page,
+      `<music-staff clef="treble" time="2/4">
+         <music-note note="C" octave="5" duration="quarter" grace="F" ${attrs}></music-note>
+       </music-staff>`
+    );
+    return page.evaluate(
+      () =>
+        document.querySelector('music-note')?.getBoundingClientRect().left ?? 0
+    );
+  };
+  const plain = await noteLeftWith('');
+  const diamond = await noteLeftWith('grace-notehead="diamond-white"');
+  expect(diamond).toBeCloseTo(plain, 1);
+});
+
+test('a triangle grace note takes ledger lines at its real pitch', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="2/4">
+       <music-note duration="quarter" notehead="triangle-up" grace="C" grace-octave="4"></music-note>
+       <music-note note="C" octave="5" duration="quarter" grace="C" grace-octave="4"></music-note>
+     </music-staff>`
+  );
+  const ledgerYs = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('music-note')).map((note) => {
+      const line = note.shadowRoot?.querySelector('.grace-ledger-line');
+      return line?.getBoundingClientRect().top ?? null;
+    })
+  );
+  expect(ledgerYs[0]).not.toBeNull();
+  expect(ledgerYs[0] ?? 0).toBeCloseTo(ledgerYs[1] ?? 0, 0);
+});
+
+test('a triangle stays out of a cross-staff beam group', async ({ page }) => {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning') {
+      warnings.push(message.text());
+    }
+  });
+  await render(
+    page,
+    `<music-measure>
+       <music-staff clef="treble" time="2/4">
+         <music-note note="C" octave="5" duration="eighth" beam-group="a"></music-note>
+         <music-note duration="eighth" notehead="triangle-up" beam-group="a"></music-note>
+         <music-rest duration="quarter"></music-rest>
+       </music-staff>
+       <music-staff clef="bass" time="2/4">
+         <music-note note="C" octave="3" duration="eighth" beam-group="a"></music-note>
+         <music-rest duration="eighth"></music-rest>
+         <music-rest duration="quarter"></music-rest>
+       </music-staff>
+     </music-measure>`
+  );
+  const triangle = await page.evaluate(() => {
+    const note = document.querySelectorAll('music-note')[1];
+    return {
+      hasFlag: note.shadowRoot?.querySelector('.flag') !== null,
+    };
+  });
+  expect(triangle.hasFlag).toBe(true);
+  expect(warnings.some((w) => w.includes('beam-group is ignored'))).toBe(true);
+  // The other two members still form the group.
+  const beams = await page.evaluate(
+    () =>
+      document
+        .querySelector('music-measure')
+        ?.shadowRoot?.querySelectorAll('.double-stemmed-beam').length ?? 0
+  );
+  expect(beams).toBeGreaterThan(0);
+});

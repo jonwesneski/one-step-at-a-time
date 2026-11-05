@@ -36,7 +36,7 @@ import type {
   BeatTypeInMeasure,
   DurationType,
 } from '../../types/theory';
-import { MUSIC_REST_NODE, SVG_NS } from '../consts';
+import { MUSIC_NOTE_NODE, MUSIC_REST_NODE, SVG_NS } from '../consts';
 import {
   BEAM_GAP_PX,
   BEAM_THICKNESS_PX,
@@ -601,10 +601,12 @@ export class BeamsBuilder {
         const dur = (elements[i].dataset.duration ??
           elements[i].getAttribute('duration')) as DurationType;
         // A triangle (undefined extreme pitch) always stands alone with its
-        // own flag.
+        // own flag. A chord can't be one: its triangle value falls back to
+        // normal heads.
         const flagCount =
           elements[i].nodeName === MUSIC_REST_NODE ||
-          isTriangle(parseNotehead(elements[i].getAttribute('notehead')))
+          (elements[i].nodeName === MUSIC_NOTE_NODE &&
+            isTriangle(parseNotehead(elements[i].getAttribute('notehead'))))
             ? undefined
             : durationToFlagCountMap.get(dur);
 

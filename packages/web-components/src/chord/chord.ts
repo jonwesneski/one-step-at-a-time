@@ -1,4 +1,5 @@
 import {
+  applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
   GraceNoteDescriptor,
@@ -50,6 +51,7 @@ import {
   addLedgerLines,
   createChordSvg,
   createSempreArpeggiandoText,
+  graceHeadLeftOverhangsPx,
   graceListToAttr,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
@@ -833,6 +835,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get graceHeadLeftOverhangsPx(): number[] {
+      return graceHeadLeftOverhangsPx(
+        this.graceNotehead,
+        this.grace?.length ?? 0,
+        this.graceDuration
+      );
+    }
+
     get graceType(): GraceType {
       return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
     }
@@ -1484,6 +1494,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.graceNotehead
       );
       applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
+      applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
       return graceNotes;
     }
 

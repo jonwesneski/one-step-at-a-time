@@ -295,3 +295,37 @@ describe('computeNoteAccidentals — trill-finish accidentals', () => {
     expect(noteShowAccidentals.get(note)).toBe('sharp');
   });
 });
+
+describe('computeNoteAccidentals with a triangle', () => {
+  it('resolves its grace notes but ignores its own nominal pitch', () => {
+    const before = makeNote({ note: 'F#' });
+    const triangle = makeNote({ note: 'C#' });
+    triangle.setAttribute('notehead', 'triangle-up');
+    triangle.setAttribute('grace', 'F');
+    const after = makeNote({ note: 'C' });
+    const later = makeNote({ note: 'F' });
+
+    const { noteShowAccidentals, graceShowAccidentals } =
+      computeNoteAccidentals([before, triangle, after, later], 'C', 'major');
+
+    expect(graceShowAccidentals.get(triangle)).toEqual(['natural']);
+    expect(noteShowAccidentals.get(triangle)).toBeNull();
+    // The C# never entered the state, and the grace F did.
+    expect(noteShowAccidentals.get(after)).toBeNull();
+    expect(noteShowAccidentals.get(later)).toBeNull();
+  });
+
+  it('resolves its finishing notes', () => {
+    const before = makeNote({ note: 'F#' });
+    const triangle = makeNote({ note: 'C' });
+    triangle.setAttribute('notehead', 'triangle-up');
+    triangle.setAttribute('trill-finish', 'F');
+
+    const { trillFinishShowAccidentals } = computeNoteAccidentals(
+      [before, triangle],
+      'C',
+      'major'
+    );
+    expect(trillFinishShowAccidentals.get(triangle)).toEqual(['natural']);
+  });
+});

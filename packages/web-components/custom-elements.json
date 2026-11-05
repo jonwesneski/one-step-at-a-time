@@ -698,6 +698,14 @@
             },
             {
               "kind": "field",
+              "name": "graceHeadLeftOverhangsPx",
+              "type": {
+                "text": "number[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "graceType",
               "type": {
                 "text": "GraceType"
@@ -2854,6 +2862,15 @@
             },
             {
               "kind": "field",
+              "name": "#nominalStaffY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#lastNoteheadWarning",
               "privacy": "private",
               "type": {
@@ -3038,6 +3055,13 @@
             {
               "kind": "field",
               "name": "staffY",
+              "type": {
+                "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "nominalStaffY",
               "type": {
                 "text": "number | null"
               }
@@ -3300,6 +3324,14 @@
             },
             {
               "kind": "field",
+              "name": "graceHeadLeftOverhangsPx",
+              "type": {
+                "text": "number[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "graceType",
               "type": {
                 "text": "GraceType"
@@ -3453,6 +3485,24 @@
                   "name": "accidental",
                   "type": {
                     "text": "AccidentalType | undefined"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#rebaseOrnamentSteps",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "ornaments",
+                  "type": {
+                    "text": "GraceNoteDescriptor[]"
                   }
                 }
               ]
@@ -3783,7 +3833,7 @@
               "type": {
                 "text": "string"
               },
-              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note)."
+              "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note). Ignored, with a warning, on a `triangle-up`/`triangle-down` note."
             },
             {
               "name": "shared-stem-for",
@@ -5011,6 +5061,13 @@
                   "name": "chordStaffYCoords",
                   "type": {
                     "text": "Map<ChordElementType, number[]>"
+                  }
+                },
+                {
+                  "name": "resolvedStem",
+                  "optional": true,
+                  "type": {
+                    "text": "(index: number) => {\n      stemUp: boolean;\n      stemExtensionPx: number;\n      noFlags: boolean;\n    }"
                   }
                 }
               ],
@@ -9232,6 +9289,13 @@
                   "name": "chordStaffYCoords",
                   "type": {
                     "text": "Map<ChordElementType, number[]>"
+                  }
+                },
+                {
+                  "name": "resolvedStem",
+                  "optional": true,
+                  "type": {
+                    "text": "(index: number) => {\n      stemUp: boolean;\n      stemExtensionPx: number;\n      noFlags: boolean;\n    }"
                   }
                 }
               ],

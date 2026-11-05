@@ -200,3 +200,35 @@ export function triangleStemExtensionPx(
   const tipY = stemUp ? headY - stemLengthPx : headY + stemLengthPx;
   return Math.max(0, stemUp ? tipY - middleY : middleY - tipY);
 }
+
+// Staff-Y of a stem's tip, null when there's no stem. The stem starts at the
+// head farthest from the tip, and an unbeamed chord's stem reaches past its
+// spread (matches createChordSvg's effective extension).
+export function resolveStemTipY({
+  headYs,
+  stemUp,
+  stemless,
+  noFlags,
+  stemExtensionPx,
+  baseStemLengthPx,
+  flagExtensionPx,
+}: {
+  headYs: readonly number[];
+  stemUp: boolean;
+  stemless: boolean;
+  noFlags: boolean;
+  stemExtensionPx: number;
+  baseStemLengthPx: number;
+  flagExtensionPx: number;
+}): number | null {
+  if (stemless || headYs.length === 0) {
+    return null;
+  }
+  const lowestHeadY = Math.max(...headYs);
+  const highestHeadY = Math.min(...headYs);
+  const extension = noFlags
+    ? stemExtensionPx
+    : Math.max(stemExtensionPx, lowestHeadY - highestHeadY) + flagExtensionPx;
+  const length = baseStemLengthPx + extension;
+  return stemUp ? lowestHeadY - length : highestHeadY + length;
+}

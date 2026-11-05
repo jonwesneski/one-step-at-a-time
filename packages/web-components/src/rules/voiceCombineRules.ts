@@ -42,13 +42,24 @@ type Candidate = {
   beatOffset: number;
 };
 
+function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
+  if (element.nodeName === MUSIC_NOTE_NODE) {
+    return (element as NoteElementType).notehead === 'normal';
+  }
+  return (element as ChordElementType).toneNoteheads.every(
+    (notehead) => notehead === 'normal'
+  );
+}
+
 /**
  * A note/chord is combine-eligible only when every one of these is absent —
  * excluded from combining entirely, not merely "must match" — since a
  * tie/slur/arpeggio/trill/grace/glissando/stress/dynamic-shared attached to
  * one voice's note has no unambiguous meaning once merged and un-merged
  * downstream: the synthetic chord never copies these onto itself, so they'd
- * silently vanish when the original element is hidden.
+ * silently vanish when the original element is hidden. A non-normal notehead
+ * is excluded the same way: merged tones are deduplicated by pitch, so a tone
+ * couldn't keep a head of its own, and a triangle can't be a chord tone at all.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   if (voice.tupletsByIndex.has(index)) {
@@ -61,6 +72,9 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     return false;
   }
   const element = voice.elements[index] as NoteOrChordElementType;
+  if (!hasOnlyNormalNoteheads(element)) {
+    return false;
+  }
   return (
     element.tie === null &&
     element.slur === null &&

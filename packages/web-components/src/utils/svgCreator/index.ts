@@ -37,6 +37,7 @@ export {
   createGraceNotesSvg,
   createOrnamentConnectorSlur,
   createTrillFinishNotesSvg,
+  graceHeadLeftOverhangsPx,
   TRILL_FINISH_HEAD_RY,
   type GraceNotesProps,
   type TrillFinishNotesProps,

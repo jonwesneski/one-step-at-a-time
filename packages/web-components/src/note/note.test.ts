@@ -2146,6 +2146,53 @@ describe(`${MUSIC_NOTE} notehead`, () => {
     warn.mockRestore();
   });
 
+  it('ignores beam-group on a triangle, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = renderNote({
+      duration: 'eighth',
+      notehead: 'triangle-up',
+      'beam-group': 'a',
+    });
+    expect(note.beamGroup).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('beam-group is ignored')
+    );
+    warn.mockRestore();
+  });
+
+  it('rejoins its beam group and tells the measure when it stops being a triangle', () => {
+    const note = renderNote({
+      duration: 'eighth',
+      notehead: 'x',
+      'beam-group': 'a',
+    });
+    expect(note.beamGroup).toBe('a');
+    const onChange = jest.fn();
+    note.addEventListener(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, onChange);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    note.setAttribute('notehead', 'triangle-up');
+    warn.mockRestore();
+    expect(note.beamGroup).toBeNull();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves a grace accidental clear of a head wider than the ellipse', () => {
+    const accidentalX = (note: NoteElementType) =>
+      Number(
+        note.shadowRoot?.querySelector('.grace-accidental')?.getAttribute('x')
+      );
+    const plain = renderNote({ duration: 'quarter', grace: 'F#' });
+    const diamond = renderNote({
+      duration: 'quarter',
+      grace: 'F#',
+      'grace-notehead': 'diamond-white',
+    });
+    expect(plain.graceHeadLeftOverhangsPx).toEqual([0]);
+    const [overhang] = diamond.graceHeadLeftOverhangsPx;
+    expect(overhang).toBeGreaterThan(0);
+    expect(accidentalX(diamond)).toBeCloseTo(accidentalX(plain) - overhang);
+  });
+
   it('reflects the notehead property to the attribute', () => {
     const note = renderNote({ duration: 'quarter' });
     note.notehead = 'x';

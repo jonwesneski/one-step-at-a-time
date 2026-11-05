@@ -3,11 +3,15 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
 import {
+  applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
+  rebaseGraceSteps,
+  type GraceNoteDescriptor,
 } from '../rules/graceRules';
 import {
   forcedStemUp,
+  isTriangle,
   suppressesAccidental,
   suppressesLedgerLines,
   triangleDurationWarning,
@@ -56,6 +60,7 @@ import {
   createSempreArpeggiandoText,
   createTrillFinishNotesSvg,
   GRACE_MAIN_GAP_PX,
+  graceHeadLeftOverhangsPx,
   graceListToAttr,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
@@ -149,7 +154,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this note (inclusive).
    * @attr {boolean} loco - Closes the currently open octave-transposition span at this note, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
    * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.
-   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
+   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note). Ignored, with a warning, on a `triangle-up`/`triangle-down` note.
    * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
    * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
    * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
@@ -221,6 +226,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
     #noFlags = false;
+    #nominalStaffY: number | null = null;
     #lastNoteheadWarning: string | null = null;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -378,6 +384,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    get nominalStaffY(): number | null {
+      return this.#nominalStaffY;
+    }
+    set nominalStaffY(value: number | null) {
+      this.#nominalStaffY = value;
+      this.#scheduleRender();
+    }
+
     get slur(): ConnectorRole | null {
       return parseConnectorRole(this.getAttribute('slur'));
     }
@@ -513,7 +527,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // staves that joins one cross-staff double-stemmed beam group. Resolved
     // by the ancestor <music-measure>.
     get beamGroup(): string | null {
-      return this.getAttribute('beam-group');
+      return isTriangle(this.notehead) ? null : this.getAttribute('beam-group');
     }
     set beamGroup(value: string | null) {
       if (value === null) {
@@ -810,6 +824,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    get graceHeadLeftOverhangsPx(): number[] {
+      return graceHeadLeftOverhangsPx(
+        this.graceNotehead,
+        this.grace?.length ?? 0,
+        this.graceDuration
+      );
+    }
+
     get graceType(): GraceType {
       return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
     }
@@ -1017,6 +1039,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (
+        (name === 'notehead' || name === 'beam-group') &&
+        isTriangle(this.notehead) &&
+        this.hasAttribute('beam-group')
+      ) {
+        console.warn(
+          `[music-note] beam-group is ignored on notehead="${this.notehead}": a triangle always stands alone.`
+        );
+      }
+
       if (name === 'notehead' || name === 'grace-notehead') {
         const warning =
           name === 'notehead'
@@ -1219,6 +1251,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // "slur to next" pass depends on it too. `notehead` changes the
         // head's width, and a triangle also moves the note and forces its
         // stem.
+        if (name === 'notehead' && this.hasAttribute('beam-group')) {
+          // A triangle leaves or rejoins its cross-staff beam group.
+          this.dispatchEvent(
+            new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+              bubbles: true,
+              composed: true,
+            })
+          );
+        }
         if (
           name === 'trill-note' &&
           newValue !== null &&
@@ -1400,6 +1441,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.graceNotehead
       );
       applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
+      applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
+      this.#rebaseOrnamentSteps(graceNotes);
 
       const accidentalFootprint = accidental
         ? ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP
@@ -1453,6 +1496,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       noteSvg.appendChild(graceGroup);
     }
 
+    #rebaseOrnamentSteps(ornaments: GraceNoteDescriptor[]): void {
+      if (this.#staffY !== null && this.#nominalStaffY !== null) {
+        rebaseGraceSteps(ornaments, this.#staffY, this.#nominalStaffY);
+      }
+    }
+
     // Renders the finishing grace note(s) and, when requested, the
     // self-contained "to-main" slur. A 'to-next'/'both' slur reaches a
     // sibling element this note doesn't know about, so the ancestor staff
@@ -1473,6 +1522,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         trillFinishNotes,
         this.#resolvedTrillFinishAccidentals
       );
+      this.#rebaseOrnamentSteps(trillFinishNotes);
 
       const { cx, cy } = noteHeadCenter(
         this.stemUp,

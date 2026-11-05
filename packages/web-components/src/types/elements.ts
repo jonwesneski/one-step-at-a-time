@@ -198,6 +198,9 @@ export interface INoteElement {
   // Per-grace notehead aligned by index with grace; an empty slot is normal.
   get graceNotehead(): (NoteheadType | null)[] | null;
   set graceNotehead(value: GraceNoteheadsType);
+  // Per grace note, how far its head reaches left of the ellipse head's edge
+  // (px, at grace scale).
+  readonly graceHeadLeftOverhangsPx: number[];
   graceType: GraceType;
   graceDuration: GraceDuration | null;
   graceSlur: GraceSlur;
@@ -250,6 +253,10 @@ export interface INoteElement {
   showAccidental: AccidentalType | null | undefined;
   // Set by the staff to enable ledger line rendering. null in standalone mode.
   staffY: number | null;
+  // Where the nominal pitch would sit when the head is drawn elsewhere (an
+  // in-staff triangle), so ornaments stay on their real staff positions. Null
+  // otherwise.
+  nominalStaffY: number | null;
   batchUpdate(fn: () => void): void;
 }
 
@@ -386,6 +393,9 @@ export interface IChordElement {
   // Per-grace notehead aligned by index with grace; an empty slot is normal.
   get graceNotehead(): (NoteheadType | null)[] | null;
   set graceNotehead(value: GraceNoteheadsType);
+  // Per grace note, how far its head reaches left of the ellipse head's edge
+  // (px, at grace scale).
+  readonly graceHeadLeftOverhangsPx: number[];
   graceType: GraceType;
   graceDuration: GraceDuration | null;
   graceSlur: GraceSlur;

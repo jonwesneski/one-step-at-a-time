@@ -24,6 +24,7 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../utils/notationDimensions';
+import { isTriangle } from './noteheadRules';
 import { MINOR_TO_RELATIVE_MAJOR } from './theoryConsts';
 
 // ─── Suffix parsing ────────────────────────────────────────────────────────────
@@ -143,7 +144,9 @@ export function computeNoteAccidentals(
         graceShowAccidentals,
         noteElement
       );
-      if (noteElement.tie === 'end') {
+      // A triangle's nominal pitch is undefined, so like a tied note it neither
+      // shows an accidental nor changes the measure's state. Its ornaments do.
+      if (noteElement.tie === 'end' || isTriangle(noteElement.notehead)) {
         noteShowAccidentals.set(noteElement, null);
         resolveOrnamentAccidentals(
           noteElement.trillFinish,
