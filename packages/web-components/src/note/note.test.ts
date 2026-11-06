@@ -23,6 +23,7 @@ import {
   GRACE_SCALE,
   STAFF_LINE_SPACING,
   STAFF_LINE_THICKNESS_PX,
+  TWO_TAILS_LENGTH_PX,
 } from '../utils/notationDimensions';
 import { SLUR_HEAD_CLEARANCE_PX } from '../utils/svgCreator/graceNotes';
 import {
@@ -467,11 +468,19 @@ describe('grace notes', () => {
       expect(slash).not.toBeNull();
       const y1 = Number(slash?.getAttribute('y1'));
       const y2 = Number(slash?.getAttribute('y2'));
-      return (y1 + y2) / 2;
+      const graceNote = noteElement.shadowRoot?.querySelector('.grace-note');
+      const [, translateY, scale] =
+        /translate\(\S+ (\S+)\) scale\((\S+)\)/.exec(
+          graceNote?.getAttribute('transform') ?? ''
+        ) ?? [];
+      const stemTipY =
+        Number(translateY) +
+        Number(scale) *
+          NOTE_SCALE *
+          Number(graceNote?.querySelector('.stem')?.getAttribute('y1'));
+      return (y1 + y2) / 2 - stemTipY;
     };
 
-    // Extra flags stack downward toward the head on a stem-up note, so the
-    // stem tip — and the slash crossing it — must not shift with flag count.
     const eighthY = slashY('eighth');
     const sixteenthY = slashY('sixteenth');
     const thirtysecondY = slashY('thirtysecond');
@@ -2252,6 +2261,114 @@ describe('stem length', () => {
       );
     }
   );
+
+  describe('tails', () => {
+    const tailYExtentPx = (note: NoteElementType) => {
+      const path = note.shadowRoot?.querySelector('path.single-flag');
+      const transform = path?.getAttribute('transform') ?? '';
+      const [, translateY, scaleY] =
+        /translate\(\S+ (\S+)\) scale\(\S+ (\S+)\)/.exec(transform) ?? [];
+      const coordinates = (path?.getAttribute('d') ?? '')
+        .replace(/[A-Z]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .map(Number);
+      const outlineYs = coordinates.filter((_, index) => index % 2 === 1);
+      const toPx = (y: number) =>
+        (Number(translateY) + y * Number(scaleY)) * NOTE_SCALE;
+      return {
+        top: toPx(Math.min(...outlineYs)),
+        bottom: toPx(Math.max(...outlineYs)),
+      };
+    };
+    const tailLengthSpaces = (note: NoteElementType) => {
+      const { top, bottom } = tailYExtentPx(note);
+      return (bottom - top) / STAFF_LINE_SPACING;
+    };
+    const stemTipYPx = (note: NoteElementType, stemUp: boolean) => {
+      const stem = note.shadowRoot?.querySelector('.stem');
+      return Number(stem?.getAttribute(stemUp ? 'y1' : 'y2')) * NOTE_SCALE;
+    };
+
+    it.each([true, false])(
+      'draws a lone tail 3 spaces long from the stem tip (stemUp=%s)',
+      (stemUp) => {
+        const note = renderNote('eighth', stemUp);
+        expect(tailLengthSpaces(note)).toBeCloseTo(3, 1);
+        const { top, bottom } = tailYExtentPx(note);
+        expect(stemUp ? top : bottom).toBeCloseTo(stemTipYPx(note, stemUp), 0);
+      }
+    );
+
+    it.each([
+      [-1, 2.5],
+      [-0.75, 2.75],
+      [-0.5, 3],
+    ])(
+      'fits a lone tail to a stem with extension %d spaces',
+      (extensionSpaces, expectedSpaces) => {
+        const note = renderNote('eighth');
+        note.stemExtension = STAFF_LINE_SPACING * extensionSpaces;
+        expect(tailLengthSpaces(note)).toBeCloseTo(expectedSpaces, 1);
+      }
+    );
+
+    it.each([
+      [-1, 2],
+      [-0.75, 2.25],
+      [-0.5, 2.5],
+      [0, 3],
+    ])(
+      'stops a down-stem tail at the lower edge of the head with extension %d spaces',
+      (extensionSpaces, expectedSpaces) => {
+        const note = renderNote('eighth', false);
+        note.stemExtension = STAFF_LINE_SPACING * extensionSpaces;
+        expect(tailLengthSpaces(note)).toBeCloseTo(expectedSpaces, 1);
+      }
+    );
+
+    it.each([
+      ['sixteenth', 2],
+      ['thirtysecond', 3],
+      ['sixtyfourth', 4],
+    ] as [DurationType, number][])(
+      'stops a down-stem %s stack at the lower edge of the head',
+      (duration, tailCount) => {
+        const note = renderNote(duration, false);
+        const stackSpanSpaces =
+          tailLengthSpaces(note) +
+          ((tailCount - 1) * FLAG_STEM_STEP_PX) / STAFF_LINE_SPACING;
+        expect(stackSpanSpaces).toBeCloseTo(
+          stemLengthPx(note) / STAFF_LINE_SPACING - 0.5,
+          1
+        );
+      }
+    );
+
+    it.each(['sixteenth', 'thirtysecond', 'sixtyfourth'] as DurationType[])(
+      'nests each %s tail inside the length of a lone tail',
+      (duration) => {
+        expect(tailLengthSpaces(renderNote(duration))).toBeCloseTo(
+          (TWO_TAILS_LENGTH_PX - FLAG_STEM_STEP_PX) / STAFF_LINE_SPACING,
+          1
+        );
+      }
+    );
+
+    it.each([true, false])(
+      'spaces stacked tails toward the head (stemUp=%s)',
+      (stemUp) => {
+        const note = renderNote('thirtysecond', stemUp);
+        const offsets = Array.from(
+          note.shadowRoot?.querySelectorAll('.flag use') ?? []
+        ).map((use) => Number(use.getAttribute('y')) * NOTE_SCALE);
+        const direction = stemUp ? 1 : -1;
+        expect(offsets).toHaveLength(2);
+        expect(offsets[0]).toBeCloseTo(direction * FLAG_STEM_STEP_PX);
+        expect(offsets[1]).toBeCloseTo(direction * 2 * FLAG_STEM_STEP_PX);
+      }
+    );
+  });
 
   it('keeps the head at the same offset whatever the stem length', () => {
     const note = renderNote('quarter');

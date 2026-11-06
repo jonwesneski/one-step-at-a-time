@@ -23,6 +23,7 @@ import {
   GRACE_BEAM_COUNT,
   GRACE_BEAM_GAP_PX,
   GRACE_BEAM_THICKNESS_PX,
+  GRACE_NOTE_ADVANCE_PX,
   GRACE_SCALE,
   GRACE_SLASH_HALF_HEIGHT_PX,
   GRACE_SLASH_HALF_WIDTH_PX,
@@ -37,6 +38,7 @@ import { createArticulationMarks } from './articulations';
 import { createCurveSvg, DEFAULT_BULGE_HEIGHT } from './curve';
 import {
   createNoteSvg,
+  flagStemExtensionPx,
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
@@ -46,6 +48,7 @@ import {
   noteHeadCenter,
   noteHeadGeometry,
   noteHeadLeftOverhangPx,
+  TAIL_UP_WIDTH_PX,
 } from './note';
 
 // Full-size stem stroke is 22 units in the note's 600-unit space (≈1.17px);
@@ -289,11 +292,15 @@ function renderOrnamentNoteGroup(
       }
     }
 
-    // Grace notes are always stem-up, and a stem-up tip position doesn't
-    // move with flag count (extra flags stack down toward the head, not up
-    // past the tip), so this holds regardless of the written duration's
-    // flag count.
-    const stemTipY = headYCenters[0] - GRACE_SCALE * BASE_STEM_LENGTH_PX;
+    // Grace notes are always stem-up and placed by their head, so tails past
+    // the second move the tip away from it.
+    const stemTipY =
+      headYCenters[0] -
+      GRACE_SCALE *
+        (BASE_STEM_LENGTH_PX +
+          flagStemExtensionPx(
+            durationToFlagCountMap.get(writtenDuration) ?? 0
+          ));
     firstStemTipY = stemTipY;
     lastStemTipY = stemTipY;
 
@@ -396,6 +403,19 @@ export type TrillFinishNotesProps = {
   // GraceNotesProps.mainStaffY.
   mainStaffY: number | null;
 };
+
+/**
+ * How far (px) a finishing figure's tail reaches past its layout width. Only a
+ * lone finishing note has a tail, and it points at whatever follows; a group is
+ * beamed.
+ */
+export function trillFinishTailOverhangPx(noteCount: number): number {
+  return noteCount === 1
+    ? GRACE_STEM_X_FROM_HEAD_CENTER +
+        GRACE_SCALE * TAIL_UP_WIDTH_PX -
+        GRACE_NOTE_ADVANCE_PX / 2
+    : 0;
+}
 
 export type TrillFinishNotesResult = {
   element: SVGGElement;

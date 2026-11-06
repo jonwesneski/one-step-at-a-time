@@ -13,10 +13,7 @@ import {
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
 } from '../utils/consts';
-import {
-  FLAG_STEM_STEP_PX,
-  STAFF_LINE_SPACING,
-} from '../utils/notationDimensions';
+import { STAFF_LINE_SPACING } from '../utils/notationDimensions';
 import {
   determineStemDirections,
   determineVoiceStemDirections,
@@ -374,15 +371,59 @@ describe('unbeamedStemExtensionPx', () => {
     expect(unbeamedStemExtensionPx([G4], true, 2)).toBe(0);
   });
 
-  it('keeps the length of a partly shortened stem for two tails', () => {
-    expect(unbeamedStemExtensionPx([C5], true, 2)).toBe(spaces(-0.5));
+  it('leaves a stemless duration alone', () => {
+    expect(unbeamedStemExtensionPx([F5], true, 0)).toBe(spaces(-1));
+    expect(unbeamedStemExtensionPx([B5], false, 0)).toBe(0);
   });
 
-  it('gives a stem at the minimum length room for its second tail', () => {
+  it('keeps a short stem for one tail, which shortens to fit it', () => {
+    expect(unbeamedStemExtensionPx([C5], true, 1)).toBe(spaces(-0.5));
     expect(unbeamedStemExtensionPx([F5], true, 1)).toBe(spaces(-1));
-    expect(unbeamedStemExtensionPx([F5], true, 2)).toBe(
-      spaces(-1) + FLAG_STEM_STEP_PX
+  });
+
+  it('gives a short stem the length of two tails', () => {
+    expect(unbeamedStemExtensionPx([C5], true, 2)).toBeCloseTo(spaces(-0.25));
+    expect(unbeamedStemExtensionPx([F5], true, 2)).toBeCloseTo(spaces(-0.25));
+    expect(unbeamedStemExtensionPx([D4], false, 2)).toBeCloseTo(spaces(-0.25));
+  });
+
+  it.each([
+    ['above the stave', B5, false, 1, 0.25],
+    ['above the stave', C6, false, 2, 1],
+    ['above the stave', E6, false, 1, 1.75],
+    ['below the stave', B3, true, 1, 0.25],
+    ['below the stave', A3, true, 2, 1],
+    ['below the stave', E3, true, 1, 3.75],
+  ] as [string, number, boolean, number, number][])(
+    'keeps tails short of the first ledger line %s (head %d, stemUp=%s, %d tails)',
+    (_side, head, stemUp, flagCount, extraSpaces) => {
+      expect(unbeamedStemExtensionPx([head], stemUp, flagCount)).toBeCloseTo(
+        spaces(extraSpaces)
+      );
+    }
+  );
+
+  it('needs no extra length for a head on the first ledger line', () => {
+    expect(unbeamedStemExtensionPx([A5], false, 2)).toBe(0);
+    expect(unbeamedStemExtensionPx([C4], true, 2)).toBe(0);
+  });
+
+  it('leaves a stem pointing away from the stave alone', () => {
+    expect(unbeamedStemExtensionPx([C6], true, 1)).toBe(spaces(-1));
+    expect(unbeamedStemExtensionPx([E3], false, 1)).toBe(spaces(-1));
+  });
+
+  it("measures a chord from the head nearest the stem's open end", () => {
+    expect(unbeamedStemExtensionPx([C6, G4], false, 1)).toBe(
+      unbeamedStemExtensionPx([G4], false, 1)
     );
+    expect(unbeamedStemExtensionPx([B5, C6], false, 1)).toBe(
+      unbeamedStemExtensionPx([B5], false, 1)
+    );
+  });
+
+  it('skips ledger clearance for a head with no ledger lines', () => {
+    expect(unbeamedStemExtensionPx([B5], false, 1, false)).toBe(0);
   });
 });
 

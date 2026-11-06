@@ -206,10 +206,66 @@ export const OUTWARD_STEM_SHORTENING_PER_STEP_PX = STAFF_LINE_SPACING * 0.25;
 
 /**
  * Stem lengthening (px) for each tail beyond what the stem has room for; also
- * the spacing between stacked tails.
- * = 0.64 × STAFF_LINE_SPACING
+ * the spacing between stacked tails, a little less than a stave-space.
+ * = 0.875 × STAFF_LINE_SPACING
  */
-export const FLAG_STEM_STEP_PX = STAFF_LINE_SPACING * 0.64;
+export const FLAG_STEM_STEP_PX = STAFF_LINE_SPACING * 0.875;
+
+/**
+ * Length (px) of a lone tail: on a 3½-space stem it ends level with the
+ * notehead's near edge. A shorter stem takes a shorter tail.
+ * = 3 × STAFF_LINE_SPACING
+ */
+export const QUAVER_TAIL_LENGTH_PX = STAFF_LINE_SPACING * 3;
+
+/**
+ * Stem length (px) left free of tails on a down-stem, from the head's centre to
+ * its lower edge. Keeps a standard stem's lone tail at its full length.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DOWN_TAIL_HEAD_ROOM_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Combined length (px) of two stacked tails, a little longer than a lone tail.
+ * Also the shortest stem that can carry them.
+ * = 3.25 × STAFF_LINE_SPACING
+ */
+export const TWO_TAILS_LENGTH_PX = STAFF_LINE_SPACING * 3.25;
+
+/**
+ * Length (px) of each tail in a stack, so that the stack nests inside the shape
+ * of a lone tail.
+ * = TWO_TAILS_LENGTH_PX − FLAG_STEM_STEP_PX
+ */
+export const STACKED_TAIL_LENGTH_PX = TWO_TAILS_LENGTH_PX - FLAG_STEM_STEP_PX;
+
+/**
+ * Gap (px) kept between a tail's end and the first ledger line, on a stem
+ * running from a ledger-line note back into the stave.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const LEDGER_TAIL_CLEARANCE_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Advance (px) added to MIN_NOTE_WIDTH for a note or chord straight after an
+ * up-stem tail, so the tail doesn't crowd its notehead.
+ * = 0.35 × STAFF_LINE_SPACING
+ */
+export const NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.35;
+
+/**
+ * Advance (px) added to MIN_NOTE_WIDTH for a rest straight after an up-stem
+ * tail, so the tail clears the rest, down to the widest rest glyph.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.8;
+
+/**
+ * The same for a rest after a down-stem tail, which reaches less far right, so
+ * that a rest sits the same distance from a tail in either direction.
+ * = 0.35 × STAFF_LINE_SPACING
+ */
+export const REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.35;
 
 /**
  * Maximum amount (px) a beamed stem may be shortened before hitting the minimum.

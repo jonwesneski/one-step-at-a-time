@@ -145,6 +145,7 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   octaveSignWidth,
   TRILL_FINISH_HEAD_RY,
+  trillFinishTailOverhangPx,
 } from './utils';
 import {
   CLEF_EVENTS,
@@ -190,6 +191,7 @@ import {
   LEADING_NOTE_GAP_PX,
   MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
+  NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   NOTES_AREA_LEFT_MARGIN,
   OCTAVE_LOCO_ESTIMATED_WIDTH_PX,
   OCTAVE_LOCO_GAP_PX,
@@ -199,6 +201,8 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
+  REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
@@ -1756,7 +1760,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ? unbeamedStemExtensionPx(
             getStaffYs(elements[i], noteStaffYCoords, chordStaffYCoords),
             stemDirections[i],
-            durationToFlagCountMap.get(elements[i].duration) ?? 0
+            durationToFlagCountMap.get(elements[i].duration) ?? 0,
+            !(
+              elements[i].nodeName === MUSIC_NOTE_NODE &&
+              isTriangle((elements[i] as NoteElementType).notehead)
+            )
           )
         : 0;
     this.#placeTriangles(
@@ -2233,7 +2241,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
       let extraRightwardWidth = 0;
       for (let i = 0; i < state.elements.length; i++) {
-        extraRightwardWidth += this.#rightwardFootprint(voiceKey, i);
+        extraRightwardWidth +=
+          this.#rightwardFootprint(voiceKey, i) +
+          this.#tailFollowerRoom(state, i);
       }
       const clefMarkerWidth =
         !isMultiVoice || voiceKey === 1
@@ -2511,9 +2521,35 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         trillFinish,
         hostElement.resolvedTrillFinishAccidentals
       );
-      footprints.set(i, width);
+      footprints.set(i, width + trillFinishTailOverhangPx(trillFinish.length));
     }
     return footprints;
+  }
+
+  // Extra advance (px) for an entry straight after a tail, which at the minimum
+  // advance would crowd it. A rest's ink sits further left in its box than a
+  // notehead's, so it needs more, and an up-stem's tail reaches further right
+  // than a down-stem's, which leaves a following notehead enough room as it is.
+  #tailFollowerRoom(state: VoiceRenderState, index: number): number {
+    if (index === 0) {
+      return 0;
+    }
+    const previous = state.elements[index - 1];
+    if (previous.nodeName === MUSIC_REST_NODE) {
+      return 0;
+    }
+    const { stemUp, noFlags, duration } = previous as
+      | NoteElementType
+      | ChordElementType;
+    if (noFlags || (durationToFlagCountMap.get(duration) ?? 0) === 0) {
+      return 0;
+    }
+    if (state.elements[index].nodeName === MUSIC_REST_NODE) {
+      return stemUp
+        ? REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX
+        : REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX;
+    }
+    return stemUp ? NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX : 0;
   }
 
   // Combined rightward footprint (px) at `index` of `voiceKey` — every
@@ -2814,7 +2850,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // *previous* entry alone — never looking ahead, so appending a new
         // entry can never move an already-placed one.
         if (previousNoteX !== null) {
-          xInWrapper = Math.max(xInWrapper, previousNoteX + MIN_NOTE_WIDTH);
+          xInWrapper = Math.max(
+            xInWrapper,
+            previousNoteX + MIN_NOTE_WIDTH + this.#tailFollowerRoom(state, i)
+          );
         }
 
         // Everything drawn left of this entry — accidental / grace / arpeggio sign

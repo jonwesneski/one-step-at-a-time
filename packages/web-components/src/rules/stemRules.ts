@@ -8,12 +8,17 @@ import type { BeamsBuilder } from '../utils';
 import { MUSIC_REST_NODE } from '../utils/consts';
 import {
   BASE_STEM_LENGTH_PX,
-  FLAG_STEM_STEP_PX,
+  LEDGER_TAIL_CLEARANCE_PX,
   MIDDLE_STAFF_Y,
   MIN_STEM_LENGTH_PX,
   OUTWARD_STEM_LENGTH_AT_MIDDLE_PX,
   OUTWARD_STEM_SHORTENING_PER_STEP_PX,
+  QUAVER_TAIL_LENGTH_PX,
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_LINE_SPACING,
+  STAFF_TOP_LINE_Y,
   STAFF_Y_STEP,
+  TWO_TAILS_LENGTH_PX,
 } from '../utils/notationDimensions';
 import { getStaffYs } from './staffNoteRules';
 import type { VoiceDirection } from './voiceRules';
@@ -125,21 +130,45 @@ export function stemLengthAdjustPx(
 }
 
 /**
- * Stem extension (px) for an unbeamed note or chord. A stem at the minimum
- * length has room for one tail, so a second tail lengthens it by a step; the
- * note SVG itself adds a step per tail past the second at any length.
+ * Stem extension (px) for an unbeamed note or chord. Two tails need a stem at
+ * least as long as they are, and a stem from a ledger-line note back into the
+ * stave grows so its tails stop short of the first ledger line. Both hold for
+ * any tail count: the note SVG adds a step per tail past the second on its own.
  */
 export function unbeamedStemExtensionPx(
   headYs: readonly number[],
   stemUp: boolean,
-  flagCount: number
+  flagCount: number,
+  hasLedgerLines = true
 ): number {
   const adjust = stemLengthAdjustPx(headYs, stemUp);
-  const atMinimumLength =
-    BASE_STEM_LENGTH_PX + adjust <= MIN_STEM_LENGTH_PX + OFFSET_EPSILON;
-  return atMinimumLength && flagCount >= 2
-    ? adjust + FLAG_STEM_STEP_PX
-    : adjust;
+  if (flagCount === 0 || headYs.length === 0) {
+    return adjust;
+  }
+  const tailsLengthPx =
+    flagCount >= 2 ? TWO_TAILS_LENGTH_PX : QUAVER_TAIL_LENGTH_PX;
+  const ledgerFloorPx = hasLedgerLines
+    ? ledgerTailStemFloorPx(headYs, stemUp, tailsLengthPx)
+    : 0;
+  const tailsFloorPx = flagCount >= 2 ? TWO_TAILS_LENGTH_PX : 0;
+  return (
+    Math.max(BASE_STEM_LENGTH_PX + adjust, tailsFloorPx, ledgerFloorPx) -
+    BASE_STEM_LENGTH_PX
+  );
+}
+
+function ledgerTailStemFloorPx(
+  headYs: readonly number[],
+  stemUp: boolean,
+  tailsLengthPx: number
+): number {
+  const headNearestOpenEnd = stemUp ? Math.min(...headYs) : Math.max(...headYs);
+  const headPastFirstLedgerPx = stemUp
+    ? headNearestOpenEnd - (STAFF_BOTTOM_LINE_Y + STAFF_LINE_SPACING)
+    : STAFF_TOP_LINE_Y - STAFF_LINE_SPACING - headNearestOpenEnd;
+  return headPastFirstLedgerPx < 0
+    ? 0
+    : headPastFirstLedgerPx + LEDGER_TAIL_CLEARANCE_PX + tailsLengthPx;
 }
 
 function buildStemUnits(

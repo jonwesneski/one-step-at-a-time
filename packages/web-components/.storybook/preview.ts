@@ -9,6 +9,10 @@ setCustomElementsManifest(customElements);
 
 const preview: Preview = {
   parameters: {
+    docs: {
+      // Controls list only what each story's own args and argTypes configure.
+      extractArgTypes: () => ({}),
+    },
     controls: {
       matchers: {
         color: /(background|color)$/i,
@@ -39,7 +43,6 @@ const preview: Preview = {
             'Trills',
             'Octave Signs',
             'Clef Changes',
-            'Noteheads',
             'Beams',
             'Voices',
           ],

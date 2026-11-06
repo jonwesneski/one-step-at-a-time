@@ -157,6 +157,7 @@ export const createChordSvg = ({
       noStem: noStem || !isExtremal,
       stemUp,
       stemExtension: isExtremal ? effectiveStemExtension : 0,
+      tailRoomStemExtension: isExtremal ? stemExtension : 0,
       qualifiedElementName: 'svg',
       notehead: noteheads[i] ?? 'normal',
     });
