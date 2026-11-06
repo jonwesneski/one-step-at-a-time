@@ -274,8 +274,8 @@ Notes are mapped to semitones 0–11 (A=0, Bb=1, B=2, C=3, …, Ab=11). Chord fo
 Each staff reports **two** widths, both computed in `rules/staffWidth.ts`:
 
 - **strut min width** — the collision floor:
-  `describeEndX + LEADING_NOTE_GAP_PX + noteCount × MIN_NOTE_WIDTH + leftward-overhangs + clefChangeWidth`
-  (vocal takes `max(noteCount × MIN_NOTE_WIDTH, lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)`).
+  `describeEndX + LEADING_NOTE_GAP_PX + noteCount × MIN_NOTE_WIDTH + leftward-overhangs + rightward-room + clefChangeWidth`
+  (rightward-room is what entries reserve after themselves, plus whatever each later entry's minimum advance needs beyond those terms: `rules/staffWidth.ts#computeMinimumEntryAdvance`, which mirrors the clamps in `#spaceElements()`; vocal re-scores the same inputs, `StaffClassicalElementBase#currentStrutInputs`, as `max(noteCount × MIN_NOTE_WIDTH + clefChangeWidth + rightward-room, lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)`).
 - **natural width** — the strut plus the total beat-proportional spacing
   slack the entries want beyond it (`Σ` of `computeSpacingWeights` from
   `rules/spacingRules.ts`).

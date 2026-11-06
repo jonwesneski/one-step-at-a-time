@@ -54,6 +54,8 @@ import { getStaffYs } from './rules/staffNoteRules';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
+  computeMinimumEntryAdvance,
+  type StaffStrutInputs,
 } from './rules/staffWidth';
 import {
   determineVoiceStemDirections,
@@ -71,7 +73,6 @@ import {
   computeOuterBracketBaseY,
   computeTupletBracketGeometry,
   computeTupletScaleByIndex,
-  computeTupletScaledNoteCount,
   getStaffYForIndex,
   naturalStemTipY,
   noteheadEdgeY,
@@ -531,7 +532,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #describeEndX = 0;
-  #currentSpacingSlackWeight = 0;
+  #currentStrutInputs: StaffStrutInputs | null = null;
   #showDescribe = true;
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
@@ -700,12 +701,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   /**
-   * Σ of the current entries' logarithmic spacing slack weights, set on every
-   * #spaceElements() pass. StaffVocalElement reads it to compute its natural
-   * width after re-scoring against lyric widths.
+   * What the widest voice's widths were summed from, set on every #renderNotes()
+   * pass; null with no entries. StaffVocalElement re-scores it against lyrics.
    */
-  protected get currentSpacingSlackWeight(): number {
-    return this.#currentSpacingSlackWeight;
+  protected get currentStrutInputs(): StaffStrutInputs | null {
+    return this.#currentStrutInputs;
   }
 
   get showDescribe(): boolean {
@@ -2223,6 +2223,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // so this only affects the staff's own *preferred* width.
     let maxMinWidth = 0;
     let maxNaturalWidth = 0;
+    let strutInputs: StaffStrutInputs | null = null;
     let anyVoiceHasContent = false;
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       if (state.elements.length === 0) {
@@ -2241,17 +2242,23 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
       let extraRightwardWidth = 0;
       for (let i = 0; i < state.elements.length; i++) {
-        extraRightwardWidth +=
-          this.#rightwardFootprint(voiceKey, i) +
-          this.#tailFollowerRoom(state, i);
+        extraRightwardWidth += this.#rightwardFootprint(voiceKey, i);
+        if (i > 0) {
+          extraRightwardWidth += this.#advanceBeyondStrutTerms(
+            voiceKey,
+            state,
+            i
+          );
+        }
       }
       const clefMarkerWidth =
         !isMultiVoice || voiceKey === 1
           ? this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
           : 0;
+      const noteCount = state.elements.length;
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
-        computeTupletScaledNoteCount(state.elements, state.tupletsByIndex),
+        noteCount,
         firstElementLeftwardWidth,
         extraLeftwardWidth,
         clefMarkerWidth,
@@ -2262,9 +2269,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         computeTupletScaleByIndex(state.elements, state.tupletsByIndex)
       );
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
+      if (minWidth > maxMinWidth) {
+        strutInputs = {
+          noteCount,
+          firstElementLeftwardWidth,
+          extraLeftwardWidth,
+          clefChangeWidth: clefMarkerWidth,
+          extraRightwardWidth,
+          totalSlackWeight: totalWeight,
+        };
+      }
       maxMinWidth = Math.max(maxMinWidth, minWidth);
       maxNaturalWidth = Math.max(maxNaturalWidth, naturalWidth);
     }
+    this.#currentStrutInputs = strutInputs;
     if (anyVoiceHasContent) {
       this.dispatchEvent(
         new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
@@ -2552,6 +2570,30 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return stemUp ? NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX : 0;
   }
 
+  // What entry `index`'s minimum advance needs beyond the strut's own terms for
+  // it: MIN_NOTE_WIDTH, its non-accidental leftward extent and the previous
+  // entry's rightward footprint. Mirrors the clamps in #spaceElements().
+  #advanceBeyondStrutTerms(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
+    const element = state.elements[index];
+    const previousFootprint = this.#rightwardFootprint(voiceKey, index - 1);
+    const advance = computeMinimumEntryAdvance(
+      this.#tailFollowerRoom(state, index),
+      this.#entryLeftwardExtent(element),
+      previousFootprint
+    );
+    return Math.max(
+      0,
+      advance -
+        MIN_NOTE_WIDTH -
+        this.#entryLeftwardExtent(element, false) -
+        previousFootprint
+    );
+  }
+
   // Combined rightward footprint (px) at `index` of `voiceKey` — every
   // decoration that reserves space after an entry's own right edge sums
   // here, so #spaceElements() and the strut min-width only need one call
@@ -2584,10 +2626,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // its first note's own box.
   //
   // `includeAccidental` is false only for the non-first entries of the strut
-  // min-width sum: their accidental column sits between two entries and is
-  // absorbed by inter-note spacing / the per-entry MIN_NOTE_WIDTH, so it needs
-  // no extra measure width. The first entry's column has only the describe area
-  // to its left, so it always counts.
+  // min-width sum: their accidental column sits between two entries, so
+  // #advanceBeyondStrutTerms() counts it. The first entry's column has only the
+  // describe area to its left, so it always counts.
   #entryLeftwardExtent(
     element: NoteChordOrRestElementType,
     includeAccidental = true
@@ -2737,7 +2778,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureCapacity = beatsInMeasure / beatType;
     const isMultiVoice = this.#voices.size > 1;
 
-    let totalSlackWeight = 0;
     // Beat-offset-clustered noteheads across every real voice, for the
     // cross-voice collision pass below (needs every voice's positions
     // resolved first — see rules/voiceRules.ts#computeCrossVoiceDisplacements).
@@ -2779,16 +2819,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
         continue;
       }
-
-      const tupletScaleByIndex = computeTupletScaleByIndex(
-        state.elements,
-        state.tupletsByIndex
-      );
-      const { totalWeight } = computeSpacingWeights(
-        state.elements,
-        tupletScaleByIndex
-      );
-      totalSlackWeight += totalWeight;
 
       // state.beatOffsets was already computed in Pass 1 (#renderNotes) for
       // every real voice and for 'shared-rest'; the 'combined' track's own
@@ -2997,8 +3027,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       state.beamRenderer?.spaceAll();
     }
-
-    this.#currentSpacingSlackWeight = totalSlackWeight;
 
     // Cross-voice collision pass — only meaningful once 2+ real voices
     // share the staff. Applies a small horizontal nudge on top of the

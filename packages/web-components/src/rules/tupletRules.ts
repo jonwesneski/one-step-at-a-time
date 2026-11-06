@@ -97,30 +97,8 @@ export function resolveInnermostTuplet(
 }
 
 /**
- * Counts elements with tuplet-scaled weighting: a plain element contributes 1,
- * a tupleted element contributes its ratio's normal/actual factor (matching
- * the reduced horizontal footprint used in #spaceElements()).
- */
-export function computeTupletScaledNoteCount(
-  elements: NoteChordOrRestElementType[],
-  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
-): number {
-  let count = 0;
-  for (let i = 0; i < elements.length; i++) {
-    const innermostTuplet = resolveInnermostTuplet(tupletsByIndex, i);
-    if (innermostTuplet !== undefined) {
-      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-      count += normal / actual;
-    } else {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-/**
- * Maps each tupleted element index to its innermost ratio's normal/actual factor
- * (the same horizontal-footprint reduction used in #spaceElements()). Plain
+ * Maps each tupleted element index to its innermost ratio's normal/actual factor,
+ * which scales that entry's spacing slack (computeSpacingWeights). Plain
  * elements are absent from the map — callers treat a missing index as factor 1.
  */
 export function computeTupletScaleByIndex(

@@ -4138,12 +4138,12 @@
             },
             {
               "kind": "field",
-              "name": "#currentSpacingSlackWeight",
+              "name": "#currentStrutInputs",
               "privacy": "private",
               "type": {
-                "text": "number"
+                "text": "StaffStrutInputs | null"
               },
-              "default": "0",
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -4555,12 +4555,12 @@
             },
             {
               "kind": "field",
-              "name": "currentSpacingSlackWeight",
+              "name": "currentStrutInputs",
               "type": {
-                "text": "number"
+                "text": "StaffStrutInputs | null"
               },
               "privacy": "protected",
-              "description": "Σ of the current entries' logarithmic spacing slack weights, set on every\n#spaceElements() pass. StaffVocalElement reads it to compute its natural\nwidth after re-scoring against lyric widths.",
+              "description": "What the widest voice's widths were summed from, set on every #renderNotes()\npass; null with no entries. StaffVocalElement re-scores it against lyrics.",
               "readonly": true,
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5426,6 +5426,40 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#advanceBeyondStrutTerms",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "state",
                   "type": {
@@ -8011,15 +8045,6 @@
           "members": [
             {
               "kind": "field",
-              "name": "#slottedElements",
-              "privacy": "private",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "default": "[]"
-            },
-            {
-              "kind": "field",
               "name": "#sopranoYCoordinates",
               "privacy": "private",
               "static": true
@@ -8288,28 +8313,6 @@
             },
             {
               "kind": "method",
-              "name": "onHandleSlotChange",
-              "privacy": "protected",
-              "return": {
-                "type": {
-                  "text": "void"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "event",
-                  "type": {
-                    "text": "Event"
-                  }
-                }
-              ],
-              "inheritedFrom": {
-                "name": "StaffElementBase",
-                "module": "src/staffBase.ts"
-              }
-            },
-            {
-              "kind": "method",
               "name": "onStaffResize",
               "privacy": "protected",
               "return": {
@@ -8416,12 +8419,12 @@
             },
             {
               "kind": "field",
-              "name": "#currentSpacingSlackWeight",
+              "name": "#currentStrutInputs",
               "privacy": "private",
               "type": {
-                "text": "number"
+                "text": "StaffStrutInputs | null"
               },
-              "default": "0",
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -8833,12 +8836,12 @@
             },
             {
               "kind": "field",
-              "name": "currentSpacingSlackWeight",
+              "name": "currentStrutInputs",
               "type": {
-                "text": "number"
+                "text": "StaffStrutInputs | null"
               },
               "privacy": "protected",
-              "description": "Σ of the current entries' logarithmic spacing slack weights, set on every\n#spaceElements() pass. StaffVocalElement reads it to compute its natural\nwidth after re-scoring against lyric widths.",
+              "description": "What the widest voice's widths were summed from, set on every #renderNotes()\npass; null with no entries. StaffVocalElement re-scores it against lyrics.",
               "readonly": true,
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -9156,6 +9159,28 @@
                   "text": "void"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onHandleSlotChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "event",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -9695,6 +9720,40 @@
                 }
               },
               "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#advanceBeyondStrutTerms",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
                 {
                   "name": "state",
                   "type": {

@@ -256,16 +256,16 @@ export const NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.35;
 /**
  * Advance (px) added to MIN_NOTE_WIDTH for a rest straight after an up-stem
  * tail, so the tail clears the rest, down to the widest rest glyph.
- * = 0.8 × STAFF_LINE_SPACING
+ * = 1.2 × STAFF_LINE_SPACING
  */
-export const REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.8;
+export const REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 1.2;
 
 /**
  * The same for a rest after a down-stem tail, which reaches less far right, so
  * that a rest sits the same distance from a tail in either direction.
- * = 0.35 × STAFF_LINE_SPACING
+ * = 0.75 × STAFF_LINE_SPACING
  */
-export const REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.35;
+export const REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.75;
 
 /**
  * Maximum amount (px) a beamed stem may be shortened before hitting the minimum.

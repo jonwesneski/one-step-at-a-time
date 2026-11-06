@@ -24,11 +24,13 @@ import {
   ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
   BASE_STEM_LENGTH_PX,
+  MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_SCALE,
+  NOTE_SVG_WIDTH,
 } from '../utils/svgCreator/note';
 import './index';
 
@@ -1748,7 +1750,7 @@ describe('staff integration', () => {
         minWidths.push((event as CustomEvent).detail.minWidth);
       });
 
-      const [first] = renderChords(staff, [
+      const [first, second] = renderChords(staff, [
         { chord: 'Cmaj' },
         { chord: 'Fmaj' },
       ]);
@@ -1757,9 +1759,16 @@ describe('staff integration', () => {
       first.setAttribute('arpeggiate', 'start');
       const withPassage = minWidths[minWidths.length - 1];
 
-      // Both chords now carry an (implied) sign.
+      // Both chords now carry an (implied) sign, and the second chord's sign
+      // has to clear the first chord's whole box.
       expect(withPassage).toBeCloseTo(
-        withoutPassage + 2 * ARPEGGIO_FOOTPRINT_PX,
+        withoutPassage +
+          2 * ARPEGGIO_FOOTPRINT_PX +
+          (NOTE_SVG_WIDTH - MIN_NOTE_WIDTH),
+        5
+      );
+      expect(withPassage).toBeCloseTo(
+        parseFloat(second.style.left) + MIN_NOTE_WIDTH,
         5
       );
     });
