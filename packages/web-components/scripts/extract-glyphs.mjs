@@ -74,6 +74,8 @@ const CODEPOINTS = {
   noteheadTriangleUpBlack: 0xe0be,
   noteheadTriangleDownWhite: 0xe0c6,
   noteheadTriangleDownBlack: 0xe0c7,
+  flag8thUp: 0xe240,
+  flag8thDown: 0xe241,
 };
 
 const args = process.argv.slice(2);

@@ -18,7 +18,7 @@ export type VoiceDirectionInput = {
  * unconditionally, not pitch-driven. Voice 3 (middle, only reachable with
  * all three voices active) is contextual — see resolveMiddleVoiceDirection.
  * This is what distinguishes multi-voice stem direction from the
- * pitch-driven single-voice logic in staffNoteRules.ts#determineStemDirections,
+ * pitch-driven single-voice logic in stemRules.ts#determineStemDirections,
  * which is untouched and still used whenever only one voice is active.
  *
  * `staffYsByVoice` is only read for a 3-voice call — omit it (or call with

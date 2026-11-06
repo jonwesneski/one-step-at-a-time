@@ -36,7 +36,6 @@ import {
   isTriangle,
   resolveStemTipY,
   resolveTriangleStaffYs,
-  triangleStemExtensionPx,
   type TrianglePlacementEntry,
 } from './rules/noteheadRules';
 import {
@@ -51,14 +50,17 @@ import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
 } from './rules/spacingRules';
-import {
-  determineVoiceStemDirections,
-  getStaffYs,
-} from './rules/staffNoteRules';
+import { getStaffYs } from './rules/staffNoteRules';
 import {
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
+  computeMinimumEntryAdvance,
+  type StaffStrutInputs,
 } from './rules/staffWidth';
+import {
+  determineVoiceStemDirections,
+  unbeamedStemExtensionPx,
+} from './rules/stemRules';
 import { durationToFlagCountMap } from './rules/theoryConsts';
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
@@ -71,11 +73,11 @@ import {
   computeOuterBracketBaseY,
   computeTupletBracketGeometry,
   computeTupletScaleByIndex,
-  computeTupletScaledNoteCount,
   getStaffYForIndex,
   naturalStemTipY,
   noteheadEdgeY,
   resolveTupletBracketAbove,
+  stemTipYFromStaffY,
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
@@ -144,6 +146,7 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   octaveSignWidth,
   TRILL_FINISH_HEAD_RY,
+  trillFinishTailOverhangPx,
 } from './utils';
 import {
   CLEF_EVENTS,
@@ -188,8 +191,8 @@ import {
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
   MID_STREAM_CLEF_Y_OFFSET,
-  MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
+  NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   NOTES_AREA_LEFT_MARGIN,
   OCTAVE_LOCO_ESTIMATED_WIDTH_PX,
   OCTAVE_LOCO_GAP_PX,
@@ -199,6 +202,8 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
+  REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
@@ -227,11 +232,7 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   flagStemExtensionPx,
-  NOTE_STEM_TIP_Y_OFFSET,
-  NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
-  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
-  NOTE_Y_HEAD_OFFSET_STEM_UP,
   trillSignLeftX,
 } from './utils/svgCreator/note';
 import {
@@ -429,6 +430,10 @@ type VoiceRenderState = {
   beamsBuilder: BeamsBuilder | null;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null;
   stemDirections: boolean[];
+  // What each unbeamed stem draws beyond the base length, from the head it
+  // starts at (chord spread and tails included). 0 for beamed entries, whose
+  // tips come from the beam line, and for stemless ones.
+  unbeamedStemTipExtensionsPx: number[];
   beamedIndices: Set<number>;
   // Indices joined to a cross-staff double-stemmed beam group — their real
   // stemExtension is resolved and written directly by the ancestor
@@ -527,7 +532,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #describeEndX = 0;
-  #currentSpacingSlackWeight = 0;
+  #currentStrutInputs: StaffStrutInputs | null = null;
   #showDescribe = true;
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
@@ -696,12 +701,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   /**
-   * Σ of the current entries' logarithmic spacing slack weights, set on every
-   * #spaceElements() pass. StaffVocalElement reads it to compute its natural
-   * width after re-scoring against lyric widths.
+   * What the widest voice's widths were summed from, set on every #renderNotes()
+   * pass; null with no entries. StaffVocalElement re-scores it against lyrics.
    */
-  protected get currentSpacingSlackWeight(): number {
-    return this.#currentSpacingSlackWeight;
+  protected get currentStrutInputs(): StaffStrutInputs | null {
+    return this.#currentStrutInputs;
   }
 
   get showDescribe(): boolean {
@@ -1740,16 +1744,51 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       externallyBeamedIndices,
       combinedStemOverrides
     );
+    // Beamed lengths come from the beam line and cross-staff ones from the
+    // ancestor <music-measure>, so only unbeamed stems take their rule length.
+    const hasOwnStem = (i: number): boolean => {
+      const { nodeName, duration } = elements[i];
+      return (
+        nodeName !== MUSIC_REST_NODE &&
+        !beamsBuilder.isBeamed(i) &&
+        duration !== 'whole' &&
+        duration !== 'double-whole'
+      );
+    };
+    const unbeamedExtensionPx = (i: number): number =>
+      hasOwnStem(i)
+        ? unbeamedStemExtensionPx(
+            getStaffYs(elements[i], noteStaffYCoords, chordStaffYCoords),
+            stemDirections[i],
+            durationToFlagCountMap.get(elements[i].duration) ?? 0,
+            !(
+              elements[i].nodeName === MUSIC_NOTE_NODE &&
+              isTriangle((elements[i] as NoteElementType).notehead)
+            )
+          )
+        : 0;
     this.#placeTriangles(
       elements,
       noteStaffYCoords,
       chordStaffYCoords,
       (i) => ({
         stemUp: stemDirections[i],
-        stemExtensionPx: beamRenderer.stemExtension(i),
+        stemExtensionPx: beamRenderer.stemExtension(i) + unbeamedExtensionPx(i),
         noFlags: beamsBuilder.isBeamed(i),
       })
     );
+    const unbeamedExtensionsPx = elements.map((_, i) => unbeamedExtensionPx(i));
+    const unbeamedStemTipExtensionsPx = elements.map((element, i) => {
+      if (!hasOwnStem(i)) {
+        return 0;
+      }
+      const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      return (
+        unbeamedExtensionsPx[i] +
+        (Math.max(...headYs) - Math.min(...headYs)) +
+        flagStemExtensionPx(durationToFlagCountMap.get(element.duration) ?? 0)
+      );
+    });
 
     const beamedIndices = new Set(
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
@@ -1783,18 +1822,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         noteElement.batchUpdate(() => {
           noteElement.stemUp = stemUp;
           if (!isExternallyBeamed) {
-            noteElement.stemExtension =
-              triangle && !isBeamed && staffY !== null
-                ? Math.max(
-                    extension,
-                    triangleStemExtensionPx(
-                      staffY,
-                      stemUp,
-                      MIDDLE_STAFF_Y,
-                      BASE_STEM_LENGTH_PX
-                    )
-                  )
-                : extension;
+            noteElement.stemExtension = isBeamed
+              ? extension
+              : unbeamedExtensionsPx[i];
           }
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental =
@@ -1830,7 +1860,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         chordElement.batchUpdate(() => {
           chordElement.stemUp = stemUp;
           if (!isExternallyBeamed) {
-            chordElement.stemExtension = extension;
+            chordElement.stemExtension = isBeamed
+              ? extension
+              : unbeamedExtensionsPx[i];
           }
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
@@ -1855,6 +1887,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beamsBuilder,
       beamRenderer,
       stemDirections,
+      unbeamedStemTipExtensionsPx,
       beamedIndices,
       externallyBeamedIndices,
       externallyPositionedRestIndices,
@@ -2190,6 +2223,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // so this only affects the staff's own *preferred* width.
     let maxMinWidth = 0;
     let maxNaturalWidth = 0;
+    let strutInputs: StaffStrutInputs | null = null;
     let anyVoiceHasContent = false;
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       if (state.elements.length === 0) {
@@ -2209,14 +2243,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       let extraRightwardWidth = 0;
       for (let i = 0; i < state.elements.length; i++) {
         extraRightwardWidth += this.#rightwardFootprint(voiceKey, i);
+        if (i > 0) {
+          extraRightwardWidth += this.#advanceBeyondStrutTerms(
+            voiceKey,
+            state,
+            i
+          );
+        }
       }
       const clefMarkerWidth =
         !isMultiVoice || voiceKey === 1
           ? this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
           : 0;
+      const noteCount = state.elements.length;
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
-        computeTupletScaledNoteCount(state.elements, state.tupletsByIndex),
+        noteCount,
         firstElementLeftwardWidth,
         extraLeftwardWidth,
         clefMarkerWidth,
@@ -2227,9 +2269,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         computeTupletScaleByIndex(state.elements, state.tupletsByIndex)
       );
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
+      if (minWidth > maxMinWidth) {
+        strutInputs = {
+          noteCount,
+          firstElementLeftwardWidth,
+          extraLeftwardWidth,
+          clefChangeWidth: clefMarkerWidth,
+          extraRightwardWidth,
+          totalSlackWeight: totalWeight,
+        };
+      }
       maxMinWidth = Math.max(maxMinWidth, minWidth);
       maxNaturalWidth = Math.max(maxNaturalWidth, naturalWidth);
     }
+    this.#currentStrutInputs = strutInputs;
     if (anyVoiceHasContent) {
       this.dispatchEvent(
         new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
@@ -2486,9 +2539,59 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         trillFinish,
         hostElement.resolvedTrillFinishAccidentals
       );
-      footprints.set(i, width);
+      footprints.set(i, width + trillFinishTailOverhangPx(trillFinish.length));
     }
     return footprints;
+  }
+
+  // Extra advance (px) for an entry straight after a tail, which at the minimum
+  // advance would crowd it. A rest's ink sits further left in its box than a
+  // notehead's, so it needs more, and an up-stem's tail reaches further right
+  // than a down-stem's, which leaves a following notehead enough room as it is.
+  #tailFollowerRoom(state: VoiceRenderState, index: number): number {
+    if (index === 0) {
+      return 0;
+    }
+    const previous = state.elements[index - 1];
+    if (previous.nodeName === MUSIC_REST_NODE) {
+      return 0;
+    }
+    const { stemUp, noFlags, duration } = previous as
+      | NoteElementType
+      | ChordElementType;
+    if (noFlags || (durationToFlagCountMap.get(duration) ?? 0) === 0) {
+      return 0;
+    }
+    if (state.elements[index].nodeName === MUSIC_REST_NODE) {
+      return stemUp
+        ? REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX
+        : REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX;
+    }
+    return stemUp ? NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX : 0;
+  }
+
+  // What entry `index`'s minimum advance needs beyond the strut's own terms for
+  // it: MIN_NOTE_WIDTH, its non-accidental leftward extent and the previous
+  // entry's rightward footprint. Mirrors the clamps in #spaceElements().
+  #advanceBeyondStrutTerms(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
+    const element = state.elements[index];
+    const previousFootprint = this.#rightwardFootprint(voiceKey, index - 1);
+    const advance = computeMinimumEntryAdvance(
+      this.#tailFollowerRoom(state, index),
+      this.#entryLeftwardExtent(element),
+      previousFootprint
+    );
+    return Math.max(
+      0,
+      advance -
+        MIN_NOTE_WIDTH -
+        this.#entryLeftwardExtent(element, false) -
+        previousFootprint
+    );
   }
 
   // Combined rightward footprint (px) at `index` of `voiceKey` — every
@@ -2523,10 +2626,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // its first note's own box.
   //
   // `includeAccidental` is false only for the non-first entries of the strut
-  // min-width sum: their accidental column sits between two entries and is
-  // absorbed by inter-note spacing / the per-entry MIN_NOTE_WIDTH, so it needs
-  // no extra measure width. The first entry's column has only the describe area
-  // to its left, so it always counts.
+  // min-width sum: their accidental column sits between two entries, so
+  // #advanceBeyondStrutTerms() counts it. The first entry's column has only the
+  // describe area to its left, so it always counts.
   #entryLeftwardExtent(
     element: NoteChordOrRestElementType,
     includeAccidental = true
@@ -2676,7 +2778,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureCapacity = beatsInMeasure / beatType;
     const isMultiVoice = this.#voices.size > 1;
 
-    let totalSlackWeight = 0;
     // Beat-offset-clustered noteheads across every real voice, for the
     // cross-voice collision pass below (needs every voice's positions
     // resolved first — see rules/voiceRules.ts#computeCrossVoiceDisplacements).
@@ -2718,16 +2819,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
         continue;
       }
-
-      const tupletScaleByIndex = computeTupletScaleByIndex(
-        state.elements,
-        state.tupletsByIndex
-      );
-      const { totalWeight } = computeSpacingWeights(
-        state.elements,
-        tupletScaleByIndex
-      );
-      totalSlackWeight += totalWeight;
 
       // state.beatOffsets was already computed in Pass 1 (#renderNotes) for
       // every real voice and for 'shared-rest'; the 'combined' track's own
@@ -2789,7 +2880,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // *previous* entry alone — never looking ahead, so appending a new
         // entry can never move an already-placed one.
         if (previousNoteX !== null) {
-          xInWrapper = Math.max(xInWrapper, previousNoteX + MIN_NOTE_WIDTH);
+          xInWrapper = Math.max(
+            xInWrapper,
+            previousNoteX + MIN_NOTE_WIDTH + this.#tailFollowerRoom(state, i)
+          );
         }
 
         // Everything drawn left of this entry — accidental / grace / arpeggio sign
@@ -2934,8 +3028,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       state.beamRenderer?.spaceAll();
     }
 
-    this.#currentSpacingSlackWeight = totalSlackWeight;
-
     // Cross-voice collision pass — only meaningful once 2+ real voices
     // share the staff. Applies a small horizontal nudge on top of the
     // shared beat-position x already set above, exactly as
@@ -3059,7 +3151,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           null,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group)
+          this.#tupletSideOverride(group),
+          (i) => state.unbeamedStemTipExtensionsPx[i]
         );
         if (geometry !== null) {
           innerGeometriesByGroup.set(group, geometry);
@@ -3099,7 +3192,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           outerBaseY,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group)
+          this.#tupletSideOverride(group),
+          (i) => state.unbeamedStemTipExtensionsPx[i]
         );
         if (geometry !== null) {
           allGeometries.push(geometry);
@@ -4467,7 +4561,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
               state.elements,
               state.stemDirections,
               state.noteStaffYCoords,
-              state.chordStaffYCoords
+              state.chordStaffYCoords,
+              state.unbeamedStemTipExtensionsPx[i]
             )
           : noteheadEdgeY(
               i,
@@ -4510,13 +4605,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (staffY === null) {
         continue;
       }
-      const yHeadOffset = stemUp
-        ? NOTE_Y_HEAD_OFFSET_STEM_UP
-        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-      const stemTipOffset = stemUp
-        ? NOTE_STEM_TIP_Y_OFFSET
-        : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-      const tipY = STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+      const tipY = stemTipYFromStaffY(
+        staffY,
+        stemUp,
+        state.stemDirections[i] === stemUp
+          ? state.unbeamedStemTipExtensionsPx[i]
+          : 0
+      );
       extreme = stemUp ? Math.min(extreme, tipY) : Math.max(extreme, tipY);
       anyResolved = true;
     }

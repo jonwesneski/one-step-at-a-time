@@ -39,6 +39,7 @@ export {
   createTrillFinishNotesSvg,
   graceHeadLeftOverhangsPx,
   TRILL_FINISH_HEAD_RY,
+  trillFinishTailOverhangPx,
   type GraceNotesProps,
   type TrillFinishNotesProps,
   type TrillFinishNotesResult,

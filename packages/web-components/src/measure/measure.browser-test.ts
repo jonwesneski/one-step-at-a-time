@@ -1766,6 +1766,51 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — stem direc
     expect(result.trebleStemUp).toBe(true);
     expect(result.bassStemUp).toBe(true);
   });
+
+  test('a triangle stays out of the group, which the other members still form', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    await buildGrandStaffMeasure(
+      page,
+      `<${MUSIC_MEASURE}>
+        <${MUSIC_STAFF} clef="treble" time="2/4">
+          <${MUSIC_NOTE} note="C" octave="5" duration="eighth" beam-group="a"></${MUSIC_NOTE}>
+          <${MUSIC_NOTE} duration="eighth" notehead="triangle-up" beam-group="a"></${MUSIC_NOTE}>
+          <${MUSIC_REST} duration="quarter"></${MUSIC_REST}>
+        </${MUSIC_STAFF}>
+        <${MUSIC_STAFF} clef="bass" time="2/4">
+          <${MUSIC_NOTE} note="C" octave="3" duration="eighth" beam-group="a"></${MUSIC_NOTE}>
+          <${MUSIC_REST} duration="eighth"></${MUSIC_REST}>
+          <${MUSIC_REST} duration="quarter"></${MUSIC_REST}>
+        </${MUSIC_STAFF}>
+      </${MUSIC_MEASURE}>`,
+      600
+    );
+    const { triangleHasFlag, beamCount } = await page.evaluate(
+      ({ noteTag, measureTag }) => ({
+        triangleHasFlag:
+          document
+            .querySelectorAll(noteTag)[1]
+            .shadowRoot?.querySelector('.flag') !== null,
+        beamCount:
+          document
+            .querySelector(measureTag)
+            ?.shadowRoot?.querySelectorAll('.double-stemmed-beam').length ?? 0,
+      }),
+      { noteTag: MUSIC_NOTE, measureTag: MUSIC_MEASURE }
+    );
+    expect(triangleHasFlag).toBe(true);
+    expect(warnings.some((w) => w.includes('beam-group is ignored'))).toBe(
+      true
+    );
+    expect(beamCount).toBeGreaterThan(0);
+  });
 });
 
 test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — multi-voice / inner-voice articulations`, () => {

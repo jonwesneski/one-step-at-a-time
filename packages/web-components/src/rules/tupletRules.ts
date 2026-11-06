@@ -97,30 +97,8 @@ export function resolveInnermostTuplet(
 }
 
 /**
- * Counts elements with tuplet-scaled weighting: a plain element contributes 1,
- * a tupleted element contributes its ratio's normal/actual factor (matching
- * the reduced horizontal footprint used in #spaceElements()).
- */
-export function computeTupletScaledNoteCount(
-  elements: NoteChordOrRestElementType[],
-  tupletsByIndex: ReadonlyMap<number, TupletElementType[]>
-): number {
-  let count = 0;
-  for (let i = 0; i < elements.length; i++) {
-    const innermostTuplet = resolveInnermostTuplet(tupletsByIndex, i);
-    if (innermostTuplet !== undefined) {
-      const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-      count += normal / actual;
-    } else {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-/**
- * Maps each tupleted element index to its innermost ratio's normal/actual factor
- * (the same horizontal-footprint reduction used in #spaceElements()). Plain
+ * Maps each tupleted element index to its innermost ratio's normal/actual factor,
+ * which scales that entry's spacing slack (computeSpacingWeights). Plain
  * elements are absent from the map — callers treat a missing index as factor 1.
  */
 export function computeTupletScaleByIndex(
@@ -219,7 +197,8 @@ export function naturalStemTipY(
   elements: NoteChordOrRestElementType[],
   stemDirections: boolean[],
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
-  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
+  stemExtensionPx = 0
 ): number | null {
   const staffY = getStaffYForIndex(
     index,
@@ -231,14 +210,31 @@ export function naturalStemTipY(
   if (staffY === null) {
     return null;
   }
-  const stemUp = stemDirections[index];
+  return stemTipYFromStaffY(staffY, stemDirections[index], stemExtensionPx);
+}
+
+/**
+ * A stem's tip Y in the staff's local coordinate space, from the staff-Y of the
+ * head it starts at. `stemExtensionPx` is what it draws beyond the base length.
+ */
+export function stemTipYFromStaffY(
+  staffY: number,
+  stemUp: boolean,
+  stemExtensionPx = 0
+): number {
   const yHeadOffset = stemUp
     ? NOTE_Y_HEAD_OFFSET_STEM_UP
     : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
   const stemTipOffset = stemUp
     ? NOTE_STEM_TIP_Y_OFFSET
     : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-  return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+  return (
+    STAFF_Y_PADDING +
+    staffY -
+    yHeadOffset +
+    stemTipOffset +
+    (stemUp ? -stemExtensionPx : stemExtensionPx)
+  );
 }
 
 /**
@@ -318,7 +314,10 @@ export function computeTupletBracketGeometry(
   // Forces the bracket's side regardless of the stem vote. A note whose
   // stem points away from the forced side is cleared by its notehead, not
   // by a stem tip on the bracket's side it doesn't have.
-  sideOverride: TupletPlacement | null = null
+  sideOverride: TupletPlacement | null = null,
+  // What an unbeamed note's stem draws beyond the base length, so the bracket
+  // clears its real tip.
+  stemExtensionPxForIndex: (index: number) => number = () => 0
 ): TupletBracketGeometry | null {
   if (group.indices.length < 2) {
     return null;
@@ -425,13 +424,11 @@ export function computeTupletBracketGeometry(
     if (staffY === null) {
       return null;
     }
-    const yHeadOffset = stemUp
-      ? NOTE_Y_HEAD_OFFSET_STEM_UP
-      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-    const stemTipOffset = stemUp
-      ? NOTE_STEM_TIP_Y_OFFSET
-      : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    return STAFF_Y_PADDING + staffY - yHeadOffset + stemTipOffset;
+    return stemTipYFromStaffY(
+      staffY,
+      stemUp,
+      stemDirections[idx] === stemUp ? stemExtensionPxForIndex(idx) : 0
+    );
   };
 
   // Push baseY outward past the extreme stem tip so the bracket never

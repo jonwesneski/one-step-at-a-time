@@ -3,16 +3,34 @@ import {
   LEADING_NOTE_GAP_PX,
   MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
+import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
   calculateGuitarTabMinWidth,
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
   calculateStaffVocalMinWidth,
   calculateStaffVocalNaturalWidth,
+  computeMinimumEntryAdvance,
   measureFlexValue,
 } from './staffWidth';
 
 const TYPICAL_DESCRIBE_END_X = 90;
+
+describe('computeMinimumEntryAdvance', () => {
+  it('tucks a plain entry under the previous box, plus any tail room', () => {
+    expect(computeMinimumEntryAdvance(0, 0, 0)).toBe(MIN_NOTE_WIDTH);
+    expect(computeMinimumEntryAdvance(12, 0, 0)).toBe(MIN_NOTE_WIDTH + 12);
+  });
+
+  it('clears the previous box for an entry reaching left of its own', () => {
+    expect(computeMinimumEntryAdvance(12, 25, 0)).toBe(NOTE_SVG_WIDTH + 25);
+  });
+
+  it('clears the previous box and its rightward footprint', () => {
+    expect(computeMinimumEntryAdvance(0, 0, 15)).toBe(NOTE_SVG_WIDTH + 15);
+    expect(computeMinimumEntryAdvance(0, 25, 15)).toBe(NOTE_SVG_WIDTH + 40);
+  });
+});
 
 describe('calculateStaffMinWidth', () => {
   it('returns describeEndX when there are no notes', () => {
@@ -119,6 +137,43 @@ describe('calculateStaffVocalMinWidth', () => {
     );
     expect(withAccidental - withoutAccidental).toBe(accidentalWidth);
   });
+
+  it('adds extraRightwardWidth to the note-driven width', () => {
+    const result = calculateStaffVocalMinWidth(
+      TYPICAL_DESCRIBE_END_X,
+      8,
+      2,
+      0,
+      0,
+      30,
+      48
+    );
+    expect(result).toBe(
+      TYPICAL_DESCRIBE_END_X +
+        LEADING_NOTE_GAP_PX +
+        8 * MIN_NOTE_WIDTH +
+        30 +
+        48
+    );
+  });
+
+  it('ignores clef and rightward room while a long lyric still drives the width', () => {
+    const withRightward = calculateStaffVocalMinWidth(
+      TYPICAL_DESCRIBE_END_X,
+      2,
+      80,
+      0,
+      0,
+      30,
+      12
+    );
+    const withoutRightward = calculateStaffVocalMinWidth(
+      TYPICAL_DESCRIBE_END_X,
+      2,
+      80
+    );
+    expect(withRightward).toBe(withoutRightward);
+  });
 });
 
 describe('calculateGuitarTabMinWidth', () => {
@@ -164,6 +219,27 @@ describe('calculateStaffVocalNaturalWidth', () => {
     );
     expect(result).toBe(
       TYPICAL_DESCRIBE_END_X + LEADING_NOTE_GAP_PX + 8 * MIN_NOTE_WIDTH + 120
+    );
+  });
+
+  it('adds extraRightwardWidth to the note-driven natural width', () => {
+    const result = calculateStaffVocalNaturalWidth(
+      TYPICAL_DESCRIBE_END_X,
+      8,
+      2,
+      120,
+      0,
+      0,
+      30,
+      48
+    );
+    expect(result).toBe(
+      TYPICAL_DESCRIBE_END_X +
+        LEADING_NOTE_GAP_PX +
+        8 * MIN_NOTE_WIDTH +
+        30 +
+        48 +
+        120
     );
   });
 

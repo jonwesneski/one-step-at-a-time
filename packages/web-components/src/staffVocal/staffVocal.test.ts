@@ -3,12 +3,19 @@
  */
 import '../index';
 import type { NoteLetterOctave } from '../types/elements';
+import type { Note } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_CLEF,
   MUSIC_LYRICS,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF_VOCAL,
+  MUSIC_TUPLET,
+  MUSIC_VOICE,
+  STAFF_EVENTS,
 } from '../utils/consts';
+import { MIN_NOTE_WIDTH } from '../utils/notationDimensions';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
@@ -504,5 +511,130 @@ describe(`${MUSIC_STAFF_VOCAL} octave search order`, () => {
   it('bass defaults to octaves [2, 3, 4]', () => {
     const staff = makeStaff('bass') as any;
     expect(staff.octaves).toEqual([2, 3, 4]);
+  });
+});
+
+describe(`${MUSIC_STAFF_VOCAL} width with lyrics`, () => {
+  it('reserves room for the entries after tails in a crowded measure', () => {
+    const staff = makeStaff() as any;
+    const entries = Array.from({ length: 4 }, () => {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('note', 'G');
+      note.setAttribute('octave', '4');
+      note.setAttribute('duration', 'eighth');
+      const rest = document.createElement(MUSIC_REST) as any;
+      rest.setAttribute('duration', 'eighth');
+      return [note, rest];
+    }).flat();
+    const lyrics = document.createElement(MUSIC_LYRICS);
+    lyrics.textContent = 'la';
+    staff.append(...entries, lyrics);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => entries;
+    slot.dispatchEvent(new Event('slotchange'));
+
+    let reported: { minWidth: number; naturalWidth: number } | null = null;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    staff.onStaffResize();
+
+    expect(entries[0].stemUp).toBe(true);
+    const lastEntryLeft = parseFloat(entries[entries.length - 1].style.left);
+    const { minWidth, naturalWidth } = reported!;
+    expect(minWidth).toBeGreaterThanOrEqual(lastEntryLeft + MIN_NOTE_WIDTH);
+    expect(naturalWidth).toBeGreaterThanOrEqual(minWidth);
+  });
+
+  it('keeps the base widths, leftward overhangs included, under a short lyric', () => {
+    const staff = makeStaff() as any;
+    const makeNote = (note: Note, grace: string | null) => {
+      const element = document.createElement(MUSIC_NOTE) as any;
+      element.setAttribute('note', note);
+      element.setAttribute('octave', '4');
+      element.setAttribute('duration', 'quarter');
+      if (grace !== null) {
+        element.setAttribute('grace', grace);
+      }
+      return element;
+    };
+    const entries = [
+      makeNote('F#', null),
+      makeNote('G', 'A,B'),
+      makeNote('A#', null),
+      makeNote('B', 'A,B'),
+    ];
+    const lyrics = document.createElement(MUSIC_LYRICS);
+    lyrics.textContent = 'la';
+    staff.append(...entries, lyrics);
+
+    let reported: { minWidth: number; naturalWidth: number } | null = null;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => entries;
+    slot.dispatchEvent(new Event('slotchange'));
+    const baseWidths = reported!;
+    staff.onStaffResize();
+    const vocalWidths = reported!;
+
+    expect(vocalWidths).not.toBe(baseWidths);
+    expect(vocalWidths.minWidth).toBeCloseTo(baseWidths.minWidth, 5);
+    expect(vocalWidths.naturalWidth).toBeCloseTo(baseWidths.naturalWidth, 5);
+  });
+
+  const makeEighth = () => {
+    const note = document.createElement(MUSIC_NOTE) as any;
+    note.setAttribute('note', 'G');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'eighth');
+    return note;
+  };
+  const makeTuplet = () => {
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.setAttribute('ratio', '3');
+    tuplet.append(makeEighth(), makeEighth(), makeEighth());
+    return tuplet;
+  };
+  const makeVoice = () => {
+    const voice = document.createElement(MUSIC_VOICE);
+    voice.append(makeEighth(), makeEighth());
+    return voice;
+  };
+
+  it.each<[string, () => Element[]]>([
+    [
+      'a mid-measure clef change',
+      () => {
+        const clef = document.createElement(MUSIC_CLEF);
+        clef.setAttribute('clef', 'bass');
+        return [makeEighth(), clef, makeEighth()];
+      },
+    ],
+    ['a tuplet', () => [makeEighth(), makeTuplet()]],
+    ['only a tuplet', () => [makeTuplet()]],
+    ['voices', () => [makeVoice(), makeVoice()]],
+  ])('keeps the base widths for %s under a short lyric', (_, makeEntries) => {
+    const staff = makeStaff() as any;
+    const entries = makeEntries();
+    const lyrics = document.createElement(MUSIC_LYRICS);
+    lyrics.textContent = 'la';
+    staff.append(...entries, lyrics);
+
+    let reported: { minWidth: number; naturalWidth: number } | null = null;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => entries;
+    slot.dispatchEvent(new Event('slotchange'));
+    const baseWidths = reported!;
+    staff.onStaffResize();
+    const vocalWidths = reported!;
+
+    expect(vocalWidths).not.toBe(baseWidths);
+    expect(vocalWidths.minWidth).toBeCloseTo(baseWidths.minWidth, 5);
+    expect(vocalWidths.naturalWidth).toBeCloseTo(baseWidths.naturalWidth, 5);
   });
 });

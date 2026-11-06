@@ -23,11 +23,14 @@ import {
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
+  BASE_STEM_LENGTH_PX,
+  MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_SCALE,
+  NOTE_SVG_WIDTH,
 } from '../utils/svgCreator/note';
 import './index';
 
@@ -1747,7 +1750,7 @@ describe('staff integration', () => {
         minWidths.push((event as CustomEvent).detail.minWidth);
       });
 
-      const [first] = renderChords(staff, [
+      const [first, second] = renderChords(staff, [
         { chord: 'Cmaj' },
         { chord: 'Fmaj' },
       ]);
@@ -1756,9 +1759,16 @@ describe('staff integration', () => {
       first.setAttribute('arpeggiate', 'start');
       const withPassage = minWidths[minWidths.length - 1];
 
-      // Both chords now carry an (implied) sign.
+      // Both chords now carry an (implied) sign, and the second chord's sign
+      // has to clear the first chord's whole box.
       expect(withPassage).toBeCloseTo(
-        withoutPassage + 2 * ARPEGGIO_FOOTPRINT_PX,
+        withoutPassage +
+          2 * ARPEGGIO_FOOTPRINT_PX +
+          (NOTE_SVG_WIDTH - MIN_NOTE_WIDTH),
+        5
+      );
+      expect(withPassage).toBeCloseTo(
+        parseFloat(second.style.left) + MIN_NOTE_WIDTH,
         5
       );
     });
@@ -1890,5 +1900,48 @@ describe(`${MUSIC_CHORD} notehead`, () => {
       { note: 'F', octave: '5', notehead: 'diamond-white' },
     ]);
     expect(chord.headLeftOverhangPx).toBeGreaterThan(0);
+  });
+});
+
+describe(`${MUSIC_CHORD} stem length`, () => {
+  const renderChord = (
+    staffYCoordinates: number[],
+    stemUp: boolean,
+    stemExtension: number
+  ) => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C');
+    chord.setAttribute('duration', 'quarter');
+    document.body.appendChild(chord);
+    chord.staffYCoordinates = staffYCoordinates;
+    chord.stemUp = stemUp;
+    chord.stemExtension = stemExtension;
+    return chord;
+  };
+  const stemLengthPx = (chord: ChordElementType) => {
+    const stem = chord.shadowRoot?.querySelector('.stem');
+    return (
+      Math.abs(
+        Number(stem?.getAttribute('y2')) - Number(stem?.getAttribute('y1'))
+      ) * NOTE_SCALE
+    );
+  };
+
+  it('spans the chord, then the base length past the head nearest the open end', () => {
+    expect(stemLengthPx(renderChord([60, 40], true, 0))).toBeCloseTo(
+      20 + BASE_STEM_LENGTH_PX
+    );
+  });
+
+  it('adds a negative extension instead of discarding it', () => {
+    expect(stemLengthPx(renderChord([60, 40], true, -10))).toBeCloseTo(
+      20 + BASE_STEM_LENGTH_PX - 10
+    );
+  });
+
+  it('takes the extension as the whole length when beamed', () => {
+    const chord = renderChord([60, 40], true, 12);
+    chord.noFlags = true;
+    expect(stemLengthPx(chord)).toBeCloseTo(BASE_STEM_LENGTH_PX + 12);
   });
 });

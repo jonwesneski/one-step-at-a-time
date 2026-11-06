@@ -11,17 +11,11 @@ import {
   KeySignatureYCoordinates,
   LyricSyllablePosition,
   LyricsElementType,
-  NoteChordOrRestElementType,
   NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
 import { Octave, VocalType } from '../types/theory';
-import {
-  MUSIC_CHORD_NODE,
-  MUSIC_NOTE_NODE,
-  MUSIC_REST_NODE,
-  STAFF_EVENTS,
-} from '../utils/consts';
+import { STAFF_EVENTS } from '../utils/consts';
 import {
   createBassClefSvg,
   createTreble8ClefSvg,
@@ -56,8 +50,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * </music-staff-vocal>
    */
   class StaffVocalElement extends StaffClassicalElementBase {
-    #slottedElements: NoteChordOrRestElementType[] = [];
-
     static #sopranoYCoordinates = generateYCoordinates('C6', 'C4');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
     static #altoYCoordinates = generateYCoordinates('A5', 'F3');
@@ -346,19 +338,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return answer;
     }
 
-    protected override onHandleSlotChange(event: Event): void {
-      const slot = event.target as HTMLSlotElement;
-      this.#slottedElements = slot
-        .assignedElements({ flatten: true })
-        .filter(
-          (e) =>
-            e.nodeName === MUSIC_NOTE_NODE ||
-            e.nodeName === MUSIC_CHORD_NODE ||
-            e.nodeName === MUSIC_REST_NODE
-        ) as NoteChordOrRestElementType[];
-      super.onHandleSlotChange(event);
-    }
-
     override onStaffResize(): void {
       super.onStaffResize();
       this.#positionLyricsIfPresent();
@@ -443,17 +422,34 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         maxLyricChars = Math.max(maxLyricChars, verseChars);
       }
-      if (this.#slottedElements.length > 0) {
+      const strutInputs = this.currentStrutInputs;
+      if (strutInputs !== null) {
+        const {
+          noteCount,
+          firstElementLeftwardWidth,
+          extraLeftwardWidth,
+          clefChangeWidth,
+          extraRightwardWidth,
+          totalSlackWeight,
+        } = strutInputs;
         const minWidth = calculateStaffVocalMinWidth(
           this.describeEndX,
-          this.#slottedElements.length,
-          maxLyricChars
+          noteCount,
+          maxLyricChars,
+          firstElementLeftwardWidth,
+          extraLeftwardWidth,
+          clefChangeWidth,
+          extraRightwardWidth
         );
         const naturalWidth = calculateStaffVocalNaturalWidth(
           this.describeEndX,
-          this.#slottedElements.length,
+          noteCount,
           maxLyricChars,
-          this.currentSpacingSlackWeight
+          totalSlackWeight,
+          firstElementLeftwardWidth,
+          extraLeftwardWidth,
+          clefChangeWidth,
+          extraRightwardWidth
         );
         this.dispatchEvent(
           new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {

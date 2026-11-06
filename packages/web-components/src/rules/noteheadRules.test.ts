@@ -10,7 +10,6 @@ import {
   suppressesAccidental,
   suppressesLedgerLines,
   triangleDurationWarning,
-  triangleStemExtensionPx,
   triangleUnsupportedWarning,
   type TrianglePlacementEntry,
 } from './noteheadRules';
@@ -209,20 +208,6 @@ describe('resolveTriangleStaffYs', () => {
   });
 });
 
-describe('triangleStemExtensionPx', () => {
-  it('extends a stem-down triangle above the stave to the middle line', () => {
-    expect(triangleStemExtensionPx(5, false, 50, 32)).toBe(13);
-  });
-
-  it('extends a stem-up triangle below the stave to the middle line', () => {
-    expect(triangleStemExtensionPx(95, true, 50, 32)).toBe(13);
-  });
-
-  it('never shortens a stem that already reaches', () => {
-    expect(triangleStemExtensionPx(25, false, 50, 32)).toBe(0);
-  });
-});
-
 describe('resolveStemTipY', () => {
   const base = {
     stemless: false,
@@ -266,6 +251,17 @@ describe('resolveStemTipY', () => {
         flagExtensionPx: 6,
       })
     ).toBe(68);
+  });
+
+  it("applies a shortened stem past an unbeamed chord's spread", () => {
+    expect(
+      resolveStemTipY({
+        ...base,
+        headYs: [40, 20],
+        stemUp: true,
+        stemExtensionPx: -5,
+      })
+    ).toBe(-7);
   });
 
   it('carries an unbeamed chord stem past its spread', () => {

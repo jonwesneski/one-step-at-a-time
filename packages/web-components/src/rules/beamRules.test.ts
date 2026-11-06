@@ -10,7 +10,15 @@ import type {
 } from '../types/elements';
 import type { DurationType } from '../types/theory';
 import { MUSIC_CHORD, MUSIC_NOTE } from '../utils/consts';
-import { STEM_OVERLAP_PX } from '../utils/notationDimensions';
+import {
+  BASE_STEM_LENGTH_PX,
+  BEAM_GAP_PX,
+  BEAM_THICKNESS_PX,
+  MIDDLE_STAFF_Y,
+  MIN_STEM_LENGTH_PX,
+  OUTWARD_STEM_LENGTH_AT_MIDDLE_PX,
+  STEM_OVERLAP_PX,
+} from '../utils/notationDimensions';
 import { buildBeamsRenderer } from './beamRules';
 
 afterEach(() => {
@@ -96,8 +104,8 @@ describe('buildBeamsRenderer beamed chords', () => {
       document.body.appendChild(chord);
       return chord;
     });
-    const topStaffY = 40;
-    const bottomStaffY = 50;
+    const topStaffY = 30;
+    const bottomStaffY = 40;
 
     const { beamRenderer } = buildBeamsRenderer(
       chords,
@@ -115,5 +123,54 @@ describe('buildBeamsRenderer beamed chords', () => {
         bottomStaffY - topStaffY - STEM_OVERLAP_PX
       );
     }
+  });
+});
+
+describe('buildBeamsRenderer stem lengths', () => {
+  const beamedNotes = (
+    duration: DurationType,
+    staffY: number,
+    stemUp: boolean
+  ) => {
+    const notes = [0, 1].map(() => {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', duration);
+      document.body.appendChild(note);
+      return note;
+    });
+    return buildBeamsRenderer(
+      notes,
+      [4, 4],
+      new Map(notes.map((note) => [note, staffY])),
+      new Map(),
+      new Map(),
+      new Set(),
+      undefined,
+      [stemUp, stemUp]
+    ).beamRenderer;
+  };
+
+  it('reaches the middle line from ledger-line notes', () => {
+    expect(beamedNotes('eighth', 95, true).stemExtension(0)).toBeCloseTo(
+      95 - MIDDLE_STAFF_Y - BASE_STEM_LENGTH_PX - STEM_OVERLAP_PX
+    );
+  });
+
+  it('never shortens a one-beam stem below the minimum', () => {
+    expect(
+      BASE_STEM_LENGTH_PX + beamedNotes('eighth', 30, true).stemExtension(0)
+    ).toBeCloseTo(MIN_STEM_LENGTH_PX);
+  });
+
+  it('lengthens a minimum-length stem for its second beam', () => {
+    expect(
+      BASE_STEM_LENGTH_PX + beamedNotes('sixteenth', 30, true).stemExtension(0)
+    ).toBeCloseTo(MIN_STEM_LENGTH_PX + BEAM_THICKNESS_PX + BEAM_GAP_PX);
+  });
+
+  it('shortens an outward beamed stem partway', () => {
+    expect(beamedNotes('eighth', 50, true).stemExtension(0)).toBeCloseTo(
+      OUTWARD_STEM_LENGTH_AT_MIDDLE_PX - BASE_STEM_LENGTH_PX - STEM_OVERLAP_PX
+    );
   });
 });

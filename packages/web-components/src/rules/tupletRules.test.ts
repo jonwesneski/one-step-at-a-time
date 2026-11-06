@@ -37,11 +37,11 @@ import {
   computeOuterBracketBaseY,
   computeTupletBracketGeometry,
   computeTupletScaleByIndex,
-  computeTupletScaledNoteCount,
   defaultNormalCount,
   parseTupletRatio,
   resolveInnermostTuplet,
   resolveTupletBracketAbove,
+  stemTipYFromStaffY,
 } from './tupletRules';
 
 afterEach(() => {
@@ -118,60 +118,6 @@ describe('resolveInnermostTuplet', () => {
     const result = resolveInnermostTuplet(tupletsByIndex, 0);
 
     expect(result).toBe(innerTuplet);
-  });
-});
-
-// ─── computeTupletScaledNoteCount ───────────────────────────────────────────
-
-describe('computeTupletScaledNoteCount', () => {
-  it('counts each plain element as 1', () => {
-    const elements: NoteChordOrRestElementType[] = [
-      makeNote({ note: 'C', duration: 'quarter' }),
-      makeNote({ note: 'C', duration: 'quarter' }),
-      makeNote({ note: 'C', duration: 'quarter' }),
-    ];
-
-    const result = computeTupletScaledNoteCount(elements, new Map());
-
-    expect(result).toBe(3);
-  });
-
-  it('scales tupleted elements by normal/actual', () => {
-    const tupletElement = makeTuplet('3');
-    const elements: NoteChordOrRestElementType[] = [
-      makeNote({ note: 'C', duration: 'eighth' }),
-      makeNote({ note: 'C', duration: 'eighth' }),
-      makeNote({ note: 'C', duration: 'eighth' }),
-    ];
-    const tupletsByIndex = new Map<number, TupletElementType[]>([
-      [0, [tupletElement]],
-      [1, [tupletElement]],
-      [2, [tupletElement]],
-    ]);
-
-    const result = computeTupletScaledNoteCount(elements, tupletsByIndex);
-
-    // ratio "3" → normal=2, actual=3, so each note contributes 2/3
-    expect(result).toBeCloseTo(2);
-  });
-
-  it('mixes plain and tupleted elements', () => {
-    const tupletElement = makeTuplet('3');
-    const elements: NoteChordOrRestElementType[] = [
-      makeNote({ note: 'C', duration: 'eighth' }),
-      makeNote({ note: 'C', duration: 'eighth' }),
-      makeNote({ note: 'C', duration: 'eighth' }),
-      makeNote({ note: 'C', duration: 'quarter' }),
-    ];
-    const tupletsByIndex = new Map<number, TupletElementType[]>([
-      [0, [tupletElement]],
-      [1, [tupletElement]],
-      [2, [tupletElement]],
-    ]);
-
-    const result = computeTupletScaledNoteCount(elements, tupletsByIndex);
-
-    expect(result).toBeCloseTo(3);
   });
 });
 
@@ -1848,5 +1794,22 @@ describe('computeTupletBracketGeometry', () => {
     // stem-up: secondary beams grow downward (away from numeral), so beamStackOffset is
     // always BEAM_THICKNESS_PX. With identical note positions the numeralY should be equal.
     expect(thirtySecondResult.numeralY).toBeCloseTo(eighthResult.numeralY);
+  });
+});
+
+describe('stemTipYFromStaffY', () => {
+  it('moves the tip away from the head by the extension, either way', () => {
+    expect(stemTipYFromStaffY(50, true, 5)).toBe(
+      stemTipYFromStaffY(50, true) - 5
+    );
+    expect(stemTipYFromStaffY(50, false, 5)).toBe(
+      stemTipYFromStaffY(50, false) + 5
+    );
+  });
+
+  it('moves the tip back toward the head for a shortened stem', () => {
+    expect(stemTipYFromStaffY(50, true, -5)).toBe(
+      stemTipYFromStaffY(50, true) + 5
+    );
   });
 });

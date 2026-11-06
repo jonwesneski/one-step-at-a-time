@@ -3,6 +3,7 @@ import {
   LEADING_NOTE_GAP_PX,
   MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
+import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 
 /**
  * Sizing of the staff/measure box itself — the min and preferred widths that
@@ -18,6 +19,40 @@ import {
  */
 
 /**
+ * What a staff's strut min width and natural width were summed from, for its
+ * widest voice. A vocal staff re-scores these against its lyrics.
+ */
+export type StaffStrutInputs = {
+  noteCount: number;
+  firstElementLeftwardWidth: number;
+  extraLeftwardWidth: number;
+  clefChangeWidth: number;
+  extraRightwardWidth: number;
+  totalSlackWeight: number;
+};
+
+/**
+ * Smallest distance (px) between one entry's x and the next's, however narrow
+ * the staff. An entry reaching left of its own box, or following one that
+ * reserves room to its right, has to clear the previous entry's whole box;
+ * anything else may tuck under it, down to MIN_NOTE_WIDTH.
+ */
+export function computeMinimumEntryAdvance(
+  tailFollowerRoom: number,
+  leftwardWidth: number,
+  previousRightwardFootprint: number
+): number {
+  const tuckedAdvance = MIN_NOTE_WIDTH + tailFollowerRoom;
+  if (leftwardWidth <= 0 && previousRightwardFootprint <= 0) {
+    return tuckedAdvance;
+  }
+  return Math.max(
+    tuckedAdvance,
+    NOTE_SVG_WIDTH + previousRightwardFootprint + leftwardWidth
+  );
+}
+
+/**
  * Strut min width for a classical staff measure (no lyrics).
  *
  * minWidth = describeEndX + leadingGap + firstElementLeftwardWidth
@@ -26,9 +61,8 @@ import {
  * leadingGap (LEADING_NOTE_GAP_PX, only when there are notes) keeps the first
  * entry off the clef/key/time area.
  *
- * noteCount may be fractional when the measure contains tuplets — each tuplet
- * note contributes (normal/actual) rather than 1.0, matching the reduced
- * horizontal footprint used in #spaceElements().
+ * A tupleted entry counts whole in noteCount: #spaceElements() floors it at
+ * MIN_NOTE_WIDTH like any other. Only its spacing slack is ratio-scaled.
  *
  * firstElementLeftwardWidth ensures the measure is wide enough when the first
  * element is shifted right to clear its leftward overhang (accidental and/or
@@ -66,7 +100,8 @@ export function calculateStaffMinWidth(
  *
  * minWidth = describeEndX + leadingGap + firstElementLeftwardWidth
  *          + extraLeftwardWidth
- *          + max(noteCount × MIN_NOTE_WIDTH,
+ *          + max(noteCount × MIN_NOTE_WIDTH + clefChangeWidth
+ *                  + extraRightwardWidth,
  *                lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)
  */
 export function calculateStaffVocalMinWidth(
@@ -74,9 +109,12 @@ export function calculateStaffVocalMinWidth(
   noteCount: number,
   lyricCharCount: number,
   firstElementLeftwardWidth = 0,
-  extraLeftwardWidth = 0
+  extraLeftwardWidth = 0,
+  clefChangeWidth = 0,
+  extraRightwardWidth = 0
 ): number {
-  const noteMinWidth = noteCount * MIN_NOTE_WIDTH;
+  const noteMinWidth =
+    noteCount * MIN_NOTE_WIDTH + clefChangeWidth + extraRightwardWidth;
   const lyricMinWidth = lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
   return (
     describeEndX +
@@ -125,14 +163,21 @@ export function calculateStaffVocalNaturalWidth(
   lyricCharCount: number,
   totalSlackWeight: number,
   firstElementLeftwardWidth = 0,
-  extraLeftwardWidth = 0
+  extraLeftwardWidth = 0,
+  clefChangeWidth = 0,
+  extraRightwardWidth = 0
 ): number {
   const base =
     describeEndX +
     (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) +
     firstElementLeftwardWidth +
     extraLeftwardWidth;
-  const noteNatural = base + noteCount * MIN_NOTE_WIDTH + totalSlackWeight;
+  const noteNatural =
+    base +
+    noteCount * MIN_NOTE_WIDTH +
+    clefChangeWidth +
+    extraRightwardWidth +
+    totalSlackWeight;
   const lyricNatural = base + lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
   return Math.max(noteNatural, lyricNatural);
 }

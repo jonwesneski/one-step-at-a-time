@@ -98,7 +98,8 @@ export const STAFF_Y_PADDING = STAFF_LINE_SPACING * 0.8;
 /**
  * Y-coordinate of the middle (3rd) staff line in the note Y-coordinate map.
  * Used to determine stem direction: notes below this line (larger Y) get stem-up,
- * notes on or above get stem-down.
+ * notes above get stem-down, and notes on it follow their context
+ * (rules/stemRules.ts).
  *
  * This is NOT derived from STAFF_LINE_SPACING — it is a fixed value in the
  * coordinate space of the yCoordinates maps defined by each staff subclass
@@ -165,25 +166,112 @@ export const BEAM_GAP_PX = STAFF_LINE_SPACING * 0.4;
 export const FRACTIONAL_BEAM_WIDTH_PX = STAFF_LINE_SPACING * 0.6;
 
 /**
- * Default beamed stem length (px). Matches BASE_STEM_LENGTH × NOTE_SCALE in
- * note.ts (600 × 32/600 = 32 px). Kept in sync manually — if NOTE_SCALE
- * changes, update this value.
- * ≈ 3.2 × STAFF_LINE_SPACING
+ * Thickness (px) of every stave line and ledger line.
  */
-export const BASE_STEM_LENGTH_PX = STAFF_LINE_SPACING * 3.2;
+export const STAFF_LINE_THICKNESS_PX = 1;
 
 /**
- * Minimum stem length (px) when a stem is shortened to accommodate beam slope.
+ * Stroke width (px) of a stem: thinner than a stave line, but not so thin that
+ * it reproduces faintly.
+ * = 0.9 × STAFF_LINE_THICKNESS_PX
+ */
+export const STEM_STROKE_WIDTH_PX = STAFF_LINE_THICKNESS_PX * 0.9;
+
+/**
+ * Standard stem length (px): one octave from the centre of the notehead.
+ * note.ts derives its drawing-unit stem length from this.
+ * = 3.5 × STAFF_LINE_SPACING
+ */
+export const BASE_STEM_LENGTH_PX = STAFF_LINE_SPACING * 3.5;
+
+/**
+ * Shortest allowed stem (px): a sixth. No stem is drawn shorter, whether it
+ * points out of the stave or is shortened to fit a beam slope.
  * = 2.5 × STAFF_LINE_SPACING
  */
-export const MIN_BEAM_STEM_LENGTH_PX = STAFF_LINE_SPACING * 2.5;
+export const MIN_STEM_LENGTH_PX = STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Length (px) of a stem pointing away from the stave whose head sits on the
+ * middle line. Each further step outward shortens it.
+ * = 3.25 × STAFF_LINE_SPACING
+ */
+export const OUTWARD_STEM_LENGTH_AT_MIDDLE_PX = STAFF_LINE_SPACING * 3.25;
+
+/**
+ * Shortening (px) per diatonic step for a stem pointing away from the stave.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const OUTWARD_STEM_SHORTENING_PER_STEP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Stem lengthening (px) for each tail beyond what the stem has room for; also
+ * the spacing between stacked tails, a little less than a stave-space.
+ * = 0.875 × STAFF_LINE_SPACING
+ */
+export const FLAG_STEM_STEP_PX = STAFF_LINE_SPACING * 0.875;
+
+/**
+ * Length (px) of a lone tail: on a 3½-space stem it ends level with the
+ * notehead's near edge. A shorter stem takes a shorter tail.
+ * = 3 × STAFF_LINE_SPACING
+ */
+export const QUAVER_TAIL_LENGTH_PX = STAFF_LINE_SPACING * 3;
+
+/**
+ * Stem length (px) left free of tails on a down-stem, from the head's centre to
+ * its lower edge. Keeps a standard stem's lone tail at its full length.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DOWN_TAIL_HEAD_ROOM_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Combined length (px) of two stacked tails, a little longer than a lone tail.
+ * Also the shortest stem that can carry them.
+ * = 3.25 × STAFF_LINE_SPACING
+ */
+export const TWO_TAILS_LENGTH_PX = STAFF_LINE_SPACING * 3.25;
+
+/**
+ * Length (px) of each tail in a stack, so that the stack nests inside the shape
+ * of a lone tail.
+ * = TWO_TAILS_LENGTH_PX − FLAG_STEM_STEP_PX
+ */
+export const STACKED_TAIL_LENGTH_PX = TWO_TAILS_LENGTH_PX - FLAG_STEM_STEP_PX;
+
+/**
+ * Gap (px) kept between a tail's end and the first ledger line, on a stem
+ * running from a ledger-line note back into the stave.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const LEDGER_TAIL_CLEARANCE_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Advance (px) added to MIN_NOTE_WIDTH for a note or chord straight after an
+ * up-stem tail, so the tail doesn't crowd its notehead.
+ * = 0.35 × STAFF_LINE_SPACING
+ */
+export const NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.35;
+
+/**
+ * Advance (px) added to MIN_NOTE_WIDTH for a rest straight after an up-stem
+ * tail, so the tail clears the rest, down to the widest rest glyph.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * The same for a rest after a down-stem tail, which reaches less far right, so
+ * that a rest sits the same distance from a tail in either direction.
+ * = 0.75 × STAFF_LINE_SPACING
+ */
+export const REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.75;
 
 /**
  * Maximum amount (px) a beamed stem may be shortened before hitting the minimum.
- * = BASE_STEM_LENGTH_PX − MIN_BEAM_STEM_LENGTH_PX
+ * = BASE_STEM_LENGTH_PX − MIN_STEM_LENGTH_PX
  */
-export const MAX_STEM_SHORTENING_PX =
-  BASE_STEM_LENGTH_PX - MIN_BEAM_STEM_LENGTH_PX;
+export const MAX_STEM_SHORTENING_PX = BASE_STEM_LENGTH_PX - MIN_STEM_LENGTH_PX;
 
 /**
  * Extra pixels the stem tip extends inside the beam polygon to prevent
@@ -257,13 +345,11 @@ export const REST_STEM_AVOIDANCE_NUDGE_PX = STAFF_LINE_SPACING * 1.2;
 /**
  * Stroke width (px) of the real stem line `measure.ts#redrawSharedStems`
  * draws directly between two real noteheads on adjacent staves that share
- * one stem (`shared-stem-for`) — matches a normal note's own rendered stem
- * width (`STEM_WIDTH` in `svgCreator/note.ts`, 22 units in its 600-unit
- * space at `NOTE_SCALE`), since this line stands in for both ends' now
- * locally-suppressed stems and shouldn't look thicker or thinner than one.
- * = 0.12 × STAFF_LINE_SPACING
+ * one stem (`shared-stem-for`) — matches a normal note's own rendered stem,
+ * since this line stands in for both ends' now locally-suppressed stems and
+ * shouldn't look thicker or thinner than one.
  */
-export const SHARED_STEM_WIDTH_PX = STAFF_LINE_SPACING * 0.12;
+export const SHARED_STEM_WIDTH_PX = STEM_STROKE_WIDTH_PX;
 
 /**
  * Real X distance (px) beyond which a `shared-stem-for` pair's two

@@ -120,12 +120,13 @@ export const createChordSvg = ({
   // above the outermost notehead as a single note's stem would be.
   const chordSpread =
     Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates);
-  // The real extension the extremal note's own stem actually renders with
-  // (chord-spread-adjusted) — reused below for the chord-level articulation
-  // anchor so it matches the real rendered tip, not the raw prop value.
+  // The real extension the extremal note's own stem actually renders with.
+  // A beamed stem's extension already includes the spread; an unbeamed one is
+  // measured from the head nearest the open end. Reused below for the
+  // chord-level articulation anchor and the grace slur target.
   const effectiveStemExtension = noFlags
     ? stemExtension
-    : Math.max(stemExtension, chordSpread);
+    : stemExtension + chordSpread;
 
   const headLeftOverhang = Math.max(
     0,
@@ -156,6 +157,7 @@ export const createChordSvg = ({
       noStem: noStem || !isExtremal,
       stemUp,
       stemExtension: isExtremal ? effectiveStemExtension : 0,
+      tailRoomStemExtension: isExtremal ? stemExtension : 0,
       qualifiedElementName: 'svg',
       notehead: noteheads[i] ?? 'normal',
     });
@@ -301,9 +303,6 @@ export const createChordSvg = ({
       STAFF_Y_PADDING +
       Math.max(...staffYCoordinates) -
       NOTE_HEAD_Y_OFFSET_CORRECTION;
-    const effectiveStemExtension = noFlags
-      ? stemExtension
-      : Math.max(stemExtension, chordSpread);
     const mainSlurTargetXPx = stemUp
       ? NOTE_STEM_X_OFFSET + extremalXOffset
       : topNoteHeadCenterXPx;

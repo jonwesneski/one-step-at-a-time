@@ -4,7 +4,7 @@
 import './index';
 import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
 import { ChordElementType } from './types/elements';
-import type { Chord, Octave } from './types/theory';
+import type { Chord, DurationType, Octave } from './types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
@@ -19,7 +19,10 @@ import {
   BASE_STEM_LENGTH_PX,
   DYNAMICS_BASELINE_Y,
   MIDDLE_STAFF_Y,
+  MIN_NOTE_WIDTH,
+  MIN_STEM_LENGTH_PX,
   STAFF_BOTTOM_LINE_Y,
+  STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
@@ -27,7 +30,11 @@ import {
 import {
   flagStemExtensionPx,
   NOTE_SCALE,
+  NOTE_STEM_X_OFFSET,
+  NOTE_STEM_X_OFFSET_STEM_DOWN,
   noteHeadCenter,
+  TAIL_DOWN_WIDTH_PX,
+  TAIL_UP_WIDTH_PX,
 } from './utils/svgCreator/note';
 
 afterEach(() => {
@@ -1266,7 +1273,10 @@ describe('staffClassicalBase triangle noteheads', () => {
       ]);
       expect(f5.stemUp).toBe(true);
       expect(triangle.staffY).toBe(
-        f5.staffY - BASE_STEM_LENGTH_PX - TRIANGLE_RUN_CLEARANCE_PX
+        f5.staffY -
+          BASE_STEM_LENGTH_PX -
+          f5.stemExtension -
+          TRIANGLE_RUN_CLEARANCE_PX
       );
     });
 
@@ -1308,6 +1318,7 @@ describe('staffClassicalBase triangle noteheads', () => {
       expect(triangle.staffY).toBeCloseTo(
         sixteenth.staffY -
           BASE_STEM_LENGTH_PX -
+          sixteenth.stemExtension -
           flagStemExtensionPx(2) -
           TRIANGLE_RUN_CLEARANCE_PX
       );
@@ -1425,4 +1436,258 @@ describe('staffClassicalBase triangle noteheads', () => {
       MIDDLE_STAFF_Y - (triangle.staffY + BASE_STEM_LENGTH_PX)
     );
   });
+});
+
+describe('staffClassicalBase strut min width', () => {
+  const ACCIDENTAL_NOTES = ['F#', 'G#', 'A#', 'C#'];
+
+  it.each<[string, (index: number) => Record<string, string>]>([
+    ['an accidental', (index) => ({ note: ACCIDENTAL_NOTES[index] })],
+    ['grace notes', () => ({ note: 'G', grace: 'A,B' })],
+    [
+      'a written trilling notehead',
+      () => ({ note: 'G', trill: '', 'trill-note': 'A' }),
+    ],
+  ])('fits later entries carrying %s', (_, attributesAt) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    const notes = ACCIDENTAL_NOTES.map((__, index) => {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      note.setAttribute('duration', 'sixteenth');
+      for (const [name, value] of Object.entries(attributesAt(index))) {
+        note.setAttribute(name, value);
+      }
+      return note;
+    });
+    const plainLastNote = document.createElement(MUSIC_NOTE) as any;
+    plainLastNote.setAttribute('note', 'G');
+    plainLastNote.setAttribute('octave', `${4 satisfies Octave}`);
+    plainLastNote.setAttribute('duration', 'sixteenth');
+    const elements = [...notes, plainLastNote];
+    staff.append(...elements);
+
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => elements;
+    slot.dispatchEvent(new Event('slotchange'));
+
+    expect(minWidth).toBeCloseTo(
+      parseFloat(plainLastNote.style.left) + MIN_NOTE_WIDTH,
+      5
+    );
+  });
+});
+
+describe('staffClassicalBase strut min width with tuplets', () => {
+  const makeNote = (duration: DurationType) => {
+    const note = document.createElement(MUSIC_NOTE) as any;
+    note.setAttribute('note', 'G');
+    note.setAttribute('octave', `${4 satisfies Octave}`);
+    note.setAttribute('duration', duration);
+    return note;
+  };
+  const makeTuplet = (ratio: string, content: Element[]) => {
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.setAttribute('ratio', ratio);
+    tuplet.append(...content);
+    return tuplet;
+  };
+
+  it.each<[string, () => { entries: Element[]; last: HTMLElement }]>([
+    [
+      'a triplet',
+      () => {
+        const notes = [
+          makeNote('eighth'),
+          makeNote('eighth'),
+          makeNote('eighth'),
+        ];
+        return {
+          entries: [makeNote('quarter'), makeTuplet('3', notes)],
+          last: notes[2],
+        };
+      },
+    ],
+    [
+      'a quintuplet',
+      () => {
+        const notes = Array.from({ length: 5 }, () => makeNote('sixteenth'));
+        return { entries: [makeTuplet('5', notes)], last: notes[4] };
+      },
+    ],
+    [
+      'a nested tuplet',
+      () => {
+        const inner = [
+          makeNote('sixteenth'),
+          makeNote('sixteenth'),
+          makeNote('sixteenth'),
+        ];
+        return {
+          entries: [
+            makeTuplet('3', [makeNote('eighth'), makeTuplet('3', inner)]),
+          ],
+          last: inner[2],
+        };
+      },
+    ],
+  ])('fits every entry of %s', (_, build) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    const { entries, last } = build();
+    staff.append(...entries);
+
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => entries;
+    slot.dispatchEvent(new Event('slotchange'));
+
+    expect(minWidth).toBeCloseTo(
+      parseFloat(last.style.left) + MIN_NOTE_WIDTH,
+      5
+    );
+  });
+});
+
+describe('staffClassicalBase stems', () => {
+  const renderStaff = (entries: Record<string, string>[], time = '4/4') => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, time);
+    staff.setAttribute('clef', 'treble');
+    document.body.appendChild(staff);
+    const elements = entries.map((attrs) => {
+      const { tag = MUSIC_NOTE, ...rest } = attrs;
+      const element = document.createElement(tag) as any;
+      for (const [name, value] of Object.entries(rest)) {
+        element.setAttribute(name, value);
+      }
+      return element;
+    });
+    staff.append(...elements);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => elements;
+    slot.dispatchEvent(new Event('slotchange'));
+    return elements;
+  };
+  const quarter = (note: string, octave: string) => ({
+    note,
+    octave,
+    duration: 'quarter',
+  });
+
+  it('continues surrounding stems on a centre-line note', () => {
+    const [, b4] = renderStaff([
+      quarter('G', '4'),
+      quarter('B', '4'),
+      quarter('A', '4'),
+    ]);
+    expect(b4.stemUp).toBe(true);
+  });
+
+  it('keeps a down-stem on a centre-line note among down-stems', () => {
+    const [, b4] = renderStaff([
+      quarter('D', '5'),
+      quarter('B', '4'),
+      quarter('C', '5'),
+    ]);
+    expect(b4.stemUp).toBe(false);
+  });
+
+  it('treats a neighbouring stem-direction as context', () => {
+    const [, b4] = renderStaff([
+      { ...quarter('G', '4'), 'stem-direction': 'down' },
+      quarter('B', '4'),
+    ]);
+    expect(b4.stemUp).toBe(false);
+  });
+
+  it("lets a centre-line note's own stem-direction win over context", () => {
+    const [, b4] = renderStaff([
+      quarter('G', '4'),
+      { ...quarter('B', '4'), 'stem-direction': 'down' },
+      quarter('A', '4'),
+    ]);
+    expect(b4.stemUp).toBe(false);
+  });
+
+  it('extends a stem to the middle line past the first ledger line', () => {
+    const [a5, c6, c4, a3] = renderStaff([
+      quarter('A', '5'),
+      quarter('C', '6'),
+      quarter('C', '4'),
+      quarter('A', '3'),
+    ]);
+    expect(a5.stemExtension).toBe(0);
+    expect(c6.stemExtension).toBe(
+      MIDDLE_STAFF_Y - c6.staffY - BASE_STEM_LENGTH_PX
+    );
+    expect(c4.stemExtension).toBe(0);
+    expect(a3.stemExtension).toBe(
+      a3.staffY - MIDDLE_STAFF_Y - BASE_STEM_LENGTH_PX
+    );
+  });
+
+  it('shortens a stem forced out of the stave, down to the minimum', () => {
+    const [c5, f5] = renderStaff([
+      { ...quarter('C', '5'), 'stem-direction': 'up' },
+      { ...quarter('F', '5'), 'stem-direction': 'up' },
+    ]);
+    expect(BASE_STEM_LENGTH_PX + c5.stemExtension).toBe(STAFF_LINE_SPACING * 3);
+    expect(BASE_STEM_LENGTH_PX + f5.stemExtension).toBe(MIN_STEM_LENGTH_PX);
+  });
+
+  it('leaves a stemless note with no extension', () => {
+    const [c6] = renderStaff([{ note: 'C', octave: '6', duration: 'whole' }]);
+    expect(c6.stemExtension).toBe(0);
+  });
+
+  it('measures a chord stem from the head nearest the open end', () => {
+    const [chord] = renderStaff([
+      {
+        tag: MUSIC_CHORD,
+        chord: 'C',
+        duration: 'quarter',
+        'stem-direction': 'down',
+      },
+    ]);
+    const lowestHead = Math.max(...chord.staffYCoordinates);
+    expect(lowestHead).toBeGreaterThan(MIDDLE_STAFF_Y);
+    expect(BASE_STEM_LENGTH_PX + chord.stemExtension).toBe(MIN_STEM_LENGTH_PX);
+  });
+
+  it.each([
+    ['B', '3', true, NOTE_STEM_X_OFFSET + TAIL_UP_WIDTH_PX],
+    ['C', '5', false, NOTE_STEM_X_OFFSET_STEM_DOWN + TAIL_DOWN_WIDTH_PX],
+  ])(
+    'clears a hundredtwentyeighth rest from the tails of %s%s',
+    (note, octave, stemUp, tailRightEdgePx) => {
+      const [noteElement, rest] = renderStaff([
+        { note, octave, duration: 'hundredtwentyeighth' },
+        { tag: MUSIC_REST, duration: 'hundredtwentyeighth' },
+      ]);
+      expect(noteElement.stemUp).toBe(stemUp);
+      const restBallLeftEdgesPx = Array.from(
+        rest.shadowRoot.querySelectorAll('circle') as NodeListOf<SVGElement>
+      ).map(
+        (ball) =>
+          (Number(ball.getAttribute('cx')) - Number(ball.getAttribute('r'))) *
+          NOTE_SCALE
+      );
+      expect(restBallLeftEdgesPx.length).toBeGreaterThan(0);
+      const advancePx =
+        parseFloat(rest.style.left) - parseFloat(noteElement.style.left);
+      expect(advancePx + Math.min(...restBallLeftEdgesPx)).toBeGreaterThan(
+        tailRightEdgePx
+      );
+    }
+  );
 });

@@ -605,13 +605,7 @@ test('pushes the following note rightward to make room for the finishing grace n
   });
 
   expect(groupRect).not.toBeNull();
-  // computeGraceFootprintWidth reserves space for the finishing note's
-  // headOnly advance but not its stem+flag, which extends a couple of px
-  // further right than the reserved footprint (pre-existing approximation,
-  // not introduced by beat-proportional spacing — just newly visible now
-  // that spacing is tight enough to expose it). Tolerate that small gap
-  // rather than asserting exact clearance.
-  expect(followingRect.left).toBeGreaterThanOrEqual(groupRect!.right - 3);
+  expect(followingRect.left).toBeGreaterThanOrEqual(groupRect!.right - 0.5);
   expect(followingRect.left).toBeGreaterThan(hostRect.right);
 });
 

@@ -450,7 +450,11 @@ test.describe('multi-voice staff', () => {
         .map((note) => note.getBoundingClientRect());
       const voice2NoteRects = notes
         .slice(4, 8)
-        .map((note) => note.getBoundingClientRect());
+        .flatMap((note) =>
+          Array.from(
+            note.shadowRoot?.querySelectorAll('.head, .stem, .flag') ?? []
+          ).map((glyph) => glyph.getBoundingClientRect())
+        );
       return {
         markings,
         voice1MarkingRects,
@@ -536,7 +540,11 @@ test.describe('multi-voice staff', () => {
         document.querySelectorAll('music-note')
       )
         .slice(0, 2)
-        .map((note) => note.getBoundingClientRect());
+        .flatMap((note) =>
+          Array.from(
+            note.shadowRoot?.querySelectorAll('.head, .stem, .flag') ?? []
+          ).map((glyph) => glyph.getBoundingClientRect())
+        );
       return {
         signRect:
           sign === null || sign === undefined
@@ -595,12 +603,16 @@ test.describe('multi-voice staff', () => {
       const line = staff?.shadowRoot?.querySelector(
         '.trill-lines-container .trill-line'
       ) as SVGGElement | null;
-      const voice1NoteRects = Array.from(
+      const voice1Notes = Array.from(
         document.querySelectorAll('music-note')
-      )
-        .slice(0, 2)
-        .map((note) => note.getBoundingClientRect());
+      ).slice(0, 2);
+      const voice1NoteRects = voice1Notes.flatMap((note) =>
+        Array.from(
+          note.shadowRoot?.querySelectorAll('.head, .stem, .flag') ?? []
+        ).map((glyph) => glyph.getBoundingClientRect())
+      );
       return {
+        secondNoteLeft: voice1Notes[1].getBoundingClientRect().left,
         lineRect:
           line === null || line === undefined
             ? null
@@ -615,9 +627,7 @@ test.describe('multi-voice staff', () => {
     // confirms this scenario actually exercises the collision path, not
     // just a coincidental non-overlap.
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
-    expect(result.lineRect!.right).toBeGreaterThan(
-      result.voice1NoteRects[1].left
-    );
+    expect(result.lineRect!.right).toBeGreaterThan(result.secondNoteLeft);
     for (const noteRect of result.voice1NoteRects) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       expect(rectsOverlap(result.lineRect!, noteRect)).toBe(false);

@@ -189,20 +189,8 @@ export function resolveTriangleStaffYs(
   return ys;
 }
 
-// Extra stem length (px) so a triangle's stem, drawn from a head outside the
-// stave, reaches the middle line.
-export function triangleStemExtensionPx(
-  headY: number,
-  stemUp: boolean,
-  middleY: number,
-  stemLengthPx: number
-): number {
-  const tipY = stemUp ? headY - stemLengthPx : headY + stemLengthPx;
-  return Math.max(0, stemUp ? tipY - middleY : middleY - tipY);
-}
-
 // Staff-Y of a stem's tip, null when there's no stem. The stem starts at the
-// head farthest from the tip, and an unbeamed chord's stem reaches past its
+// head farthest from the tip, and an unbeamed chord's stem also spans its
 // spread (matches createChordSvg's effective extension).
 export function resolveStemTipY({
   headYs,
@@ -228,7 +216,7 @@ export function resolveStemTipY({
   const highestHeadY = Math.min(...headYs);
   const extension = noFlags
     ? stemExtensionPx
-    : Math.max(stemExtensionPx, lowestHeadY - highestHeadY) + flagExtensionPx;
+    : stemExtensionPx + (lowestHeadY - highestHeadY) + flagExtensionPx;
   const length = baseStemLengthPx + extension;
   return stemUp ? lowestHeadY - length : highestHeadY + length;
 }
