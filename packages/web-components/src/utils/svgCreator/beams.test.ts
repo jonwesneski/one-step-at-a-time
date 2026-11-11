@@ -12,6 +12,7 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF,
 } from '../consts';
+import { MIN_STEM_LENGTH_PX, STEM_OVERLAP_PX } from '../notationDimensions';
 import { BeamsBuilder } from './beams';
 import { NOTE_SCALE } from './note';
 
@@ -757,31 +758,36 @@ describe('beams', () => {
     });
   });
 
-  describe('minimum stem length is enforced', () => {
-    it('no stem is shorter than 25 px when a steep-pitch beam group requires shifting', () => {
+  describe('wide-interval groups take a kneed beam', () => {
+    it('stems point both ways, none shorter than 2½ spaces', () => {
       const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
       staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
       staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
       staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
       document.body.appendChild(staff);
 
-      const steepGapNotes = [
+      const notes = [
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'G', octave: 5, duration: 'eighth' }),
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'G', octave: 5, duration: 'eighth' }),
       ];
-      triggerSlotChange(staff, steepGapNotes);
+      triggerSlotChange(staff, notes);
 
-      expect(steepGapNotes.length).toBeGreaterThan(0);
-      for (const note of steepGapNotes) {
-        const stem = getNoteStem(note);
-        if (!stem) continue;
+      expect(notes.map((note) => (note as any).stemUp)).toEqual([
+        true,
+        false,
+        true,
+        false,
+      ]);
+      for (const note of notes) {
+        const stem = getNoteStem(note)!;
+        expect(stem).not.toBeNull();
         const y1 = parseFloat(stem.getAttribute('y1')!);
         const y2 = parseFloat(stem.getAttribute('y2')!);
-        const stemLengthPx = Math.abs(y2 - y1) * NOTE_SCALE;
-
-        expect(stemLengthPx).toBeGreaterThanOrEqual(24);
+        // The drawn line stops STEM_OVERLAP_PX inside the beam's far edge.
+        const stemLengthPx = Math.abs(y2 - y1) * NOTE_SCALE + STEM_OVERLAP_PX;
+        expect(stemLengthPx).toBeGreaterThanOrEqual(MIN_STEM_LENGTH_PX - 1);
       }
     });
   });

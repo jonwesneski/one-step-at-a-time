@@ -27,6 +27,7 @@ const spaces = (count: number) => count * STAFF_LINE_SPACING;
 // Treble staff-Ys.
 const E6 = 0;
 const C6 = 10;
+const G5 = 25;
 const B5 = 15;
 const A5 = 20;
 const F5 = 30;
@@ -275,6 +276,47 @@ describe('determineStemDirections', () => {
           [[1, 2]]
         )
       ).toEqual([UP, UP, UP, UP]);
+    });
+  });
+
+  describe('a beam group', () => {
+    const eighths = (ys: number[]) =>
+      ys.map((y): Entry => ({ ys: [y], length: 1 / 8 }));
+    const group = (ys: number[]) => [ys.map((_, i) => i)];
+
+    it('follows the farthest note when as many notes lie each side of the middle line', () => {
+      expect(
+        resolve(eighths([G5, E4, F4, F5]), [2, 4], group([0, 1, 2, 3]))
+      ).toEqual([DOWN, DOWN, DOWN, DOWN]);
+    });
+
+    it('follows the majority when the farthest note is in the minority', () => {
+      expect(
+        resolve(eighths([G4, G4, G4, E5]), [2, 4], group([0, 1, 2, 3]))
+      ).toEqual([UP, UP, UP, UP]);
+    });
+
+    it('follows a minority that lies much further from the middle line', () => {
+      const ys = [B4, C6, A4, G4, F4, G4];
+      expect(resolve(eighths(ys), [3, 4], group(ys))).toEqual(
+        ys.map(() => DOWN)
+      );
+    });
+
+    it('follows a lone note a space and a half further out', () => {
+      expect(resolve(eighths([F5, A4, A4]), [3, 8], group([0, 1, 2]))).toEqual([
+        DOWN,
+        DOWN,
+        DOWN,
+      ]);
+    });
+
+    it('does not count middle-line notes', () => {
+      expect(resolve(eighths([B4, B4, A4]), [3, 8], group([0, 1, 2]))).toEqual([
+        UP,
+        UP,
+        UP,
+      ]);
     });
   });
 

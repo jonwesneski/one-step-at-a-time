@@ -25,7 +25,7 @@ import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
   BASE_STEM_LENGTH_PX,
-  BEAM_GAP_PX,
+  BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
   DOWN_TAIL_HEAD_ROOM_PX,
   FLAG_STEM_STEP_PX,
@@ -114,6 +114,8 @@ export function flagStemExtensionPx(flagCount: number): number {
 
 // Notehead geometry in pixel space — used by ledgerLines.ts and chord.ts
 export const NOTE_HEAD_RADIUS_PX = HEAD_WIDTH * NOTE_SCALE; // ≈ 4.27px
+// Also the length of a fractional beam.
+export const NOTEHEAD_WIDTH_PX = 2 * NOTE_HEAD_RADIUS_PX;
 export const ADJACENT_NOTE_X_DISPLACEMENT_PX = 150 * NOTE_SCALE; // = 8px
 export const NOTE_HEAD_CX_STEM_UP_PX = (COORD_WIDTH / 2 - 10) * NOTE_SCALE; // ≈ 15.47px
 export const NOTE_HEAD_CX_STEM_DOWN_PX =
@@ -671,7 +673,7 @@ export function stemBeamJunctionPosition(
   const { x, y } = stemTipPosition(stemUp, duration, noFlags, stemExtension);
   const hiddenPastSurfacePx =
     (stemUp ? BEAM_THICKNESS_PX - STEM_OVERLAP_PX : STEM_OVERLAP_PX) +
-    beamLevels * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
+    beamLevels * BEAM_STEP_PX;
   const towardNoteSign = stemUp ? 1 : -1;
   return { x, y: y + (towardNoteSign * hiddenPastSurfacePx) / NOTE_SCALE };
 }

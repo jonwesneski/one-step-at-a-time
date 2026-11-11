@@ -7,6 +7,7 @@ import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
 } from './rules/arpeggioRules';
+import type { BeamObstacle } from './rules/beamPlacementRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import { computeBeatOffsets } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
@@ -190,6 +191,8 @@ import {
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
+  MID_STREAM_CLEF_SVG_HEIGHT_PX,
+  MID_STREAM_CLEF_WIDTH_PX,
   MID_STREAM_CLEF_Y_OFFSET,
   MIN_NOTE_WIDTH,
   NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
@@ -2594,6 +2597,34 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
   }
 
+  // The box a mid-stream clef glyph covers, in beams-container px: measured
+  // from the glyph when laid out, otherwise the clef's whole drawing box.
+  #clefBeamObstacle(
+    marker: ClefMarkerPlacement,
+    leftInWrapper: number
+  ): BeamObstacle {
+    const left = leftInWrapper - this.#describeEndX;
+    const hostTop = marker.element.getBoundingClientRect().top;
+    const glyphRects = Array.from(
+      marker.element.shadowRoot?.querySelectorAll('path') ?? []
+    )
+      .map((path) => path.getBoundingClientRect())
+      .filter((rect) => rect.height > 0);
+    const [top, bottom] =
+      glyphRects.length > 0
+        ? [
+            Math.min(...glyphRects.map((rect) => rect.top)) - hostTop,
+            Math.max(...glyphRects.map((rect) => rect.bottom)) - hostTop,
+          ]
+        : [0, MID_STREAM_CLEF_SVG_HEIGHT_PX];
+    return {
+      left,
+      right: left + MID_STREAM_CLEF_WIDTH_PX,
+      top: MID_STREAM_CLEF_Y_OFFSET + top,
+      bottom: MID_STREAM_CLEF_Y_OFFSET + bottom,
+    };
+  }
+
   // Combined rightward footprint (px) at `index` of `voiceKey` — every
   // decoration that reserves space after an entry's own right edge sums
   // here, so #spaceElements() and the strut min-width only need one call
@@ -2856,6 +2887,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // A marker before the first note/chord/rest (afterElementIndex === -1)
       // is positioned here, ahead of the loop, since there's no element index
       // to key off inside it.
+      const clefObstacles: BeamObstacle[] = [];
       const leadingClefMarker = clefMarkersByAfterIndex.get(-1);
       if (leadingClefMarker) {
         leadingClefMarker.element.style.position = 'absolute';
@@ -2989,6 +3021,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           trailingClefMarker.element.style.left = `${previousRightEdge}px`;
           trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
           trailingClefMarker.element.style.display = '';
+          clefObstacles.push(
+            this.#clefBeamObstacle(trailingClefMarker, previousRightEdge)
+          );
           previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
           clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
         }
@@ -3025,6 +3060,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
       }
 
+      // A beam spanning a clef change keeps clear of the clef glyph.
+      state.beamRenderer?.setObstacles(clefObstacles);
       state.beamRenderer?.spaceAll();
     }
 
@@ -4292,10 +4329,23 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           ? this.#extremeStemTipY(state, group.indices, stemUp)
           : this.#forcedSideTupletExtremeY(state, group, stemUp);
 
-      const numeralOffset =
-        TUPLET_NUMERAL_FONT_SIZE / 2 +
-        TUPLET_NUMERAL_BEAM_GAP_PX +
-        BEAM_THICKNESS_PX;
+      // Mirrors tupletRules.ts#computeTupletBracketGeometry: a fully beamed
+      // group hangs its numeral off the beam; any other draws a bracket past
+      // the stem tips with the numeral centred on it.
+      const bracketOmitted =
+        this.#tupletSideOverride(group) === null &&
+        group.indices.every(
+          (i) =>
+            state.beamedIndices.has(i) &&
+            state.elements[i].nodeName !== MUSIC_REST_NODE
+        );
+      const numeralOffset = bracketOmitted
+        ? TUPLET_NUMERAL_FONT_SIZE / 2 +
+          TUPLET_NUMERAL_BEAM_GAP_PX +
+          BEAM_THICKNESS_PX
+        : TUPLET_STAFF_CLEARANCE_PX +
+          TUPLET_HOOK_LENGTH_PX +
+          TUPLET_NUMERAL_FONT_SIZE / 2;
       const beamDerivedY =
         extremeStemTipY !== null
           ? stemUp

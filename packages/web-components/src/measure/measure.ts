@@ -102,6 +102,7 @@ import {
   MUSIC_TUPLET,
   MUSIC_VOICE,
   NOTE_EVENTS,
+  NOTEHEAD_WIDTH_PX,
   STAFF_EVENTS,
   SVG_NS,
   TUPLET_EVENTS,
@@ -123,6 +124,7 @@ import {
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
   BEAM_GAP_PX,
+  BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
@@ -132,7 +134,6 @@ import {
   DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_BASELINE_Y,
   EMPTY_MEASURE_FLEX_BASIS_PX,
-  FRACTIONAL_BEAM_WIDTH_PX,
   HAIRPIN_OPEN_HEIGHT,
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
@@ -2406,6 +2407,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (memberGeometries.length < 2) {
           continue;
         }
+        // Successive members on one staff share an x only before that staff
+        // has spaced its notes; measuring then would size the gap from a
+        // transient layout. Its NOTES_POSITIONED re-runs this pass.
+        const staffNotSpacedYet = memberGeometries.some(
+          (geometry, i) =>
+            i > 0 &&
+            memberGeometries
+              .slice(0, i)
+              .some(
+                (earlier) =>
+                  earlier.staffIndex === geometry.staffIndex &&
+                  Math.abs(earlier.point.x - geometry.point.x) < 0.5
+              )
+        );
+        if (staffNotSpacedYet) {
+          continue;
+        }
 
         const resolvedLine = resolveDoubleStemmedBeamLine(
           memberGeometries.map((g) => g.point),
@@ -2444,14 +2462,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             );
           }
         }
-        const beamStep = BEAM_THICKNESS_PX + BEAM_GAP_PX;
+        const beamStep = BEAM_STEP_PX;
         const segmentXRange = (segment: BeamLineDescriptor) => {
           let x1 = memberGeometries[segment.fromNoteIndex].point.x;
           let x2 = memberGeometries[segment.toNoteIndex].point.x;
           if (segment.fractionalBeamSide === 'left') {
-            x1 -= FRACTIONAL_BEAM_WIDTH_PX;
+            x1 -= NOTEHEAD_WIDTH_PX;
           } else if (segment.fractionalBeamSide === 'right') {
-            x2 += FRACTIONAL_BEAM_WIDTH_PX;
+            x2 += NOTEHEAD_WIDTH_PX;
           }
           return { x1, x2 };
         };

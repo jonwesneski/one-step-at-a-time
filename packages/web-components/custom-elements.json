@@ -5480,6 +5480,34 @@
             },
             {
               "kind": "method",
+              "name": "#clefBeamObstacle",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BeamObstacle"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "marker",
+                  "type": {
+                    "text": "ClefMarkerPlacement"
+                  }
+                },
+                {
+                  "name": "leftInWrapper",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardFootprint",
               "privacy": "private",
               "return": {
@@ -9762,6 +9790,34 @@
                 },
                 {
                   "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clefBeamObstacle",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BeamObstacle"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "marker",
+                  "type": {
+                    "text": "ClefMarkerPlacement"
+                  }
+                },
+                {
+                  "name": "leftInWrapper",
                   "type": {
                     "text": "number"
                   }

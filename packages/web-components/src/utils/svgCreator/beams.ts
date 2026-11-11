@@ -10,10 +10,12 @@ Beam grouping implemented here:
   stream).
 - A rest always breaks the current run (no beaming over rests).
 - Notes in one beam group share a single stem direction, resolved from the
-  group's Y extremes (determineStemDirections in stemRules.ts) — not per-note.
-- The beam is linearly interpolated between the first and last note's stem
-  tips at their rule lengths (stemRules.ts#stemLengthAdjustPx), so it's
-  horizontal when they match and slanted otherwise.
+  whole group (determineStemDirections in stemRules.ts), except a kneed
+  group, whose stems point both ways (rules/beamRules.ts).
+- The beam's height and slope come from rules/beamPlacementRules.ts: beams
+  inside the stave attach to stave lines, stems stay near 3½ spaces, and the
+  slope follows the outer interval within its limits. A kneed group's beam
+  sits between the noteheads.
 - Mixed durations produce a primary beam across the whole group plus
   secondary/fractional (partial-stub) beams for the faster subdivisions,
   built in BeamGroup#computeBeamStructure.
@@ -21,6 +23,12 @@ Beam grouping implemented here:
   they land in the correct beat window alongside non-tuplet notes.
 */
 
+import {
+  type BeamObstacle,
+  type BeamPlacement,
+  resolveBeamPlacement,
+  resolveKneedBeamPlacement,
+} from '../../rules/beamPlacementRules';
 import {
   BeamLineDescriptor,
   computeBeamLevelStructure,
@@ -38,10 +46,9 @@ import type {
 } from '../../types/theory';
 import { MUSIC_NOTE_NODE, MUSIC_REST_NODE, SVG_NS } from '../consts';
 import {
-  BEAM_GAP_PX,
+  BASE_STEM_LENGTH_PX,
+  BEAM_ESTIMATE_NOTE_SPACING_PX,
   BEAM_THICKNESS_PX,
-  FRACTIONAL_BEAM_WIDTH_PX,
-  MAX_STEM_SHORTENING_PX,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
 import { parseNotehead } from '../parsers';
@@ -50,40 +57,28 @@ import {
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
+  NOTEHEAD_WIDTH_PX,
 } from './note';
 
 /** Y-position data for a single beamed note, passed to BeamsBuilder.buildRenderer(). */
 export type NoteYPosition = {
+  /** Top of the note's SVG in the beams container. */
   y: number;
   stemUp: boolean;
-  /**
-   * Only needed for chords: the Y limit that prevents the outermost beam from
-   * overlapping non-extremal noteheads. For stem-up groups the beam outer edge
-   * must be ≤ this value; for stem-down it must be ≥ this value.
-   */
-  chordClearanceY?: number;
-  /**
-   * Only needed for chords: the distance (px) from the notehead that owns the
-   * stem to the notehead nearest the beam. The beam is fitted to a stem
-   * measured from that nearer notehead, as a single note's would be.
-   */
-  chordSpread?: number;
-  /**
-   * How much longer (px) than the base length this note's stem wants to be as
-   * a lone note (negative: shorter). Places the ends of the beam line.
-   */
-  stemLengthAdjustPx?: number;
+  /** Highest and lowest head in the note Y map; equal for a single note. */
+  highestHeadStaffY: number;
+  lowestHeadStaffY: number;
 };
 
 interface NoteData {
   x: number;
-  // Stem tip at the base stem length; the length floor is measured from here.
-  y: number;
-  // Stem tip at this note's rule length; the beam line runs between the first
-  // and last note's anchors.
-  beamAnchorY: number;
+  // Stem tip at the base stem length, measured from the head nearest the beam.
+  tipY: number;
+  highestHeadStaffY: number;
+  lowestHeadStaffY: number;
   /** Number of beams on this note (= flag count): 1 = eighth, 2 = sixteenth, etc. */
   beamCount: number;
+  stemUp: boolean;
 }
 
 // A single beam line drawn across two stems (or as a fractional beam stub).
@@ -98,160 +93,174 @@ class BeamLine {
   ) {}
 }
 
-// Handles SVG drawing and X-repositioning for one beam group. The beam vertical
-// offset and per-note stem extensions are (re)derived from the current note
-// positions — an index-fraction estimate before setX, the true-X value after.
-// Created by BeamGroup.buildRenderer().
+function chordSpread(note: NoteData): number {
+  return note.lowestHeadStaffY - note.highestHeadStaffY;
+}
+
+// Handles SVG drawing and X-repositioning for one beam group. The placement is
+// (re)derived from the current note positions — an estimated spacing before
+// setX, the true x after. Created by BeamGroup.buildRenderer().
 class BeamGroupRenderer {
   #notes: NoteData[];
   #beamLines: BeamLine[];
-  #stemUp: boolean;
-  #chordClearanceY: ReadonlyArray<number | null>;
-  #chordSpreads: ReadonlyArray<number>;
-  #beamVerticalOffset = 0;
   #globalIndices: readonly number[];
+  #obstacles: readonly BeamObstacle[] = [];
+  #placement: BeamPlacement = {
+    primaryTopAtFirst: 0,
+    primaryTopAtLast: 0,
+    levelOffset: 0,
+  };
+  #placementFirstX = 0;
+  #placementLastX = 0;
   readonly svgGroup: SVGGElement;
 
   constructor(
     notes: NoteData[],
     beamLines: BeamLine[],
-    stemUp: boolean,
-    chordClearanceY: ReadonlyArray<number | null>,
-    chordSpreads: ReadonlyArray<number>,
     globalIndices: readonly number[],
     svgGroup: SVGGElement
   ) {
     this.#notes = notes;
     this.#beamLines = beamLines;
-    this.#stemUp = stemUp;
-    this.#chordClearanceY = chordClearanceY;
-    this.#chordSpreads = chordSpreads;
     this.#globalIndices = globalIndices;
     this.svgGroup = svgGroup;
   }
 
-  // Progress (0 at the first note, 1 at the last) used to interpolate the primary
-  // beam Y at note `localIndex`. Falls back to the index fraction before setX has
-  // run (note x is NaN) or when the group has no horizontal span; otherwise uses
-  // the true-X fraction — the same value repositionBeams() draws the polygon at.
-  #beamProgressAt(localIndex: number): number {
-    const first = this.#notes[0];
-    const last = this.#notes[this.#notes.length - 1];
-    const noteX = this.#notes[localIndex].x;
-    if (Number.isNaN(noteX) || first.x === last.x) {
-      return localIndex / (this.#notes.length - 1);
-    }
-    return (noteX - first.x) / (last.x - first.x);
+  #isKneed(): boolean {
+    return this.#notes.some((note) => note.stemUp !== this.#notes[0].stemUp);
   }
 
-  #primaryBeamYAtNote(localIndex: number): number {
-    const first = this.#notes[0];
-    const last = this.#notes[this.#notes.length - 1];
-    return (
-      first.beamAnchorY +
-      (last.beamAnchorY - first.beamAnchorY) *
-        this.#beamProgressAt(localIndex) +
-      this.#beamVerticalOffset
+  #stemXs(): number[] {
+    const allPlaced = this.#notes.every((note) => Number.isFinite(note.x));
+    return this.#notes.map((note, i) =>
+      allPlaced ? note.x : i * BEAM_ESTIMATE_NOTE_SPACING_PX
     );
   }
 
+  setObstacles(obstacles: readonly BeamObstacle[]): void {
+    this.#obstacles = obstacles;
+  }
+
   /**
-   * Recomputes the vertical offset that shifts the whole beam line so that:
-   *   1. The stem to the innermost beam is never shorter than
-   *      MIN_STEM_LENGTH_PX. Inner beams stack toward the noteheads, so a
-   *      multi-beam group needs a longer stem to the primary beam than a single
-   *      beam does — innerStackDepth accounts for that.
-   *   2. The beam outer edge does not overlap non-extremal chord noteheads.
-   * Both constraints push the beam away from the noteheads, so the more
-   * restrictive wins. Runs once from buildRenderer() (index-fraction estimate)
-   * and again from repositionBeams() once true X positions are known.
+   * Re-places the beam from the current stem positions. Runs once from
+   * buildRenderer() (estimated spacing) and again from repositionBeams() once
+   * the true x positions are known.
    */
-  recomputeVerticalOffset(): void {
-    if (this.#notes.length <= 1) {
-      this.#beamVerticalOffset = 0;
-      return;
-    }
+  recomputePlacement(): void {
+    const xs = this.#stemXs();
+    const last = this.#notes.length - 1;
+    // Offset from the note Y map to the beams container, read off a stem tip
+    // so stem lengths come out exact.
     const first = this.#notes[0];
-    const last = this.#notes[this.#notes.length - 1];
-    const unshiftedBeamYAt = (i: number) =>
-      first.beamAnchorY +
-      (last.beamAnchorY - first.beamAnchorY) * this.#beamProgressAt(i);
-
-    // Constraint 1: minimum stem length, measured to the innermost beam.
-    // STEM_OVERLAP_PX is subtracted inside stemExtension(), so both the trigger
-    // and magnitude must account for it to guarantee the shortest stem to the
-    // innermost beam is exactly MIN_STEM_LENGTH_PX in the worst case.
-    let shortestStemExtension = Infinity;
-    for (let i = 0; i < this.#notes.length; i++) {
-      const rawExtension = this.#stemUp
-        ? this.#notes[i].y - unshiftedBeamYAt(i)
-        : unshiftedBeamYAt(i) - this.#notes[i].y;
-      shortestStemExtension = Math.min(shortestStemExtension, rawExtension);
+    const staffYToContainerY = first.stemUp
+      ? first.tipY + BASE_STEM_LENGTH_PX - first.highestHeadStaffY
+      : first.tipY - BASE_STEM_LENGTH_PX - first.lowestHeadStaffY;
+    const toContainer = (placement: BeamPlacement): BeamPlacement => ({
+      primaryTopAtFirst: placement.primaryTopAtFirst + staffYToContainerY,
+      primaryTopAtLast: placement.primaryTopAtLast + staffYToContainerY,
+      levelOffset: placement.levelOffset,
+    });
+    if (this.#isKneed()) {
+      this.#placement = toContainer(
+        resolveKneedBeamPlacement(
+          this.#notes.map((note, i) => ({
+            x: xs[i],
+            highestHeadY: note.highestHeadStaffY,
+            lowestHeadY: note.lowestHeadStaffY,
+            beamCount: note.beamCount,
+          })),
+          this.#notes.map((note) => note.stemUp)
+        ).placement
+      );
+    } else {
+      const stemUp = this.#notes[0].stemUp;
+      this.#placement = toContainer(
+        resolveBeamPlacement({
+          notes: this.#notes.map((note, i) => ({
+            x: xs[i],
+            nearestHeadY: stemUp
+              ? note.highestHeadStaffY
+              : note.lowestHeadStaffY,
+            beamCount: note.beamCount,
+          })),
+          stemUp,
+          obstacles: this.#obstacles.map((obstacle) => ({
+            ...obstacle,
+            top: obstacle.top - staffYToContainerY,
+            bottom: obstacle.bottom - staffYToContainerY,
+          })),
+        })
+      );
     }
-    const maxBeamCount = Math.max(...this.#notes.map((n) => n.beamCount));
-    const innerStackDepth =
-      (maxBeamCount - 1) * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
-    const adjustedMaxShortening = MAX_STEM_SHORTENING_PX - STEM_OVERLAP_PX;
-    const minRequiredExtension = innerStackDepth - adjustedMaxShortening;
-    let verticalOffset = 0;
-    if (shortestStemExtension < minRequiredExtension) {
-      const shortage = minRequiredExtension - shortestStemExtension;
-      verticalOffset = this.#stemUp ? -shortage : shortage;
-    }
+    this.#placementFirstX = xs[0];
+    this.#placementLastX = xs[last];
+  }
 
-    // Constraint 2: chord non-extremal notehead clearance.
-    for (let i = 0; i < this.#notes.length; i++) {
-      const clearanceY = this.#chordClearanceY[i];
-      if (clearanceY === null || clearanceY === undefined) continue;
-      const beamYUnshifted = unshiftedBeamYAt(i);
-      if (this.#stemUp) {
-        verticalOffset = Math.min(verticalOffset, clearanceY - beamYUnshifted);
-      } else {
-        verticalOffset = Math.max(verticalOffset, clearanceY - beamYUnshifted);
-      }
+  #primaryTopAt(x: number): number {
+    const { primaryTopAtFirst, primaryTopAtLast } = this.#placement;
+    const span = this.#placementLastX - this.#placementFirstX;
+    if (span === 0) {
+      return primaryTopAtFirst;
     }
+    return (
+      primaryTopAtFirst +
+      (primaryTopAtLast - primaryTopAtFirst) *
+        ((x - this.#placementFirstX) / span)
+    );
+  }
 
-    this.#beamVerticalOffset = verticalOffset;
+  // The beam edge a stem ends at: past every beam the note carries, on the far
+  // side from its head.
+  #stemEndEdgeY(localIndex: number): number {
+    const note = this.#notes[localIndex];
+    const top = this.#primaryTopAt(this.#stemXs()[localIndex]);
+    const deepestLevelOffset =
+      (note.beamCount - 1) * this.#placement.levelOffset;
+    return note.stemUp
+      ? top + Math.min(0, deepestLevelOffset)
+      : top + BEAM_THICKNESS_PX + Math.max(0, deepestLevelOffset);
   }
 
   /**
    * Returns how many px the stem tip must move toward the beam to reach the
-   * primary beam at this note's position. Returns null if the note is not in
-   * this group.
+   * beam at this note's position. Returns null if the note is not in this
+   * group.
    */
   stemExtension(globalIndex: number): number | null {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
-    if (localIndex === -1) return null;
-    if (this.#notes.length <= 1) return 0;
-
-    const delta =
-      this.#notes[localIndex].y - this.#primaryBeamYAtNote(localIndex);
-    // Subtract STEM_OVERLAP_PX so the tip sits slightly inside the beam polygon
-    // rather than exactly at its edge, preventing sub-pixel rendering gaps. A
-    // chord's tip was fitted from its notehead nearest the beam, but its stem
-    // extends from the notehead that owns it, so the spread is added back.
-    return (
-      (this.#stemUp ? delta : -delta) -
-      STEM_OVERLAP_PX +
-      this.#chordSpreads[localIndex]
-    );
+    if (localIndex === -1) {
+      return null;
+    }
+    const note = this.#notes[localIndex];
+    const edge = this.#stemEndEdgeY(localIndex);
+    // The tip sits STEM_OVERLAP_PX inside the beam so no sub-pixel gap shows.
+    // A chord's tip was fitted from its head nearest the beam, but its stem
+    // extends from the head that owns it, so the spread is added back.
+    const extension = note.stemUp
+      ? note.tipY - (edge + STEM_OVERLAP_PX)
+      : edge - STEM_OVERLAP_PX - note.tipY;
+    return extension + chordSpread(note);
   }
 
   /**
-   * The primary (outermost) beam's Y at this note's stem. Null if the note is
-   * not in this group. Consumers that need to sit clear of the beam (the tuplet
-   * numeral / bracket) read this rather than re-deriving it from staff coords.
+   * The beam edge this note's stem ends at. Null if the note is not in this
+   * group. Consumers that need to sit clear of the beam (the tuplet numeral /
+   * bracket) read this rather than re-deriving it from staff coords.
    */
   primaryBeamYForIndex(globalIndex: number): number | null {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
-    if (localIndex === -1) return null;
-    return this.#primaryBeamYAtNote(localIndex);
+    if (localIndex === -1) {
+      return null;
+    }
+    return this.#stemEndEdgeY(localIndex);
   }
 
   setX(globalIndex: number, x: number): void {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
-    if (localIndex === -1) return;
-    const xOffset = this.#stemUp
+    if (localIndex === -1) {
+      return;
+    }
+    const xOffset = this.#notes[localIndex].stemUp
       ? NOTE_STEM_X_OFFSET
       : NOTE_STEM_X_OFFSET_STEM_DOWN;
     this.#notes[localIndex].x = x + xOffset;
@@ -259,52 +268,36 @@ class BeamGroupRenderer {
 
   /** Updates all beam polygon points using the current x/y positions. */
   repositionBeams(): void {
-    this.recomputeVerticalOffset();
+    this.recomputePlacement();
     const beamPolygons = this.svgGroup.querySelectorAll('polygon');
-    // Stem-up: beam layers grow downward (toward noteheads); polygons grow downward.
-    // Stem-down: beam layers grow upward (toward noteheads); polygons grow upward.
-    const layerDirection = this.#stemUp ? 1 : -1;
-    const beamThickness = BEAM_THICKNESS_PX * layerDirection;
+    const xs = this.#stemXs();
+    const { levelOffset } = this.#placement;
+    // Corners run outer-left, inner-left, inner-right, outer-right, where the
+    // outer edge faces away from the direction the beams stack in.
+    const outerIsTop = levelOffset > 0;
 
     this.#beamLines.forEach((beamLine, i) => {
-      const noteX1 = this.#notes[beamLine.fromNoteIndex].x;
-      const noteX2 = this.#notes[beamLine.toNoteIndex].x;
+      const noteX1 = xs[beamLine.fromNoteIndex];
+      const noteX2 = xs[beamLine.toNoteIndex];
       const x1 =
         beamLine.fractionalBeamSide === 'left'
-          ? noteX1 - FRACTIONAL_BEAM_WIDTH_PX
+          ? noteX1 - NOTEHEAD_WIDTH_PX
           : noteX1;
       const x2 =
         beamLine.fractionalBeamSide === 'right'
-          ? noteX2 + FRACTIONAL_BEAM_WIDTH_PX
+          ? noteX2 + NOTEHEAD_WIDTH_PX
           : noteX2;
-      const levelOffset =
-        beamLine.beamLevel * layerDirection * (BEAM_THICKNESS_PX + BEAM_GAP_PX);
-      const y1 = this.#primaryBeamYAt(x1) + levelOffset;
-      const y2 = this.#primaryBeamYAt(x2) + levelOffset;
+      const levelShift = beamLine.beamLevel * levelOffset;
+      const top1 = this.#primaryTopAt(x1) + levelShift;
+      const top2 = this.#primaryTopAt(x2) + levelShift;
+      const [outer1, inner1, inner2, outer2] = outerIsTop
+        ? [top1, top1 + BEAM_THICKNESS_PX, top2 + BEAM_THICKNESS_PX, top2]
+        : [top1 + BEAM_THICKNESS_PX, top1, top2, top2 + BEAM_THICKNESS_PX];
       beamPolygons[i].setAttribute(
         'points',
-        `${x1},${y1} ${x1},${y1 + beamThickness} ${x2},${
-          y2 + beamThickness
-        } ${x2},${y2}`
+        `${x1},${outer1} ${x1},${inner1} ${x2},${inner2} ${x2},${outer2}`
       );
     });
-  }
-
-  /**
-   * Returns the Y position of the primary beam line at a given X coordinate.
-   * Interpolates linearly from the first to the last note's stem tip, then
-   * applies the beam's vertical offset.
-   */
-  #primaryBeamYAt(x: number): number {
-    const first = this.#notes[0];
-    const last = this.#notes[this.#notes.length - 1];
-    if (first.x === last.x) return first.beamAnchorY + this.#beamVerticalOffset;
-    return (
-      first.beamAnchorY +
-      (last.beamAnchorY - first.beamAnchorY) *
-        ((x - first.x) / (last.x - first.x)) +
-      this.#beamVerticalOffset
-    );
   }
 }
 
@@ -320,20 +313,17 @@ class BeamGroup {
   // Fractional (partial/stub) beams for isolated faster notes at any level.
   #fractionalBeams: BeamLine[];
   #globalIndices: number[];
-  #stemUp = true;
-  #chordClearanceY: Array<number | null>;
-  #chordSpreads: number[];
 
   constructor(flagCounts: number[], globalIndices: number[]) {
     this.#notes = flagCounts.map((beamCount) => ({
       x: NaN,
-      y: NaN,
-      beamAnchorY: NaN,
+      tipY: NaN,
+      highestHeadStaffY: NaN,
+      lowestHeadStaffY: NaN,
       beamCount,
+      stemUp: true,
     }));
     this.#globalIndices = globalIndices;
-    this.#chordClearanceY = new Array(flagCounts.length).fill(null);
-    this.#chordSpreads = new Array(flagCounts.length).fill(0);
     // Beam structure is derived only from flag counts and computed once at
     // construction. Only x/y coordinates change at render/resize time.
     const { primaryBeam, secondaryBeams, fractionalBeams } =
@@ -351,36 +341,29 @@ class BeamGroup {
     return this.#globalIndices;
   }
 
-  /** Records the Y stem-tip position for the note at globalIndex. */
-  setY(
-    globalIndex: number,
-    y: number,
-    stemUp: boolean,
-    chordClearanceY?: number,
-    chordSpread = 0,
-    stemLengthAdjustPx = 0
-  ): void {
+  /** Records the Y data for the note at globalIndex. */
+  setY(globalIndex: number, position: NoteYPosition): void {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
-    if (localIndex === -1) return;
-    this.#stemUp = stemUp;
+    if (localIndex === -1) {
+      return;
+    }
+    const { y, stemUp, highestHeadStaffY, lowestHeadStaffY } = position;
     // Beamed notes always render noFlags, so they never draw the per-flag stem
     // extension an unbeamed note would — the tip is the base stem length.
     const tipOffset = stemUp
       ? NOTE_STEM_TIP_Y_OFFSET
       : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
-    const baseTipY = y + tipOffset + (stemUp ? -chordSpread : chordSpread);
-    this.#notes[localIndex].y = baseTipY;
-    this.#notes[localIndex].beamAnchorY =
-      baseTipY + (stemUp ? -stemLengthAdjustPx : stemLengthAdjustPx);
-    this.#chordSpreads[localIndex] = chordSpread;
-    if (chordClearanceY !== undefined) {
-      this.#chordClearanceY[localIndex] = chordClearanceY;
-    }
+    const spread = lowestHeadStaffY - highestHeadStaffY;
+    const note = this.#notes[localIndex];
+    note.tipY = y + tipOffset + (stemUp ? -spread : spread);
+    note.highestHeadStaffY = highestHeadStaffY;
+    note.lowestHeadStaffY = lowestHeadStaffY;
+    note.stemUp = stemUp;
   }
 
   /**
-   * Builds the SVG <g> element and returns a BeamGroupRenderer, seeded with an
-   * index-fraction vertical offset. repositionBeams() recomputes it from true X.
+   * Builds the SVG <g> element and returns a BeamGroupRenderer, placed from an
+   * estimated spacing. repositionBeams() re-places it from the true x.
    */
   buildRenderer(): BeamGroupRenderer {
     // Rendering order: primary first, then secondary, then fractional.
@@ -393,13 +376,10 @@ class BeamGroup {
     const renderer = new BeamGroupRenderer(
       this.#notes,
       beamLines,
-      this.#stemUp,
-      this.#chordClearanceY,
-      this.#chordSpreads,
       this.#globalIndices,
       svgGroup
     );
-    renderer.recomputeVerticalOffset();
+    renderer.recomputePlacement();
     return renderer;
   }
 
@@ -478,6 +458,16 @@ class BeamRenderer {
   setX(noteIndex: number, x: number): void {
     for (const renderer of this.#groupRenderers) {
       renderer.setX(noteIndex, x);
+    }
+  }
+
+  /**
+   * Rects (beams-container px) the beams must stay clear of, such as a clef
+   * change; applied on the next spaceAll().
+   */
+  setObstacles(obstacles: readonly BeamObstacle[]): void {
+    for (const renderer of this.#groupRenderers) {
+      renderer.setObstacles(obstacles);
     }
   }
 
@@ -676,8 +666,8 @@ export class BeamsBuilder {
   }
 
   /**
-   * Phase 2 entry point. Applies Y positions to all beam groups, finalizes each
-   * group's beam slant and vertical offset, builds SVG elements, and returns a
+   * Phase 2 entry point. Applies Y positions to all beam groups, places each
+   * group's beam, builds SVG elements, and returns a
    * BeamRenderer ready for X positioning (setX / spaceAll).
    *
    * noteYPositions must be indexed by the same global note index used everywhere
@@ -685,17 +675,12 @@ export class BeamsBuilder {
    */
   buildRenderer(noteYPositions: (NoteYPosition | null)[]): BeamRenderer {
     for (let i = 0; i < noteYPositions.length; i++) {
-      const pos = noteYPositions[i];
-      if (pos === null) continue;
+      const position = noteYPositions[i];
+      if (position === null) {
+        continue;
+      }
       for (const group of this.#groups) {
-        group.setY(
-          i,
-          pos.y,
-          pos.stemUp,
-          pos.chordClearanceY,
-          pos.chordSpread,
-          pos.stemLengthAdjustPx
-        );
+        group.setY(i, position);
       }
     }
     const groupRenderers = this.#groups.map((g) => g.buildRenderer());

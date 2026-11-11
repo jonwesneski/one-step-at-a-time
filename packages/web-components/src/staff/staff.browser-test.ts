@@ -360,6 +360,62 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
     expect(Math.abs(widthRatio - 0.5)).toBeLessThan(0.2);
   });
 
+  test('a beam flattens when a resize crowds its notes closer than three spaces', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host element missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        staff.setAttribute('time', '2/4');
+        for (const pitch of ['C', 'A', 'C', 'A']) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'eighth');
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const firstBeamRise = () =>
+      page.evaluate((staffTag) => {
+        const staff = document.querySelector(staffTag);
+        const beam = staff?.shadowRoot?.querySelector('.beam-group .beam');
+        if (!beam) {
+          throw new Error('beam missing');
+        }
+        const points = (beam.getAttribute('points') ?? '')
+          .trim()
+          .split(/\s+/)
+          .map((point) => point.split(',').map(Number));
+        return Math.abs(points[3][1] - points[0][1]);
+      }, MUSIC_STAFF);
+
+    const wideRise = await firstBeamRise();
+
+    const repositioned = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 160);
+    await repositioned.catch(() => undefined);
+    await waitForRedrawCycle(page);
+
+    const narrowRise = await firstBeamRise();
+    expect(narrowRise).toBeLessThan(wideRise);
+    // At most half a space once the notes are crowded.
+    expect(narrowRise).toBeLessThanOrEqual(5.001);
+  });
+
   test('valid tie connector appears and repositions across a resize', async ({
     page,
   }) => {

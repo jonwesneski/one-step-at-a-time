@@ -1,5 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
 import { waitForRedrawCycle } from '../../test-fixtures/helpers';
+import {
+  BEAM_STEP_PX,
+  MIN_STEM_LENGTH_PX,
+  STEM_OVERLAP_PX,
+} from '../utils/notationDimensions';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -138,9 +143,12 @@ test('written-out arpeggio run: stem-up stems lengthen for the beam stack and re
   const geometry = await runStemVsPrimaryBeam(page, true);
   expect(geometry).toHaveLength(4);
   for (const { stemLength, tipToPrimaryGap } of geometry) {
-    // A thirtysecond run stacks 3 beams toward the heads; the base stem is
-    // too short — it must grow so the innermost beam still clears the notehead.
-    expect(stemLength).toBeGreaterThan(40);
+    // A thirtysecond run stacks 3 beams toward the heads, so each stem is at
+    // least the shortest stem plus two beam steps; the drawn line stops
+    // STEM_OVERLAP_PX inside the outer beam.
+    expect(stemLength).toBeGreaterThanOrEqual(
+      MIN_STEM_LENGTH_PX + 2 * BEAM_STEP_PX - STEM_OVERLAP_PX - 0.5
+    );
     expect(tipToPrimaryGap).toBeLessThan(4);
   }
 });
