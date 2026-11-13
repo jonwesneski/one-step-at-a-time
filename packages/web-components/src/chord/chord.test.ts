@@ -1945,3 +1945,71 @@ describe(`${MUSIC_CHORD} stem length`, () => {
     expect(stemLengthPx(chord)).toBeCloseTo(BASE_STEM_LENGTH_PX + 12);
   });
 });
+
+describe('augmentation dots', () => {
+  const makeDottedChord = (
+    duration: DurationType,
+    tones: [Note, Octave][]
+  ): ChordElementType => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('duration', duration);
+    for (const [value, octave] of tones) {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('note', value);
+      note.setAttribute('octave', `${octave}`);
+      chord.appendChild(note);
+    }
+    document.body.appendChild(chord);
+    return chord;
+  };
+
+  const dots = (chord: ChordElementType) =>
+    chord.shadowRoot?.querySelectorAll('[class~="augmentation-dot"]') ?? [];
+
+  it('draws one dot column for every head, not one per tone svg', () => {
+    const chord = makeDottedChord('dotted-half', [
+      ['C', 5],
+      ['E', 5],
+      ['G', 5],
+    ]);
+    expect(dots(chord)).toHaveLength(3);
+    expect(
+      chord.shadowRoot?.querySelectorAll('[class~="augmentation-dots"]')
+    ).toHaveLength(1);
+  });
+
+  it('repeats each row for a double dot', () => {
+    const chord = makeDottedChord('double-dotted-half', [
+      ['C', 5],
+      ['E', 5],
+      ['G', 5],
+    ]);
+    expect(dots(chord)).toHaveLength(6);
+  });
+
+  it('draws no dots for an undotted chord', () => {
+    const chord = makeDottedChord('half', [
+      ['C', 5],
+      ['E', 5],
+    ]);
+    expect(dots(chord)).toHaveLength(0);
+    expect(chord.augmentationDotsRightEdgePx).toBeNull();
+  });
+
+  it('warns when a child note carries a different number of dots', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('duration', 'dotted-half' satisfies DurationType);
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '5');
+    note.setAttribute('duration', 'half' satisfies DurationType);
+    chord.appendChild(note);
+    document.body.appendChild(chord);
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('every notehead takes the chord')
+    );
+    warn.mockRestore();
+  });
+});

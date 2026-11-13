@@ -8,6 +8,7 @@ import {
   resolveChordToneNoteheads,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
+import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import type {
   ChordNote,
@@ -95,6 +96,7 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
+import { chordAugmentationDotLayout } from '../utils/svgCreator/chord';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -107,7 +109,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *
    * @customElement music-chord
    * @attr {Chord} chord - Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`.
-   * @attr {DurationType} duration - Note value for the chord. Defaults to `quarter`.
+   * @attr {DurationType} duration - Note value for the chord, optionally dotted (`dotted-half`); every notehead takes the chord's dots. Defaults to `quarter`.
    * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
    * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
    * @attr {'start' | 'end'} slur - Marks this chord as the start or end of a slur.
@@ -224,6 +226,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
+    #augmentationDotRows: number[] | null = null;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -326,6 +329,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#articulationStemAnchorBeamLevels = v;
+      this.#scheduleRender();
+    }
+
+    get augmentationDotRows(): number[] | null {
+      return this.#augmentationDotRows;
+    }
+    set augmentationDotRows(v: number[] | null) {
+      const current = this.#augmentationDotRows;
+      if (
+        v === current ||
+        (v !== null &&
+          current !== null &&
+          v.length === current.length &&
+          v.every((row, i) => row === current[i]))
+      ) {
+        return;
+      }
+      this.#augmentationDotRows = v;
       this.#scheduleRender();
     }
 
@@ -560,6 +581,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ...this.toneNoteheads.map((notehead) =>
           noteHeadLeftOverhangPx(this.#stemUp, this.duration, notehead)
         )
+      );
+    }
+
+    get augmentationDotsRightEdgePx(): number | null {
+      const staffYCoordinates =
+        this.#staffYCoordinates ??
+        (this.notes.length > 0 ? this.#resolveStandaloneYCoordinates() : []);
+      return (
+        chordAugmentationDotLayout({
+          duration: this.duration,
+          staffYCoordinates,
+          stemUp: this.#stemUp,
+          noFlags: this.#noFlags,
+          noStem: this.#noStem,
+          noteheads: this.toneNoteheads,
+          stemExtension: this.#stemExtension,
+          rowStaffYs: this.#augmentationDotRows,
+        })?.rightEdgeX ?? null
       );
     }
 
@@ -1255,8 +1294,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-note' ||
         name === 'trill-finish' ||
         name === 'trill-finish-octave' ||
-        name === 'trill-finish-slur'
+        name === 'trill-finish-slur' ||
+        name === 'duration'
       ) {
+        // `duration` moves every later entry (beat time) and its dots widen
+        // the rightward footprint.
         // arpeggio/grace changes the chord's leftward footprint, and
         // trill-note/trill-finish the rightward one, the same way: it takes
         // the same path. `arpeggio-for` reserves the same footprint for the
@@ -1290,11 +1332,35 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.render();
     }
 
+    #lastDotMismatchWarning: string | null = null;
+
+    // Every head takes the chord's dots, so a child's own dotted duration
+    // can't change them.
+    #warnChildDotMismatch(): void {
+      const chordDots = durationToDotCount[this.duration];
+      const mismatch = [
+        ...this.querySelectorAll<NoteElementType>(MUSIC_NOTE),
+      ].find(
+        (note) =>
+          note.hasAttribute('duration') &&
+          durationToDotCount[note.duration] !== chordDots
+      );
+      const warning = mismatch
+        ? `child duration="${mismatch.duration}" has a different number of dots than the chord's duration="${this.duration}"; every notehead takes the chord's dots.`
+        : null;
+      if (warning && warning !== this.#lastDotMismatchWarning) {
+        console.warn(`[music-chord] ${warning}`);
+      }
+      this.#lastDotMismatchWarning = warning;
+    }
+
     private render(): void {
+      this.#warnChildDotMismatch();
       const toneNoteheads = this.toneNoteheads;
       if (this.#staffYCoordinates) {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
+          augmentationDotRows: this.#augmentationDotRows,
           staffYCoordinates: this.#staffYCoordinates,
           arpeggio: this.#renderArpeggioSign
             ? this.arpeggio ?? this.#impliedArpeggio
@@ -1411,6 +1477,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
         const [chordSvg] = createChordSvg({
           duration: this.duration,
+          augmentationDotRows: this.#augmentationDotRows,
           staffYCoordinates: standaloneYCoordinates,
           arpeggio: this.#renderArpeggioSign
             ? this.arpeggio ?? this.#impliedArpeggio

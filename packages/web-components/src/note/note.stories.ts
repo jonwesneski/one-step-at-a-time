@@ -124,3 +124,72 @@ export const InStaff: Story = {
     </div>
   `,
 };
+
+// A dot sits half a space after the head, in the head's own space, or the
+// space above when the head is on a (ledger) line. An up-stem tail that would
+// cover the dot pushes it to the right of the tail.
+export const Dotted: Story = {
+  args: {
+    duration: 'dotted-quarter',
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+  },
+  render: (args) => html`
+    <div
+      style="display: flex; flex-direction: column; gap: 24px; padding: 40px"
+    >
+      <music-note duration=${args.duration}></music-note>
+      <music-staff clef="treble" time="4/4">
+        <music-note note="F" octave="4" duration="dotted-half"></music-note>
+        <music-rest duration="quarter"></music-rest>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-note
+          note="A"
+          octave="4"
+          duration="triple-dotted-quarter"
+        ></music-note>
+        <music-note note="A" octave="4" duration="thirtysecond"></music-note>
+        <music-rest duration="half"></music-rest>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-note note="F" octave="4" duration="dotted-half"></music-note>
+        <music-note note="E" octave="5" duration="dotted-eighth"></music-note>
+        <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-note note="A" octave="5" duration="dotted-quarter"></music-note>
+        <music-note note="C" octave="6" duration="eighth"></music-note>
+        <music-note note="C" octave="4" duration="dotted-quarter"></music-note>
+        <music-note note="A" octave="3" duration="eighth"></music-note>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-note note="E" octave="4" duration="dotted-eighth"></music-note>
+        <music-note note="F" octave="4" duration="sixteenth"></music-note>
+        <music-note
+          note="E"
+          octave="4"
+          duration="dotted-sixteenth"
+        ></music-note>
+        <music-note note="G" octave="4" duration="thirtysecond"></music-note>
+        <music-rest duration="half"></music-rest>
+        <music-rest duration="eighth"></music-rest>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-note
+          note="G"
+          octave="4"
+          duration="dotted-half"
+          tie="start"
+        ></music-note>
+        <music-note
+          note="G"
+          octave="4"
+          duration="quarter"
+          tie="end"
+        ></music-note>
+      </music-staff>
+    </div>
+  `,
+};

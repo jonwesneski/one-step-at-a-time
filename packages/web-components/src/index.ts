@@ -13,7 +13,11 @@ import './guitarNote';
 import './note';
 import './rest';
 
-export { durationToFactor } from './rules/theoryConsts';
+export {
+  durationToBase,
+  durationToDotCount,
+  durationToFactor,
+} from './rules/theoryConsts';
 export { parseTupletRatio } from './rules/tupletRules';
 export type { ParsedTupletRatio } from './rules/tupletRules';
 export type {
@@ -34,6 +38,7 @@ export * from './types/theory';
 export {
   ARPEGGIOS,
   ARTICULATIONS,
+  BASE_DURATIONS,
   CLEFS,
   DURATIONS,
   DYNAMICS,

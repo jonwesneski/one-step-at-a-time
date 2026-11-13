@@ -18,8 +18,8 @@ const EPSILON = 1e-9;
  * whole-bar rest is engraved instead of one rest inventory per voice.
  * Sum-based, not duration-literal-based: a literal 'whole' rest would
  * already overflow/get dropped in any measure with capacity < 1 (e.g. 3/4,
- * since this library has no dotted durations), so "every voice's rests sum
- * to the full measure" is the only reliable signal. Deliberately narrow: no
+ * where a whole-bar rest is still a whole rest, never a dotted half), so
+ * "every voice's rests sum to the full measure" is the only reliable signal. Deliberately narrow: no
  * partial-bar alignment (too fuzzy to specify safely), and no tuplet-ratio
  * scaling (an empty measure built from tupleted rests is not a case this
  * optimization needs to handle — its sum simply won't match exactly, so

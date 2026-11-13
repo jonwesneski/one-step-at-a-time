@@ -45,7 +45,7 @@ const LEADING_NOTE_GAP = 10;
 const PIXELS_PER_BEAT = 160;
 const MEASURE_MIN_WIDTH = 100;
 // Whole-note-fraction duration factors, mirroring rules/theoryConsts.ts.
-const DURATION_FACTOR: Record<DurationType, number> = {
+const DURATION_FACTOR: Partial<Record<DurationType, number>> = {
   'double-whole': 2,
   whole: 1,
   half: 0.5,
@@ -59,7 +59,10 @@ const DURATION_FACTOR: Record<DurationType, number> = {
 // Natural-width contribution (advance) of one entry of the given duration:
 // its beat-proportional weight, floored at MIN_NOTE_WIDTH.
 function entryNatural(duration: DurationType): number {
-  return Math.max(MIN_NOTE_WIDTH, DURATION_FACTOR[duration] * PIXELS_PER_BEAT);
+  return Math.max(
+    MIN_NOTE_WIDTH,
+    (DURATION_FACTOR[duration] ?? 0) * PIXELS_PER_BEAT
+  );
 }
 
 test.beforeEach(async ({ page }) => {

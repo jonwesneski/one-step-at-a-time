@@ -1,4 +1,9 @@
 import type { DurationType, NoteheadType } from '../types/theory';
+import {
+  durationToBase,
+  isOpenDuration,
+  isStemlessDuration,
+} from './theoryConsts';
 
 // Drawn outline for a non-`normal` notehead; `normal` keeps the ellipse.
 export type NoteheadGlyph =
@@ -11,12 +16,6 @@ export type NoteheadGlyph =
   | 'triangle-up-white'
   | 'triangle-down-black'
   | 'triangle-down-white';
-
-const isOpenDuration = (duration: DurationType): boolean =>
-  duration === 'half' || duration === 'whole' || duration === 'double-whole';
-
-const isStemlessDuration = (duration: DurationType): boolean =>
-  duration === 'whole' || duration === 'double-whole';
 
 export function resolveNoteheadGlyph(
   notehead: NoteheadType,
@@ -33,7 +32,9 @@ export function resolveNoteheadGlyph(
       if (isStemlessDuration(duration)) {
         return 'diamond-white-wide';
       }
-      return duration === 'half' ? 'diamond-white' : 'diamond-black';
+      return durationToBase[duration] === 'half'
+        ? 'diamond-white'
+        : 'diamond-black';
     case 'diamond-white':
       return isStemlessDuration(duration)
         ? 'diamond-white-wide'

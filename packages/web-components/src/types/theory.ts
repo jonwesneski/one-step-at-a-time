@@ -1,5 +1,5 @@
-/** Note/rest value, from `double-whole` (breve) down to `hundredtwentyeighth`. */
-export type DurationType =
+/** Undotted note/rest value, from `double-whole` (breve) down to `hundredtwentyeighth`. */
+export type BaseDurationType =
   | 'double-whole'
   | 'whole'
   | 'half'
@@ -9,6 +9,21 @@ export type DurationType =
   | 'thirtysecond'
   | 'sixtyfourth'
   | 'hundredtwentyeighth';
+
+/** Number of augmentation dots a duration carries. */
+export type DotCount = 0 | 1 | 2 | 3;
+
+/** A base value lengthened by one, two or three augmentation dots. */
+export type DottedDurationType =
+  | `dotted-${BaseDurationType}`
+  | `double-dotted-${BaseDurationType}`
+  | `triple-dotted-${BaseDurationType}`;
+
+/**
+ * Note/rest value: a base value, optionally dotted (up to three dots), e.g.
+ * `quarter`, `dotted-quarter`, `double-dotted-half`.
+ */
+export type DurationType = BaseDurationType | DottedDurationType;
 
 export type NoteLetter = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 /** Scientific-pitch octave number supported by the staves. */
@@ -276,7 +291,7 @@ export type GraceType = 'acciaccatura' | 'appoggiatura' | 'trill';
 
 /** Note value a grace note is drawn with. */
 export type GraceDuration = Extract<
-  DurationType,
+  BaseDurationType,
   'half' | 'quarter' | 'eighth' | 'sixteenth' | 'thirtysecond' | 'sixtyfourth'
 >;
 

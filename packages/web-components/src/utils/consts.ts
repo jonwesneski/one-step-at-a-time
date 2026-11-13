@@ -2,6 +2,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BaseDurationType,
   ClefType,
   DurationType,
   DynamicMarking,
@@ -121,7 +122,8 @@ export const COMMON_ATTRIBUTES = {
   //TEMPO: tempo,
 } as const;
 
-export const DURATIONS: DurationType[] = [
+/** Undotted durations, longest first. */
+export const BASE_DURATIONS: BaseDurationType[] = [
   'double-whole',
   'whole',
   'half',
@@ -132,6 +134,22 @@ export const DURATIONS: DurationType[] = [
   'sixtyfourth',
   'hundredtwentyeighth',
 ];
+
+/** Prefix for each dot count; index = number of dots. */
+export const DOT_PREFIXES = [
+  '',
+  'dotted-',
+  'double-dotted-',
+  'triple-dotted-',
+] as const;
+
+/**
+ * Every duration, longest first. A dotted value is 1.5–1.875× its base, so it
+ * sorts between its base and the next longer base value.
+ */
+export const DURATIONS: DurationType[] = BASE_DURATIONS.flatMap((base) =>
+  [3, 2, 1, 0].map((dots) => `${DOT_PREFIXES[dots]}${base}` as DurationType)
+);
 
 export const NOTES: Note[] = [
   'A',

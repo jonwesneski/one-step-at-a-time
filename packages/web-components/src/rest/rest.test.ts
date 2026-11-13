@@ -219,3 +219,35 @@ describe('staff integration', () => {
     consoleSpy.mockRestore();
   });
 });
+
+describe('augmentation dots', () => {
+  it.each([
+    ['dotted-whole', 1],
+    ['dotted-half', 1],
+    ['dotted-quarter', 1],
+    ['double-dotted-eighth', 2],
+    ['triple-dotted-thirtysecond', 3],
+    ['sixteenth', 0],
+  ] satisfies [DurationType, number][])(
+    'draws the dots of a %s rest',
+    (duration, expected) => {
+      const rest = document.createElement(MUSIC_REST) as RestElementType;
+      rest.setAttribute('duration', duration);
+      document.body.appendChild(rest);
+      expect(
+        rest.shadowRoot?.querySelectorAll('[class~="augmentation-dot"]')
+      ).toHaveLength(expected);
+    }
+  );
+
+  it('draws the base glyph for a dotted rest', () => {
+    const dotted = document.createElement(MUSIC_REST) as RestElementType;
+    dotted.setAttribute('duration', 'dotted-eighth' satisfies DurationType);
+    const plain = document.createElement(MUSIC_REST) as RestElementType;
+    plain.setAttribute('duration', 'eighth' satisfies DurationType);
+    document.body.append(dotted, plain);
+    const glyph = (rest: RestElementType) =>
+      rest.shadowRoot?.querySelector('svg > g')?.innerHTML;
+    expect(glyph(dotted)).toBe(glyph(plain));
+  });
+});

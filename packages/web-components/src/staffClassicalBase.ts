@@ -69,7 +69,11 @@ import {
   determineVoiceStemDirections,
   unbeamedStemExtensionPx,
 } from './rules/stemRules';
-import { durationToFlagCountMap } from './rules/theoryConsts';
+import {
+  durationToDotCount,
+  durationToFlagCountMap,
+  isStemlessDuration,
+} from './rules/theoryConsts';
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
   resolveTrillPitch,
@@ -100,10 +104,12 @@ import {
 } from './rules/voiceRestRules';
 import {
   computeCrossVoiceDisplacements,
+  resolveCrossVoiceDotRows,
   resolveVoiceDirections,
   VoiceDirection,
   VoiceDirectionInput,
   VoiceNoteheadPlacement,
+  VoicePartGeometry,
 } from './rules/voiceRules';
 import { StaffElementBase } from './staffBase';
 import type {
@@ -238,11 +244,15 @@ import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
+import { chordHeadExtentPx } from './utils/svgCreator/chord';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
   flagStemExtensionPx,
+  NOTE_SCALE,
   NOTE_SVG_WIDTH,
+  noteHeadGeometry,
+  stemTipPosition,
   trillSignLeftX,
 } from './utils/svgCreator/note';
 import {
@@ -1598,7 +1608,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           ? resolveStemTipY({
               headYs,
               stemUp: stem.stemUp,
-              stemless: duration === 'whole' || duration === 'double-whole',
+              stemless: isStemlessDuration(duration),
               noFlags: stem.noFlags,
               stemExtensionPx: stem.stemExtensionPx,
               baseStemLengthPx: BASE_STEM_LENGTH_PX,
@@ -1772,8 +1782,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return (
         nodeName !== MUSIC_REST_NODE &&
         !beamsBuilder.isBeamed(i) &&
-        duration !== 'whole' &&
-        duration !== 'double-whole'
+        !isStemlessDuration(duration)
       );
     };
     const unbeamedExtensionPx = (i: number): number =>
@@ -2793,6 +2802,45 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     };
   }
 
+  // Element-local head, stem and dot extents a cross-voice offset is
+  // measured against.
+  #voicePartGeometry(
+    element: NoteElementType | ChordElementType,
+    staffYs: readonly number[]
+  ): VoicePartGeometry {
+    const { stemUp, noFlags, duration } = element;
+    let headLeftX: number;
+    let headRightX: number;
+    if (element.nodeName === MUSIC_NOTE_NODE) {
+      const head = noteHeadGeometry(
+        stemUp,
+        duration,
+        noFlags,
+        (element as NoteElementType).notehead
+      );
+      headLeftX = (head.cx - head.halfWidth) * NOTE_SCALE;
+      headRightX = (head.cx + head.halfWidth) * NOTE_SCALE;
+    } else {
+      const extent = chordHeadExtentPx({
+        duration,
+        staffYCoordinates: staffYs,
+        stemUp,
+        noFlags,
+        noteheads: (element as ChordElementType).toneNoteheads,
+      });
+      headLeftX = extent.left;
+      headRightX = extent.right;
+    }
+    return {
+      headLeftX,
+      headRightX,
+      stemX: isStemlessDuration(duration)
+        ? null
+        : stemTipPosition(stemUp, duration, noFlags, 0).x * NOTE_SCALE,
+      dotsRightEdgeX: element.augmentationDotsRightEdgePx,
+    };
+  }
+
   // Combined rightward footprint (px) at `index` of `voiceKey` — every
   // decoration that reserves space after an entry's own right edge sums
   // here, so #spaceElements() and the strut min-width only need one call
@@ -2803,9 +2851,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return 0;
     }
     return (
+      this.#augmentationDotFootprint(state, index) +
       (state.writtenTrillFootprints.get(index) ?? 0) +
       (state.trillFinishFootprints.get(index) ?? 0)
     );
+  }
+
+  // How far (px) an entry's duration dots reach past its own SVG box. The
+  // written trilling notehead and trill-finish notes start after the dots.
+  #augmentationDotFootprint(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    const rightEdge = element?.augmentationDotsRightEdgePx ?? null;
+    return rightEdge === null ? 0 : Math.max(0, rightEdge - NOTE_SVG_WIDTH);
   }
 
   // Total px an entry paints / needs left of its own SVG left edge (x = 0), from
@@ -3170,6 +3227,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             hasFlagOrBeam:
               state.beamedIndices.has(i) ||
               (durationToFlagCountMap.get(duration) ?? 0) > 0,
+            dotCount: durationToDotCount[duration],
+            geometry: this.#voicePartGeometry(
+              element as NoteElementType | ChordElementType,
+              staffYs
+            ),
           });
         }
       }
@@ -3185,6 +3247,35 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // shared beat-position x already set above, exactly as
     // rules/chordRules.ts#computeAdjacentDisplacements is already layered
     // on top of a chord's own base x.
+    // Dot rows another voice decides (a dropped lower dot, one shared
+    // column); every other element places its own, so stale rows reset.
+    const dotRowsByElement = new Map<Element, number[]>();
+    if (isMultiVoice) {
+      for (const column of placementColumns) {
+        if (column.placements.length < 2) {
+          continue;
+        }
+        for (const rows of resolveCrossVoiceDotRows(column.placements)) {
+          const element = this.#voiceRenderStates.get(rows.voiceNumber)
+            ?.elements[rows.localIndex];
+          if (element) {
+            dotRowsByElement.set(element, rows.rowStaffYs);
+          }
+        }
+      }
+    }
+    for (const state of this.#voiceRenderStates.values()) {
+      for (const element of state.elements) {
+        if (
+          element.nodeName === MUSIC_NOTE_NODE ||
+          element.nodeName === MUSIC_CHORD_NODE
+        ) {
+          (element as NoteElementType | ChordElementType).augmentationDotRows =
+            dotRowsByElement.get(element) ?? null;
+        }
+      }
+    }
+
     if (isMultiVoice) {
       let anyDisplacement = false;
       for (const column of placementColumns) {
@@ -3594,6 +3685,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       let endX =
         stopNoteX +
         NOTE_SVG_WIDTH +
+        this.#augmentationDotFootprint(state, span.stopIndex) +
         OCTAVE_SIGN_TRAILING_GAP_PX +
         OCTAVE_SIGN_CORNER_PX;
       // The closing note's own trill (if it has an active line) reaches
@@ -4070,6 +4162,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const lastHeadX =
         hostX +
         NOTE_SVG_WIDTH +
+        this.#augmentationDotFootprint(state, i) +
         GRACE_MAIN_GAP_PX +
         layout.headXCenters[lastLocalIndex];
 
@@ -4112,7 +4205,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
     const anchorNoteX = state.noteXPositions.get(anchorIndex) ?? 0;
-    const leftX = anchorNoteX + NOTE_SVG_WIDTH + TRILL_WRITTEN_NOTE_GAP_PX;
+    const leftX =
+      anchorNoteX +
+      NOTE_SVG_WIDTH +
+      this.#augmentationDotFootprint(state, anchorIndex) +
+      TRILL_WRITTEN_NOTE_GAP_PX;
     const rawY = this.noteToYCoordinate(
       `${resolvedTrillPitch.letter}${accidentalSuffix(
         resolvedTrillPitch.accidental

@@ -176,3 +176,62 @@ export const InStaff: Story = {
     </div>
   `,
 };
+
+// One dot column after the chord, one dot per space: a line note dots the
+// space above unless an adjacent note took it, the column stays centred on a
+// cluster, and a wide cluster dots only the spaces it covers.
+export const Dotted: Story = {
+  render: () => html`
+    <div
+      style="display: flex; flex-direction: column; gap: 24px; padding: 40px"
+    >
+      <music-staff clef="treble" time="4/4">
+        <music-chord duration="double-dotted-half">
+          <music-note note="C" octave="5"></music-note>
+          <music-note note="E" octave="5"></music-note>
+          <music-note note="G" octave="5"></music-note>
+        </music-chord>
+        <music-chord duration="eighth">
+          <music-note note="B" octave="4"></music-note>
+          <music-note note="D" octave="5"></music-note>
+          <music-note note="F" octave="5"></music-note>
+        </music-chord>
+      </music-staff>
+      <music-staff clef="treble" time="3/4">
+        <music-chord duration="dotted-quarter">
+          <music-note note="F" octave="4"></music-note>
+          <music-note note="G" octave="4"></music-note>
+        </music-chord>
+        <music-chord duration="dotted-quarter">
+          <music-note note="G" octave="4"></music-note>
+          <music-note note="A" octave="4"></music-note>
+        </music-chord>
+      </music-staff>
+      <music-staff clef="treble" time="3/4">
+        <music-chord duration="dotted-quarter">
+          <music-note note="E" octave="4"></music-note>
+          <music-note note="F" octave="4"></music-note>
+          <music-note note="G" octave="4"></music-note>
+          <music-note note="A" octave="4"></music-note>
+        </music-chord>
+        <music-chord duration="dotted-quarter">
+          <music-note note="C" octave="6"></music-note>
+          <music-note note="D" octave="6"></music-note>
+        </music-chord>
+      </music-staff>
+      <music-staff clef="treble" time="3/4">
+        <music-chord duration="dotted-half">
+          <music-note note="F" octave="4"></music-note>
+          <music-note note="G" octave="4"></music-note>
+          <music-note note="A" octave="4"></music-note>
+          <music-note note="B" octave="4"></music-note>
+          <music-note note="C" octave="5"></music-note>
+          <music-note note="D" octave="5"></music-note>
+          <music-note note="E" octave="5"></music-note>
+          <music-note note="F" octave="5"></music-note>
+          <music-note note="G" octave="5"></music-note>
+        </music-chord>
+      </music-staff>
+    </div>
+  `,
+};

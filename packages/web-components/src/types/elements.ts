@@ -73,6 +73,8 @@ export interface INoteElement {
   set notehead(value: NoteheadType | null);
   // How far a glyph head reaches left of the ellipse head's edge (px).
   readonly headLeftOverhangPx: number;
+  // Right ink edge (element px) of the duration dots, or null when undotted.
+  readonly augmentationDotsRightEdgePx: number | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -96,6 +98,10 @@ export interface INoteElement {
   // (outer voice, single-voice staff, or not a beam-group member at all).
   // Not an attribute.
   articulationStemAnchorBeamLevels: number | null;
+  // Staff Ys of the dot rows, set by the staff when another voice decides
+  // where this element's dots go (an empty array draws none); null uses the
+  // element's own placement. Not an attribute.
+  augmentationDotRows: number[] | null;
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -280,6 +286,8 @@ export interface IChordElement {
   readonly toneNoteheads: NoteheadType[];
   // The widest tone's INoteElement.headLeftOverhangPx.
   readonly headLeftOverhangPx: number;
+  // Right ink edge (element px) of the duration dots, or null when undotted.
+  readonly augmentationDotsRightEdgePx: number | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -289,6 +297,8 @@ export interface IChordElement {
   sharedStemFor: string | null;
   // See INoteElement.articulationStemAnchorBeamLevels.
   articulationStemAnchorBeamLevels: number | null;
+  // See INoteElement.augmentationDotRows.
+  augmentationDotRows: number[] | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;
@@ -461,6 +471,8 @@ export interface IGuitarNoteElement {
 
 export interface IRestElement {
   duration: DurationType;
+  // Right ink edge (element px) of the duration dots, or null when undotted.
+  readonly augmentationDotsRightEdgePx: number | null;
   // Correlation key only — a rest never contributes to the beam polygon, but
   // shares INoteElement.beamGroup's `id` shape so a double-stemmed group can
   // tell "this rest belongs to me" for rest-placement purposes.

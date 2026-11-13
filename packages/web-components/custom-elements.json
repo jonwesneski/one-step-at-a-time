@@ -234,6 +234,15 @@
             },
             {
               "kind": "field",
+              "name": "#augmentationDotRows",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -392,6 +401,13 @@
             },
             {
               "kind": "field",
+              "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "noFlags",
               "type": {
                 "text": "boolean"
@@ -542,6 +558,14 @@
               "name": "headLeftOverhangPx",
               "type": {
                 "text": "number"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
               },
               "readonly": true
             },
@@ -830,6 +854,25 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#lastDotMismatchWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#warnChildDotMismatch",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
               "kind": "method",
               "name": "render",
               "privacy": "private",
@@ -927,7 +970,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Note value for the chord. Defaults to `quarter`."
+              "description": "Note value for the chord, optionally dotted (`dotted-half`); every notehead takes the chord's dots. Defaults to `quarter`."
             },
             {
               "name": "tie",
@@ -1887,7 +1930,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Note value. Defaults to `quarter`."
+              "description": "Note value, optionally dotted (`dotted-quarter`); sets timing only, since the tab draws no rhythm. Defaults to `quarter`."
             },
             {
               "name": "tie",
@@ -2884,6 +2927,15 @@
             },
             {
               "kind": "field",
+              "name": "#augmentationDotRows",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -3050,6 +3102,13 @@
             },
             {
               "kind": "field",
+              "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "noFlags",
               "type": {
                 "text": "boolean"
@@ -3207,6 +3266,14 @@
               "name": "headLeftOverhangPx",
               "type": {
                 "text": "number"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
               },
               "readonly": true
             },
@@ -3570,7 +3637,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`."
+              "description": "Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`."
             },
             {
               "name": "note",
@@ -3945,6 +4012,14 @@
             },
             {
               "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "beamGroup",
               "type": {
                 "text": "string | null"
@@ -3981,7 +4056,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`."
+              "description": "Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted (`dotted-quarter`, `double-dotted-eighth`). Defaults to `quarter`."
             },
             {
               "name": "beam-group",
@@ -5721,6 +5796,34 @@
             },
             {
               "kind": "method",
+              "name": "#voicePartGeometry",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoicePartGeometry"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardFootprint",
               "privacy": "private",
               "return": {
@@ -5733,6 +5836,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#augmentationDotFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {
@@ -10450,6 +10581,34 @@
             },
             {
               "kind": "method",
+              "name": "#voicePartGeometry",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoicePartGeometry"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardFootprint",
               "privacy": "private",
               "return": {
@@ -10462,6 +10621,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#augmentationDotFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {

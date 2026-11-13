@@ -1,10 +1,15 @@
-import { DurationType } from '../../types/theory';
+import { augmentationDotRowWidthPx } from '../../rules/augmentationDotRules';
+import { durationToBase, durationToDotCount } from '../../rules/theoryConsts';
+import { BaseDurationType, DurationType } from '../../types/theory';
 import { SVG_NS } from '../consts';
+import { AUGMENTATION_DOT_NOTEHEAD_GAP_PX } from '../notationDimensions';
+import { createAugmentationDotsSvg } from './augmentationDots';
 import {
   COORD_WIDTH,
   NOTE_SCALE,
   NOTE_SVG_HEIGHT,
   NOTE_SVG_WIDTH,
+  type NoteDotLayout,
 } from './note';
 
 // Vertical centre of the rest SVG in pixels — used as yHeadOffset so the staff
@@ -64,22 +69,69 @@ export const createRestSvg = ({
   const g = document.createElementNS(SVG_NS, 'g');
   g.setAttribute('transform', `scale(${NOTE_SCALE})`);
 
-  if (duration === 'double-whole') {
+  const base = durationToBase[duration];
+  if (base === 'double-whole') {
     g.appendChild(createRect(WHOLE_REST_Y, Math.round(SPACE)));
-  } else if (duration === 'whole') {
+  } else if (base === 'whole') {
     g.appendChild(createRect(WHOLE_REST_Y));
-  } else if (duration === 'half') {
+  } else if (base === 'half') {
     g.appendChild(createRect(HALF_REST_Y));
-  } else if (duration === 'quarter') {
+  } else if (base === 'quarter') {
     g.appendChild(createQuarterRestPath());
   } else {
-    g.appendChild(createHookedRest(duration));
+    g.appendChild(createHookedRest(base));
   }
 
   svg.appendChild(g);
 
+  const dotLayout = restAugmentationDotLayout(duration);
+  const dots = dotLayout && createAugmentationDotsSvg(dotLayout);
+  if (dots) {
+    svg.appendChild(dots);
+  }
+
   return [svg, REST_Y_SVG_CENTER];
 };
+
+/**
+ * A rest's dots keep one position relative to the glyph wherever the rest
+ * sits: in the space a whole/half/breve block fills, beside the upper body
+ * of a quarter rest, and level with the top hook of a hooked rest.
+ */
+export function restAugmentationDotLayout(
+  duration: DurationType
+): NoteDotLayout | null {
+  const dotCount = durationToDotCount[duration];
+  if (dotCount === 0) {
+    return null;
+  }
+  const base = durationToBase[duration];
+  let glyphRightX: number;
+  let rowCenterY: number;
+  if (base === 'double-whole' || base === 'whole') {
+    glyphRightX = X_CENTER + REST_RECT_WIDTH / 2;
+    rowCenterY = WHOLE_REST_Y + SPACE / 2;
+  } else if (base === 'half') {
+    glyphRightX = X_CENTER + REST_RECT_WIDTH / 2;
+    rowCenterY = HALF_REST_Y + REST_RECT_HEIGHT - SPACE / 2;
+  } else if (base === 'quarter') {
+    glyphRightX = QUARTER_REST_RIGHT_X;
+    rowCenterY = Y_CENTER - SPACE / 2;
+  } else {
+    const { stemTopX, topHookBallCenterY } = hookedRestGeometry(
+      hookCountMap[base]
+    );
+    glyphRightX = stemTopX + STEM_STROKE_WIDTH / 2;
+    rowCenterY = topHookBallCenterY;
+  }
+  const leftX = glyphRightX * NOTE_SCALE + AUGMENTATION_DOT_NOTEHEAD_GAP_PX;
+  return {
+    dotCount,
+    leftX,
+    rowCentersY: [rowCenterY * NOTE_SCALE],
+    rightEdgeX: leftX + augmentationDotRowWidthPx(dotCount),
+  };
+}
 
 function createRect(y: number, height = REST_RECT_HEIGHT): SVGRectElement {
   const rect = document.createElementNS(SVG_NS, 'rect');
@@ -90,6 +142,9 @@ function createRect(y: number, height = REST_RECT_HEIGHT): SVGRectElement {
   rect.setAttribute('fill', 'currentColor');
   return rect;
 }
+
+// Rightmost x of the quarter-rest outline (its `sx + 9.406·S` point).
+const QUARTER_REST_RIGHT_X = X_CENTER + (42.3 + 9.406) * ((SPACE * 3) / 296);
 
 function createQuarterRestPath(): SVGPathElement {
   const path = document.createElementNS(SVG_NS, 'path');
@@ -149,7 +204,7 @@ const ARM_LENGTH_BASE = 1.0;
 const ARM_LENGTH_STEP = 0.1;
 
 type HookDurationType = Exclude<
-  DurationType,
+  BaseDurationType,
   'double-whole' | 'whole' | 'half' | 'quarter'
 >;
 
@@ -169,7 +224,7 @@ function createSingleHook(
   const ballCx = hx - SPACE * armLength;
   const ballR = SPACE * 0.25;
   const armEndY = hy + SPACE * 0.5;
-  const ballCy = armEndY - ballR * 0.7;
+  const ballCy = hookBallCenterY(hy);
 
   const hookGroup = document.createElementNS(SVG_NS, 'g');
 
@@ -197,15 +252,36 @@ function createSingleHook(
   return hookGroup;
 }
 
+function hookedRestGeometry(hookCount: number): {
+  stemTopX: number;
+  stemTopY: number;
+  stemBotX: number;
+  stemBotY: number;
+  topHookBallCenterY: number;
+} {
+  // Stem: angled line, top-right to bottom-left, grows longer with more hooks
+  const stemTopX = X_CENTER + 40;
+  const stemTopY = Y_CENTER - SPACE * 0.5 - (hookCount - 1) * SPACE * 0.5;
+  const topHookY = stemTopY + SPACE * 0.05;
+  return {
+    stemTopX,
+    stemTopY,
+    stemBotX: stemTopX - STEM_ANGLE_X,
+    stemBotY: Y_CENTER + SPACE * 1.0 + (hookCount - 1) * SPACE * 0.65,
+    topHookBallCenterY: hookBallCenterY(topHookY),
+  };
+}
+
+function hookBallCenterY(hookY: number): number {
+  return hookY + SPACE * 0.5 - SPACE * 0.25 * 0.7;
+}
+
 function createHookedRest(duration: HookDurationType): SVGGElement {
   const hookCount = hookCountMap[duration];
   const group = document.createElementNS(SVG_NS, 'g');
 
-  // Stem: angled line, top-right to bottom-left, grows longer with more hooks
-  const stemTopX = X_CENTER + 40;
-  const stemTopY = Y_CENTER - SPACE * 0.5 - (hookCount - 1) * SPACE * 0.5;
-  const stemBotX = stemTopX - STEM_ANGLE_X;
-  const stemBotY = Y_CENTER + SPACE * 1.0 + (hookCount - 1) * SPACE * 0.65;
+  const { stemTopX, stemTopY, stemBotX, stemBotY } =
+    hookedRestGeometry(hookCount);
 
   const stem = document.createElementNS(SVG_NS, 'line');
   stem.setAttribute('x1', stemTopX.toString());

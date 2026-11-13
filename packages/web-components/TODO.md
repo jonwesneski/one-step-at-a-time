@@ -179,9 +179,9 @@ These alter the rhythmic length of a note.
 
 |          | Name             | Notation            | Description                          |
 | -------- | ---------------- | ------------------- | ------------------------------------ |
-| &#x2610; | Dot              | `.` after note      | Adds 50% of note's value             |
-| &#x2610; | Double Dot       | `..` after note     | Adds 75% of note's value             |
-| &#x2610; | Triple Dot       | `...` after note    | Adds 87.5% of note's value           |
+| &#x2611; | Dot              | `.` after note      | Adds 50% of note's value             |
+| &#x2611; | Double Dot       | `..` after note     | Adds 75% of note's value             |
+| &#x2611; | Triple Dot       | `...` after note    | Adds 87.5% of note's value           |
 | &#x2611; | Tie              | Curved line         | Extends note across a barline        |
 | &#x2611; | Tuplet / Triplet | Bracket with number | Groups of notes in irregular rhythms |
 | &#x2611; | Fermata          | `ð„`                | Hold the note longer than written    |

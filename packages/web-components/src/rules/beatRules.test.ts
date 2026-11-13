@@ -35,6 +35,25 @@ describe('durationContribution', () => {
     );
   });
 
+  it('lengthens a dotted value by half and a double-dotted one by three quarters', () => {
+    const dotted = makeNote({ note: 'C', duration: 'dotted-quarter' });
+    const doubleDotted = makeNote({
+      note: 'C',
+      duration: 'double-dotted-half',
+    });
+    expect(durationContribution(dotted, 0, new Map())).toBeCloseTo(0.375);
+    expect(durationContribution(doubleDotted, 0, new Map())).toBeCloseTo(0.875);
+  });
+
+  it('scales a dotted tupleted entry by its ratio', () => {
+    const note = makeNote({ note: 'C', duration: 'dotted-eighth' });
+    const tuplet = makeTuplet('3');
+    const tupletsByIndex = new Map([[0, [tuplet]]]);
+    expect(durationContribution(note, 0, tupletsByIndex)).toBeCloseTo(
+      0.1875 * (2 / 3)
+    );
+  });
+
   it('returns zero for an arpeggio run-note index, regardless of duration', () => {
     const note = makeNote({ note: 'C', duration: 'whole' });
     const runIndices = new Set([0]);

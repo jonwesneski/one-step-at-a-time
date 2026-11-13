@@ -3,7 +3,6 @@ import {
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
-import type { DurationType } from '../types/theory';
 import type { BeamsBuilder } from '../utils';
 import { MUSIC_REST_NODE } from '../utils/consts';
 import {
@@ -22,6 +21,7 @@ import {
 } from '../utils/notationDimensions';
 import { beamedGroupStemUp } from './beamPlacementRules';
 import { getStaffYs } from './staffNoteRules';
+import { isStemlessDuration } from './theoryConsts';
 import type { VoiceDirection } from './voiceRules';
 
 const OFFSET_EPSILON = 1e-9;
@@ -197,7 +197,7 @@ function buildStemUnits(
       indices,
       start: beatOffsets[indices[0]],
       end: beatOffsets[last] + durations[last],
-      stemmed: !isStemless(elements[i].duration),
+      stemmed: !isStemlessDuration(elements[i].duration),
       stemUp:
         forced ??
         unitStemUpFromPitch(
@@ -209,10 +209,6 @@ function buildStemUnits(
   }
 
   return units;
-}
-
-function isStemless(duration: DurationType): boolean {
-  return duration === 'whole' || duration === 'double-whole';
 }
 
 function unitStemUpFromPitch(

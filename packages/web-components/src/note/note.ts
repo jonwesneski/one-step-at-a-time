@@ -100,7 +100,10 @@ import {
   OCTAVES,
   STAFF_TAGS,
 } from '../utils/consts';
-import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+import {
+  NOTE_SVG_WIDTH,
+  noteAugmentationDotLayout,
+} from '../utils/svgCreator/note';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -113,7 +116,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @customElement music-note
    * @attr {Note} note - Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.
    * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
-   * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`.
+   * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`.
    * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
    * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
    * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
@@ -225,6 +228,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #stemExtension = 0;
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
+    #augmentationDotRows: number[] | null = null;
     #noFlags = false;
     #nominalStaffY: number | null = null;
     #lastNoteheadWarning: string | null = null;
@@ -326,6 +330,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#articulationStemAnchorBeamLevels = v;
+      this.#scheduleRender();
+    }
+
+    get augmentationDotRows(): number[] | null {
+      return this.#augmentationDotRows;
+    }
+    set augmentationDotRows(v: number[] | null) {
+      const current = this.#augmentationDotRows;
+      if (
+        v === current ||
+        (v !== null &&
+          current !== null &&
+          v.length === current.length &&
+          v.every((row, i) => row === current[i]))
+      ) {
+        return;
+      }
+      this.#augmentationDotRows = v;
       this.#scheduleRender();
     }
 
@@ -565,6 +587,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // See noteHeadLeftOverhangPx.
     get headLeftOverhangPx(): number {
       return noteHeadLeftOverhangPx(this.stemUp, this.duration, this.notehead);
+    }
+
+    get augmentationDotsRightEdgePx(): number | null {
+      return (
+        noteAugmentationDotLayout({
+          duration: this.duration,
+          stemUp: this.stemUp,
+          noFlags: this.#noFlags,
+          noStem: this.#noStem,
+          notehead: this.notehead,
+          stemExtension: this.#stemExtension,
+          tailRoomStemExtension: this.#stemExtension,
+          staffY: this.#staffY,
+          rowStaffYs: this.#augmentationDotRows,
+        })?.rightEdgeX ?? null
+      );
     }
 
     // Author override for stemUp, independent of pitch. null = today's
@@ -1239,8 +1277,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-note' ||
         name === 'trill-finish' ||
         name === 'trill-finish-octave' ||
-        name === 'trill-finish-slur'
+        name === 'trill-finish-slur' ||
+        name === 'duration'
       ) {
+        // `duration` moves every later entry (beat time) and its dots widen
+        // the rightward footprint.
         // arpeggio/grace changes the element's leftward footprint, and
         // trill-note/trill-finish the rightward one, the same way: the staff
         // re-runs its layout pass on NOTE_Y_CHANGE, and standalone we
@@ -1350,6 +1391,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         trillSignExtraLift: this.#trillSignExtraLift,
         articulationStemAnchorBeamLevels:
           this.#articulationStemAnchorBeamLevels,
+        augmentationDotRows: this.#augmentationDotRows,
       });
 
       if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
@@ -1535,7 +1577,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         trillFinishSlur: this.trillFinishSlur,
         mainHeadCenterXPx: cx * NOTE_SCALE,
         mainHeadCenterYPx: cy * NOTE_SCALE,
-        anchorLeftXPx: NOTE_SVG_WIDTH + GRACE_MAIN_GAP_PX,
+        anchorLeftXPx:
+          Math.max(NOTE_SVG_WIDTH, this.augmentationDotsRightEdgePx ?? 0) +
+          GRACE_MAIN_GAP_PX,
         mainStaffY: this.#staffY,
       });
       noteSvg.setAttribute('overflow', 'visible');

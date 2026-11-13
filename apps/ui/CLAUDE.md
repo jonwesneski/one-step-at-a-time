@@ -292,8 +292,9 @@ test.
   (`rewrite: boolean`) — one `record()` per change.
 - **Rebar** (`rebarHelpers.ts`) is the reflow for `rewrite: true`: per staff index, it
   concatenates the region's entry stream and re-slices it to the new capacity,
-  splitting barline-crossing notes into **tie chains** (`durationHelpers.ts`
-  `decomposeToDurations` — no dotted durations in the model), moving tuplet runs
+  splitting barline-crossing notes into the fewest durations (`durationHelpers.ts`
+  `decomposeToDurations` — a single dotted value where one fits, else a **tie
+  chain**), moving tuplet runs
   whole, minting/dropping measures, and re-anchoring ties. The region's final
   measure may be left under-full (no rest padding). Because it mints new
   measure/staff ids, the mutator clears the selection afterward.

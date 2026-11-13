@@ -144,6 +144,46 @@ export const MIN_NOTE_WIDTH = STAFF_LINE_SPACING * 2;
  */
 export const VOICE_REST_DISPLACEMENT_PX = STAFF_LINE_SPACING;
 
+// ─── Augmentation dots ───────────────────────────────────────────────────────
+
+/**
+ * Diameter (px) of a duration dot.
+ * = 0.4 × STAFF_LINE_SPACING, the engraving font's dot; about 1.7× a staccato dot.
+ */
+export const AUGMENTATION_DOT_DIAMETER_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) from a notehead's right edge to its first dot.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_NOTEHEAD_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Ink gap (px) between consecutive dots of a double or triple dot.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_SPACING_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Gap (px) from an up-stem tail's right edge to a dot moved clear of it.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_TAIL_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Vertical clearance (px) a dot keeps from an up-stem tail's lowest ink before
+ * it must move right of the tail.
+ * = 0.15 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_TAIL_CLEARANCE_PX = STAFF_LINE_SPACING * 0.15;
+
+/**
+ * Clearance (px) between crossed voices: an up-stem part's stem and the
+ * down-stem part's head or dots it passes.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const CROSSED_VOICE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.25;
+
 // ─── Beams ────────────────────────────────────────────────────────────────────
 
 /**

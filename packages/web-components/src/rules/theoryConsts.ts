@@ -1,4 +1,11 @@
-import { ChordType, DurationType, Note } from '../types/theory';
+import {
+  BaseDurationType,
+  ChordType,
+  DotCount,
+  DurationType,
+  Note,
+} from '../types/theory';
+import { BASE_DURATIONS, DOT_PREFIXES, DURATIONS } from '../utils/consts';
 
 // Minor key → its relative major. Used both for accidental key-signature
 // lookup and for deriving minor key-signature Y-coordinate tables from a
@@ -21,13 +28,47 @@ export const MINOR_TO_RELATIVE_MAJOR: Partial<Record<string, string>> = {
   Ab: 'Cb',
 };
 
-export const durationToFlagCountMap = new Map<DurationType, number>([
-  ['eighth', 1],
-  ['sixteenth', 2],
-  ['thirtysecond', 3],
-  ['sixtyfourth', 4],
-  ['hundredtwentyeighth', 5],
-]);
+/** Each duration's undotted base value (`dotted-eighth` → `eighth`). */
+export const durationToBase = Object.fromEntries(
+  BASE_DURATIONS.flatMap((base) =>
+    DOT_PREFIXES.map((prefix) => [`${prefix}${base}`, base])
+  )
+) as Record<DurationType, BaseDurationType>;
+
+/** Each duration's augmentation-dot count (`double-dotted-half` → 2). */
+export const durationToDotCount = Object.fromEntries(
+  BASE_DURATIONS.flatMap((base) =>
+    DOT_PREFIXES.map((prefix, dots) => [`${prefix}${base}`, dots])
+  )
+) as Record<DurationType, DotCount>;
+
+/** Half and longer: drawn with an open (unfilled) notehead. */
+export const isOpenDuration = (duration: DurationType): boolean => {
+  const base = durationToBase[duration];
+  return base === 'half' || base === 'whole' || base === 'double-whole';
+};
+
+/** Whole and longer: drawn with no stem. */
+export const isStemlessDuration = (duration: DurationType): boolean => {
+  const base = durationToBase[duration];
+  return base === 'whole' || base === 'double-whole';
+};
+
+const baseFlagCounts: Partial<Record<BaseDurationType, number>> = {
+  eighth: 1,
+  sixteenth: 2,
+  thirtysecond: 3,
+  sixtyfourth: 4,
+  hundredtwentyeighth: 5,
+};
+
+/** Flag (tail/beam) count by duration; dots never change it. */
+export const durationToFlagCountMap = new Map<DurationType, number>(
+  DURATIONS.flatMap((duration) => {
+    const count = baseFlagCounts[durationToBase[duration]];
+    return count === undefined ? [] : [[duration, count] as const];
+  })
+);
 
 export const noteSemitoneMap: Map<Note, number> = new Map();
 noteSemitoneMap.set('A', 0);
@@ -134,20 +175,19 @@ export const ChordSemitoneMapAliases: Record<
 
 /**
  * Relative horizontal space each duration occupies, as a fraction of a whole
- * note (`whole` = 1, `quarter` = 0.25, …). Exported so consumers can reproduce
- * the staff's note spacing.
+ * note (`whole` = 1, `quarter` = 0.25, `dotted-quarter` = 0.375, …). Exported
+ * so consumers can reproduce
+ * the staff's note spacing and bar fit.
  */
-export const durationToFactor: Record<DurationType, number> = {
-  'double-whole': 2,
-  whole: 1,
-  half: 0.5,
-  quarter: 0.25,
-  eighth: 0.125,
-  sixteenth: 0.0625,
-  thirtysecond: 0.03125,
-  sixtyfourth: 0.015625,
-  hundredtwentyeighth: 0.0078125,
-} as const;
+export const durationToFactor = Object.fromEntries(
+  DURATIONS.map((duration) => {
+    const baseFactor =
+      2 ** (1 - BASE_DURATIONS.indexOf(durationToBase[duration]));
+    // Each dot adds half the previous value: base × (2 − 2^−dots).
+    const factor = baseFactor * (2 - 2 ** -durationToDotCount[duration]);
+    return [duration, factor];
+  })
+) as Record<DurationType, number>;
 
 export const factorToDuration: Map<number, DurationType> = new Map(
   (Object.entries(durationToFactor) as [DurationType, number][]).map(
