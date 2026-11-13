@@ -110,6 +110,7 @@ class BeamGroupRenderer {
     primaryTopAtLast: 0,
     levelOffset: 0,
   };
+  #hasFittingPlacement = false;
   #placementFirstX = 0;
   #placementLastX = 0;
   readonly svgGroup: SVGGElement;
@@ -160,18 +161,29 @@ class BeamGroupRenderer {
       primaryTopAtLast: placement.primaryTopAtLast + staffYToContainerY,
       levelOffset: placement.levelOffset,
     });
+    const obstacles = this.#obstacles.map((obstacle) => ({
+      ...obstacle,
+      top: obstacle.top - staffYToContainerY,
+      bottom: obstacle.bottom - staffYToContainerY,
+    }));
     if (this.#isKneed()) {
-      this.#placement = toContainer(
-        resolveKneedBeamPlacement(
-          this.#notes.map((note, i) => ({
-            x: xs[i],
-            highestHeadY: note.highestHeadStaffY,
-            lowestHeadY: note.lowestHeadStaffY,
-            beamCount: note.beamCount,
-          })),
-          this.#notes.map((note) => note.stemUp)
-        ).placement
+      const { placement, fits } = resolveKneedBeamPlacement(
+        this.#notes.map((note, i) => ({
+          x: xs[i],
+          highestHeadY: note.highestHeadStaffY,
+          lowestHeadY: note.lowestHeadStaffY,
+          beamCount: note.beamCount,
+        })),
+        this.#notes.map((note) => note.stemUp),
+        { obstacles }
       );
+      // A knee is only chosen when it fits at any spacing and spans no clef
+      // change (rules/beamRules.ts), so this always fits; should it not, the
+      // last fitting beam stays, stretched to the new stem positions.
+      if (fits || !this.#hasFittingPlacement) {
+        this.#placement = toContainer(placement);
+        this.#hasFittingPlacement = fits;
+      }
     } else {
       const stemUp = this.#notes[0].stemUp;
       this.#placement = toContainer(
@@ -184,13 +196,10 @@ class BeamGroupRenderer {
             beamCount: note.beamCount,
           })),
           stemUp,
-          obstacles: this.#obstacles.map((obstacle) => ({
-            ...obstacle,
-            top: obstacle.top - staffYToContainerY,
-            bottom: obstacle.bottom - staffYToContainerY,
-          })),
+          obstacles,
         })
       );
+      this.#hasFittingPlacement = true;
     }
     this.#placementFirstX = xs[0];
     this.#placementLastX = xs[last];
@@ -243,16 +252,22 @@ class BeamGroupRenderer {
   }
 
   /**
-   * The beam edge this note's stem ends at. Null if the note is not in this
-   * group. Consumers that need to sit clear of the beam (the tuplet numeral /
-   * bracket) read this rather than re-deriving it from staff coords.
+   * The outer edge, on the `above` side, of the whole beam stack at this
+   * note's stem. Null if the note is not in this group. Consumers that need to
+   * sit clear of the beams (the tuplet numeral / bracket) read this rather
+   * than re-deriving it from staff coords.
    */
-  primaryBeamYForIndex(globalIndex: number): number | null {
+  beamStackEdgeYForIndex(globalIndex: number, above: boolean): number | null {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
     if (localIndex === -1) {
       return null;
     }
-    return this.#stemEndEdgeY(localIndex);
+    const top = this.#primaryTopAt(this.#stemXs()[localIndex]);
+    const maxBeamCount = Math.max(...this.#notes.map((note) => note.beamCount));
+    const deepestLevelOffset = (maxBeamCount - 1) * this.#placement.levelOffset;
+    return above
+      ? top + Math.min(0, deepestLevelOffset)
+      : top + BEAM_THICKNESS_PX + Math.max(0, deepestLevelOffset);
   }
 
   setX(globalIndex: number, x: number): void {
@@ -444,13 +459,15 @@ class BeamRenderer {
   }
 
   /**
-   * The primary-beam Y at the note's stem, or null if the note is not beamed.
-   * Valid after spaceAll() (uses true-X interpolation and the final offset).
+   * The outer edge, on the `above` side, of the beam stack at the note's stem,
+   * or null if the note is not beamed. Valid after spaceAll() (uses the true x).
    */
-  primaryBeamYForIndex(noteIndex: number): number | null {
+  beamStackEdgeYForIndex(noteIndex: number, above: boolean): number | null {
     for (const renderer of this.#groupRenderers) {
-      const y = renderer.primaryBeamYForIndex(noteIndex);
-      if (y !== null) return y;
+      const y = renderer.beamStackEdgeYForIndex(noteIndex, above);
+      if (y !== null) {
+        return y;
+      }
     }
     return null;
   }

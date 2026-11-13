@@ -304,6 +304,29 @@ export const ClefChangeInGroup: Story = {
   `,
 };
 
+// A clef change applies to every voice from where it is written: the lower
+// voice's first two notes keep the bass clef, and its beam keeps clear of the
+// new clef.
+export const ClefChangeInGroupTwoVoices: Story = {
+  render: () => html`
+    <music-staff clef="bass" key-sig="C" mode="major" time="2/4">
+      <music-voice>
+        <music-note note="C" octave="4" duration="eighth"></music-note>
+        <music-clef clef="treble"></music-clef>
+        <music-note note="C" octave="5" duration="eighth"></music-note>
+        <music-note note="D" octave="5" duration="quarter"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="E" octave="3" duration="sixteenth"></music-note>
+        <music-note note="F" octave="3" duration="sixteenth"></music-note>
+        <music-note note="C" octave="4" duration="sixteenth"></music-note>
+        <music-note note="B" octave="3" duration="sixteenth"></music-note>
+        <music-rest duration="quarter"></music-rest>
+      </music-voice>
+    </music-staff>
+  `,
+};
+
 // A very wide interval takes a beam between the noteheads with stems both
 // ways, when no stem gets shorter than 2½ spaces and the outer lines stay
 // clear; a narrower one (last group) keeps a one-direction beam.

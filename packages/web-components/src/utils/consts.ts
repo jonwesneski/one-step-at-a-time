@@ -109,6 +109,7 @@ export const STAFF_EVENTS = {
   STAFF_MIN_WIDTH: 'staff-min-width',
   GROUP_ATTRIBUTE_CHANGE: 'staff-group-attribute-change',
   LABEL_ATTRIBUTE_CHANGE: 'staff-label-attribute-change',
+  TAB_LINK_ATTRIBUTE_CHANGE: 'staff-tab-link-attribute-change',
   VERTICAL_SPACE_CHANGE: 'staff-vertical-space-change',
 } as const;
 

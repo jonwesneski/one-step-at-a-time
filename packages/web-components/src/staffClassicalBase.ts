@@ -9,8 +9,15 @@ import {
 } from './rules/arpeggioRules';
 import type { BeamObstacle } from './rules/beamPlacementRules';
 import { buildBeamsRenderer } from './rules/beamRules';
-import { computeBeatOffsets } from './rules/beatRules';
+import { computeBeatOffsets, durationContribution } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
+import {
+  activeClefChangeIndex,
+  CLEF_BEAT_EPSILON,
+  clefChangeBeat,
+  clefChangesReached,
+  mergeClefChangeBeats,
+} from './rules/clefChangeRules';
 import { getClefRenderData } from './rules/clefRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
@@ -527,6 +534,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       'group',
       'group-id',
       'label',
+      'part',
     ];
   }
 
@@ -535,6 +543,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
   #describeEndX = 0;
+  #ownDescribeEndX = 0;
   #currentStrutInputs: StaffStrutInputs | null = null;
   #showDescribe = true;
   #clefChangeAtBoundary = false;
@@ -566,6 +575,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // public noteToYCoordinate()'s `elementIndex` argument (always meaning
   // "index into voice 1") converts into as well.
   #voice1BeatOffsets: number[] = [];
+  // Where each of voice 1's entries ends, from the same pass: a clef change
+  // takes effect at the end of the entry it follows (#clefMarkerBeatOffset).
+  #voice1BeatEnds: number[] = [];
   // Every voice's elements' beat-offsets from the same pass — see
   // beatOffsetOf().
   #beatOffsetByElement = new Map<Element, number>();
@@ -1359,6 +1371,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       return;
     }
 
+    if (name === 'part') {
+      this.dispatchTabLinkAttributeChange();
+      return;
+    }
+
     if (name === COMMON_ATTRIBUTES.TIME) {
       this.effectiveTimeSig = this.convertTotimeInts(
         this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
@@ -1745,7 +1762,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       voiceKey === 'combined' ? beatOffsets : undefined,
       stemDirectionsOverride,
       externallyBeamedIndices,
-      combinedStemOverrides
+      combinedStemOverrides,
+      this.#clefMarkers.map((marker) => this.#clefMarkerBeatOffset(marker))
     );
     // Beamed lengths come from the beam line and cross-staff ones from the
     // ancestor <music-measure>, so only unbeamed stems take their rule length.
@@ -1974,6 +1992,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const voice1 = pass1ByVoice.get(1);
     const allowedElementCount = voice1?.elements.length ?? 0;
     this.#voice1BeatOffsets = voice1?.beatOffsets ?? [];
+    const voice1ArpeggioRunIndices = new Set<number>(
+      voice1?.arpeggioGroups.flatMap((group) => group.runIndices) ?? []
+    );
+    this.#voice1BeatEnds = (voice1?.elements ?? []).map(
+      (element, i) =>
+        this.#voice1BeatOffsets[i] +
+        durationContribution(
+          element,
+          i,
+          voice1?.tupletsByIndex ?? new Map(),
+          voice1ArpeggioRunIndices
+        )
+    );
     const survivingClefMarkers: ClefMarkerPlacement[] = [];
     for (const marker of this.#clefMarkers) {
       if (marker.afterElementIndex < allowedElementCount) {
@@ -2255,9 +2286,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
       }
       const clefMarkerWidth =
-        !isMultiVoice || voiceKey === 1
-          ? this.#clefMarkers.length * CLEF_CHANGE_RESERVED_WIDTH_PX
-          : 0;
+        mergeClefChangeBeats(
+          this.ownClefChangeBeats,
+          this.measureClefChangeBeats
+        ).length * CLEF_CHANGE_RESERVED_WIDTH_PX;
       const noteCount = state.elements.length;
       const minWidth = calculateStaffMinWidth(
         this.#describeEndX,
@@ -2347,7 +2379,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   // Finds the clef marker active at `beatOffset` (whole-note-fraction, the
   // shared coordinate space every voice's positions already align on) — the
-  // latest marker whose own beat-offset is strictly less than it — or null if
+  // latest marker taking effect at or before it — or null if
   // segment 0 (the staff's own clef, via the abstract yCoordinates/octaves
   // getters) applies. Always null for staves with no <music-clef> markers
   // (e.g. StaffVocalElement), which is exactly what keeps this a no-op for
@@ -2355,30 +2387,34 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // for every voice on a multi-voice staff, not just voice 1 — see
   // #clefMarkers' own doc comment for how a marker's index converts here.
   #activeClefAt(beatOffset: number): ClefType | null {
-    let active: ClefMarkerPlacement | null = null;
-    let activeBeatOffset = -Infinity;
-    for (const marker of this.#clefMarkers) {
-      const markerBeatOffset = this.#clefMarkerBeatOffset(marker);
-      if (
-        markerBeatOffset < beatOffset &&
-        markerBeatOffset > activeBeatOffset
-      ) {
-        active = marker;
-        activeBeatOffset = markerBeatOffset;
-      }
-    }
-    return active ? active.element.clef : null;
+    const active = activeClefChangeIndex(
+      this.#clefMarkers.map((marker) => this.#clefMarkerBeatOffset(marker)),
+      beatOffset
+    );
+    return active === -1 ? null : this.#clefMarkers[active].element.clef;
   }
 
   // #clefMarkers stores each marker's `afterElementIndex` relative to voice
   // 1's own flat array (see ClefMarkerPlacement's doc comment) — converts
-  // that into the shared beat-offset coordinate space via #voice1BeatOffsets
+  // that into the shared beat-offset coordinate space via #voice1BeatEnds
   // (populated once per #renderNotes() pass), so #activeClefAt can compare it
   // against any voice's own beat-offset, not just voice 1's index.
+  override get ownClefChangeBeats(): readonly number[] {
+    return this.#clefMarkers.map((marker) =>
+      this.#clefMarkerBeatOffset(marker)
+    );
+  }
+
+  override get ownNotesStartX(): number {
+    return this.#ownDescribeEndX;
+  }
+
+  protected override onMeasureLayoutChange(): void {
+    this.#renderNotes();
+  }
+
   #clefMarkerBeatOffset(marker: ClefMarkerPlacement): number {
-    return marker.afterElementIndex === -1
-      ? -1
-      : this.#voice1BeatOffsets[marker.afterElementIndex] ?? -1;
+    return clefChangeBeat(marker.afterElementIndex, this.#voice1BeatEnds);
   }
 
   #renderDataForBeatOffset(beatOffset: number): {
@@ -2597,6 +2633,138 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
   }
 
+  // An entry's x (wrapper px) from its beat alone: its share of the width
+  // left after the leading gap and every clef change's reserved room, shifted
+  // past each clef change it comes after. Every voice uses the same formula,
+  // so entries on the same beat line up across voices.
+  #proportionalEntryX(
+    state: VoiceRenderState,
+    clefChangeBeats: readonly number[],
+    remainingWidth: number,
+    measureCapacity: number
+  ): (i: number) => number {
+    const measureOffsets = computeMeasureProportionalOffsets(
+      state.beatOffsets,
+      measureCapacity,
+      remainingWidth -
+        LEADING_NOTE_GAP_PX -
+        clefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX
+    );
+    return (i) =>
+      this.#describeEndX +
+      LEADING_NOTE_GAP_PX +
+      clefChangesReached(clefChangeBeats, state.beatOffsets[i]) *
+        CLEF_CHANGE_RESERVED_WIDTH_PX +
+      measureOffsets[i];
+  }
+
+  // Each entry's x (wrapper px) and leftward extent, floored against the entry
+  // before it and kept clear of every clef change whose slot is known
+  // (`clefSlotLefts` may cover only the earlier changes). Stops before
+  // `endBeat`. Reads layout state only, so clef slots can be resolved from it
+  // before anything is placed.
+  #layoutVoiceEntries(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    clefChangeBeats: readonly number[],
+    clefSlotLefts: readonly number[],
+    proportionalX: (i: number) => number,
+    endBeat = Number.POSITIVE_INFINITY
+  ): { x: number; leftwardWidth: number; rightEdge: number }[] {
+    const placements: {
+      x: number;
+      leftwardWidth: number;
+      rightEdge: number;
+    }[] = [];
+    let previousNoteX: number | null = null;
+    let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
+    let changesPassed = 0;
+    for (let i = 0; i < state.elements.length; i++) {
+      const beat = state.beatOffsets[i];
+      if (beat >= endBeat - CLEF_BEAT_EPSILON) {
+        break;
+      }
+      let clefRight: number | null = null;
+      while (
+        changesPassed < clefSlotLefts.length &&
+        clefChangeBeats[changesPassed] <= beat + CLEF_BEAT_EPSILON
+      ) {
+        clefRight =
+          clefSlotLefts[changesPassed] + CLEF_CHANGE_RESERVED_WIDTH_PX;
+        previousRightEdge = Math.max(previousRightEdge, clefRight);
+        changesPassed++;
+      }
+
+      let x = proportionalX(i);
+      // Collision floor: the proportional position has no built-in minimum
+      // gap, so enforce one against the *previous* entry alone — never
+      // looking ahead, so appending a new entry never moves a placed one.
+      if (previousNoteX !== null) {
+        x = Math.max(
+          x,
+          previousNoteX + MIN_NOTE_WIDTH + this.#tailFollowerRoom(state, i)
+        );
+      }
+      // Everything drawn left of this entry (see #entryLeftwardExtent, the
+      // single source of truth) must not cross into the describe area.
+      const leftwardWidth = this.#entryLeftwardExtent(state.elements[i]);
+      if (leftwardWidth > 0) {
+        x = Math.max(
+          x,
+          this.#describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
+        );
+      }
+      x = computeInterNoteSpacing(x, leftwardWidth, previousRightEdge);
+      // A rightward-reserving decoration on the previous entry (a written
+      // trilling notehead, a trill's finishing grace notes) reserves room
+      // whether or not this entry has leftward decorations of its own.
+      if (i > 0 && this.#rightwardFootprint(voiceKey, i - 1) > 0) {
+        x = Math.max(x, previousRightEdge);
+      }
+      if (clefRight !== null) {
+        x = Math.max(x, clefRight + leftwardWidth);
+      }
+
+      const rightEdge =
+        x + NOTE_SVG_WIDTH + this.#rightwardFootprint(voiceKey, i);
+      placements.push({ x, leftwardWidth, rightEdge });
+      previousNoteX = x;
+      previousRightEdge = rightEdge;
+    }
+    return placements;
+  }
+
+  // Left edge (wrapper px) of each clef change's glyph, in #clefMarkers order:
+  // right after the last entry, in any voice, that starts before the change.
+  #resolveClefChangeSlots(
+    clefChangeBeats: readonly number[],
+    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>
+  ): number[] {
+    const slotLefts: number[] = [];
+    for (const changeBeat of clefChangeBeats) {
+      let left = this.#describeEndX + LEADING_NOTE_GAP_PX;
+      for (const [voiceKey, proportionalX] of proportionalXByVoice) {
+        const state = this.#voiceRenderStates.get(voiceKey);
+        if (!state) {
+          continue;
+        }
+        const before = this.#layoutVoiceEntries(
+          voiceKey,
+          state,
+          clefChangeBeats,
+          slotLefts,
+          proportionalX,
+          changeBeat
+        );
+        if (before.length > 0) {
+          left = Math.max(left, before[before.length - 1].rightEdge);
+        }
+      }
+      slotLefts.push(left);
+    }
+    return slotLefts;
+  }
+
   // The box a mid-stream clef glyph covers, in beams-container px: measured
   // from the glyph when laid out, otherwise the clef's whole drawing box.
   #clefBeamObstacle(
@@ -2757,11 +2925,17 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     if (typeof this.#describeContainer.getBBox === 'function') {
       const describeBBox = this.#describeContainer.getBBox();
-      this.#describeEndX = Math.round(describeBBox.x + describeBBox.width);
+      this.#ownDescribeEndX = Math.round(describeBBox.x + describeBBox.width);
     } else {
       const describeRect = this.#describeContainer.getBoundingClientRect();
-      this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
+      this.#ownDescribeEndX = Math.round(
+        describeRect.right - transcribeRect.left
+      );
     }
+    this.#describeEndX = Math.max(
+      this.#ownDescribeEndX,
+      this.measureNotesStartX
+    );
     const remainingWidth = transcribeRect.width - this.#describeEndX;
 
     // Estimate above/below-staff budget using stem directions and staff-referenced
@@ -2817,6 +2991,43 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       placements: VoiceNoteheadPlacement[];
     }[] = [];
 
+    // Clef changes are staff-wide: every voice makes room for each glyph, and
+    // every voice's beams keep clear of it.
+    const clefChangeBeats = this.#clefMarkers.map((marker) =>
+      this.#clefMarkerBeatOffset(marker)
+    );
+    // Every staff in the measure makes room for each other's clef changes too,
+    // so same-beat entries stay aligned across staves.
+    const layoutChangeBeats = mergeClefChangeBeats(
+      clefChangeBeats,
+      this.measureClefChangeBeats
+    );
+    const proportionalXByVoice = new Map<VoiceKey, (i: number) => number>();
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      if (voiceKey !== 'shared-rest') {
+        proportionalXByVoice.set(
+          voiceKey,
+          this.#proportionalEntryX(
+            state,
+            layoutChangeBeats,
+            remainingWidth,
+            measureCapacity
+          )
+        );
+      }
+    }
+    const clefSlotLefts = this.#resolveClefChangeSlots(
+      clefChangeBeats,
+      proportionalXByVoice
+    );
+    const clefObstacles: BeamObstacle[] = this.#clefMarkers.map((marker, k) => {
+      marker.element.style.position = 'absolute';
+      marker.element.style.left = `${clefSlotLefts[k]}px`;
+      marker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
+      marker.element.style.display = '';
+      return this.#clefBeamObstacle(marker, clefSlotLefts[k]);
+    });
+
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       state.noteXPositions.clear();
       state.firstGraceHeadXPositions.clear();
@@ -2857,96 +3068,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // is always already correct and does not need recomputing here.
       const beatOffsets = state.beatOffsets;
 
-      // Clef markers are staff-wide and only meaningful for voice 1 in the
-      // single-voice case (see #renderNotes' clef-marker handling).
-      const isVoiceOneOrSingle = !isMultiVoice || voiceKey === 1;
-      const clefMarkerCount = isVoiceOneOrSingle ? this.#clefMarkers.length : 0;
-      const proportionalWidth =
-        remainingWidth -
-        LEADING_NOTE_GAP_PX -
-        clefMarkerCount * CLEF_CHANGE_RESERVED_WIDTH_PX;
-      const measureOffsets = computeMeasureProportionalOffsets(
-        beatOffsets,
-        measureCapacity,
-        proportionalWidth
+      const placements = this.#layoutVoiceEntries(
+        voiceKey,
+        state,
+        clefChangeBeats,
+        clefSlotLefts,
+        proportionalXByVoice.get(voiceKey) ?? (() => this.#describeEndX)
       );
-
-      const clefMarkersByAfterIndex = isVoiceOneOrSingle
-        ? new Map(
-            this.#clefMarkers.map((marker) => [
-              marker.afterElementIndex,
-              marker,
-            ])
-          )
-        : new Map<number, ClefMarkerPlacement>();
-
-      let clefMarkerReservedWidth = 0;
-      let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
-      let previousNoteX: number | null = null;
-
-      // A marker before the first note/chord/rest (afterElementIndex === -1)
-      // is positioned here, ahead of the loop, since there's no element index
-      // to key off inside it.
-      const clefObstacles: BeamObstacle[] = [];
-      const leadingClefMarker = clefMarkersByAfterIndex.get(-1);
-      if (leadingClefMarker) {
-        leadingClefMarker.element.style.position = 'absolute';
-        leadingClefMarker.element.style.left = `${previousRightEdge}px`;
-        leadingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
-        leadingClefMarker.element.style.display = '';
-        previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-        clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
-      }
 
       for (let i = 0; i < state.elements.length; i++) {
         const element = state.elements[i];
         const duration = element.duration as DurationType;
-        const xOffsetInNotesSpace =
-          LEADING_NOTE_GAP_PX + clefMarkerReservedWidth + measureOffsets[i];
-
-        // Position the light DOM element via inline styles
-        let xInWrapper = this.#describeEndX + xOffsetInNotesSpace;
-
-        // Collision floor: the proportional position above has no built-in
-        // minimum gap (unlike a per-entry strut), so enforce one against the
-        // *previous* entry alone — never looking ahead, so appending a new
-        // entry can never move an already-placed one.
-        if (previousNoteX !== null) {
-          xInWrapper = Math.max(
-            xInWrapper,
-            previousNoteX + MIN_NOTE_WIDTH + this.#tailFollowerRoom(state, i)
-          );
-        }
-
-        // Everything drawn left of this entry — accidental / grace / arpeggio sign
-        // + dynamic-change hairpin / cross-staff span footprint (see
-        // #entryLeftwardExtent, the single source of truth).
-        const leftwardWidth = this.#entryLeftwardExtent(element);
-
-        // Barline constraint: the overhang must not cross into the describe area
-        if (leftwardWidth > 0) {
-          xInWrapper = Math.max(
-            xInWrapper,
-            this.#describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
-          );
-        }
-
-        xInWrapper = computeInterNoteSpacing(
-          xInWrapper,
-          leftwardWidth,
-          previousRightEdge
-        );
-
-        // A rightward-reserving decoration (a written trilling notehead, a
-        // trill's finishing grace note(s), or both) on the previous entry
-        // reserves real space regardless of whether *this* entry has any
-        // leftward decorations of its own — computeInterNoteSpacing only
-        // enforces previousRightEdge when leftwardWidth is positive (the
-        // leftward-only case every other decoration in this codebase
-        // reserves), so apply it unconditionally here for that case.
-        if (i > 0 && this.#rightwardFootprint(voiceKey, i - 1) > 0) {
-          xInWrapper = Math.max(xInWrapper, previousRightEdge);
-        }
+        const { x: xInWrapper, leftwardWidth } = placements[i];
 
         // Notify beam renderer of final position after any accidental shift, so beam
         // endpoints stay in sync with the DOM positions of the chord elements.
@@ -2978,9 +3111,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
         element.style.position = 'absolute';
         element.style.left = `${xInWrapper}px`;
-        previousNoteX = xInWrapper;
-        previousRightEdge =
-          xInWrapper + NOTE_SVG_WIDTH + this.#rightwardFootprint(voiceKey, i);
 
         if (element.nodeName === MUSIC_REST_NODE) {
           if (!state.externallyPositionedRestIndices.has(i)) {
@@ -3010,22 +3140,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         } else {
           // Chord y-positioning is handled internally by the chord's own SVG rendering
           element.style.top = '0px';
-        }
-
-        // A marker following this element (afterElementIndex === i) is
-        // zero-duration — it does not consume spacing slack — but does reserve
-        // horizontal space, same as MIN_NOTE_WIDTH does for a real note.
-        const trailingClefMarker = clefMarkersByAfterIndex.get(i);
-        if (trailingClefMarker) {
-          trailingClefMarker.element.style.position = 'absolute';
-          trailingClefMarker.element.style.left = `${previousRightEdge}px`;
-          trailingClefMarker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
-          trailingClefMarker.element.style.display = '';
-          clefObstacles.push(
-            this.#clefBeamObstacle(trailingClefMarker, previousRightEdge)
-          );
-          previousRightEdge += CLEF_CHANGE_RESERVED_WIDTH_PX;
-          clefMarkerReservedWidth += CLEF_CHANGE_RESERVED_WIDTH_PX;
         }
 
         // Collect this notehead's placement for the cross-voice collision
@@ -3059,8 +3173,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           });
         }
       }
+    }
 
-      // A beam spanning a clef change keeps clear of the clef glyph.
+    for (const state of this.#voiceRenderStates.values()) {
       state.beamRenderer?.setObstacles(clefObstacles);
       state.beamRenderer?.spaceAll();
     }
@@ -3148,10 +3263,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // why the stored value is a delta, not an absolute Y) — else this
       // staff's own same-staff beam, else null (plain staff-coord fallback,
       // inside computeTupletBracketGeometry itself).
-      const tupletBeamYForIndex = (i: number): number | null => {
+      const tupletBeamYForIndex = (
+        i: number,
+        above: boolean
+      ): number | null => {
         const delta = this.#crossStaffTupletBeamY?.get(state.elements[i]);
         if (delta === undefined) {
-          return state.beamRenderer?.primaryBeamYForIndex(i) ?? null;
+          return state.beamRenderer?.beamStackEdgeYForIndex(i, above) ?? null;
         }
         const natural = naturalStemTipY(
           i,

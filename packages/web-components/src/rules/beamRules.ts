@@ -40,7 +40,10 @@ export function buildBeamsRenderer(
   elementBeatOffsets?: number[],
   stemDirectionsOverride?: boolean[],
   externallyBeamedIndices?: ReadonlySet<number>,
-  crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>
+  crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>,
+  // Where mid-stream clef changes take effect, in the same beat-offset space
+  // as `elements` (a change applies to entries starting at or after it).
+  clefChangeBeatOffsets: readonly number[] = []
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -51,6 +54,8 @@ export function buildBeamsRenderer(
   const elementDurationFactors = elements.map((element, i) =>
     durationContribution(element, i, tupletsByIndex, arpeggioRunIndices)
   );
+  const beatOffsets =
+    elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors);
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
@@ -73,8 +78,7 @@ export function buildBeamsRenderer(
       chordStaffYCoords,
       {
         timeSig,
-        beatOffsets:
-          elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors),
+        beatOffsets,
         durations: elementDurationFactors,
         forcedDirections: crossStaffStemOverrides,
       }
@@ -115,6 +119,8 @@ export function buildBeamsRenderer(
       beamsBuilder,
       headExtents,
       stemDirections,
+      beatOffsets,
+      clefChangeBeatOffsets,
       crossStaffStemOverrides
     );
   }
@@ -164,12 +170,16 @@ function headStaffYExtent(
 
 // A wide-interval group whose one-direction beam would need a very long stem
 // takes a beam between its noteheads instead, with stems both ways, when that
-// fits. Only pitch-driven groups qualify: a forced direction keeps its beam.
+// fits however the notes end up spaced. Only pitch-driven groups qualify: a
+// forced direction keeps its beam, and so does a group a clef change falls
+// inside, since the clef sits in the stave where a kneed beam would run.
 function applyKneedBeams(
   elements: NoteChordOrRestElementType[],
   beamsBuilder: BeamsBuilder,
   headExtents: readonly { highest: number; lowest: number }[],
   stemDirections: boolean[],
+  beatOffsets: readonly number[],
+  clefChangeBeatOffsets: readonly number[],
   forcedDirections?: ReadonlyMap<NoteChordOrRestElementType, boolean>
 ): void {
   const visited = new Set<number>();
@@ -180,6 +190,15 @@ function applyKneedBeams(
     }
     group.forEach((index) => visited.add(index));
     if (group.some((index) => forcedDirections?.has(elements[index]))) {
+      continue;
+    }
+    const firstBeat = beatOffsets[group[0]];
+    const lastBeat = beatOffsets[group[group.length - 1]];
+    if (
+      clefChangeBeatOffsets.some(
+        (clefBeat) => clefBeat > firstBeat && clefBeat <= lastBeat
+      )
+    ) {
       continue;
     }
     const notes = group.map((index, position) => ({
@@ -203,7 +222,10 @@ function applyKneedBeams(
       continue;
     }
     const stemUps = resolveKneedBeamSplit(notes);
-    if (stemUps === null || !resolveKneedBeamPlacement(notes, stemUps).fits) {
+    if (
+      stemUps === null ||
+      !resolveKneedBeamPlacement(notes, stemUps, { anySpacing: true }).fits
+    ) {
       continue;
     }
     group.forEach((index, position) => {

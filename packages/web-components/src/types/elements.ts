@@ -520,6 +520,8 @@ export interface IStaffElementBase {
   groupId: string | null;
   /** Short margin text to the left of the staff (e.g. "r.h."/"l.h."). */
   label: string | null;
+  /** Names the part this staff carries, for a tab staff's `tab-for`. */
+  part: string | null;
   time: TimeSignature;
   readonly staffHeight: number;
   readonly staffLineCount: number;

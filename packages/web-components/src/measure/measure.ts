@@ -6,6 +6,7 @@ import {
   BeamLineDescriptor,
   computeBeamLevelStructure,
 } from '../rules/beamStructureRules';
+import { mergeClefChangeBeats } from '../rules/clefChangeRules';
 import {
   type ObstacleRect,
   sliceConvexPolygon,
@@ -63,6 +64,7 @@ import {
 } from '../rules/sharedStemRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
+import { resolveTabMirrors } from '../rules/tabMirrorRules';
 import {
   durationToFactor,
   durationToFlagCountMap,
@@ -99,6 +101,7 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_REST_NODE,
+  MUSIC_STAFF_GUITAR_TAB_NODE,
   MUSIC_TUPLET,
   MUSIC_VOICE,
   NOTE_EVENTS,
@@ -295,6 +298,77 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     >();
     // Relative to each staff's top line (see applyOctaveContinuationRects).
     #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
+    #boundSyncClefChangeBeats = () => this.#syncClefChangeBeats();
+    #lastTabMirrorWarnings = new Set<string>();
+
+    // Every staff starts its notes after the widest start area in the
+    // measure, so same-beat entries line up from the first beat. Each staff's
+    // own start is measured from its start-area glyphs alone, so the re-render
+    // a new value triggers finds the same maximum and the exchange ends.
+    #syncNotesStartX(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) && 'measureNotesStartX' in child
+      ) as unknown as {
+        ownNotesStartX: number;
+        measureNotesStartX: number;
+      }[];
+      const notesStartX = Math.max(
+        0,
+        ...staves.map((staff) => staff.ownNotesStartX)
+      );
+      staves.forEach((staff) => {
+        staff.measureNotesStartX = notesStartX;
+      });
+    }
+
+    // Every notation staff makes room for every other's mid-bar clef changes,
+    // and so does a tab staff that mirrors one (`tab-for` → `part`), so
+    // same-beat entries stay aligned past them. A staff ignores an unchanged
+    // value, so its re-render coming back through here ends the exchange.
+    #syncClefChangeBeats(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) &&
+          // A staff parsed from markup before its definition has run is not
+          // upgraded yet, so it has none of these accessors.
+          'measureClefChangeBeats' in child
+      ) as unknown as (StaffElementBaseType & {
+        ownClefChangeBeats: readonly number[];
+        measureClefChangeBeats: readonly number[];
+        part: string | null;
+        tabFor?: string | null;
+      })[];
+      const kinds = staves.map((staff) =>
+        staff.nodeName === MUSIC_STAFF_GUITAR_TAB_NODE
+          ? ('tab' as const)
+          : ('notation' as const)
+      );
+      const union = mergeClefChangeBeats(
+        ...staves
+          .filter((_, i) => kinds[i] === 'notation')
+          .map((staff) => staff.ownClefChangeBeats)
+      );
+      const { links, warnings } = resolveTabMirrors(
+        staves.map((staff, i) => ({
+          kind: kinds[i],
+          part: staff.part,
+          tabFor: staff.tabFor ?? null,
+        }))
+      );
+      const currentWarnings = new Set(warnings);
+      for (const warning of currentWarnings) {
+        if (!this.#lastTabMirrorWarnings.has(warning)) {
+          console.warn(warning);
+        }
+      }
+      this.#lastTabMirrorWarnings = currentWarnings;
+      staves.forEach((staff, i) => {
+        staff.measureClefChangeBeats =
+          kinds[i] === 'notation' || links.has(i) ? union : [];
+      });
+    }
+
     #onStaffMinWidth = (event: Event): void => {
       const customEvent = event as CustomEvent<{
         minWidth: number;
@@ -320,6 +394,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // any tie/slur/etc. across this measure's own staves. Connectors run
       // *after* double-stemmed beams — a slur may need to read the real,
       // already-drawn beam polygon to avoid crossing it (Chapter G).
+      this.#syncNotesStartX();
+      this.#syncClefChangeBeats();
       this.#redrawArpeggios();
       this.#redrawDoubleStemmedBeams();
       this.#redrawCrossStaffTuplets();
@@ -472,6 +548,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundUpdateConnectorVisibility
       );
       this.addEventListener(
+        STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
+        this.#boundSyncClefChangeBeats
+      );
+      this.addEventListener(
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
@@ -545,6 +625,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
+        this.#boundSyncClefChangeBeats
       );
       this.removeEventListener(
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,

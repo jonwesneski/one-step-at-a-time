@@ -5,14 +5,21 @@
 import '../../index';
 import { makeChord, makeNote } from '../../test-fixtures/unitHelpers';
 import type { ChordElementType, StaffElementType } from '../../types/elements';
-import type { DurationType } from '../../types/theory';
+import type { DurationType, Note } from '../../types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
+  MUSIC_CLEF,
   MUSIC_NOTE,
   MUSIC_STAFF,
+  MUSIC_TUPLET,
+  MUSIC_VOICE,
 } from '../consts';
-import { MIN_STEM_LENGTH_PX, STEM_OVERLAP_PX } from '../notationDimensions';
+import {
+  MIN_STEM_LENGTH_PX,
+  STEM_OVERLAP_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
+} from '../notationDimensions';
 import { BeamsBuilder } from './beams';
 import { NOTE_SCALE } from './note';
 
@@ -789,6 +796,88 @@ describe('beams', () => {
         const stemLengthPx = Math.abs(y2 - y1) * NOTE_SCALE + STEM_OVERLAP_PX;
         expect(stemLengthPx).toBeGreaterThanOrEqual(MIN_STEM_LENGTH_PX - 1);
       }
+    });
+  });
+
+  describe('clef changes', () => {
+    it("gives every voice's beams the staff's clef changes to keep clear of", () => {
+      const received: number[] = [];
+      const buildRenderer = BeamsBuilder.prototype.buildRenderer;
+      const spy = jest
+        .spyOn(BeamsBuilder.prototype, 'buildRenderer')
+        .mockImplementation(function (this: BeamsBuilder, positions) {
+          const renderer = buildRenderer.call(this, positions);
+          const setObstacles = renderer.setObstacles.bind(renderer);
+          renderer.setObstacles = (obstacles) => {
+            received.push(obstacles.length);
+            setObstacles(obstacles);
+          };
+          return renderer;
+        });
+
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+      const voice1 = document.createElement(MUSIC_VOICE);
+      const clef = document.createElement(MUSIC_CLEF);
+      clef.setAttribute('clef', 'bass');
+      voice1.append(
+        makeNote({ note: 'C', octave: 5, duration: 'half' }),
+        clef,
+        makeNote({ note: 'C', octave: 3, duration: 'half' })
+      );
+      const voice2 = document.createElement(MUSIC_VOICE);
+      voice2.append(
+        ...(['G', 'A', 'B', 'C'] satisfies Note[]).map((note) =>
+          makeNote({ note, octave: 3, duration: 'eighth' })
+        )
+      );
+      triggerSlotChange(staff, [voice1, voice2]);
+      spy.mockRestore();
+
+      expect(received.length).toBeGreaterThanOrEqual(2);
+      expect(received.every((count) => count === 1)).toBe(true);
+    });
+  });
+
+  describe('tuplets on a kneed beam', () => {
+    it('keeps the numeral clear of every beam in the stack', () => {
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+      const notes = (
+        [
+          ['E', 6],
+          ['A', 3],
+          ['A', 3],
+          ['A', 3],
+          ['E', 6],
+        ] as const
+      ).map(([note, octave]) =>
+        makeNote({ note, octave, duration: 'thirtysecond' })
+      );
+      const tuplet = document.createElement(MUSIC_TUPLET);
+      tuplet.setAttribute('ratio', '5');
+      tuplet.append(...notes);
+      triggerSlotChange(staff, [tuplet]);
+
+      expect(notes.map((note) => (note as any).stemUp)).toEqual([
+        false,
+        true,
+        true,
+        true,
+        false,
+      ]);
+      const beamYs = Array.from(
+        staff.shadowRoot!.querySelectorAll('.beam-group .beam')
+      ).flatMap((polygon) => parsePoints(polygon).map(([, y]) => y));
+      const numeral = staff.shadowRoot!.querySelector('.tuplet-numeral')!;
+      expect(numeral).not.toBeNull();
+      const numeralY = parseFloat(numeral.getAttribute('y')!);
+      // Most stems point up, so the numeral goes above the beams.
+      expect(numeralY + TUPLET_NUMERAL_FONT_SIZE / 2).toBeLessThanOrEqual(
+        Math.min(...beamYs)
+      );
     });
   });
 

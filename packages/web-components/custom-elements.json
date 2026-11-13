@@ -1993,6 +1993,37 @@
             },
             {
               "kind": "field",
+              "name": "#boundSyncClefChangeBeats",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#lastTabMirrorWarnings",
+              "privacy": "private",
+              "default": "new Set<string>()"
+            },
+            {
+              "kind": "method",
+              "name": "#syncNotesStartX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#syncClefChangeBeats",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "#onStaffMinWidth",
               "privacy": "private"
             },
@@ -4138,6 +4169,19 @@
             },
             {
               "kind": "field",
+              "name": "#ownDescribeEndX",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#currentStrutInputs",
               "privacy": "private",
               "type": {
@@ -4282,6 +4326,19 @@
             {
               "kind": "field",
               "name": "#voice1BeatOffsets",
+              "privacy": "private",
+              "type": {
+                "text": "number[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#voice1BeatEnds",
               "privacy": "private",
               "type": {
                 "text": "number[]"
@@ -5212,6 +5269,44 @@
               }
             },
             {
+              "kind": "field",
+              "name": "ownClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onMeasureLayoutChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#clefMarkerBeatOffset",
               "privacy": "private",
@@ -5470,6 +5565,124 @@
                   "name": "index",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#proportionalEntryX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(i: number) => number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "measureCapacity",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutVoiceEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ x: number; leftwardWidth: number; rightEdge: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "clefSlotLefts",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalX",
+                  "type": {
+                    "text": "(i: number) => number"
+                  }
+                },
+                {
+                  "name": "endBeat",
+                  "default": "Number.POSITIVE_INFINITY"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveClefChangeSlots",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
                   }
                 }
               ],
@@ -6872,6 +7085,79 @@
               }
             },
             {
+              "kind": "field",
+              "name": "part",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchTabLinkAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchGroupAttributeChange",
               "privacy": "protected",
@@ -7202,6 +7488,17 @@
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
               }
+            },
+            {
+              "name": "part",
+              "type": {
+                "text": "string"
+              },
+              "description": "Names the part this staff carries (e.g. `guitar`), so a `<music-staff-guitar-tab>` in the same measure can mirror it with `tab-for`.",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
             }
           ],
           "superclass": {
@@ -7277,6 +7574,15 @@
             },
             {
               "kind": "field",
+              "name": "#ownDescribeEndX",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#showDescribe",
               "privacy": "private",
               "type": {
@@ -7307,7 +7613,7 @@
               "type": {
                 "text": "Record<number, number>"
               },
-              "default": "{ 6: STAFF_LINE_START, 5: STAFF_LINE_START + STAFF_LINE_SPACING, 4: STAFF_LINE_START + STAFF_LINE_SPACING * 2, 3: STAFF_LINE_START + STAFF_LINE_SPACING * 3, 2: STAFF_LINE_START + STAFF_LINE_SPACING * 4, 1: STAFF_LINE_START + STAFF_LINE_SPACING * 5, }"
+              "default": "{ 1: STAFF_LINE_START, 2: STAFF_LINE_START + STAFF_LINE_SPACING, 3: STAFF_LINE_START + STAFF_LINE_SPACING * 2, 4: STAFF_LINE_START + STAFF_LINE_SPACING * 3, 5: STAFF_LINE_START + STAFF_LINE_SPACING * 4, 6: STAFF_LINE_START + STAFF_LINE_SPACING * 5, }"
             },
             {
               "kind": "field",
@@ -7330,6 +7636,39 @@
               "privacy": "protected",
               "description": "Override in subclasses to inject additional CSS into the shadow DOM style block.",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tabFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onMeasureLayoutChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -7638,6 +7977,91 @@
               }
             },
             {
+              "kind": "field",
+              "name": "part",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchTabLinkAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchGroupAttributeChange",
               "privacy": "protected",
@@ -7939,6 +8363,20 @@
                 "text": "string"
               },
               "description": "Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row."
+            },
+            {
+              "name": "part",
+              "type": {
+                "text": "string"
+              },
+              "description": "Names the part this staff carries, for a tab staff's `tab-for` to match."
+            },
+            {
+              "name": "tab-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "The `part` of the notation staff in the same `<music-measure>` this tab mirrors; the tab then keeps its notes aligned with that staff past a mid-bar clef change. Has no effect outside a `<music-measure>`."
             },
             {
               "type": {
@@ -8447,6 +8885,19 @@
             },
             {
               "kind": "field",
+              "name": "#ownDescribeEndX",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#currentStrutInputs",
               "privacy": "private",
               "type": {
@@ -8591,6 +9042,19 @@
             {
               "kind": "field",
               "name": "#voice1BeatOffsets",
+              "privacy": "private",
+              "type": {
+                "text": "number[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#voice1BeatEnds",
               "privacy": "private",
               "type": {
                 "text": "number[]"
@@ -9521,6 +9985,44 @@
               }
             },
             {
+              "kind": "field",
+              "name": "ownClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onMeasureLayoutChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#clefMarkerBeatOffset",
               "privacy": "private",
@@ -9792,6 +10294,124 @@
                   "name": "index",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#proportionalEntryX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(i: number) => number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "measureCapacity",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutVoiceEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ x: number; leftwardWidth: number; rightEdge: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "clefSlotLefts",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalX",
+                  "type": {
+                    "text": "(i: number) => number"
+                  }
+                },
+                {
+                  "name": "endBeat",
+                  "default": "Number.POSITIVE_INFINITY"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveClefChangeSlots",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
                   }
                 }
               ],
@@ -11180,6 +11800,79 @@
               }
             },
             {
+              "kind": "field",
+              "name": "part",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchTabLinkAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchGroupAttributeChange",
               "privacy": "protected",
@@ -11517,6 +12210,17 @@
                 "text": "string"
               },
               "description": "Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "name": "part",
+              "type": {
+                "text": "string"
+              },
+              "description": "Names the part this staff carries (e.g. `guitar`), so a `<music-staff-guitar-tab>` in the same measure can mirror it with `tab-for`.",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"

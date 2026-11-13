@@ -1,4 +1,5 @@
 import { computeBeatOffsets } from '../rules/beatRules';
+import { clefChangesReached } from '../rules/clefChangeRules';
 import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
@@ -19,6 +20,7 @@ import {
   SVG_NS,
 } from '../utils/consts';
 import {
+  CLEF_CHANGE_RESERVED_WIDTH_PX,
   LEADING_NOTE_GAP_PX,
   MIN_NOTE_WIDTH,
   STAFF_LINE_SPACING,
@@ -37,6 +39,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'grand' | 'bracket'} group - Joins this staff to its next sibling under a brace or bracket connector.
    * @attr {string} group-id - Shared identifier letting a `group="bracket"` connector span more than two contiguous staves.
    * @attr {string} label - Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.
+   * @attr {string} part - Names the part this staff carries, for a tab staff's `tab-for` to match.
+   * @attr {string} tab-for - The `part` of the notation staff in the same `<music-measure>` this tab mirrors; the tab then keeps its notes aligned with that staff past a mid-bar clef change. Has no effect outside a `<music-measure>`.
    *
    * @example
    * <music-staff-guitar-tab time="4/4">
@@ -56,6 +60,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     `;
     #describeContainer: SVGGElement;
     #describeEndX = 0;
+    #ownDescribeEndX = 0;
     #showDescribe = true;
     #currentElements: GuitarNoteElementType[] = [];
 
@@ -71,12 +76,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#refreshDescribe();
     }
     #yCoordinates: Record<number, number> = {
-      6: STAFF_LINE_START,
-      5: STAFF_LINE_START + STAFF_LINE_SPACING,
-      4: STAFF_LINE_START + STAFF_LINE_SPACING * 2,
-      3: STAFF_LINE_START + STAFF_LINE_SPACING * 3,
-      2: STAFF_LINE_START + STAFF_LINE_SPACING * 4,
-      1: STAFF_LINE_START + STAFF_LINE_SPACING * 5,
+      1: STAFF_LINE_START,
+      2: STAFF_LINE_START + STAFF_LINE_SPACING,
+      3: STAFF_LINE_START + STAFF_LINE_SPACING * 2,
+      4: STAFF_LINE_START + STAFF_LINE_SPACING * 3,
+      5: STAFF_LINE_START + STAFF_LINE_SPACING * 4,
+      6: STAFF_LINE_START + STAFF_LINE_SPACING * 5,
     };
 
     constructor() {
@@ -97,7 +102,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     static get observedAttributes(): string[] {
-      return [COMMON_ATTRIBUTES.TIME, 'group', 'group-id', 'label'];
+      return [
+        COMMON_ATTRIBUTES.TIME,
+        'group',
+        'group-id',
+        'label',
+        'part',
+        'tab-for',
+      ];
     }
 
     // No time-signature glyph to render (tab notation doesn't show one), so
@@ -119,7 +131,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.dispatchGroupAttributeChange();
       } else if (name === 'label') {
         this.dispatchLabelAttributeChange();
+      } else if (name === 'part' || name === 'tab-for') {
+        this.dispatchTabLinkAttributeChange();
       }
+    }
+
+    get tabFor(): string | null {
+      return this.getAttribute('tab-for');
+    }
+
+    set tabFor(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('tab-for');
+      } else {
+        this.setAttribute('tab-for', value);
+      }
+    }
+
+    override get ownNotesStartX(): number {
+      return this.#ownDescribeEndX;
+    }
+
+    protected override onMeasureLayoutChange(): void {
+      this.#renderNotes(this.#currentElements);
     }
 
     // Mirrors StaffClassicalElementBase.refreshInheritedAttrs, scoped to
@@ -182,10 +216,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (elements.length === 0) {
         return;
       }
-      const minWidth = calculateGuitarTabMinWidth(
-        this.#describeEndX,
-        elements.length
-      );
+      const minWidth =
+        calculateGuitarTabMinWidth(this.#describeEndX, elements.length) +
+        this.measureClefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
       const { totalWeight } = computeSpacingWeights(elements);
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
       this.dispatchEvent(
@@ -200,7 +233,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
       const transcribeRect = this.transcribeContainer.getBoundingClientRect();
       const describeRect = this.#describeContainer.getBoundingClientRect();
-      this.#describeEndX = Math.round(describeRect.right - transcribeRect.left);
+      this.#ownDescribeEndX = Math.round(
+        describeRect.right - transcribeRect.left
+      );
+      this.#describeEndX = Math.max(
+        this.#ownDescribeEndX,
+        this.measureNotesStartX
+      );
       const remainingWidth = transcribeRect.width - this.#describeEndX;
 
       // Same fixed measure-capacity-proportional model as the classical
@@ -209,7 +248,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const [beatsInMeasure, beatType] = this.effectiveTimeSig;
       const measureCapacity = beatsInMeasure / beatType;
       const beatOffsets = computeBeatOffsets(assignedElements, new Map());
-      const proportionalWidth = remainingWidth - LEADING_NOTE_GAP_PX;
+      // A mirrored notation staff's clef changes take room in the measure
+      // (measureClefChangeBeats, set only when `tab-for` links this tab), so
+      // the tab leaves the same room to stay aligned with it.
+      const clefChangeBeats = this.measureClefChangeBeats;
+      const proportionalWidth =
+        remainingWidth -
+        LEADING_NOTE_GAP_PX -
+        clefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
       const measureOffsets = computeMeasureProportionalOffsets(
         beatOffsets,
         measureCapacity,
@@ -219,7 +265,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       let previousNoteX: number | null = null;
       for (let i = 0; i < assignedElements.length; i++) {
         const element = assignedElements[i];
-        const xOffsetInNotesSpace = LEADING_NOTE_GAP_PX + measureOffsets[i];
+        const xOffsetInNotesSpace =
+          LEADING_NOTE_GAP_PX +
+          clefChangesReached(clefChangeBeats, beatOffsets[i]) *
+            CLEF_CHANGE_RESERVED_WIDTH_PX +
+          measureOffsets[i];
         let x = this.#describeEndX + xOffsetInNotesSpace;
         if (previousNoteX !== null) {
           x = Math.max(x, previousNoteX + MIN_NOTE_WIDTH);

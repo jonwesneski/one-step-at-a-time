@@ -227,7 +227,7 @@ export function resolveBeamPlacement(input: {
     solveUniform(input, BEAM_STEP_PX, true) ??
     solveUniform(input, BEAM_STEP_PX, false) ??
     solveUniform({ notes, stemUp }, BEAM_STEP_PX, false) ??
-    fallbackPlacement(notes, stemUp)
+    fallbackPlacement(notes, stemUp, BEAM_STEP_PX)
   );
 }
 
@@ -264,13 +264,23 @@ function solveUniform(
   const idealStems = notes.map((note) => idealStemPx(note, stemUp, step));
   const minStems = notes.map((note) => minimumStemPx(note, step));
 
-  const center = snapToGrid(first.nearestHeadY + towardBeam * idealStems[0]);
+  // Wide enough that every note can reach both its ideal and its shortest
+  // allowed stem, at any slope the group may take.
+  const anchorEdges = notes.flatMap((note, i) => [
+    note.nearestHeadY + towardBeam * idealStems[i],
+    note.nearestHeadY + towardBeam * minStems[i],
+  ]);
+  const slopeReach = maxSlopeSteps * GRID_PX;
+  const searchFrom = snapToGrid(
+    Math.min(...anchorEdges) - slopeReach - SEARCH_RANGE_PX
+  );
+  const searchTo = Math.max(...anchorEdges) + slopeReach + SEARCH_RANGE_PX;
   let best: UniformBeamPlacement | null = null;
   let bestCost = Infinity;
 
   for (
-    let outerFirst = center - SEARCH_RANGE_PX;
-    outerFirst <= center + SEARCH_RANGE_PX + EPSILON;
+    let outerFirst = searchFrom;
+    outerFirst <= searchTo + EPSILON;
     outerFirst += GRID_PX
   ) {
     for (let slopeSteps = 0; slopeSteps <= maxSlopeSteps; slopeSteps++) {
@@ -327,17 +337,21 @@ function solveUniform(
   return best;
 }
 
+// A level beam far enough out that every stem keeps its floor.
 function fallbackPlacement(
   notes: readonly BeamPlacementNote[],
-  stemUp: boolean
+  stemUp: boolean,
+  step: number
 ): UniformBeamPlacement {
   const towardBeam = stemUp ? -1 : 1;
   const outers = notes.map(
-    (note) => note.nearestHeadY + towardBeam * BASE_STEM_LENGTH_PX
+    (note) =>
+      note.nearestHeadY +
+      towardBeam * Math.max(BASE_STEM_LENGTH_PX, minimumStemPx(note, step))
   );
   const outer = stemUp ? Math.min(...outers) : Math.max(...outers);
   const stems = notes.map((note) => Math.abs(outer - note.nearestHeadY));
-  return toPlacement(outer, outer, stemUp, BEAM_STEP_PX, stems);
+  return toPlacement(outer, outer, stemUp, step, stems);
 }
 
 function toPlacement(
@@ -474,7 +488,7 @@ function innermostBeamClearsLedgerSide(
 
 function stackHitsObstacle(
   obstacle: BeamObstacle,
-  notes: readonly BeamPlacementNote[],
+  notes: readonly { x: number }[],
   outerAtX: (x: number) => number,
   stemUp: boolean,
   stackDepth: number
@@ -545,13 +559,20 @@ export function resolveKneedBeamSplit(
 
 /**
  * A beam centred between noteheads whose stems point both ways, sloped with
- * the outer interval. Fits when every stem is at least MIN_STEM_LENGTH_PX and
- * the beams keep clear of the top and bottom stave lines.
+ * the outer interval. Fits when every stem is at least MIN_STEM_LENGTH_PX, the
+ * beams keep clear of the top and bottom stave lines, and no beam crosses an
+ * obstacle. With `anySpacing`, each inner note is checked at both ends of the
+ * beam, so a fit holds wherever the notes end up being spaced.
  */
 export function resolveKneedBeamPlacement(
   notes: readonly KneedBeamNote[],
-  stemUps: readonly boolean[]
+  stemUps: readonly boolean[],
+  options: {
+    anySpacing?: boolean;
+    obstacles?: readonly BeamObstacle[];
+  } = {}
 ): KneedBeamPlacement {
+  const { anySpacing = false, obstacles = [] } = options;
   const count = notes.length;
   const nearestYs = notes.map((note, i) =>
     stemUps[i] ? note.highestHeadY : note.lowestHeadY
@@ -593,9 +614,9 @@ export function resolveKneedBeamPlacement(
       primaryTop += GRID_PX
     ) {
       const topAt = (i: number) => primaryTop + rise * progress[i];
-      const fits = notes.every((note, i) => {
-        const stackTop = topAt(i) + stackAbove;
-        const stackBottom = topAt(i) + stackBelow;
+      const fitsAt = (note: KneedBeamNote, i: number, at: number) => {
+        const stackTop = primaryTop + rise * at + stackAbove;
+        const stackBottom = primaryTop + rise * at + stackBelow;
         if (
           stackTop <= STAFF_TOP_LINE_Y + EPSILON ||
           stackBottom >= STAFF_BOTTOM_LINE_Y - EPSILON
@@ -605,8 +626,30 @@ export function resolveKneedBeamPlacement(
         return stemUps[i]
           ? note.highestHeadY - stackBottom >= freeStemMin - EPSILON
           : stackTop - note.lowestHeadY >= freeStemMin - EPSILON;
+      };
+      const fits = notes.every((note, i) => {
+        const inner = i > 0 && i < count - 1;
+        const positions = anySpacing && inner ? [0, 1] : [progress[i]];
+        return positions.every((at) => fitsAt(note, i, at));
       });
       if (!fits) {
+        continue;
+      }
+      const span = notes[count - 1].x - notes[0].x;
+      if (
+        obstacles.some((obstacle) =>
+          stackHitsObstacle(
+            obstacle,
+            notes,
+            (x) =>
+              primaryTop +
+              (span === 0 ? 0 : (rise * (x - notes[0].x)) / span) +
+              stackAbove,
+            true,
+            stackBelow - stackAbove
+          )
+        )
+      ) {
         continue;
       }
       const middleAtCenter =

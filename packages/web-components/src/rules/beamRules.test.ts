@@ -185,20 +185,37 @@ describe('buildBeamsRenderer stem lengths', () => {
 });
 
 describe('buildBeamsRenderer kneed beams', () => {
-  const directionsFor = (staffYs: number[]) => {
+  const directionsFor = (
+    staffYs: number[],
+    clefChangeBeatOffsets: number[] = []
+  ) => {
     const notes = staffYs.map(() => makeNote('eighth'));
     return buildBeamsRenderer(
       notes,
       [4, 4],
       new Map(notes.map((note, i) => [note, staffYs[i]])),
       new Map(),
-      new Map()
+      new Map(),
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      clefChangeBeatOffsets
     ).stemDirections;
   };
 
   it('splits a wide-interval group into stems both ways', () => {
     // E4 and A5: one direction would need an 8-space stem.
     expect(directionsFor([70, 20])).toEqual([true, false]);
+  });
+
+  it('keeps one direction when a clef change falls inside the group', () => {
+    expect(directionsFor([70, 20], [1 / 8])).toEqual([false, false]);
+  });
+
+  it('still knees when the clef change falls outside the group', () => {
+    expect(directionsFor([70, 20], [1 / 4])).toEqual([true, false]);
   });
 
   it('keeps one direction when the interval leaves no room for a beam between', () => {

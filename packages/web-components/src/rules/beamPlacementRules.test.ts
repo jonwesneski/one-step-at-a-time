@@ -336,6 +336,28 @@ describe('resolveBeamPlacement', () => {
     );
   });
 
+  it('keeps every stem its floor when the notes lie far apart', () => {
+    const group = { heads: [C4, E6], stemUp: true, beamCount: 4 };
+    const placement = place(group);
+    const floor = MIN_STEM_LENGTH_PX + 3 * Math.abs(placement.levelOffset);
+    for (const stem of endStems(group)) {
+      expect(stem).toBeGreaterThanOrEqual(floor - 1e-6);
+    }
+  });
+
+  it('gives up an obstacle it cannot clear but keeps every stem its floor', () => {
+    const everywhere = { left: -1000, right: 1000, top: -1000, bottom: 1000 };
+    const group = {
+      heads: [F4, C5],
+      stemUp: true,
+      beamCount: 2,
+      obstacles: [everywhere],
+    };
+    for (const stem of endStems(group)) {
+      expect(stem).toBeGreaterThanOrEqual(MIN_STEM_LENGTH_PX + BEAM_STEP_PX);
+    }
+  });
+
   it('reports the longest stem', () => {
     expect(place({ heads: [F4, F4], stemUp: true }).longestStemPx).toBe(
       spaces(3.5)
@@ -378,6 +400,49 @@ describe('kneed beams', () => {
       MIN_STEM_LENGTH_PX
     );
     expect(stackTop).toBeGreaterThan(STAFF_TOP_LINE_Y);
+  });
+
+  it('rejects, for any spacing, a knee that only fits at some spacings', () => {
+    const notes = [note(G5, G5, 0), note(F4, F4, 1), note(D6, D6, 2)];
+    const stemUps = [false, true, false];
+    expect(resolveKneedBeamPlacement(notes, stemUps).fits).toBe(true);
+    const uneven = [0, 32, 100].map((x, i) => ({ ...notes[i], x }));
+    expect(resolveKneedBeamPlacement(uneven, stemUps).fits).toBe(false);
+    expect(
+      resolveKneedBeamPlacement(notes, stemUps, { anySpacing: true }).fits
+    ).toBe(false);
+  });
+
+  it('keeps a knee accepted for any spacing valid at uneven spacings', () => {
+    const heads = [C4, G5, C4, G5];
+    const stemUps = [true, false, true, false];
+    const at = (xs: number[]) =>
+      heads.map((head, i) => ({ ...note(head), x: xs[i] }));
+    expect(
+      resolveKneedBeamPlacement(at([0, 40, 80, 120]), stemUps, {
+        anySpacing: true,
+      }).fits
+    ).toBe(true);
+    for (const xs of [
+      [0, 10, 90, 100],
+      [0, 80, 85, 100],
+      [0, 5, 10, 200],
+    ]) {
+      expect(resolveKneedBeamPlacement(at(xs), stemUps).fits).toBe(true);
+    }
+  });
+
+  it('does not fit when every placement crosses an obstacle', () => {
+    const acrossStave = { left: 10, right: 30, top: 0, bottom: 100 };
+    expect(
+      resolveKneedBeamPlacement(
+        [note(F5, F5, 0), note(A3, A3, 1)],
+        [false, true],
+        {
+          obstacles: [acrossStave],
+        }
+      ).fits
+    ).toBe(false);
   });
 
   it('slopes in the direction of the outer interval', () => {
