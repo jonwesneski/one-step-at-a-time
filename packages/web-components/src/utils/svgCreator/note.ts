@@ -143,7 +143,7 @@ export const NOTE_HEAD_CX_STEM_DOWN_PX =
 export {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH
+  ACCIDENTAL_SYMBOL_WIDTH,
 } from '../notationDimensions';
 
 export type NoteProps = {
