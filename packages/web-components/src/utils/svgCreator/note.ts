@@ -142,7 +142,7 @@ export const NOTE_HEAD_CX_STEM_DOWN_PX =
 export {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH
+  ACCIDENTAL_SYMBOL_WIDTH,
 } from '../notationDimensions';
 
 export type NoteProps = {
@@ -194,6 +194,11 @@ export type NoteProps = {
   // Another voice draws the head this note shares in a unison; the stem,
   // flags, ledger lines and accidental are still drawn.
   omitsHead?: boolean;
+  // Moves the stem and its tails sideways, off this note's own head, to the
+  // stem of a unison group (px).
+  stemShiftPx?: number;
+  // Starts the stem this far from the head's level, at the base of a prong (px).
+  stemLiftPx?: number;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -250,6 +255,8 @@ export const createNoteSvg = ({
   augmentationDotRows = null,
   augmentationDotShiftPx = 0,
   omitsHead = false,
+  stemShiftPx = 0,
+  stemLiftPx = 0,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -278,24 +285,26 @@ export const createNoteSvg = ({
   // stem itself is drawn to; an inner-voice double-stemmed member always
   // has a real stem anyway (noStem is for shared-stem/chord-internal
   // suppression, unrelated).
-  const { x: stemX, y: stemTipY } = stemTipPosition(
+  const { x: ownStemX, y: stemTipY } = stemTipPosition(
     stemUp,
     duration,
     noFlags,
     stemExtension
   );
+  const stemX = ownStemX + stemShiftPx / NOTE_SCALE;
+  const stemLift = stemLiftPx / NOTE_SCALE;
   if (!noStem && !isStemlessDuration(duration)) {
     // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
     // Stem-down: left side of head, head end at top (y1), tip at bottom (y2).
-    const stemY1 = stemUp ? stemTipY : headGeometry.anchorY;
-    const stemY2 = stemUp ? headGeometry.anchorY : stemTipY;
+    const stemY1 = stemUp ? stemTipY : headGeometry.anchorY + stemLift;
+    const stemY2 = stemUp ? headGeometry.anchorY - stemLift : stemTipY;
     const stem = document.createElementNS(SVG_NS, 'line');
     stem.classList.add('stem');
     stem.setAttribute('x1', stemX.toString());
     stem.setAttribute('y1', stemY1.toString());
     stem.setAttribute('x2', stemX.toString());
     stem.setAttribute('y2', stemY2.toString());
-    if (stemExtension !== 0 || flagStemExtension > 0) {
+    if (stemExtension !== 0 || flagStemExtension > 0 || stemShiftPx !== 0) {
       svg.setAttribute('overflow', 'visible');
     }
     stem.setAttribute('stroke', 'currentColor');

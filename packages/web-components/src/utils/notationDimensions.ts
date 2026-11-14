@@ -193,6 +193,32 @@ export const CROSSED_VOICE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.25;
  */
 export const UNISON_STEM_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
+/**
+ * How far a single-stem unison's vertical stem runs past the point where the
+ * diagonal joins it, so tails and beams stay clear of the diagonal.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DIAGONAL_STEM_JOIN_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * How far a prong's stem base rises above the heads it forks to: clear of the
+ * accidental (30px tall, so 15px above the head's centre) that sits beneath it.
+ * = 2 × STAFF_LINE_SPACING
+ */
+export const PRONG_LIFT_PX = STAFF_LINE_SPACING * 2;
+
+/**
+ * Height (px) of the square bracket over a stemless cluster, above its topmost head.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const CLUSTER_BRACKET_RISE_PX = STAFF_LINE_SPACING;
+
+/**
+ * Length (px) of a stemless cluster bracket's end hooks.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const CLUSTER_BRACKET_HOOK_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Beams ────────────────────────────────────────────────────────────────────
 
 /**

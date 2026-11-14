@@ -226,6 +226,15 @@
             },
             {
               "kind": "field",
+              "name": "#unisonToneShiftsPx",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -385,6 +394,13 @@
             {
               "kind": "field",
               "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unisonToneShiftsPx",
               "type": {
                 "text": "number[] | null"
               }
@@ -4503,6 +4519,19 @@
             },
             {
               "kind": "field",
+              "name": "#unisonContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -5791,6 +5820,12 @@
                   "type": {
                     "text": "DurationType"
                   }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -5922,6 +5957,62 @@
                   "name": "container",
                   "type": {
                     "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#unisonRoom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ beforePx: number; afterPx: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "placements",
+                  "type": {
+                    "text": "readonly VoiceNoteheadPlacement[]"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderUnisonOverlay",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "placementColumns",
+                  "type": {
+                    "text": "readonly {\n      placements: readonly VoiceNoteheadPlacement[];\n    }[]"
                   }
                 },
                 {
@@ -9090,6 +9181,19 @@
             },
             {
               "kind": "field",
+              "name": "#unisonContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -10391,6 +10495,12 @@
                   "type": {
                     "text": "DurationType"
                   }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -10522,6 +10632,62 @@
                   "name": "container",
                   "type": {
                     "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#unisonRoom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ beforePx: number; afterPx: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "placements",
+                  "type": {
+                    "text": "readonly VoiceNoteheadPlacement[]"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderUnisonOverlay",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "placementColumns",
+                  "type": {
+                    "text": "readonly {\n      placements: readonly VoiceNoteheadPlacement[];\n    }[]"
                   }
                 },
                 {

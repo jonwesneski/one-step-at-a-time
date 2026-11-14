@@ -862,5 +862,186 @@ test.describe('multi-voice staff', () => {
       const lefts = await noteLefts(page);
       expect(lefts[1] - lefts[0]).toBeGreaterThan(0);
     });
+
+    test('two heads that differ by an accidental fork from one stem, and the fork goes when the pitches match', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="quarter"></music-note></music-voice>
+           <music-voice><music-note id="lower" note="G#" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      const count = (selector: string): Promise<number> =>
+        page.evaluate(
+          (css) =>
+            document
+              .querySelector('music-staff')
+              ?.shadowRoot?.querySelectorAll(css).length ?? 0,
+          selector
+        );
+      expect(await count('.unison-prong')).toBe(2);
+
+      await page.evaluate(() =>
+        document.getElementById('lower')?.setAttribute('note', 'G')
+      );
+      await waitForRedrawCycle(page);
+      expect(await count('.unison-prong')).toBe(0);
+    });
+
+    test('three heads that differ by an accidental hang from one stem by diagonals', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G#" octave="4" duration="quarter"></music-note></music-voice>
+           <music-voice><music-note note="Gb" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            document
+              .querySelector('music-staff')
+              ?.shadowRoot?.querySelectorAll('.unison-diagonal').length ?? 0
+        )
+      ).toBe(2);
+    });
+
+    test('two semibreves that differ by an accidental are bracketed', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="G#" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            document
+              .querySelector('music-staff')
+              ?.shadowRoot?.querySelectorAll('.unison-bracket').length ?? 0
+        )
+      ).toBe(1);
+    });
+
+    test('a three-head unison runs to the stem’s left when the next entry is close, and to its right when there is room', async ({
+      page,
+    }) => {
+      const eighths = Array.from(
+        { length: 7 },
+        () => '<music-note note="E" octave="5" duration="eighth"></music-note>'
+      ).join('');
+      const markup = `<music-staff clef="treble" time="6/4">
+           <music-voice>
+             <music-note note="D" octave="5" duration="half"></music-note>
+             <music-note note="G" octave="4" duration="eighth"></music-note>
+             ${eighths}
+             <music-note note="E" octave="5" duration="quarter"></music-note>
+             <music-note note="E" octave="5" duration="quarter"></music-note>
+             <music-note note="E" octave="5" duration="quarter"></music-note>
+             <music-note note="E" octave="5" duration="eighth"></music-note>
+           </music-voice>
+           <music-voice>
+             <music-rest duration="half"></music-rest>
+             <music-note note="Gb" octave="4" duration="whole"></music-note>
+           </music-voice>
+           <music-voice>
+             <music-rest duration="half"></music-rest>
+             <music-note note="G#" octave="4" duration="whole"></music-note>
+           </music-voice>
+         </music-staff>`;
+      const runsLeft = (): Promise<boolean> =>
+        page.evaluate(() => {
+          const lines = Array.from(
+            document
+              .querySelector('music-staff')
+              ?.shadowRoot?.querySelectorAll('.unison-diagonal') ?? []
+          );
+          return (
+            lines.length > 0 &&
+            lines.every(
+              (line) =>
+                Number(line.getAttribute('x2')) <
+                Number(line.getAttribute('x1'))
+            )
+          );
+        });
+
+      await render(page, markup);
+      await page.evaluate(() => {
+        document.getElementById('host')!.style.width = '230px';
+      });
+      await waitForRedrawCycle(page);
+      expect(await runsLeft()).toBe(true);
+
+      await resizeHost(page, 1400);
+      await waitForRedrawCycle(page);
+      expect(await runsLeft()).toBe(false);
+    });
+
+    test('a stemless chord moves only its unison tone off the note', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="half"></music-note></music-voice>
+           <music-voice>
+             <music-chord duration="whole">
+               <music-note note="G" octave="4"></music-note>
+               <music-note note="B" octave="4"></music-note>
+             </music-chord>
+           </music-voice>
+         </music-staff>`
+      );
+      const lefts = await page.evaluate(() => {
+        const left = (el: Element) => el.getBoundingClientRect().left;
+        const chordHeads = [
+          ...(document
+            .querySelector('music-voice:nth-of-type(2) > music-chord')
+            ?.shadowRoot?.querySelectorAll('.head') ?? []),
+        ].map(left);
+        const noteHead = document
+          .querySelector('music-voice:nth-of-type(1) > music-note')
+          ?.shadowRoot?.querySelector('.head');
+        return { chordHeads, noteHead: noteHead ? left(noteHead) : null };
+      });
+      expect(lefts.chordHeads).toHaveLength(2);
+      const [unisonTone, otherTone] = lefts.chordHeads;
+      expect(unisonTone).toBeGreaterThan(lefts.noteHead ?? Infinity);
+      expect(otherTone).toBeLessThan(unisonTone);
+    });
+
+    test('a chord and a note on one pitch share the chord’s head', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice>
+             <music-chord duration="quarter">
+               <music-note note="G" octave="4"></music-note>
+               <music-note note="B" octave="4"></music-note>
+             </music-chord>
+           </music-voice>
+           <music-voice><music-note note="G" octave="4" duration="quarter"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            document
+              .querySelector('music-voice:nth-of-type(2) > music-note')
+              ?.shadowRoot?.querySelectorAll('.head').length
+        )
+      ).toBe(0);
+    });
   });
 });

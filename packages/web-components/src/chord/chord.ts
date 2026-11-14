@@ -228,6 +228,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
     #augmentationDotRows: number[] | null = null;
+    #unisonToneShiftsPx: number[] | null = null;
     #noFlags = false;
     #noStem = false;
     #renderArpeggioSign = true;
@@ -339,6 +340,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#augmentationDotRows = v;
+      this.#scheduleRender();
+    }
+
+    get unisonToneShiftsPx(): number[] | null {
+      return this.#unisonToneShiftsPx;
+    }
+    set unisonToneShiftsPx(v: number[] | null) {
+      const current = this.#unisonToneShiftsPx;
+      if (
+        v === current ||
+        (v !== null &&
+          current !== null &&
+          v.length === current.length &&
+          v.every((shift, i) => shift === current[i]))
+      ) {
+        return;
+      }
+      this.#unisonToneShiftsPx = v;
       this.#scheduleRender();
     }
 
@@ -590,6 +609,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteheads: this.toneNoteheads,
           stemExtension: this.#stemExtension,
           rowStaffYs: this.#augmentationDotRows,
+          toneShiftPx: this.#unisonToneShiftsPx ?? [],
         })?.rightEdgeX ?? null
       );
     }
@@ -1341,6 +1361,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           augmentationDotRows: this.#augmentationDotRows,
+          toneShiftPx: this.#unisonToneShiftsPx ?? [],
           staffYCoordinates: this.#staffYCoordinates,
           arpeggio: this.#renderArpeggioSign
             ? this.arpeggio ?? this.#impliedArpeggio
@@ -1457,6 +1478,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const [chordSvg] = createChordSvg({
           duration: this.duration,
           augmentationDotRows: this.#augmentationDotRows,
+          toneShiftPx: this.#unisonToneShiftsPx ?? [],
           staffYCoordinates: standaloneYCoordinates,
           arpeggio: this.#renderArpeggioSign
             ? this.arpeggio ?? this.#impliedArpeggio

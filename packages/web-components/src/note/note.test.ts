@@ -1712,7 +1712,12 @@ describe('unison part', () => {
     document.body.appendChild(noteElement);
     expect(noteElement.shadowRoot?.querySelector('.head')).not.toBeNull();
 
-    noteElement.unisonPart = { omitsHead: true };
+    noteElement.unisonPart = {
+      omitsHead: true,
+      stemShiftPx: 0,
+      stemLiftPx: 0,
+      stemShape: null,
+    };
 
     expect(noteElement.shadowRoot?.querySelector('.head')).toBeNull();
     expect(noteElement.shadowRoot?.querySelector('.head-hit-zone')).toBeNull();
@@ -1722,7 +1727,12 @@ describe('unison part', () => {
   it('draws its head again once the unison part is cleared', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(noteElement);
-    noteElement.unisonPart = { omitsHead: true };
+    noteElement.unisonPart = {
+      omitsHead: true,
+      stemShiftPx: 0,
+      stemLiftPx: 0,
+      stemShape: null,
+    };
 
     noteElement.unisonPart = null;
 

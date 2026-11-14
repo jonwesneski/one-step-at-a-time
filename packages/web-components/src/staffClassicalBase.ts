@@ -96,7 +96,12 @@ import {
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
-import type { UnisonPartDescriptor } from './rules/unisonRules';
+import {
+  headClassOf,
+  resolveUnisonDiagonal,
+  resolveUnisonStemGroups,
+  type UnisonPartDescriptor,
+} from './rules/unisonRules';
 import {
   CombinedGroup,
   detectCombinableGroups,
@@ -129,6 +134,7 @@ import type {
   NoteOrChordElementType,
   RestElementType,
   TupletElementType,
+  UnisonPart,
   YCoordinates,
 } from './types/elements';
 import type {
@@ -198,6 +204,7 @@ import {
   BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
+  CLUSTER_BRACKET_RISE_PX,
   CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
@@ -243,12 +250,16 @@ import {
   TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
   TUPLET_STAFF_CLEARANCE_PX,
+  UNISON_STEM_CLEARANCE_PX,
 } from './utils/notationDimensions';
 import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
-import { chordHeadExtentPx } from './utils/svgCreator/chord';
+import {
+  chordHeadExtentPx,
+  chordToneHeadExtentPx,
+} from './utils/svgCreator/chord';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
@@ -267,6 +278,10 @@ import {
   TRILL_SIGN_WIDTH_PX,
 } from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+import {
+  createUnisonBracketSvg,
+  createUnisonDiagonalSvg,
+} from './utils/svgCreator/unison';
 
 // The `Note` suffix for an accidental — the inverse of
 // rules/accidentalRules.ts's parseAccidentalSuffix/suffixToType, needed to
@@ -601,6 +616,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #tupletContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #dynamicsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #trillLinesContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  // One staff-wide overlay (key 1): a unison's diagonal stems and cluster brackets.
+  #unisonContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
@@ -2746,7 +2763,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // What this part contributes to a unison with another voice.
   #unisonDescriptor(
     element: NoteElementType | ChordElementType,
-    duration: DurationType
+    duration: DurationType,
+    staffYs: readonly number[]
   ): UnisonPartDescriptor {
     if (element.nodeName === MUSIC_NOTE_NODE) {
       const note = element as NoteElementType;
@@ -2762,11 +2780,38 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       };
     }
     const chord = element as ChordElementType;
+    const headInput = {
+      duration,
+      staffYCoordinates: staffYs,
+      stemUp: chord.stemUp,
+      noFlags: chord.noFlags,
+      noteheads: chord.toneNoteheads,
+    };
+    const stemToneIndex = staffYs.indexOf(
+      chord.stemUp ? Math.max(...staffYs) : Math.min(...staffYs)
+    );
+    const stemless = headClassOf(durationToBase[duration]) === 'stemless';
     return {
       duration: durationToBase[duration],
       pitchAccidental: null,
-      shownAccidental: chord.noteAccidentals.find((a) => a != null) ?? null,
+      shownAccidental: null,
       isChord: true,
+      tones: chord.notes.map((tone, index) => {
+        const pitchAccidental = suffixToType(parseAccidentalSuffix(tone.value));
+        const { left, right } = chordToneHeadExtentPx(headInput, index);
+        return {
+          staffY: staffYs[index],
+          pitchAccidental,
+          shownAccidental: chord.noteAccidentals[index] ?? null,
+          headCenterX: (left + right) / 2,
+          headLeftX: left,
+          headRightX: right,
+          movesAlone: stemless || (!chord.stemUp && index !== stemToneIndex),
+        };
+      }),
+      accidentalReachPx: chord.noteAccidentals.some((a) => a != null)
+        ? totalChordAccidentalWidth(chord.noteAccidentals, [...staffYs])
+        : 0,
     };
   }
 
@@ -2944,6 +2989,253 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
     );
     container.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
+  }
+
+  // How much room lies before and after a column of voice parts: the gap from
+  // its beat x to the nearest neighbouring entry's decorations in any voice.
+  #unisonRoom(
+    placements: readonly VoiceNoteheadPlacement[],
+    remainingWidth: number
+  ): { beforePx: number; afterPx: number } {
+    let beatX = 0;
+    let previousRight = -Infinity;
+    let nextLeft = Infinity;
+    for (const placement of placements) {
+      const state = this.#voiceRenderStates.get(placement.voiceNumber);
+      if (!state) {
+        continue;
+      }
+      beatX = state.noteXPositions.get(placement.localIndex) ?? beatX;
+      const previous = state.elements[placement.localIndex - 1];
+      if (previous) {
+        previousRight = Math.max(
+          previousRight,
+          (state.noteXPositions.get(placement.localIndex - 1) ?? 0) +
+            NOTE_SVG_WIDTH +
+            this.#rightwardFootprint(
+              placement.voiceNumber,
+              placement.localIndex - 1
+            )
+        );
+      }
+      const next = state.elements[placement.localIndex + 1];
+      if (next) {
+        nextLeft = Math.min(
+          nextLeft,
+          (state.noteXPositions.get(placement.localIndex + 1) ?? 0) -
+            this.#entryLeftwardExtent(next)
+        );
+      }
+    }
+    return {
+      beforePx: previousRight === -Infinity ? beatX : beatX - previousRight,
+      afterPx:
+        nextLeft === Infinity ? remainingWidth - beatX : nextLeft - beatX,
+    };
+  }
+
+  // Diagonal stems that join a stemless head to the one stem of a unison, and
+  // the square bracket over a stemless cluster, drawn from final positions.
+  #renderUnisonOverlay(
+    placementColumns: readonly {
+      placements: readonly VoiceNoteheadPlacement[];
+    }[],
+    remainingWidth: number
+  ): void {
+    const container = this.#containerFor(
+      this.#unisonContainers,
+      1,
+      'unison-container'
+    );
+    this.#sizeVoiceContainer(container, remainingWidth);
+    container.innerHTML = '';
+
+    // The head at one staff position of a note or chord part, from final
+    // positions.
+    const headAt = (
+      voiceNumber: VoiceNumber,
+      localIndex: number,
+      staffY: number
+    ) => {
+      const state = this.#voiceRenderStates.get(voiceNumber);
+      const element = state?.elements[localIndex];
+      if (!state) {
+        return null;
+      }
+      const x = state.noteXPositions.get(localIndex) ?? 0;
+      if (element?.nodeName === MUSIC_NOTE_NODE) {
+        const note = element as NoteElementType;
+        const top = parseFloat(note.style.top || '0');
+        const head = noteHeadGeometry(
+          note.stemUp,
+          note.duration,
+          note.noFlags,
+          note.notehead
+        );
+        return {
+          stemUp: note.stemUp,
+          duration: note.duration,
+          unisonPart: note.unisonPart,
+          left: x + (head.cx - head.halfWidth) * NOTE_SCALE,
+          right: x + (head.cx + head.halfWidth) * NOTE_SCALE,
+          centerY: top + head.cy * NOTE_SCALE,
+          halfHeight: head.halfHeight * NOTE_SCALE,
+          stemX:
+            x +
+            stemTipPosition(note.stemUp, note.duration, note.noFlags, 0).x *
+              NOTE_SCALE,
+          stemTipY:
+            top +
+            stemTipPosition(
+              note.stemUp,
+              note.duration,
+              note.noFlags,
+              note.stemExtension
+            ).y *
+              NOTE_SCALE,
+        };
+      }
+      if (element?.nodeName === MUSIC_CHORD_NODE) {
+        const chord = element as ChordElementType;
+        const staffYs = state.chordStaffYCoords.get(chord) ?? [];
+        const toneIndex = staffYs.indexOf(staffY);
+        if (toneIndex < 0) {
+          return null;
+        }
+        const extent = chordToneHeadExtentPx(
+          {
+            duration: chord.duration,
+            staffYCoordinates: staffYs,
+            stemUp: chord.stemUp,
+            noFlags: chord.noFlags,
+            noteheads: chord.toneNoteheads,
+          },
+          toneIndex
+        );
+        const shift = chord.unisonToneShiftsPx?.[toneIndex] ?? 0;
+        const head = noteHeadGeometry(
+          chord.stemUp,
+          chord.duration,
+          chord.noFlags,
+          chord.toneNoteheads[toneIndex] ?? 'normal'
+        );
+        const stemNoteY = chord.stemUp
+          ? Math.max(...staffYs)
+          : Math.min(...staffYs);
+        const spread = Math.max(...staffYs) - Math.min(...staffYs);
+        return {
+          stemUp: chord.stemUp,
+          duration: chord.duration,
+          unisonPart: null,
+          left: x + extent.left + shift,
+          right: x + extent.right + shift,
+          centerY: STAFF_Y_PADDING + staffY,
+          halfHeight: head.halfHeight * NOTE_SCALE,
+          stemX:
+            x +
+            stemTipPosition(chord.stemUp, chord.duration, chord.noFlags, 0).x *
+              NOTE_SCALE,
+          stemTipY:
+            STAFF_Y_PADDING +
+            stemNoteY -
+            computeYHeadOffset(chord.stemUp, chord.duration, chord.noFlags) +
+            stemTipPosition(
+              chord.stemUp,
+              chord.duration,
+              chord.noFlags,
+              chord.noFlags ? chord.stemExtension : chord.stemExtension + spread
+            ).y *
+              NOTE_SCALE,
+        };
+      }
+      return null;
+    };
+
+    for (const column of placementColumns) {
+      for (const group of resolveUnisonStemGroups(column.placements)) {
+        if (group.kind === 'single-stem') {
+          const owner = headAt(
+            group.owner.voiceNumber,
+            group.owner.localIndex,
+            group.staffY
+          );
+          if (!owner) {
+            continue;
+          }
+          const unisonPart = owner.unisonPart;
+          const stemX = owner.stemX + (unisonPart?.stemShiftPx ?? 0);
+          const heads = [
+            owner,
+            ...group.others
+              .map((ref) =>
+                headAt(ref.voiceNumber, ref.localIndex, group.staffY)
+              )
+              .filter((head): head is NonNullable<typeof head> => !!head),
+          ];
+          if (unisonPart?.stemShape === 'prong') {
+            const apexY =
+              owner.centerY +
+              (owner.stemUp ? -unisonPart.stemLiftPx : unisonPart.stemLiftPx);
+            for (const head of heads) {
+              container.appendChild(
+                createUnisonDiagonalSvg(
+                  {
+                    fromX: stemX,
+                    fromY: apexY,
+                    toX: (head.left + head.right) / 2,
+                    toY:
+                      head.centerY +
+                      (owner.stemUp ? -head.halfHeight : head.halfHeight),
+                  },
+                  'unison-prong'
+                )
+              );
+            }
+            continue;
+          }
+          for (const head of heads) {
+            const onRight = (head.left + head.right) / 2 > stemX;
+            const gap = onRight ? head.left - stemX : stemX - head.right;
+            if (gap <= UNISON_STEM_CLEARANCE_PX + 1) {
+              continue;
+            }
+            container.appendChild(
+              createUnisonDiagonalSvg(
+                resolveUnisonDiagonal({
+                  stemUp: owner.stemUp,
+                  stemX,
+                  stemTipY: owner.stemTipY,
+                  flagCount:
+                    durationToFlagCountMap.get(
+                      durationToBase[owner.duration]
+                    ) ?? 0,
+                  headFarEdgeX: onRight ? head.right : head.left,
+                  headCenterY: head.centerY,
+                  headHalfHeight: head.halfHeight,
+                })
+              )
+            );
+          }
+        } else {
+          const members = group.members
+            .map((ref) => headAt(ref.voiceNumber, ref.localIndex, group.staffY))
+            .filter((member): member is NonNullable<typeof member> => !!member);
+          if (members.length < 2) {
+            continue;
+          }
+          container.appendChild(
+            createUnisonBracketSvg({
+              leftX: Math.min(...members.map((member) => member.left)),
+              rightX: Math.max(...members.map((member) => member.right)),
+              topY:
+                Math.min(...members.map((member) => member.centerY)) -
+                members[0].halfHeight -
+                CLUSTER_BRACKET_RISE_PX,
+            })
+          );
+        }
+      }
+    }
   }
 
   #spaceElements(): void {
@@ -3201,10 +3493,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             ),
             unison: this.#unisonDescriptor(
               element as NoteElementType | ChordElementType,
-              duration
+              duration,
+              staffYs
             ),
           });
         }
+      }
+    }
+
+    for (const column of placementColumns) {
+      const room = this.#unisonRoom(column.placements, remainingWidth);
+      for (const placement of column.placements) {
+        placement.room = room;
       }
     }
 
@@ -3253,7 +3553,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
-    const headlessNotes = new Set<Element>();
+    const unisonPartByElement = new Map<Element, UnisonPart>();
+    const toneShiftsByElement = new Map<Element, number[]>();
     if (isMultiVoice) {
       let anyDisplacement = false;
       for (const column of placementColumns) {
@@ -3268,8 +3569,28 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             continue;
           }
           const element = state.elements[displacement.localIndex];
-          if (displacement.omitsHead) {
-            headlessNotes.add(element);
+          if (displacement.omitsHead || displacement.unisonStem) {
+            unisonPartByElement.set(element, {
+              omitsHead: displacement.omitsHead,
+              stemShiftPx: displacement.unisonStem?.stemShiftPx ?? 0,
+              stemLiftPx: displacement.unisonStem?.stemLiftPx ?? 0,
+              stemShape: displacement.unisonStem?.shape ?? null,
+            });
+          }
+          if (
+            displacement.toneShifts?.length &&
+            element.nodeName === MUSIC_CHORD_NODE
+          ) {
+            const staffYs =
+              state.chordStaffYCoords.get(element as ChordElementType) ?? [];
+            const shifts = staffYs.map(
+              (staffY) =>
+                displacement.toneShifts?.find((tone) => tone.staffY === staffY)
+                  ?.shiftPx ?? 0
+            );
+            if (shifts.some((shift) => shift !== 0)) {
+              toneShiftsByElement.set(element, shifts);
+            }
           }
           const currentLeft = parseFloat(element.style.left || '0');
           element.style.left = `${currentLeft + displacement.xOffset}px`;
@@ -3277,7 +3598,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             state.noteXPositions.get(displacement.localIndex) ?? 0;
           const newX = currentX + displacement.xOffset;
           state.noteXPositions.set(displacement.localIndex, newX);
-          state.beamRenderer?.setX(displacement.localIndex, newX);
+          // A beamed stem moved off its own head carries its beam with it.
+          state.beamRenderer?.setX(
+            displacement.localIndex,
+            newX + (displacement.unisonStem?.stemShiftPx ?? 0)
+          );
           anyDisplacement = true;
         }
       }
@@ -3290,9 +3615,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const state of this.#voiceRenderStates.values()) {
       for (const element of state.elements) {
         if (element.nodeName === MUSIC_NOTE_NODE) {
-          (element as NoteElementType).unisonPart = headlessNotes.has(element)
-            ? { omitsHead: true }
-            : null;
+          (element as NoteElementType).unisonPart =
+            unisonPartByElement.get(element) ?? null;
+        } else if (element.nodeName === MUSIC_CHORD_NODE) {
+          (element as ChordElementType).unisonToneShiftsPx =
+            toneShiftsByElement.get(element) ?? null;
         }
       }
     }
@@ -3462,6 +3789,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#sizeVoiceContainer(trillLinesContainer, remainingWidth);
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
+
+    this.#renderUnisonOverlay(placementColumns, remainingWidth);
 
     // Octave signs, per voice key.
     for (const voiceKey of this.#voiceRenderStates.keys()) {
