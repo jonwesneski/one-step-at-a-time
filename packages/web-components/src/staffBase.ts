@@ -1,3 +1,4 @@
+import { sameClefChangeBeats } from './rules/clefChangeRules';
 import { computeBandOverflow, VerticalBand } from './rules/verticalSpaceRules';
 import {
   BeatsInMeasure,
@@ -169,6 +170,83 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     } else {
       this.setAttribute('label', value);
     }
+  }
+
+  // A plain key naming the part this staff carries (e.g. "guitar"); a
+  // <music-staff-guitar-tab>'s `tab-for` matches it to follow this staff.
+  get part(): string | null {
+    return this.getAttribute('part');
+  }
+
+  set part(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('part');
+    } else {
+      this.setAttribute('part', value);
+    }
+  }
+
+  // Beats of this staff's own mid-stream clef changes, read by the ancestor
+  // <music-measure> to align its staves past each change.
+  get ownClefChangeBeats(): readonly number[] {
+    return [];
+  }
+
+  // Every clef-change beat a staff in the same <music-measure> makes room
+  // for, set by that measure, so same-beat entries stay aligned past a clef
+  // change on any of its staves.
+  get measureClefChangeBeats(): readonly number[] {
+    return this.sharedClefChangeBeats;
+  }
+
+  set measureClefChangeBeats(value: readonly number[]) {
+    if (sameClefChangeBeats(this.sharedClefChangeBeats, value)) {
+      return;
+    }
+    this.sharedClefChangeBeats = [...value];
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedClefChangeBeats: readonly number[] = [];
+
+  // Right edge of this staff's own start area (clef/key/time, or the tab
+  // label), read by the ancestor <music-measure> to start every staff's
+  // notes at the same x.
+  get ownNotesStartX(): number {
+    return 0;
+  }
+
+  // The widest start area among the staves in the same <music-measure>, set
+  // by that measure; a staff starts its notes at this or its own, whichever
+  // is further right.
+  get measureNotesStartX(): number {
+    return this.sharedNotesStartX;
+  }
+
+  set measureNotesStartX(value: number) {
+    if (this.sharedNotesStartX === value) {
+      return;
+    }
+    this.sharedNotesStartX = value;
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedNotesStartX = 0;
+
+  protected onMeasureLayoutChange(): void {
+    // Staves that space notes override this to relayout.
+  }
+
+  protected dispatchTabLinkAttributeChange(): void {
+    if (!this.isConnected) {
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent(STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE, {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   protected dispatchGroupAttributeChange(): void {
@@ -451,7 +529,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
       rowLeft: 0,
-      rowRight: rootRect.width,
     });
     for (const svg of svgs) {
       this.#standaloneConnectorsOverlay.appendChild(svg);

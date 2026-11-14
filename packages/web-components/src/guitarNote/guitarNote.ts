@@ -35,7 +35,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @customElement music-guitar-note
    * @attr {number | 'x'} fret - Fret number, or `x` for a muted/dead note.
    * @attr {number} string - String number, 1 = highest. Defaults to `1`.
-   * @attr {DurationType} duration - Note value. Defaults to `quarter`.
+   * @attr {DurationType} duration - Note value, optionally dotted (`dotted-quarter`); sets timing only, since the tab draws no rhythm. Defaults to `quarter`.
    * @attr {'start' | 'end'} tie - Start or end of a tie to the same fret/string.
    * @attr {'start' | 'end'} slur - Start or end of a slur.
    * @attr {'start' | 'end'} hammer-on - Start or end of a hammer-on to the next note.
@@ -180,6 +180,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.render();
+      if (name === 'string' || name === 'duration') {
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
     }
 
     private render(): void {

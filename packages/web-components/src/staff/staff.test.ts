@@ -20,6 +20,8 @@ import {
   MUSIC_NOTE,
   MUSIC_STAFF,
   MUSIC_TUPLET,
+  MUSIC_VOICE,
+  STAFF_EVENTS,
 } from '../utils/consts';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
@@ -160,6 +162,105 @@ describe(`${MUSIC_STAFF} clef changes`, () => {
     expect(noteBefore.style.top).toBe(expectedNoteTop('treble', 'C4'));
     expect(noteAfter.style.top).toBe(expectedNoteTop('bass', 'C4'));
     expect(noteBefore.style.top).not.toBe(noteAfter.style.top);
+  });
+
+  it('a clef change reaches other voices where it is written, not at the start of the note before it', () => {
+    const staff = makeStaff('treble');
+    const makeNote = (
+      octave: string,
+      duration: 'quarter' | 'eighth'
+    ): NoteElementType => {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', duration);
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', octave);
+      return note;
+    };
+    const voice1 = document.createElement(MUSIC_VOICE);
+    voice1.append(
+      makeNote('5', 'quarter'),
+      makeClefMarker('bass'),
+      makeNote('3', 'quarter')
+    );
+    const voice2Notes = [0, 1, 2, 3].map(() => makeNote('4', 'eighth'));
+    const voice2 = document.createElement(MUSIC_VOICE);
+    voice2.append(...voice2Notes);
+
+    renderElements(staff, [voice1, voice2]);
+
+    const trebleC4 = staff.noteToYCoordinate('C', 4, 0);
+    const bassC4 = staff.noteToYCoordinate('C', 4, 1);
+    expect(trebleC4).not.toBe(bassC4);
+    // Beats 0 and 1/8 sound during the voice-1 quarter before the change.
+    expect(voice2Notes.map((note) => (note as any).staffY)).toEqual([
+      trebleC4,
+      trebleC4,
+      bassC4,
+      bassC4,
+    ]);
+  });
+
+  it("relays out for a sibling staff's clef changes, but not for an unchanged list", () => {
+    const staff = makeStaff('treble');
+    const notes = ['C', 'D', 'E', 'F'].map((pitch) => {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', pitch);
+      note.setAttribute('octave', '4');
+      return note;
+    });
+    renderElements(staff, notes);
+    const relayouts = jest.fn();
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, relayouts);
+
+    staff.measureClefChangeBeats = [1 / 2];
+    expect(relayouts).toHaveBeenCalledTimes(1);
+
+    staff.measureClefChangeBeats = [0.25 + 0.25];
+    expect(relayouts).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts its notes at a sibling staff's wider start area, relaying out only on a change", () => {
+    const staff = makeStaff('treble');
+    const notes = ['C', 'D', 'E', 'F'].map((pitch) => {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', pitch);
+      note.setAttribute('octave', '4');
+      return note;
+    });
+    renderElements(staff, notes);
+    const ownFirstX = parseFloat(notes[0].style.left);
+    const relayouts = jest.fn();
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, relayouts);
+
+    const notesStartX = staff.ownNotesStartX + 40;
+    staff.measureNotesStartX = notesStartX;
+    expect(parseFloat(notes[0].style.left)).toBe(ownFirstX + 40);
+    expect(relayouts).toHaveBeenCalledTimes(1);
+
+    staff.measureNotesStartX = notesStartX;
+    expect(relayouts).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports its own clef changes, by the beat each takes effect', () => {
+    const staff = makeStaff('treble');
+    const quarter = () => {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', 'quarter');
+      note.setAttribute('note', 'C');
+      note.setAttribute('octave', '4');
+      return note;
+    };
+    renderElements(staff, [
+      makeClefMarker('bass'),
+      quarter(),
+      quarter(),
+      makeClefMarker('treble'),
+      quarter(),
+    ]);
+
+    expect(staff.ownClefChangeBeats).toEqual([-1, 1 / 2]);
   });
 
   it('mutating an already-slotted marker clef attribute relayouts notes after it, without a new slotchange', () => {

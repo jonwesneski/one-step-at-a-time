@@ -48,14 +48,6 @@ export class MusicLyricsElement
     this.setAttribute('verse', value);
   }
 
-  get syllables(): LyricSyllablePosition[] {
-    return this.#syllablePositions;
-  }
-
-  set syllables(value: LyricSyllablePosition[]) {
-    this.#syllablePositions = value;
-  }
-
   connectedCallback() {
     if (!this.shadowRoot) {
       return;
@@ -95,8 +87,9 @@ export class MusicLyricsElement
     ) as SVGSVGElement;
   }
 
-  updatePositions() {
-    if (this.#syllablePositions.length === 0) {
+  updatePositions(positions: LyricSyllablePosition[]) {
+    this.#syllablePositions = positions;
+    if (positions.length === 0) {
       return;
     }
 

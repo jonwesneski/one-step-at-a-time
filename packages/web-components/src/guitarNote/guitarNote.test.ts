@@ -53,3 +53,30 @@ describe(MUSIC_GUITAR_NOTE, () => {
     expect(handler).toHaveBeenCalled();
   });
 });
+
+describe(`${MUSIC_GUITAR_NOTE} re-layout`, () => {
+  it.each(['string', 'duration'])(
+    'asks its staff to re-lay out when %s changes',
+    (name) => {
+      const el = document.createElement(MUSIC_GUITAR_NOTE);
+      document.body.appendChild(el);
+      const listener = jest.fn();
+      el.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, listener);
+
+      el.setAttribute(name, name === 'string' ? '3' : 'half');
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('re-renders locally for a fret change', () => {
+    const el = document.createElement(MUSIC_GUITAR_NOTE);
+    document.body.appendChild(el);
+    const listener = jest.fn();
+    el.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, listener);
+
+    el.setAttribute('fret', '5');
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});

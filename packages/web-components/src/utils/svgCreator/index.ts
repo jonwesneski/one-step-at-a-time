@@ -62,6 +62,7 @@ export {
   NOTE_STEM_X_OFFSET,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
+  NOTEHEAD_WIDTH_PX,
   noteHeadCenter,
   noteHeadGeometry,
   noteHeadLeftOverhangPx,

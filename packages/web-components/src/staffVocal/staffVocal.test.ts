@@ -383,12 +383,13 @@ describe(`${MUSIC_STAFF_VOCAL} lyrics`, () => {
   it('updates positions on demand', () => {
     const lyrics = document.createElement(MUSIC_LYRICS) as any;
     lyrics.setAttribute('verse', '1');
-    lyrics.dataset.syllables = JSON.stringify([
-      { text: 'Hap', x: 10, y: 100, isMelisma: false, isHyphenated: true },
-      { text: 'py', x: 30, y: 100, isMelisma: false, isHyphenated: false },
-    ]);
     // Should not throw
-    expect(() => lyrics.updatePositions()).not.toThrow();
+    expect(() =>
+      lyrics.updatePositions([
+        { text: 'Hap', x: 10, y: 100, isMelisma: false, isHyphenated: true },
+        { text: 'py', x: 30, y: 100, isMelisma: false, isHyphenated: false },
+      ])
+    ).not.toThrow();
   });
 });
 

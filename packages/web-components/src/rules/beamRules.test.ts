@@ -12,11 +12,8 @@ import type { DurationType } from '../types/theory';
 import { MUSIC_CHORD, MUSIC_NOTE } from '../utils/consts';
 import {
   BASE_STEM_LENGTH_PX,
-  BEAM_GAP_PX,
-  BEAM_THICKNESS_PX,
   MIDDLE_STAFF_Y,
-  MIN_STEM_LENGTH_PX,
-  OUTWARD_STEM_LENGTH_AT_MIDDLE_PX,
+  STAFF_LINE_SPACING,
   STEM_OVERLAP_PX,
 } from '../utils/notationDimensions';
 import { buildBeamsRenderer } from './beamRules';
@@ -97,7 +94,7 @@ describe('buildBeamsRenderer stem overrides', () => {
 });
 
 describe('buildBeamsRenderer beamed chords', () => {
-  it('fits the beam to a full stem beyond the notehead nearest it, so a chord keeps its whole stem length', () => {
+  it('fits the beam to the head nearest it, so a chord keeps its spread on top of that stem', () => {
     const chords = [0, 1].map(() => {
       const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
       chord.setAttribute('duration', 'eighth');
@@ -105,6 +102,8 @@ describe('buildBeamsRenderer beamed chords', () => {
       return chord;
     });
     const topStaffY = 30;
+    // A line: the beam straddles the line 3¼ spaces below rather than
+    // leaving its second-beam position in a space.
     const bottomStaffY = 40;
 
     const { beamRenderer } = buildBeamsRenderer(
@@ -120,7 +119,7 @@ describe('buildBeamsRenderer beamed chords', () => {
 
     for (const index of [0, 1]) {
       expect(beamRenderer.stemExtension(index)).toBeCloseTo(
-        bottomStaffY - topStaffY - STEM_OVERLAP_PX
+        bottomStaffY - topStaffY - STAFF_LINE_SPACING / 4 - STEM_OVERLAP_PX
       );
     }
   });
@@ -149,6 +148,10 @@ describe('buildBeamsRenderer stem lengths', () => {
       [stemUp, stemUp]
     ).beamRenderer;
   };
+  const stemLength = (duration: DurationType, staffY: number, stemUp = true) =>
+    BASE_STEM_LENGTH_PX +
+    beamedNotes(duration, staffY, stemUp).stemExtension(0) +
+    STEM_OVERLAP_PX;
 
   it('reaches the middle line from ledger-line notes', () => {
     expect(beamedNotes('eighth', 95, true).stemExtension(0)).toBeCloseTo(
@@ -156,21 +159,86 @@ describe('buildBeamsRenderer stem lengths', () => {
     );
   });
 
-  it('never shortens a one-beam stem below the minimum', () => {
-    expect(
-      BASE_STEM_LENGTH_PX + beamedNotes('eighth', 30, true).stemExtension(0)
-    ).toBeCloseTo(MIN_STEM_LENGTH_PX);
+  it('keeps 3½ spaces from a head in a space', () => {
+    expect(stemLength('eighth', 65)).toBeCloseTo(BASE_STEM_LENGTH_PX);
+    expect(stemLength('sixteenth', 65)).toBeCloseTo(BASE_STEM_LENGTH_PX);
   });
 
-  it('lengthens a minimum-length stem for its second beam', () => {
-    expect(
-      BASE_STEM_LENGTH_PX + beamedNotes('sixteenth', 30, true).stemExtension(0)
-    ).toBeCloseTo(MIN_STEM_LENGTH_PX + BEAM_THICKNESS_PX + BEAM_GAP_PX);
-  });
-
-  it('shortens an outward beamed stem partway', () => {
-    expect(beamedNotes('eighth', 50, true).stemExtension(0)).toBeCloseTo(
-      OUTWARD_STEM_LENGTH_AT_MIDDLE_PX - BASE_STEM_LENGTH_PX - STEM_OVERLAP_PX
+  it('shortens to 3¼ spaces from a head on a line', () => {
+    expect(stemLength('eighth', 60)).toBeCloseTo(3.25 * STAFF_LINE_SPACING);
+    expect(stemLength('sixteenth', 60)).toBeCloseTo(3.25 * STAFF_LINE_SPACING);
+    expect(stemLength('eighth', 40, false)).toBeCloseTo(
+      3.25 * STAFF_LINE_SPACING
     );
+  });
+
+  it('keeps 3½ spaces when the beams lie outside the stave', () => {
+    expect(stemLength('eighth', 30)).toBeCloseTo(BASE_STEM_LENGTH_PX);
+    expect(stemLength('sixteenth', 50)).toBeCloseTo(BASE_STEM_LENGTH_PX);
+  });
+
+  it('moves a three-beam stack out to the next line it can hang from', () => {
+    expect(stemLength('thirtysecond', 75)).toBeCloseTo(
+      4.5 * STAFF_LINE_SPACING
+    );
+  });
+});
+
+describe('buildBeamsRenderer kneed beams', () => {
+  const directionsFor = (
+    staffYs: number[],
+    clefChangeBeatOffsets: number[] = []
+  ) => {
+    const notes = staffYs.map(() => makeNote('eighth'));
+    return buildBeamsRenderer(
+      notes,
+      [4, 4],
+      new Map(notes.map((note, i) => [note, staffYs[i]])),
+      new Map(),
+      new Map(),
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      clefChangeBeatOffsets
+    ).stemDirections;
+  };
+
+  it('splits a wide-interval group into stems both ways', () => {
+    // E4 and A5: one direction would need an 8-space stem.
+    expect(directionsFor([70, 20])).toEqual([true, false]);
+  });
+
+  it('keeps one direction when a clef change falls inside the group', () => {
+    expect(directionsFor([70, 20], [1 / 8])).toEqual([false, false]);
+  });
+
+  it('still knees when the clef change falls outside the group', () => {
+    expect(directionsFor([70, 20], [1 / 4])).toEqual([true, false]);
+  });
+
+  it('keeps one direction when the interval leaves no room for a beam between', () => {
+    expect(directionsFor([60, 20])).toEqual([false, false]);
+  });
+
+  it('keeps one direction when a member is forced', () => {
+    const notes = [makeNote('eighth'), makeNote('eighth')];
+    const { stemDirections } = buildBeamsRenderer(
+      notes,
+      [4, 4],
+      new Map([
+        [notes[0], 70],
+        [notes[1], 20],
+      ]),
+      new Map(),
+      new Map(),
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      new Map([[notes[1], false]])
+    );
+    expect(stemDirections).toEqual([false, false]);
   });
 });

@@ -62,7 +62,7 @@
   },
   "devDependencies": {
     "@custom-elements-manifest/analyzer": "0.11.0",
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.65.0",
     "@types/jest": "^30.0.0",
     "@types/react": "^19",
     "eslint": "^8",

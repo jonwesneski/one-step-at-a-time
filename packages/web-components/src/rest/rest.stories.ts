@@ -36,3 +36,34 @@ export const SpacerRest: Story = {
     </music-staff>
   `,
 };
+
+// A rest's dot keeps the same place relative to the glyph wherever the rest
+// sits.
+export const Dotted: Story = {
+  render: () => html`
+    <div
+      style="display: flex; flex-direction: column; gap: 24px; padding: 40px"
+    >
+      <music-staff clef="treble" time="12/8">
+        <music-rest duration="dotted-whole"></music-rest>
+      </music-staff>
+      <music-staff clef="treble" time="9/8">
+        <music-rest duration="dotted-half"></music-rest>
+        <music-rest duration="dotted-quarter"></music-rest>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-rest duration="dotted-eighth"></music-rest>
+        <music-rest duration="sixteenth"></music-rest>
+        <music-rest duration="double-dotted-eighth"></music-rest>
+        <music-rest duration="thirtysecond"></music-rest>
+        <music-rest duration="dotted-sixteenth"></music-rest>
+        <music-rest duration="thirtysecond"></music-rest>
+        <music-rest duration="dotted-thirtysecond"></music-rest>
+        <music-rest duration="sixtyfourth"></music-rest>
+        <music-rest duration="triple-dotted-eighth"></music-rest>
+        <music-rest duration="sixtyfourth"></music-rest>
+        <music-rest duration="sixteenth"></music-rest>
+      </music-staff>
+    </div>
+  `,
+};

@@ -22,6 +22,9 @@ pnpm install
 
 ```bash
 nx run ui:dev
+
+# if you want to run on public internet (in a separate terminal)
+ssh srv.us -R 1:localhost:PORT
 ```
 
 ## Commands

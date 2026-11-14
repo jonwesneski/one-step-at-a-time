@@ -9,16 +9,19 @@ import {
   BeatTypeInMeasure,
   DurationType,
 } from '../types/theory';
-import {
-  BeamsBuilder,
-  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
-  NOTE_Y_HEAD_OFFSET_STEM_UP,
-  type NoteYPosition,
-} from '../utils';
+import { BeamsBuilder, type NoteYPosition } from '../utils';
 import { MUSIC_NOTE_NODE } from '../utils/consts';
-import { STAFF_Y_PADDING } from '../utils/notationDimensions';
+import {
+  BEAM_ESTIMATE_NOTE_SPACING_PX,
+  KNEED_BEAM_TRIGGER_STEM_PX,
+} from '../utils/notationDimensions';
+import {
+  resolveBeamPlacement,
+  resolveKneedBeamPlacement,
+  resolveKneedBeamSplit,
+} from './beamPlacementRules';
 import { durationContribution } from './beatRules';
-import { determineStemDirections, stemLengthAdjustPx } from './stemRules';
+import { determineStemDirections } from './stemRules';
 import { durationToFlagCountMap } from './theoryConsts';
 
 export function buildBeamsRenderer(
@@ -31,7 +34,10 @@ export function buildBeamsRenderer(
   elementBeatOffsets?: number[],
   stemDirectionsOverride?: boolean[],
   externallyBeamedIndices?: ReadonlySet<number>,
-  crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>
+  crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>,
+  // Where mid-stream clef changes take effect, in the same beat-offset space
+  // as `elements` (a change applies to entries starting at or after it).
+  clefChangeBeatOffsets: readonly number[] = []
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -42,11 +48,12 @@ export function buildBeamsRenderer(
   const elementDurationFactors = elements.map((element, i) =>
     durationContribution(element, i, tupletsByIndex, arpeggioRunIndices)
   );
+  const beatOffsets =
+    elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors);
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
-    elementDurationFactors,
-    elementBeatOffsets,
+    beatOffsets,
     externallyBeamedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
@@ -64,8 +71,7 @@ export function buildBeamsRenderer(
       chordStaffYCoords,
       {
         timeSig,
-        beatOffsets:
-          elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors),
+        beatOffsets,
         durations: elementDurationFactors,
         forcedDirections: crossStaffStemOverrides,
       }
@@ -97,58 +103,32 @@ export function buildBeamsRenderer(
     );
   }
 
+  const headExtents = elements.map((element) =>
+    headStaffYExtent(element, noteStaffYCoords, chordStaffYCoords)
+  );
+  if (stemDirectionsOverride === undefined) {
+    applyKneedBeams(
+      elements,
+      beamsBuilder,
+      headExtents,
+      stemDirections,
+      beatOffsets,
+      clefChangeBeatOffsets,
+      crossStaffStemOverrides
+    );
+  }
+
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {
       if (!beamsBuilder.isBeamed(i)) {
         return null;
       }
       const stemUp = stemDirections[i];
-      const yHeadOffset = stemUp
-        ? NOTE_Y_HEAD_OFFSET_STEM_UP
-        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
-
-      if (element.nodeName === MUSIC_NOTE_NODE) {
-        const noteElement = element as NoteElementType;
-        return {
-          y:
-            STAFF_Y_PADDING +
-            (noteStaffYCoords.get(noteElement) ?? 0) -
-            yHeadOffset,
-          stemUp,
-          stemLengthAdjustPx: stemLengthAdjustPx(
-            [noteStaffYCoords.get(noteElement) ?? 0],
-            stemUp
-          ),
-        };
-      }
-
-      const chordElement = element as ChordElementType;
-      const staffYCoordinates = chordStaffYCoords.get(chordElement) ?? [];
-      const extremalStaffY = stemUp
-        ? Math.max(...staffYCoordinates)
-        : Math.min(...staffYCoordinates);
-
-      const beamCount =
-        durationToFlagCountMap.get(chordElement.duration as DurationType) ?? 1;
-      const NOTEHEAD_BEAM_CLEAR = 7.2 + beamCount * 12;
-      const nonExtStaffYs = staffYCoordinates.filter(
-        (y) => y !== extremalStaffY
-      );
-
-      let chordClearanceY: number | undefined;
-      if (nonExtStaffYs.length > 0) {
-        chordClearanceY = stemUp
-          ? Math.min(...nonExtStaffYs) - NOTEHEAD_BEAM_CLEAR
-          : Math.max(...nonExtStaffYs) + NOTEHEAD_BEAM_CLEAR;
-      }
-
+      const { highest, lowest } = headExtents[i];
       return {
-        y: STAFF_Y_PADDING + extremalStaffY - yHeadOffset,
         stemUp,
-        chordClearanceY,
-        chordSpread:
-          Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates),
-        stemLengthAdjustPx: stemLengthAdjustPx(staffYCoordinates, stemUp),
+        highestHeadStaffY: highest,
+        lowestHeadStaffY: lowest,
       };
     }
   );
@@ -158,6 +138,87 @@ export function buildBeamsRenderer(
     beamRenderer: beamsBuilder.buildRenderer(noteYPositions),
     stemDirections,
   };
+}
+
+function headStaffYExtent(
+  element: NoteChordOrRestElementType,
+  noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
+  chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
+): { highest: number; lowest: number } {
+  const staffYs =
+    element.nodeName === MUSIC_NOTE_NODE
+      ? [noteStaffYCoords.get(element as NoteElementType) ?? 0]
+      : chordStaffYCoords.get(element as ChordElementType) ?? [];
+  if (staffYs.length === 0) {
+    return { highest: 0, lowest: 0 };
+  }
+  return { highest: Math.min(...staffYs), lowest: Math.max(...staffYs) };
+}
+
+// A wide-interval group whose one-direction beam would need a very long stem
+// takes a beam between its noteheads instead, with stems both ways, when that
+// fits however the notes end up spaced. Only pitch-driven groups qualify: a
+// forced direction keeps its beam, and so does a group a clef change falls
+// inside, since the clef sits in the stave where a kneed beam would run.
+function applyKneedBeams(
+  elements: NoteChordOrRestElementType[],
+  beamsBuilder: BeamsBuilder,
+  headExtents: readonly { highest: number; lowest: number }[],
+  stemDirections: boolean[],
+  beatOffsets: readonly number[],
+  clefChangeBeatOffsets: readonly number[],
+  forcedDirections?: ReadonlyMap<NoteChordOrRestElementType, boolean>
+): void {
+  const visited = new Set<number>();
+  for (let i = 0; i < elements.length; i++) {
+    const group = beamsBuilder.beamGroupFor(i);
+    if (group === null || visited.has(i)) {
+      continue;
+    }
+    group.forEach((index) => visited.add(index));
+    if (group.some((index) => forcedDirections?.has(elements[index]))) {
+      continue;
+    }
+    const firstBeat = beatOffsets[group[0]];
+    const lastBeat = beatOffsets[group[group.length - 1]];
+    if (
+      clefChangeBeatOffsets.some(
+        (clefBeat) => clefBeat > firstBeat && clefBeat <= lastBeat
+      )
+    ) {
+      continue;
+    }
+    const notes = group.map((index, position) => ({
+      x: position * BEAM_ESTIMATE_NOTE_SPACING_PX,
+      highestHeadY: headExtents[index].highest,
+      lowestHeadY: headExtents[index].lowest,
+      beamCount:
+        durationToFlagCountMap.get(elements[index].duration as DurationType) ??
+        1,
+    }));
+    const stemUp = stemDirections[group[0]];
+    const { longestStemPx } = resolveBeamPlacement({
+      notes: notes.map((note) => ({
+        x: note.x,
+        nearestHeadY: stemUp ? note.highestHeadY : note.lowestHeadY,
+        beamCount: note.beamCount,
+      })),
+      stemUp,
+    });
+    if (longestStemPx <= KNEED_BEAM_TRIGGER_STEM_PX) {
+      continue;
+    }
+    const stemUps = resolveKneedBeamSplit(notes);
+    if (
+      stemUps === null ||
+      !resolveKneedBeamPlacement(notes, stemUps, { anySpacing: true }).fits
+    ) {
+      continue;
+    }
+    group.forEach((index, position) => {
+      stemDirections[index] = stemUps[position];
+    });
+  }
 }
 
 function cumulativeOffsets(durations: readonly number[]): number[] {

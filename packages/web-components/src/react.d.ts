@@ -85,12 +85,15 @@ declare module 'react' {
         group?: StaffGroupType;
         'group-id'?: string;
         label?: string;
+        part?: string;
       };
       'music-staff-guitar-tab': WebComponentProps & {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
         label?: string;
+        part?: string;
+        'tab-for'?: string;
       };
       'music-staff-vocal': WebComponentProps & {
         voice?: VocalType;
@@ -100,6 +103,7 @@ declare module 'react' {
         group?: StaffGroupType;
         'group-id'?: string;
         label?: string;
+        part?: string;
       };
       'music-lyrics': WebComponentProps & {
         verse?: string;

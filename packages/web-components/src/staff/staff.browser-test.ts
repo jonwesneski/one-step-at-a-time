@@ -12,6 +12,7 @@ import {
   MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_TUPLET,
+  MUSIC_VOICE,
 } from '../utils/consts';
 
 test.beforeEach(async ({ page }) => {
@@ -358,6 +359,62 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
     expect(narrow.firstBBox.width).toBeLessThan(wide.firstBBox.width);
     const widthRatio = narrow.firstBBox.width / wide.firstBBox.width;
     expect(Math.abs(widthRatio - 0.5)).toBeLessThan(0.2);
+  });
+
+  test('a beam flattens when a resize crowds its notes closer than three spaces', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host element missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        staff.setAttribute('time', '2/4');
+        for (const pitch of ['C', 'A', 'C', 'A']) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'eighth');
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const firstBeamRise = () =>
+      page.evaluate((staffTag) => {
+        const staff = document.querySelector(staffTag);
+        const beam = staff?.shadowRoot?.querySelector('.beam-group .beam');
+        if (!beam) {
+          throw new Error('beam missing');
+        }
+        const points = (beam.getAttribute('points') ?? '')
+          .trim()
+          .split(/\s+/)
+          .map((point) => point.split(',').map(Number));
+        return Math.abs(points[3][1] - points[0][1]);
+      }, MUSIC_STAFF);
+
+    const wideRise = await firstBeamRise();
+
+    const repositioned = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 160);
+    await repositioned.catch(() => undefined);
+    await waitForRedrawCycle(page);
+
+    const narrowRise = await firstBeamRise();
+    expect(narrowRise).toBeLessThan(wideRise);
+    // At most half a space once the notes are crowded.
+    expect(narrowRise).toBeLessThanOrEqual(5.001);
   });
 
   test('valid tie connector appears and repositions across a resize', async ({
@@ -1167,6 +1224,114 @@ test.describe('staves authored as parsed HTML markup', () => {
     expect(rendered.notesRendered).toBe(rendered.totalNotes);
     expect(rendered.guitarTabRendered).toBe(true);
     expect(rendered.vocalRendered).toBe(true);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} mid-stream clef changes with two voices`, () => {
+  test('every voice keeps clear of the clef and stays aligned past it across a resize', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag, clefTag, voiceTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '900px';
+        const staff = document.createElement(staffTag);
+        staff.setAttribute('clef', 'treble');
+        staff.setAttribute('time', '4/4');
+        const note = (pitch: string, duration: string, accent = false) => {
+          const element = document.createElement(noteTag);
+          element.setAttribute('note', pitch[0]);
+          element.setAttribute('octave', pitch.slice(1));
+          element.setAttribute('duration', duration);
+          // Keeps same-rhythm notes in the two voices from merging onto
+          // one stem.
+          if (accent) {
+            element.setAttribute('articulation', 'accent');
+          }
+          return element;
+        };
+        const voice1 = document.createElement(voiceTag);
+        const clef = document.createElement(clefTag);
+        clef.setAttribute('clef', 'bass');
+        voice1.append(
+          note('C5', 'quarter', true),
+          clef,
+          note('C4', 'quarter', true),
+          note('B3', 'quarter', true),
+          note('A3', 'quarter', true)
+        );
+        const voice2 = document.createElement(voiceTag);
+        voice2.append(
+          note('F4', 'eighth'),
+          note('G4', 'eighth'),
+          note('E2', 'quarter'),
+          note('F2', 'quarter'),
+          note('G2', 'quarter')
+        );
+        staff.append(voice1, voice2);
+        host.appendChild(staff);
+      },
+      {
+        staffTag: MUSIC_STAFF,
+        noteTag: MUSIC_NOTE,
+        clefTag: MUSIC_CLEF,
+        voiceTag: MUSIC_VOICE,
+      }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const readLayout = () =>
+      page.evaluate(
+        ({ voiceTag, noteTag, clefTag }) => {
+          const voices = Array.from(document.querySelectorAll(voiceTag));
+          const notesOf = (voice: Element) =>
+            Array.from(voice.querySelectorAll(noteTag)).map((note) =>
+              note.getBoundingClientRect()
+            );
+          const clef = document.querySelector(clefTag);
+          if (clef === null || voices.length !== 2) {
+            throw new Error('staff not ready');
+          }
+          const clefRect = clef.getBoundingClientRect();
+          return {
+            clef: { left: clefRect.left, right: clefRect.right },
+            voice1: notesOf(voices[0]).map((rect) => rect.left),
+            voice2: notesOf(voices[1]).map((rect) => ({
+              left: rect.left,
+              right: rect.right,
+            })),
+          };
+        },
+        { voiceTag: MUSIC_VOICE, noteTag: MUSIC_NOTE, clefTag: MUSIC_CLEF }
+      );
+
+    const expectClearAndAligned = (
+      layout: Awaited<ReturnType<typeof readLayout>>
+    ) => {
+      const [f4, g4, ...afterChange] = layout.voice2;
+      for (const before of [f4, g4]) {
+        expect(before.right).toBeLessThanOrEqual(layout.clef.left + 0.5);
+      }
+      afterChange.forEach((after, i) => {
+        expect(after.left).toBeGreaterThanOrEqual(layout.clef.right - 0.5);
+        expect(Math.abs(after.left - layout.voice1[i + 1])).toBeLessThan(0.5);
+      });
+    };
+
+    expectClearAndAligned(await readLayout());
+
+    const repositioned = waitForStaffNotesPositioned(page);
+    await resizeHost(page, 500);
+    await repositioned.catch(() => undefined);
+    await waitForRedrawCycle(page);
+
+    expectClearAndAligned(await readLayout());
   });
 });
 

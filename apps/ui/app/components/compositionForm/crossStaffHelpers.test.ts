@@ -167,6 +167,28 @@ describe('shared stems', () => {
     ).toMatch(/same duration/);
   });
 
+  it('lets dotted quarters share a stem, but not a dotted eighth', () => {
+    const structure = buildPair();
+    structure.entriesById.u1 = {
+      ...structure.entriesById.u1,
+      duration: 'dotted-quarter',
+    } as NoteEntry;
+    structure.entriesById.l1 = {
+      ...structure.entriesById.l1,
+      duration: 'dotted-quarter',
+    } as NoteEntry;
+    expect(sharedStemProblem(structure, pair)).toBeNull();
+    structure.entriesById.u1 = {
+      ...structure.entriesById.u1,
+      duration: 'dotted-eighth',
+    } as NoteEntry;
+    structure.entriesById.l1 = {
+      ...structure.entriesById.l1,
+      duration: 'dotted-eighth',
+    } as NoteEntry;
+    expect(sharedStemProblem(structure, pair)).toMatch(/quarter and half/);
+  });
+
   it('links the lower entry to the upper one, and separates again', () => {
     const joined = setSharedStem(buildPair(), pair, true);
     expect(joined.entriesById.l1).toMatchObject({

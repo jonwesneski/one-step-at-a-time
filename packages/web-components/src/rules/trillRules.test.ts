@@ -209,9 +209,7 @@ describe('resolveTrillContinuationSegments', () => {
     ];
     const boundaries = boundariesFor(3);
     const [span] = resolveTrillSpans(elements);
-    expect(
-      resolveTrillContinuationSegments(elements, boundaries, span)
-    ).toEqual([]);
+    expect(resolveTrillContinuationSegments(boundaries, span)).toEqual([]);
   });
 
   it('returns nothing for an untied trill on a measure’s last element, even though the line itself runs into the next measure’s first note', () => {
@@ -234,9 +232,7 @@ describe('resolveTrillContinuationSegments', () => {
       stopped: false,
       endBeforeIndex: 3,
     });
-    expect(
-      resolveTrillContinuationSegments(elements, boundaries, span)
-    ).toEqual([]);
+    expect(resolveTrillContinuationSegments(boundaries, span)).toEqual([]);
   });
 
   it('adds one segment when the tie chain carries the span into the very next measure and stops there', () => {
@@ -248,9 +244,7 @@ describe('resolveTrillContinuationSegments', () => {
     const boundaries = boundariesFor(1, 2);
     const [span] = resolveTrillSpans(elements);
     expect(span).toMatchObject({ startIndex: 0, lastTiedIndex: 1 });
-    expect(
-      resolveTrillContinuationSegments(elements, boundaries, span)
-    ).toEqual([
+    expect(resolveTrillContinuationSegments(boundaries, span)).toEqual([
       { measureIndex: 1, endBeforeLocalIndex: 1, stopAtLocalIndex: null },
     ]);
   });
@@ -266,9 +260,7 @@ describe('resolveTrillContinuationSegments', () => {
     const [span] = resolveTrillSpans(elements);
     expect(span.stopped).toBe(true);
     expect(span.lastTiedIndex).toBe(2);
-    expect(
-      resolveTrillContinuationSegments(elements, boundaries, span)
-    ).toEqual([
+    expect(resolveTrillContinuationSegments(boundaries, span)).toEqual([
       { measureIndex: 1, endBeforeLocalIndex: null, stopAtLocalIndex: null },
       { measureIndex: 2, endBeforeLocalIndex: null, stopAtLocalIndex: 0 },
     ]);
@@ -282,9 +274,7 @@ describe('resolveTrillContinuationSegments', () => {
     const boundaries = boundariesFor(1, 1);
     const [span] = resolveTrillSpans(elements);
     expect(span.endBeforeIndex).toBeNull();
-    expect(
-      resolveTrillContinuationSegments(elements, boundaries, span)
-    ).toEqual([
+    expect(resolveTrillContinuationSegments(boundaries, span)).toEqual([
       { measureIndex: 1, endBeforeLocalIndex: null, stopAtLocalIndex: null },
     ]);
   });
@@ -296,9 +286,7 @@ describe('resolveTrillContinuationSegments', () => {
     ];
     const boundaries = boundariesFor(1, 1);
     const [span] = resolveTrillSpans(elements);
-    expect(
-      resolveTrillContinuationSegments(elements, boundaries, span)
-    ).toEqual([
+    expect(resolveTrillContinuationSegments(boundaries, span)).toEqual([
       { measureIndex: 1, endBeforeLocalIndex: null, stopAtLocalIndex: null },
     ]);
   });

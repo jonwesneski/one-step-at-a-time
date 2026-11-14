@@ -65,7 +65,7 @@ describe('calculateStaffMinWidth', () => {
     expect(largeDescribe - smallDescribe).toBe(70);
   });
 
-  it('adds firstNoteAccidentalWidth when provided', () => {
+  it('adds leftwardWidth when provided', () => {
     const accidentalWidth = 12;
     const withAccidental = calculateStaffMinWidth(
       TYPICAL_DESCRIBE_END_X,
@@ -76,7 +76,7 @@ describe('calculateStaffMinWidth', () => {
     expect(withAccidental - withoutAccidental).toBe(accidentalWidth);
   });
 
-  it('returns same result with zero firstNoteAccidentalWidth as without it', () => {
+  it('returns same result with zero leftwardWidth as without it', () => {
     expect(calculateStaffMinWidth(TYPICAL_DESCRIBE_END_X, 4, 0)).toBe(
       calculateStaffMinWidth(TYPICAL_DESCRIBE_END_X, 4)
     );
@@ -122,7 +122,7 @@ describe('calculateStaffVocalMinWidth', () => {
     );
   });
 
-  it('adds firstNoteAccidentalWidth on top of note/lyric-driven width', () => {
+  it('adds leftwardWidth on top of note/lyric-driven width', () => {
     const accidentalWidth = 12;
     const withAccidental = calculateStaffVocalMinWidth(
       TYPICAL_DESCRIBE_END_X,
@@ -138,15 +138,13 @@ describe('calculateStaffVocalMinWidth', () => {
     expect(withAccidental - withoutAccidental).toBe(accidentalWidth);
   });
 
-  it('adds extraRightwardWidth to the note-driven width', () => {
+  it('adds rightwardWidth to the note-driven width', () => {
     const result = calculateStaffVocalMinWidth(
       TYPICAL_DESCRIBE_END_X,
       8,
       2,
       0,
-      0,
-      30,
-      48
+      30 + 48
     );
     expect(result).toBe(
       TYPICAL_DESCRIBE_END_X +
@@ -163,9 +161,7 @@ describe('calculateStaffVocalMinWidth', () => {
       2,
       80,
       0,
-      0,
-      30,
-      12
+      30 + 12
     );
     const withoutRightward = calculateStaffVocalMinWidth(
       TYPICAL_DESCRIBE_END_X,
@@ -222,16 +218,14 @@ describe('calculateStaffVocalNaturalWidth', () => {
     );
   });
 
-  it('adds extraRightwardWidth to the note-driven natural width', () => {
+  it('adds rightwardWidth to the note-driven natural width', () => {
     const result = calculateStaffVocalNaturalWidth(
       TYPICAL_DESCRIBE_END_X,
       8,
       2,
       120,
       0,
-      0,
-      30,
-      48
+      30 + 48
     );
     expect(result).toBe(
       TYPICAL_DESCRIBE_END_X +

@@ -1,9 +1,12 @@
 import { IRestElement } from '../types/elements';
 import { DurationType, RestStaffSide } from '../types/theory';
 import { MUSIC_REST, NOTE_EVENTS } from '../utils/consts';
-import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 import { parseRestStaffSide } from '../utils/parsers';
-import { createRestSvg } from '../utils/svgCreator/rest';
+import {
+  createRestSvg,
+  restAugmentationDotLayout,
+} from '../utils/svgCreator/rest';
+import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -11,7 +14,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * `<music-staff>`.
    *
    * @customElement music-rest
-   * @attr {DurationType} duration - Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`.
+   * @attr {DurationType} duration - Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted (`dotted-quarter`, `double-dotted-eighth`). Defaults to `quarter`.
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself.
    * @attr {RestStaffSide} rest-staff-side - Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`.
    * @attr {boolean} hidden - Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands.
@@ -38,6 +41,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     set duration(value: DurationType) {
       this.setAttribute('duration', value);
+    }
+
+    get augmentationDotsRightEdgePx(): number | null {
+      return restAugmentationDotLayout(this.duration)?.rightEdgeX ?? null;
     }
 
     // `id` shared by every element across a measure's two adjacent grand-staff

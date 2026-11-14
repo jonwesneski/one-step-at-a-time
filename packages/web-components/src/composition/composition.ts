@@ -714,7 +714,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
         rowLeft,
-        rowRight: rootRect.width,
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,
@@ -1158,7 +1157,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             continue;
           }
           const segments = resolveTrillContinuationSegments(
-            globalElements,
             measureBoundaries,
             span
           );
@@ -1819,9 +1817,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         (node) => node.nodeName === MUSIC_MEASURE_NODE
       ) as HTMLElement[];
       measures.forEach((measure, index) => {
-        if (index === 0) {
-          measure.setAttribute(COMMON_ATTRIBUTES.TIME, this.time);
-        }
         measure.setAttribute('number', (index + 1).toString());
       });
 

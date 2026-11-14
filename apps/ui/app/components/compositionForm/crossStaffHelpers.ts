@@ -1,3 +1,5 @@
+import type { BaseDurationType } from '@one-step-at-a-time/web-components';
+import { durationToBase } from '@one-step-at-a-time/web-components';
 import { staffOfEntry } from './entryLocationHelpers';
 import { CAPACITY_EPSILON, entryFactor } from './measureCapacityHelpers';
 import type {
@@ -86,7 +88,7 @@ export function canShareDynamic(
 // the value has a stem but no flag (the library doesn't draw a flag on a
 // shared stem yet). The link is stored on the lower staff's entry.
 
-const SHARED_STEM_DURATIONS = new Set(['half', 'quarter']);
+const SHARED_STEM_DURATIONS = new Set<BaseDurationType>(['half', 'quarter']);
 
 function noteOrChord(
   structure: CompositionStructure,
@@ -139,8 +141,8 @@ export function sharedStemProblem(
   if (upper.duration !== lower.duration) {
     return 'They must have the same duration.';
   }
-  if (!SHARED_STEM_DURATIONS.has(upper.duration)) {
-    return 'Only quarters and halves can share a stem for now.';
+  if (!SHARED_STEM_DURATIONS.has(durationToBase[upper.duration])) {
+    return 'Only quarter and half values (dotted or not) can share a stem for now.';
   }
   if (upper.beamGroupId || lower.beamGroupId) {
     return 'One of them is already in a cross-staff beam.';

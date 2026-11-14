@@ -22,15 +22,6 @@
             },
             {
               "kind": "field",
-              "name": "#applyingDefaults",
-              "privacy": "private",
-              "type": {
-                "text": "boolean"
-              },
-              "default": "false"
-            },
-            {
-              "kind": "field",
               "name": "#ownedDurations",
               "privacy": "private",
               "default": "new WeakSet<Element>()"
@@ -55,14 +46,6 @@
               "type": {
                 "text": "boolean"
               }
-            },
-            {
-              "kind": "field",
-              "name": "flatElements",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "readonly": true
             },
             {
               "kind": "field",
@@ -234,6 +217,15 @@
             },
             {
               "kind": "field",
+              "name": "#augmentationDotRows",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -309,7 +301,7 @@
               "name": "#resolvedTrillPitch",
               "privacy": "private",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               },
               "default": "null"
             },
@@ -388,6 +380,13 @@
               "name": "articulationStemAnchorBeamLevels",
               "type": {
                 "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
               }
             },
             {
@@ -547,6 +546,14 @@
             },
             {
               "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "toneNoteheads",
               "type": {
                 "text": "NoteheadType[]"
@@ -665,7 +672,7 @@
               "kind": "field",
               "name": "resolvedTrillPitch",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               }
             },
             {
@@ -830,6 +837,25 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#lastDotMismatchWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#warnChildDotMismatch",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
               "kind": "method",
               "name": "render",
               "privacy": "private",
@@ -927,7 +953,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Note value for the chord. Defaults to `quarter`."
+              "description": "Note value for the chord, optionally dotted (`dotted-half`); every notehead takes the chord's dots. Defaults to `quarter`."
             },
             {
               "name": "tie",
@@ -1887,7 +1913,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Note value. Defaults to `quarter`."
+              "description": "Note value, optionally dotted (`dotted-quarter`); sets timing only, since the tab draws no rhythm. Defaults to `quarter`."
             },
             {
               "name": "tie",
@@ -1990,6 +2016,37 @@
               "name": "#octaveContinuationRects",
               "privacy": "private",
               "default": "new Map<Element, readonly ObstacleRect[]>()"
+            },
+            {
+              "kind": "field",
+              "name": "#boundSyncClefChangeBeats",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#lastTabMirrorWarnings",
+              "privacy": "private",
+              "default": "new Set<string>()"
+            },
+            {
+              "kind": "method",
+              "name": "#syncNotesStartX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#syncClefChangeBeats",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
             },
             {
               "kind": "field",
@@ -2853,6 +2910,15 @@
             },
             {
               "kind": "field",
+              "name": "#augmentationDotRows",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -2946,7 +3012,7 @@
               "name": "#resolvedTrillPitch",
               "privacy": "private",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               },
               "default": "null"
             },
@@ -3015,6 +3081,13 @@
               "name": "articulationStemAnchorBeamLevels",
               "type": {
                 "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
               }
             },
             {
@@ -3181,6 +3254,14 @@
             },
             {
               "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "stemDirection",
               "type": {
                 "text": "StemDirection | null"
@@ -3291,7 +3372,7 @@
               "kind": "field",
               "name": "resolvedTrillPitch",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               }
             },
             {
@@ -3539,7 +3620,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`."
+              "description": "Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`."
             },
             {
               "name": "note",
@@ -3914,6 +3995,14 @@
             },
             {
               "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "beamGroup",
               "type": {
                 "text": "string | null"
@@ -3950,7 +4039,7 @@
               "type": {
                 "text": "DurationType"
               },
-              "description": "Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, … Defaults to `quarter`."
+              "description": "Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted (`dotted-quarter`, `double-dotted-eighth`). Defaults to `quarter`."
             },
             {
               "name": "beam-group",
@@ -4074,19 +4163,6 @@
             },
             {
               "kind": "field",
-              "name": "#mutationObservers",
-              "privacy": "private",
-              "type": {
-                "text": "MutationObserver[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#effectiveMode",
               "privacy": "private",
               "type": {
@@ -4125,7 +4201,7 @@
             },
             {
               "kind": "field",
-              "name": "#describeEndX",
+              "name": "#ownDescribeEndX",
               "privacy": "private",
               "type": {
                 "text": "number"
@@ -4294,6 +4370,19 @@
             },
             {
               "kind": "field",
+              "name": "#voice1BeatEnds",
+              "privacy": "private",
+              "type": {
+                "text": "number[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#beatOffsetByElement",
               "privacy": "private",
               "default": "new Map<Element, number>()",
@@ -4321,19 +4410,6 @@
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, VoiceRenderState>"
-              },
-              "default": "new Map()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#previousElementsByVoice",
-              "privacy": "private",
-              "type": {
-                "text": "Map<VoiceKey, NoteChordOrRestElementType[]>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -5212,6 +5288,44 @@
               }
             },
             {
+              "kind": "field",
+              "name": "ownClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onMeasureLayoutChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#clefMarkerBeatOffset",
               "privacy": "private",
@@ -5480,6 +5594,180 @@
             },
             {
               "kind": "method",
+              "name": "#proportionalEntryX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(i: number) => number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "measureCapacity",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutVoiceEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ x: number; leftwardWidth: number; rightEdge: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "clefSlotLefts",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalX",
+                  "type": {
+                    "text": "(i: number) => number"
+                  }
+                },
+                {
+                  "name": "endBeat",
+                  "default": "Number.POSITIVE_INFINITY"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveClefChangeSlots",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clefBeamObstacle",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BeamObstacle"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "marker",
+                  "type": {
+                    "text": "ClefMarkerPlacement"
+                  }
+                },
+                {
+                  "name": "leftInWrapper",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#voicePartGeometry",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoicePartGeometry"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardFootprint",
               "privacy": "private",
               "return": {
@@ -5492,6 +5780,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#augmentationDotFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {
@@ -6837,6 +7153,79 @@
               "name": "label",
               "type": {
                 "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "part",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchTabLinkAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffElementBase",
@@ -7174,6 +7563,17 @@
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
               }
+            },
+            {
+              "name": "part",
+              "type": {
+                "text": "string"
+              },
+              "description": "Names the part this staff carries (e.g. `guitar`), so a `<music-staff-guitar-tab>` in the same measure can mirror it with `tab-for`.",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
             }
           ],
           "superclass": {
@@ -7249,6 +7649,15 @@
             },
             {
               "kind": "field",
+              "name": "#ownDescribeEndX",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#showDescribe",
               "privacy": "private",
               "type": {
@@ -7271,15 +7680,6 @@
               "type": {
                 "text": "boolean"
               }
-            },
-            {
-              "kind": "field",
-              "name": "#yCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "Record<number, number>"
-              },
-              "default": "{ 6: STAFF_LINE_START, 5: STAFF_LINE_START + STAFF_LINE_SPACING, 4: STAFF_LINE_START + STAFF_LINE_SPACING * 2, 3: STAFF_LINE_START + STAFF_LINE_SPACING * 3, 2: STAFF_LINE_START + STAFF_LINE_SPACING * 4, 1: STAFF_LINE_START + STAFF_LINE_SPACING * 5, }"
             },
             {
               "kind": "field",
@@ -7308,8 +7708,46 @@
               }
             },
             {
+              "kind": "field",
+              "name": "tabFor",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onMeasureLayoutChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "refreshInheritedAttrs"
+            },
+            {
+              "kind": "field",
+              "name": "#relayout",
+              "privacy": "private"
             },
             {
               "kind": "method",
@@ -7603,6 +8041,91 @@
               "name": "label",
               "type": {
                 "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "part",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchTabLinkAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffElementBase",
@@ -7913,6 +8436,20 @@
               "description": "Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row."
             },
             {
+              "name": "part",
+              "type": {
+                "text": "string"
+              },
+              "description": "Names the part this staff carries, for a tab staff's `tab-for` to match."
+            },
+            {
+              "name": "tab-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "The `part` of the notation staff in the same `<music-measure>` this tab mirrors; the tab then keeps its notes aligned with that staff past a mid-bar clef change. Has no effect outside a `<music-measure>`."
+            },
+            {
               "type": {
                 "text": "TimeSignature"
               },
@@ -7982,15 +8519,16 @@
               }
             },
             {
-              "kind": "field",
-              "name": "syllables",
-              "type": {
-                "text": "LyricSyllablePosition[]"
-              }
-            },
-            {
               "kind": "method",
-              "name": "updatePositions"
+              "name": "updatePositions",
+              "parameters": [
+                {
+                  "name": "positions",
+                  "type": {
+                    "text": "LyricSyllablePosition[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -8045,7 +8583,13 @@
           "members": [
             {
               "kind": "field",
-              "name": "#sopranoYCoordinates",
+              "name": "#treble",
+              "privacy": "private",
+              "static": true
+            },
+            {
+              "kind": "field",
+              "name": "#bass",
               "privacy": "private",
               "static": true
             },
@@ -8069,189 +8613,12 @@
             },
             {
               "kind": "field",
-              "name": "#baritoneYCoordinates",
-              "privacy": "private",
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#bassYCoordinates",
-              "privacy": "private",
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#trebleSharps",
+              "name": "#tenorKeyTables",
               "privacy": "private",
               "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#trebleFlats",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'B4', 'E5', 'A4', 'D5', 'G4', 'C5', 'F4', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMajorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
+                "text": "KeySignatureTables"
               },
               "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMajorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMinorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ E: StaffVocalElement.#trebleMajorSharpYCoordinates.G, B: StaffVocalElement.#trebleMajorSharpYCoordinates.D, ['F#']: StaffVocalElement.#trebleMajorSharpYCoordinates.A, ['C#']: StaffVocalElement.#trebleMajorSharpYCoordinates.E, ['G#']: StaffVocalElement.#trebleMajorSharpYCoordinates.B, ['D#']: StaffVocalElement.#trebleMajorSharpYCoordinates['F#'], ['A#']: StaffVocalElement.#trebleMajorSharpYCoordinates['C#'], }"
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMinorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ D: StaffVocalElement.#trebleMajorFlatYCoordinates.F, G: StaffVocalElement.#trebleMajorFlatYCoordinates.Bb, C: StaffVocalElement.#trebleMajorFlatYCoordinates.Eb, F: StaffVocalElement.#trebleMajorFlatYCoordinates.Ab, Bb: StaffVocalElement.#trebleMajorFlatYCoordinates.Db, Eb: StaffVocalElement.#trebleMajorFlatYCoordinates.Gb, Ab: StaffVocalElement.#trebleMajorFlatYCoordinates.Cb, }"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorSharps",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'F4', 'C4', 'G4', 'D4', 'A3', 'E4', 'B3', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorFlats",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'B3', 'E4', 'A3', 'D4', 'G3', 'C4', 'F3', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMajorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMajorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMinorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ E: StaffVocalElement.#tenorMajorSharpYCoordinates.G, B: StaffVocalElement.#tenorMajorSharpYCoordinates.D, ['F#']: StaffVocalElement.#tenorMajorSharpYCoordinates.A, ['C#']: StaffVocalElement.#tenorMajorSharpYCoordinates.E, ['G#']: StaffVocalElement.#tenorMajorSharpYCoordinates.B, ['D#']: StaffVocalElement.#tenorMajorSharpYCoordinates['F#'], ['A#']: StaffVocalElement.#tenorMajorSharpYCoordinates['C#'], }"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMinorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ D: StaffVocalElement.#tenorMajorFlatYCoordinates.F, G: StaffVocalElement.#tenorMajorFlatYCoordinates.Bb, C: StaffVocalElement.#tenorMajorFlatYCoordinates.Eb, F: StaffVocalElement.#tenorMajorFlatYCoordinates.Ab, Bb: StaffVocalElement.#tenorMajorFlatYCoordinates.Db, Eb: StaffVocalElement.#tenorMajorFlatYCoordinates.Gb, Ab: StaffVocalElement.#tenorMajorFlatYCoordinates.Cb, }"
-            },
-            {
-              "kind": "field",
-              "name": "#bassSharps",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#bassFlats",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#bassMajorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#bassMajorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#bassMinorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ E: StaffVocalElement.#bassMajorSharpYCoordinates.G, B: StaffVocalElement.#bassMajorSharpYCoordinates.D, ['F#']: StaffVocalElement.#bassMajorSharpYCoordinates.A, ['C#']: StaffVocalElement.#bassMajorSharpYCoordinates.E, ['G#']: StaffVocalElement.#bassMajorSharpYCoordinates.B, ['D#']: StaffVocalElement.#bassMajorSharpYCoordinates['F#'], ['A#']: StaffVocalElement.#bassMajorSharpYCoordinates['C#'], }"
-            },
-            {
-              "kind": "field",
-              "name": "#bassMinorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ D: StaffVocalElement.#bassMajorFlatYCoordinates.F, G: StaffVocalElement.#bassMajorFlatYCoordinates.Bb, C: StaffVocalElement.#bassMajorFlatYCoordinates.Eb, F: StaffVocalElement.#bassMajorFlatYCoordinates.Ab, Bb: StaffVocalElement.#bassMajorFlatYCoordinates.Db, Eb: StaffVocalElement.#bassMajorFlatYCoordinates.Gb, Ab: StaffVocalElement.#bassMajorFlatYCoordinates.Cb, }"
             },
             {
               "kind": "field",
@@ -8355,19 +8722,6 @@
             },
             {
               "kind": "field",
-              "name": "#mutationObservers",
-              "privacy": "private",
-              "type": {
-                "text": "MutationObserver[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#effectiveMode",
               "privacy": "private",
               "type": {
@@ -8406,7 +8760,7 @@
             },
             {
               "kind": "field",
-              "name": "#describeEndX",
+              "name": "#ownDescribeEndX",
               "privacy": "private",
               "type": {
                 "text": "number"
@@ -8575,6 +8929,19 @@
             },
             {
               "kind": "field",
+              "name": "#voice1BeatEnds",
+              "privacy": "private",
+              "type": {
+                "text": "number[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#beatOffsetByElement",
               "privacy": "private",
               "default": "new Map<Element, number>()",
@@ -8602,19 +8969,6 @@
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, VoiceRenderState>"
-              },
-              "default": "new Map()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#previousElementsByVoice",
-              "privacy": "private",
-              "type": {
-                "text": "Map<VoiceKey, NoteChordOrRestElementType[]>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -9493,6 +9847,44 @@
               }
             },
             {
+              "kind": "field",
+              "name": "ownClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onMeasureLayoutChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#clefMarkerBeatOffset",
               "privacy": "private",
@@ -9774,6 +10166,180 @@
             },
             {
               "kind": "method",
+              "name": "#proportionalEntryX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(i: number) => number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "measureCapacity",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutVoiceEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ x: number; leftwardWidth: number; rightEdge: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "clefSlotLefts",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalX",
+                  "type": {
+                    "text": "(i: number) => number"
+                  }
+                },
+                {
+                  "name": "endBeat",
+                  "default": "Number.POSITIVE_INFINITY"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveClefChangeSlots",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clefBeamObstacle",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BeamObstacle"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "marker",
+                  "type": {
+                    "text": "ClefMarkerPlacement"
+                  }
+                },
+                {
+                  "name": "leftInWrapper",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#voicePartGeometry",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VoicePartGeometry"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardFootprint",
               "privacy": "private",
               "return": {
@@ -9786,6 +10352,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#augmentationDotFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {
@@ -11117,6 +11711,79 @@
               "name": "label",
               "type": {
                 "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "part",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedClefChangeBeats",
+              "type": {
+                "text": "readonly number[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedNotesStartX",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dispatchTabLinkAttributeChange",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
               },
               "inheritedFrom": {
                 "name": "StaffElementBase",
@@ -11465,6 +12132,17 @@
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
               }
+            },
+            {
+              "name": "part",
+              "type": {
+                "text": "string"
+              },
+              "description": "Names the part this staff carries (e.g. `guitar`), so a `<music-staff-guitar-tab>` in the same measure can mirror it with `tab-for`.",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
             }
           ],
           "superclass": {
@@ -11587,7 +12265,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nreads each voice's `flatElements` independently.",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
           "name": "VoiceElement",
           "members": [
             {
@@ -11598,23 +12276,6 @@
                 "text": "MutationObserver | null"
               },
               "default": "null"
-            },
-            {
-              "kind": "field",
-              "name": "#applyingDefaults",
-              "privacy": "private",
-              "type": {
-                "text": "boolean"
-              },
-              "default": "false"
-            },
-            {
-              "kind": "field",
-              "name": "flatElements",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "readonly": true
             },
             {
               "kind": "method",

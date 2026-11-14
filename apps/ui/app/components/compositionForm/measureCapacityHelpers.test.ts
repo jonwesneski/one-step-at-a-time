@@ -1,4 +1,8 @@
 import type { DurationType } from '@one-step-at-a-time/web-components';
+import {
+  DURATIONS,
+  durationToFactor,
+} from '@one-step-at-a-time/web-components';
 import { describe, expect, it } from 'vitest';
 import {
   availableForDuration,
@@ -182,46 +186,42 @@ describe('availableForDuration', () => {
 });
 
 describe('fittingDurations', () => {
+  const upTo = (factor: number) =>
+    DURATIONS.filter((duration) => durationToFactor[duration] <= factor);
+
   it('keeps everything that fits plus the current value and shorter', () => {
-    expect(fittingDurations(0.25, 'quarter')).toEqual([
-      'quarter',
-      'eighth',
-      'sixteenth',
-      'thirtysecond',
-      'sixtyfourth',
-      'hundredtwentyeighth',
+    const offered = fittingDurations(0.25, 'quarter');
+    expect(offered).toEqual(upTo(0.25));
+    expect(offered[0]).toBe('quarter');
+    expect(offered).toContain('dotted-eighth');
+  });
+
+  it('adds longer values, dotted ones included, once they fit', () => {
+    const offered = fittingDurations(0.5, 'quarter');
+    expect(offered).toEqual(upTo(0.5));
+    expect(offered.slice(0, 4)).toEqual([
+      'half',
+      'triple-dotted-quarter',
+      'double-dotted-quarter',
+      'dotted-quarter',
     ]);
   });
 
-  it('adds longer values once they fit', () => {
-    expect(fittingDurations(0.5, 'quarter')).toEqual([
-      'half',
-      'quarter',
-      'eighth',
-      'sixteenth',
-      'thirtysecond',
-      'sixtyfourth',
-      'hundredtwentyeighth',
-    ]);
+  it('offers a dotted half for an empty 3/4 bar', () => {
+    expect(fittingDurations(0.75, 'quarter')[0]).toBe('dotted-half');
   });
 
   it('still shows the current value when the measure is already overfull', () => {
-    expect(fittingDurations(-0.25, 'whole')).toEqual([
-      'whole',
-      'half',
-      'quarter',
-      'eighth',
-      'sixteenth',
-      'thirtysecond',
-      'sixtyfourth',
-      'hundredtwentyeighth',
-    ]);
+    const offered = fittingDurations(-0.25, 'whole');
+    expect(offered).toEqual(upTo(1));
+    expect(offered[0]).toBe('whole');
   });
 });
 
 describe('largestFittingDuration', () => {
   it('is the longest value within budget', () => {
     expect(largestFittingDuration(0.3)).toBe('quarter');
+    expect(largestFittingDuration(0.4)).toBe('dotted-quarter');
     expect(largestFittingDuration(1)).toBe('whole');
     expect(largestFittingDuration(2)).toBe('double-whole');
   });

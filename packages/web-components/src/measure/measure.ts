@@ -6,6 +6,7 @@ import {
   BeamLineDescriptor,
   computeBeamLevelStructure,
 } from '../rules/beamStructureRules';
+import { mergeClefChangeBeats } from '../rules/clefChangeRules';
 import {
   type ObstacleRect,
   sliceConvexPolygon,
@@ -63,6 +64,7 @@ import {
 } from '../rules/sharedStemRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
+import { resolveTabMirrors } from '../rules/tabMirrorRules';
 import {
   durationToFactor,
   durationToFlagCountMap,
@@ -99,10 +101,13 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_REST_NODE,
+  MUSIC_STAFF_GUITAR_TAB_NODE,
   MUSIC_TUPLET,
   MUSIC_VOICE,
   NOTE_EVENTS,
+  NOTEHEAD_WIDTH_PX,
   STAFF_EVENTS,
+  STAFF_TAGS,
   SVG_NS,
   TUPLET_EVENTS,
 } from '../utils';
@@ -121,8 +126,8 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   ARPEGGIO_CHORD_GAP_PX,
-  ARPEGGIO_WAVE_WIDTH_PX,
   BEAM_GAP_PX,
+  BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
   BRACE_STAFF_GAP_PX,
   BRACE_WIDTH_PX,
@@ -132,7 +137,6 @@ import {
   DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_BASELINE_Y,
   EMPTY_MEASURE_FLEX_BASIS_PX,
-  FRACTIONAL_BEAM_WIDTH_PX,
   HAIRPIN_OPEN_HEIGHT,
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
@@ -294,6 +298,77 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     >();
     // Relative to each staff's top line (see applyOctaveContinuationRects).
     #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
+    #boundSyncClefChangeBeats = () => this.#syncClefChangeBeats();
+    #lastTabMirrorWarnings = new Set<string>();
+
+    // Every staff starts its notes after the widest start area in the
+    // measure, so same-beat entries line up from the first beat. Each staff's
+    // own start is measured from its start-area glyphs alone, so the re-render
+    // a new value triggers finds the same maximum and the exchange ends.
+    #syncNotesStartX(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) && 'measureNotesStartX' in child
+      ) as unknown as {
+        ownNotesStartX: number;
+        measureNotesStartX: number;
+      }[];
+      const notesStartX = Math.max(
+        0,
+        ...staves.map((staff) => staff.ownNotesStartX)
+      );
+      staves.forEach((staff) => {
+        staff.measureNotesStartX = notesStartX;
+      });
+    }
+
+    // Every notation staff makes room for every other's mid-bar clef changes,
+    // and so does a tab staff that mirrors one (`tab-for` → `part`), so
+    // same-beat entries stay aligned past them. A staff ignores an unchanged
+    // value, so its re-render coming back through here ends the exchange.
+    #syncClefChangeBeats(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) &&
+          // A staff parsed from markup before its definition has run is not
+          // upgraded yet, so it has none of these accessors.
+          'measureClefChangeBeats' in child
+      ) as unknown as (StaffElementBaseType & {
+        ownClefChangeBeats: readonly number[];
+        measureClefChangeBeats: readonly number[];
+        part: string | null;
+        tabFor?: string | null;
+      })[];
+      const kinds = staves.map((staff) =>
+        staff.nodeName === MUSIC_STAFF_GUITAR_TAB_NODE
+          ? ('tab' as const)
+          : ('notation' as const)
+      );
+      const union = mergeClefChangeBeats(
+        ...staves
+          .filter((_, i) => kinds[i] === 'notation')
+          .map((staff) => staff.ownClefChangeBeats)
+      );
+      const { links, warnings } = resolveTabMirrors(
+        staves.map((staff, i) => ({
+          kind: kinds[i],
+          part: staff.part,
+          tabFor: staff.tabFor ?? null,
+        }))
+      );
+      const currentWarnings = new Set(warnings);
+      for (const warning of currentWarnings) {
+        if (!this.#lastTabMirrorWarnings.has(warning)) {
+          console.warn(warning);
+        }
+      }
+      this.#lastTabMirrorWarnings = currentWarnings;
+      staves.forEach((staff, i) => {
+        staff.measureClefChangeBeats =
+          kinds[i] === 'notation' || links.has(i) ? union : [];
+      });
+    }
+
     #onStaffMinWidth = (event: Event): void => {
       const customEvent = event as CustomEvent<{
         minWidth: number;
@@ -319,6 +394,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // any tie/slur/etc. across this measure's own staves. Connectors run
       // *after* double-stemmed beams — a slur may need to read the real,
       // already-drawn beam polygon to avoid crossing it (Chapter G).
+      this.#syncNotesStartX();
+      this.#syncClefChangeBeats();
       this.#redrawArpeggios();
       this.#redrawDoubleStemmedBeams();
       this.#redrawCrossStaffTuplets();
@@ -363,13 +440,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       super();
 
       this.attachShadow({ mode: 'open' });
-      const composition = this.closest(MUSIC_COMPOSITION);
-      if (composition) {
-        this.time = composition.getAttribute(COMMON_ATTRIBUTES.TIME) ?? '4/4';
-        this.mode = composition.getAttribute(COMMON_ATTRIBUTES.MODE) ?? 'major';
-        this.keySig =
-          composition.getAttribute(COMMON_ATTRIBUTES.KEY_SIG) ?? 'C';
-      }
 
       this.#boundUpdateConnectorVisibility =
         this.#updateConnectorVisibility.bind(this);
@@ -471,6 +541,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundUpdateConnectorVisibility
       );
       this.addEventListener(
+        STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
+        this.#boundSyncClefChangeBeats
+      );
+      this.addEventListener(
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
@@ -546,6 +620,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#boundUpdateConnectorVisibility
       );
       this.removeEventListener(
+        STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
+        this.#boundSyncClefChangeBeats
+      );
+      this.removeEventListener(
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundUpdateConnectorVisibility
       );
@@ -618,6 +696,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       newValue: string | null
     ): void {
       if (oldValue !== newValue) {
+        if (
+          this.isConnected &&
+          (name === COMMON_ATTRIBUTES.KEY_SIG ||
+            name === COMMON_ATTRIBUTES.MODE ||
+            name === COMMON_ATTRIBUTES.TIME)
+        ) {
+          Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import, as composition.ts does
+            (staff as any).refreshInheritedAttrs?.();
+          });
+        }
         this.render();
         // render() replaced the shadow DOM, so the connector overlays are now
         // empty while the paired arpeggio endpoints stay locally suppressed.
@@ -1057,7 +1146,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             arpeggio: span.arpeggio,
             topY,
             bottomY,
-            signLeftEdgeX: rightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+            signRightEdgeX: rightEdgeX,
           });
           overlay.appendChild(wrap);
         }
@@ -1274,7 +1363,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
         rowLeft: 0,
-        rowRight: rootRect.width,
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,
@@ -2406,6 +2494,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (memberGeometries.length < 2) {
           continue;
         }
+        // Successive members on one staff share an x only before that staff
+        // has spaced its notes; measuring then would size the gap from a
+        // transient layout. Its NOTES_POSITIONED re-runs this pass.
+        const staffNotSpacedYet = memberGeometries.some(
+          (geometry, i) =>
+            i > 0 &&
+            memberGeometries
+              .slice(0, i)
+              .some(
+                (earlier) =>
+                  earlier.staffIndex === geometry.staffIndex &&
+                  Math.abs(earlier.point.x - geometry.point.x) < 0.5
+              )
+        );
+        if (staffNotSpacedYet) {
+          continue;
+        }
 
         const resolvedLine = resolveDoubleStemmedBeamLine(
           memberGeometries.map((g) => g.point),
@@ -2444,14 +2549,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             );
           }
         }
-        const beamStep = BEAM_THICKNESS_PX + BEAM_GAP_PX;
+        const beamStep = BEAM_STEP_PX;
         const segmentXRange = (segment: BeamLineDescriptor) => {
           let x1 = memberGeometries[segment.fromNoteIndex].point.x;
           let x2 = memberGeometries[segment.toNoteIndex].point.x;
           if (segment.fractionalBeamSide === 'left') {
-            x1 -= FRACTIONAL_BEAM_WIDTH_PX;
+            x1 -= NOTEHEAD_WIDTH_PX;
           } else if (segment.fractionalBeamSide === 'right') {
-            x2 += FRACTIONAL_BEAM_WIDTH_PX;
+            x2 += NOTEHEAD_WIDTH_PX;
           }
           return { x1, x2 };
         };

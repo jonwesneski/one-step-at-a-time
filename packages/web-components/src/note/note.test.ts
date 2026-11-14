@@ -2386,3 +2386,47 @@ describe('stem length', () => {
     expect(widthPx).toBeGreaterThan(STAFF_LINE_THICKNESS_PX / 2);
   });
 });
+
+describe('augmentation dots', () => {
+  const dotCount = (note: NoteElementType): number =>
+    note.shadowRoot?.querySelectorAll('[class~="augmentation-dot"]').length ??
+    0;
+
+  it.each([
+    ['quarter', 0],
+    ['dotted-quarter', 1],
+    ['double-dotted-half', 2],
+    ['triple-dotted-eighth', 3],
+  ] satisfies [DurationType, number][])(
+    'draws the dots of a %s standalone note',
+    (duration, expected) => {
+      const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+      note.setAttribute('duration', duration);
+      document.body.appendChild(note);
+      expect(dotCount(note)).toBe(expected);
+      expect(note.augmentationDotsRightEdgePx === null).toBe(expected === 0);
+    }
+  );
+
+  it('keeps the base value for the notehead, stem and tail', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'dotted-half' satisfies DurationType);
+    document.body.appendChild(note);
+    const head = note.shadowRoot?.querySelector('[class~="head"]');
+    expect(head?.getAttribute('fill')).toBe('none');
+    expect(note.shadowRoot?.querySelector('[class~="stem"]')).not.toBeNull();
+    expect(note.shadowRoot?.querySelector('[class~="flag"]')).toBeNull();
+  });
+
+  it('asks the staff to re-lay out when the duration changes', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'E', 4);
+    const listener = jest.fn();
+    note.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, listener);
+
+    note.setAttribute('duration', 'dotted-quarter' satisfies DurationType);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(dotCount(note as NoteElementType)).toBe(1);
+  });
+});

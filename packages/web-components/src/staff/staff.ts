@@ -20,6 +20,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {'grand' | 'bracket'} group - Joins this staff to its next sibling under a brace or bracket connector.
    * @attr {string} group-id - Shared identifier letting a `group="bracket"` connector span more than two contiguous staves.
    * @attr {string} label - Short margin text to the left of the staff (e.g. `r.h.`/`l.h.` hand distribution, an instrument name). Only drawn on the first measure of each visual row.
+   * @attr {string} part - Names the part this staff carries (e.g. `guitar`), so a `<music-staff-guitar-tab>` in the same measure can mirror it with `tab-for`.
    *
    * @example
    * <music-staff clef="treble" key-sig="G" mode="major" time="4/4">

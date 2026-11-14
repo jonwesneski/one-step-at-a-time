@@ -1,10 +1,10 @@
 /**
  * @jest-environment jsdom
  */
-import '../note/index';
-import '../tuplet/index';
 import '../chord/index';
+import '../note/index';
 import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
+import '../tuplet/index';
 import {
   NoteChordOrRestElementType,
   TupletElementType,
@@ -24,6 +24,33 @@ function makeTuplet(ratio: string): TupletElementType {
 }
 
 describe('computeAllowedElementCount', () => {
+  it('fills 3/4 exactly with a dotted half', () => {
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'C', duration: 'dotted-half' }),
+    ];
+    const { allowedElementCount, error } = computeAllowedElementCount(
+      elements,
+      [3, 4],
+      new Map()
+    );
+    expect(allowedElementCount).toBe(1);
+    expect(error).toBeNull();
+  });
+
+  it('names the dotted value left over when the next entry overflows', () => {
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'C', duration: 'dotted-half' }),
+      makeNote({ note: 'C', duration: 'dotted-half' }),
+    ];
+    const { allowedElementCount, error } = computeAllowedElementCount(
+      elements,
+      [9, 8],
+      new Map()
+    );
+    expect(allowedElementCount).toBe(1);
+    expect(error).toContain('dotted-quarter');
+  });
+
   it('allows all elements when they exactly fill the measure', () => {
     const elements: NoteChordOrRestElementType[] = Array.from(
       { length: 4 },

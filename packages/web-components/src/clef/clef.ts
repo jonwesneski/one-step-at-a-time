@@ -2,6 +2,7 @@ import { getClefRenderData } from '../rules/clefRules';
 import { IClefElement } from '../types/elements';
 import { ClefType } from '../types/theory';
 import { CLEF_EVENTS, MUSIC_CLEF } from '../utils/consts';
+import { MID_STREAM_CLEF_SVG_HEIGHT_PX } from '../utils/notationDimensions';
 import { parseClef } from '../utils/parsers';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
@@ -65,7 +66,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         <style>
           :host { display: inline-block; width: 30px; height: 60px; overflow: visible; }
         </style>
-        <svg width="30" height="84" viewBox="0 0 30 84" style="overflow: visible">
+        <svg width="30" height="${MID_STREAM_CLEF_SVG_HEIGHT_PX}" viewBox="0 0 30 ${MID_STREAM_CLEF_SVG_HEIGHT_PX}" style="overflow: visible">
           ${getClefRenderData(this.clef).clefSvg}
         </svg>
       `;

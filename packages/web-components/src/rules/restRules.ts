@@ -1,5 +1,5 @@
-import { DurationType } from '../types/theory';
-import { DURATIONS } from '../utils';
+import { BaseDurationType, DurationType } from '../types/theory';
+import { BASE_DURATIONS } from '../utils/consts';
 import { VOICE_REST_DISPLACEMENT_PX } from '../utils/notationDimensions';
 import {
   getFirstBallYPx,
@@ -8,6 +8,7 @@ import {
   QUARTER_SY_PX,
   WHOLE_RECT_TOP_PX,
 } from '../utils/svgCreator/rest';
+import { durationToBase } from './theoryConsts';
 import { VoiceDirection } from './voiceRules';
 
 // Absolute staff line positions (px from staff-wrapper top), clef-agnostic
@@ -28,37 +29,38 @@ const BETWEEN_LINE2_LINE3 = 43; // midpoint between lines 2 and 3
 // for measure.ts, which resolves that target from real beam/notehead
 // geometry no staff-line constant here captures).
 export function restGlyphOffsetFromBoxTop(duration: DurationType): number {
-  if (duration === 'double-whole' || duration === 'whole') {
+  const base = durationToBase[duration];
+  if (base === 'double-whole' || base === 'whole') {
     return WHOLE_RECT_TOP_PX;
   }
-  if (duration === 'half') {
+  if (base === 'half') {
     return HALF_RECT_BOTTOM_PX;
   }
-  if (duration === 'quarter') {
+  if (base === 'quarter') {
     return QUARTER_SY_PX - 2; // just a tiny bit lower;
   }
-  return getFirstBallYPx(hookCountMap[duration]);
+  return getFirstBallYPx(hookCountMap[base]);
 }
 
-function computeTopY(duration: DurationType): number {
-  const offset = restGlyphOffsetFromBoxTop(duration);
-  if (duration === 'double-whole' || duration === 'whole') {
+function computeTopY(base: BaseDurationType): number {
+  const offset = restGlyphOffsetFromBoxTop(base);
+  if (base === 'double-whole' || base === 'whole') {
     return LINE_2 - offset;
   }
-  if (duration === 'half') {
+  if (base === 'half') {
     return LINE_3 - offset;
   }
-  if (duration === 'quarter') {
+  if (base === 'quarter') {
     return LINE_1 - offset;
   }
-  const hookCount = hookCountMap[duration];
+  const hookCount = hookCountMap[base];
   const ballTarget = hookCount <= 2 ? BETWEEN_LINE2_LINE3 : BETWEEN_LINE1_LINE2;
   return ballTarget - offset;
 }
 
-const restTopMap: Record<DurationType, number> = Object.fromEntries(
-  DURATIONS.map((d) => [d, computeTopY(d)])
-) as Record<DurationType, number>;
+const restTopMap = Object.fromEntries(
+  BASE_DURATIONS.map((base) => [base, computeTopY(base)])
+) as Record<BaseDurationType, number>;
 
 export type VoiceRestContext = { direction: VoiceDirection };
 
@@ -95,11 +97,11 @@ export function restToYCoordinate(
   if (crossStaffContext) {
     return crossStaffContext.targetY - restGlyphOffsetFromBoxTop(duration);
   }
-  const base = restTopMap[duration];
+  const top = restTopMap[durationToBase[duration]];
   if (!voiceContext) {
-    return base;
+    return top;
   }
   return voiceContext.direction === 'up'
-    ? base - VOICE_REST_DISPLACEMENT_PX
-    : base + VOICE_REST_DISPLACEMENT_PX;
+    ? top - VOICE_REST_DISPLACEMENT_PX
+    : top + VOICE_REST_DISPLACEMENT_PX;
 }

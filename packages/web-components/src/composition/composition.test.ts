@@ -117,6 +117,44 @@ describe(`${MUSIC_COMPOSITION} attribute propagation`, () => {
     // Measure-level override still wins after composition propagates
     expect(staff.keySig).toBe('F');
   });
+  it('propagates changes to a staff in parsed markup, with no values copied onto the measure', () => {
+    document.body.innerHTML = `<${MUSIC_COMPOSITION} key-sig="C" time="4/4"><${MUSIC_MEASURE}><${MUSIC_STAFF} clef="treble"></${MUSIC_STAFF}></${MUSIC_MEASURE}></${MUSIC_COMPOSITION}>`;
+    const composition = document.querySelector(MUSIC_COMPOSITION) as any;
+    const measure = document.querySelector(MUSIC_MEASURE) as HTMLElement;
+    const staff = document.querySelector(MUSIC_STAFF) as StaffElementType;
+
+    expect(measure.hasAttribute(COMMON_ATTRIBUTES.KEY_SIG)).toBe(false);
+    expect(measure.hasAttribute(COMMON_ATTRIBUTES.MODE)).toBe(false);
+
+    composition.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'G');
+    composition.setAttribute(COMMON_ATTRIBUTES.MODE, 'minor');
+    composition.setAttribute(COMMON_ATTRIBUTES.TIME, '3/4');
+
+    expect(staff.keySig).toBe('G');
+    expect(staff.mode).toBe('minor');
+    expect(staff.time).toBe('3/4');
+  });
+
+  it('propagates a time change to the first measure once measures are numbered', async () => {
+    const { composition, measure, staff } = makeTree('treble');
+    // Let the composition's child-list observer number the measures.
+    await Promise.resolve();
+    expect(measure.getAttribute('number')).toBe('1');
+
+    composition.setAttribute(COMMON_ATTRIBUTES.TIME, '3/4');
+
+    expect(staff.time).toBe('3/4');
+  });
+
+  it("updates a staff when its connected measure's own values change", () => {
+    const { measure, staff } = makeTree('treble');
+
+    measure.setAttribute(COMMON_ATTRIBUTES.TIME, '6/8');
+    measure.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'D');
+
+    expect(staff.time).toBe('6/8');
+    expect(staff.keySig).toBe('D');
+  });
 });
 
 describe(`${MUSIC_COMPOSITION} max-width`, () => {

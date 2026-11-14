@@ -147,31 +147,27 @@ type OrnamentNoteGroupResult = {
 // placement rule; a finishing group can slur to either or both neighbors).
 function renderOrnamentNoteGroup(
   graceNotes: GraceNoteDescriptor[],
-  writtenDuration: GraceDuration,
-  // The *unresolved* explicit duration attribute (null when unset) — kept
-  // separate from writtenDuration (which always defaults to 'eighth' for
-  // rendering the notehead/flag shape) because an unset duration resolves to
-  // a distinct GRACE_BEAM_COUNT beam count for a group, not "eighth"'s own
-  // 1-flag count (resolveGroupBeamCount's null branch).
+  // The explicit duration attribute, null when unset. Heads and flags draw
+  // an unset value as an eighth, but a group's beam count has its own
+  // default (resolveGroupBeamCount's null branch).
   explicitGroupDuration: GraceDuration | null,
   headXCenters: number[],
   headYCenters: number[],
   mainStaffY: number | null,
   mainHeadCenterYPx: number,
-  // Acciaccatura's crossed-through slash and per-note articulation marks are
-  // leading-grace-only concepts — a trill's finishing notes have no
-  // grace-type/articulation attribute of their own.
-  allowSlashAndArticulation: boolean,
-  graceType: GraceType
+  // null for a trill's finishing notes: the acciaccatura slash and per-note
+  // articulation marks belong to leading grace notes only.
+  graceType: GraceType | null
 ): OrnamentNoteGroupResult {
   const group = document.createElementNS(SVG_NS, 'g');
   const isGroup = graceNotes.length > 1;
+  const writtenDuration = explicitGroupDuration ?? 'eighth';
+  const allowSlashAndArticulation = graceType !== null;
 
   appendLedgerLines(
     group,
     graceNotes,
     headXCenters,
-    headYCenters,
     mainStaffY,
     mainHeadCenterYPx
   );
@@ -191,7 +187,6 @@ function renderOrnamentNoteGroup(
           true,
           headXCenters[i],
           headYCenters[i],
-          i,
           graceNotes[i].notehead
         )
       );
@@ -274,7 +269,6 @@ function renderOrnamentNoteGroup(
         false,
         headXCenters[0],
         headYCenters[0],
-        0,
         graceNotes[0].notehead
       )
     );
@@ -334,7 +328,6 @@ export function createGraceNotesSvg({
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('grace-notes');
 
-  const writtenDuration = graceDuration ?? 'eighth';
   const layout = computeGraceLayout(graceNotes);
   const headXCenters = layout.headXCenters.map(
     (headXCenter) => anchorRightXPx - layout.totalWidth + headXCenter
@@ -347,13 +340,11 @@ export function createGraceNotesSvg({
   const { group: noteGroup, firstStemTipY: firstGraceStemTipY } =
     renderOrnamentNoteGroup(
       graceNotes,
-      writtenDuration,
       graceDuration,
       headXCenters,
       headYCenters,
       mainStaffY,
       mainHeadCenterYPx,
-      true,
       graceType
     );
   group.appendChild(noteGroup);
@@ -443,7 +434,6 @@ export function createTrillFinishNotesSvg({
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('trill-finish-notes');
 
-  const writtenDuration: GraceDuration = 'eighth';
   const layout = computeGraceLayout(trillFinishNotes);
   const headXCenters = layout.headXCenters.map(
     (headXCenter) => anchorLeftXPx + headXCenter
@@ -454,14 +444,12 @@ export function createTrillFinishNotesSvg({
 
   const { group: noteGroup } = renderOrnamentNoteGroup(
     trillFinishNotes,
-    writtenDuration,
     null,
     headXCenters,
     headYCenters,
     mainStaffY,
     mainHeadCenterYPx,
-    false,
-    'appoggiatura'
+    null
   );
   group.appendChild(noteGroup);
 
@@ -536,7 +524,6 @@ function buildGraceHead(
   stemless: boolean,
   xCenter: number,
   yCenter: number,
-  index: number,
   notehead: NoteheadType = 'normal'
 ): SVGGElement {
   const [noteGroup] = createNoteSvg({
@@ -570,7 +557,7 @@ function buildGraceHead(
   // flag in the same shadow root.
   const flagPath = noteGroup.querySelector('path.single-flag');
   if (flagPath) {
-    const graceFlagId = `grace-single-flag-${index}`;
+    const graceFlagId = 'grace-single-flag';
     flagPath.id = graceFlagId;
     for (const use of noteGroup.querySelectorAll('use')) {
       use.setAttribute('href', `#${graceFlagId}`);
@@ -848,7 +835,6 @@ function appendLedgerLines(
   group: SVGGElement,
   graceNotes: GraceNoteDescriptor[],
   headXCenters: number[],
-  headYCenters: number[],
   mainStaffY: number | null,
   mainHeadCenterYPx: number
 ): void {

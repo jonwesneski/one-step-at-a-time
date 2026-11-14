@@ -521,12 +521,14 @@ describe('staffClassicalBase', () => {
       // never auto-combine-eligible (see rules/voiceCombineRules.ts) — this
       // test is about independent per-voice rendering, not the v1-scoped
       // combine optimization (covered separately in voiceCombineRules.test.ts).
+      // Voice 2 sits below voice 1 so the parts don't cross (crossed parts
+      // are offset — see rules/voiceRules.ts#computeCrossVoiceDisplacements).
       const voice1Notes = ['C', 'D'].map(makeQuarterNote);
       const voice2Notes = ['E', 'F'].map((pitch) => {
         const note = document.createElement(MUSIC_NOTE) as any;
         note.setAttribute('duration', 'half');
         note.setAttribute('note', pitch);
-        note.setAttribute('octave', `${4 satisfies Octave}`);
+        note.setAttribute('octave', `${3 satisfies Octave}`);
         return note;
       });
       const voice1 = document.createElement('music-voice');
@@ -1281,22 +1283,22 @@ describe('staffClassicalBase triangle noteheads', () => {
     });
 
     it('clears a beam group stem that points against its own pitch', () => {
-      const [e4, a5, triangle] = renderStaff(
+      const [g4, a5, triangle] = renderStaff(
         [
-          { note: 'E', octave: '4', duration: 'eighth' },
+          { note: 'G', octave: '4', duration: 'eighth' },
           { note: 'A', octave: '5', duration: 'eighth' },
           { duration: 'quarter', notehead: 'triangle-down' },
         ],
         'treble',
         '2/4'
       );
-      // On its own the E4 would stem up, but the A5 sets the beam's direction.
-      expect(e4.stemUp).toBe(false);
+      // On its own the G4 would stem up, but the A5 sets the beam's direction.
+      expect(g4.stemUp).toBe(false);
       expect(a5.stemUp).toBe(false);
       expect(triangle.staffY).toBeCloseTo(
-        e4.staffY +
+        g4.staffY +
           BASE_STEM_LENGTH_PX +
-          e4.stemExtension +
+          g4.stemExtension +
           TRIANGLE_RUN_CLEARANCE_PX
       );
     });

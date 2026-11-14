@@ -305,12 +305,15 @@ export function computeTupletBracketGeometry(
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>,
   outerBaseY: number | null,
   hasInnerGroups: boolean,
-  // The primary (outermost) beam's Y at note `index`, as the beam renderer
-  // actually drew it — null when that note is not beamed or no renderer exists.
-  // The numeral/bracket sits clear of the beam, so it reads the real beam line
-  // rather than re-deriving it from staff coords (which misses the beam's
-  // vertical offset). Defaults to the staff-coord derivation.
-  primaryBeamYForIndex: (index: number) => number | null = () => null,
+  // The outer edge, on the `above` side, of the beam stack at note `index`, as
+  // the beam renderer actually drew it — null when that note is not beamed or
+  // no renderer exists. The numeral/bracket sits clear of the beams, so it
+  // reads the real stack rather than re-deriving it from staff coords (which
+  // misses the beam's placement). Defaults to the staff-coord derivation.
+  beamStackEdgeYForIndex: (
+    index: number,
+    above: boolean
+  ) => number | null = () => null,
   // Forces the bracket's side regardless of the stem vote. A note whose
   // stem points away from the forced side is cleared by its notehead, not
   // by a stem tip on the bracket's side it doesn't have.
@@ -406,11 +409,12 @@ export function computeTupletBracketGeometry(
       TUPLET_HOOK_LENGTH_PX;
   let baseY = outerBaseY ?? staffBaseY;
 
-  // The beam Y at note `idx`: the renderer's actual primary-beam line when
-  // available, else re-derived from the staff Y (which omits the beam's vertical
-  // offset — used only when there is no beam renderer, e.g. jsdom / standalone).
+  // The beam Y at note `idx` on the numeral's side: the renderer's actual beam
+  // stack when available, else re-derived from the staff Y (which omits the
+  // beam's placement — used only when there is no beam renderer, e.g. jsdom /
+  // standalone).
   const beamTipYForIndex = (idx: number): number | null => {
-    const fromRenderer = primaryBeamYForIndex(idx);
+    const fromRenderer = beamStackEdgeYForIndex(idx, stemUp);
     if (fromRenderer !== null) {
       return fromRenderer;
     }
@@ -446,20 +450,32 @@ export function computeTupletBracketGeometry(
 
     const extremeStemTipY = nonRestIndicesForClamping.reduce(
       (worst, i) => {
-        const tipY =
-          sideOverride !== null && stemDirections[i] !== stemUp
-            ? noteheadEdgeY(
-                i,
-                elements,
-                noteStaffYCoords,
-                chordStaffYCoords,
-                stemUp
-              )
-            : beamTipYForIndex(i);
-        if (tipY === null) {
-          return worst;
-        }
-        return stemUp ? Math.min(worst, tipY) : Math.max(worst, tipY);
+        const awayFromSide = stemDirections[i] !== stemUp;
+        const headEdge = () =>
+          noteheadEdgeY(
+            i,
+            elements,
+            noteStaffYCoords,
+            chordStaffYCoords,
+            stemUp
+          );
+        // A beamed note stemmed away from the bracket's side (a kneed beam)
+        // has its head beyond the beams on that side.
+        const candidates =
+          sideOverride !== null && awayFromSide
+            ? [headEdge()]
+            : awayFromSide && beamStackEdgeYForIndex(i, stemUp) !== null
+            ? [beamTipYForIndex(i), headEdge()]
+            : [beamTipYForIndex(i)];
+        return candidates.reduce<number>(
+          (extreme, y) =>
+            y === null
+              ? extreme
+              : stemUp
+              ? Math.min(extreme, y)
+              : Math.max(extreme, y),
+          worst
+        );
       },
       stemUp ? Infinity : -Infinity
     );

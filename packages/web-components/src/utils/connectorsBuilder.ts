@@ -49,6 +49,7 @@ import {
   ARPEGGIO_RUN_DIVIDED_TIE_GAP_HALF_PX,
   ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
   ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
+  AUGMENTATION_DOT_SPACING_GAP_PX,
   CROSS_STAFF_SLUR_BULGE_SPAN_RATIO,
   LAISSEZ_VIBRER_CURVE_LENGTH_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
@@ -752,11 +753,11 @@ const chordOtherToneCenters = (
   return centers;
 };
 
-// A tie must not run through a written trilling notehead (trill-note) or a
-// trill's finishing grace note(s) (trill-finish) — nudge the tie's start
-// point past whichever (or both — summed, harmless in that rare combination
-// since the two decorations aren't laid out to coexist cleanly anyway)
-// reserve space there, computed analytically (matching
+// A tie must not run through a dotted note's dots, a written trilling
+// notehead (trill-note) or a trill's finishing grace note(s) (trill-finish) —
+// nudge the tie's start point past whichever reserve space there (the two
+// trill decorations are summed, harmless in that rare combination since they
+// aren't laid out to coexist cleanly anyway), computed analytically (matching
 // computeWrittenTrillNoteWidth's/computeGraceFootprintWidth's own math)
 // rather than queried from the DOM. The written notehead is drawn by the
 // staff's own overlay; the finishing grace note(s) are drawn locally inside
@@ -766,7 +767,7 @@ const chordOtherToneCenters = (
 // rules/trillRules.ts's writtenNoteAnchorIndex), this still nudges from the
 // first note's own position — a harmless overshoot in that rare
 // combination, not a visual bug.
-const tieStartTrillNudgePx = (note: NoteLikeElementType): number => {
+const tieStartNudgePx = (note: NoteLikeElementType): number => {
   const tag = note.tagName.toLowerCase();
   if (tag !== MUSIC_NOTE && tag !== MUSIC_CHORD) {
     return 0;
@@ -803,6 +804,17 @@ const tieStartTrillNudgePx = (note: NoteLikeElementType): number => {
         trillFinish,
         trillCapableNote.resolvedTrillFinishAccidentals
       );
+  }
+  // A tie from a dotted note starts after its dots; any trill decoration
+  // above already starts after them too.
+  const dotsRightEdge =
+    (stemSourceOf(note) as NoteElementType | ChordElementType)
+      .augmentationDotsRightEdgePx ?? null;
+  if (dotsRightEdge !== null) {
+    nudge =
+      nudge > 0
+        ? nudge + Math.max(0, dotsRightEdge - NOTE_SVG_WIDTH)
+        : dotsRightEdge + AUGMENTATION_DOT_SPACING_GAP_PX - NOTE_SVG_WIDTH / 2;
   }
   return nudge;
 };
@@ -1149,8 +1161,9 @@ export const collectStemRects = (
 
 export type ConnectorsBuildOptions = {
   rootRect: DOMRect;
+  // Where a connector that leaves its row starts again on the next row; it
+  // runs out to the root's right edge.
   rowLeft: number;
-  rowRight: number;
   // Real double-stemmed-beam polygon rects (root-rect-relative — same
   // space every anchor in this module uses), already drawn by the
   // ancestor <music-measure> before this runs (ordering dependency:
@@ -1219,8 +1232,8 @@ const buildCrossStaffSlurSvgs = (
   staves: SlurGroupStaves,
   options: ConnectorsBuildOptions
 ): SVGGElement[] => {
-  const { rootRect, rowLeft, rowRight, innerVoiceElements, entryObstacles } =
-    options;
+  const { rootRect, rowLeft, innerVoiceElements, entryObstacles } = options;
+  const rowRight = rootRect.width;
   const entries = entryObstacles?.entries ?? [];
   const counts = countNotesPerStaffInSpan(pair, staves, entries, rootRect);
   const preferredSide = pickCrossStaffSlurSide(counts.top, counts.bottom);
@@ -1324,11 +1337,11 @@ export const buildConnectorSvgs = (
   const {
     rootRect,
     rowLeft,
-    rowRight,
     beamRects = [],
     groupSlurStaves,
     innerVoiceElements,
   } = options;
+  const rowRight = rootRect.width;
   const elements: SVGGElement[] = [];
 
   for (const pair of pairs) {
@@ -1579,7 +1592,7 @@ export const buildConnectorSvgs = (
 
     const startAnchor = resolveSlurAwareAnchor(pair.start, startBulge);
     if (pair.kind === 'tie') {
-      startAnchor.x += tieStartTrillNudgePx(pair.start);
+      startAnchor.x += tieStartNudgePx(pair.start);
     }
     const endAnchor = resolveSlurAwareAnchor(pair.end, endBulge);
 

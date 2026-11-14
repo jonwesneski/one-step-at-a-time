@@ -656,7 +656,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -677,7 +676,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -701,7 +699,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -726,7 +723,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
 
     const path = parseCubicPath(
@@ -755,7 +751,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
 
     const path = parsePath(svgGroup.querySelector('path')!.getAttribute('d')!);
@@ -779,7 +774,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutObstacle] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
     const basePath = parseCubicPath(
       withoutObstacle.querySelector('path')!.getAttribute('d')!
@@ -796,7 +790,6 @@ describe('buildConnectorSvgs', () => {
     const [withObstacle] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
       entryObstacles: {
         entries: [
           makeEntry(rest, {
@@ -835,7 +828,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutEntries] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
     const anchorBox = (x: number, y: number) => ({
       left: x - 10,
@@ -850,7 +842,6 @@ describe('buildConnectorSvgs', () => {
     const [withOwnEndpointsOnly] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
       entryObstacles: {
         entries: [
           makeEntry(startNote, {
@@ -889,7 +880,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
       entryObstacles: {
         entries: [
           makeEntry(startNote, { staffIndex: 0, centerX: 60 }),
@@ -930,7 +920,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
       groupSlurStaves: new Map([
         [pair, { topStaffIndex: 0, bottomStaffIndex: 1 }],
       ]),
@@ -976,7 +965,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -997,7 +985,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -1019,7 +1006,6 @@ describe('buildConnectorSvgs', () => {
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     expect(svgGroup.querySelector('text')?.textContent).toBe(
@@ -1049,7 +1035,6 @@ describe('buildConnectorSvgs', () => {
     const groups = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
 
     expect(groups).toHaveLength(1);
@@ -1081,7 +1066,6 @@ describe('buildConnectorSvgs', () => {
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
     expect(svgs).toHaveLength(3);
 
@@ -1110,7 +1094,7 @@ describe('buildConnectorSvgs', () => {
           label: 'l.v.',
         } as ConnectorPair,
       ],
-      { rootRect, rowLeft: 0, rowRight: 800 }
+      { rootRect, rowLeft: 0 }
     );
     expect(svgs).toHaveLength(1);
     const path = parsePath(svgs[0].querySelector('path')!.getAttribute('d')!);
@@ -1145,7 +1129,6 @@ describe('buildConnectorSvgs', () => {
     const svgs = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
     // Two short stubs instead of one full curve.
     expect(svgs).toHaveLength(2);
@@ -1170,7 +1153,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1193,7 +1175,6 @@ describe('buildConnectorSvgs', () => {
     const [withBeam] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
       beamRects: [beamRect],
     });
     const pushedPath = parsePath(
@@ -1222,7 +1203,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1242,7 +1222,6 @@ describe('buildConnectorSvgs', () => {
     const [withFarBeam] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
       beamRects: [farRect],
     });
     const farPath = parsePath(
@@ -1268,7 +1247,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1288,7 +1266,6 @@ describe('buildConnectorSvgs', () => {
     const [withBeam] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
       beamRects: [straddlingRect],
     });
     const pushedPath = parsePath(
@@ -1333,7 +1310,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutFlag] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
     });
     const baseline = parsePath(
       withoutFlag.querySelector('path')!.getAttribute('d')!
@@ -1342,7 +1318,6 @@ describe('buildConnectorSvgs', () => {
     const [withFlag] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 800,
       innerVoiceElements: new Set([startNote]),
     });
     const flagged = parsePath(
@@ -1405,7 +1380,6 @@ describe('buildConnectorSvgs', () => {
     const [svg] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
     const path = parsePath(svg.querySelector('path')!.getAttribute('d')!);
 
@@ -1446,7 +1420,6 @@ describe('buildConnectorSvgs', () => {
     const [svg] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
     const path = parseCubicPath(svg.querySelector('path')!.getAttribute('d')!);
 
@@ -1475,7 +1448,6 @@ describe('buildConnectorSvgs', () => {
     const [withoutStem] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
     const baseline = parsePath(
       withoutStem.querySelector('path')!.getAttribute('d')!
@@ -1499,7 +1471,6 @@ describe('buildConnectorSvgs', () => {
     const [withStem] = buildConnectorSvgs([pair], {
       rootRect,
       rowLeft: 0,
-      rowRight: 1000,
     });
     const withStemPath = parsePath(
       withStem.querySelector('path')!.getAttribute('d')!

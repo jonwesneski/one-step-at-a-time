@@ -45,7 +45,7 @@ const LEADING_NOTE_GAP = 10;
 const PIXELS_PER_BEAT = 160;
 const MEASURE_MIN_WIDTH = 100;
 // Whole-note-fraction duration factors, mirroring rules/theoryConsts.ts.
-const DURATION_FACTOR: Record<DurationType, number> = {
+const DURATION_FACTOR: Partial<Record<DurationType, number>> = {
   'double-whole': 2,
   whole: 1,
   half: 0.5,
@@ -59,7 +59,10 @@ const DURATION_FACTOR: Record<DurationType, number> = {
 // Natural-width contribution (advance) of one entry of the given duration:
 // its beat-proportional weight, floored at MIN_NOTE_WIDTH.
 function entryNatural(duration: DurationType): number {
-  return Math.max(MIN_NOTE_WIDTH, DURATION_FACTOR[duration] * PIXELS_PER_BEAT);
+  return Math.max(
+    MIN_NOTE_WIDTH,
+    (DURATION_FACTOR[duration] ?? 0) * PIXELS_PER_BEAT
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -6619,5 +6622,201 @@ test.describe(`${MUSIC_MEASURE} octave signs with double-stemmed beams`, () => {
         expect(segmentIntersectsRect(start, end, padded)).toBe(false);
       }
     }
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} mid-bar clef changes across staves`, () => {
+  const quarters = (pitches: string[]) =>
+    pitches
+      .map((pitch) =>
+        pitch === '|bass' || pitch === '|treble'
+          ? `<music-clef clef="${pitch.slice(1)}"></music-clef>`
+          : `<music-note note="${pitch[0]}" octave="${pitch.slice(
+              1
+            )}" duration="quarter"></music-note>`
+      )
+      .join('');
+
+  async function buildMeasure(page: Page, staves: string) {
+    await page.goto('./');
+    await page.evaluate((html) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.innerHTML = '';
+      host.style.width = '900px';
+      const template = document.createElement('template');
+      template.innerHTML = `<music-measure time="4/4">${html}</music-measure>`;
+      host.appendChild(document.importNode(template.content, true));
+    }, staves);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  const noteLeftsByStaff = (page: Page, noteTag = 'music-note') =>
+    page.evaluate(
+      (tag) =>
+        Array.from(document.querySelectorAll('music-measure > *')).map(
+          (staff) =>
+            Array.from(staff.querySelectorAll(tag)).map(
+              (note) => note.getBoundingClientRect().left
+            )
+        ),
+      noteTag
+    );
+
+  // Compares spacing, not absolute x: a fret number's box and a notehead's
+  // box are anchored differently, which shifts a whole staff, not a column.
+  const columnSpread = (top: number[], bottom: number[]) => {
+    expect(top.length).toBe(bottom.length);
+    const offsets = top.map((left, i) => left - bottom[i]);
+    return Math.max(...offsets) - Math.min(...offsets);
+  };
+  const expectColumnsAligned = (top: number[], bottom: number[]) => {
+    expect(columnSpread(top, bottom)).toBeLessThan(1);
+  };
+
+  test("a sibling staff keeps its notes aligned past one staff's clef change, across a resize", async ({
+    page,
+  }) => {
+    await buildMeasure(
+      page,
+      `<music-staff clef="treble">${quarters([
+        'C5',
+        'D5',
+        '|bass',
+        'C3',
+        'D3',
+      ])}</music-staff>
+       <music-staff clef="bass">${quarters([
+         'C3',
+         'D3',
+         'E3',
+         'F3',
+       ])}</music-staff>`
+    );
+
+    let [treble, bass] = await noteLeftsByStaff(page);
+    expectColumnsAligned(treble, bass);
+
+    await resizeHost(page, 500);
+    await waitForRedrawCycle(page);
+    [treble, bass] = await noteLeftsByStaff(page);
+    expectColumnsAligned(treble, bass);
+  });
+
+  test('two staves changing clef on the same beat share one slot', async ({
+    page,
+  }) => {
+    await buildMeasure(
+      page,
+      `<music-staff clef="treble">${quarters([
+        'C5',
+        'D5',
+        '|bass',
+        'C3',
+        'D3',
+      ])}</music-staff>
+       <music-staff clef="bass">${quarters([
+         'C3',
+         'D3',
+         '|treble',
+         'C5',
+         'D5',
+       ])}</music-staff>`
+    );
+
+    const [treble, bass] = await noteLeftsByStaff(page);
+    expectColumnsAligned(treble, bass);
+    const clefLefts = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('music-clef')).map(
+        (clef) => clef.getBoundingClientRect().left
+      )
+    );
+    expect(Math.abs(clefLefts[0] - clefLefts[1])).toBeLessThan(1);
+  });
+
+  test('a tab staff with a wider start area keeps its frets under the notes, across a resize', async ({
+    page,
+  }) => {
+    const fret = (value: number) =>
+      `<music-guitar-note fret="${value}" string="1" duration="quarter"></music-guitar-note>`;
+    await buildMeasure(
+      page,
+      `<music-staff clef="treble">${quarters([
+        'C5',
+        'D5',
+        'E5',
+        'F5',
+      ])}</music-staff>
+       <music-staff-guitar-tab>${[0, 1, 2, 3]
+         .map(fret)
+         .join('')}</music-staff-guitar-tab>`
+    );
+
+    const columns = async () => {
+      const [notation] = await noteLeftsByStaff(page);
+      const [, tab] = await noteLeftsByStaff(page, 'music-guitar-note');
+      return { notation, tab };
+    };
+    let { notation, tab } = await columns();
+    expectColumnsAligned(tab, notation);
+
+    await resizeHost(page, 500);
+    await waitForRedrawCycle(page);
+    ({ notation, tab } = await columns());
+    expectColumnsAligned(tab, notation);
+  });
+
+  test('a tab staff follows the notation staff it mirrors, and only while linked', async ({
+    page,
+  }) => {
+    const fret = (value: number) =>
+      `<music-guitar-note fret="${value}" string="1" duration="quarter"></music-guitar-note>`;
+    await buildMeasure(
+      page,
+      `<music-staff clef="treble" part="guitar">${quarters([
+        'C5',
+        'D5',
+        '|bass',
+        'C3',
+        'D3',
+      ])}</music-staff>
+       <music-staff-guitar-tab>${[0, 1, 2, 3]
+         .map(fret)
+         .join('')}</music-staff-guitar-tab>`
+    );
+
+    const tabLefts = async () =>
+      (await noteLeftsByStaff(page, 'music-guitar-note'))[1];
+    const [notation] = await noteLeftsByStaff(page);
+    const unlinked = await tabLefts();
+    // Unlinked, the tab ignores the clef change and falls out of step.
+    expect(columnSpread(unlinked, notation)).toBeGreaterThan(10);
+
+    const setTabFor = async (value: string | null) => {
+      await page.evaluate((tabFor) => {
+        const tab = document.querySelector('music-staff-guitar-tab');
+        if (tab === null) {
+          throw new Error('tab missing');
+        }
+        if (tabFor === null) {
+          tab.removeAttribute('tab-for');
+        } else {
+          tab.setAttribute('tab-for', tabFor);
+        }
+      }, value);
+      await waitForRedrawCycle(page);
+    };
+
+    await setTabFor('guitar');
+    expectColumnsAligned(await tabLefts(), notation);
+
+    await setTabFor(null);
+    const unlinkedAgain = await tabLefts();
+    unlinkedAgain.forEach((left, i) => {
+      expect(Math.abs(left - unlinked[i])).toBeLessThan(0.5);
+    });
   });
 });

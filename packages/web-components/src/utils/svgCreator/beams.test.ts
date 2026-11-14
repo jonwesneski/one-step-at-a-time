@@ -5,13 +5,21 @@
 import '../../index';
 import { makeChord, makeNote } from '../../test-fixtures/unitHelpers';
 import type { ChordElementType, StaffElementType } from '../../types/elements';
-import type { DurationType } from '../../types/theory';
+import type { DurationType, Note } from '../../types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
+  MUSIC_CLEF,
   MUSIC_NOTE,
   MUSIC_STAFF,
+  MUSIC_TUPLET,
+  MUSIC_VOICE,
 } from '../consts';
+import {
+  MIN_STEM_LENGTH_PX,
+  STEM_OVERLAP_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
+} from '../notationDimensions';
 import { BeamsBuilder } from './beams';
 import { NOTE_SCALE } from './note';
 
@@ -757,36 +765,123 @@ describe('beams', () => {
     });
   });
 
-  describe('minimum stem length is enforced', () => {
-    it('no stem is shorter than 25 px when a steep-pitch beam group requires shifting', () => {
+  describe('wide-interval groups take a kneed beam', () => {
+    it('stems point both ways, none shorter than 2½ spaces', () => {
       const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
       staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
       staff.setAttribute(COMMON_ATTRIBUTES.MODE, 'major');
       staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
       document.body.appendChild(staff);
 
-      const steepGapNotes = [
+      const notes = [
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'G', octave: 5, duration: 'eighth' }),
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'G', octave: 5, duration: 'eighth' }),
       ];
-      triggerSlotChange(staff, steepGapNotes);
+      triggerSlotChange(staff, notes);
 
-      expect(steepGapNotes.length).toBeGreaterThan(0);
-      for (const note of steepGapNotes) {
-        const stem = getNoteStem(note);
-        if (!stem) continue;
+      expect(notes.map((note) => (note as any).stemUp)).toEqual([
+        true,
+        false,
+        true,
+        false,
+      ]);
+      for (const note of notes) {
+        const stem = getNoteStem(note)!;
+        expect(stem).not.toBeNull();
         const y1 = parseFloat(stem.getAttribute('y1')!);
         const y2 = parseFloat(stem.getAttribute('y2')!);
-        const stemLengthPx = Math.abs(y2 - y1) * NOTE_SCALE;
-
-        expect(stemLengthPx).toBeGreaterThanOrEqual(24);
+        // The drawn line stops STEM_OVERLAP_PX inside the beam's far edge.
+        const stemLengthPx = Math.abs(y2 - y1) * NOTE_SCALE + STEM_OVERLAP_PX;
+        expect(stemLengthPx).toBeGreaterThanOrEqual(MIN_STEM_LENGTH_PX - 1);
       }
     });
   });
 
-  describe('elementBeatOffsets (sparse combined-track positions)', () => {
+  describe('clef changes', () => {
+    it("gives every voice's beams the staff's clef changes to keep clear of", () => {
+      const received: number[] = [];
+      const buildRenderer = BeamsBuilder.prototype.buildRenderer;
+      const spy = jest
+        .spyOn(BeamsBuilder.prototype, 'buildRenderer')
+        .mockImplementation(function (this: BeamsBuilder, positions) {
+          const renderer = buildRenderer.call(this, positions);
+          const setObstacles = renderer.setObstacles.bind(renderer);
+          renderer.setObstacles = (obstacles) => {
+            received.push(obstacles.length);
+            setObstacles(obstacles);
+          };
+          return renderer;
+        });
+
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+      const voice1 = document.createElement(MUSIC_VOICE);
+      const clef = document.createElement(MUSIC_CLEF);
+      clef.setAttribute('clef', 'bass');
+      voice1.append(
+        makeNote({ note: 'C', octave: 5, duration: 'half' }),
+        clef,
+        makeNote({ note: 'C', octave: 3, duration: 'half' })
+      );
+      const voice2 = document.createElement(MUSIC_VOICE);
+      voice2.append(
+        ...(['G', 'A', 'B', 'C'] satisfies Note[]).map((note) =>
+          makeNote({ note, octave: 3, duration: 'eighth' })
+        )
+      );
+      triggerSlotChange(staff, [voice1, voice2]);
+      spy.mockRestore();
+
+      expect(received.length).toBeGreaterThanOrEqual(2);
+      expect(received.every((count) => count === 1)).toBe(true);
+    });
+  });
+
+  describe('tuplets on a kneed beam', () => {
+    it('keeps the numeral clear of every beam in the stack', () => {
+      const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+      const notes = (
+        [
+          ['E', 6],
+          ['A', 3],
+          ['A', 3],
+          ['A', 3],
+          ['E', 6],
+        ] as const
+      ).map(([note, octave]) =>
+        makeNote({ note, octave, duration: 'thirtysecond' })
+      );
+      const tuplet = document.createElement(MUSIC_TUPLET);
+      tuplet.setAttribute('ratio', '5');
+      tuplet.append(...notes);
+      triggerSlotChange(staff, [tuplet]);
+
+      expect(notes.map((note) => (note as any).stemUp)).toEqual([
+        false,
+        true,
+        true,
+        true,
+        false,
+      ]);
+      const beamYs = Array.from(
+        staff.shadowRoot!.querySelectorAll('.beam-group .beam')
+      ).flatMap((polygon) => parsePoints(polygon).map(([, y]) => y));
+      const numeral = staff.shadowRoot!.querySelector('.tuplet-numeral')!;
+      expect(numeral).not.toBeNull();
+      const numeralY = parseFloat(numeral.getAttribute('y')!);
+      // Most stems point up, so the numeral goes above the beams.
+      expect(numeralY + TUPLET_NUMERAL_FONT_SIZE / 2).toBeLessThanOrEqual(
+        Math.min(...beamYs)
+      );
+    });
+  });
+
+  describe('beatOffsets (sparse combined-track positions)', () => {
     it('groups elements by their supplied offsets, not by sequential accumulation', () => {
       // Two eighth notes whose OWN durations would only span 1/4 total, but
       // whose real beat-time positions (as a combined-voice track sparsely
@@ -798,7 +893,7 @@ describe('beams', () => {
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
       ];
-      const builder = new BeamsBuilder(elements, [4, 4], undefined, [0, 0.5]);
+      const builder = new BeamsBuilder(elements, [4, 4], [0, 0.5]);
       expect(builder.isBeamed(0)).toBe(false);
       expect(builder.isBeamed(1)).toBe(false);
     });
@@ -808,17 +903,7 @@ describe('beams', () => {
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
       ];
-      const builder = new BeamsBuilder(elements, [4, 4], undefined, [0, 1 / 8]);
-      expect(builder.isBeamed(0)).toBe(true);
-      expect(builder.isBeamed(1)).toBe(true);
-    });
-
-    it('omitting elementBeatOffsets falls back to sequential accumulation (unchanged existing behavior)', () => {
-      const elements = [
-        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
-        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
-      ];
-      const builder = new BeamsBuilder(elements, [4, 4]);
+      const builder = new BeamsBuilder(elements, [4, 4], [0, 1 / 8]);
       expect(builder.isBeamed(0)).toBe(true);
       expect(builder.isBeamed(1)).toBe(true);
     });
@@ -827,13 +912,7 @@ describe('beams', () => {
   describe('externallyBeamedIndices (cross-staff double-stemmed beam members)', () => {
     it('reports isBeamed true for an externally-beamed index with no same-staff group of its own', () => {
       const elements = [makeNote({ note: 'C', octave: 4, duration: 'eighth' })];
-      const builder = new BeamsBuilder(
-        elements,
-        [4, 4],
-        undefined,
-        undefined,
-        new Set([0])
-      );
+      const builder = new BeamsBuilder(elements, [4, 4], [0], new Set([0]));
       expect(builder.isBeamed(0)).toBe(true);
       expect(builder.beamGroupFor(0)).toBeNull();
     });
@@ -847,8 +926,7 @@ describe('beams', () => {
       const builder = new BeamsBuilder(
         elements,
         [4, 4],
-        undefined,
-        undefined,
+        [0, 1 / 8, 2 / 8],
         new Set([1])
       );
       // The externally-beamed middle note breaks the run — indices 0 and 2

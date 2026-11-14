@@ -24,10 +24,10 @@ import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
  */
 export type StaffStrutInputs = {
   noteCount: number;
-  firstElementLeftwardWidth: number;
-  extraLeftwardWidth: number;
-  clefChangeWidth: number;
-  extraRightwardWidth: number;
+  // Everything painted left of entries' own boxes.
+  leftwardWidth: number;
+  // Clef-change room plus everything reserved right of entries' boxes.
+  rightwardWidth: number;
   totalSlackWeight: number;
 };
 
@@ -55,8 +55,8 @@ export function computeMinimumEntryAdvance(
 /**
  * Strut min width for a classical staff measure (no lyrics).
  *
- * minWidth = describeEndX + leadingGap + firstElementLeftwardWidth
- *          + extraLeftwardWidth + noteCount × MIN_NOTE_WIDTH + clefChangeWidth
+ * minWidth = describeEndX + leadingGap + leftwardWidth
+ *          + noteCount × MIN_NOTE_WIDTH + rightwardWidth
  *
  * leadingGap (LEADING_NOTE_GAP_PX, only when there are notes) keeps the first
  * entry off the clef/key/time area.
@@ -64,33 +64,24 @@ export function computeMinimumEntryAdvance(
  * A tupleted entry counts whole in noteCount: #spaceElements() floors it at
  * MIN_NOTE_WIDTH like any other. Only its spacing slack is ratio-scaled.
  *
- * firstElementLeftwardWidth ensures the measure is wide enough when the first
- * element is shifted right to clear its leftward overhang (accidental and/or
- * grace notes) from the describe area. extraLeftwardWidth reserves room for
- * the grace-note overhangs of the remaining elements. Together they guarantee
- * that proportionalWidth in #spaceElements() is never negative, preventing
- * noteheads from bleeding into adjacent measures.
- *
- * clefChangeWidth reserves room for any mid-stream <music-clef> markers,
- * which occupy horizontal space but are excluded from noteCount (they don't
- * consume beat duration).
+ * leftwardWidth covers every entry's leftward overhang (accidentals, grace
+ * notes), so proportionalWidth in #spaceElements() is never negative and
+ * noteheads can't bleed into adjacent measures. rightwardWidth covers
+ * mid-stream <music-clef> markers (horizontal space but no beat duration) and
+ * what entries reserve after themselves.
  */
 export function calculateStaffMinWidth(
   describeEndX: number,
   noteCount: number,
-  firstElementLeftwardWidth = 0,
-  extraLeftwardWidth = 0,
-  clefChangeWidth = 0,
-  extraRightwardWidth = 0
+  leftwardWidth = 0,
+  rightwardWidth = 0
 ): number {
   return (
     describeEndX +
     (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) +
-    firstElementLeftwardWidth +
-    extraLeftwardWidth +
+    leftwardWidth +
     noteCount * MIN_NOTE_WIDTH +
-    clefChangeWidth +
-    extraRightwardWidth
+    rightwardWidth
   );
 }
 
@@ -98,29 +89,23 @@ export function calculateStaffMinWidth(
  * Strut min width for a vocal staff measure, accounting for both note spacing
  * and lyric character width.
  *
- * minWidth = describeEndX + leadingGap + firstElementLeftwardWidth
- *          + extraLeftwardWidth
- *          + max(noteCount × MIN_NOTE_WIDTH + clefChangeWidth
- *                  + extraRightwardWidth,
+ * minWidth = describeEndX + leadingGap + leftwardWidth
+ *          + max(noteCount × MIN_NOTE_WIDTH + rightwardWidth,
  *                lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)
  */
 export function calculateStaffVocalMinWidth(
   describeEndX: number,
   noteCount: number,
   lyricCharCount: number,
-  firstElementLeftwardWidth = 0,
-  extraLeftwardWidth = 0,
-  clefChangeWidth = 0,
-  extraRightwardWidth = 0
+  leftwardWidth = 0,
+  rightwardWidth = 0
 ): number {
-  const noteMinWidth =
-    noteCount * MIN_NOTE_WIDTH + clefChangeWidth + extraRightwardWidth;
+  const noteMinWidth = noteCount * MIN_NOTE_WIDTH + rightwardWidth;
   const lyricMinWidth = lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
   return (
     describeEndX +
     (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) +
-    firstElementLeftwardWidth +
-    extraLeftwardWidth +
+    leftwardWidth +
     Math.max(noteMinWidth, lyricMinWidth)
   );
 }
@@ -162,22 +147,13 @@ export function calculateStaffVocalNaturalWidth(
   noteCount: number,
   lyricCharCount: number,
   totalSlackWeight: number,
-  firstElementLeftwardWidth = 0,
-  extraLeftwardWidth = 0,
-  clefChangeWidth = 0,
-  extraRightwardWidth = 0
+  leftwardWidth = 0,
+  rightwardWidth = 0
 ): number {
   const base =
-    describeEndX +
-    (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) +
-    firstElementLeftwardWidth +
-    extraLeftwardWidth;
+    describeEndX + (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) + leftwardWidth;
   const noteNatural =
-    base +
-    noteCount * MIN_NOTE_WIDTH +
-    clefChangeWidth +
-    extraRightwardWidth +
-    totalSlackWeight;
+    base + noteCount * MIN_NOTE_WIDTH + rightwardWidth + totalSlackWeight;
   const lyricNatural = base + lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
   return Math.max(noteNatural, lyricNatural);
 }

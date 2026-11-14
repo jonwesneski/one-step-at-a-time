@@ -144,26 +144,73 @@ export const MIN_NOTE_WIDTH = STAFF_LINE_SPACING * 2;
  */
 export const VOICE_REST_DISPLACEMENT_PX = STAFF_LINE_SPACING;
 
+// ─── Augmentation dots ───────────────────────────────────────────────────────
+
+/**
+ * Diameter (px) of a duration dot.
+ * = 0.4 × STAFF_LINE_SPACING, the engraving font's dot; about 1.7× a staccato dot.
+ */
+export const AUGMENTATION_DOT_DIAMETER_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) from a notehead's right edge to its first dot.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_NOTEHEAD_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Ink gap (px) between consecutive dots of a double or triple dot.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_SPACING_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Gap (px) from an up-stem tail's right edge to a dot moved clear of it.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_TAIL_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Vertical clearance (px) a dot keeps from an up-stem tail's lowest ink before
+ * it must move right of the tail.
+ * = 0.15 × STAFF_LINE_SPACING
+ */
+export const AUGMENTATION_DOT_TAIL_CLEARANCE_PX = STAFF_LINE_SPACING * 0.15;
+
+/**
+ * Clearance (px) between crossed voices: an up-stem part's stem and the
+ * down-stem part's head or dots it passes.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const CROSSED_VOICE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.25;
+
 // ─── Beams ────────────────────────────────────────────────────────────────────
 
 /**
- * Vertical thickness (px) of each beam rectangle.
- * = 0.8 × STAFF_LINE_SPACING
+ * Vertical thickness (px) of each beam.
+ * = 0.5 × STAFF_LINE_SPACING
  */
-export const BEAM_THICKNESS_PX = STAFF_LINE_SPACING * 0.8;
+export const BEAM_THICKNESS_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Vertical gap (px) between stacked beam layers (primary, secondary, etc.).
- * = 0.4 × STAFF_LINE_SPACING
+ * Vertical gap (px) between stacked beams.
+ * = 0.25 × STAFF_LINE_SPACING
  */
-export const BEAM_GAP_PX = STAFF_LINE_SPACING * 0.4;
+export const BEAM_GAP_PX = STAFF_LINE_SPACING * 0.25;
 
 /**
- * Horizontal width (px) of a fractional (stub/partial) beam — used when a
- * single fast note cannot connect to a full beam run.
- * = 0.6 × STAFF_LINE_SPACING
+ * Distance (px) from one beam to the next in a stack, so a stack of beams
+ * alternates between hanging from, sitting on and straddling stave lines.
+ * = BEAM_THICKNESS_PX + BEAM_GAP_PX
  */
-export const FRACTIONAL_BEAM_WIDTH_PX = STAFF_LINE_SPACING * 0.6;
+export const BEAM_STEP_PX = BEAM_THICKNESS_PX + BEAM_GAP_PX;
+
+/**
+ * Beam-to-beam distance (px) for four or more beams inside the stave: spread
+ * slightly so that each of four beams touches a stave line across 3 spaces.
+ * = (3 − 0.5) / 3 × STAFF_LINE_SPACING
+ */
+export const WIDE_BEAM_STEP_PX = ((3 - 0.5) / 3) * STAFF_LINE_SPACING;
 
 /**
  * Thickness (px) of every stave line and ledger line.
@@ -268,10 +315,73 @@ export const REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 1.2;
 export const REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX = STAFF_LINE_SPACING * 0.75;
 
 /**
- * Maximum amount (px) a beamed stem may be shortened before hitting the minimum.
- * = BASE_STEM_LENGTH_PX − MIN_STEM_LENGTH_PX
+ * Stem-to-stem distance (px) a beam assumes before its notes are spaced; wide
+ * enough not to count as closely spaced.
+ * = 4 × STAFF_LINE_SPACING
  */
-export const MAX_STEM_SHORTENING_PX = BASE_STEM_LENGTH_PX - MIN_STEM_LENGTH_PX;
+export const BEAM_ESTIMATE_NOTE_SPACING_PX = STAFF_LINE_SPACING * 4;
+
+/**
+ * Shortest beamed stem (px) for a head inside the stave. A head outside the
+ * stave may go down to MIN_STEM_LENGTH_PX.
+ * = 3 × STAFF_LINE_SPACING
+ */
+export const BEAMED_STEM_MIN_IN_STAVE_PX = STAFF_LINE_SPACING * 3;
+
+/**
+ * Beam slope (px) per space of interval between the outer notes, before the
+ * caps below: a 2nd slopes ¼ space, a 3rd ½, a 5th a whole space.
+ */
+export const BEAM_SLOPE_PER_INTERVAL = 0.5;
+
+/**
+ * Steepest slope (px) for a group of two or three notes: it crosses no more
+ * than one stave line.
+ * = STAFF_LINE_SPACING
+ */
+export const MAX_BEAM_SLOPE_SHORT_GROUP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Steepest slope (px) for a group of four or more notes.
+ * = 2 × STAFF_LINE_SPACING
+ */
+export const MAX_BEAM_SLOPE_LONG_GROUP_PX = STAFF_LINE_SPACING * 2;
+
+/**
+ * Average distance (px) between adjacent stems below which a group counts as
+ * closely spaced and takes only a slight slope.
+ * = 3 × STAFF_LINE_SPACING
+ */
+export const CLOSE_BEAMED_NOTES_SPACING_PX = STAFF_LINE_SPACING * 3;
+
+/**
+ * Steepest slope (px) for a closely spaced group, and for a group whose notes
+ * all lie past the first ledger line.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const MAX_BEAM_SLOPE_SLIGHT_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Slope (px) of a closely spaced or all-ledger-line group whose outer notes
+ * are a 2nd apart.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const BEAM_SLOPE_SECOND_SLIGHT_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * How much further (px) from the middle line the minority of a beamed group
+ * must reach before it, rather than the majority, sets the stem direction:
+ * a few short stems the 'wrong' way read better than many long ones.
+ * = STAFF_LINE_SPACING
+ */
+export const BEAM_MINORITY_FAR_THRESHOLD_PX = STAFF_LINE_SPACING;
+
+/**
+ * Longest stem (px) a one-direction beam may need before a wide-interval
+ * group takes a beam between the noteheads with stems both ways.
+ * = 5 × STAFF_LINE_SPACING
+ */
+export const KNEED_BEAM_TRIGGER_STEM_PX = STAFF_LINE_SPACING * 5;
 
 /**
  * Extra pixels the stem tip extends inside the beam polygon to prevent
@@ -298,7 +408,6 @@ export const REST_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.5;
 /**
  * Minimum gap (px) between a double-stemmed member's notehead and the beam
  * level nearest it; the beam moves to keep it, and past that the gap widens.
- * The usual free-stem floor for a two-beam note.
  * = 1.5 × STAFF_LINE_SPACING
  */
 export const DOUBLE_STEMMED_BEAM_MIN_STEM_PX = STAFF_LINE_SPACING * 1.5;
@@ -371,7 +480,7 @@ export const SHARED_STEM_MISALIGNMENT_WARN_PX = STAFF_LINE_SPACING;
  * NOTES_POSITIONED event it dispatches, the ancestor measure's own redraw)
  * forever. 0.5px sits comfortably below anything visually meaningful (the
  * smallest real quantities this value composes with are STEM_OVERLAP_PX
- * (2px) and BEAM_THICKNESS_PX (8px)) and comfortably above realistic
+ * (2px) and BEAM_THICKNESS_PX (5px)) and comfortably above realistic
  * layout-engine jitter.
  */
 export const CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX = 0.5;
@@ -794,6 +903,12 @@ export const MID_STREAM_CLEF_GAP_PX = STAFF_LINE_SPACING * 0.5;
  */
 export const CLEF_CHANGE_RESERVED_WIDTH_PX =
   MID_STREAM_CLEF_WIDTH_PX + MID_STREAM_CLEF_GAP_PX * 2;
+
+/**
+ * Height (px) of a mid-stream clef's drawing box.
+ * = 8.4 × STAFF_LINE_SPACING
+ */
+export const MID_STREAM_CLEF_SVG_HEIGHT_PX = STAFF_LINE_SPACING * 8.4;
 
 /**
  * Vertical offset (px) of a mid-stream clef glyph from the top of the

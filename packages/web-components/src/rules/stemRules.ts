@@ -3,7 +3,6 @@ import {
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
-import type { DurationType } from '../types/theory';
 import type { BeamsBuilder } from '../utils';
 import { MUSIC_REST_NODE } from '../utils/consts';
 import {
@@ -20,7 +19,9 @@ import {
   STAFF_Y_STEP,
   TWO_TAILS_LENGTH_PX,
 } from '../utils/notationDimensions';
+import { beamedGroupStemUp } from './beamPlacementRules';
 import { getStaffYs } from './staffNoteRules';
+import { isStemlessDuration } from './theoryConsts';
 import type { VoiceDirection } from './voiceRules';
 
 const OFFSET_EPSILON = 1e-9;
@@ -47,8 +48,9 @@ type StemUnit = {
 
 /**
  * Pitch-driven stem direction for one bar: the head farthest from the middle
- * line decides, one direction per beam group. A centre-line or evenly balanced
- * unit then follows its surrounding stems (see resolveNeutralStemUp).
+ * line decides a lone note or chord, and a beam group goes the way most of its
+ * notes would (see beamedGroupStemUp). A centre-line or evenly balanced unit
+ * then follows its surrounding stems (see resolveNeutralStemUp).
  */
 export function determineStemDirections(
   elements: NoteChordOrRestElementType[],
@@ -195,11 +197,11 @@ function buildStemUnits(
       indices,
       start: beatOffsets[indices[0]],
       end: beatOffsets[last] + durations[last],
-      stemmed: !isStemless(elements[i].duration),
+      stemmed: !isStemlessDuration(elements[i].duration),
       stemUp:
         forced ??
-        stemUpFromPitch(
-          indices.flatMap((index) =>
+        unitStemUpFromPitch(
+          indices.map((index) =>
             getStaffYs(elements[index], noteStaffYCoords, chordStaffYCoords)
           )
         ),
@@ -209,8 +211,23 @@ function buildStemUnits(
   return units;
 }
 
-function isStemless(duration: DurationType): boolean {
-  return duration === 'whole' || duration === 'double-whole';
+function unitStemUpFromPitch(
+  memberHeadYs: readonly (readonly number[])[]
+): boolean | null {
+  if (memberHeadYs.length === 1) {
+    return stemUpFromPitch(memberHeadYs[0]);
+  }
+  return beamedGroupStemUp(
+    memberHeadYs
+      .filter((headYs) => headYs.length > 0)
+      .map((headYs) => ({
+        stemUp: stemUpFromPitch(headYs),
+        reachPx: Math.max(
+          MIDDLE_STAFF_Y - Math.min(...headYs),
+          Math.max(...headYs) - MIDDLE_STAFF_Y
+        ),
+      }))
+  );
 }
 
 function stemUpFromPitch(headYs: readonly number[]): boolean | null {

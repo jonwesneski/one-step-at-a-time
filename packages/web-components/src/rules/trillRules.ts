@@ -205,7 +205,6 @@ const measureIndexOfGlobalIndex = (
  * `composition.ts` for every measure this returns).
  */
 export function resolveTrillContinuationSegments(
-  elements: readonly NoteChordOrRestElementType[],
   measureBoundaries: readonly TrillMeasureBoundary[],
   span: TrillLineSpan
 ): TrillContinuationSegment[] {

@@ -11,6 +11,7 @@ import {
   MUSIC_NOTE,
   NOTE_EVENTS,
 } from '../utils/consts';
+import { flattenSlotElements } from '../utils/slotElements';
 import './index';
 
 afterEach(() => {
@@ -43,18 +44,16 @@ describe('music-arpeggio', () => {
     expect(wrapper.unmatched).toBe('lv');
     expect(wrapper.runElements.length).toBe(3);
     expect(wrapper.targetElement?.nodeName).toBe(MUSIC_CHORD.toUpperCase());
-    expect(wrapper.flatElements.length).toBe(4);
+    expect(
+      flattenSlotElements(Array.from(wrapper.children)).flatElements.length
+    ).toBe(4);
   });
 
   it('writes the default run duration onto run notes that lack one', () => {
     const wrapper = makeArpeggio(['C', 'E', 'G']);
     for (const note of wrapper.runElements) {
       expect(note.getAttribute('duration')).toBe('thirtysecond');
-      expect(note.hasAttribute('data-arpeggio-run')).toBe(true);
     }
-    expect(wrapper.targetElement?.hasAttribute('data-arpeggio-target')).toBe(
-      true
-    );
   });
 
   it('respects a duration authored on a run note before connect', () => {

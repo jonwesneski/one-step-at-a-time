@@ -802,7 +802,8 @@ test.describe('multi-voice staff', () => {
     expect(tops.length).toBe(8);
     const [v2C4A, v2C4B, v2C4C, v2C4D] = tops.slice(4, 8);
     // Voice 2's first two C4s (beat-offset 0, 0.25) sound before the clef
-    // marker's own anchor point (beat-offset 0.25) — still treble.
+    // change, which takes effect where voice 1's D5 ends (beat-offset 0.5) —
+    // still treble.
     expect(v2C4A).toBe(v2C4B);
     // Voice 2's last two C4s (beat-offset 0.5, 0.75) sound after it — bass.
     expect(v2C4C).toBe(v2C4D);

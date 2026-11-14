@@ -413,3 +413,85 @@ export const TwoVoicesMidStreamClefChange: Story = {
     </music-staff>
   `,
 };
+
+// Up/down parts a second apart share one stem line, with the up-stem part
+// left. A lone dot on the left part separates the parts unless its space
+// clears the other head; two dotted parts share one column after both; a
+// crossed up-stem part moves clear of the other part's head and dot; the
+// lower part's dot on a line drops to the space below.
+export const TwoVoicesDotted: Story = {
+  render: () => html`
+    <div style="display: flex; flex-direction: column; gap: 24px">
+      <music-staff clef="treble" time="4/4">
+        <music-voice>
+          <music-note note="A" octave="4" duration="dotted-half"></music-note>
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="G" octave="4" duration="half"></music-note>
+          <music-note note="F" octave="4" duration="half"></music-note>
+        </music-voice>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-voice>
+          <music-note note="B" octave="4" duration="dotted-half"></music-note>
+          <music-note note="B" octave="4" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="A" octave="4" duration="half"></music-note>
+          <music-note note="G" octave="4" duration="half"></music-note>
+        </music-voice>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-voice>
+          <music-note note="A" octave="4" duration="dotted-half"></music-note>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note
+            note="G"
+            octave="4"
+            duration="dotted-quarter"
+          ></music-note>
+          <music-note note="G" octave="4" duration="eighth"></music-note>
+          <music-note note="F" octave="4" duration="half"></music-note>
+        </music-voice>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-voice>
+          <music-note note="E" octave="4" duration="half"></music-note>
+          <music-note note="A" octave="4" duration="half"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="C" octave="5" duration="dotted-half"></music-note>
+          <music-note note="G" octave="4" duration="quarter"></music-note>
+        </music-voice>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-voice>
+          <music-note note="F" octave="4" duration="dotted-half"></music-note>
+          <music-note note="C" octave="5" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="G" octave="4" duration="half"></music-note>
+          <music-note note="C" octave="5" duration="half"></music-note>
+        </music-voice>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        <music-voice>
+          <music-note note="D" octave="5" duration="dotted-half"></music-note>
+          <music-note note="D" octave="5" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note
+            note="G"
+            octave="4"
+            duration="dotted-quarter"
+          ></music-note>
+          <music-rest duration="dotted-quarter"></music-rest>
+          <music-note note="G" octave="4" duration="quarter"></music-note>
+        </music-voice>
+      </music-staff>
+    </div>
+  `,
+};

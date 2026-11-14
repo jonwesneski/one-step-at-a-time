@@ -1,3 +1,4 @@
+import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
   AccidentalType,
@@ -73,6 +74,8 @@ export interface INoteElement {
   set notehead(value: NoteheadType | null);
   // How far a glyph head reaches left of the ellipse head's edge (px).
   readonly headLeftOverhangPx: number;
+  // Right ink edge (element px) of the duration dots, or null when undotted.
+  readonly augmentationDotsRightEdgePx: number | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -96,6 +99,10 @@ export interface INoteElement {
   // (outer voice, single-voice staff, or not a beam-group member at all).
   // Not an attribute.
   articulationStemAnchorBeamLevels: number | null;
+  // Staff Ys of the dot rows, set by the staff when another voice decides
+  // where this element's dots go (an empty array draws none); null uses the
+  // element's own placement. Not an attribute.
+  augmentationDotRows: number[] | null;
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -174,12 +181,7 @@ export interface INoteElement {
   // Set by the staff to the resolved trilling pitch for a trill-marked
   // element. null when not trilling, or in standalone mode (trills render
   // nothing without a staff). Not an attribute.
-  resolvedTrillPitch: {
-    letter: NoteLetter;
-    accidental: AccidentalType | null;
-    written: boolean;
-    octave: Octave | null;
-  } | null;
+  resolvedTrillPitch: ResolvedTrillPitch | null;
   // Staff-written px to raise the trill sign glyph above its own nominal
   // position, when another voice's own content occupies that territory in
   // a multi-voice staff. Not an attribute; mirrors stemExtension's own
@@ -263,7 +265,6 @@ export interface INoteElement {
 export type ChordNote = {
   value: Note;
   octave: Octave | null;
-  duration: DurationType;
 };
 export interface IChordElement {
   duration: DurationType;
@@ -280,6 +281,8 @@ export interface IChordElement {
   readonly toneNoteheads: NoteheadType[];
   // The widest tone's INoteElement.headLeftOverhangPx.
   readonly headLeftOverhangPx: number;
+  // Right ink edge (element px) of the duration dots, or null when undotted.
+  readonly augmentationDotsRightEdgePx: number | null;
   stemExtension: number;
   noFlags: boolean;
   noStem: boolean;
@@ -289,6 +292,8 @@ export interface IChordElement {
   sharedStemFor: string | null;
   // See INoteElement.articulationStemAnchorBeamLevels.
   articulationStemAnchorBeamLevels: number | null;
+  // See INoteElement.augmentationDotRows.
+  augmentationDotRows: number[] | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;
@@ -369,12 +374,7 @@ export interface IChordElement {
   // Set by the staff to the resolved trilling pitch for a trill-marked
   // element. null when not trilling, or in standalone mode (trills render
   // nothing without a staff). Not an attribute.
-  resolvedTrillPitch: {
-    letter: NoteLetter;
-    accidental: AccidentalType | null;
-    written: boolean;
-    octave: Octave | null;
-  } | null;
+  resolvedTrillPitch: ResolvedTrillPitch | null;
   // Staff-written px to raise the trill sign glyph above its own nominal
   // position, when another voice's own content occupies that territory in
   // a multi-voice staff. Not an attribute; mirrors stemExtension's own
@@ -461,6 +461,8 @@ export interface IGuitarNoteElement {
 
 export interface IRestElement {
   duration: DurationType;
+  // Right ink edge (element px) of the duration dots, or null when undotted.
+  readonly augmentationDotsRightEdgePx: number | null;
   // Correlation key only — a rest never contributes to the beam polygon, but
   // shares INoteElement.beamGroup's `id` shape so a double-stemmed group can
   // tell "this rest belongs to me" for rest-placement purposes.
@@ -497,22 +499,10 @@ export interface IArpeggioElement {
   unmatched: 'lv' | 'skip';
   /** Draw an `l.v.` label on the laissez-vibrer ties this group produces. */
   lvLabel: boolean;
-  readonly flatElements: NoteChordOrRestElementType[];
   /** The run `<music-note>`s — every `<music-note>` child except the last element child. */
   readonly runElements: NoteElementType[];
   /** The target chord/note — the last element child, or null when malformed. */
   readonly targetElement: NoteOrChordElementType | null;
-}
-
-/**
- * `<music-voice>` — groups one contrapuntal voice's entire ordered
- * note/chord/rest/tuplet/arpeggio subtree within a staff. Purely a grouping
- * wrapper (no shadow DOM, no attributes) — voice number (1/2/3) is derived
- * from sibling position among a staff's `<music-voice>` children, not stored
- * on the element itself; see utils/slotElements.ts.
- */
-export interface IVoiceElement {
-  readonly flatElements: NoteChordOrRestElementType[];
 }
 
 export interface IStaffElementBase {
@@ -520,6 +510,8 @@ export interface IStaffElementBase {
   groupId: string | null;
   /** Short margin text to the left of the staff (e.g. "r.h."/"l.h."). */
   label: string | null;
+  /** Names the part this staff carries, for a tab staff's `tab-for`. */
+  part: string | null;
   time: TimeSignature;
   readonly staffHeight: number;
   readonly staffLineCount: number;
@@ -541,7 +533,6 @@ export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
-export type VoiceElementType = HTMLElement & IVoiceElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -592,9 +583,8 @@ export type LyricSyllablePosition = {
 };
 
 export interface ILyricsElement {
-  syllables: LyricSyllablePosition[];
   verse: string;
-  updatePositions(): void;
+  updatePositions(positions: LyricSyllablePosition[]): void;
 }
 
 export type LyricsElementType = HTMLElement & ILyricsElement;

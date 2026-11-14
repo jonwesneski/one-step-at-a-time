@@ -1,4 +1,5 @@
 import { computeBeamLevelStructure } from './beamStructureRules';
+import { durationToFlagCountMap } from './theoryConsts';
 
 describe('computeBeamLevelStructure', () => {
   it('produces one full-span primary beam for two eighth notes', () => {
@@ -100,5 +101,28 @@ describe('computeBeamLevelStructure', () => {
       { fromNoteIndex: 1, toNoteIndex: 2, beamLevel: 2 },
     ]);
     expect(fractionalBeams).toEqual([]);
+  });
+
+  it('stubs a sixteenth after a dotted eighth to the left', () => {
+    const { fractionalBeams } = computeBeamLevelStructure([
+      durationToFlagCountMap.get('dotted-eighth') ?? 0,
+      durationToFlagCountMap.get('sixteenth') ?? 0,
+    ]);
+    expect(fractionalBeams).toEqual([
+      expect.objectContaining({ fromNoteIndex: 1, fractionalBeamSide: 'left' }),
+    ]);
+  });
+
+  it('stubs a sixteenth before a dotted eighth to the right', () => {
+    const { fractionalBeams } = computeBeamLevelStructure([
+      durationToFlagCountMap.get('sixteenth') ?? 0,
+      durationToFlagCountMap.get('dotted-eighth') ?? 0,
+    ]);
+    expect(fractionalBeams).toEqual([
+      expect.objectContaining({
+        fromNoteIndex: 0,
+        fractionalBeamSide: 'right',
+      }),
+    ]);
   });
 });

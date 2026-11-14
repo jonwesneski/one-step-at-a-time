@@ -5,11 +5,11 @@ import {
 } from '@one-step-at-a-time/web-components';
 import { CAPACITY_EPSILON } from './measureCapacityHelpers';
 
-// The model has no augmentation dots, so a duration that isn't a single power of
-// two (e.g. a dotted-eighth 0.1875, or the 0.3125 a barline can leave) is written
-// as a tie chain of plain durations. Greedy largest-first over `DURATIONS`
-// (descending) — every time signature here has a power-of-two beat type, so a
-// factor that is a multiple of a 128th always resolves exactly.
+// Writes a length as the fewest durations, longest first: a single dotted value
+// where one fits exactly (0.375 → dotted-quarter), else a tie chain (the 0.3125
+// a barline can leave → quarter + sixteenth). Greedy over `DURATIONS`, which is
+// sorted longest first — every time signature here has a power-of-two beat
+// type, so a factor that is a multiple of a 128th always resolves exactly.
 export function decomposeToDurations(factor: number): DurationType[] {
   const out: DurationType[] = [];
   let remaining = factor;

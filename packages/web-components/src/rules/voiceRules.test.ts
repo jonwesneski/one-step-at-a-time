@@ -1,12 +1,21 @@
 import { VoiceNumber } from '../types/theory';
-import { STAFF_Y_STEP } from '../utils/notationDimensions';
-import { ADJACENT_NOTE_X_DISPLACEMENT_PX } from '../utils/svgCreator/note';
+import {
+  AUGMENTATION_DOT_SPACING_GAP_PX,
+  CROSSED_VOICE_CLEARANCE_PX,
+  STAFF_Y_STEP,
+} from '../utils/notationDimensions';
+import {
+  ADJACENT_NOTE_X_DISPLACEMENT_PX,
+  OPPOSITE_STEM_ALIGN_OFFSET_PX,
+} from '../utils/svgCreator/note';
 import {
   computeCrossVoiceDisplacements,
+  resolveCrossVoiceDotRows,
   resolveMiddleVoiceDirection,
   resolveVoiceDirections,
   VoiceDirectionInput,
   VoiceNoteheadPlacement,
+  VoicePartGeometry,
 } from './voiceRules';
 
 describe('resolveVoiceDirections', () => {
@@ -139,12 +148,30 @@ describe('computeCrossVoiceDisplacements', () => {
     expect(result[0].isUnison).toBe(false);
   });
 
-  it('does not displace a same-direction second apart when stems differ (common voice1-up/voice2-down case)', () => {
+  it('lines up the stems of an up/down second by moving the down-stem part right', () => {
     const result = computeCrossVoiceDisplacements([
       placement(1, [40], 'up'),
       placement(2, [40 + STAFF_Y_STEP], 'down'),
     ]);
-    expect(result).toHaveLength(0);
+    expect(result).toEqual([
+      expect.objectContaining({
+        voiceNumber: 2,
+        xOffset: OPPOSITE_STEM_ALIGN_OFFSET_PX,
+      }),
+    ]);
+  });
+
+  it('keeps the up-stem part left when it sits a second below the down-stem part', () => {
+    const result = computeCrossVoiceDisplacements([
+      placement(1, [40 + STAFF_Y_STEP], 'up'),
+      placement(2, [40], 'down'),
+    ]);
+    expect(result).toEqual([
+      expect.objectContaining({
+        voiceNumber: 2,
+        xOffset: OPPOSITE_STEM_ALIGN_OFFSET_PX,
+      }),
+    ]);
   });
 
   it('moves the plain notehead instead of a beamed/flagged one on a same-direction collision', () => {
@@ -175,5 +202,172 @@ describe('computeCrossVoiceDisplacements', () => {
     // closest collision is the shared 50 (distance 0) -> unison split
     expect(result).toHaveLength(2);
     expect(result.every((d) => d.isUnison)).toBe(true);
+  });
+});
+
+// Element-local px matching the note SVG: heads ±4.27 around 15.47 (up) /
+// 17.17 (down), dots half a space after the head.
+const UP_STEM_X = 19.47;
+const UP_GEOMETRY: VoicePartGeometry = {
+  headLeftX: 11.2,
+  headRightX: 19.74,
+  stemX: UP_STEM_X,
+  dotsRightEdgeX: null,
+};
+const DOWN_GEOMETRY: VoicePartGeometry = {
+  headLeftX: 12.9,
+  headRightX: 21.44,
+  stemX: 13.17,
+  dotsRightEdgeX: null,
+};
+
+function part(
+  voiceNumber: VoiceNumber,
+  staffYCoordinates: number[],
+  direction: 'up' | 'down',
+  dotCount = 0
+): VoiceNoteheadPlacement {
+  const base = direction === 'up' ? UP_GEOMETRY : DOWN_GEOMETRY;
+  return {
+    voiceNumber,
+    localIndex: 0,
+    staffYCoordinates,
+    direction,
+    hasFlagOrBeam: false,
+    dotCount,
+    geometry: {
+      ...base,
+      dotsRightEdgeX: dotCount > 0 ? base.headRightX + 9 : null,
+    },
+  };
+}
+
+const offsetOf = (
+  result: ReturnType<typeof computeCrossVoiceDisplacements>,
+  voiceNumber: VoiceNumber
+) => result.find((d) => d.voiceNumber === voiceNumber)?.xOffset ?? 0;
+
+describe('computeCrossVoiceDisplacements with dots', () => {
+  it('lets a dotted upper part in a space separate the parts with its dot', () => {
+    // Upper A4 (space) dotted, lower G4 a step below: the dot sits level with
+    // the lower head, so the lower part moves past it.
+    const result = computeCrossVoiceDisplacements([
+      part(1, [55], 'up', 1),
+      part(2, [60], 'down'),
+    ]);
+    expect(offsetOf(result, 1)).toBe(0);
+    expect(offsetOf(result, 2)).toBeCloseTo(
+      UP_GEOMETRY.headRightX +
+        9 +
+        AUGMENTATION_DOT_SPACING_GAP_PX -
+        DOWN_GEOMETRY.headLeftX
+    );
+  });
+
+  it('needs no gap when the upper part is on a line and its dot sits above the lower head', () => {
+    const result = computeCrossVoiceDisplacements([
+      part(1, [50], 'up', 1),
+      part(2, [55], 'down'),
+    ]);
+    expect(offsetOf(result, 2)).toBeCloseTo(OPPOSITE_STEM_ALIGN_OFFSET_PX);
+  });
+
+  it('separates a dotted lower up-stem part from the crossing part above it', () => {
+    const result = computeCrossVoiceDisplacements([
+      part(1, [60], 'up', 1),
+      part(2, [55], 'down'),
+    ]);
+    expect(offsetOf(result, 2)).toBeGreaterThan(OPPOSITE_STEM_ALIGN_OFFSET_PX);
+  });
+
+  it('moves a crossed up-stem part clear of the down-stem head', () => {
+    const result = computeCrossVoiceDisplacements([
+      part(1, [70], 'up'),
+      part(2, [45], 'down'),
+    ]);
+    expect(offsetOf(result, 2)).toBe(0);
+    expect(offsetOf(result, 1)).toBeCloseTo(
+      DOWN_GEOMETRY.headRightX + CROSSED_VOICE_CLEARANCE_PX - UP_STEM_X
+    );
+  });
+
+  it("keeps a crossed up-stem's stem from coming between the other part's head and dot", () => {
+    const result = computeCrossVoiceDisplacements([
+      part(1, [70], 'up'),
+      part(2, [45], 'down', 1),
+    ]);
+    expect(offsetOf(result, 1)).toBeCloseTo(
+      DOWN_GEOMETRY.headRightX + 9 + CROSSED_VOICE_CLEARANCE_PX - UP_STEM_X
+    );
+  });
+
+  it('leaves parts in their normal order alone', () => {
+    const result = computeCrossVoiceDisplacements([
+      part(1, [40], 'up', 1),
+      part(2, [60], 'down', 1),
+    ]);
+    expect(result).toHaveLength(0);
+  });
+
+  it('pushes the right note of a unison past the left note’s dot', () => {
+    const result = computeCrossVoiceDisplacements([
+      part(1, [55], 'up', 1),
+      part(2, [55], 'down'),
+    ]);
+    expect(offsetOf(result, 1)).toBeCloseTo(
+      -ADJACENT_NOTE_X_DISPLACEMENT_PX / 2
+    );
+    expect(offsetOf(result, 2)).toBeGreaterThan(
+      ADJACENT_NOTE_X_DISPLACEMENT_PX / 2
+    );
+  });
+});
+
+describe('resolveCrossVoiceDotRows', () => {
+  const rowsOf = (
+    result: ReturnType<typeof resolveCrossVoiceDotRows>,
+    voiceNumber: VoiceNumber
+  ) => result.find((r) => r.voiceNumber === voiceNumber)?.rowStaffYs;
+
+  it('drops the lower part’s dot below its line', () => {
+    const result = resolveCrossVoiceDotRows([
+      part(1, [45], 'up', 1),
+      part(2, [60], 'down', 1),
+    ]);
+    expect(rowsOf(result, 1)).toEqual([45]);
+    expect(rowsOf(result, 2)).toEqual([65]);
+  });
+
+  it('keeps the space above for a down-stem part that crosses above the other part', () => {
+    const result = resolveCrossVoiceDotRows([
+      part(1, [70], 'up'),
+      part(2, [60], 'down', 1),
+    ]);
+    expect(rowsOf(result, 2)).toEqual([55]);
+  });
+
+  it('aligns both dots of an adjacent pair in one column after the right part', () => {
+    // Upper A4 (space) and lower G4 (line), both dotted.
+    const result = resolveCrossVoiceDotRows([
+      part(1, [55], 'up', 1),
+      part(2, [60], 'down', 1),
+    ]);
+    expect(rowsOf(result, 1)).toEqual([]);
+    expect(rowsOf(result, 2)).toEqual([55, 65]);
+  });
+
+  it('keeps separate columns when the dot counts differ', () => {
+    const result = resolveCrossVoiceDotRows([
+      part(1, [55], 'up', 2),
+      part(2, [60], 'down', 1),
+    ]);
+    expect(rowsOf(result, 1)).toEqual([55]);
+    expect(rowsOf(result, 2)).toEqual([65]);
+  });
+
+  it('returns nothing for a column with no dots', () => {
+    expect(
+      resolveCrossVoiceDotRows([part(1, [55], 'up'), part(2, [60], 'down')])
+    ).toEqual([]);
   });
 });
