@@ -107,6 +107,7 @@ import {
   NOTE_EVENTS,
   NOTEHEAD_WIDTH_PX,
   STAFF_EVENTS,
+  STAFF_TAGS,
   SVG_NS,
   TUPLET_EVENTS,
 } from '../utils';
@@ -125,7 +126,6 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   ARPEGGIO_CHORD_GAP_PX,
-  ARPEGGIO_WAVE_WIDTH_PX,
   BEAM_GAP_PX,
   BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
@@ -440,13 +440,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       super();
 
       this.attachShadow({ mode: 'open' });
-      const composition = this.closest(MUSIC_COMPOSITION);
-      if (composition) {
-        this.time = composition.getAttribute(COMMON_ATTRIBUTES.TIME) ?? '4/4';
-        this.mode = composition.getAttribute(COMMON_ATTRIBUTES.MODE) ?? 'major';
-        this.keySig =
-          composition.getAttribute(COMMON_ATTRIBUTES.KEY_SIG) ?? 'C';
-      }
 
       this.#boundUpdateConnectorVisibility =
         this.#updateConnectorVisibility.bind(this);
@@ -703,6 +696,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       newValue: string | null
     ): void {
       if (oldValue !== newValue) {
+        if (
+          this.isConnected &&
+          (name === COMMON_ATTRIBUTES.KEY_SIG ||
+            name === COMMON_ATTRIBUTES.MODE ||
+            name === COMMON_ATTRIBUTES.TIME)
+        ) {
+          Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import, as composition.ts does
+            (staff as any).refreshInheritedAttrs?.();
+          });
+        }
         this.render();
         // render() replaced the shadow DOM, so the connector overlays are now
         // empty while the paired arpeggio endpoints stay locally suppressed.
@@ -1142,7 +1146,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             arpeggio: span.arpeggio,
             topY,
             bottomY,
-            signLeftEdgeX: rightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+            signRightEdgeX: rightEdgeX,
           });
           overlay.appendChild(wrap);
         }
@@ -1359,7 +1363,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
         rowLeft: 0,
-        rowRight: rootRect.width,
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,

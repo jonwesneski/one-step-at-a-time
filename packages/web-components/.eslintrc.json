@@ -54,7 +54,7 @@
     },
 
     {
-      "files": ["*.test.ts"],
+      "files": ["*.test.ts", "*.browser-test.ts"],
       "rules": {
         "@typescript-eslint/no-non-null-assertion": "off"
       }

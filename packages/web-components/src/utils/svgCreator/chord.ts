@@ -16,13 +16,10 @@ import { GraceNoteDescriptor } from '../../rules/graceRules';
 import { durationToBase, durationToDotCount } from '../../rules/theoryConsts';
 import type {
   AccidentalType,
-  ArpeggioType,
   DurationType,
-  DynamicMarking,
   GraceDuration,
   GraceSlur,
   GraceType,
-  HairpinKind,
   NoteheadType,
   TrillFinishSlur,
 } from '../../types/theory';
@@ -31,7 +28,6 @@ import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_CHORD_GAP_PX,
-  ARPEGGIO_WAVE_WIDTH_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
   BASE_STEM_LENGTH_PX,
   GRACE_MAIN_GAP_PX,
@@ -65,13 +61,17 @@ import {
 } from './note';
 import { createTrillSignSvg } from './trill';
 
-type ChordProps = NoteProps & {
+// A chord draws its tones itself, so the per-note head/accidental/staff
+// props don't apply.
+type ChordProps = Omit<
+  NoteProps,
+  | 'qualifiedElementName'
+  | 'tailRoomStemExtension'
+  | 'notehead'
+  | 'accidental'
+  | 'staffY'
+> & {
   staffYCoordinates: number[];
-  arpeggio?: ArpeggioType | null;
-  arpeggioHairpin?: HairpinKind | null;
-  arpeggioHairpinFrom?: DynamicMarking | null;
-  arpeggioHairpinTo?: DynamicMarking | null;
-  trill?: boolean;
   noteAccidentals?: (AccidentalType | null | undefined)[];
   // Per tone, aligned with staffYCoordinates; missing entries are normal.
   noteheads?: readonly NoteheadType[];
@@ -420,7 +420,7 @@ export const createChordSvg = ({
         arpeggio,
         topY,
         bottomY,
-        signLeftEdgeX: signRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+        signRightEdgeX,
         staffRelative: true,
       });
     }

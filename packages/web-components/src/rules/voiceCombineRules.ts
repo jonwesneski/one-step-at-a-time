@@ -107,7 +107,7 @@ function combineKey(element: NoteOrChordElementType): string {
 function tonesOf(element: NoteOrChordElementType): ChordNote[] {
   if (element.nodeName === MUSIC_NOTE_NODE) {
     const note = element as NoteElementType;
-    return [{ value: note.note, octave: note.octave, duration: note.duration }];
+    return [{ value: note.note, octave: note.octave }];
   }
   return (element as ChordElementType).notes;
 }

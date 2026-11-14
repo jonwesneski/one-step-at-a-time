@@ -10,6 +10,7 @@ import {
 } from '../rules/noteheadRules';
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
+import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type {
   ChordNote,
   ConnectorRole,
@@ -235,12 +236,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #noteAccidentals: (AccidentalType | null | undefined)[] = [];
     #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
     #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
-    #resolvedTrillPitch: {
-      letter: NoteLetter;
-      accidental: AccidentalType | null;
-      written: boolean;
-      octave: Octave | null;
-    } | null = null;
+    #resolvedTrillPitch: ResolvedTrillPitch | null = null;
     #batchDepth = 0;
     #renderPending = false;
     #childObserver: MutationObserver | null = null;
@@ -276,16 +272,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node) => {
-          notes.push({
-            value: node.note,
-            octave: node.octave,
-            duration: node.duration,
-          });
+          notes.push({ value: node.note, octave: node.octave });
         });
       } else if (this.chord) {
         const chordNotes = getChordNotes(this.chord);
         chordNotes.forEach((value) => {
-          notes.push({ value, octave: null, duration: this.duration });
+          notes.push({ value, octave: null });
         });
       }
       return notes;
@@ -804,22 +796,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // Set by the staff to the resolved trilling pitch. null when not
     // trilling, or in standalone mode.
-    get resolvedTrillPitch(): {
-      letter: NoteLetter;
-      accidental: AccidentalType | null;
-      written: boolean;
-      octave: Octave | null;
-    } | null {
+    get resolvedTrillPitch(): ResolvedTrillPitch | null {
       return this.#resolvedTrillPitch;
     }
-    set resolvedTrillPitch(
-      value: {
-        letter: NoteLetter;
-        accidental: AccidentalType | null;
-        written: boolean;
-        octave: Octave | null;
-      } | null
-    ) {
+    set resolvedTrillPitch(value: ResolvedTrillPitch | null) {
       this.#resolvedTrillPitch = value;
       this.#scheduleRender();
     }
@@ -1383,7 +1363,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noStem: this.#noStem,
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
-          qualifiedElementName: 'g',
           noteAccidentals: this.#noteAccidentals,
           noteheads: toneNoteheads,
           articulation: this.articulation,
@@ -1493,7 +1472,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noFlags: false,
           noStem: this.#noStem,
           stemExtension: 0,
-          qualifiedElementName: 'g',
           articulation: this.articulation,
           stress: this.stress,
           graceNotes: this.#buildGraceDescriptors(notes),

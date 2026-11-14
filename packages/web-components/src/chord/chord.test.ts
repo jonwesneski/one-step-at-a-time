@@ -738,9 +738,6 @@ describe(MUSIC_CHORD, () => {
       const notes = chordElement.notes;
       const values: Note[] = notes.map((n: { value: Note }) => n.value);
       expect(values).toEqual(['A', 'C#', 'E']);
-      notes.forEach((n: { duration: DurationType }) => {
-        expect(n.duration).toBe('quarter');
-      });
     });
 
     it('returns child music-note elements when they exist, ignoring chord attribute', () => {

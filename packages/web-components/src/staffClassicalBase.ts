@@ -53,7 +53,7 @@ import {
   resolveOctaveSpans,
   splitOctaveSpanIntoRuns,
 } from './rules/octaveRules';
-import { restToYCoordinate, VoiceRestContext } from './rules/restRules';
+import { restToYCoordinate } from './rules/restRules';
 import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
@@ -445,9 +445,7 @@ type VoiceRenderState = {
   elements: NoteChordOrRestElementType[];
   beatOffsets: number[];
   tupletsByIndex: Map<number, TupletElementType[]>;
-  arpeggioGroups: ArpeggioGroupPlacement[];
   tupletGroups: TupletGroup[];
-  beamsBuilder: BeamsBuilder | null;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']> | null;
   stemDirections: boolean[];
   // What each unbeamed stem draws beyond the base length, from the head it
@@ -475,14 +473,9 @@ type VoiceRenderState = {
   firstGraceHeadXPositions: Map<number, number>;
   writtenTrillFootprints: Map<number, number>;
   trillFinishFootprints: Map<number, number>;
-  // Unused (kept 'up') for the 'combined'/'shared-rest' synthetic tracks —
-  // the combined track is pitch-driven (see rules/voiceCombineRules.ts) and
-  // the shared rest is direction-agnostic by definition.
-  direction: VoiceDirection;
-  // Set only for a real, multi-voice-policy-driven voice (undefined for the
-  // single-voice case and for the 'combined'/'shared-rest' tracks) — read
-  // by #spaceElements() when positioning this voice's own rests.
-  restContext: VoiceRestContext | undefined;
+  // The voice policy's stem direction; null for a pitch-driven track (a
+  // single-voice staff, or the 'combined' track).
+  direction: VoiceDirection | null;
 };
 
 // How far `oldIndex` shifts down once every index in `removedIndices` has
@@ -548,11 +541,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     ];
   }
 
-  #mutationObservers: MutationObserver[];
   #effectiveMode: Mode;
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
-  #describeEndX = 0;
   #ownDescribeEndX = 0;
   #currentStrutInputs: StaffStrutInputs | null = null;
   #showDescribe = true;
@@ -598,12 +589,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // plus 'combined'/'shared-rest' when either v1-scoped optimization fires
   // for the current measure) — see the type's own doc comment above.
   #voiceRenderStates: Map<VoiceKey, VoiceRenderState> = new Map();
-  // Previous pass's elements per voice key, for #resolveArpeggiandoPassages'
-  // dropped-element cleanup — one array per voice instead of one shared
-  // array, so a dropped element's impliedArpeggio is cleared regardless of
-  // which voice it came from.
-  #previousElementsByVoice: Map<VoiceKey, NoteChordOrRestElementType[]> =
-    new Map();
   // One instance per active voice key, created lazily on first use (see
   // #containerFor), hidden (not removed) when a voice key becomes inactive
   // — avoids DOM churn on a transient edit that temporarily reduces the
@@ -664,8 +649,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   };
 
+  // Where the clef/key/time area ends: this staff's own, or the widest in
+  // its measure so every staff starts its notes at the same x.
   protected get describeEndX(): number {
-    return this.#describeEndX;
+    return Math.max(this.#ownDescribeEndX, this.measureNotesStartX);
   }
 
   /**
@@ -1115,7 +1102,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   constructor() {
     super();
-    this.#mutationObservers = [];
 
     this.#effectiveMode = this.resolveInheritedValue(
       COMMON_ATTRIBUTES.MODE,
@@ -1355,11 +1341,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       TUPLET_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundNoteYChange
     );
-    try {
-      this.#mutationObservers.forEach((m) => m.disconnect());
-    } catch (e) {
-      // ignore
-    }
   }
 
   override attributeChangedCallback(
@@ -1436,25 +1417,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#voices = voices;
     this.#clefMarkers = clefMarkers;
     this.#renderNotes();
-
-    /*
-     * todo: I may not need this, but I am keeping an example for now.
-     * This would mainly be if I need to be aware of changes to attributes
-     * on notes/chords and do something about it. I would also need to handle
-     * these observers better in the case of a note/chord being removed but the
-     * observer is still around (dead/disconnected); I will update to a map somehow.
-     */
-    // assignedElements.forEach((node) => {
-    //   // only create the observer if it is new
-    //   const observer = new MutationObserver(() => {});
-    //   observer.observe(node, {
-    //     childList: true,
-    //     subtree: true,
-    //     attributes: true,
-    //     characterData: true,
-    //   });
-    //   this.#mutationObservers.push(observer);
-    // });
   }
 
   // Removes every synthetic element (a v1-scoped combined-voices chord or
@@ -1824,9 +1786,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
     );
     const tupletGroups = buildTupletGroups(elements, tupletsByIndex);
-    const voiceRestContext: VoiceRestContext | undefined = pitchDriven
-      ? undefined
-      : { direction };
 
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -1912,9 +1871,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       elements,
       beatOffsets,
       tupletsByIndex,
-      arpeggioGroups,
       tupletGroups,
-      beamsBuilder,
       beamRenderer,
       stemDirections,
       unbeamedStemTipExtensionsPx,
@@ -1927,8 +1884,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       firstGraceHeadXPositions: new Map(),
       writtenTrillFootprints: new Map(),
       trillFinishFootprints: new Map(),
-      direction,
-      restContext: voiceRestContext,
+      direction: pitchDriven ? null : direction,
     };
     // #spaceElements() (below) reads these to push a following entry clear
     // of a rightward-reserving decoration's footprint, so they must be
@@ -2208,22 +2164,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // shared array, so a dropped element's impliedArpeggio is cleared
     // regardless of which voice it came from (including a voice key that
     // existed last pass but not this one, e.g. it became a shared rest).
-    const previousElementsByVoice = this.#previousElementsByVoice;
-    this.#previousElementsByVoice = new Map(
-      [...newRenderStates.entries()].map(([key, state]) => [
-        key,
-        state.elements,
-      ])
-    );
+    const previousStates = this.#voiceRenderStates;
     for (const [voiceKey, state] of newRenderStates) {
       this.#resolveArpeggiandoPassages(
         state.elements,
-        previousElementsByVoice.get(voiceKey) ?? []
+        previousStates.get(voiceKey)?.elements ?? []
       );
     }
-    for (const [voiceKey, elements] of previousElementsByVoice) {
+    for (const [voiceKey, previous] of previousStates) {
       if (!newRenderStates.has(voiceKey)) {
-        this.#resolveArpeggiandoPassages([], elements);
+        this.#resolveArpeggiandoPassages([], previous.elements);
       }
     }
 
@@ -2273,40 +2223,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
       anyVoiceHasContent = true;
-      const firstElementLeftwardWidth = this.#entryLeftwardExtent(
-        state.elements[0]
-      );
-      let extraLeftwardWidth = 0;
+      // The first entry's accidental sits before the describe area; every
+      // later one's sits between two entries (see #entryLeftwardExtent).
+      let leftwardWidth = this.#entryLeftwardExtent(state.elements[0]);
       for (let i = 1; i < state.elements.length; i++) {
-        extraLeftwardWidth += this.#entryLeftwardExtent(
-          state.elements[i],
-          false
-        );
+        leftwardWidth += this.#entryLeftwardExtent(state.elements[i], false);
       }
-      let extraRightwardWidth = 0;
-      for (let i = 0; i < state.elements.length; i++) {
-        extraRightwardWidth += this.#rightwardFootprint(voiceKey, i);
-        if (i > 0) {
-          extraRightwardWidth += this.#advanceBeyondStrutTerms(
-            voiceKey,
-            state,
-            i
-          );
-        }
-      }
-      const clefMarkerWidth =
+      let rightwardWidth =
         mergeClefChangeBeats(
           this.ownClefChangeBeats,
           this.measureClefChangeBeats
         ).length * CLEF_CHANGE_RESERVED_WIDTH_PX;
+      for (let i = 0; i < state.elements.length; i++) {
+        rightwardWidth += this.#rightwardFootprint(voiceKey, i);
+        if (i > 0) {
+          rightwardWidth += this.#advanceBeyondStrutTerms(voiceKey, state, i);
+        }
+      }
       const noteCount = state.elements.length;
       const minWidth = calculateStaffMinWidth(
-        this.#describeEndX,
+        this.describeEndX,
         noteCount,
-        firstElementLeftwardWidth,
-        extraLeftwardWidth,
-        clefMarkerWidth,
-        extraRightwardWidth
+        leftwardWidth,
+        rightwardWidth
       );
       const { totalWeight } = computeSpacingWeights(
         state.elements,
@@ -2316,10 +2255,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (minWidth > maxMinWidth) {
         strutInputs = {
           noteCount,
-          firstElementLeftwardWidth,
-          extraLeftwardWidth,
-          clefChangeWidth: clefMarkerWidth,
-          extraRightwardWidth,
+          leftwardWidth,
+          rightwardWidth,
           totalSlackWeight: totalWeight,
         };
       }
@@ -2660,7 +2597,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         clefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX
     );
     return (i) =>
-      this.#describeEndX +
+      this.describeEndX +
       LEADING_NOTE_GAP_PX +
       clefChangesReached(clefChangeBeats, state.beatOffsets[i]) *
         CLEF_CHANGE_RESERVED_WIDTH_PX +
@@ -2686,7 +2623,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       rightEdge: number;
     }[] = [];
     let previousNoteX: number | null = null;
-    let previousRightEdge = this.#describeEndX + LEADING_NOTE_GAP_PX;
+    let previousRightEdge = this.describeEndX + LEADING_NOTE_GAP_PX;
     let changesPassed = 0;
     for (let i = 0; i < state.elements.length; i++) {
       const beat = state.beatOffsets[i];
@@ -2720,7 +2657,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (leftwardWidth > 0) {
         x = Math.max(
           x,
-          this.#describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
+          this.describeEndX + NOTES_AREA_LEFT_MARGIN + leftwardWidth
         );
       }
       x = computeInterNoteSpacing(x, leftwardWidth, previousRightEdge);
@@ -2751,7 +2688,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   ): number[] {
     const slotLefts: number[] = [];
     for (const changeBeat of clefChangeBeats) {
-      let left = this.#describeEndX + LEADING_NOTE_GAP_PX;
+      let left = this.describeEndX + LEADING_NOTE_GAP_PX;
       for (const [voiceKey, proportionalX] of proportionalXByVoice) {
         const state = this.#voiceRenderStates.get(voiceKey);
         if (!state) {
@@ -2780,7 +2717,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     marker: ClefMarkerPlacement,
     leftInWrapper: number
   ): BeamObstacle {
-    const left = leftInWrapper - this.#describeEndX;
+    const left = leftInWrapper - this.describeEndX;
     const hostTop = marker.element.getBoundingClientRect().top;
     const glyphRects = Array.from(
       marker.element.shadowRoot?.querySelectorAll('path') ?? []
@@ -2969,7 +2906,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // per-voice overlay container (beams/tuplets/dynamics/trill-lines) — they
   // all cover exactly the same notes area.
   #sizeVoiceContainer(container: SVGSVGElement, remainingWidth: number): void {
-    container.setAttribute('x', `${this.#describeEndX}`);
+    container.setAttribute('x', `${this.describeEndX}`);
     container.setAttribute('width', `${remainingWidth}`);
     container.setAttribute(
       'viewBox',
@@ -2989,11 +2926,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         describeRect.right - transcribeRect.left
       );
     }
-    this.#describeEndX = Math.max(
-      this.#ownDescribeEndX,
-      this.measureNotesStartX
-    );
-    const remainingWidth = transcribeRect.width - this.#describeEndX;
+    const remainingWidth = transcribeRect.width - this.describeEndX;
 
     // Estimate above/below-staff budget using stem directions and staff-referenced
     // positions. This is a conservative estimate computed before notes are
@@ -3105,7 +3038,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const restElement = state.elements[0];
         if (restElement) {
           const x = sharedRestGlyphX(
-            this.#describeEndX,
+            this.describeEndX,
             remainingWidth,
             NOTE_SVG_WIDTH
           );
@@ -3114,7 +3047,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           restElement.style.top = `${restToYCoordinate(
             restElement.duration
           )}px`;
-          state.noteXPositions.set(0, x - this.#describeEndX);
+          state.noteXPositions.set(0, x - this.describeEndX);
         }
         continue;
       }
@@ -3130,7 +3063,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         state,
         clefChangeBeats,
         clefSlotLefts,
-        proportionalXByVoice.get(voiceKey) ?? (() => this.#describeEndX)
+        proportionalXByVoice.get(voiceKey) ?? (() => this.describeEndX)
       );
 
       for (let i = 0; i < state.elements.length; i++) {
@@ -3140,7 +3073,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
         // Notify beam renderer of final position after any accidental shift, so beam
         // endpoints stay in sync with the DOM positions of the chord elements.
-        const xInBeamsContainer = xInWrapper - this.#describeEndX;
+        const xInBeamsContainer = xInWrapper - this.describeEndX;
         state.beamRenderer?.setX(i, xInBeamsContainer);
         state.noteXPositions.set(i, xInBeamsContainer);
 
@@ -3173,7 +3106,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           if (!state.externallyPositionedRestIndices.has(i)) {
             element.style.top = `${restToYCoordinate(
               element.duration,
-              state.restContext
+              state.direction === null
+                ? undefined
+                : { direction: state.direction }
             )}px`;
           }
         } else if (element.nodeName === MUSIC_NOTE_NODE) {
@@ -3205,6 +3140,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         // left to collide with — see rules/voiceRules.ts).
         if (
           typeof voiceKey === 'number' &&
+          state.direction !== null &&
           element.nodeName !== MUSIC_REST_NODE
         ) {
           const staffYs =
@@ -3648,7 +3584,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const width =
       remainingWidth ??
       this.transcribeContainer.getBoundingClientRect().width -
-        this.#describeEndX;
+        this.describeEndX;
 
     const { spans, warnings, standaloneLocoIndices } = resolveOctaveSpans(
       state.elements
@@ -3975,7 +3911,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const width =
       remainingWidth ??
       this.transcribeContainer.getBoundingClientRect().width -
-        this.#describeEndX;
+        this.describeEndX;
 
     for (const span of resolveTrillSpans(state.elements)) {
       const startElement = state.elements[span.startIndex] as
@@ -4887,16 +4823,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // its OWN side of the staff, matching its stem direction — the up-stem
   // voice above, the down-stem voice below — standard multi-voice-on-one-
   // staff notation convention, so two voices' rows never compete for the
-  // same territory. A single-voice staff (direction otherwise irrelevant)
-  // and the 'combined'/'shared-rest' synthetic tracks (whose `direction` is
-  // an unused placeholder, not a real per-voice-policy value) always stay
-  // below, matching today's byte-for-byte behavior.
+  // same territory. A single-voice staff and the 'combined'/'shared-rest'
+  // synthetic tracks always stay below.
   #dynamicsPlacedAbove(voiceKey: VoiceKey, state: VoiceRenderState): boolean {
-    return (
-      this.#voices.size > 1 &&
-      typeof voiceKey === 'number' &&
-      state.direction === 'up'
-    );
+    return typeof voiceKey === 'number' && state.direction === 'up';
   }
   #dynamicsLocalToClientY(voiceKey: VoiceKey, y: number): number {
     const matrix = this.#dynamicsContainers.get(voiceKey)?.getScreenCTM?.();

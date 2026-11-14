@@ -17,6 +17,7 @@ import {
   triangleDurationWarning,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
+import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type {
   ConnectorRole,
   GraceArticulationsType,
@@ -241,12 +242,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #staffY: number | null = null;
     #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
     #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
-    #resolvedTrillPitch: {
-      letter: NoteLetter;
-      accidental: AccidentalType | null;
-      written: boolean;
-      octave: Octave | null;
-    } | null = null;
+    #resolvedTrillPitch: ResolvedTrillPitch | null = null;
     #batchDepth = 0;
     #renderPending = false;
 
@@ -598,7 +594,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noStem: this.#noStem,
           notehead: this.notehead,
           stemExtension: this.#stemExtension,
-          tailRoomStemExtension: this.#stemExtension,
           staffY: this.#staffY,
           rowStaffYs: this.#augmentationDotRows,
         })?.rightEdgeX ?? null
@@ -792,22 +787,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // Set by the staff to the resolved trilling pitch. null when not
     // trilling, or in standalone mode.
-    get resolvedTrillPitch(): {
-      letter: NoteLetter;
-      accidental: AccidentalType | null;
-      written: boolean;
-      octave: Octave | null;
-    } | null {
+    get resolvedTrillPitch(): ResolvedTrillPitch | null {
       return this.#resolvedTrillPitch;
     }
-    set resolvedTrillPitch(
-      value: {
-        letter: NoteLetter;
-        accidental: AccidentalType | null;
-        written: boolean;
-        octave: Octave | null;
-      } | null
-    ) {
+    set resolvedTrillPitch(value: ResolvedTrillPitch | null) {
       this.#resolvedTrillPitch = value;
       this.#scheduleRender();
     }

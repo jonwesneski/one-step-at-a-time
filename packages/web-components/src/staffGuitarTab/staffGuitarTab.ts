@@ -16,6 +16,7 @@ import {
   MUSIC_GUITAR_NOTE,
   MUSIC_GUITAR_NOTE_NODE,
   MUSIC_STAFF_GUITAR_TAB,
+  NOTE_EVENTS,
   STAFF_EVENTS,
   SVG_NS,
 } from '../utils/consts';
@@ -26,6 +27,18 @@ import {
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
 } from '../utils/notationDimensions';
+
+const TAB_STRING_COUNT = 6;
+
+// Y of a tab string's line, string 1 at the top; an out-of-range string sits
+// on the top line.
+function stringToY(string: number): number {
+  const line =
+    Number.isInteger(string) && string >= 1 && string <= TAB_STRING_COUNT
+      ? string
+      : 1;
+  return STAFF_LINE_START + (line - 1) * STAFF_LINE_SPACING;
+}
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -75,14 +88,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#showDescribe = value;
       this.#refreshDescribe();
     }
-    #yCoordinates: Record<number, number> = {
-      1: STAFF_LINE_START,
-      2: STAFF_LINE_START + STAFF_LINE_SPACING,
-      3: STAFF_LINE_START + STAFF_LINE_SPACING * 2,
-      4: STAFF_LINE_START + STAFF_LINE_SPACING * 3,
-      5: STAFF_LINE_START + STAFF_LINE_SPACING * 4,
-      6: STAFF_LINE_START + STAFF_LINE_SPACING * 5,
-    };
 
     constructor() {
       super();
@@ -90,7 +95,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get staffLineCount(): number {
-      return 6;
+      return TAB_STRING_COUNT;
     }
 
     protected override get additionalStyles(): string {
@@ -162,9 +167,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.effectiveTimeSig = this.convertTotimeInts(
         this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
       );
+      this.#relayout();
     }
 
+    // Also runs when a note's `string` or `duration` changes: its line, and
+    // every later note's x, move.
+    #relayout = () => {
+      if (this.#currentElements.length > 0) {
+        this.#renderNotes(this.#currentElements);
+      }
+    };
+
     protected onConnectedCallback() {
+      this.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#relayout);
       // Re-resolve now that ancestors are reachable via closest()
       this.effectiveTimeSig = this.convertTotimeInts(
         this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
@@ -183,8 +198,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         : '';
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- no cleanup needed yet; still an empty stub (see CLAUDE.md Known Incomplete Areas)
-    protected override onDisconnectedCallback(): void {}
+    protected override onDisconnectedCallback(): void {
+      this.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#relayout);
+    }
 
     protected override onHandleSlotChange(event: Event): void {
       const slot = event.target as HTMLSlotElement;
@@ -276,9 +292,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         previousNoteX = x;
         element.style.left = `${x}px`;
-        element.style.top = `${
-          this.#yCoordinates[element.string] ?? STAFF_LINE_START
-        }px`;
+        element.style.top = `${stringToY(element.string)}px`;
       }
     }
 

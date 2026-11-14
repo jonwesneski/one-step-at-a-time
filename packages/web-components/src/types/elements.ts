@@ -1,3 +1,4 @@
+import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
   AccidentalType,
@@ -180,12 +181,7 @@ export interface INoteElement {
   // Set by the staff to the resolved trilling pitch for a trill-marked
   // element. null when not trilling, or in standalone mode (trills render
   // nothing without a staff). Not an attribute.
-  resolvedTrillPitch: {
-    letter: NoteLetter;
-    accidental: AccidentalType | null;
-    written: boolean;
-    octave: Octave | null;
-  } | null;
+  resolvedTrillPitch: ResolvedTrillPitch | null;
   // Staff-written px to raise the trill sign glyph above its own nominal
   // position, when another voice's own content occupies that territory in
   // a multi-voice staff. Not an attribute; mirrors stemExtension's own
@@ -269,7 +265,6 @@ export interface INoteElement {
 export type ChordNote = {
   value: Note;
   octave: Octave | null;
-  duration: DurationType;
 };
 export interface IChordElement {
   duration: DurationType;
@@ -379,12 +374,7 @@ export interface IChordElement {
   // Set by the staff to the resolved trilling pitch for a trill-marked
   // element. null when not trilling, or in standalone mode (trills render
   // nothing without a staff). Not an attribute.
-  resolvedTrillPitch: {
-    letter: NoteLetter;
-    accidental: AccidentalType | null;
-    written: boolean;
-    octave: Octave | null;
-  } | null;
+  resolvedTrillPitch: ResolvedTrillPitch | null;
   // Staff-written px to raise the trill sign glyph above its own nominal
   // position, when another voice's own content occupies that territory in
   // a multi-voice staff. Not an attribute; mirrors stemExtension's own
@@ -509,22 +499,10 @@ export interface IArpeggioElement {
   unmatched: 'lv' | 'skip';
   /** Draw an `l.v.` label on the laissez-vibrer ties this group produces. */
   lvLabel: boolean;
-  readonly flatElements: NoteChordOrRestElementType[];
   /** The run `<music-note>`s — every `<music-note>` child except the last element child. */
   readonly runElements: NoteElementType[];
   /** The target chord/note — the last element child, or null when malformed. */
   readonly targetElement: NoteOrChordElementType | null;
-}
-
-/**
- * `<music-voice>` — groups one contrapuntal voice's entire ordered
- * note/chord/rest/tuplet/arpeggio subtree within a staff. Purely a grouping
- * wrapper (no shadow DOM, no attributes) — voice number (1/2/3) is derived
- * from sibling position among a staff's `<music-voice>` children, not stored
- * on the element itself; see utils/slotElements.ts.
- */
-export interface IVoiceElement {
-  readonly flatElements: NoteChordOrRestElementType[];
 }
 
 export interface IStaffElementBase {
@@ -555,7 +533,6 @@ export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
-export type VoiceElementType = HTMLElement & IVoiceElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -606,9 +583,8 @@ export type LyricSyllablePosition = {
 };
 
 export interface ILyricsElement {
-  syllables: LyricSyllablePosition[];
   verse: string;
-  updatePositions(): void;
+  updatePositions(positions: LyricSyllablePosition[]): void;
 }
 
 export type LyricsElementType = HTMLElement & ILyricsElement;

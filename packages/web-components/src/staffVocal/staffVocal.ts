@@ -1,17 +1,17 @@
+import { ClefRenderData, getClefRenderData } from '../rules/clefRules';
 import {
   calculateStaffVocalMinWidth,
   calculateStaffVocalNaturalWidth,
 } from '../rules/staffWidth';
 import {
   generateKeySignatureYCoordinates,
+  generateMinorKeySignatureYCoordinates,
   generateYCoordinates,
 } from '../rules/theoryHelpers';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import {
-  KeySignatureYCoordinates,
   LyricSyllablePosition,
   LyricsElementType,
-  NoteLetterOctave,
   YCoordinates,
 } from '../types/elements';
 import { Octave, VocalType } from '../types/theory';
@@ -22,6 +22,14 @@ import {
   createTrebleClefSvg,
 } from '../utils/svgCreator/clefs';
 import type { MusicLyricsElement } from './lyrics';
+
+type KeySignatureTables = Pick<
+  ClefRenderData,
+  | 'majorSharpYCoordinates'
+  | 'majorFlatYCoordinates'
+  | 'minorSharpYCoordinates'
+  | 'minorFlatYCoordinates'
+>;
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   const LYRICS_BASELINE_OFFSET = -25; // px below staff to first verse
@@ -51,173 +59,36 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * </music-staff-vocal>
    */
   class StaffVocalElement extends StaffClassicalElementBase {
-    static #sopranoYCoordinates = generateYCoordinates('C6', 'C4');
+    static #treble = getClefRenderData('treble');
+    static #bass = getClefRenderData('bass');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
     static #altoYCoordinates = generateYCoordinates('A5', 'F3');
     static #tenorYCoordinates = generateYCoordinates('C5', 'C3');
-    static #baritoneYCoordinates = generateYCoordinates('E4', 'E2');
-    static #bassYCoordinates = generateYCoordinates('E4', 'E2');
 
-    // soprano, mezzo, alto (treble-based)
-    static #trebleSharps: NoteLetterOctave[] = [
-      'F5',
-      'C5',
-      'G5',
-      'D5',
-      'A4',
-      'E5',
-      'B4',
-    ];
-    static #trebleFlats: NoteLetterOctave[] = [
-      'B4',
-      'E5',
-      'A4',
-      'D5',
-      'G4',
-      'C5',
-      'F4',
-    ];
-
-    static #trebleMajorSharpYCoordinates: KeySignatureYCoordinates =
-      generateKeySignatureYCoordinates(
+    // Tenor reads an octave lower than treble, so its key signature sits on
+    // its own (treble-8vb) positions.
+    static #tenorKeyTables: KeySignatureTables = (() => {
+      const majorSharpYCoordinates = generateKeySignatureYCoordinates(
         { G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7 },
-        StaffVocalElement.#trebleSharps,
-        StaffVocalElement.#sopranoYCoordinates
-      );
-
-    static #trebleMajorFlatYCoordinates: KeySignatureYCoordinates =
-      generateKeySignatureYCoordinates(
-        { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
-        StaffVocalElement.#trebleFlats,
-        StaffVocalElement.#sopranoYCoordinates
-      );
-
-    static #trebleMinorSharpYCoordinates: KeySignatureYCoordinates = {
-      E: StaffVocalElement.#trebleMajorSharpYCoordinates.G,
-      B: StaffVocalElement.#trebleMajorSharpYCoordinates.D,
-      ['F#']: StaffVocalElement.#trebleMajorSharpYCoordinates.A,
-      ['C#']: StaffVocalElement.#trebleMajorSharpYCoordinates.E,
-      ['G#']: StaffVocalElement.#trebleMajorSharpYCoordinates.B,
-      ['D#']: StaffVocalElement.#trebleMajorSharpYCoordinates['F#'],
-      ['A#']: StaffVocalElement.#trebleMajorSharpYCoordinates['C#'],
-    };
-
-    static #trebleMinorFlatYCoordinates: KeySignatureYCoordinates = {
-      D: StaffVocalElement.#trebleMajorFlatYCoordinates.F,
-      G: StaffVocalElement.#trebleMajorFlatYCoordinates.Bb,
-      C: StaffVocalElement.#trebleMajorFlatYCoordinates.Eb,
-      F: StaffVocalElement.#trebleMajorFlatYCoordinates.Ab,
-      Bb: StaffVocalElement.#trebleMajorFlatYCoordinates.Db,
-      Eb: StaffVocalElement.#trebleMajorFlatYCoordinates.Gb,
-      Ab: StaffVocalElement.#trebleMajorFlatYCoordinates.Cb,
-    };
-
-    static #tenorSharps: NoteLetterOctave[] = [
-      'F4',
-      'C4',
-      'G4',
-      'D4',
-      'A3',
-      'E4',
-      'B3',
-    ];
-    static #tenorFlats: NoteLetterOctave[] = [
-      'B3',
-      'E4',
-      'A3',
-      'D4',
-      'G3',
-      'C4',
-      'F3',
-    ];
-
-    static #tenorMajorSharpYCoordinates: KeySignatureYCoordinates =
-      generateKeySignatureYCoordinates(
-        { G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7 },
-        StaffVocalElement.#tenorSharps,
+        ['F4', 'C4', 'G4', 'D4', 'A3', 'E4', 'B3'],
         StaffVocalElement.#tenorYCoordinates
       );
-
-    static #tenorMajorFlatYCoordinates: KeySignatureYCoordinates =
-      generateKeySignatureYCoordinates(
+      const majorFlatYCoordinates = generateKeySignatureYCoordinates(
         { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
-        StaffVocalElement.#tenorFlats,
+        ['B3', 'E4', 'A3', 'D4', 'G3', 'C4', 'F3'],
         StaffVocalElement.#tenorYCoordinates
       );
-
-    static #tenorMinorSharpYCoordinates: KeySignatureYCoordinates = {
-      E: StaffVocalElement.#tenorMajorSharpYCoordinates.G,
-      B: StaffVocalElement.#tenorMajorSharpYCoordinates.D,
-      ['F#']: StaffVocalElement.#tenorMajorSharpYCoordinates.A,
-      ['C#']: StaffVocalElement.#tenorMajorSharpYCoordinates.E,
-      ['G#']: StaffVocalElement.#tenorMajorSharpYCoordinates.B,
-      ['D#']: StaffVocalElement.#tenorMajorSharpYCoordinates['F#'],
-      ['A#']: StaffVocalElement.#tenorMajorSharpYCoordinates['C#'],
-    };
-
-    static #tenorMinorFlatYCoordinates: KeySignatureYCoordinates = {
-      D: StaffVocalElement.#tenorMajorFlatYCoordinates.F,
-      G: StaffVocalElement.#tenorMajorFlatYCoordinates.Bb,
-      C: StaffVocalElement.#tenorMajorFlatYCoordinates.Eb,
-      F: StaffVocalElement.#tenorMajorFlatYCoordinates.Ab,
-      Bb: StaffVocalElement.#tenorMajorFlatYCoordinates.Db,
-      Eb: StaffVocalElement.#tenorMajorFlatYCoordinates.Gb,
-      Ab: StaffVocalElement.#tenorMajorFlatYCoordinates.Cb,
-    };
-
-    // baritone, bass (bass-based)
-    static #bassSharps: NoteLetterOctave[] = [
-      'F3',
-      'C3',
-      'G3',
-      'D3',
-      'A2',
-      'E3',
-      'B2',
-    ];
-    static #bassFlats: NoteLetterOctave[] = [
-      'B2',
-      'E3',
-      'A2',
-      'D3',
-      'G2',
-      'C3',
-      'F2',
-    ];
-
-    static #bassMajorSharpYCoordinates: KeySignatureYCoordinates =
-      generateKeySignatureYCoordinates(
-        { G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7 },
-        StaffVocalElement.#bassSharps,
-        StaffVocalElement.#baritoneYCoordinates
-      );
-
-    static #bassMajorFlatYCoordinates: KeySignatureYCoordinates =
-      generateKeySignatureYCoordinates(
-        { F: 1, Bb: 2, Eb: 3, Ab: 4, Db: 5, Gb: 6, Cb: 7 },
-        StaffVocalElement.#bassFlats,
-        StaffVocalElement.#baritoneYCoordinates
-      );
-
-    static #bassMinorSharpYCoordinates: KeySignatureYCoordinates = {
-      E: StaffVocalElement.#bassMajorSharpYCoordinates.G,
-      B: StaffVocalElement.#bassMajorSharpYCoordinates.D,
-      ['F#']: StaffVocalElement.#bassMajorSharpYCoordinates.A,
-      ['C#']: StaffVocalElement.#bassMajorSharpYCoordinates.E,
-      ['G#']: StaffVocalElement.#bassMajorSharpYCoordinates.B,
-      ['D#']: StaffVocalElement.#bassMajorSharpYCoordinates['F#'],
-      ['A#']: StaffVocalElement.#bassMajorSharpYCoordinates['C#'],
-    };
-
-    static #bassMinorFlatYCoordinates: KeySignatureYCoordinates = {
-      D: StaffVocalElement.#bassMajorFlatYCoordinates.F,
-      G: StaffVocalElement.#bassMajorFlatYCoordinates.Bb,
-      C: StaffVocalElement.#bassMajorFlatYCoordinates.Eb,
-      F: StaffVocalElement.#bassMajorFlatYCoordinates.Ab,
-      Bb: StaffVocalElement.#bassMajorFlatYCoordinates.Db,
-      Eb: StaffVocalElement.#bassMajorFlatYCoordinates.Gb,
-      Ab: StaffVocalElement.#bassMajorFlatYCoordinates.Cb,
-    };
+      return {
+        majorSharpYCoordinates,
+        majorFlatYCoordinates,
+        minorSharpYCoordinates: generateMinorKeySignatureYCoordinates(
+          majorSharpYCoordinates
+        ),
+        minorFlatYCoordinates: generateMinorKeySignatureYCoordinates(
+          majorFlatYCoordinates
+        ),
+      };
+    })();
 
     static override get observedAttributes(): string[] {
       return [...super.observedAttributes, 'voice'];
@@ -234,7 +105,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     get yCoordinates(): YCoordinates {
       switch (this.voice) {
         case 'soprano':
-          return StaffVocalElement.#sopranoYCoordinates;
+          return StaffVocalElement.#treble.yCoordinates;
         case 'mezzo':
           return StaffVocalElement.#mezzoYCoordinates;
         case 'alto':
@@ -242,16 +113,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         case 'tenor':
           return StaffVocalElement.#tenorYCoordinates;
         case 'baritone':
-          return StaffVocalElement.#baritoneYCoordinates;
         case 'bass':
-          return StaffVocalElement.#bassYCoordinates;
+          return StaffVocalElement.#bass.yCoordinates;
       }
     }
 
     get octaves(): Octave[] {
       switch (this.voice) {
         case 'soprano':
-          return [4, 5, 6];
+          return StaffVocalElement.#treble.octaves;
         case 'mezzo':
           return [3, 4, 5, 6];
         case 'alto':
@@ -259,9 +129,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         case 'tenor':
           return [3, 4, 5];
         case 'baritone':
-          return [2, 3, 4];
         case 'bass':
-          return [2, 3, 4];
+          return StaffVocalElement.#bass.octaves;
       }
     }
 
@@ -280,63 +149,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
-      const answer: { useSharps: boolean; coordinates: number[] } = {
-        useSharps: false,
-        coordinates: [],
+      const tables: KeySignatureTables =
+        this.voice === 'tenor'
+          ? StaffVocalElement.#tenorKeyTables
+          : this.voice === 'baritone' || this.voice === 'bass'
+          ? StaffVocalElement.#bass
+          : StaffVocalElement.#treble;
+      const [sharps, flats] =
+        this.mode === 'major'
+          ? [tables.majorSharpYCoordinates, tables.majorFlatYCoordinates]
+          : [tables.minorSharpYCoordinates, tables.minorFlatYCoordinates];
+      return {
+        useSharps: !!sharps[this.keySig],
+        coordinates: sharps[this.keySig] ?? flats[this.keySig] ?? [],
       };
-
-      if (this.voice === 'tenor') {
-        if (this.mode === 'major') {
-          answer.useSharps =
-            !!StaffVocalElement.#tenorMajorSharpYCoordinates[this.keySig];
-          answer.coordinates =
-            StaffVocalElement.#tenorMajorSharpYCoordinates[this.keySig] ??
-            StaffVocalElement.#tenorMajorFlatYCoordinates[this.keySig] ??
-            [];
-        } else {
-          answer.useSharps =
-            !!StaffVocalElement.#tenorMinorSharpYCoordinates[this.keySig];
-          answer.coordinates =
-            StaffVocalElement.#tenorMinorSharpYCoordinates[this.keySig] ??
-            StaffVocalElement.#tenorMinorFlatYCoordinates[this.keySig] ??
-            [];
-        }
-      } else if (this.voice === 'baritone' || this.voice === 'bass') {
-        if (this.mode === 'major') {
-          answer.useSharps =
-            !!StaffVocalElement.#bassMajorSharpYCoordinates[this.keySig];
-          answer.coordinates =
-            StaffVocalElement.#bassMajorSharpYCoordinates[this.keySig] ??
-            StaffVocalElement.#bassMajorFlatYCoordinates[this.keySig] ??
-            [];
-        } else {
-          answer.useSharps =
-            !!StaffVocalElement.#bassMinorSharpYCoordinates[this.keySig];
-          answer.coordinates =
-            StaffVocalElement.#bassMinorSharpYCoordinates[this.keySig] ??
-            StaffVocalElement.#bassMinorFlatYCoordinates[this.keySig] ??
-            [];
-        }
-      } else {
-        // soprano, mezzo, alto (treble-based)
-        if (this.mode === 'major') {
-          answer.useSharps =
-            !!StaffVocalElement.#trebleMajorSharpYCoordinates[this.keySig];
-          answer.coordinates =
-            StaffVocalElement.#trebleMajorSharpYCoordinates[this.keySig] ??
-            StaffVocalElement.#trebleMajorFlatYCoordinates[this.keySig] ??
-            [];
-        } else {
-          answer.useSharps =
-            !!StaffVocalElement.#trebleMinorSharpYCoordinates[this.keySig];
-          answer.coordinates =
-            StaffVocalElement.#trebleMinorSharpYCoordinates[this.keySig] ??
-            StaffVocalElement.#trebleMinorFlatYCoordinates[this.keySig] ??
-            [];
-        }
-      }
-
-      return answer;
     }
 
     override onStaffResize(): void {
@@ -403,12 +229,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           };
         });
 
-        (lyricEl as LyricsElementType).syllables = positions;
+        (lyricEl as LyricsElementType).updatePositions(positions);
         verseIndex++;
-      }
-
-      for (const lyricEl of lyricsElements) {
-        lyricEl.updatePositions();
       }
 
       // Re-score with lyrics included — overwrites the lyrics-unaware score from super.
@@ -425,32 +247,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       const strutInputs = this.currentStrutInputs;
       if (strutInputs !== null) {
-        const {
-          noteCount,
-          firstElementLeftwardWidth,
-          extraLeftwardWidth,
-          clefChangeWidth,
-          extraRightwardWidth,
-          totalSlackWeight,
-        } = strutInputs;
+        const { noteCount, leftwardWidth, rightwardWidth, totalSlackWeight } =
+          strutInputs;
         const minWidth = calculateStaffVocalMinWidth(
           this.describeEndX,
           noteCount,
           maxLyricChars,
-          firstElementLeftwardWidth,
-          extraLeftwardWidth,
-          clefChangeWidth,
-          extraRightwardWidth
+          leftwardWidth,
+          rightwardWidth
         );
         const naturalWidth = calculateStaffVocalNaturalWidth(
           this.describeEndX,
           noteCount,
           maxLyricChars,
           totalSlackWeight,
-          firstElementLeftwardWidth,
-          extraLeftwardWidth,
-          clefChangeWidth,
-          extraRightwardWidth
+          leftwardWidth,
+          rightwardWidth
         );
         this.dispatchEvent(
           new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {

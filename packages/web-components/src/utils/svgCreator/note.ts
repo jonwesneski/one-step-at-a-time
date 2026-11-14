@@ -33,7 +33,6 @@ import {
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
   ARPEGGIO_CHORD_GAP_PX,
-  ARPEGGIO_WAVE_WIDTH_PX,
   AUGMENTATION_DOT_DIAMETER_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
   AUGMENTATION_DOT_TAIL_CLEARANCE_PX,
@@ -447,7 +446,6 @@ export const createNoteSvg = ({
     noStem,
     notehead,
     stemExtension,
-    tailRoomStemExtension,
     staffY,
     rowStaffYs: augmentationDotRows,
   });
@@ -515,7 +513,7 @@ export const createNoteSvg = ({
         arpeggio,
         topY: headCenterY,
         bottomY: headCenterY,
-        signLeftEdgeX: signRightEdgeX - ARPEGGIO_WAVE_WIDTH_PX,
+        signRightEdgeX,
       });
     }
   }
@@ -570,7 +568,6 @@ export type NoteDotLayoutInput = {
   noStem: boolean;
   notehead: NoteheadType;
   stemExtension: number;
-  tailRoomStemExtension: number;
   // Staff Y of the head, or null standalone (dots stay at the head's centre).
   staffY: number | null;
   // Overrides the head's own dot row (another voice placed it).
@@ -596,7 +593,6 @@ export function noteAugmentationDotLayout({
   noStem,
   notehead,
   stemExtension,
-  tailRoomStemExtension,
   staffY,
   rowStaffYs = null,
 }: NoteDotLayoutInput): NoteDotLayout | null {
@@ -621,7 +617,7 @@ export function noteAugmentationDotLayout({
     noFlags,
     noStem,
     stemExtension,
-    tailRoomStemExtension,
+    tailRoomStemExtension: stemExtension,
     rowCentersY,
   });
   if (tailClearX !== null) {
@@ -682,10 +678,9 @@ export function upTailDotClearX({
 export function computeYHeadOffset(
   stemUp: boolean,
   duration: DurationType,
-  noFlags: boolean,
-  notehead: NoteheadType = 'normal'
+  noFlags: boolean
 ): number {
-  const { cy } = noteHeadCenter(stemUp, duration, noFlags, notehead);
+  const { cy } = noteHeadCenter(stemUp, duration, noFlags);
   return Math.round(NOTE_HEAD_Y_OFFSET_CORRECTION + cy * NOTE_SCALE);
 }
 

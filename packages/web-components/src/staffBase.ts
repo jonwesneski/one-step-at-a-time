@@ -529,7 +529,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
       rowLeft: 0,
-      rowRight: rootRect.width,
     });
     for (const svg of svgs) {
       this.#standaloneConnectorsOverlay.appendChild(svg);

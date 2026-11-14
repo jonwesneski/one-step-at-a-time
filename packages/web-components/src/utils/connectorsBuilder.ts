@@ -1161,8 +1161,9 @@ export const collectStemRects = (
 
 export type ConnectorsBuildOptions = {
   rootRect: DOMRect;
+  // Where a connector that leaves its row starts again on the next row; it
+  // runs out to the root's right edge.
   rowLeft: number;
-  rowRight: number;
   // Real double-stemmed-beam polygon rects (root-rect-relative — same
   // space every anchor in this module uses), already drawn by the
   // ancestor <music-measure> before this runs (ordering dependency:
@@ -1231,8 +1232,8 @@ const buildCrossStaffSlurSvgs = (
   staves: SlurGroupStaves,
   options: ConnectorsBuildOptions
 ): SVGGElement[] => {
-  const { rootRect, rowLeft, rowRight, innerVoiceElements, entryObstacles } =
-    options;
+  const { rootRect, rowLeft, innerVoiceElements, entryObstacles } = options;
+  const rowRight = rootRect.width;
   const entries = entryObstacles?.entries ?? [];
   const counts = countNotesPerStaffInSpan(pair, staves, entries, rootRect);
   const preferredSide = pickCrossStaffSlurSide(counts.top, counts.bottom);
@@ -1336,11 +1337,11 @@ export const buildConnectorSvgs = (
   const {
     rootRect,
     rowLeft,
-    rowRight,
     beamRects = [],
     groupSlurStaves,
     innerVoiceElements,
   } = options;
+  const rowRight = rootRect.width;
   const elements: SVGGElement[] = [];
 
   for (const pair of pairs) {

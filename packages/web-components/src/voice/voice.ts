@@ -1,4 +1,3 @@
-import { IVoiceElement, NoteChordOrRestElementType } from '../types/elements';
 import {
   MUSIC_ARPEGGIO_NODE,
   MUSIC_CHORD_NODE,
@@ -16,7 +15,6 @@ import {
 // timeline every other voice's beat-offsets are compared against. This
 // element can't know its own sibling position, so it can't enforce that
 // restriction itself — flattenStaffSlotElements() does, at the staff level.
-import { flattenSlotElements } from '../utils/slotElements';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -30,7 +28,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * resolved by the staff from sibling position, see utils/slotElements.ts.
    *
    * The wrapper is layout-only (no shadow DOM, no attributes); the staff
-   * reads each voice's `flatElements` independently.
+   * flattens each voice's children itself (flattenStaffSlotElements).
    *
    * @customElement music-voice
    *
@@ -45,17 +43,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *   </music-voice>
    * </music-staff>
    */
-  class VoiceElement extends HTMLElement implements IVoiceElement {
-    static get observedAttributes(): string[] {
-      return [];
-    }
-
+  class VoiceElement extends HTMLElement {
     #childObserver: MutationObserver | null = null;
-    #applyingDefaults = false;
-
-    get flatElements(): NoteChordOrRestElementType[] {
-      return flattenSlotElements(Array.from(this.children)).flatElements;
-    }
 
     connectedCallback(): void {
       this.#applyDefaults();
@@ -76,9 +65,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #onChildChange(): void {
-      if (this.#applyingDefaults) {
-        return;
-      }
       this.#applyDefaults();
       this.#notify();
     }
@@ -89,28 +75,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // staff itself (flattenStaffSlotElements) can tell whether this
     // <music-voice> is actually voice 1, so it enforces that part.
     #applyDefaults(): void {
-      this.#applyingDefaults = true;
-      try {
-        for (const child of this.#elementChildren()) {
-          if (child.nodeName === MUSIC_VOICE_NODE) {
-            console.warn(
-              '[music-voice] <music-voice> cannot nest inside another <music-voice>'
-            );
-          } else if (
-            child.nodeName !== MUSIC_NOTE_NODE &&
-            child.nodeName !== MUSIC_CHORD_NODE &&
-            child.nodeName !== MUSIC_REST_NODE &&
-            child.nodeName !== MUSIC_TUPLET_NODE &&
-            child.nodeName !== MUSIC_ARPEGGIO_NODE &&
-            child.nodeName !== MUSIC_CLEF_NODE
-          ) {
-            console.warn(
-              `[music-voice] <${child.nodeName.toLowerCase()}> is not allowed inside <music-voice>`
-            );
-          }
+      for (const child of this.#elementChildren()) {
+        if (child.nodeName === MUSIC_VOICE_NODE) {
+          console.warn(
+            '[music-voice] <music-voice> cannot nest inside another <music-voice>'
+          );
+        } else if (
+          child.nodeName !== MUSIC_NOTE_NODE &&
+          child.nodeName !== MUSIC_CHORD_NODE &&
+          child.nodeName !== MUSIC_REST_NODE &&
+          child.nodeName !== MUSIC_TUPLET_NODE &&
+          child.nodeName !== MUSIC_ARPEGGIO_NODE &&
+          child.nodeName !== MUSIC_CLEF_NODE
+        ) {
+          console.warn(
+            `[music-voice] <${child.nodeName.toLowerCase()}> is not allowed inside <music-voice>`
+          );
         }
-      } finally {
-        this.#applyingDefaults = false;
       }
     }
 

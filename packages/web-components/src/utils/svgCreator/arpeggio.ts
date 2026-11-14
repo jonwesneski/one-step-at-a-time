@@ -165,8 +165,8 @@ export type ArpeggioHairpinProps = {
   topY: number;
   /** Pixel Y of the bottom notehead center (equal to topY for a single note). */
   bottomY: number;
-  /** Left edge (px X) of the arpeggio sign — the hairpin sits just left of it. */
-  signLeftEdgeX: number;
+  /** Right edge (px X) of the arpeggio sign — the hairpin sits just left of the sign. */
+  signRightEdgeX: number;
   /**
    * When true, the wedge is extended to span at least the staff height and the
    * dynamic letters land just beyond the staff lines — used element-local so
@@ -191,7 +191,7 @@ export function appendArpeggioHairpin(
     arpeggio,
     topY,
     bottomY,
-    signLeftEdgeX,
+    signRightEdgeX,
     staffRelative = false,
   }: ArpeggioHairpinProps
 ): void {
@@ -202,7 +202,8 @@ export function appendArpeggioHairpin(
     spanBottomY = Math.max(spanBottomY, STAFF_BOTTOM_LINE_Y);
   }
   const spineX =
-    signLeftEdgeX -
+    signRightEdgeX -
+    ARPEGGIO_WAVE_WIDTH_PX -
     ARPEGGIO_HAIRPIN_GAP_PX -
     ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX / 2;
 

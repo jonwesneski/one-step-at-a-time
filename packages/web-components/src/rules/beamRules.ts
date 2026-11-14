@@ -9,17 +9,11 @@ import {
   BeatTypeInMeasure,
   DurationType,
 } from '../types/theory';
-import {
-  BeamsBuilder,
-  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
-  NOTE_Y_HEAD_OFFSET_STEM_UP,
-  type NoteYPosition,
-} from '../utils';
+import { BeamsBuilder, type NoteYPosition } from '../utils';
 import { MUSIC_NOTE_NODE } from '../utils/consts';
 import {
   BEAM_ESTIMATE_NOTE_SPACING_PX,
   KNEED_BEAM_TRIGGER_STEM_PX,
-  STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
 import {
   resolveBeamPlacement,
@@ -59,8 +53,7 @@ export function buildBeamsRenderer(
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
-    elementDurationFactors,
-    elementBeatOffsets,
+    beatOffsets,
     externallyBeamedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
@@ -131,14 +124,8 @@ export function buildBeamsRenderer(
         return null;
       }
       const stemUp = stemDirections[i];
-      const yHeadOffset = stemUp
-        ? NOTE_Y_HEAD_OFFSET_STEM_UP
-        : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
       const { highest, lowest } = headExtents[i];
-      // The stem belongs to the head farthest from the beam.
-      const stemOwnerStaffY = stemUp ? lowest : highest;
       return {
-        y: STAFF_Y_PADDING + stemOwnerStaffY - yHeadOffset,
         stemUp,
         highestHeadStaffY: highest,
         lowestHeadStaffY: lowest,

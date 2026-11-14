@@ -22,15 +22,6 @@
             },
             {
               "kind": "field",
-              "name": "#applyingDefaults",
-              "privacy": "private",
-              "type": {
-                "text": "boolean"
-              },
-              "default": "false"
-            },
-            {
-              "kind": "field",
               "name": "#ownedDurations",
               "privacy": "private",
               "default": "new WeakSet<Element>()"
@@ -55,14 +46,6 @@
               "type": {
                 "text": "boolean"
               }
-            },
-            {
-              "kind": "field",
-              "name": "flatElements",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "readonly": true
             },
             {
               "kind": "field",
@@ -318,7 +301,7 @@
               "name": "#resolvedTrillPitch",
               "privacy": "private",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               },
               "default": "null"
             },
@@ -689,7 +672,7 @@
               "kind": "field",
               "name": "resolvedTrillPitch",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               }
             },
             {
@@ -3029,7 +3012,7 @@
               "name": "#resolvedTrillPitch",
               "privacy": "private",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               },
               "default": "null"
             },
@@ -3389,7 +3372,7 @@
               "kind": "field",
               "name": "resolvedTrillPitch",
               "type": {
-                "text": "{\n      letter: NoteLetter;\n      accidental: AccidentalType | null;\n      written: boolean;\n      octave: Octave | null;\n    } | null"
+                "text": "ResolvedTrillPitch | null"
               }
             },
             {
@@ -4180,19 +4163,6 @@
             },
             {
               "kind": "field",
-              "name": "#mutationObservers",
-              "privacy": "private",
-              "type": {
-                "text": "MutationObserver[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#effectiveMode",
               "privacy": "private",
               "type": {
@@ -4224,19 +4194,6 @@
               "type": {
                 "text": "SVGGElement"
               },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#describeEndX",
-              "privacy": "private",
-              "type": {
-                "text": "number"
-              },
-              "default": "0",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -4453,19 +4410,6 @@
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, VoiceRenderState>"
-              },
-              "default": "new Map()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#previousElementsByVoice",
-              "privacy": "private",
-              "type": {
-                "text": "Map<VoiceKey, NoteChordOrRestElementType[]>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -7739,15 +7683,6 @@
             },
             {
               "kind": "field",
-              "name": "#yCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "Record<number, number>"
-              },
-              "default": "{ 1: STAFF_LINE_START, 2: STAFF_LINE_START + STAFF_LINE_SPACING, 3: STAFF_LINE_START + STAFF_LINE_SPACING * 2, 4: STAFF_LINE_START + STAFF_LINE_SPACING * 3, 5: STAFF_LINE_START + STAFF_LINE_SPACING * 4, 6: STAFF_LINE_START + STAFF_LINE_SPACING * 5, }"
-            },
-            {
-              "kind": "field",
               "name": "staffLineCount",
               "type": {
                 "text": "number"
@@ -7808,6 +7743,11 @@
             {
               "kind": "method",
               "name": "refreshInheritedAttrs"
+            },
+            {
+              "kind": "field",
+              "name": "#relayout",
+              "privacy": "private"
             },
             {
               "kind": "method",
@@ -8579,15 +8519,16 @@
               }
             },
             {
-              "kind": "field",
-              "name": "syllables",
-              "type": {
-                "text": "LyricSyllablePosition[]"
-              }
-            },
-            {
               "kind": "method",
-              "name": "updatePositions"
+              "name": "updatePositions",
+              "parameters": [
+                {
+                  "name": "positions",
+                  "type": {
+                    "text": "LyricSyllablePosition[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -8642,7 +8583,13 @@
           "members": [
             {
               "kind": "field",
-              "name": "#sopranoYCoordinates",
+              "name": "#treble",
+              "privacy": "private",
+              "static": true
+            },
+            {
+              "kind": "field",
+              "name": "#bass",
               "privacy": "private",
               "static": true
             },
@@ -8666,189 +8613,12 @@
             },
             {
               "kind": "field",
-              "name": "#baritoneYCoordinates",
-              "privacy": "private",
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#bassYCoordinates",
-              "privacy": "private",
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#trebleSharps",
+              "name": "#tenorKeyTables",
               "privacy": "private",
               "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#trebleFlats",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'B4', 'E5', 'A4', 'D5', 'G4', 'C5', 'F4', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMajorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
+                "text": "KeySignatureTables"
               },
               "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMajorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMinorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ E: StaffVocalElement.#trebleMajorSharpYCoordinates.G, B: StaffVocalElement.#trebleMajorSharpYCoordinates.D, ['F#']: StaffVocalElement.#trebleMajorSharpYCoordinates.A, ['C#']: StaffVocalElement.#trebleMajorSharpYCoordinates.E, ['G#']: StaffVocalElement.#trebleMajorSharpYCoordinates.B, ['D#']: StaffVocalElement.#trebleMajorSharpYCoordinates['F#'], ['A#']: StaffVocalElement.#trebleMajorSharpYCoordinates['C#'], }"
-            },
-            {
-              "kind": "field",
-              "name": "#trebleMinorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ D: StaffVocalElement.#trebleMajorFlatYCoordinates.F, G: StaffVocalElement.#trebleMajorFlatYCoordinates.Bb, C: StaffVocalElement.#trebleMajorFlatYCoordinates.Eb, F: StaffVocalElement.#trebleMajorFlatYCoordinates.Ab, Bb: StaffVocalElement.#trebleMajorFlatYCoordinates.Db, Eb: StaffVocalElement.#trebleMajorFlatYCoordinates.Gb, Ab: StaffVocalElement.#trebleMajorFlatYCoordinates.Cb, }"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorSharps",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'F4', 'C4', 'G4', 'D4', 'A3', 'E4', 'B3', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorFlats",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'B3', 'E4', 'A3', 'D4', 'G3', 'C4', 'F3', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMajorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMajorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMinorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ E: StaffVocalElement.#tenorMajorSharpYCoordinates.G, B: StaffVocalElement.#tenorMajorSharpYCoordinates.D, ['F#']: StaffVocalElement.#tenorMajorSharpYCoordinates.A, ['C#']: StaffVocalElement.#tenorMajorSharpYCoordinates.E, ['G#']: StaffVocalElement.#tenorMajorSharpYCoordinates.B, ['D#']: StaffVocalElement.#tenorMajorSharpYCoordinates['F#'], ['A#']: StaffVocalElement.#tenorMajorSharpYCoordinates['C#'], }"
-            },
-            {
-              "kind": "field",
-              "name": "#tenorMinorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ D: StaffVocalElement.#tenorMajorFlatYCoordinates.F, G: StaffVocalElement.#tenorMajorFlatYCoordinates.Bb, C: StaffVocalElement.#tenorMajorFlatYCoordinates.Eb, F: StaffVocalElement.#tenorMajorFlatYCoordinates.Ab, Bb: StaffVocalElement.#tenorMajorFlatYCoordinates.Db, Eb: StaffVocalElement.#tenorMajorFlatYCoordinates.Gb, Ab: StaffVocalElement.#tenorMajorFlatYCoordinates.Cb, }"
-            },
-            {
-              "kind": "field",
-              "name": "#bassSharps",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#bassFlats",
-              "privacy": "private",
-              "type": {
-                "text": "NoteLetterOctave[]"
-              },
-              "static": true,
-              "default": "[ 'B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2', ]"
-            },
-            {
-              "kind": "field",
-              "name": "#bassMajorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#bassMajorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true
-            },
-            {
-              "kind": "field",
-              "name": "#bassMinorSharpYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ E: StaffVocalElement.#bassMajorSharpYCoordinates.G, B: StaffVocalElement.#bassMajorSharpYCoordinates.D, ['F#']: StaffVocalElement.#bassMajorSharpYCoordinates.A, ['C#']: StaffVocalElement.#bassMajorSharpYCoordinates.E, ['G#']: StaffVocalElement.#bassMajorSharpYCoordinates.B, ['D#']: StaffVocalElement.#bassMajorSharpYCoordinates['F#'], ['A#']: StaffVocalElement.#bassMajorSharpYCoordinates['C#'], }"
-            },
-            {
-              "kind": "field",
-              "name": "#bassMinorFlatYCoordinates",
-              "privacy": "private",
-              "type": {
-                "text": "KeySignatureYCoordinates"
-              },
-              "static": true,
-              "default": "{ D: StaffVocalElement.#bassMajorFlatYCoordinates.F, G: StaffVocalElement.#bassMajorFlatYCoordinates.Bb, C: StaffVocalElement.#bassMajorFlatYCoordinates.Eb, F: StaffVocalElement.#bassMajorFlatYCoordinates.Ab, Bb: StaffVocalElement.#bassMajorFlatYCoordinates.Db, Eb: StaffVocalElement.#bassMajorFlatYCoordinates.Gb, Ab: StaffVocalElement.#bassMajorFlatYCoordinates.Cb, }"
             },
             {
               "kind": "field",
@@ -8952,19 +8722,6 @@
             },
             {
               "kind": "field",
-              "name": "#mutationObservers",
-              "privacy": "private",
-              "type": {
-                "text": "MutationObserver[]"
-              },
-              "default": "[]",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
               "name": "#effectiveMode",
               "privacy": "private",
               "type": {
@@ -8996,19 +8753,6 @@
               "type": {
                 "text": "SVGGElement"
               },
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#describeEndX",
-              "privacy": "private",
-              "type": {
-                "text": "number"
-              },
-              "default": "0",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -9225,19 +8969,6 @@
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, VoiceRenderState>"
-              },
-              "default": "new Map()",
-              "inheritedFrom": {
-                "name": "StaffClassicalElementBase",
-                "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#previousElementsByVoice",
-              "privacy": "private",
-              "type": {
-                "text": "Map<VoiceKey, NoteChordOrRestElementType[]>"
               },
               "default": "new Map()",
               "inheritedFrom": {
@@ -12534,7 +12265,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nreads each voice's `flatElements` independently.",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
           "name": "VoiceElement",
           "members": [
             {
@@ -12545,23 +12276,6 @@
                 "text": "MutationObserver | null"
               },
               "default": "null"
-            },
-            {
-              "kind": "field",
-              "name": "#applyingDefaults",
-              "privacy": "private",
-              "type": {
-                "text": "boolean"
-              },
-              "default": "false"
-            },
-            {
-              "kind": "field",
-              "name": "flatElements",
-              "type": {
-                "text": "NoteChordOrRestElementType[]"
-              },
-              "readonly": true
             },
             {
               "kind": "method",

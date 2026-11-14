@@ -34,10 +34,7 @@ import {
   computeBeamLevelStructure,
 } from '../../rules/beamStructureRules';
 import { isTriangle } from '../../rules/noteheadRules';
-import {
-  durationToFactor,
-  durationToFlagCountMap,
-} from '../../rules/theoryConsts';
+import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import type { NoteChordOrRestElementType } from '../../types/elements';
 import type {
   BeatsInMeasure,
@@ -49,6 +46,7 @@ import {
   BASE_STEM_LENGTH_PX,
   BEAM_ESTIMATE_NOTE_SPACING_PX,
   BEAM_THICKNESS_PX,
+  STAFF_Y_PADDING,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
 import { parseNotehead } from '../parsers';
@@ -57,13 +55,13 @@ import {
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
+  NOTE_Y_HEAD_OFFSET_STEM_DOWN,
+  NOTE_Y_HEAD_OFFSET_STEM_UP,
   NOTEHEAD_WIDTH_PX,
 } from './note';
 
 /** Y-position data for a single beamed note, passed to BeamsBuilder.buildRenderer(). */
 export type NoteYPosition = {
-  /** Top of the note's SVG in the beams container. */
-  y: number;
   stemUp: boolean;
   /** Highest and lowest head in the note Y map; equal for a single note. */
   highestHeadStaffY: number;
@@ -362,7 +360,13 @@ class BeamGroup {
     if (localIndex === -1) {
       return;
     }
-    const { y, stemUp, highestHeadStaffY, lowestHeadStaffY } = position;
+    const { stemUp, highestHeadStaffY, lowestHeadStaffY } = position;
+    // Top of the note's SVG in the beams container; the stem belongs to the
+    // head farthest from the beam.
+    const y =
+      STAFF_Y_PADDING +
+      (stemUp ? lowestHeadStaffY : highestHeadStaffY) -
+      (stemUp ? NOTE_Y_HEAD_OFFSET_STEM_UP : NOTE_Y_HEAD_OFFSET_STEM_DOWN);
     // Beamed notes always render noFlags, so they never draw the per-flag stem
     // extension an unbeamed note would — the tip is the base stem length.
     const tipOffset = stemUp
@@ -508,8 +512,9 @@ export class BeamsBuilder {
   constructor(
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
-    elementDurationFactors?: number[],
-    elementBeatOffsets?: number[],
+    // Whole-note-fraction offset at which each element starts (tuplet-scaled;
+    // sparse for the auto-combine track — see rules/voiceCombineRules.ts).
+    beatOffsets: readonly number[],
     // Indices already joined to a cross-staff double-stemmed beam group
     // (rules/doubleStemmedBeamRules.ts) — never join or extend a same-staff
     // run here, exactly like a rest already breaks one, but still report as
@@ -519,8 +524,7 @@ export class BeamsBuilder {
     const { groups, beamedIndices } = BeamsBuilder.#scan(
       elements,
       time,
-      elementDurationFactors,
-      elementBeatOffsets,
+      beatOffsets,
       externallyBeamedIndices
     );
     this.#groups = groups;
@@ -545,9 +549,8 @@ export class BeamsBuilder {
   static #scan(
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
-    elementDurationFactors?: number[],
-    elementBeatOffsets?: number[],
-    externallyBeamedIndices: ReadonlySet<number> = new Set()
+    elementOffsets: readonly number[],
+    externallyBeamedIndices: ReadonlySet<number>
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
     const [beats, beatType] = time;
     const measureDuration = beats / beatType;
@@ -557,29 +560,6 @@ export class BeamsBuilder {
     );
     const groups: BeamGroup[] = [];
     const beamedIndices = new Set<number>();
-
-    // Whole-note-fraction offset at which each element starts. When
-    // elementBeatOffsets is supplied (the v1-scoped auto-combine track's
-    // sparse, non-contiguous beat positions — see rules/voiceCombineRules.ts),
-    // it's used directly instead of accumulating sequentially: a combined
-    // track's own array indices are still 0..N-1, but its real beat-time
-    // gaps between entries can be wider than its own durations would sum to
-    // (other voices' non-combined material occupies the space between).
-    // Otherwise elementDurationFactors, when provided, supplies tuplet-scaled
-    // durations so notes inside a tuplet are assigned to the correct window.
-    const elementOffsets: number[] =
-      elementBeatOffsets ??
-      (() => {
-        const offsets: number[] = [];
-        let offset = 0;
-        for (let i = 0; i < elements.length; i++) {
-          offsets.push(offset);
-          const dur = (elements[i].dataset.duration ??
-            elements[i].getAttribute('duration')) as DurationType;
-          offset += elementDurationFactors?.[i] ?? durationToFactor[dur] ?? 0;
-        }
-        return offsets;
-      })();
 
     // Flushes a completed consecutive run; creates a BeamGroup only when the run
     // has ≥ 2 notes (lone beamable notes fall back to flags).

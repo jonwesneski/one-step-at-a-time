@@ -175,3 +175,55 @@ describe(`${MUSIC_STAFF_GUITAR_TAB} mirroring a notation staff`, () => {
     expect(staff.hasAttribute('tab-for')).toBe(false);
   });
 });
+
+describe(`${MUSIC_STAFF_GUITAR_TAB} re-layout`, () => {
+  const renderInTab = (parent: HTMLElement = document.body) => {
+    const staff = document.createElement(MUSIC_STAFF_GUITAR_TAB) as any;
+    parent.appendChild(staff);
+    const notes = [1, 2].map((string) => {
+      const note = document.createElement(MUSIC_GUITAR_NOTE);
+      note.setAttribute('fret', '0');
+      note.setAttribute('string', `${string}`);
+      note.setAttribute('duration', 'quarter' satisfies DurationType);
+      staff.appendChild(note);
+      return note as HTMLElement;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => notes;
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, notes };
+  };
+
+  it("moves a note to its new string's line", () => {
+    const { notes } = renderInTab();
+
+    notes[0].setAttribute('string', '4');
+
+    expect(parseFloat(notes[0].style.top)).toBe(
+      STAFF_LINE_START + STAFF_LINE_SPACING * 3
+    );
+  });
+
+  it("re-lays out when a note's duration changes", () => {
+    const { staff, notes } = renderInTab();
+    const relayouts = jest.fn();
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, relayouts);
+
+    notes[0].setAttribute('duration', 'half' satisfies DurationType);
+
+    expect(relayouts).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-lays out when the inherited time changes', () => {
+    const measure = document.createElement(MUSIC_MEASURE);
+    document.body.appendChild(measure);
+    const { staff } = renderInTab(measure);
+    const relayouts = jest.fn();
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, relayouts);
+
+    measure.setAttribute(COMMON_ATTRIBUTES.TIME, '3/4');
+
+    expect(staff.time).toBe('3/4');
+    expect(relayouts).toHaveBeenCalled();
+  });
+});

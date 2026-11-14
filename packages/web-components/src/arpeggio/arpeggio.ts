@@ -1,6 +1,5 @@
 import {
   IArpeggioElement,
-  NoteChordOrRestElementType,
   NoteElementType,
   NoteOrChordElementType,
 } from '../types/elements';
@@ -17,7 +16,6 @@ import {
   MUSIC_TUPLET_NODE,
   NOTE_EVENTS,
 } from '../utils/consts';
-import { flattenSlotElements } from '../utils/slotElements';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -53,7 +51,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #childObserver: MutationObserver | null = null;
-    #applyingDefaults = false;
     // Run notes whose `duration` the wrapper wrote (vs. author-set) — re-applied
     // when `run-duration` changes.
     #ownedDurations = new WeakSet<Element>();
@@ -87,10 +84,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.removeAttribute('lv-label');
       }
-    }
-
-    get flatElements(): NoteChordOrRestElementType[] {
-      return flattenSlotElements(Array.from(this.children)).flatElements;
     }
 
     get runElements(): NoteElementType[] {
@@ -147,57 +140,47 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #onChildChange(): void {
-      if (this.#applyingDefaults) {
-        return;
-      }
       this.#applyDefaults();
       this.#notify();
     }
 
-    // Give each run note a drawn value and a marker; validate the structure.
+    // Give each run note a drawn value; validate the structure.
     #applyDefaults(): void {
-      this.#applyingDefaults = true;
-      try {
-        const elementChildren = this.#elementChildren();
-        if (elementChildren.length < 2) {
-          console.warn(
-            '[music-arpeggio] needs at least a run note and a target chord/note'
-          );
-          return;
-        }
-        const target = elementChildren[elementChildren.length - 1];
-        if (
-          target.nodeName !== MUSIC_NOTE_NODE &&
-          target.nodeName !== MUSIC_CHORD_NODE
+      const elementChildren = this.#elementChildren();
+      if (elementChildren.length < 2) {
+        console.warn(
+          '[music-arpeggio] needs at least a run note and a target chord/note'
+        );
+        return;
+      }
+      const target = elementChildren[elementChildren.length - 1];
+      if (
+        target.nodeName !== MUSIC_NOTE_NODE &&
+        target.nodeName !== MUSIC_CHORD_NODE
+      ) {
+        console.warn(
+          '[music-arpeggio] the last child must be a <music-chord> or <music-note>'
+        );
+      }
+      for (const child of elementChildren.slice(0, -1)) {
+        if (child.nodeName === MUSIC_NOTE_NODE) {
+          if (
+            !child.hasAttribute('duration') ||
+            this.#ownedDurations.has(child)
+          ) {
+            child.setAttribute('duration', this.runDuration);
+            this.#ownedDurations.add(child);
+          }
+        } else if (
+          child.nodeName === MUSIC_ARPEGGIO_NODE ||
+          child.nodeName === MUSIC_TUPLET_NODE ||
+          child.nodeName === MUSIC_CLEF_NODE ||
+          child.nodeName === MUSIC_REST_NODE
         ) {
           console.warn(
-            '[music-arpeggio] the last child must be a <music-chord> or <music-note>'
+            `[music-arpeggio] <${child.nodeName.toLowerCase()}> is not allowed inside <music-arpeggio>`
           );
         }
-        for (const child of elementChildren.slice(0, -1)) {
-          if (child.nodeName === MUSIC_NOTE_NODE) {
-            if (
-              !child.hasAttribute('duration') ||
-              this.#ownedDurations.has(child)
-            ) {
-              child.setAttribute('duration', this.runDuration);
-              this.#ownedDurations.add(child);
-            }
-            child.setAttribute('data-arpeggio-run', '');
-          } else if (
-            child.nodeName === MUSIC_ARPEGGIO_NODE ||
-            child.nodeName === MUSIC_TUPLET_NODE ||
-            child.nodeName === MUSIC_CLEF_NODE ||
-            child.nodeName === MUSIC_REST_NODE
-          ) {
-            console.warn(
-              `[music-arpeggio] <${child.nodeName.toLowerCase()}> is not allowed inside <music-arpeggio>`
-            );
-          }
-        }
-        target.setAttribute('data-arpeggio-target', '');
-      } finally {
-        this.#applyingDefaults = false;
       }
     }
 

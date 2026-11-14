@@ -180,6 +180,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.render();
+      if (name === 'string' || name === 'duration') {
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
     }
 
     private render(): void {

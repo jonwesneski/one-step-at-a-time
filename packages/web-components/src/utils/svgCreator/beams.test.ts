@@ -881,7 +881,7 @@ describe('beams', () => {
     });
   });
 
-  describe('elementBeatOffsets (sparse combined-track positions)', () => {
+  describe('beatOffsets (sparse combined-track positions)', () => {
     it('groups elements by their supplied offsets, not by sequential accumulation', () => {
       // Two eighth notes whose OWN durations would only span 1/4 total, but
       // whose real beat-time positions (as a combined-voice track sparsely
@@ -893,7 +893,7 @@ describe('beams', () => {
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
       ];
-      const builder = new BeamsBuilder(elements, [4, 4], undefined, [0, 0.5]);
+      const builder = new BeamsBuilder(elements, [4, 4], [0, 0.5]);
       expect(builder.isBeamed(0)).toBe(false);
       expect(builder.isBeamed(1)).toBe(false);
     });
@@ -903,17 +903,7 @@ describe('beams', () => {
         makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
         makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
       ];
-      const builder = new BeamsBuilder(elements, [4, 4], undefined, [0, 1 / 8]);
-      expect(builder.isBeamed(0)).toBe(true);
-      expect(builder.isBeamed(1)).toBe(true);
-    });
-
-    it('omitting elementBeatOffsets falls back to sequential accumulation (unchanged existing behavior)', () => {
-      const elements = [
-        makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
-        makeNote({ note: 'D', octave: 4, duration: 'eighth' }),
-      ];
-      const builder = new BeamsBuilder(elements, [4, 4]);
+      const builder = new BeamsBuilder(elements, [4, 4], [0, 1 / 8]);
       expect(builder.isBeamed(0)).toBe(true);
       expect(builder.isBeamed(1)).toBe(true);
     });
@@ -922,13 +912,7 @@ describe('beams', () => {
   describe('externallyBeamedIndices (cross-staff double-stemmed beam members)', () => {
     it('reports isBeamed true for an externally-beamed index with no same-staff group of its own', () => {
       const elements = [makeNote({ note: 'C', octave: 4, duration: 'eighth' })];
-      const builder = new BeamsBuilder(
-        elements,
-        [4, 4],
-        undefined,
-        undefined,
-        new Set([0])
-      );
+      const builder = new BeamsBuilder(elements, [4, 4], [0], new Set([0]));
       expect(builder.isBeamed(0)).toBe(true);
       expect(builder.beamGroupFor(0)).toBeNull();
     });
@@ -942,8 +926,7 @@ describe('beams', () => {
       const builder = new BeamsBuilder(
         elements,
         [4, 4],
-        undefined,
-        undefined,
+        [0, 1 / 8, 2 / 8],
         new Set([1])
       );
       // The externally-beamed middle note breaks the run — indices 0 and 2
