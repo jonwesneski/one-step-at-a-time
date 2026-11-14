@@ -326,6 +326,14 @@ describe('detectCombinableGroups', () => {
 });
 
 describe('detectCombinableGroups with noteheads', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   const twoVoices = (
     first: NoteElementType | ChordElementType,
     second: NoteElementType | ChordElementType

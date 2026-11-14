@@ -1137,6 +1137,16 @@ describe('staffClassicalBase', () => {
 });
 
 describe('staffClassicalBase triangle noteheads', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(async () => {
+    document.body.innerHTML = '';
+    await Promise.resolve();
+    jest.restoreAllMocks();
+  });
+
   const renderStaff = (
     entries: Record<string, string>[],
     clef = 'treble',
@@ -1239,7 +1249,6 @@ describe('staffClassicalBase triangle noteheads', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('stem-direction="up" is ignored')
     );
-    warn.mockRestore();
   });
 
   describe('clearing the real stems of a run', () => {
@@ -1417,7 +1426,6 @@ describe('staffClassicalBase triangle noteheads', () => {
       'treble',
       '1/4'
     );
-    warn.mockRestore();
     expect(first.noFlags).toBe(true);
     expect(second.noFlags).toBe(true);
     expect(first.toneNoteheads).toEqual(['normal', 'normal', 'normal']);
@@ -1432,7 +1440,6 @@ describe('staffClassicalBase triangle noteheads', () => {
         'beam-group': 'a',
       },
     ]);
-    warn.mockRestore();
     expect(triangle.noFlags).toBe(false);
     expect(triangle.stemExtension).toBeCloseTo(
       MIDDLE_STAFF_Y - (triangle.staffY + BASE_STEM_LENGTH_PX)
