@@ -45,6 +45,7 @@ const preview: Preview = {
             'Clef Changes',
             'Beams',
             'Voices',
+            'Unisons',
           ],
           'Instruments',
           [

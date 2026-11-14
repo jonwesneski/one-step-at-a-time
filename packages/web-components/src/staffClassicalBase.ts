@@ -1,6 +1,8 @@
 import {
   computeInterNoteSpacing,
   computeNoteAccidentals,
+  parseAccidentalSuffix,
+  suffixToType,
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import {
@@ -70,6 +72,7 @@ import {
   unbeamedStemExtensionPx,
 } from './rules/stemRules';
 import {
+  durationToBase,
   durationToDotCount,
   durationToFlagCountMap,
   isStemlessDuration,
@@ -93,6 +96,7 @@ import {
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
+import type { UnisonPartDescriptor } from './rules/unisonRules';
 import {
   CombinedGroup,
   detectCombinableGroups,
@@ -2739,6 +2743,33 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     };
   }
 
+  // What this part contributes to a unison with another voice.
+  #unisonDescriptor(
+    element: NoteElementType | ChordElementType,
+    duration: DurationType
+  ): UnisonPartDescriptor {
+    if (element.nodeName === MUSIC_NOTE_NODE) {
+      const note = element as NoteElementType;
+      const pitchAccidental = suffixToType(parseAccidentalSuffix(note.note));
+      return {
+        duration: durationToBase[duration],
+        pitchAccidental,
+        shownAccidental:
+          note.showAccidental === undefined
+            ? pitchAccidental
+            : note.showAccidental,
+        isChord: false,
+      };
+    }
+    const chord = element as ChordElementType;
+    return {
+      duration: durationToBase[duration],
+      pitchAccidental: null,
+      shownAccidental: chord.noteAccidentals.find((a) => a != null) ?? null,
+      isChord: true,
+    };
+  }
+
   // Element-local head, stem and dot extents a cross-voice offset is
   // measured against.
   #voicePartGeometry(
@@ -3168,6 +3199,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
               element as NoteElementType | ChordElementType,
               staffYs
             ),
+            unison: this.#unisonDescriptor(
+              element as NoteElementType | ChordElementType,
+              duration
+            ),
           });
         }
       }
@@ -3186,6 +3221,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Dot rows another voice decides (a dropped lower dot, one shared
     // column); every other element places its own, so stale rows reset.
     const dotRowsByElement = new Map<Element, number[]>();
+    const dotShiftByElement = new Map<Element, number>();
     if (isMultiVoice) {
       for (const column of placementColumns) {
         if (column.placements.length < 2) {
@@ -3196,6 +3232,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             ?.elements[rows.localIndex];
           if (element) {
             dotRowsByElement.set(element, rows.rowStaffYs);
+            dotShiftByElement.set(element, rows.columnShiftPx);
           }
         }
       }
@@ -3208,10 +3245,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ) {
           (element as NoteElementType | ChordElementType).augmentationDotRows =
             dotRowsByElement.get(element) ?? null;
+          if (element.nodeName === MUSIC_NOTE_NODE) {
+            (element as NoteElementType).augmentationDotShiftPx =
+              dotShiftByElement.get(element) ?? 0;
+          }
         }
       }
     }
 
+    const headlessNotes = new Set<Element>();
     if (isMultiVoice) {
       let anyDisplacement = false;
       for (const column of placementColumns) {
@@ -3226,6 +3268,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             continue;
           }
           const element = state.elements[displacement.localIndex];
+          if (displacement.omitsHead) {
+            headlessNotes.add(element);
+          }
           const currentLeft = parseFloat(element.style.left || '0');
           element.style.left = `${currentLeft + displacement.xOffset}px`;
           const currentX =
@@ -3239,6 +3284,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (anyDisplacement) {
         for (const state of this.#voiceRenderStates.values()) {
           state.beamRenderer?.spaceAll();
+        }
+      }
+    }
+    for (const state of this.#voiceRenderStates.values()) {
+      for (const element of state.elements) {
+        if (element.nodeName === MUSIC_NOTE_NODE) {
+          (element as NoteElementType).unisonPart = headlessNotes.has(element)
+            ? { omitsHead: true }
+            : null;
         }
       }
     }

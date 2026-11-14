@@ -2919,6 +2919,24 @@
             },
             {
               "kind": "field",
+              "name": "#unisonPart",
+              "privacy": "private",
+              "type": {
+                "text": "UnisonPart | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#augmentationDotShiftPx",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -3088,6 +3106,20 @@
               "name": "augmentationDotRows",
               "type": {
                 "text": "number[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotShiftPx",
+              "type": {
+                "text": "number"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unisonPart",
+              "type": {
+                "text": "UnisonPart | null"
               }
             },
             {
@@ -5730,6 +5762,34 @@
                   "name": "leftInWrapper",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#unisonDescriptor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "UnisonPartDescriptor"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "duration",
+                  "type": {
+                    "text": "DurationType"
                   }
                 }
               ],
@@ -10302,6 +10362,34 @@
                   "name": "leftInWrapper",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#unisonDescriptor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "UnisonPartDescriptor"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "duration",
+                  "type": {
+                    "text": "DurationType"
                   }
                 }
               ],

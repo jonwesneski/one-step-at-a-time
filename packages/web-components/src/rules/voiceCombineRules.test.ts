@@ -65,6 +65,36 @@ describe('detectCombinableGroups', () => {
     expect(groups[0].tones.map((t) => t.value).sort()).toEqual(['C', 'E']);
   });
 
+  it('does not combine two voices sounding the same pitch (a unison)', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('G', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('treats the same letter and octave with different accidentals as a unison', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('G#', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('still combines the same letter in different octaves', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 5)], [0])],
+        [2, voiceInput([note('G', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(1);
+  });
+
   it('does not combine when durations differ', () => {
     const v1Note = note('C', 4, 'quarter');
     const v2Note = note('E', 4, 'eighth');
@@ -160,12 +190,12 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('combines a chord + a note into one bigger chord (tone-set union, deduplicated)', () => {
+  it('combines a chord + a note into one bigger chord (tone-set union)', () => {
     const v1Chord = chord([
       ['C', 4],
       ['E', 4],
     ]);
-    const v2Note = note('E', 4); // duplicate pitch — should not double up
+    const v2Note = note('G', 4);
     const groups = detectCombinableGroups(
       new Map([
         [1, voiceInput([v1Chord], [0])],
@@ -173,7 +203,22 @@ describe('detectCombinableGroups', () => {
       ])
     );
     expect(groups).toHaveLength(1);
-    expect(groups[0].tones).toHaveLength(2); // C4, E4 — deduplicated
+    expect(groups[0].tones).toHaveLength(3);
+  });
+
+  it('leaves a chord and a note that share a pitch uncombined (a unison)', () => {
+    const v1Chord = chord([
+      ['C', 4],
+      ['E', 4],
+    ]);
+    const v2Note = note('E', 4);
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Chord], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
   });
 
   it('combines 2 of 3 voices while the 3rd stays independent', () => {
@@ -267,7 +312,7 @@ describe('detectCombinableGroups', () => {
     const v1BeatOne = note('C', 5);
     const v2BeatZero = note('E', 4);
     const v2BeatHalf = note('G', 4);
-    const v3BeatHalf = note('G', 4);
+    const v3BeatHalf = note('B', 4);
     const groups = detectCombinableGroups(
       new Map([
         [1, voiceInput([v1BeatZero, v1BeatOne], [0, 1])],

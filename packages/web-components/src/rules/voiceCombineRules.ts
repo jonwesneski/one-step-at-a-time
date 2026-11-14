@@ -112,6 +112,27 @@ function tonesOf(element: NoteOrChordElementType): ChordNote[] {
   return (element as ChordElementType).notes;
 }
 
+// Two members sounding the same letter and octave are a unison: it is laid
+// out by rules/unisonRules.ts (shared head, or two heads) rather than merged
+// into one chord, which would drop one of the parts.
+function hasUnison(bucket: readonly Candidate[]): boolean {
+  const seen = new Set<string>();
+  for (const candidate of bucket) {
+    const positions = new Set(
+      tonesOf(candidate.element).map(
+        (tone) => `${tone.value[0].toUpperCase()}${tone.octave ?? ''}`
+      )
+    );
+    for (const position of positions) {
+      if (seen.has(position)) {
+        return true;
+      }
+      seen.add(position);
+    }
+  }
+  return false;
+}
+
 function dedupeTones(tones: readonly ChordNote[]): ChordNote[] {
   const seen = new Set<string>();
   const result: ChordNote[] = [];
@@ -190,7 +211,7 @@ export function detectCombinableGroups(
       }
     }
     for (const bucket of byKey.values()) {
-      if (bucket.length < 2) {
+      if (bucket.length < 2 || hasUnison(bucket)) {
         continue;
       }
       groups.push({

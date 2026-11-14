@@ -184,6 +184,15 @@ export const AUGMENTATION_DOT_TAIL_CLEARANCE_PX = STAFF_LINE_SPACING * 0.15;
  */
 export const CROSSED_VOICE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.25;
 
+/**
+ * Gap (px) between the two heads of an unshared unison, so the left part's
+ * stem never meets the right head and a semibreve never looks joined to a stem.
+ * A drawn head is about 2px wider than its layout box, so this leaves a visible
+ * sliver of about 3px.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const UNISON_STEM_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Beams ────────────────────────────────────────────────────────────────────
 
 /**

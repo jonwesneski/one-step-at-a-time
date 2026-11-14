@@ -16,6 +16,33 @@ export function resolveNoteDotStaffY(staffY: number): number {
   return isOnStaffLine(staffY) ? staffY - STAFF_Y_STEP : staffY;
 }
 
+/**
+ * One dot per head for `headCount` heads on one staff position, each in a
+ * stave space of its own so the column never reads as a horizontal pair
+ * (which would give the notes a double-dotted value). A head on a line takes
+ * the spaces above and below it; a head in a space takes its own space, then
+ * the one above. Returned top to bottom.
+ */
+export function resolveUnisonDotStaffYs(
+  staffY: number,
+  headCount: number
+): number[] {
+  const rows: number[] = [];
+  const onLine = isOnStaffLine(staffY);
+  for (let distance = 0; rows.length < headCount; distance++) {
+    const offset = (onLine ? 1 + distance * 2 : distance * 2) * STAFF_Y_STEP;
+    if (onLine) {
+      rows.push(staffY - offset);
+      if (rows.length < headCount) {
+        rows.push(staffY + offset);
+      }
+    } else {
+      rows.push(staffY - offset);
+    }
+  }
+  return rows.sort((a, b) => a - b);
+}
+
 // A dot pushed this far past the chord's outer head is too far to read as
 // belonging to it.
 const FORCED_DOT_DISTANCE = STAFF_LINE_SPACING * 2;

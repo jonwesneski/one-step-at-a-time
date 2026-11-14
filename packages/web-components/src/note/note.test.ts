@@ -1705,6 +1705,31 @@ describe('stem direction', () => {
   });
 });
 
+describe('unison part', () => {
+  it('draws no head or hit zone when another voice draws the shared head, but keeps the stem', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('duration', 'quarter');
+    document.body.appendChild(noteElement);
+    expect(noteElement.shadowRoot?.querySelector('.head')).not.toBeNull();
+
+    noteElement.unisonPart = { omitsHead: true };
+
+    expect(noteElement.shadowRoot?.querySelector('.head')).toBeNull();
+    expect(noteElement.shadowRoot?.querySelector('.head-hit-zone')).toBeNull();
+    expect(noteElement.shadowRoot?.querySelector('.stem')).not.toBeNull();
+  });
+
+  it('draws its head again once the unison part is cleared', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    noteElement.unisonPart = { omitsHead: true };
+
+    noteElement.unisonPart = null;
+
+    expect(noteElement.shadowRoot?.querySelector('.head')).not.toBeNull();
+  });
+});
+
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();

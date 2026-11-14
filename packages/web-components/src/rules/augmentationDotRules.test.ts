@@ -8,6 +8,7 @@ import {
   isOnStaffLine,
   resolveChordDotStaffYs,
   resolveNoteDotStaffY,
+  resolveUnisonDotStaffYs,
 } from './augmentationDotRules';
 
 // Treble staff Ys: lines F5=30 D5=40 B4=50 G4=60 E4=70; ledger C6=10 A5=20
@@ -114,5 +115,25 @@ describe('augmentationDotCentersX', () => {
     expect(centers[1] + AUGMENTATION_DOT_DIAMETER_PX / 2).toBeCloseTo(
       augmentationDotRowWidthPx(2)
     );
+  });
+});
+
+describe('resolveUnisonDotStaffYs', () => {
+  it('puts two heads on a line in the spaces above and below it', () => {
+    expect(resolveUnisonDotStaffYs(G4, 2)).toEqual([A4, F4]);
+  });
+
+  it('puts two heads in a space in that space and the one above', () => {
+    expect(resolveUnisonDotStaffYs(A4, 2)).toEqual([C5, A4]);
+  });
+
+  it('gives every head its own row', () => {
+    for (const staffY of [G4, A4, C6, B5]) {
+      for (const count of [1, 2, 3]) {
+        const rows = resolveUnisonDotStaffYs(staffY, count);
+        expect(new Set(rows).size).toBe(count);
+        expect(rows.every((row) => !isOnStaffLine(row))).toBe(true);
+      }
+    }
   });
 });

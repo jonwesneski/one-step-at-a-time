@@ -26,6 +26,7 @@ import type {
   GraceOctavesType,
   INoteElement,
   TieValue,
+  UnisonPart,
 } from '../types/elements';
 import type {
   AccidentalType,
@@ -230,6 +231,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
     #augmentationDotRows: number[] | null = null;
+    #unisonPart: UnisonPart | null = null;
+    #augmentationDotShiftPx = 0;
     #noFlags = false;
     #nominalStaffY: number | null = null;
     #lastNoteheadWarning: string | null = null;
@@ -344,6 +347,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       this.#augmentationDotRows = v;
+      this.#scheduleRender();
+    }
+
+    get augmentationDotShiftPx(): number {
+      return this.#augmentationDotShiftPx;
+    }
+    set augmentationDotShiftPx(v: number) {
+      if (v === this.#augmentationDotShiftPx) {
+        return;
+      }
+      this.#augmentationDotShiftPx = v;
+      this.#scheduleRender();
+    }
+
+    get unisonPart(): UnisonPart | null {
+      return this.#unisonPart;
+    }
+    set unisonPart(v: UnisonPart | null) {
+      const current = this.#unisonPart;
+      if (
+        v === current ||
+        (v !== null && current !== null && v.omitsHead === current.omitsHead)
+      ) {
+        return;
+      }
+      this.#unisonPart = v;
       this.#scheduleRender();
     }
 
@@ -596,6 +625,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemExtension: this.#stemExtension,
           staffY: this.#staffY,
           rowStaffYs: this.#augmentationDotRows,
+          columnShiftPx: this.#augmentationDotShiftPx,
         })?.rightEdgeX ?? null
       );
     }
@@ -1375,6 +1405,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         articulationStemAnchorBeamLevels:
           this.#articulationStemAnchorBeamLevels,
         augmentationDotRows: this.#augmentationDotRows,
+        augmentationDotShiftPx: this.#augmentationDotShiftPx,
+        omitsHead: this.#unisonPart?.omitsHead ?? false,
       });
 
       if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {

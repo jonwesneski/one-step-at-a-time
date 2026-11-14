@@ -815,4 +815,52 @@ test.describe('multi-voice staff', () => {
     expect(v2C4A).toBe(expectedDownStemNoteTop('treble', 'C4'));
     expect(v2C4C).toBe(expectedDownStemNoteTop('bass', 'C4'));
   });
+
+  test.describe('unisons', () => {
+    async function headCounts(page: Page): Promise<number[]> {
+      return page.evaluate(() =>
+        Array.from(document.querySelectorAll('music-note')).map(
+          (note) => note.shadowRoot?.querySelectorAll('.head').length ?? 0
+        )
+      );
+    }
+
+    const unisonMarkup = (lowerDuration: string): string =>
+      `<music-staff clef="treble" time="4/4">
+         <music-voice>
+           <music-note note="G" octave="4" duration="quarter"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note id="lower" note="G" octave="4" duration="${lowerDuration}"></music-note>
+         </music-voice>
+       </music-staff>`;
+
+    test('two equal stemmed parts share one head, and un-share it when the lower duration changes', async ({
+      page,
+    }) => {
+      await render(page, unisonMarkup('quarter'));
+      expect(await headCounts(page)).toEqual([1, 0]);
+
+      await page.evaluate(() =>
+        document.getElementById('lower')?.setAttribute('duration', 'half')
+      );
+      await waitForRedrawCycle(page);
+      expect(await headCounts(page)).toEqual([1, 1]);
+    });
+
+    test('two semibreves keep two heads, and the upper part stays on the beat', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(await headCounts(page)).toEqual([1, 1]);
+      const lefts = await noteLefts(page);
+      expect(lefts[1] - lefts[0]).toBeGreaterThan(0);
+    });
+  });
 });

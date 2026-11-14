@@ -8,7 +8,17 @@ import {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
   OPPOSITE_STEM_ALIGN_OFFSET_PX,
 } from '../utils/svgCreator/note';
-import { resolveChordDotStaffYs } from './augmentationDotRules';
+import {
+  resolveChordDotStaffYs,
+  resolveNoteDotStaffY,
+  resolveUnisonDotStaffYs,
+} from './augmentationDotRules';
+import {
+  canShareNotehead,
+  resolveUnisonPair,
+  type UnisonPartDescriptor,
+  type UnisonPartInput,
+} from './unisonRules';
 
 export type VoiceDirection = 'up' | 'down';
 
@@ -138,6 +148,8 @@ export type VoiceNoteheadPlacement = {
   dotCount?: number;
   // Without it, dots never move a part.
   geometry?: VoicePartGeometry;
+  // Without it (or without geometry) a unison keeps the symmetric nudge.
+  unison?: UnisonPartDescriptor;
 };
 
 export type VoiceNoteheadDisplacement = {
@@ -145,13 +157,16 @@ export type VoiceNoteheadDisplacement = {
   localIndex: number;
   xOffset: number;
   isUnison: boolean;
+  // Shared head: this part draws no head of its own.
+  omitsHead: boolean;
 };
 
 /**
  * Resolves horizontal displacement for all voices' notes/chords sharing one
  * beat-offset column:
- *  - an exact unison between two voices — both noteheads are kept and nudged
- *    ± half of ADJACENT_NOTE_X_DISPLACEMENT_PX about the shared beat x;
+ *  - an exact unison between two voices — see rules/unisonRules.ts#resolveUnisonPair:
+ *    a shared head with two stems, or two heads with the upper part kept on
+ *    the beat x;
  *  - a second between an up-stem and a down-stem part (either above the
  *    other) — the up-stem part stays left and the down-stem part moves right
  *    until the two stems share one x;
@@ -172,14 +187,29 @@ export function computeCrossVoiceDisplacements(
 ): VoiceNoteheadDisplacement[] {
   const offsets = new Map<VoiceNoteheadPlacement, number>();
   const unisons = new Set<VoiceNoteheadPlacement>();
+  const headless = new Set<VoiceNoteheadPlacement>();
   const halfDisplacement = ADJACENT_NOTE_X_DISPLACEMENT_PX / 2;
   const dotRows = resolveCrossVoiceDotRows(placements);
+  const dotShifts = new Set(
+    dotRows
+      .filter((rows) => rows.columnShiftPx > 0)
+      .map((rows) =>
+        placements.find(
+          (placement) =>
+            placement.voiceNumber === rows.voiceNumber &&
+            placement.localIndex === rows.localIndex
+        )
+      )
+      .filter((placement): placement is VoiceNoteheadPlacement => !!placement)
+  );
   const rowsOf = (placement: VoiceNoteheadPlacement): number[] =>
     dotRows.find(
       (rows) =>
         rows.voiceNumber === placement.voiceNumber &&
         rows.localIndex === placement.localIndex
     )?.rowStaffYs ?? [];
+  const dotsFollowGroup = (placement: VoiceNoteheadPlacement): boolean =>
+    dotShifts.has(placement);
   const addOffset = (placement: VoiceNoteheadPlacement, offset: number) => {
     offsets.set(placement, (offsets.get(placement) ?? 0) + offset);
   };
@@ -224,9 +254,27 @@ export function computeCrossVoiceDisplacements(
       }
 
       if (collision.distance === 0) {
-        // Exact unison: both noteheads kept, nudged symmetrically apart.
-        // Lower-numbered voice goes left, the other right, regardless of
-        // stem direction (this is about visual separation, not stems).
+        const aInput = toUnisonInput(a);
+        const bInput = toUnisonInput(b);
+        if (aInput && bInput) {
+          const layout = resolveUnisonPair(aInput, bInput);
+          const [left, right] = a.voiceNumber < b.voiceNumber ? [a, b] : [b, a];
+          addOffset(left, layout.leftOffsetPx);
+          addOffset(right, layout.rightOffsetPx);
+          if (layout.omitsHeadVoiceNumber !== null) {
+            headless.add(
+              layout.omitsHeadVoiceNumber === left.voiceNumber ? left : right
+            );
+          }
+          unisons.add(left);
+          unisons.add(right);
+          if (layout.mode !== 'shared-head' && !dotsFollowGroup(left)) {
+            separateByDots(left, right);
+          }
+          continue;
+        }
+        // No geometry to measure: both heads nudged symmetrically apart,
+        // lower voice number to the left.
         const [left, right] = a.voiceNumber < b.voiceNumber ? [a, b] : [b, a];
         addOffset(left, -halfDisplacement);
         addOffset(right, halfDisplacement);
@@ -272,7 +320,82 @@ export function computeCrossVoiceDisplacements(
     localIndex: placement.localIndex,
     xOffset,
     isUnison: unisons.has(placement),
+    omitsHead: headless.has(placement),
   }));
+}
+
+function toUnisonInput(
+  placement: VoiceNoteheadPlacement
+): UnisonPartInput | null {
+  if (!placement.unison || !placement.geometry) {
+    return null;
+  }
+  return {
+    ...placement.unison,
+    voiceNumber: placement.voiceNumber,
+    direction: placement.direction,
+    dotCount: placement.dotCount ?? 0,
+    geometry: placement.geometry,
+  };
+}
+
+// A unison where only the upper part is dotted: its dot sits after the whole
+// group, in its own row (the space above a line), which is what ties it to the
+// upper note. The shift is how far past its own head that column starts.
+function resolveUnisonDotShifts(
+  placements: readonly VoiceNoteheadPlacement[]
+): Map<VoiceNoteheadPlacement, number> {
+  const shifts = new Map<VoiceNoteheadPlacement, number>();
+  for (const dotted of placements) {
+    for (const other of placements) {
+      if (
+        dotted === other ||
+        (dotted.dotCount ?? 0) === 0 ||
+        (other.dotCount ?? 0) > 0 ||
+        dotted.voiceNumber > other.voiceNumber ||
+        dotted.staffYCoordinates.length !== 1 ||
+        other.staffYCoordinates.length !== 1 ||
+        dotted.staffYCoordinates[0] !== other.staffYCoordinates[0]
+      ) {
+        continue;
+      }
+      const dottedInput = toUnisonInput(dotted);
+      const otherInput = toUnisonInput(other);
+      if (!dottedInput || !otherInput) {
+        continue;
+      }
+      const layout = resolveUnisonPair(dottedInput, otherInput);
+      shifts.set(
+        dotted,
+        layout.rightOffsetPx +
+          otherInput.geometry.headRightX -
+          dottedInput.geometry.headRightX
+      );
+    }
+  }
+  return shifts;
+}
+
+// Dot rows for two equally dotted single-note parts on one staff position:
+// a shared head is one note and dots like one; two heads take one dot each, in
+// a column after the right head, in separate stave spaces. Null for chord parts.
+function resolveUnisonDotRows(
+  left: VoiceNoteheadPlacement,
+  right: VoiceNoteheadPlacement
+): { left: number[]; right: number[] } | null {
+  if (
+    left.staffYCoordinates.length !== 1 ||
+    right.staffYCoordinates.length !== 1
+  ) {
+    return null;
+  }
+  const [staffY] = left.staffYCoordinates;
+  const leftInput = toUnisonInput(left);
+  const rightInput = toUnisonInput(right);
+  if (leftInput && rightInput && canShareNotehead(leftInput, rightInput)) {
+    return { left: [resolveNoteDotStaffY(staffY)], right: [] };
+  }
+  return { left: [], right: resolveUnisonDotStaffYs(staffY, 2) };
 }
 
 // How far an up-stem part sitting below a down-stem part must move right so
@@ -316,6 +439,8 @@ export type VoiceDotRows = {
   // Staff Ys of the dot rows this part draws; empty when another part draws
   // its dots for it.
   rowStaffYs: number[];
+  // Px to move this part's dot column right, past the other part's head.
+  columnShiftPx: number;
 };
 
 /**
@@ -372,6 +497,14 @@ export function resolveCrossVoiceDotRows(
           : a.direction === 'up'
           ? [a, b]
           : [b, a];
+      if (collision.distance === 0) {
+        const unisonRows = resolveUnisonDotRows(left, right);
+        if (unisonRows) {
+          rows.set(left, unisonRows.left);
+          rows.set(right, unisonRows.right);
+          continue;
+        }
+      }
       const union = [...left.staffYCoordinates, ...right.staffYCoordinates];
       rows.set(left, []);
       rows.set(
@@ -384,10 +517,12 @@ export function resolveCrossVoiceDotRows(
     }
   }
 
+  const shifts = resolveUnisonDotShifts(placements);
   return [...rows].map(([placement, rowStaffYs]) => ({
     voiceNumber: placement.voiceNumber,
     localIndex: placement.localIndex,
     rowStaffYs,
+    columnShiftPx: shifts.get(placement) ?? 0,
   }));
 }
 
