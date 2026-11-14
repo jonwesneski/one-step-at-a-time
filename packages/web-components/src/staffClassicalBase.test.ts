@@ -1407,7 +1407,6 @@ describe('staffClassicalBase triangle noteheads', () => {
   });
 
   it('keeps two chords with a triangle value beamed, drawn with normal heads', () => {
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const [first, second] = renderStaff(
       [
         {
@@ -1432,7 +1431,6 @@ describe('staffClassicalBase triangle noteheads', () => {
   });
 
   it('never beams a triangle that names a beam-group', () => {
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const [triangle] = renderStaff([
       {
         duration: 'eighth',
