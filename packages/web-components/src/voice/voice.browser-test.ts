@@ -986,6 +986,29 @@ test.describe('multi-voice staff', () => {
       expect(await runsLeft()).toBe(false);
     });
 
+    test('a crossed semibreve warns once, however often the staff redraws', async ({
+      page,
+    }) => {
+      const warnings: string[] = [];
+      page.on('console', (message) => {
+        if (message.type() === 'warning') {
+          warnings.push(message.text());
+        }
+      });
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="A" octave="4" duration="half"></music-note><music-note note="A" octave="4" duration="half"></music-note></music-voice>
+         </music-staff>`
+      );
+      await resizeHost(page, 700);
+      await waitForRedrawCycle(page);
+      expect(
+        warnings.filter((text) => text.includes('semibreves'))
+      ).toHaveLength(1);
+    });
+
     test('a stemless chord moves only its unison tone off the note', async ({
       page,
     }) => {

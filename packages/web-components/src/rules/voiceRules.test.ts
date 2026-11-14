@@ -267,6 +267,28 @@ describe('computeCrossVoiceDisplacements', () => {
       expect(result?.xOffset).toBeGreaterThan(0);
     });
 
+    it('flags two crossed semibreves a step apart and puts the up-stem one right', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'whole'),
+        {
+          ...unisonPlacement(2, 'down', 'whole'),
+          staffYCoordinates: [50 - STAFF_Y_STEP],
+        },
+      ]);
+      expect(result.find((d) => d.voiceNumber === 1)?.xOffset).toBe(
+        ADJACENT_NOTE_X_DISPLACEMENT_PX
+      );
+      expect(result.every((d) => d.overlappingSemibreves)).toBe(true);
+    });
+
+    it('does not flag a semibreve beside a stemmed note', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'whole'),
+        unisonPlacement(2, 'down', 'quarter'),
+      ]);
+      expect(result.some((d) => d.overlappingSemibreves)).toBe(false);
+    });
+
     it('shows two separate heads for two semibreves', () => {
       const result = computeCrossVoiceDisplacements([
         unisonPlacement(1, 'up', 'whole'),
@@ -303,17 +325,28 @@ describe('computeCrossVoiceDisplacements', () => {
     ]);
   });
 
-  it('keeps the up-stem part left when it sits a second below the down-stem part', () => {
+  it('keeps the down-stem part left and moves the up-stem part right when the up-stem part sits a second below it', () => {
     const result = computeCrossVoiceDisplacements([
       placement(1, [40 + STAFF_Y_STEP], 'up'),
       placement(2, [40], 'down'),
     ]);
     expect(result).toEqual([
       expect.objectContaining({
-        voiceNumber: 2,
-        xOffset: OPPOSITE_STEM_ALIGN_OFFSET_PX,
+        voiceNumber: 1,
+        xOffset: ADJACENT_NOTE_X_DISPLACEMENT_PX,
       }),
     ]);
+  });
+
+  it('keeps a dotted up-stem part left of the down-stem part a step above it, the dot between them', () => {
+    const result = computeCrossVoiceDisplacements([
+      { ...placement(1, [40 + STAFF_Y_STEP], 'up'), dotCount: 1 },
+      placement(2, [40], 'down'),
+    ]);
+    expect(result.find((d) => d.voiceNumber === 1)).toBeUndefined();
+    expect(result.find((d) => d.voiceNumber === 2)?.xOffset).toBe(
+      OPPOSITE_STEM_ALIGN_OFFSET_PX
+    );
   });
 
   it('moves the plain notehead instead of a beamed/flagged one on a same-direction collision', () => {

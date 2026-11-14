@@ -166,6 +166,9 @@ export type VoiceNoteheadDisplacement = {
   isUnison: boolean;
   // Shared head: this part draws no head of its own.
   omitsHead: boolean;
+  // Stemless heads that overlap or cross another part's: drawn as separate
+  // heads, though stemmed notes would show the part progression better.
+  overlappingSemibreves: boolean;
   // The stem part of a single-stem unison whose heads differ by accidental:
   // its stem moves off its own head (see rules/unisonRules.ts).
   unisonStem?: {
@@ -210,6 +213,7 @@ export function computeCrossVoiceDisplacements(
     NonNullable<VoiceNoteheadDisplacement['unisonStem']>
   >();
   const groupOf = new Map<VoiceNoteheadPlacement, number>();
+  const overlappingSemibreves = new Set<VoiceNoteheadPlacement>();
   const toneShifts = new Map<VoiceNoteheadPlacement, Map<number, number>>();
   const halfDisplacement = ADJACENT_NOTE_X_DISPLACEMENT_PX / 2;
   const dotRows = resolveCrossVoiceDotRows(placements);
@@ -357,6 +361,16 @@ export function computeCrossVoiceDisplacements(
         continue;
       }
 
+      if (
+        collision.distance === 0 &&
+        isStemless(a) &&
+        isStemless(b) &&
+        !groupOf.has(a)
+      ) {
+        overlappingSemibreves.add(a);
+        overlappingSemibreves.add(b);
+      }
+
       if (collision.distance === 0) {
         if (groupOf.has(a) && groupOf.get(a) === groupOf.get(b)) {
           continue;
@@ -405,6 +419,27 @@ export function computeCrossVoiceDisplacements(
 
       if (collision.distance === STAFF_Y_STEP && a.direction !== b.direction) {
         const [up, down] = a.direction === 'up' ? [a, b] : [b, a];
+        const upY = up === a ? collision.aY : collision.bY;
+        const downY = up === a ? collision.bY : collision.aY;
+        if (isStemless(up) || isStemless(down)) {
+          if (upY > downY) {
+            overlappingSemibreves.add(up);
+            overlappingSemibreves.add(down);
+          }
+          const [first, second] = upY > downY ? [down, up] : [up, down];
+          addOffset(second, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+          separateByDots(first, second);
+          continue;
+        }
+        // An up-stem part a step below the down-stem part overlaps it: the
+        // down-stem part stays left, unless only the up-stem part is dotted
+        // (its dot then separates the two) or both are (they may overlap).
+        const upDots = up.dotCount ?? 0;
+        if (upY > downY && upDots === 0) {
+          addOffset(up, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+          separateByDots(down, up);
+          continue;
+        }
         addOffset(down, OPPOSITE_STEM_ALIGN_OFFSET_PX);
         separateByDots(up, down);
         continue;
@@ -440,6 +475,7 @@ export function computeCrossVoiceDisplacements(
     xOffset,
     isUnison: unisons.has(placement),
     omitsHead: headless.has(placement),
+    overlappingSemibreves: overlappingSemibreves.has(placement),
     unisonStem: unisonStems.get(placement),
     toneShifts: toneShifts.has(placement)
       ? [...(toneShifts.get(placement) ?? [])].map(([staffY, shiftPx]) => ({
@@ -449,6 +485,9 @@ export function computeCrossVoiceDisplacements(
       : undefined,
   }));
 }
+
+const isStemless = (placement: VoiceNoteheadPlacement): boolean =>
+  !!placement.unison && headClassOf(placement.unison.duration) === 'stemless';
 
 // The part as it sounds at one staff position: a chord part's accidental and
 // head there come from its tone at that Y.

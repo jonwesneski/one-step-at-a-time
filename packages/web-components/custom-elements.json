@@ -4532,6 +4532,19 @@
             },
             {
               "kind": "field",
+              "name": "#warnedSemibreveOverlap",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -9187,6 +9200,19 @@
                 "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedSemibreveOverlap",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"

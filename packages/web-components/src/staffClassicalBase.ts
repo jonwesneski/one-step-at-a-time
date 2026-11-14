@@ -618,6 +618,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #trillLinesContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   // One staff-wide overlay (key 1): a unison's diagonal stems and cluster brackets.
   #unisonContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #warnedSemibreveOverlap = false;
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
@@ -3557,6 +3558,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const toneShiftsByElement = new Map<Element, number[]>();
     if (isMultiVoice) {
       let anyDisplacement = false;
+      let overlappingSemibreves = false;
       for (const column of placementColumns) {
         if (column.placements.length < 2) {
           continue;
@@ -3569,6 +3571,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             continue;
           }
           const element = state.elements[displacement.localIndex];
+          overlappingSemibreves ||= displacement.overlappingSemibreves;
           if (displacement.omitsHead || displacement.unisonStem) {
             unisonPartByElement.set(element, {
               omitsHead: displacement.omitsHead,
@@ -3609,6 +3612,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (anyDisplacement) {
         for (const state of this.#voiceRenderStates.values()) {
           state.beamRenderer?.spaceAll();
+        }
+      }
+      if (overlappingSemibreves !== this.#warnedSemibreveOverlap) {
+        this.#warnedSemibreveOverlap = overlappingSemibreves;
+        if (overlappingSemibreves) {
+          console.warn(
+            '[music-staff] overlapping or crossed semibreves are drawn as separate heads; dividing them into tied stemmed notes shows each part’s progression better.'
+          );
         }
       }
     }

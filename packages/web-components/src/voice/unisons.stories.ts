@@ -227,6 +227,26 @@ export const ChordToneMovesAlone: Story = {
   `,
 };
 
+/** Crossed parts: the down-stem part (higher pitch) stays left, the up-stem part moves right. */
+export const CrossedAdjacentParts: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('G', 'quarter')}</music-voice>
+      <music-voice>${note('A', 'quarter')}</music-voice>
+    </music-staff>
+  `,
+};
+
+/** Crossed semibreves stay separate heads; the staff warns that tied stemmed notes read better. */
+export const CrossedSemibreves: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('G', 'whole')}</music-voice>
+      <music-voice>${note('A', 'half')}${note('A', 'half')}</music-voice>
+    </music-staff>
+  `,
+};
+
 const eighthsE = (count: number) =>
   Array.from({ length: count }).map(() => note('E', 'eighth'));
 
