@@ -221,7 +221,14 @@ export const createChordSvg = ({
         inputs.push({
           noteIndex: i,
           accidental: acc,
-          yPixel: STAFF_Y_PADDING + staffYCoordinates[i],
+          // Centred on the head as drawn.
+          yPixel: chordToneHeadCenterY(
+            staffYCoordinates[i],
+            stemUp,
+            duration,
+            noFlags,
+            noteheads[i] ?? 'normal'
+          ),
         });
       }
     }
@@ -575,38 +582,69 @@ export function chordAugmentationDotLayout({
   };
 }
 
-/** Left and right ink edges (chord-SVG px) of every head, displaced ones included. */
-export function chordHeadExtentPx({
-  duration,
-  staffYCoordinates,
-  stemUp,
-  noFlags,
-  noteheads = [],
-}: {
+type ChordHeadExtentInput = {
   duration: DurationType;
   staffYCoordinates: readonly number[];
   stemUp: boolean;
   noFlags: boolean;
   noteheads?: readonly NoteheadType[];
-}): { left: number; right: number } {
-  const displacementMap = new Map(
-    computeAdjacentDisplacements([...staffYCoordinates], stemUp).map((d) => [
-      d.noteIndex,
-      d.xOffset,
-    ])
+};
+
+/** Left and right ink edges (chord-SVG px) of one tone's head, displaced or not. */
+export function chordToneHeadExtentPx(
+  {
+    duration,
+    staffYCoordinates,
+    stemUp,
+    noFlags,
+    noteheads = [],
+  }: ChordHeadExtentInput,
+  toneIndex: number
+): { left: number; right: number } {
+  const shift =
+    computeAdjacentDisplacements([...staffYCoordinates], stemUp).find(
+      (displacement) => displacement.noteIndex === toneIndex
+    )?.xOffset ?? 0;
+  const { cx, halfWidth } = noteHeadGeometry(
+    stemUp,
+    duration,
+    noFlags,
+    noteheads[toneIndex] ?? 'normal'
   );
+  return {
+    left: (cx - halfWidth) * NOTE_SCALE + shift,
+    right: (cx + halfWidth) * NOTE_SCALE + shift,
+  };
+}
+
+// Centre Y (chord-SVG px) of the head at staffY, as createChordSvg places it.
+export function chordToneHeadCenterY(
+  staffY: number,
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean,
+  notehead: NoteheadType = 'normal'
+): number {
+  const base = durationToBase[duration];
+  return (
+    STAFF_Y_PADDING +
+    staffY -
+    computeYHeadOffset(stemUp, base, noFlags) +
+    noteHeadGeometry(stemUp, base, noFlags, notehead).cy * NOTE_SCALE
+  );
+}
+
+/** Left and right ink edges (chord-SVG px) of every head, displaced ones included. */
+export function chordHeadExtentPx(input: ChordHeadExtentInput): {
+  left: number;
+  right: number;
+} {
   let left = Infinity;
   let right = -Infinity;
-  staffYCoordinates.forEach((_, i) => {
-    const { cx, halfWidth } = noteHeadGeometry(
-      stemUp,
-      duration,
-      noFlags,
-      noteheads[i] ?? 'normal'
-    );
-    const shift = displacementMap.get(i) ?? 0;
-    left = Math.min(left, (cx - halfWidth) * NOTE_SCALE + shift);
-    right = Math.max(right, (cx + halfWidth) * NOTE_SCALE + shift);
+  input.staffYCoordinates.forEach((_, index) => {
+    const extent = chordToneHeadExtentPx(input, index);
+    left = Math.min(left, extent.left);
+    right = Math.max(right, extent.right);
   });
   return { left, right };
 }

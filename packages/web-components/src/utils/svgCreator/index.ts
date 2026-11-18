@@ -104,3 +104,4 @@ export {
   type WrittenTrillNoteResult,
 } from './trill';
 export { createTupletBracketSvg } from './tuplet';
+export { createUnisonBracketSvg } from './unison';

@@ -58,6 +58,12 @@ export type GraceArticulationsType =
   | null;
 export type GraceNoteheadsType = (NoteheadType | null)[] | string | null;
 
+// A note's role in a unison with another voice (see rules/unisonRules.ts).
+export type UnisonPart = {
+  // The other voice draws the shared head.
+  omitsHead: boolean;
+};
+
 export interface INoteElement {
   duration: DurationType;
   note: Note;
@@ -103,6 +109,13 @@ export interface INoteElement {
   // where this element's dots go (an empty array draws none); null uses the
   // element's own placement. Not an attribute.
   augmentationDotRows: number[] | null;
+  // Set by the staff to move this note's dot column right, past the other
+  // voice's head in a unison where only this (upper) part is dotted. 0 = the
+  // column follows this note's own head. Not an attribute.
+  augmentationDotShiftPx: number;
+  // Set by the staff when this note shares a unison with another voice; null
+  // draws the note as usual. Not an attribute.
+  unisonPart: UnisonPart | null;
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg

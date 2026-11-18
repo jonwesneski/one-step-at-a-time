@@ -1,6 +1,8 @@
 import {
   computeInterNoteSpacing,
   computeNoteAccidentals,
+  parseAccidentalSuffix,
+  suffixToType,
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import {
@@ -42,6 +44,7 @@ import { computeAllowedElementCount } from './rules/measureRules';
 import {
   forcedStemUp,
   isTriangle,
+  resolveNoteheadGlyph,
   resolveStemTipY,
   resolveTriangleStaffYs,
   type TrianglePlacementEntry,
@@ -70,6 +73,7 @@ import {
   unbeamedStemExtensionPx,
 } from './rules/stemRules';
 import {
+  durationToBase,
   durationToDotCount,
   durationToFlagCountMap,
   isStemlessDuration,
@@ -93,6 +97,10 @@ import {
   TupletBracketGeometry,
   TupletGroup,
 } from './rules/tupletRules';
+import {
+  resolveStemlessClusters,
+  type UnisonPartDescriptor,
+} from './rules/unisonRules';
 import {
   CombinedGroup,
   detectCombinableGroups,
@@ -125,6 +133,7 @@ import type {
   NoteOrChordElementType,
   RestElementType,
   TupletElementType,
+  UnisonPart,
   YCoordinates,
 } from './types/elements';
 import type {
@@ -194,6 +203,7 @@ import {
   BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
+  CLUSTER_BRACKET_RISE_PX,
   CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
@@ -244,7 +254,11 @@ import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
-import { chordHeadExtentPx } from './utils/svgCreator/chord';
+import {
+  chordHeadExtentPx,
+  chordToneHeadCenterY,
+  chordToneHeadExtentPx,
+} from './utils/svgCreator/chord';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
@@ -253,6 +267,7 @@ import {
   NOTE_SVG_WIDTH,
   noteHeadGeometry,
   stemTipPosition,
+  TAIL_UP_WIDTH_PX,
   trillSignLeftX,
 } from './utils/svgCreator/note';
 import {
@@ -263,6 +278,7 @@ import {
   TRILL_SIGN_WIDTH_PX,
 } from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
+import { createUnisonBracketSvg } from './utils/svgCreator/unison';
 
 // The `Note` suffix for an accidental — the inverse of
 // rules/accidentalRules.ts's parseAccidentalSuffix/suffixToType, needed to
@@ -280,6 +296,18 @@ function accidentalSuffix(accidental: AccidentalType | null): string {
       return 'bb';
     default:
       return '';
+  }
+}
+
+// Undoes what the staff's cross-voice pass sets on an element, so a note or
+// chord that leaves the staff draws as its own again.
+function resetCrossVoiceState(
+  element: NoteElementType | ChordElementType
+): void {
+  element.augmentationDotRows = null;
+  if (element.nodeName === MUSIC_NOTE_NODE) {
+    (element as NoteElementType).unisonPart = null;
+    (element as NoteElementType).augmentationDotShiftPx = 0;
   }
 }
 
@@ -597,6 +625,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #tupletContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #dynamicsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #trillLinesContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  // One staff-wide overlay (key 1): a unison's diagonal stems and cluster brackets.
+  #unisonContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #warnedSemibreveOverlap = false;
+  // Every note and chord the last pass laid out: what it set on them (dot
+  // rows, unison parts) is cleared once they leave.
+  #crossVoiceElements = new Set<NoteElementType | ChordElementType>();
+  // Px a unison on an entry's beat moves a part right, per voice and index:
+  // the entry after it keeps clear of that (see #reserveUnisonRoom).
+  #unisonReserves = new Map<VoiceKey, Map<number, number>>();
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
@@ -1320,6 +1357,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   protected override onDisconnectedCallback(): void {
+    for (const element of this.#crossVoiceElements) {
+      resetCrossVoiceState(element);
+    }
+    this.#crossVoiceElements.clear();
     this.removeEventListener(
       NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
       this.#boundDrawConnectors
@@ -1986,6 +2027,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     type TrackInput = Pass1Voice;
     const trackInputs = new Map<VoiceKey, TrackInput>();
 
+    // Pass 1.5: precompute each real voice's own Y-coordinates from its
+    // Pass-1 elements/beatOffsets. Combine detection compares them to find
+    // unisons, resolveVoiceDirections needs them to place voice 3 (see
+    // rules/voiceRules.ts#resolveMiddleVoiceDirection), and Pass 2 reuses
+    // them, so every real voice's Y-coordinates are computed once
+    // ('combined'/'shared-rest' don't exist yet at this point, so they still
+    // compute their own inline in #buildVoiceRenderState).
+    const yCoordsByVoice = new Map<VoiceNumber, VoiceStaffYCoords>();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      yCoordsByVoice.set(
+        voiceNumber,
+        this.#resolveVoiceStaffYCoords(p.elements, p.beatOffsets)
+      );
+    }
+
     const sharedRestDuration = isMultiVoice
       ? detectSharedWholeMeasureRest(
           new Map(
@@ -2021,6 +2077,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           arpeggioTargetIndices: new Set(
             p.arpeggioGroups.map((group) => group.targetIndex)
           ),
+          staffYsOf: (index) => {
+            const coords = yCoordsByVoice.get(voiceNumber);
+            return coords
+              ? getStaffYs(
+                  p.elements[index],
+                  coords.noteStaffYCoords,
+                  coords.chordStaffYCoords
+                )
+              : [];
+          },
         });
       }
       const combinedGroups = isMultiVoice
@@ -2100,21 +2166,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#effectiveMode
     );
 
-    // Pass 1.5: precompute each real voice's own Y-coordinates from its
-    // Pass-1 elements/beatOffsets. Needed before resolveVoiceDirections can
-    // contextually place voice 3 (3-voice case only — see
-    // rules/voiceRules.ts#resolveMiddleVoiceDirection), and reused directly
-    // by Pass 2 below so every real voice's Y-coordinates are computed once,
-    // not twice ('combined'/'shared-rest' don't exist yet at this point —
-    // they're a byproduct of the compaction pass above — so they still
-    // compute their own inline in #buildVoiceRenderState).
-    const yCoordsByVoice = new Map<VoiceNumber, VoiceStaffYCoords>();
-    for (const [voiceNumber, p] of pass1ByVoice) {
-      yCoordsByVoice.set(
-        voiceNumber,
-        this.#resolveVoiceStaffYCoords(p.elements, p.beatOffsets)
-      );
-    }
     const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>();
     for (const [voiceNumber, p] of pass1ByVoice) {
       const y = yCoordsByVoice.get(voiceNumber);
@@ -2739,6 +2790,61 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     };
   }
 
+  // What this part contributes to a unison with another voice.
+  #unisonDescriptor(
+    element: NoteElementType | ChordElementType,
+    duration: DurationType,
+    staffYs: readonly number[]
+  ): UnisonPartDescriptor {
+    if (element.nodeName === MUSIC_NOTE_NODE) {
+      const note = element as NoteElementType;
+      const pitchAccidental = suffixToType(parseAccidentalSuffix(note.note));
+      return {
+        duration: durationToBase[duration],
+        pitchAccidental,
+        shownAccidental:
+          note.showAccidental === undefined
+            ? pitchAccidental
+            : note.showAccidental,
+        notehead: resolveNoteheadGlyph(note.notehead, duration),
+        isChord: false,
+      };
+    }
+    const chord = element as ChordElementType;
+    const headInput = {
+      duration,
+      staffYCoordinates: staffYs,
+      stemUp: chord.stemUp,
+      noFlags: chord.noFlags,
+      noteheads: chord.toneNoteheads,
+    };
+    return {
+      duration: durationToBase[duration],
+      pitchAccidental: null,
+      shownAccidental: null,
+      isChord: true,
+      tones: chord.notes.map((tone, index) => {
+        const pitchAccidental = suffixToType(parseAccidentalSuffix(tone.value));
+        const { left, right } = chordToneHeadExtentPx(headInput, index);
+        return {
+          staffY: staffYs[index],
+          pitchAccidental,
+          shownAccidental: chord.noteAccidentals[index] ?? null,
+          headCenterX: (left + right) / 2,
+          headLeftX: left,
+          headRightX: right,
+          notehead: resolveNoteheadGlyph(
+            chord.toneNoteheads[index] ?? 'normal',
+            duration
+          ),
+        };
+      }),
+      accidentalReachPx: chord.noteAccidentals.some((a) => a != null)
+        ? totalChordAccidentalWidth(chord.noteAccidentals, [...staffYs])
+        : 0,
+    };
+  }
+
   // Element-local head, stem and dot extents a cross-voice offset is
   // measured against.
   #voicePartGeometry(
@@ -2768,13 +2874,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       headLeftX = extent.left;
       headRightX = extent.right;
     }
+    const stemX = isStemlessDuration(duration)
+      ? null
+      : stemTipPosition(stemUp, duration, noFlags, 0).x * NOTE_SCALE;
+    const drawsTails =
+      stemUp &&
+      !noFlags &&
+      !element.noStem &&
+      (durationToFlagCountMap.get(durationToBase[duration]) ?? 0) > 0;
     return {
       headLeftX,
       headRightX,
-      stemX: isStemlessDuration(duration)
-        ? null
-        : stemTipPosition(stemUp, duration, noFlags, 0).x * NOTE_SCALE,
+      stemX,
       dotsRightEdgeX: element.augmentationDotsRightEdgePx,
+      tailRightX:
+        drawsTails && stemX !== null ? stemX + TAIL_UP_WIDTH_PX : null,
     };
   }
 
@@ -2790,7 +2904,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return (
       this.#augmentationDotFootprint(state, index) +
       (state.writtenTrillFootprints.get(index) ?? 0) +
-      (state.trillFinishFootprints.get(index) ?? 0)
+      (state.trillFinishFootprints.get(index) ?? 0) +
+      (this.#unisonReserves.get(voiceKey)?.get(index) ?? 0)
     );
   }
 
@@ -2915,6 +3030,259 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     container.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
   }
 
+  // Every real voice's notes and chords, clustered by beat, for the
+  // cross-voice pass ('combined'/'shared-rest' already merged or represent
+  // every voice at once, so neither has anything left to collide with — see
+  // rules/voiceRules.ts). `xOf` is where each entry sits.
+  #collectPlacementColumns(
+    xOf: (voiceNumber: VoiceNumber, index: number) => number | undefined
+  ): { beatOffset: number; placements: VoiceNoteheadPlacement[] }[] {
+    const columns: {
+      beatOffset: number;
+      placements: VoiceNoteheadPlacement[];
+    }[] = [];
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      if (typeof voiceKey !== 'number' || state.direction === null) {
+        continue;
+      }
+      for (let i = 0; i < state.elements.length; i++) {
+        const element = state.elements[i];
+        if (element.nodeName === MUSIC_REST_NODE) {
+          continue;
+        }
+        const noteOrChord = element as NoteElementType | ChordElementType;
+        const duration = element.duration as DurationType;
+        const staffYs = getStaffYs(
+          element,
+          state.noteStaffYCoords,
+          state.chordStaffYCoords
+        );
+        const beatOffset = state.beatOffsets[i];
+        let column = columns.find(
+          (candidate) => Math.abs(candidate.beatOffset - beatOffset) < 1e-9
+        );
+        if (!column) {
+          column = { beatOffset, placements: [] };
+          columns.push(column);
+        }
+        column.placements.push({
+          voiceNumber: voiceKey,
+          localIndex: i,
+          staffYCoordinates: staffYs,
+          // The stem as drawn: `stem-direction` can overrule the voice's.
+          direction: noteOrChord.stemUp ? 'up' : 'down',
+          x: xOf(voiceKey, i),
+          hasFlagOrBeam:
+            state.beamedIndices.has(i) ||
+            (durationToFlagCountMap.get(duration) ?? 0) > 0,
+          dotCount: durationToDotCount[duration],
+          geometry: this.#voicePartGeometry(noteOrChord, staffYs),
+          unison: this.#unisonDescriptor(noteOrChord, duration, staffYs),
+        });
+      }
+    }
+    return columns;
+  }
+
+  // A unison moves a part right of its beat x, so the next beat must leave
+  // room for it before it is placed: a trial layout finds each move and
+  // #rightwardFootprint reserves it on every voice's entry at that beat. Reserving room can move a
+  // later unison's parts apart, changing what that one needs, so this repeats
+  // until nothing changes; each pass settles at least one more column, in beat
+  // order. Returns the clef-change slots for the final reservation.
+  #reserveUnisonRoom(
+    isMultiVoice: boolean,
+    clefChangeBeats: readonly number[],
+    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>
+  ): number[] {
+    this.#unisonReserves = new Map();
+    let clefSlotLefts = this.#resolveClefChangeSlots(
+      clefChangeBeats,
+      proportionalXByVoice
+    );
+    if (!isMultiVoice) {
+      return clefSlotLefts;
+    }
+    let passesLeft = Infinity;
+    while (passesLeft-- > 0) {
+      const xByVoice = new Map<VoiceKey, number[]>();
+      for (const [voiceKey, proportionalX] of proportionalXByVoice) {
+        const state = this.#voiceRenderStates.get(voiceKey);
+        if (state) {
+          xByVoice.set(
+            voiceKey,
+            this.#layoutVoiceEntries(
+              voiceKey,
+              state,
+              clefChangeBeats,
+              clefSlotLefts,
+              proportionalX
+            ).map((placement) => placement.x)
+          );
+        }
+      }
+      const columns = this.#collectPlacementColumns(
+        (voiceNumber, index) => xByVoice.get(voiceNumber)?.[index]
+      ).filter((column) => column.placements.length >= 2);
+      if (passesLeft === Infinity) {
+        passesLeft = columns.length;
+      }
+      const reserves = new Map<VoiceKey, Map<number, number>>();
+      for (const column of columns) {
+        const reserve = Math.max(
+          0,
+          ...computeCrossVoiceDisplacements(column.placements)
+            .filter((displacement) => displacement.isUnison)
+            .map((displacement) => displacement.xOffset)
+        );
+        if (reserve === 0) {
+          continue;
+        }
+        // Every voice's entry on that beat, rests too, so the next beat
+        // stays one column across voices.
+        for (const [voiceKey, state] of this.#voiceRenderStates) {
+          if (voiceKey === 'shared-rest') {
+            continue;
+          }
+          const index = state.beatOffsets.findIndex(
+            (beatOffset) => Math.abs(beatOffset - column.beatOffset) < 1e-9
+          );
+          if (index >= 0) {
+            const voiceReserves =
+              reserves.get(voiceKey) ?? new Map<number, number>();
+            voiceReserves.set(index, reserve);
+            reserves.set(voiceKey, voiceReserves);
+          }
+        }
+      }
+      const unchanged =
+        reserves.size === this.#unisonReserves.size &&
+        [...reserves].every(([voiceKey, voiceReserves]) => {
+          const previous = this.#unisonReserves.get(voiceKey);
+          return (
+            previous?.size === voiceReserves.size &&
+            [...voiceReserves].every(
+              ([index, reserve]) => previous.get(index) === reserve
+            )
+          );
+        });
+      if (unchanged) {
+        break;
+      }
+      this.#unisonReserves = reserves;
+      clefSlotLefts = this.#resolveClefChangeSlots(
+        clefChangeBeats,
+        proportionalXByVoice
+      );
+    }
+    return clefSlotLefts;
+  }
+
+  // The square bracket over a stemless cluster, drawn from final positions.
+  #renderUnisonOverlay(
+    placementColumns: readonly {
+      placements: readonly VoiceNoteheadPlacement[];
+    }[],
+    remainingWidth: number
+  ): void {
+    const container = this.#containerFor(
+      this.#unisonContainers,
+      1,
+      'unison-container'
+    );
+    this.#sizeVoiceContainer(container, remainingWidth);
+    container.innerHTML = '';
+
+    // The head at one staff position of a note or chord part, from final
+    // positions.
+    const headAt = (
+      voiceNumber: VoiceNumber,
+      localIndex: number,
+      staffY: number
+    ) => {
+      const state = this.#voiceRenderStates.get(voiceNumber);
+      const element = state?.elements[localIndex];
+      if (!state) {
+        return null;
+      }
+      const x = state.noteXPositions.get(localIndex) ?? 0;
+      if (element?.nodeName === MUSIC_NOTE_NODE) {
+        const note = element as NoteElementType;
+        const top = parseFloat(note.style.top || '0');
+        const head = noteHeadGeometry(
+          note.stemUp,
+          note.duration,
+          note.noFlags,
+          note.notehead
+        );
+        return {
+          left: x + (head.cx - head.halfWidth) * NOTE_SCALE,
+          right: x + (head.cx + head.halfWidth) * NOTE_SCALE,
+          centerY: top + head.cy * NOTE_SCALE,
+          halfHeight: head.halfHeight * NOTE_SCALE,
+        };
+      }
+      if (element?.nodeName === MUSIC_CHORD_NODE) {
+        const chord = element as ChordElementType;
+        const staffYs = state.chordStaffYCoords.get(chord) ?? [];
+        const toneIndex = staffYs.indexOf(staffY);
+        if (toneIndex < 0) {
+          return null;
+        }
+        const extent = chordToneHeadExtentPx(
+          {
+            duration: chord.duration,
+            staffYCoordinates: staffYs,
+            stemUp: chord.stemUp,
+            noFlags: chord.noFlags,
+            noteheads: chord.toneNoteheads,
+          },
+          toneIndex
+        );
+        const head = noteHeadGeometry(
+          chord.stemUp,
+          chord.duration,
+          chord.noFlags,
+          chord.toneNoteheads[toneIndex] ?? 'normal'
+        );
+        return {
+          left: x + extent.left,
+          right: x + extent.right,
+          centerY: chordToneHeadCenterY(
+            staffY,
+            chord.stemUp,
+            chord.duration,
+            chord.noFlags,
+            chord.toneNoteheads[toneIndex] ?? 'normal'
+          ),
+          halfHeight: head.halfHeight * NOTE_SCALE,
+        };
+      }
+      return null;
+    };
+
+    for (const column of placementColumns) {
+      for (const cluster of resolveStemlessClusters(column.placements)) {
+        const members = cluster.members
+          .map((ref) => headAt(ref.voiceNumber, ref.localIndex, cluster.staffY))
+          .filter((member): member is NonNullable<typeof member> => !!member);
+        if (members.length < 2) {
+          continue;
+        }
+        container.appendChild(
+          createUnisonBracketSvg({
+            leftX: Math.min(...members.map((member) => member.left)),
+            rightX: Math.max(...members.map((member) => member.right)),
+            topY:
+              Math.min(...members.map((member) => member.centerY)) -
+              members[0].halfHeight -
+              CLUSTER_BRACKET_RISE_PX,
+          })
+        );
+      }
+    }
+  }
+
   #spaceElements(): void {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
     if (typeof this.#describeContainer.getBBox === 'function') {
@@ -2973,14 +3341,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureCapacity = beatsInMeasure / beatType;
     const isMultiVoice = this.#voices.size > 1;
 
-    // Beat-offset-clustered noteheads across every real voice, for the
-    // cross-voice collision pass below (needs every voice's positions
-    // resolved first — see rules/voiceRules.ts#computeCrossVoiceDisplacements).
-    const placementColumns: {
-      beatOffset: number;
-      placements: VoiceNoteheadPlacement[];
-    }[] = [];
-
     // Clef changes are staff-wide: every voice makes room for each glyph, and
     // every voice's beams keep clear of it.
     const clefChangeBeats = this.#clefMarkers.map((marker) =>
@@ -3006,7 +3366,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         );
       }
     }
-    const clefSlotLefts = this.#resolveClefChangeSlots(
+    const clefSlotLefts = this.#reserveUnisonRoom(
+      isMultiVoice,
       clefChangeBeats,
       proportionalXByVoice
     );
@@ -3051,12 +3412,6 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
         continue;
       }
-
-      // state.beatOffsets was already computed in Pass 1 (#renderNotes) for
-      // every real voice and for 'shared-rest'; the 'combined' track's own
-      // beat offsets (from each CombinedGroup) were set there too — so this
-      // is always already correct and does not need recomputing here.
-      const beatOffsets = state.beatOffsets;
 
       const placements = this.#layoutVoiceEntries(
         voiceKey,
@@ -3133,45 +3488,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           // Chord y-positioning is handled internally by the chord's own SVG rendering
           element.style.top = '0px';
         }
-
-        // Collect this notehead's placement for the cross-voice collision
-        // pass below — real voices only ('combined'/'shared-rest' already
-        // merged or represent every voice at once, so neither has anything
-        // left to collide with — see rules/voiceRules.ts).
-        if (
-          typeof voiceKey === 'number' &&
-          state.direction !== null &&
-          element.nodeName !== MUSIC_REST_NODE
-        ) {
-          const staffYs =
-            element.nodeName === MUSIC_NOTE_NODE
-              ? [state.noteStaffYCoords.get(element as NoteElementType) ?? 0]
-              : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
-          const beatOffset = beatOffsets[i];
-          let column = placementColumns.find(
-            (c) => Math.abs(c.beatOffset - beatOffset) < 1e-9
-          );
-          if (!column) {
-            column = { beatOffset, placements: [] };
-            placementColumns.push(column);
-          }
-          column.placements.push({
-            voiceNumber: voiceKey,
-            localIndex: i,
-            staffYCoordinates: staffYs,
-            direction: state.direction,
-            hasFlagOrBeam:
-              state.beamedIndices.has(i) ||
-              (durationToFlagCountMap.get(duration) ?? 0) > 0,
-            dotCount: durationToDotCount[duration],
-            geometry: this.#voicePartGeometry(
-              element as NoteElementType | ChordElementType,
-              staffYs
-            ),
-          });
-        }
       }
     }
+
+    // Beat-offset-clustered noteheads across every real voice, for the
+    // cross-voice collision pass below (needs every voice's positions
+    // resolved first — see rules/voiceRules.ts#computeCrossVoiceDisplacements).
+    const placementColumns = this.#collectPlacementColumns(
+      (voiceNumber, index) =>
+        this.#voiceRenderStates.get(voiceNumber)?.noteXPositions.get(index)
+    );
 
     for (const state of this.#voiceRenderStates.values()) {
       state.beamRenderer?.setObstacles(clefObstacles);
@@ -3186,6 +3512,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // Dot rows another voice decides (a dropped lower dot, one shared
     // column); every other element places its own, so stale rows reset.
     const dotRowsByElement = new Map<Element, number[]>();
+    const dotShiftByElement = new Map<Element, number>();
     if (isMultiVoice) {
       for (const column of placementColumns) {
         if (column.placements.length < 2) {
@@ -3196,6 +3523,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             ?.elements[rows.localIndex];
           if (element) {
             dotRowsByElement.set(element, rows.rowStaffYs);
+            dotShiftByElement.set(element, rows.columnShiftPx);
           }
         }
       }
@@ -3208,12 +3536,18 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ) {
           (element as NoteElementType | ChordElementType).augmentationDotRows =
             dotRowsByElement.get(element) ?? null;
+          if (element.nodeName === MUSIC_NOTE_NODE) {
+            (element as NoteElementType).augmentationDotShiftPx =
+              dotShiftByElement.get(element) ?? 0;
+          }
         }
       }
     }
 
+    const unisonPartByElement = new Map<Element, UnisonPart>();
     if (isMultiVoice) {
       let anyDisplacement = false;
+      let overlappingSemibreves = false;
       for (const column of placementColumns) {
         if (column.placements.length < 2) {
           continue;
@@ -3226,6 +3560,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             continue;
           }
           const element = state.elements[displacement.localIndex];
+          overlappingSemibreves ||= displacement.overlappingSemibreves;
+          if (displacement.omitsHead) {
+            unisonPartByElement.set(element, { omitsHead: true });
+          }
           const currentLeft = parseFloat(element.style.left || '0');
           element.style.left = `${currentLeft + displacement.xOffset}px`;
           const currentX =
@@ -3241,7 +3579,36 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           state.beamRenderer?.spaceAll();
         }
       }
+      if (overlappingSemibreves !== this.#warnedSemibreveOverlap) {
+        this.#warnedSemibreveOverlap = overlappingSemibreves;
+        if (overlappingSemibreves) {
+          console.warn(
+            '[music-staff] overlapping or crossed semibreves are drawn as separate heads; dividing them into tied stemmed notes shows each part’s progression better.'
+          );
+        }
+      }
     }
+    const crossVoiceElements = new Set<NoteElementType | ChordElementType>();
+    for (const state of this.#voiceRenderStates.values()) {
+      for (const element of state.elements) {
+        if (element.nodeName === MUSIC_NOTE_NODE) {
+          (element as NoteElementType).unisonPart =
+            unisonPartByElement.get(element) ?? null;
+        }
+        if (
+          element.nodeName === MUSIC_NOTE_NODE ||
+          element.nodeName === MUSIC_CHORD_NODE
+        ) {
+          crossVoiceElements.add(element as NoteElementType | ChordElementType);
+        }
+      }
+    }
+    for (const element of this.#crossVoiceElements) {
+      if (!crossVoiceElements.has(element)) {
+        resetCrossVoiceState(element);
+      }
+    }
+    this.#crossVoiceElements = crossVoiceElements;
 
     // Reconcile each beamed stem to the beam line as actually drawn. #renderNotes()
     // pushed an index-fraction estimate before X was known; now that setX + spaceAll
@@ -3408,6 +3775,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#sizeVoiceContainer(trillLinesContainer, remainingWidth);
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
+
+    this.#renderUnisonOverlay(placementColumns, remainingWidth);
 
     // Octave signs, per voice key.
     for (const voiceKey of this.#voiceRenderStates.keys()) {

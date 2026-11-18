@@ -4,7 +4,7 @@
 import '../chord/index';
 import '../note/index';
 import { ChordElementType, NoteElementType } from '../types/elements';
-import { MUSIC_CHORD, MUSIC_NOTE } from '../utils/consts';
+import { MUSIC_CHORD, MUSIC_NOTE, MUSIC_NOTE_NODE } from '../utils/consts';
 import { detectCombinableGroups, VoiceCombineInput } from './voiceCombineRules';
 
 afterEach(() => {
@@ -37,9 +37,27 @@ function chord(
   return el;
 }
 
+// A stand-in for the staff's Y lookup: one step per letter, octave 4 when
+// none is written.
+function staffYsOfTones(element: NoteElementType | ChordElementType): number[] {
+  const tones =
+    element.nodeName === MUSIC_NOTE_NODE
+      ? [
+          {
+            value: (element as NoteElementType).note,
+            octave: (element as NoteElementType).octave,
+          },
+        ]
+      : (element as ChordElementType).notes;
+  return tones.map(
+    (tone) => -((tone.octave ?? 4) * 7 + 'CDEFGAB'.indexOf(tone.value[0])) * 5
+  );
+}
+
 function voiceInput(
   elements: (NoteElementType | ChordElementType)[],
-  beatOffsets: number[]
+  beatOffsets: number[],
+  staffYs?: number[][]
 ): VoiceCombineInput {
   return {
     elements: elements as never,
@@ -47,6 +65,7 @@ function voiceInput(
     tupletsByIndex: new Map(),
     arpeggioRunIndices: new Set(),
     arpeggioTargetIndices: new Set(),
+    staffYsOf: (index) => staffYs?.[index] ?? staffYsOfTones(elements[index]),
   };
 }
 
@@ -63,6 +82,76 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].members).toHaveLength(2);
     expect(groups[0].tones.map((t) => t.value).sort()).toEqual(['C', 'E']);
+  });
+
+  it('does not combine two voices sounding the same pitch (a unison)', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('G', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('treats the same letter and octave with different accidentals as a unison', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('G#', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('compares resolved staff positions, so a chord tone with no written octave still counts', () => {
+    const symbol = document.createElement(MUSIC_CHORD) as ChordElementType;
+    symbol.setAttribute('chord', 'C');
+    symbol.setAttribute('duration', 'quarter');
+    document.body.appendChild(symbol);
+    const g4 = note('G', 4);
+    const resolved = [staffYsOfTones(note('C', 4))[0], staffYsOfTones(g4)[0]];
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([symbol], [0], [resolved])],
+        [2, voiceInput([g4], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('leaves two voices uncombined when a third voice sounds one of their pitches on that beat', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('B', 4)], [0])],
+        [3, voiceInput([note('G', 4, 'half')], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('counts a third voice that cannot combine itself', () => {
+    const tied = note('G', 4);
+    tied.setAttribute('tie', 'start');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('B', 4)], [0])],
+        [3, voiceInput([tied], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('still combines the same letter in different octaves', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 5)], [0])],
+        [2, voiceInput([note('G', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(1);
   });
 
   it('does not combine when durations differ', () => {
@@ -160,12 +249,12 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('combines a chord + a note into one bigger chord (tone-set union, deduplicated)', () => {
+  it('combines a chord + a note into one bigger chord (tone-set union)', () => {
     const v1Chord = chord([
       ['C', 4],
       ['E', 4],
     ]);
-    const v2Note = note('E', 4); // duplicate pitch — should not double up
+    const v2Note = note('G', 4);
     const groups = detectCombinableGroups(
       new Map([
         [1, voiceInput([v1Chord], [0])],
@@ -173,7 +262,22 @@ describe('detectCombinableGroups', () => {
       ])
     );
     expect(groups).toHaveLength(1);
-    expect(groups[0].tones).toHaveLength(2); // C4, E4 — deduplicated
+    expect(groups[0].tones).toHaveLength(3);
+  });
+
+  it('leaves a chord and a note that share a pitch uncombined (a unison)', () => {
+    const v1Chord = chord([
+      ['C', 4],
+      ['E', 4],
+    ]);
+    const v2Note = note('E', 4);
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Chord], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
   });
 
   it('combines 2 of 3 voices while the 3rd stays independent', () => {
@@ -267,7 +371,7 @@ describe('detectCombinableGroups', () => {
     const v1BeatOne = note('C', 5);
     const v2BeatZero = note('E', 4);
     const v2BeatHalf = note('G', 4);
-    const v3BeatHalf = note('G', 4);
+    const v3BeatHalf = note('B', 4);
     const groups = detectCombinableGroups(
       new Map([
         [1, voiceInput([v1BeatZero, v1BeatOne], [0, 1])],
@@ -281,6 +385,14 @@ describe('detectCombinableGroups', () => {
 });
 
 describe('detectCombinableGroups with noteheads', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   const twoVoices = (
     first: NoteElementType | ChordElementType,
     second: NoteElementType | ChordElementType

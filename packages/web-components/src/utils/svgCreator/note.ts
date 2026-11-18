@@ -189,6 +189,11 @@ export type NoteProps = {
   trillSignExtraLift?: number;
   // Staff-resolved dot rows (see INoteElement.augmentationDotRows).
   augmentationDotRows?: readonly number[] | null;
+  // See INoteElement.augmentationDotShiftPx.
+  augmentationDotShiftPx?: number;
+  // Another voice draws the head this note shares in a unison; the stem,
+  // flags, ledger lines and accidental are still drawn.
+  omitsHead?: boolean;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -243,6 +248,8 @@ export const createNoteSvg = ({
   staffY = null,
   trillSignExtraLift = 0,
   augmentationDotRows = null,
+  augmentationDotShiftPx = 0,
+  omitsHead = false,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -357,33 +364,35 @@ export const createNoteSvg = ({
   }
   headHitZone.setAttribute('fill', 'transparent');
   headHitZone.setAttribute('stroke', 'none');
-  g.appendChild(headHitZone);
-
-  if (headGeometry.glyph && headGeometry.placement) {
-    // Glyph outlines can reach past the 32x60 viewport (a stem-down
-    // diamond or triangle head rises above y = 0).
-    svg.setAttribute('overflow', 'visible');
-    const head = createNoteheadGlyphPath(
-      headGeometry.glyph,
-      headGeometry.placement
-    );
-    head.classList.add('head');
-    g.appendChild(head);
-  } else {
-    const head = document.createElementNS(SVG_NS, 'ellipse');
-    head.classList.add('head');
-    head.setAttribute('cx', headXStartStr);
-    head.setAttribute('cy', headYStartStr);
-    head.setAttribute('rx', HEAD_WIDTH.toString());
-    head.setAttribute('ry', (HEAD_WIDTH * 0.75).toString());
-    head.setAttribute(
-      'transform',
-      `rotate(-30 ${headXStartStr} ${headYStartStr})`
-    );
-    head.setAttribute('stroke', 'currentColor');
-    head.setAttribute('fill', headFill);
-    head.setAttribute('stroke-width', '30');
-    g.appendChild(head);
+  // The shared head of a unison is drawn by the other voice's note.
+  if (!omitsHead) {
+    g.appendChild(headHitZone);
+    if (headGeometry.glyph && headGeometry.placement) {
+      // Glyph outlines can reach past the 32x60 viewport (a stem-down
+      // diamond or triangle head rises above y = 0).
+      svg.setAttribute('overflow', 'visible');
+      const head = createNoteheadGlyphPath(
+        headGeometry.glyph,
+        headGeometry.placement
+      );
+      head.classList.add('head');
+      g.appendChild(head);
+    } else {
+      const head = document.createElementNS(SVG_NS, 'ellipse');
+      head.classList.add('head');
+      head.setAttribute('cx', headXStartStr);
+      head.setAttribute('cy', headYStartStr);
+      head.setAttribute('rx', HEAD_WIDTH.toString());
+      head.setAttribute('ry', (HEAD_WIDTH * 0.75).toString());
+      head.setAttribute(
+        'transform',
+        `rotate(-30 ${headXStartStr} ${headYStartStr})`
+      );
+      head.setAttribute('stroke', 'currentColor');
+      head.setAttribute('fill', headFill);
+      head.setAttribute('stroke-width', '30');
+      g.appendChild(head);
+    }
   }
 
   if (durationToBase[duration] === 'double-whole') {
@@ -448,6 +457,7 @@ export const createNoteSvg = ({
     stemExtension,
     staffY,
     rowStaffYs: augmentationDotRows,
+    columnShiftPx: augmentationDotShiftPx,
   });
   const dots = dotLayout && createAugmentationDotsSvg(dotLayout);
   if (dots) {
@@ -462,9 +472,7 @@ export const createNoteSvg = ({
   ) {
     const symbolWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental];
     const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[accidental];
-    const yHeadCenter = stemUp
-      ? NOTE_Y_HEAD_OFFSET_STEM_UP
-      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const yHeadCenter = headGeometry.cy * NOTE_SCALE;
 
     const symbolSvg = createAccidentalSvg(accidental);
 
@@ -478,9 +486,7 @@ export const createNoteSvg = ({
   }
 
   if (arpeggio && qualifiedElementName === 'svg') {
-    const headCenterY = stemUp
-      ? NOTE_Y_HEAD_OFFSET_STEM_UP
-      : NOTE_Y_HEAD_OFFSET_STEM_DOWN;
+    const headCenterY = headGeometry.cy * NOTE_SCALE;
     const headLeftX = (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE;
     const accidentalLeftX =
       accidental && !suppressesAccidental(notehead)
@@ -572,6 +578,9 @@ export type NoteDotLayoutInput = {
   staffY: number | null;
   // Overrides the head's own dot row (another voice placed it).
   rowStaffYs?: readonly number[] | null;
+  // Moves the dot column right, past another voice's head (a unison's one
+  // dotted part dots after the whole group).
+  columnShiftPx?: number;
 };
 
 export type NoteDotLayout = {
@@ -595,6 +604,7 @@ export function noteAugmentationDotLayout({
   stemExtension,
   staffY,
   rowStaffYs = null,
+  columnShiftPx = 0,
 }: NoteDotLayoutInput): NoteDotLayout | null {
   const dotCount = durationToDotCount[duration];
   if (dotCount === 0 || rowStaffYs?.length === 0) {
@@ -623,6 +633,7 @@ export function noteAugmentationDotLayout({
   if (tailClearX !== null) {
     leftX = Math.max(leftX, tailClearX);
   }
+  leftX += columnShiftPx;
   return {
     dotCount,
     leftX,

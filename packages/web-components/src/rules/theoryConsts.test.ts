@@ -1,4 +1,4 @@
-import { BASE_DURATIONS, DURATIONS } from '../utils/consts';
+import { BASE_DURATIONS, DURATIONS, NOTES, PITCH_NOTES } from '../utils/consts';
 import {
   durationToBase,
   durationToDotCount,
@@ -45,5 +45,20 @@ describe('dotted duration maps', () => {
   it('maps every factor back to one duration', () => {
     expect(factorToDuration.size).toBe(DURATIONS.length);
     expect(factorToDuration.get(0.1875)).toBe('dotted-eighth');
+  });
+});
+
+describe('PITCH_NOTES', () => {
+  it('lists every letter with all five accidentals', () => {
+    expect(PITCH_NOTES).toHaveLength(35);
+    expect(PITCH_NOTES).toEqual(
+      expect.arrayContaining(['Cb', 'Fb', 'E#', 'B#', 'G##', 'Abb'])
+    );
+  });
+
+  it('contains every spelling NOTES offers as a key signature', () => {
+    for (const note of NOTES) {
+      expect(PITCH_NOTES).toContain(note);
+    }
   });
 });

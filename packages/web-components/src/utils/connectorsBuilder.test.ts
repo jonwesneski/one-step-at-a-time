@@ -31,6 +31,10 @@ import {
 } from './consts';
 import { SLUR_OBSTACLE_CLEARANCE_PX } from './notationDimensions';
 
+beforeEach(() => {
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+});
+
 afterEach(() => {
   document.body.innerHTML = '';
   jest.restoreAllMocks();

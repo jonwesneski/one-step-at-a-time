@@ -1,8 +1,9 @@
-import { VoiceNumber } from '../types/theory';
+import type { BaseDurationType, VoiceNumber } from '../types/theory';
 import {
   AUGMENTATION_DOT_SPACING_GAP_PX,
   CROSSED_VOICE_CLEARANCE_PX,
   STAFF_Y_STEP,
+  UNISON_STEM_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
@@ -137,6 +138,167 @@ describe('computeCrossVoiceDisplacements', () => {
     expect(v2?.xOffset).toBe(ADJACENT_NOTE_X_DISPLACEMENT_PX / 2);
   });
 
+  describe('unisons', () => {
+    const geometry: VoicePartGeometry = {
+      headLeftX: 11,
+      headRightX: 20,
+      stemX: 20,
+      dotsRightEdgeX: null,
+    };
+    function unisonPlacement(
+      voiceNumber: VoiceNumber,
+      direction: 'up' | 'down',
+      duration: BaseDurationType,
+      localIndex = 0
+    ): VoiceNoteheadPlacement {
+      return {
+        voiceNumber,
+        localIndex,
+        staffYCoordinates: [50],
+        direction,
+        hasFlagOrBeam: false,
+        geometry,
+        unison: {
+          duration,
+          pitchAccidental: null,
+          shownAccidental: null,
+          isChord: false,
+        },
+      };
+    }
+
+    it('shares one head between two equal stemmed parts and omits the lower voice’s', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'quarter'),
+        unisonPlacement(2, 'down', 'quarter'),
+      ]);
+      expect(result.find((d) => d.voiceNumber === 1)?.omitsHead).toBe(false);
+      expect(result.find((d) => d.voiceNumber === 2)?.omitsHead).toBe(true);
+      expect(result.every((d) => d.isUnison)).toBe(true);
+    });
+
+    it('keeps the upper part on the beat and moves the lower part right when the heads cannot share', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'half'),
+        unisonPlacement(2, 'down', 'quarter'),
+      ]);
+      const upper = result.find((d) => d.voiceNumber === 1);
+      const lower = result.find((d) => d.voiceNumber === 2);
+      expect(upper?.xOffset).toBe(0);
+      expect(lower?.xOffset).toBe(
+        geometry.headRightX + UNISON_STEM_CLEARANCE_PX - geometry.headLeftX
+      );
+      expect(lower?.omitsHead).toBe(false);
+    });
+
+    function chordPlacement(
+      voiceNumber: VoiceNumber,
+      direction: 'up' | 'down',
+      duration: BaseDurationType,
+      staffYs: number[]
+    ): VoiceNoteheadPlacement {
+      return {
+        voiceNumber,
+        localIndex: 0,
+        staffYCoordinates: staffYs,
+        direction,
+        hasFlagOrBeam: false,
+        geometry,
+        unison: {
+          duration,
+          pitchAccidental: null,
+          shownAccidental: null,
+          isChord: true,
+          tones: staffYs.map((staffY) => ({
+            staffY,
+            pitchAccidental: null,
+            shownAccidental: null,
+            headCenterX: 15.5,
+            headLeftX: geometry.headLeftX,
+            headRightX: geometry.headRightX,
+          })),
+        },
+      };
+    }
+
+    it.each<['up' | 'down', BaseDurationType, number[]]>([
+      ['down', 'whole', [50, 60]],
+      ['down', 'quarter', [40, 50]],
+      ['down', 'quarter', [50, 60]],
+      ['up', 'quarter', [40, 50]],
+    ])(
+      'moves a %s-stem %s chord at %j as a unit',
+      (direction, duration, staffYs) => {
+        const chord = computeCrossVoiceDisplacements([
+          unisonPlacement(1, direction === 'up' ? 'down' : 'up', 'half'),
+          chordPlacement(2, direction, duration, staffYs),
+        ]).find((d) => d.voiceNumber === 2);
+        expect(chord?.xOffset).toBe(
+          geometry.headRightX + UNISON_STEM_CLEARANCE_PX - geometry.headLeftX
+        );
+      }
+    );
+
+    it('shares one head among three voices at most once, keeping the third head', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'quarter'),
+        unisonPlacement(2, 'down', 'quarter'),
+        unisonPlacement(3, 'down', 'quarter'),
+      ]);
+      const [first, second, third] = [1, 2, 3].map((voiceNumber) =>
+        result.find((d) => d.voiceNumber === voiceNumber)
+      );
+      expect(second?.omitsHead).toBe(true);
+      expect(second?.xOffset).toBe(first?.xOffset);
+      expect(third?.omitsHead).toBe(false);
+      expect(third?.xOffset).toBe(
+        geometry.headRightX + UNISON_STEM_CLEARANCE_PX - geometry.headLeftX
+      );
+    });
+
+    it('lines the shared head up from each part’s own x', () => {
+      const result = computeCrossVoiceDisplacements([
+        { ...unisonPlacement(1, 'up', 'quarter'), x: 108 },
+        { ...unisonPlacement(2, 'down', 'quarter'), x: 100 },
+      ]);
+      expect(result.find((d) => d.voiceNumber === 1)?.xOffset).toBe(0);
+      expect(result.find((d) => d.voiceNumber === 2)?.xOffset).toBe(8);
+    });
+
+    it('flags two crossed semibreves a step apart and puts the up-stem one right', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'whole'),
+        {
+          ...unisonPlacement(2, 'down', 'whole'),
+          staffYCoordinates: [50 - STAFF_Y_STEP],
+        },
+      ]);
+      expect(result.find((d) => d.voiceNumber === 1)?.xOffset).toBe(
+        ADJACENT_NOTE_X_DISPLACEMENT_PX
+      );
+      expect(result.every((d) => d.overlappingSemibreves)).toBe(true);
+    });
+
+    it('does not flag a semibreve beside a stemmed note', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'whole'),
+        unisonPlacement(2, 'down', 'quarter'),
+      ]);
+      expect(result.some((d) => d.overlappingSemibreves)).toBe(false);
+    });
+
+    it('shows two separate heads for two semibreves', () => {
+      const result = computeCrossVoiceDisplacements([
+        unisonPlacement(1, 'up', 'whole'),
+        unisonPlacement(2, 'down', 'whole'),
+      ]);
+      expect(result.every((d) => !d.omitsHead)).toBe(true);
+      expect(result.find((d) => d.voiceNumber === 2)?.xOffset).toBeGreaterThan(
+        geometry.headRightX - geometry.headLeftX
+      );
+    });
+  });
+
   it('displaces the lower notehead right when two voices share direction a diatonic second apart', () => {
     const result = computeCrossVoiceDisplacements([
       placement(1, [40], 'up'),
@@ -161,17 +323,28 @@ describe('computeCrossVoiceDisplacements', () => {
     ]);
   });
 
-  it('keeps the up-stem part left when it sits a second below the down-stem part', () => {
+  it('keeps the down-stem part left and moves the up-stem part right when the up-stem part sits a second below it', () => {
     const result = computeCrossVoiceDisplacements([
       placement(1, [40 + STAFF_Y_STEP], 'up'),
       placement(2, [40], 'down'),
     ]);
     expect(result).toEqual([
       expect.objectContaining({
-        voiceNumber: 2,
-        xOffset: OPPOSITE_STEM_ALIGN_OFFSET_PX,
+        voiceNumber: 1,
+        xOffset: ADJACENT_NOTE_X_DISPLACEMENT_PX,
       }),
     ]);
+  });
+
+  it('keeps a dotted up-stem part left of the down-stem part a step above it, the dot between them', () => {
+    const result = computeCrossVoiceDisplacements([
+      { ...placement(1, [40 + STAFF_Y_STEP], 'up'), dotCount: 1 },
+      placement(2, [40], 'down'),
+    ]);
+    expect(result.find((d) => d.voiceNumber === 1)).toBeUndefined();
+    expect(result.find((d) => d.voiceNumber === 2)?.xOffset).toBe(
+      OPPOSITE_STEM_ALIGN_OFFSET_PX
+    );
   });
 
   it('moves the plain notehead instead of a beamed/flagged one on a same-direction collision', () => {
@@ -336,6 +509,97 @@ describe('resolveCrossVoiceDotRows', () => {
     ]);
     expect(rowsOf(result, 1)).toEqual([45]);
     expect(rowsOf(result, 2)).toEqual([65]);
+  });
+
+  it('stacks two equally dotted unison heads in one column after the right part', () => {
+    // G4 on a line, both dotted, different durations so the head is not shared.
+    const result = resolveCrossVoiceDotRows([
+      part(1, [60], 'up', 1),
+      part(2, [60], 'down', 1),
+    ]);
+    expect(rowsOf(result, 1)).toEqual([]);
+    expect(rowsOf(result, 2)).toEqual([55, 65]);
+  });
+
+  it('dots a unison’s dotted upper part after both heads, in its own row', () => {
+    const unisonPart = (
+      voiceNumber: VoiceNumber,
+      direction: 'up' | 'down',
+      dotCount: number,
+      duration: BaseDurationType
+    ): VoiceNoteheadPlacement => ({
+      ...part(voiceNumber, [60], direction, dotCount),
+      unison: {
+        duration,
+        pitchAccidental: null,
+        shownAccidental: null,
+        isChord: false,
+      },
+    });
+    const placements = [
+      unisonPart(1, 'up', 1, 'quarter'),
+      unisonPart(2, 'down', 0, 'quarter'),
+    ];
+    const upper = resolveCrossVoiceDotRows(placements).find(
+      (r) => r.voiceNumber === 1
+    );
+    expect(upper?.rowStaffYs).toEqual([55]);
+    const lowerOffset = computeCrossVoiceDisplacements(placements).find(
+      (d) => d.voiceNumber === 2
+    )?.xOffset;
+    expect(upper?.columnShiftPx).toBe(
+      (lowerOffset ?? 0) + DOWN_GEOMETRY.headRightX - UP_GEOMETRY.headRightX
+    );
+    // The dot no longer sits between the heads, so the lower head is not
+    // pushed past it.
+    expect(lowerOffset).toBe(
+      UP_GEOMETRY.headRightX +
+        UNISON_STEM_CLEARANCE_PX -
+        DOWN_GEOMETRY.headLeftX
+    );
+  });
+
+  it('leaves each head of an altered unison its own dot column', () => {
+    const altered = (
+      voiceNumber: VoiceNumber,
+      direction: 'up' | 'down',
+      pitchAccidental: 'sharp' | null
+    ): VoiceNoteheadPlacement => ({
+      ...part(voiceNumber, [60], direction, 1),
+      unison: {
+        duration: 'quarter',
+        pitchAccidental,
+        shownAccidental: pitchAccidental,
+        isChord: false,
+      },
+    });
+    const result = resolveCrossVoiceDotRows([
+      altered(1, 'up', null),
+      altered(2, 'down', 'sharp'),
+    ]);
+    expect(rowsOf(result, 1)).toEqual([55]);
+    expect(rowsOf(result, 2)).toEqual([65]);
+  });
+
+  it('dots a shared unison head once, above the line like a single note', () => {
+    const sharedHead = (
+      voiceNumber: VoiceNumber,
+      direction: 'up' | 'down'
+    ): VoiceNoteheadPlacement => ({
+      ...part(voiceNumber, [60], direction, 1),
+      unison: {
+        duration: 'quarter',
+        pitchAccidental: null,
+        shownAccidental: null,
+        isChord: false,
+      },
+    });
+    const result = resolveCrossVoiceDotRows([
+      sharedHead(1, 'up'),
+      sharedHead(2, 'down'),
+    ]);
+    expect(rowsOf(result, 1)).toEqual([55]);
+    expect(rowsOf(result, 2)).toEqual([]);
   });
 
   it('keeps the space above for a down-stem part that crosses above the other part', () => {

@@ -2919,6 +2919,24 @@
             },
             {
               "kind": "field",
+              "name": "#unisonPart",
+              "privacy": "private",
+              "type": {
+                "text": "UnisonPart | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#augmentationDotShiftPx",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -3088,6 +3106,20 @@
               "name": "augmentationDotRows",
               "type": {
                 "text": "number[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotShiftPx",
+              "type": {
+                "text": "number"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unisonPart",
+              "type": {
+                "text": "UnisonPart | null"
               }
             },
             {
@@ -4471,6 +4503,52 @@
             },
             {
               "kind": "field",
+              "name": "#unisonContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedSemibreveOverlap",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossVoiceElements",
+              "privacy": "private",
+              "default": "new Set<NoteElementType | ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#unisonReserves",
+              "privacy": "private",
+              "default": "new Map<VoiceKey, Map<number, number>>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -5740,6 +5818,40 @@
             },
             {
               "kind": "method",
+              "name": "#unisonDescriptor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "UnisonPartDescriptor"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "duration",
+                  "type": {
+                    "text": "DurationType"
+                  }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#voicePartGeometry",
               "privacy": "private",
               "return": {
@@ -5862,6 +5974,90 @@
                   "name": "container",
                   "type": {
                     "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#collectPlacementColumns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ beatOffset: number; placements: VoiceNoteheadPlacement[] }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "xOf",
+                  "type": {
+                    "text": "(voiceNumber: VoiceNumber, index: number) => number | undefined"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveUnisonRoom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "isMultiVoice",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderUnisonOverlay",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "placementColumns",
+                  "type": {
+                    "text": "readonly {\n      placements: readonly VoiceNoteheadPlacement[];\n    }[]"
                   }
                 },
                 {
@@ -9030,6 +9226,52 @@
             },
             {
               "kind": "field",
+              "name": "#unisonContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedSemibreveOverlap",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#crossVoiceElements",
+              "privacy": "private",
+              "default": "new Set<NoteElementType | ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#unisonReserves",
+              "privacy": "private",
+              "default": "new Map<VoiceKey, Map<number, number>>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -10312,6 +10554,40 @@
             },
             {
               "kind": "method",
+              "name": "#unisonDescriptor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "UnisonPartDescriptor"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteElementType | ChordElementType"
+                  }
+                },
+                {
+                  "name": "duration",
+                  "type": {
+                    "text": "DurationType"
+                  }
+                },
+                {
+                  "name": "staffYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#voicePartGeometry",
               "privacy": "private",
               "return": {
@@ -10434,6 +10710,90 @@
                   "name": "container",
                   "type": {
                     "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#collectPlacementColumns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ beatOffset: number; placements: VoiceNoteheadPlacement[] }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "xOf",
+                  "type": {
+                    "text": "(voiceNumber: VoiceNumber, index: number) => number | undefined"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveUnisonRoom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "isMultiVoice",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "clefChangeBeats",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderUnisonOverlay",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "placementColumns",
+                  "type": {
+                    "text": "readonly {\n      placements: readonly VoiceNoteheadPlacement[];\n    }[]"
                   }
                 },
                 {

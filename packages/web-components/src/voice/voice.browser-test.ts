@@ -815,4 +815,271 @@ test.describe('multi-voice staff', () => {
     expect(v2C4A).toBe(expectedDownStemNoteTop('treble', 'C4'));
     expect(v2C4C).toBe(expectedDownStemNoteTop('bass', 'C4'));
   });
+
+  test.describe('unisons', () => {
+    async function headCounts(page: Page): Promise<number[]> {
+      return page.evaluate(() =>
+        Array.from(document.querySelectorAll('music-note')).map(
+          (note) => note.shadowRoot?.querySelectorAll('.head').length ?? 0
+        )
+      );
+    }
+
+    const unisonMarkup = (lowerDuration: string): string =>
+      `<music-staff clef="treble" time="4/4">
+         <music-voice>
+           <music-note note="G" octave="4" duration="quarter"></music-note>
+         </music-voice>
+         <music-voice>
+           <music-note id="lower" note="G" octave="4" duration="${lowerDuration}"></music-note>
+         </music-voice>
+       </music-staff>`;
+
+    test('two equal stemmed parts share one head, and un-share it when the lower duration changes', async ({
+      page,
+    }) => {
+      await render(page, unisonMarkup('quarter'));
+      expect(await headCounts(page)).toEqual([1, 0]);
+
+      await page.evaluate(() =>
+        document.getElementById('lower')?.setAttribute('duration', 'half')
+      );
+      await waitForRedrawCycle(page);
+      expect(await headCounts(page)).toEqual([1, 1]);
+    });
+
+    test('a different notehead on the lower part un-shares the head', async ({
+      page,
+    }) => {
+      await render(page, unisonMarkup('quarter'));
+      expect(await headCounts(page)).toEqual([1, 0]);
+
+      await page.evaluate(() =>
+        document.getElementById('lower')?.setAttribute('notehead', 'x')
+      );
+      await waitForRedrawCycle(page);
+      expect(await headCounts(page)).toEqual([1, 1]);
+    });
+
+    test('turning the lower part’s stem up un-shares the head', async ({
+      page,
+    }) => {
+      await render(page, unisonMarkup('quarter'));
+      expect(await headCounts(page)).toEqual([1, 0]);
+
+      await page.evaluate(() =>
+        document.getElementById('lower')?.setAttribute('stem-direction', 'up')
+      );
+      await waitForRedrawCycle(page);
+      expect(await headCounts(page)).toEqual([1, 1]);
+    });
+
+    test('a note that shared a head draws its own once it leaves the staff', async ({
+      page,
+    }) => {
+      await render(page, unisonMarkup('quarter'));
+      expect(await headCounts(page)).toEqual([1, 0]);
+
+      await page.evaluate(() => {
+        const lower = document.getElementById('lower');
+        if (lower) {
+          document.getElementById('host')?.appendChild(lower);
+        }
+      });
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+      expect(await headCounts(page)).toEqual([1, 1]);
+    });
+
+    test('a third voice joining a shared head keeps a head of its own', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="quarter"></music-note></music-voice>
+           <music-voice><music-note note="G" octave="4" duration="quarter"></music-note></music-voice>
+           <music-voice><music-note id="third" note="B" octave="4" duration="quarter"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(await headCounts(page)).toEqual([1, 0, 1]);
+
+      await page.evaluate(() =>
+        document.getElementById('third')?.setAttribute('note', 'G')
+      );
+      await waitForRedrawCycle(page);
+      expect(await headCounts(page)).toEqual([1, 0, 1]);
+    });
+
+    test('two semibreves keep two heads, and the upper part stays on the beat', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(await headCounts(page)).toEqual([1, 1]);
+      const lefts = await noteLefts(page);
+      expect(lefts[1] - lefts[0]).toBeGreaterThan(0);
+    });
+
+    test('a semibreve is never joined to the stem beside it, whichever side its accidental puts it', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note id="crotchet" note="G" octave="4" duration="quarter"></music-note></music-voice>
+           <music-voice><music-note id="semibreve" note="G#" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      const layout = () =>
+        page.evaluate(() => {
+          const shadow = (id: string) =>
+            document.getElementById(id)?.shadowRoot;
+          const box = (element: Element | null | undefined) =>
+            element?.getBoundingClientRect() ?? null;
+          const stem = box(shadow('crotchet')?.querySelector('.stem'));
+          const crotchetHead = box(shadow('crotchet')?.querySelector('.head'));
+          const semibreveHead = box(
+            shadow('semibreve')?.querySelector('.head')
+          );
+          return {
+            stemLeft: stem?.left ?? 0,
+            stemRight: stem?.right ?? 0,
+            crotchetHeadLeft: crotchetHead?.left ?? 0,
+            crotchetHeadRight: crotchetHead?.right ?? 0,
+            semibreveLeft: semibreveHead?.left ?? 0,
+            semibreveRight: semibreveHead?.right ?? 0,
+            joins:
+              document
+                .querySelector('music-staff')
+                ?.shadowRoot?.querySelectorAll(
+                  '.unison-prong, .unison-diagonal'
+                ).length ?? 0,
+          };
+        });
+
+      // G♯ follows the G: the semibreve sits right of the crotchet's up stem.
+      const sharp = await layout();
+      expect(sharp.joins).toBe(0);
+      expect(sharp.semibreveLeft).toBeGreaterThan(sharp.stemRight);
+      expect(sharp.stemLeft).toBeGreaterThanOrEqual(
+        sharp.crotchetHeadRight - 2
+      );
+
+      // G♭ comes first: the crotchet moves right of the semibreve, its stem
+      // still on its own head.
+      await page.evaluate(() =>
+        document.getElementById('semibreve')?.setAttribute('note', 'Gb')
+      );
+      await waitForRedrawCycle(page);
+      const flat = await layout();
+      expect(flat.joins).toBe(0);
+      expect(flat.crotchetHeadLeft).toBeGreaterThan(flat.semibreveRight);
+      expect(flat.stemLeft).toBeGreaterThanOrEqual(flat.crotchetHeadRight - 2);
+    });
+
+    test('two semibreves that differ by an accidental are bracketed', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="G#" octave="4" duration="whole"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            document
+              .querySelector('music-staff')
+              ?.shadowRoot?.querySelectorAll('.unison-bracket').length ?? 0
+        )
+      ).toBe(1);
+    });
+
+    test('the entry after a unison keeps clear of its moved part at any width', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice>
+             <music-note note="G" octave="4" duration="eighth"></music-note>
+             <music-note note="C" octave="5" duration="quarter"></music-note>
+           </music-voice>
+           <music-voice>
+             <music-note note="G#" octave="4" duration="eighth"></music-note>
+             <music-note note="G#" octave="4" duration="eighth"></music-note>
+           </music-voice>
+         </music-staff>`
+      );
+      const lowerLefts = (): Promise<number[]> =>
+        page.evaluate(() =>
+          Array.from(
+            document.querySelectorAll('music-voice:nth-of-type(2) > music-note')
+          ).map((note) => note.getBoundingClientRect().left)
+        );
+
+      for (const width of [800, 220]) {
+        await resizeHost(page, width);
+        await waitForRedrawCycle(page);
+        const [moved, next] = await lowerLefts();
+        expect(next).toBeGreaterThan(moved);
+      }
+    });
+
+    test('a crossed semibreve warns once, however often the staff redraws', async ({
+      page,
+    }) => {
+      const warnings: string[] = [];
+      page.on('console', (message) => {
+        if (message.type() === 'warning') {
+          warnings.push(message.text());
+        }
+      });
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice><music-note note="G" octave="4" duration="whole"></music-note></music-voice>
+           <music-voice><music-note note="A" octave="4" duration="half"></music-note><music-note note="A" octave="4" duration="half"></music-note></music-voice>
+         </music-staff>`
+      );
+      await resizeHost(page, 700);
+      await waitForRedrawCycle(page);
+      expect(
+        warnings.filter((text) => text.includes('semibreves'))
+      ).toHaveLength(1);
+    });
+
+    test('a chord and a note on one pitch share the chord’s head', async ({
+      page,
+    }) => {
+      await render(
+        page,
+        `<music-staff clef="treble" time="4/4">
+           <music-voice>
+             <music-chord duration="quarter">
+               <music-note note="G" octave="4"></music-note>
+               <music-note note="B" octave="4"></music-note>
+             </music-chord>
+           </music-voice>
+           <music-voice><music-note note="G" octave="4" duration="quarter"></music-note></music-voice>
+         </music-staff>`
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            document
+              .querySelector('music-voice:nth-of-type(2) > music-note')
+              ?.shadowRoot?.querySelectorAll('.head').length
+        )
+      ).toBe(0);
+    });
+  });
 });

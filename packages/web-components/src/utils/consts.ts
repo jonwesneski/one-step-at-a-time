@@ -171,6 +171,16 @@ export const NOTES: Note[] = [
   'Ab',
 ];
 
+const PITCH_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
+const PITCH_SUFFIXES = ['bb', 'b', '', '#', '##'] as const;
+
+// Every pitch spelling a note can take. NOTES is the key-signature option list
+// and omits the spellings that are not keys, so pickers for a note's own
+// pitch use this one.
+export const PITCH_NOTES: Note[] = PITCH_LETTERS.flatMap((letter) =>
+  PITCH_SUFFIXES.map((suffix) => `${letter}${suffix}` as Note)
+);
+
 export const OCTAVES: Octave[] = [2, 3, 4, 5, 6];
 
 export const MODES: Mode[] = ['major', 'minor'];
