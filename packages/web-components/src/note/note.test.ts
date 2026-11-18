@@ -19,6 +19,7 @@ import {
 } from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
+  ARPEGGIO_VERTICAL_OVERSHOOT_PX,
   FLAG_STEM_STEP_PX,
   GRACE_SCALE,
   STAFF_LINE_SPACING,
@@ -1090,6 +1091,22 @@ describe('arpeggio', () => {
     expect(noteElement.getAttribute('arpeggio')).toBeNull();
   });
 
+  it('centres a lone note’s sign on its head', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('arpeggio', 'non-arpeggiate');
+    document.body.appendChild(noteElement);
+    const sign = noteElement.shadowRoot?.querySelector('.arpeggio');
+    const head = noteElement.shadowRoot?.querySelector('.head');
+    const spanTop = Number(
+      /translate\([^ ]+ ([^)]+)\)/.exec(
+        sign?.getAttribute('transform') ?? ''
+      )?.[1]
+    );
+    expect(spanTop + ARPEGGIO_VERTICAL_OVERSHOOT_PX).toBeCloseTo(
+      Number(head?.getAttribute('cy')) * NOTE_SCALE
+    );
+  });
+
   it('renders the wave group only when set', () => {
     const plain = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(plain);
@@ -1712,12 +1729,7 @@ describe('unison part', () => {
     document.body.appendChild(noteElement);
     expect(noteElement.shadowRoot?.querySelector('.head')).not.toBeNull();
 
-    noteElement.unisonPart = {
-      omitsHead: true,
-      stemShiftPx: 0,
-      stemLiftPx: 0,
-      stemShape: null,
-    };
+    noteElement.unisonPart = { omitsHead: true };
 
     expect(noteElement.shadowRoot?.querySelector('.head')).toBeNull();
     expect(noteElement.shadowRoot?.querySelector('.head-hit-zone')).toBeNull();
@@ -1727,12 +1739,7 @@ describe('unison part', () => {
   it('draws its head again once the unison part is cleared', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
     document.body.appendChild(noteElement);
-    noteElement.unisonPart = {
-      omitsHead: true,
-      stemShiftPx: 0,
-      stemLiftPx: 0,
-      stemShape: null,
-    };
+    noteElement.unisonPart = { omitsHead: true };
 
     noteElement.unisonPart = null;
 

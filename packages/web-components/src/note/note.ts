@@ -368,12 +368,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const current = this.#unisonPart;
       if (
         v === current ||
-        (v !== null &&
-          current !== null &&
-          v.omitsHead === current.omitsHead &&
-          v.stemShiftPx === current.stemShiftPx &&
-          v.stemLiftPx === current.stemLiftPx &&
-          v.stemShape === current.stemShape)
+        (v !== null && current !== null && v.omitsHead === current.omitsHead)
       ) {
         return;
       }
@@ -1412,8 +1407,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         augmentationDotRows: this.#augmentationDotRows,
         augmentationDotShiftPx: this.#augmentationDotShiftPx,
         omitsHead: this.#unisonPart?.omitsHead ?? false,
-        stemShiftPx: this.#unisonPart?.stemShiftPx ?? 0,
-        stemLiftPx: this.#unisonPart?.stemLiftPx ?? 0,
       });
 
       if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {

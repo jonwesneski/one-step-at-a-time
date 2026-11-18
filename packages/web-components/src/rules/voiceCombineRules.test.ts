@@ -4,7 +4,7 @@
 import '../chord/index';
 import '../note/index';
 import { ChordElementType, NoteElementType } from '../types/elements';
-import { MUSIC_CHORD, MUSIC_NOTE } from '../utils/consts';
+import { MUSIC_CHORD, MUSIC_NOTE, MUSIC_NOTE_NODE } from '../utils/consts';
 import { detectCombinableGroups, VoiceCombineInput } from './voiceCombineRules';
 
 afterEach(() => {
@@ -37,9 +37,27 @@ function chord(
   return el;
 }
 
+// A stand-in for the staff's Y lookup: one step per letter, octave 4 when
+// none is written.
+function staffYsOfTones(element: NoteElementType | ChordElementType): number[] {
+  const tones =
+    element.nodeName === MUSIC_NOTE_NODE
+      ? [
+          {
+            value: (element as NoteElementType).note,
+            octave: (element as NoteElementType).octave,
+          },
+        ]
+      : (element as ChordElementType).notes;
+  return tones.map(
+    (tone) => -((tone.octave ?? 4) * 7 + 'CDEFGAB'.indexOf(tone.value[0])) * 5
+  );
+}
+
 function voiceInput(
   elements: (NoteElementType | ChordElementType)[],
-  beatOffsets: number[]
+  beatOffsets: number[],
+  staffYs?: number[][]
 ): VoiceCombineInput {
   return {
     elements: elements as never,
@@ -47,6 +65,7 @@ function voiceInput(
     tupletsByIndex: new Map(),
     arpeggioRunIndices: new Set(),
     arpeggioTargetIndices: new Set(),
+    staffYsOf: (index) => staffYs?.[index] ?? staffYsOfTones(elements[index]),
   };
 }
 
@@ -80,6 +99,46 @@ describe('detectCombinableGroups', () => {
       new Map([
         [1, voiceInput([note('G', 4)], [0])],
         [2, voiceInput([note('G#', 4)], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('compares resolved staff positions, so a chord tone with no written octave still counts', () => {
+    const symbol = document.createElement(MUSIC_CHORD) as ChordElementType;
+    symbol.setAttribute('chord', 'C');
+    symbol.setAttribute('duration', 'quarter');
+    document.body.appendChild(symbol);
+    const g4 = note('G', 4);
+    const resolved = [staffYsOfTones(note('C', 4))[0], staffYsOfTones(g4)[0]];
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([symbol], [0], [resolved])],
+        [2, voiceInput([g4], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('leaves two voices uncombined when a third voice sounds one of their pitches on that beat', () => {
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('B', 4)], [0])],
+        [3, voiceInput([note('G', 4, 'half')], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('counts a third voice that cannot combine itself', () => {
+    const tied = note('G', 4);
+    tied.setAttribute('tie', 'start');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([note('G', 4)], [0])],
+        [2, voiceInput([note('B', 4)], [0])],
+        [3, voiceInput([tied], [0])],
       ])
     );
     expect(groups).toHaveLength(0);

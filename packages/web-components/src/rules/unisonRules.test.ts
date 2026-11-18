@@ -1,9 +1,6 @@
 import type { AccidentalType, BaseDurationType } from '../types/theory';
 import {
   ACCIDENTAL_SYMBOL_WIDTH,
-  DIAGONAL_STEM_JOIN_CLEARANCE_PX,
-  FLAG_STEM_STEP_PX,
-  PRONG_LIFT_PX,
   UNISON_STEM_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
@@ -12,9 +9,8 @@ import {
   groupUnisonPlacements,
   headClassOf,
   resolveAlteredSingleStemGroup,
-  resolveUnisonDiagonal,
+  resolveStemlessClusters,
   resolveUnisonPair,
-  resolveUnisonStemGroups,
   UnisonGroupPlacement,
   UnisonPartInput,
 } from './unisonRules';
@@ -230,6 +226,71 @@ describe('resolveUnisonPair', () => {
   });
 });
 
+describe('resolveUnisonPair: positions and notehead glyphs', () => {
+  it('does not share a head between different notehead glyphs', () => {
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter'),
+        part(2, 'down', 'quarter', { notehead: 'x' })
+      )
+    ).toBe(false);
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { notehead: 'x' }),
+        part(2, 'down', 'quarter', { notehead: 'x' })
+      )
+    ).toBe(true);
+  });
+
+  it('moves the down-stem part further when it sits left of the up-stem part', () => {
+    const sameX = resolveUnisonPair(
+      part(1, 'up', 'quarter'),
+      part(2, 'down', 'quarter', { headCenterX: 14 })
+    );
+    const leftOf = resolveUnisonPair(
+      part(1, 'up', 'quarter', { originX: 6 }),
+      part(2, 'down', 'quarter', { headCenterX: 14 })
+    );
+    expect(leftOf.leftOffsetPx).toBe(0);
+    expect(leftOf.rightOffsetPx).toBe(sameX.rightOffsetPx + 6);
+  });
+
+  it('moves the up-stem part right when the down-stem part sits further right', () => {
+    const layout = resolveUnisonPair(
+      part(1, 'up', 'quarter'),
+      part(2, 'down', 'quarter', { originX: 6 })
+    );
+    expect(layout.leftOffsetPx).toBe(6);
+    expect(layout.rightOffsetPx).toBe(0);
+    expect(layout.omitsHeadVoiceNumber).toBe(2);
+  });
+
+  it('clears the left head from where each part sits, never moving the right part left', () => {
+    const closer = resolveUnisonPair(
+      part(1, 'up', 'half'),
+      part(2, 'down', 'quarter', { originX: 4 })
+    );
+    expect(closer.rightOffsetPx).toBe(
+      HEAD_RIGHT + UNISON_STEM_CLEARANCE_PX - HEAD_LEFT - 4
+    );
+    const far = resolveUnisonPair(
+      part(1, 'up', 'half'),
+      part(2, 'down', 'quarter', { originX: 100 })
+    );
+    expect(far.rightOffsetPx).toBe(0);
+  });
+
+  it('keeps two heads when sharing is not allowed', () => {
+    const layout = resolveUnisonPair(
+      part(1, 'up', 'quarter'),
+      part(2, 'down', 'quarter'),
+      false
+    );
+    expect(layout.mode).toBe('separate-stems');
+    expect(layout.omitsHeadVoiceNumber).toBeNull();
+  });
+});
+
 describe('accidentalChromaticRank', () => {
   it('orders double-flat to double-sharp, with no accidental as natural', () => {
     const types: (AccidentalType | null)[] = [
@@ -253,7 +314,7 @@ describe('accidentalChromaticRank', () => {
   });
 });
 
-describe('resolveUnisonStemGroups', () => {
+describe('resolveStemlessClusters', () => {
   function placement(
     voiceNumber: 1 | 2 | 3,
     duration: BaseDurationType,
@@ -274,52 +335,46 @@ describe('resolveUnisonStemGroups', () => {
     };
   }
 
-  it('shares the stem of the one stemmed part with its stemless partners', () => {
-    const groups = resolveUnisonStemGroups([
-      placement(1, 'quarter'),
-      placement(2, 'whole', 'sharp'),
-      placement(3, 'whole', 'flat'),
-    ]);
-    expect(groups).toEqual([
+  it('brackets stemless parts that differ by accidental', () => {
+    expect(
+      resolveStemlessClusters([
+        placement(1, 'whole'),
+        placement(2, 'whole', 'sharp'),
+      ])
+    ).toEqual([
       {
-        kind: 'single-stem',
         staffY: 60,
-        owner: { voiceNumber: 1, localIndex: 0 },
-        others: [
+        members: [
+          { voiceNumber: 1, localIndex: 0 },
           { voiceNumber: 2, localIndex: 0 },
-          { voiceNumber: 3, localIndex: 0 },
         ],
       },
     ]);
   });
 
-  it('gives stemless parts that differ by accidental a bracket', () => {
-    const groups = resolveUnisonStemGroups([
-      placement(1, 'whole'),
-      placement(2, 'whole', 'sharp'),
-    ]);
-    expect(groups.map((group) => group.kind)).toEqual(['stemless-cluster']);
-  });
-
-  it('lets a chord part join at the staff position it shares', () => {
+  it('lets a stemless chord join at the staff position it shares', () => {
     const chordPart: UnisonGroupPlacement = {
       voiceNumber: 1,
       localIndex: 0,
       staffYCoordinates: [50, 60],
       unison: {
-        duration: 'quarter',
+        duration: 'whole',
         pitchAccidental: null,
         shownAccidental: null,
         isChord: true,
       },
     };
     expect(
-      resolveUnisonStemGroups([chordPart, placement(2, 'whole', 'sharp')])
-    ).toMatchObject([{ kind: 'single-stem', staffY: 60 }]);
+      resolveStemlessClusters([chordPart, placement(2, 'whole', 'sharp')])
+    ).toMatchObject([{ staffY: 60 }]);
   });
 
   it.each<[string, UnisonGroupPlacement[]]>([
     ['two plain semibreves', [placement(1, 'whole'), placement(2, 'whole')]],
+    [
+      'a stemmed part beside altered semibreves',
+      [placement(1, 'quarter'), placement(2, 'whole', 'sharp')],
+    ],
     [
       'two stemmed parts',
       [placement(1, 'quarter'), placement(2, 'quarter', 'sharp')],
@@ -329,7 +384,7 @@ describe('resolveUnisonStemGroups', () => {
       [placement(1, 'quarter', null, 60), placement(2, 'whole', null, 65)],
     ],
   ])('draws nothing for %s', (__, placements) => {
-    expect(resolveUnisonStemGroups(placements)).toEqual([]);
+    expect(resolveStemlessClusters(placements)).toEqual([]);
   });
 });
 
@@ -353,55 +408,6 @@ describe('groupUnisonPlacements', () => {
     const groups = groupUnisonPlacements([a, b, c, d]);
     expect(groups.get(50)).toEqual([a, c]);
     expect(groups.get(60)).toEqual([b, d]);
-  });
-});
-
-describe('resolveUnisonDiagonal', () => {
-  const base = {
-    stemX: 20,
-    flagCount: 0,
-    headFarEdgeX: 50,
-    headCenterY: 60,
-    headHalfHeight: 4,
-  };
-
-  it('leaves an up-stem below its tip, past the join clearance, and ends at the head’s upper edge', () => {
-    const segment = resolveUnisonDiagonal({
-      ...base,
-      stemUp: true,
-      stemTipY: 20,
-    });
-    expect(segment).toEqual({
-      fromX: 20,
-      fromY: 20 + DIAGONAL_STEM_JOIN_CLEARANCE_PX,
-      toX: 50,
-      toY: 56,
-    });
-  });
-
-  it('leaves a down-stem above its tip and ends at the head’s lower edge', () => {
-    const segment = resolveUnisonDiagonal({
-      ...base,
-      stemUp: false,
-      stemTipY: 100,
-    });
-    expect(segment.fromY).toBe(100 - DIAGONAL_STEM_JOIN_CLEARANCE_PX);
-    expect(segment.toY).toBe(64);
-  });
-
-  it('keeps the join clear of every tail', () => {
-    const plain = resolveUnisonDiagonal({
-      ...base,
-      stemUp: true,
-      stemTipY: 20,
-    });
-    const flagged = resolveUnisonDiagonal({
-      ...base,
-      stemUp: true,
-      stemTipY: 20,
-      flagCount: 2,
-    });
-    expect(flagged.fromY - plain.fromY).toBe(2 * FLAG_STEM_STEP_PX);
   });
 });
 
@@ -444,15 +450,20 @@ describe('resolveAlteredSingleStemGroup', () => {
     ).toBeNull();
   });
 
-  it('forks two heads from a stem centred over both, base lifted', () => {
+  it('keeps the stemmed head on its own stem and puts a semibreve after it, clear of the stem', () => {
     const layout = resolveAlteredSingleStemGroup([
       stemmed(1, 'up', null),
       stemless(2, 'sharp'),
     ]);
-    expect(layout?.shape).toBe('prong');
-    expect(layout?.stemLiftPx).toBe(PRONG_LIFT_PX);
-    const second = layout?.parts[1].xOffsetPx ?? 0;
-    expect(second).toBeGreaterThan(HEAD_RIGHT - HEAD_LEFT);
+    const offsetOf = (voiceNumber: number) =>
+      layout?.parts.find((entry) => entry.voiceNumber === voiceNumber)
+        ?.xOffsetPx ?? 0;
+    expect(offsetOf(1)).toBe(0);
+    // The sharp, and the semibreve after it, start past the crotchet's stem
+    // (its head's right edge) by the clearance.
+    expect(offsetOf(2) - ACCIDENTAL_SYMBOL_WIDTH.sharp).toBeGreaterThanOrEqual(
+      HEAD_RIGHT + UNISON_STEM_CLEARANCE_PX
+    );
   });
 
   it('orders heads flat to sharp whatever the voice order', () => {
@@ -467,28 +478,47 @@ describe('resolveAlteredSingleStemGroup', () => {
     expect(offsets).toEqual([...offsets].sort((a, b) => a - b));
   });
 
-  it('uses diagonals from the first head’s stem for three heads, with no lift', () => {
+  it('puts a semibreve clear of an up-stem’s tails as well as its head', () => {
+    const flagged = {
+      ...part(1, 'up', 'eighth', {
+        geometry: {
+          headLeftX: HEAD_LEFT,
+          headRightX: HEAD_RIGHT,
+          stemX: HEAD_RIGHT,
+          dotsRightEdgeX: null,
+          tailRightX: HEAD_RIGHT + 10,
+        },
+      }),
+      localIndex: 0,
+    };
     const layout = resolveAlteredSingleStemGroup([
-      stemmed(1, 'up', null),
-      stemless(2, 'flat'),
-      stemless(3, 'sharp'),
+      flagged,
+      stemless(2, 'sharp'),
     ]);
-    expect(layout?.shape).toBe('diagonal');
-    expect(layout?.stemLiftPx).toBe(0);
+    const semibreveOffset =
+      layout?.parts.find((entry) => entry.voiceNumber === 2)?.xOffsetPx ?? 0;
+    expect(
+      semibreveOffset - ACCIDENTAL_SYMBOL_WIDTH.sharp
+    ).toBeGreaterThanOrEqual(HEAD_RIGHT + 10 + UNISON_STEM_CLEARANCE_PX);
   });
 
-  it('moves the owner’s stem off its own head when another head leads', () => {
+  it('puts a down-stem head after a semibreve, its stem clear of it', () => {
     const layout = resolveAlteredSingleStemGroup([
-      stemmed(1, 'up', 'sharp'),
-      stemless(2, 'flat'),
-      stemless(3, null),
+      stemless(1, 'flat', 'up'),
+      stemmed(2, 'down', null),
     ]);
-    expect(layout?.owner.voiceNumber).toBe(1);
-    expect(layout?.stemShiftPx).toBeLessThan(0);
+    const offsetOf = (voiceNumber: number) =>
+      layout?.parts.find((entry) => entry.voiceNumber === voiceNumber)
+        ?.xOffsetPx ?? 0;
+    expect(layout?.parts.map((entry) => entry.voiceNumber)).toEqual([1, 2]);
+    // The down stem sits on the crotchet head's left edge.
+    expect(offsetOf(2) + HEAD_LEFT).toBeGreaterThanOrEqual(
+      HEAD_RIGHT + UNISON_STEM_CLEARANCE_PX
+    );
   });
 });
 
-describe('resolveAlteredSingleStemGroup: mirrored and chord parts', () => {
+describe('resolveAlteredSingleStemGroup: chord parts and positions', () => {
   const owner = (
     voiceNumber: 1 | 2 | 3,
     pitchAccidental: AccidentalType | null,
@@ -503,66 +533,46 @@ describe('resolveAlteredSingleStemGroup: mirrored and chord parts', () => {
   });
   const whole = (
     voiceNumber: 1 | 2 | 3,
-    pitchAccidental: AccidentalType | null
+    pitchAccidental: AccidentalType | null,
+    overrides: Partial<UnisonPartInput> = {}
   ) => ({
     ...part(voiceNumber, 'down', 'whole', {
       pitchAccidental,
       shownAccidental: pitchAccidental,
+      ...overrides,
     }),
     localIndex: 0,
   });
-  const three = () => [owner(1, null), whole(2, 'flat'), whole(3, 'sharp')];
 
-  it('keeps the first head on the beat when there is room after the column', () => {
-    const layout = resolveAlteredSingleStemGroup(three(), {
-      beforePx: 20,
-      afterPx: 200,
-    });
-    expect(layout?.mirrored).toBe(false);
+  it('keeps the first head on the beat and runs the rest right', () => {
+    const layout = resolveAlteredSingleStemGroup([
+      owner(1, null),
+      whole(2, 'flat'),
+      whole(3, 'sharp'),
+    ]);
     expect(layout?.parts[0].xOffsetPx).toBe(0);
-  });
-
-  it('mirrors when the room after is too small and the room before is larger', () => {
-    const layout = resolveAlteredSingleStemGroup(three(), {
-      beforePx: 60,
-      afterPx: 10,
-    });
-    expect(layout?.mirrored).toBe(true);
-    const last = layout?.parts[layout.parts.length - 1];
-    expect(last?.xOffsetPx).toBe(0);
-    for (const entry of layout?.parts.slice(0, -1) ?? []) {
-      expect(entry.xOffsetPx).toBeLessThan(0);
+    for (const entry of layout?.parts.slice(1) ?? []) {
+      expect(entry.xOffsetPx).toBeGreaterThan(0);
     }
   });
 
-  it('does not mirror when the room before is no larger', () => {
-    expect(
-      resolveAlteredSingleStemGroup(three(), { beforePx: 10, afterPx: 10 })
-        ?.mirrored
-    ).toBe(false);
-  });
-
-  it('keeps flat-to-sharp order when mirrored', () => {
-    const layout = resolveAlteredSingleStemGroup(three(), {
-      beforePx: 60,
-      afterPx: 10,
-    });
-    expect(layout?.parts.map((entry) => entry.voiceNumber)).toEqual([2, 1, 3]);
-  });
-
-  it('puts a stemmed chord at the stem’s place, never as a prong', () => {
+  it('orders a stemmed chord chromatically, like any other part', () => {
     const chord = owner(1, null, { isChord: true });
     const layout = resolveAlteredSingleStemGroup([chord, whole(2, 'flat')]);
-    expect(layout?.shape).toBe('diagonal');
-    expect(layout?.parts[0].voiceNumber).toBe(1);
-    expect(layout?.stemShiftPx).toBeCloseTo(0, 5);
+    expect(layout?.parts.map((entry) => entry.voiceNumber)).toEqual([2, 1]);
   });
 
-  it('puts a stemmed chord last when mirrored', () => {
-    const layout = resolveAlteredSingleStemGroup(
-      [owner(1, null, { isChord: true }), whole(2, 'flat'), whole(3, 'sharp')],
-      { beforePx: 60, afterPx: 10 }
-    );
-    expect(layout?.parts[layout.parts.length - 1].voiceNumber).toBe(1);
+  it('measures each head from where its part sits', () => {
+    const atZero = resolveAlteredSingleStemGroup([
+      owner(1, null),
+      whole(2, 'sharp'),
+    ]);
+    const shifted = resolveAlteredSingleStemGroup([
+      owner(1, null),
+      whole(2, 'sharp', { originX: 5 }),
+    ]);
+    const offsetOf = (layout: typeof atZero) =>
+      layout?.parts.find((entry) => entry.voiceNumber === 2)?.xOffsetPx ?? 0;
+    expect(offsetOf(shifted)).toBe(offsetOf(atZero) - 5);
   });
 });

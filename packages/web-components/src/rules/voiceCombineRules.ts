@@ -20,6 +20,8 @@ export type VoiceCombineInput = {
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>;
   arpeggioRunIndices: ReadonlySet<number>;
   arpeggioTargetIndices: ReadonlySet<number>;
+  // Staff Ys an element sounds, with its clef and chord voicing resolved.
+  staffYsOf: (index: number) => readonly number[];
 };
 
 export type CombinedGroupMember = {
@@ -112,25 +114,32 @@ function tonesOf(element: NoteOrChordElementType): ChordNote[] {
   return (element as ChordElementType).notes;
 }
 
-// Two members sounding the same letter and octave are a unison: it is laid
-// out by rules/unisonRules.ts (shared head, or two heads) rather than merged
-// into one chord, which would drop one of the parts.
-function hasUnison(bucket: readonly Candidate[]): boolean {
-  const seen = new Set<string>();
-  for (const candidate of bucket) {
-    const positions = new Set(
-      tonesOf(candidate.element).map(
-        (tone) => `${tone.value[0].toUpperCase()}${tone.octave ?? ''}`
-      )
+type Sounding = {
+  voiceNumber: VoiceNumber;
+  beatOffset: number;
+  staffYs: readonly number[];
+};
+
+// A member on the same staff position as another voice's note or chord on its
+// beat, whether that one can combine or not, is a unison: it is laid out by
+// rules/unisonRules.ts (shared head, or two heads) rather than merged into one
+// chord, which would drop one of the parts or overlap the other's head.
+function hasUnison(
+  bucket: readonly Candidate[],
+  sounding: readonly Sounding[],
+  voices: ReadonlyMap<VoiceNumber, VoiceCombineInput>
+): boolean {
+  return bucket.some((candidate) => {
+    const staffYs =
+      voices.get(candidate.voiceNumber)?.staffYsOf(candidate.index) ?? [];
+    return sounding.some(
+      (other) =>
+        other.voiceNumber !== candidate.voiceNumber &&
+        Math.abs(other.beatOffset - candidate.beatOffset) <
+          BEAT_OFFSET_EPSILON &&
+        other.staffYs.some((staffY) => staffYs.includes(staffY))
     );
-    for (const position of positions) {
-      if (seen.has(position)) {
-        return true;
-      }
-      seen.add(position);
-    }
-  }
-  return false;
+  });
 }
 
 function dedupeTones(tones: readonly ChordNote[]): ChordNote[] {
@@ -159,6 +168,7 @@ export function detectCombinableGroups(
   voices: ReadonlyMap<VoiceNumber, VoiceCombineInput>
 ): CombinedGroup[] {
   const candidates: Candidate[] = [];
+  const sounding: Sounding[] = [];
   for (const [voiceNumber, voice] of voices) {
     for (let index = 0; index < voice.elements.length; index++) {
       const element = voice.elements[index];
@@ -168,6 +178,11 @@ export function detectCombinableGroups(
       ) {
         continue; // rests never combine
       }
+      sounding.push({
+        voiceNumber,
+        beatOffset: voice.beatOffsets[index],
+        staffYs: voice.staffYsOf(index),
+      });
       if (!isCombineEligible(voice, index)) {
         continue;
       }
@@ -211,7 +226,7 @@ export function detectCombinableGroups(
       }
     }
     for (const bucket of byKey.values()) {
-      if (bucket.length < 2 || hasUnison(bucket)) {
+      if (bucket.length < 2 || hasUnison(bucket, sounding, voices)) {
         continue;
       }
       groups.push({

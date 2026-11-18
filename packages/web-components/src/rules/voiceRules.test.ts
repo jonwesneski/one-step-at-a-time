@@ -197,8 +197,6 @@ describe('computeCrossVoiceDisplacements', () => {
       duration: BaseDurationType,
       staffYs: number[]
     ): VoiceNoteheadPlacement {
-      const stemY =
-        direction === 'up' ? Math.max(...staffYs) : Math.min(...staffYs);
       return {
         voiceNumber,
         localIndex: 0,
@@ -218,53 +216,53 @@ describe('computeCrossVoiceDisplacements', () => {
             headCenterX: 15.5,
             headLeftX: geometry.headLeftX,
             headRightX: geometry.headRightX,
-            movesAlone:
-              duration === 'whole' ||
-              (direction === 'down' && staffY !== stemY),
           })),
         },
       };
     }
 
-    it('moves only the unison tone of a stemless chord and leaves the chord in place', () => {
+    it.each<['up' | 'down', BaseDurationType, number[]]>([
+      ['down', 'whole', [50, 60]],
+      ['down', 'quarter', [40, 50]],
+      ['down', 'quarter', [50, 60]],
+      ['up', 'quarter', [40, 50]],
+    ])(
+      'moves a %s-stem %s chord at %j as a unit',
+      (direction, duration, staffYs) => {
+        const chord = computeCrossVoiceDisplacements([
+          unisonPlacement(1, direction === 'up' ? 'down' : 'up', 'half'),
+          chordPlacement(2, direction, duration, staffYs),
+        ]).find((d) => d.voiceNumber === 2);
+        expect(chord?.xOffset).toBe(
+          geometry.headRightX + UNISON_STEM_CLEARANCE_PX - geometry.headLeftX
+        );
+      }
+    );
+
+    it('shares one head among three voices at most once, keeping the third head', () => {
       const result = computeCrossVoiceDisplacements([
-        unisonPlacement(1, 'up', 'half'),
-        chordPlacement(2, 'down', 'whole', [50, 60]),
+        unisonPlacement(1, 'up', 'quarter'),
+        unisonPlacement(2, 'down', 'quarter'),
+        unisonPlacement(3, 'down', 'quarter'),
       ]);
-      const chord = result.find((d) => d.voiceNumber === 2);
-      expect(chord?.xOffset).toBe(0);
-      expect(chord?.toneShifts).toEqual([
-        {
-          staffY: 50,
-          shiftPx:
-            geometry.headRightX + UNISON_STEM_CLEARANCE_PX - geometry.headLeftX,
-        },
-      ]);
+      const [first, second, third] = [1, 2, 3].map((voiceNumber) =>
+        result.find((d) => d.voiceNumber === voiceNumber)
+      );
+      expect(second?.omitsHead).toBe(true);
+      expect(second?.xOffset).toBe(first?.xOffset);
+      expect(third?.omitsHead).toBe(false);
+      expect(third?.xOffset).toBe(
+        geometry.headRightX + UNISON_STEM_CLEARANCE_PX - geometry.headLeftX
+      );
     });
 
-    it('moves a stem-down chord by its non-stem tone only', () => {
-      const alone = computeCrossVoiceDisplacements([
-        unisonPlacement(1, 'up', 'half'),
-        chordPlacement(2, 'down', 'quarter', [40, 50]),
-      ]).find((d) => d.voiceNumber === 2);
-      expect(alone?.xOffset).toBe(0);
-      expect(alone?.toneShifts?.[0]?.staffY).toBe(50);
-
-      const stemTone = computeCrossVoiceDisplacements([
-        unisonPlacement(1, 'up', 'half'),
-        chordPlacement(2, 'down', 'quarter', [50, 60]),
-      ]).find((d) => d.voiceNumber === 2);
-      expect(stemTone?.toneShifts).toBeUndefined();
-      expect(stemTone?.xOffset).toBeGreaterThan(0);
-    });
-
-    it('moves a stem-up chord as a unit, since its stem is on the side it moves toward', () => {
+    it('lines the shared head up from each part’s own x', () => {
       const result = computeCrossVoiceDisplacements([
-        unisonPlacement(1, 'down', 'half'),
-        chordPlacement(2, 'up', 'quarter', [40, 50]),
-      ]).find((d) => d.voiceNumber === 2);
-      expect(result?.toneShifts).toBeUndefined();
-      expect(result?.xOffset).toBeGreaterThan(0);
+        { ...unisonPlacement(1, 'up', 'quarter'), x: 108 },
+        { ...unisonPlacement(2, 'down', 'quarter'), x: 100 },
+      ]);
+      expect(result.find((d) => d.voiceNumber === 1)?.xOffset).toBe(0);
+      expect(result.find((d) => d.voiceNumber === 2)?.xOffset).toBe(8);
     });
 
     it('flags two crossed semibreves a step apart and puts the up-stem one right', () => {

@@ -62,12 +62,6 @@ export type GraceNoteheadsType = (NoteheadType | null)[] | string | null;
 export type UnisonPart = {
   // The other voice draws the shared head.
   omitsHead: boolean;
-  // The stem of a single-stem unison sits away from this note's own head:
-  // sideways, and (a prong) starting this far above or below the heads.
-  stemShiftPx: number;
-  stemLiftPx: number;
-  // How the group's other heads reach that stem; drawn by the staff.
-  stemShape: 'diagonal' | 'prong' | null;
 };
 
 export interface INoteElement {
@@ -313,9 +307,6 @@ export interface IChordElement {
   articulationStemAnchorBeamLevels: number | null;
   // See INoteElement.augmentationDotRows.
   augmentationDotRows: number[] | null;
-  // A unison moves only its own tone: px per tone, aligned with `notes`
-  // (null = none move); set by the staff.
-  unisonToneShiftsPx: number[] | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
   tie: TieValue | null;

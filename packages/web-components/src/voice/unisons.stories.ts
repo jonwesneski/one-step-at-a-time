@@ -88,7 +88,11 @@ export const SingleStemPerfectUnison: Story = {
   `,
 };
 
-/** Two heads that differ by an accidental fork from one stem, the prong. */
+/**
+ * Heads that differ by an accidental run flat to sharp, each after its own
+ * accidental. The stemmed part keeps its own stem; a semibreve is never joined
+ * to it, so it never reads as a minim.
+ */
 export const SingleStemAlteredUnison: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">
@@ -98,17 +102,7 @@ export const SingleStemAlteredUnison: Story = {
   `,
 };
 
-/** Tails stay on the vertical stem, clear of the diagonal. */
-export const SingleStemFlaggedOwner: Story = {
-  render: () => html`
-    <music-staff clef="treble" time="4/4">
-      <music-voice>${note('G', 'eighth')}</music-voice>
-      <music-voice>${note('G#', 'whole')}</music-voice>
-    </music-staff>
-  `,
-};
-
-/** Heads run flat to sharp, whichever voice is stemmed. */
+/** Heads run flat to sharp, whichever voice is stemmed; the semibreves stand alone. */
 export const SingleStemFlatToSharp: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">
@@ -119,7 +113,7 @@ export const SingleStemFlatToSharp: Story = {
   `,
 };
 
-/** Three heads hang from the first head's stem by diagonals. */
+/** Three heads, flat to sharp; only the crotchet has a stem. */
 export const SingleStemCluster: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">
@@ -197,7 +191,7 @@ export const ChordSharesHeadWithNote: Story = {
   `,
 };
 
-/** A stemmed chord keeps the stem's place; the displaced head hangs from it by a diagonal. */
+/** A stemmed chord keeps its own stem; the semibreve stands after it, unjoined. */
 export const ChordOwnsSingleStem: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">
@@ -207,7 +201,7 @@ export const ChordOwnsSingleStem: Story = {
   `,
 };
 
-/** A stemless chord's head joins the group; the note draws the stem at the first head. */
+/** A stemless chord takes its place in the flat-to-sharp order; the note keeps its own stem. */
 export const StemlessChordInUnison: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">
@@ -217,12 +211,79 @@ export const StemlessChordInUnison: Story = {
   `,
 };
 
-/** Only the chord's tone on the note's pitch moves; its other tones stay on the beat. */
-export const ChordToneMovesAlone: Story = {
+/** A chord in a unison moves as a unit: every tone and its stem together. */
+export const ChordMovesAsUnit: Story = {
   render: () => html`
     <music-staff clef="treble" time="4/4">
       <music-voice>${note('G', 'half')}</music-voice>
-      <music-voice>${chordOf('whole', 'G', 'B')}</music-voice>
+      <music-voice>${chordOf('quarter', 'G', 'B')}</music-voice>
+    </music-staff>
+  `,
+};
+
+/** A stemless chord moves as a unit too, ledger lines included. */
+export const StemlessChordMovesAsUnit: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('C', 'half')}</music-voice>
+      <music-voice>${chordOf('whole', 'C', 'E')}</music-voice>
+    </music-staff>
+  `,
+};
+
+/** A chord symbol's tones count at the staff positions they are drawn on. */
+export const ChordSymbolUnison: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>
+        <music-chord chord="C" duration="quarter"></music-chord>
+      </music-voice>
+      <music-voice>${note('G', 'quarter')}</music-voice>
+    </music-staff>
+  `,
+};
+
+/** Three parts on one pitch: two share a head, the third keeps its own. */
+export const ThreeVoiceUnison: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('G', 'quarter')}</music-voice>
+      <music-voice>${note('G', 'quarter')}</music-voice>
+      <music-voice>${note('G', 'quarter')}</music-voice>
+    </music-staff>
+  `,
+};
+
+/** Different noteheads never share, so the lower part's cross stays visible. */
+export const DifferentNoteheadsKeepTwoHeads: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('G', 'quarter')}</music-voice>
+      <music-voice>
+        <music-note
+          note="G"
+          octave="4"
+          duration="quarter"
+          notehead="x"
+        ></music-note>
+      </music-voice>
+    </music-staff>
+  `,
+};
+
+/** Two stems the same way never share a head, whatever the voice's default. */
+export const ForcedStemKeepsOwnHead: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('G', 'quarter')}</music-voice>
+      <music-voice>
+        <music-note
+          note="G"
+          octave="4"
+          duration="quarter"
+          stem-direction="up"
+        ></music-note>
+      </music-voice>
     </music-staff>
   `,
 };
@@ -247,30 +308,28 @@ export const CrossedSemibreves: Story = {
   `,
 };
 
-const eighthsE = (count: number) =>
-  Array.from({ length: count }).map(() => note('E', 'eighth'));
-
 /**
- * The next entry is close, so the heads run to the stem's left instead of
- * past the entries that follow. Widen the canvas and they run right again.
+ * The lower part of a unison moves right; the entry after it in that voice
+ * makes room for it at any width. Narrow the canvas to see it hold.
  */
-export const MirroredWhenRoomIsAfter: Story = {
+export const FollowingEntryMakesRoom: Story = {
   render: () => html`
-    <music-staff clef="treble" time="6/4">
+    <music-staff clef="treble" time="4/4">
       <music-voice>
-        <music-note note="D" octave="5" duration="half"></music-note>
-        ${note('G', 'eighth')} ${eighthsE(7).map((entry) => entry)}
-        <music-note note="E" octave="5" duration="quarter"></music-note>
-        <music-note note="E" octave="5" duration="quarter"></music-note>
-        <music-note note="E" octave="5" duration="quarter"></music-note>
-        <music-note note="E" octave="5" duration="eighth"></music-note>
+        ${note('G', 'eighth')}
+        <music-note note="C" octave="5" duration="quarter"></music-note>
       </music-voice>
-      <music-voice>
-        <music-rest duration="half"></music-rest>${note('Gb', 'whole')}
-      </music-voice>
-      <music-voice>
-        <music-rest duration="half"></music-rest>${note('G#', 'whole')}
-      </music-voice>
+      <music-voice>${note('G#', 'eighth')}${note('G#', 'eighth')}</music-voice>
+    </music-staff>
+  `,
+};
+
+/** A part that made room for its accidental still lines up with the shared head. */
+export const SharedHeadAfterAccidental: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>${note('G#', 'quarter')}</music-voice>
+      <music-voice>${note('G#', 'quarter')}</music-voice>
     </music-staff>
   `,
 };

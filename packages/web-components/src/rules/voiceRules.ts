@@ -22,7 +22,6 @@ import {
   resolveUnisonPair,
   type UnisonPartDescriptor,
   type UnisonPartInput,
-  type UnisonRoom,
 } from './unisonRules';
 
 export type VoiceDirection = 'up' | 'down';
@@ -142,6 +141,8 @@ export type VoicePartGeometry = {
   stemX: number | null;
   // Right ink edge of its own dot row, or null when undotted.
   dotsRightEdgeX: number | null;
+  // Right ink edge of an unbeamed up-stem's tails, which reach past the head.
+  tailRightX?: number | null;
 };
 
 export type VoiceNoteheadPlacement = {
@@ -155,8 +156,9 @@ export type VoiceNoteheadPlacement = {
   geometry?: VoicePartGeometry;
   // Without it (or without geometry) a unison keeps the symmetric nudge.
   unison?: UnisonPartDescriptor;
-  // Free room before and after this column, to choose the mirrored order.
-  room?: UnisonRoom;
+  // Where the part sits (px, any origin shared by the column): voices are
+  // spaced separately, so one may sit further right than another.
+  x?: number;
 };
 
 export type VoiceNoteheadDisplacement = {
@@ -169,24 +171,15 @@ export type VoiceNoteheadDisplacement = {
   // Stemless heads that overlap or cross another part's: drawn as separate
   // heads, though stemmed notes would show the part progression better.
   overlappingSemibreves: boolean;
-  // The stem part of a single-stem unison whose heads differ by accidental:
-  // its stem moves off its own head (see rules/unisonRules.ts).
-  unisonStem?: {
-    shape: 'diagonal' | 'prong';
-    stemShiftPx: number;
-    stemLiftPx: number;
-  };
-  // A chord part moves only its tone at the unison: those shifts are not in
-  // xOffset.
-  toneShifts?: { staffY: number; shiftPx: number }[];
 };
 
 /**
  * Resolves horizontal displacement for all voices' notes/chords sharing one
  * beat-offset column:
- *  - an exact unison between two voices — see rules/unisonRules.ts#resolveUnisonPair:
- *    a shared head with two stems, or two heads with the upper part kept on
- *    the beat x;
+ *  - an exact unison between two voices adjacent by voice number — see
+ *    rules/unisonRules.ts#resolveUnisonPair: a shared head with two stems, or
+ *    two heads with the upper part kept on the beat x. A part shares at most
+ *    one head, so a third part keeps its own head beside the shared one;
  *  - a second between an up-stem and a down-stem part (either above the
  *    other) — the up-stem part stays left and the down-stem part moves right
  *    until the two stems share one x;
@@ -208,13 +201,9 @@ export function computeCrossVoiceDisplacements(
   const offsets = new Map<VoiceNoteheadPlacement, number>();
   const unisons = new Set<VoiceNoteheadPlacement>();
   const headless = new Set<VoiceNoteheadPlacement>();
-  const unisonStems = new Map<
-    VoiceNoteheadPlacement,
-    NonNullable<VoiceNoteheadDisplacement['unisonStem']>
-  >();
   const groupOf = new Map<VoiceNoteheadPlacement, number>();
   const overlappingSemibreves = new Set<VoiceNoteheadPlacement>();
-  const toneShifts = new Map<VoiceNoteheadPlacement, Map<number, number>>();
+  const sharesHead = new Set<VoiceNoteheadPlacement>();
   const halfDisplacement = ADJACENT_NOTE_X_DISPLACEMENT_PX / 2;
   const dotRows = resolveCrossVoiceDotRows(placements);
   const dotShifts = new Set(
@@ -242,40 +231,22 @@ export function computeCrossVoiceDisplacements(
       : 0);
   const dotsFollowGroup = (placement: VoiceNoteheadPlacement): boolean =>
     dotShifts.has(placement);
-  const addOffset = (
-    placement: VoiceNoteheadPlacement,
-    offset: number,
-    unisonStaffY?: number,
-    inGroup = false
-  ) => {
-    if (
-      unisonStaffY !== undefined &&
-      movesToneAlone(placement, unisonStaffY, inGroup)
-    ) {
-      const shifts = toneShifts.get(placement) ?? new Map<number, number>();
-      shifts.set(unisonStaffY, (shifts.get(unisonStaffY) ?? 0) + offset);
-      toneShifts.set(placement, shifts);
-      if (!offsets.has(placement)) {
-        offsets.set(placement, 0);
-      }
-      return;
-    }
+  const addOffset = (placement: VoiceNoteheadPlacement, offset: number) => {
     offsets.set(placement, (offsets.get(placement) ?? 0) + offset);
   };
-  const offsetOf = (
+  const offsetOf = (placement: VoiceNoteheadPlacement): number =>
+    offsets.get(placement) ?? 0;
+  // The part's position so far: where it sits plus what it has moved.
+  const unisonInputAt = (
     placement: VoiceNoteheadPlacement,
-    unisonStaffY?: number
-  ): number =>
-    unisonStaffY !== undefined && movesToneAlone(placement, unisonStaffY, false)
-      ? toneShifts.get(placement)?.get(unisonStaffY) ?? 0
-      : offsets.get(placement) ?? 0;
+    staffY: number
+  ): UnisonPartInput | null =>
+    toUnisonInput(placement, staffY, offsetOf(placement));
   // Pushes `right` far enough that `left`'s dots sit between the two heads.
   const separateByDots = (
     left: VoiceNoteheadPlacement,
     right: VoiceNoteheadPlacement,
-    rightAccidentalReachPx = 0,
-    leftY?: number,
-    rightY?: number
+    rightAccidentalReachPx = 0
   ) => {
     const leftDotsRight = left.geometry?.dotsRightEdgeX ?? null;
     if (leftDotsRight === null || !right.geometry) {
@@ -290,19 +261,18 @@ export function computeCrossVoiceDisplacements(
     if (!touches && !(rightAccidentalReachPx > 0 && rows.length > 0)) {
       return;
     }
-    const rightHeadLeftX =
-      rightY === undefined
-        ? right.geometry.headLeftX
-        : toUnisonInput(right, rightY)?.geometry.headLeftX ??
-          right.geometry.headLeftX;
     const needed =
-      offsetOf(left, leftY) +
+      (left.x ?? 0) +
+      offsetOf(left) +
       leftDotsRight +
       AUGMENTATION_DOT_SPACING_GAP_PX +
-      (rightAccidentalReachPx > 0 ? rightAccidentalReachPx : -rightHeadLeftX);
-    const current = offsetOf(right, rightY);
+      (rightAccidentalReachPx > 0
+        ? rightAccidentalReachPx
+        : -right.geometry.headLeftX) -
+      (right.x ?? 0);
+    const current = offsetOf(right);
     if (needed > current) {
-      addOffset(right, needed - current, rightY);
+      addOffset(right, needed - current);
     }
   };
 
@@ -314,10 +284,9 @@ export function computeCrossVoiceDisplacements(
   )) {
     const layout = resolveAlteredSingleStemGroup(
       members.flatMap((member) => {
-        const input = toUnisonInput(member, staffY, true);
+        const input = toUnisonInput(member, staffY);
         return input ? [{ ...input, localIndex: member.localIndex }] : [];
-      }),
-      members.find((member) => member.room)?.room
+      })
     );
     if (!layout) {
       continue;
@@ -332,26 +301,18 @@ export function computeCrossVoiceDisplacements(
       if (!member) {
         continue;
       }
-      addOffset(member, part.xOffsetPx, staffY, true);
+      addOffset(member, part.xOffsetPx);
       unisons.add(member);
       groupOf.set(member, groupIndex);
-      if (
-        part.voiceNumber === layout.owner.voiceNumber &&
-        part.localIndex === layout.owner.localIndex
-      ) {
-        unisonStems.set(member, {
-          shape: layout.shape,
-          stemShiftPx: layout.stemShiftPx,
-          stemLiftPx: layout.stemLiftPx,
-        });
-      }
     }
   }
 
-  for (let i = 0; i < placements.length; i++) {
-    for (let j = i + 1; j < placements.length; j++) {
-      const a = placements[i];
-      const b = placements[j];
+  // Voice order, so a unison's adjacent pairs resolve left to right.
+  const ordered = [...placements].sort((a, b) => a.voiceNumber - b.voiceNumber);
+  for (let i = 0; i < ordered.length; i++) {
+    for (let j = i + 1; j < ordered.length; j++) {
+      const a = ordered[i];
+      const b = ordered[j];
 
       const collision = closestCollision(
         a.staffYCoordinates,
@@ -375,21 +336,29 @@ export function computeCrossVoiceDisplacements(
         if (groupOf.has(a) && groupOf.get(a) === groupOf.get(b)) {
           continue;
         }
-        const aInput = toUnisonInput(a, collision.aY);
-        const bInput = toUnisonInput(b, collision.bY);
+        const between = ordered
+          .slice(i + 1, j)
+          .some((other) => other.staffYCoordinates.includes(collision.aY));
+        if (between) {
+          continue;
+        }
+        const aInput = unisonInputAt(a, collision.aY);
+        const bInput = unisonInputAt(b, collision.bY);
         if (aInput && bInput) {
-          const layout = resolveUnisonPair(aInput, bInput);
+          const layout = resolveUnisonPair(
+            aInput,
+            bInput,
+            !sharesHead.has(a) && !sharesHead.has(b)
+          );
           const [left, right] = a.voiceNumber < b.voiceNumber ? [a, b] : [b, a];
-          const [leftY, rightY] =
-            left === a
-              ? [collision.aY, collision.bY]
-              : [collision.bY, collision.aY];
-          addOffset(left, layout.leftOffsetPx, leftY);
-          addOffset(right, layout.rightOffsetPx, rightY);
+          addOffset(left, layout.leftOffsetPx);
+          addOffset(right, layout.rightOffsetPx);
           if (layout.omitsHeadVoiceNumber !== null) {
             headless.add(
               layout.omitsHeadVoiceNumber === left.voiceNumber ? left : right
             );
+            sharesHead.add(left);
+            sharesHead.add(right);
           }
           unisons.add(left);
           unisons.add(right);
@@ -399,9 +368,7 @@ export function computeCrossVoiceDisplacements(
               right,
               aInput.voiceNumber === right.voiceNumber
                 ? accidentalReach(aInput)
-                : accidentalReach(bInput),
-              leftY,
-              rightY
+                : accidentalReach(bInput)
             );
           }
           continue;
@@ -476,31 +443,24 @@ export function computeCrossVoiceDisplacements(
     isUnison: unisons.has(placement),
     omitsHead: headless.has(placement),
     overlappingSemibreves: overlappingSemibreves.has(placement),
-    unisonStem: unisonStems.get(placement),
-    toneShifts: toneShifts.has(placement)
-      ? [...(toneShifts.get(placement) ?? [])].map(([staffY, shiftPx]) => ({
-          staffY,
-          shiftPx,
-        }))
-      : undefined,
   }));
 }
 
 const isStemless = (placement: VoiceNoteheadPlacement): boolean =>
   !!placement.unison && headClassOf(placement.unison.duration) === 'stemless';
 
-// The part as it sounds at one staff position: a chord part's accidental and
-// head there come from its tone at that Y.
+// The part as it sounds at one staff position: a chord part's accidental,
+// notehead and head centre there come from its tone at that Y; the chord
+// still moves as a unit, so its whole extent is measured.
 function toUnisonInput(
   placement: VoiceNoteheadPlacement,
   staffY: number,
-  inGroup = false
+  offsetPx = 0
 ): UnisonPartInput | null {
   if (!placement.unison || !placement.geometry) {
     return null;
   }
   const tone = placement.unison.tones?.find((entry) => entry.staffY === staffY);
-  const alone = !!tone && movesToneAlone(placement, staffY, inGroup);
   return {
     ...placement.unison,
     ...(tone
@@ -508,38 +468,16 @@ function toUnisonInput(
           pitchAccidental: tone.pitchAccidental,
           shownAccidental: tone.shownAccidental,
           headCenterX: tone.headCenterX,
+          notehead: tone.notehead ?? null,
         }
       : {}),
-    // Moving alone, only that tone's head and accidental are measured.
-    ...(alone ? { accidentalReachPx: undefined } : {}),
     staffYs: placement.staffYCoordinates,
     voiceNumber: placement.voiceNumber,
     direction: placement.direction,
     dotCount: placement.dotCount ?? 0,
-    geometry:
-      alone && tone
-        ? {
-            ...placement.geometry,
-            headLeftX: tone.headLeftX,
-            headRightX: tone.headRightX,
-          }
-        : placement.geometry,
+    geometry: placement.geometry,
+    originX: (placement.x ?? 0) + offsetPx,
   };
-}
-
-// Whether a unison moves only this chord's tone at the staff Y. A group keeps
-// a stemmed chord whole: its stem is what the other heads hang from.
-function movesToneAlone(
-  placement: VoiceNoteheadPlacement,
-  staffY: number,
-  inGroup: boolean
-): boolean {
-  const unison = placement.unison;
-  const tone = unison?.tones?.find((entry) => entry.staffY === staffY);
-  if (!unison || !tone || !tone.movesAlone) {
-    return false;
-  }
-  return !inGroup || headClassOf(unison.duration) === 'stemless';
 }
 
 function isAlteredUnison(
@@ -590,8 +528,10 @@ function resolveUnisonDotShifts(
       const layout = resolveUnisonPair(dottedInput, otherInput);
       shifts.set(
         dotted,
-        layout.rightOffsetPx +
+        (other.x ?? 0) +
+          layout.rightOffsetPx +
           otherInput.geometry.headRightX -
+          (dotted.x ?? 0) -
           dottedInput.geometry.headRightX
       );
     }

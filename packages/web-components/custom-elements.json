@@ -226,15 +226,6 @@
             },
             {
               "kind": "field",
-              "name": "#unisonToneShiftsPx",
-              "privacy": "private",
-              "type": {
-                "text": "number[] | null"
-              },
-              "default": "null"
-            },
-            {
-              "kind": "field",
               "name": "#noFlags",
               "privacy": "private",
               "type": {
@@ -394,13 +385,6 @@
             {
               "kind": "field",
               "name": "augmentationDotRows",
-              "type": {
-                "text": "number[] | null"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "unisonToneShiftsPx",
               "type": {
                 "text": "number[] | null"
               }
@@ -4545,6 +4529,26 @@
             },
             {
               "kind": "field",
+              "name": "#crossVoiceElements",
+              "privacy": "private",
+              "default": "new Set<NoteElementType | ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#unisonReserves",
+              "privacy": "private",
+              "default": "new Map<VoiceKey, Map<number, number>>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -5986,24 +5990,52 @@
             },
             {
               "kind": "method",
-              "name": "#unisonRoom",
+              "name": "#collectPlacementColumns",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{ beforePx: number; afterPx: number }"
+                  "text": "{ beatOffset: number; placements: VoiceNoteheadPlacement[] }[]"
                 }
               },
               "parameters": [
                 {
-                  "name": "placements",
+                  "name": "xOf",
                   "type": {
-                    "text": "readonly VoiceNoteheadPlacement[]"
+                    "text": "(voiceNumber: VoiceNumber, index: number) => number | undefined"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveUnisonRoom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "isMultiVoice",
+                  "type": {
+                    "text": "boolean"
                   }
                 },
                 {
-                  "name": "remainingWidth",
+                  "name": "clefChangeBeats",
                   "type": {
-                    "text": "number"
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
                   }
                 }
               ],
@@ -9220,6 +9252,26 @@
             },
             {
               "kind": "field",
+              "name": "#crossVoiceElements",
+              "privacy": "private",
+              "default": "new Set<NoteElementType | ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#unisonReserves",
+              "privacy": "private",
+              "default": "new Map<VoiceKey, Map<number, number>>()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#octaveSignsContainers",
               "privacy": "private",
               "type": {
@@ -10674,24 +10726,52 @@
             },
             {
               "kind": "method",
-              "name": "#unisonRoom",
+              "name": "#collectPlacementColumns",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{ beforePx: number; afterPx: number }"
+                  "text": "{ beatOffset: number; placements: VoiceNoteheadPlacement[] }[]"
                 }
               },
               "parameters": [
                 {
-                  "name": "placements",
+                  "name": "xOf",
                   "type": {
-                    "text": "readonly VoiceNoteheadPlacement[]"
+                    "text": "(voiceNumber: VoiceNumber, index: number) => number | undefined"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveUnisonRoom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "isMultiVoice",
+                  "type": {
+                    "text": "boolean"
                   }
                 },
                 {
-                  "name": "remainingWidth",
+                  "name": "clefChangeBeats",
                   "type": {
-                    "text": "number"
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "proportionalXByVoice",
+                  "type": {
+                    "text": "ReadonlyMap<VoiceKey, (i: number) => number>"
                   }
                 }
               ],
