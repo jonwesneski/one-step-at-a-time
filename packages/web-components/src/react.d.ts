@@ -36,8 +36,10 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
   TieValue,
   TimeSignature,
+  TremoloLabel,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -179,6 +181,10 @@ declare module 'react' {
         'stem-direction'?: StemDirection;
         notehead?: NoteheadType;
         tremolo?: TremoloValue;
+        'tremolo-tuplet'?: number;
+        'tremolo-label'?: TremoloLabel;
+        'articulation-repeat'?: boolean;
+        'tie-style'?: TieStyle;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -231,6 +237,10 @@ declare module 'react' {
         'stem-direction'?: StemDirection;
         notehead?: NoteheadType;
         tremolo?: TremoloValue;
+        'tremolo-tuplet'?: number;
+        'tremolo-label'?: TremoloLabel;
+        'articulation-repeat'?: boolean;
+        'tie-style'?: TieStyle;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

@@ -2023,6 +2023,55 @@ describe(`${MUSIC_CHORD} tremolo`, () => {
   });
 });
 
+describe(`${MUSIC_CHORD} tremolo numeral, label and repeated articulation`, () => {
+  const standaloneChord = (attributes: Record<string, string>) => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C');
+    for (const [name, value] of Object.entries(attributes)) {
+      chord.setAttribute(name, value);
+    }
+    document.body.appendChild(chord);
+    return chord;
+  };
+
+  it('round-trips its attributes', () => {
+    const chord = standaloneChord({});
+    chord.tremoloTuplet = 5;
+    chord.tremoloLabel = 'trem';
+    chord.articulationRepeat = true;
+    chord.tieStyle = 'dotted';
+    expect(chord.tremoloTuplet).toBe(5);
+    expect(chord.tremoloLabel).toBe('trem');
+    expect(chord.articulationRepeat).toBe(true);
+    expect(chord.tieStyle).toBe('dotted');
+  });
+
+  it('draws one numeral beyond the stem', () => {
+    const chord = standaloneChord({ tremolo: '1', 'tremolo-tuplet': '6' });
+    const numerals = chord.shadowRoot!.querySelectorAll('.tremolo-numeral');
+    expect(numerals).toHaveLength(1);
+    expect(numerals[0].textContent).toBe('6');
+  });
+
+  it('repeats the articulation once per repetition', () => {
+    const chord = standaloneChord({
+      duration: 'half',
+      tremolo: '1',
+      'tremolo-tuplet': '6',
+      articulation: 'staccato',
+      'articulation-repeat': '',
+    });
+    expect(chord.shadowRoot!.querySelectorAll('.staccato')).toHaveLength(6);
+  });
+
+  it('draws a standalone label', () => {
+    const chord = standaloneChord({ 'tremolo-label': 'non-trem' });
+    expect(chord.shadowRoot!.querySelector('.tremolo-label')?.textContent).toBe(
+      'non trem.'
+    );
+  });
+});
+
 describe('augmentation dots', () => {
   const makeDottedChord = (
     duration: DurationType,

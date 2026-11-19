@@ -81,6 +81,8 @@ import {
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
   STAFF_BAND,
+  stemlessTremoloReachPx,
+  tremoloInkPastStemPx,
   unbeamedTremoloStemExtensionPx,
 } from './rules/tremoloRules';
 import {
@@ -152,6 +154,7 @@ import type {
   NoteLetter,
   Octave,
   OctaveShiftAmount,
+  TremoloLabel,
   TupletPlacement,
   VoiceNumber,
 } from './types/theory';
@@ -239,7 +242,10 @@ import {
   STAFF_TOP_LINE_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
+  STAFF_Y_STEP,
   TIME_SIG_Y_TRANSLATE,
+  TREMOLO_LABEL_FONT_SIZE_PX,
+  TREMOLO_LABEL_GAP_PX,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -258,6 +264,7 @@ import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
+import { articulationStackDepth } from './utils/svgCreator/articulations';
 import {
   chordHeadExtentPx,
   chordToneHeadCenterY,
@@ -274,6 +281,10 @@ import {
   TAIL_UP_WIDTH_PX,
   trillSignLeftX,
 } from './utils/svgCreator/note';
+import {
+  createTremoloLabel,
+  tremoloLabelWidthPx,
+} from './utils/svgCreator/tremolo';
 import {
   computeWrittenTrillNoteWidth,
   createTrillLineSvg,
@@ -473,6 +484,14 @@ type OctaveContinuationRow = {
   starts: boolean;
 };
 
+function tremoloLabelOf(
+  element: NoteChordOrRestElementType
+): TremoloLabel | null {
+  return element.nodeName === MUSIC_REST_NODE
+    ? null
+    : (element as NoteElementType | ChordElementType).tremoloLabel ?? null;
+}
+
 type VoiceRenderState = {
   elements: NoteChordOrRestElementType[];
   beatOffsets: number[];
@@ -484,6 +503,9 @@ type VoiceRenderState = {
   // starts at (chord spread and tails included). 0 for beamed entries, whose
   // tips come from the beam line, and for stemless ones.
   unbeamedStemTipExtensionsPx: number[];
+  // How far each entry's tremolo reaches past its stem's end on the stem
+  // side (a numeral, or a stemless head's strokes); counted as stem ink.
+  tremoloInkPastStemPx: number[];
   beamedIndices: Set<number>;
   // Indices joined to a cross-staff double-stemmed beam group — their real
   // stemExtension is resolved and written directly by the ancestor
@@ -639,6 +661,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // the entry after it keeps clear of that (see #reserveUnisonRoom).
   #unisonReserves = new Map<VoiceKey, Map<number, number>>();
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #tremoloLabelContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -1503,6 +1526,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     if (reference.tremolo !== null) {
       chord.setAttribute('tremolo', String(reference.tremolo));
     }
+    if (reference.tremoloTuplet !== null) {
+      chord.setAttribute('tremolo-tuplet', String(reference.tremoloTuplet));
+    }
+    if (reference.tremoloLabel !== null) {
+      chord.setAttribute('tremolo-label', reference.tremoloLabel);
+    }
+    if (reference.articulationRepeat) {
+      chord.setAttribute('articulation-repeat', '');
+    }
     for (const tone of group.tones) {
       const note = document.createElement(MUSIC_NOTE);
       note.setAttribute('note', tone.value);
@@ -1841,6 +1873,24 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       );
     });
 
+    const tremoloInks = elements.map((element, i) => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return 0;
+      }
+      const noteOrChord = element as NoteElementType | ChordElementType;
+      const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      if (headYs.length === 0) {
+        return 0;
+      }
+      return tremoloInkPastStemPx({
+        tremolo: noteOrChord.tremolo ?? null,
+        tuplet: noteOrChord.tremoloTuplet ?? null,
+        duration: element.duration,
+        headY: stemDirections[i] ? Math.min(...headYs) : Math.max(...headYs),
+        stemUp: stemDirections[i],
+      });
+    });
+
     const beamedIndices = new Set(
       elements.map((_, i) => i).filter((i) => beamsBuilder.isBeamed(i))
     );
@@ -1934,6 +1984,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beamRenderer,
       stemDirections,
       unbeamedStemTipExtensionsPx,
+      tremoloInkPastStemPx: tremoloInks,
       beamedIndices,
       externallyBeamedIndices,
       externallyPositionedRestIndices,
@@ -2253,6 +2304,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#prepareVoiceContainers(this.#dynamicsContainers, activeKeys);
     this.#prepareVoiceContainers(this.#trillLinesContainers, activeKeys);
     this.#prepareVoiceContainers(this.#octaveSignsContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#tremoloLabelContainers, activeKeys);
 
     this.#spaceElements();
 
@@ -3675,10 +3727,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       // why the stored value is a delta, not an absolute Y) — else this
       // staff's own same-staff beam, else null (plain staff-coord fallback,
       // inside computeTupletBracketGeometry itself).
+      // A tremolo numeral beyond a beam counts as part of the beam stack.
       const tupletBeamYForIndex = (
         i: number,
         above: boolean
       ): number | null => {
+        const edge = beamEdgeYForIndex(i, above);
+        if (edge === null || state.stemDirections[i] !== above) {
+          return edge;
+        }
+        const ink = state.tremoloInkPastStemPx[i];
+        return above ? edge - ink : edge + ink;
+      };
+      const beamEdgeYForIndex = (i: number, above: boolean): number | null => {
         const delta = this.#crossStaffTupletBeamY?.get(state.elements[i]);
         if (delta === undefined) {
           return state.beamRenderer?.beamStackEdgeYForIndex(i, above) ?? null;
@@ -3719,7 +3780,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           hasInnerGroups,
           tupletBeamYForIndex,
           this.#tupletSideOverride(group),
-          (i) => state.unbeamedStemTipExtensionsPx[i]
+          (i) =>
+            state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
         );
         if (geometry !== null) {
           innerGeometriesByGroup.set(group, geometry);
@@ -3760,7 +3822,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           hasInnerGroups,
           tupletBeamYForIndex,
           this.#tupletSideOverride(group),
-          (i) => state.unbeamedStemTipExtensionsPx[i]
+          (i) =>
+            state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
         );
         if (geometry !== null) {
           allGeometries.push(geometry);
@@ -3794,6 +3857,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
 
+    this.#renderTremoloLabels(remainingWidth);
+
     this.#renderUnisonOverlay(placementColumns, remainingWidth);
 
     // Octave signs, per voice key.
@@ -3806,6 +3871,208 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#sizeVoiceContainer(octaveSignsContainer, remainingWidth);
       this.#renderOctaveSigns(voiceKey, remainingWidth);
     }
+  }
+
+  // `trem.` / `non trem.` labels sit above everything drawn over their note,
+  // in any voice, and above the stave; one that would overlap an earlier
+  // label moves up past it.
+  #renderTremoloLabels(remainingWidth: number): void {
+    const placed: { left: number; right: number; top: number }[] = [];
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const container = this.#containerFor(
+        this.#tremoloLabelContainers,
+        voiceKey,
+        'tremolo-labels-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+      for (let i = 0; i < state.elements.length; i++) {
+        const label = tremoloLabelOf(state.elements[i]);
+        if (label === null) {
+          continue;
+        }
+        const left =
+          (state.noteXPositions.get(i) ?? 0) +
+          trillSignLeftX(state.stemDirections[i]);
+        const right = left + tremoloLabelWidthPx(label);
+        let baseline = this.#tremoloLabelBaselineY(voiceKey, state, i);
+        for (const [otherKey, otherState] of this.#voiceRenderStates) {
+          if (otherKey === voiceKey) {
+            continue;
+          }
+          for (const [j, x] of otherState.noteXPositions) {
+            if (x > right || x + NOTE_SVG_WIDTH < left) {
+              continue;
+            }
+            const inkTop = this.#tremoloLabelInkTopY(otherState, j);
+            if (inkTop !== null) {
+              baseline = Math.min(baseline, inkTop - TREMOLO_LABEL_GAP_PX);
+            }
+          }
+        }
+        let moved = true;
+        while (moved) {
+          moved = false;
+          for (const other of placed) {
+            const overlapsAcross = other.left < right && left < other.right;
+            const overlapsDown =
+              baseline - TREMOLO_LABEL_FONT_SIZE_PX <
+                other.top + TREMOLO_LABEL_FONT_SIZE_PX + TREMOLO_LABEL_GAP_PX &&
+              baseline + TREMOLO_LABEL_GAP_PX > other.top;
+            if (overlapsAcross && overlapsDown) {
+              baseline = other.top - TREMOLO_LABEL_GAP_PX;
+              moved = true;
+            }
+          }
+        }
+        placed.push({
+          left,
+          right,
+          top: baseline - TREMOLO_LABEL_FONT_SIZE_PX,
+        });
+        container.appendChild(createTremoloLabel(left, baseline, label));
+      }
+    }
+  }
+
+  // Baseline (container Y) of entry i's tremolo label, before it moves past
+  // other labels or other voices: a gap above the stave, the entry's own ink,
+  // a tuplet bracket over it, a trill sign or line over it, and this voice's
+  // above-staff dynamics row.
+  #tremoloLabelBaselineY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number {
+    let top =
+      STAFF_Y_PADDING + STAFF_TOP_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const consider = (y: number | null): void => {
+      if (y !== null) {
+        top = Math.min(top, y);
+      }
+    };
+    consider(this.#tremoloLabelInkTopY(state, i));
+    for (const group of state.tupletGroups) {
+      if (
+        group.indices.includes(i) &&
+        !this.#isTupletSuppressed(group) &&
+        this.#tupletBracketAbove(state, group)
+      ) {
+        consider(this.#tupletGroupExtremeY(state, group, true));
+      }
+    }
+    for (const span of resolveTrillSpans(state.elements)) {
+      const covers =
+        i >= span.startIndex &&
+        (span.hasLine
+          ? span.endBeforeIndex === null || i < span.endBeforeIndex
+          : i <= span.lastTiedIndex);
+      if (covers) {
+        const start = state.elements[span.startIndex] as
+          | NoteElementType
+          | ChordElementType;
+        consider(
+          TRILL_ABOVE_STAFF_BOTTOM_Y -
+            TRILL_SIGN_HEIGHT_PX -
+            (start.trillSignExtraLift ?? 0)
+        );
+      }
+    }
+    if (this.#dynamicsSidesInUse(voiceKey, state).has('above')) {
+      consider(
+        this.#dynamicsBaselineForSide(voiceKey, state, 'above') -
+          DYNAMICS_FONT_SIZE
+      );
+    }
+    return top - TREMOLO_LABEL_GAP_PX;
+  }
+
+  // Topmost ink (container Y) of entry i: its top head, then its up-stem, beam
+  // and tremolo numeral, a stemless head's strokes, or the marks above a
+  // down-stem head. Null for a rest.
+  #tremoloLabelInkTopY(state: VoiceRenderState, i: number): number | null {
+    const element = state.elements[i];
+    if (element.nodeName === MUSIC_REST_NODE) {
+      return null;
+    }
+    const noteOrChord = element as NoteElementType | ChordElementType;
+    const headYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    if (headYs.length === 0) {
+      return null;
+    }
+    const topHeadY = Math.min(...headYs);
+    const topHeadCenterY =
+      STAFF_Y_PADDING + topHeadY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    let top = topHeadCenterY - STAFF_Y_STEP;
+    const stemUp = state.stemDirections[i];
+    if (isStemlessDuration(element.duration)) {
+      if (stemUp) {
+        top = Math.min(
+          top,
+          topHeadCenterY -
+            stemlessTremoloReachPx({
+              tremolo: noteOrChord.tremolo ?? null,
+              tuplet: noteOrChord.tremoloTuplet ?? null,
+              duration: element.duration,
+              headY: topHeadY,
+              stemUp,
+            })
+        );
+      }
+    } else if (stemUp) {
+      const beamEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, true);
+      const tip =
+        beamEdge !== null && beamEdge !== undefined
+          ? beamEdge - state.tremoloInkPastStemPx[i]
+          : this.#extremeStemTipY(state, [i], true);
+      if (tip !== null) {
+        top = Math.min(top, tip);
+      }
+    } else {
+      top = Math.min(
+        top,
+        topHeadCenterY -
+          articulationStackDepth(noteOrChord.articulation, noteOrChord.stress) *
+            NOTE_SCALE
+      );
+    }
+    return top;
+  }
+
+  // Topmost Y (container) any of this voice's tremolo labels reaches before
+  // stacking, allowing one more label row for each other voice with labels.
+  // Null without labels.
+  #tremoloLabelTopY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): number | null {
+    let top: number | null = null;
+    for (let i = 0; i < state.elements.length; i++) {
+      if (tremoloLabelOf(state.elements[i]) === null) {
+        continue;
+      }
+      const labelTop =
+        this.#tremoloLabelBaselineY(voiceKey, state, i) -
+        TREMOLO_LABEL_FONT_SIZE_PX;
+      top = top === null ? labelTop : Math.min(top, labelTop);
+    }
+    if (top === null) {
+      return null;
+    }
+    const otherVoicesWithLabels = [...this.#voiceRenderStates].filter(
+      ([otherKey, otherState]) =>
+        otherKey !== voiceKey &&
+        otherState.elements.some((element) => tremoloLabelOf(element) !== null)
+    ).length;
+    return (
+      top -
+      otherVoicesWithLabels *
+        (TREMOLO_LABEL_FONT_SIZE_PX + TREMOLO_LABEL_GAP_PX)
+    );
   }
 
   #renderDynamics(voiceKey: VoiceKey): void {
@@ -4691,6 +4958,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
 
+    const tremoloLabelTop = this.#tremoloLabelTopY(voiceKey, state);
+    if (tremoloLabelTop !== null && tremoloLabelTop < 0) {
+      budget = Math.max(budget, Math.ceil(-tremoloLabelTop) + 2);
+    }
+
     budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
     budget = Math.max(
       budget,
@@ -4850,50 +5122,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         continue;
       }
 
-      const nominalY = stemUp
-        ? STAFF_TOP_LINE_Y -
-          STAFF_Y_PADDING -
-          TUPLET_STAFF_CLEARANCE_PX -
-          TUPLET_HOOK_LENGTH_PX -
-          TUPLET_NUMERAL_FONT_SIZE
-        : STAFF_BOTTOM_LINE_Y +
-          STAFF_Y_PADDING +
-          TUPLET_STAFF_CLEARANCE_PX +
-          TUPLET_HOOK_LENGTH_PX +
-          TUPLET_NUMERAL_FONT_SIZE;
-
-      const extremeStemTipY =
-        this.#tupletSideOverride(group) === null
-          ? this.#extremeStemTipY(state, group.indices, stemUp)
-          : this.#forcedSideTupletExtremeY(state, group, stemUp);
-
-      // Mirrors tupletRules.ts#computeTupletBracketGeometry: a fully beamed
-      // group hangs its numeral off the beam; any other draws a bracket past
-      // the stem tips with the numeral centred on it.
-      const bracketOmitted =
-        this.#tupletSideOverride(group) === null &&
-        group.indices.every(
-          (i) =>
-            state.beamedIndices.has(i) &&
-            state.elements[i].nodeName !== MUSIC_REST_NODE
-        );
-      const numeralOffset = bracketOmitted
-        ? TUPLET_NUMERAL_FONT_SIZE / 2 +
-          TUPLET_NUMERAL_BEAM_GAP_PX +
-          BEAM_THICKNESS_PX
-        : TUPLET_STAFF_CLEARANCE_PX +
-          TUPLET_HOOK_LENGTH_PX +
-          TUPLET_NUMERAL_FONT_SIZE / 2;
-      const beamDerivedY =
-        extremeStemTipY !== null
-          ? stemUp
-            ? extremeStemTipY - numeralOffset
-            : extremeStemTipY + numeralOffset
-          : nominalY;
-
-      const worstY = stemUp
-        ? Math.min(nominalY, beamDerivedY)
-        : Math.max(nominalY, beamDerivedY);
+      const worstY = this.#tupletGroupExtremeY(state, group, stemUp);
 
       extreme =
         extreme === null
@@ -4904,6 +5133,60 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     return extreme;
+  }
+
+  // The Y one tuplet group's numeral or bracket reaches on the `stemUp`
+  // side: its fixed staff clearance or its stems' and beams' reach,
+  // whichever is further out.
+  #tupletGroupExtremeY(
+    state: VoiceRenderState,
+    group: TupletGroup,
+    stemUp: boolean
+  ): number {
+    const nominalY = stemUp
+      ? STAFF_TOP_LINE_Y -
+        STAFF_Y_PADDING -
+        TUPLET_STAFF_CLEARANCE_PX -
+        TUPLET_HOOK_LENGTH_PX -
+        TUPLET_NUMERAL_FONT_SIZE
+      : STAFF_BOTTOM_LINE_Y +
+        STAFF_Y_PADDING +
+        TUPLET_STAFF_CLEARANCE_PX +
+        TUPLET_HOOK_LENGTH_PX +
+        TUPLET_NUMERAL_FONT_SIZE;
+
+    const extremeStemTipY =
+      this.#tupletSideOverride(group) === null
+        ? this.#extremeStemTipY(state, group.indices, stemUp)
+        : this.#forcedSideTupletExtremeY(state, group, stemUp);
+
+    // Mirrors tupletRules.ts#computeTupletBracketGeometry: a fully beamed
+    // group hangs its numeral off the beam; any other draws a bracket past
+    // the stem tips with the numeral centred on it.
+    const bracketOmitted =
+      this.#tupletSideOverride(group) === null &&
+      group.indices.every(
+        (i) =>
+          state.beamedIndices.has(i) &&
+          state.elements[i].nodeName !== MUSIC_REST_NODE
+      );
+    const numeralOffset = bracketOmitted
+      ? TUPLET_NUMERAL_FONT_SIZE / 2 +
+        TUPLET_NUMERAL_BEAM_GAP_PX +
+        BEAM_THICKNESS_PX
+      : TUPLET_STAFF_CLEARANCE_PX +
+        TUPLET_HOOK_LENGTH_PX +
+        TUPLET_NUMERAL_FONT_SIZE / 2;
+    const beamDerivedY =
+      extremeStemTipY !== null
+        ? stemUp
+          ? extremeStemTipY - numeralOffset
+          : extremeStemTipY + numeralOffset
+        : nominalY;
+
+    return stemUp
+      ? Math.min(nominalY, beamDerivedY)
+      : Math.max(nominalY, beamDerivedY);
   }
 
   // Worst-case Y an octave-sign span's own row needs to clear a real
@@ -5062,6 +5345,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       consider(tupletTop);
     }
 
+    for (const [labelKey, labelState] of this.#voiceRenderStates) {
+      const labelTop = this.#tremoloLabelTopY(labelKey, labelState);
+      if (labelTop !== null) {
+        consider(labelTop);
+      }
+    }
+
     if (this.#dynamicsSidesInUse(voiceKey, state).has('above')) {
       consider(
         this.#dynamicsBaselineForSide(voiceKey, state, 'above') -
@@ -5150,7 +5440,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
               state.stemDirections,
               state.noteStaffYCoords,
               state.chordStaffYCoords,
-              state.unbeamedStemTipExtensionsPx[i]
+              state.unbeamedStemTipExtensionsPx[i] +
+                state.tremoloInkPastStemPx[i]
             )
           : noteheadEdgeY(
               i,
@@ -5197,7 +5488,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         staffY,
         stemUp,
         state.stemDirections[i] === stemUp
-          ? state.unbeamedStemTipExtensionsPx[i]
+          ? state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
           : 0
       );
       extreme = stemUp ? Math.min(extreme, tipY) : Math.max(extreme, tipY);

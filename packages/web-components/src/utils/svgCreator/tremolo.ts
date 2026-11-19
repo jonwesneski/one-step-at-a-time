@@ -1,9 +1,13 @@
+import type { TremoloLabel } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  TREMOLO_LABEL_CHAR_WIDTH_PX,
+  TREMOLO_LABEL_FONT_SIZE_PX,
   TREMOLO_STROKE_RISE_PX,
   TREMOLO_STROKE_THICKNESS_PX,
   TREMOLO_STROKE_WIDTH_PX,
 } from '../notationDimensions';
+import { createTupletNumeralText } from './tuplet';
 
 /**
  * Tremolo strokes centred on `centerX` (the stem, or a stemless head's
@@ -41,4 +45,41 @@ export function createTremoloStrokes(
     group.appendChild(stroke);
   }
   return group;
+}
+
+/** A tremolo's tuplet numeral, centred on (x, centerY). */
+export function createTremoloNumeral(
+  x: number,
+  centerY: number,
+  value: number
+): SVGTextElement {
+  return createTupletNumeralText(x, centerY, `${value}`, 'tremolo-numeral');
+}
+
+const TREMOLO_LABEL_TEXT: Record<TremoloLabel, string> = {
+  trem: 'trem.',
+  'non-trem': 'non trem.',
+};
+
+/** Estimated drawn width (px) of a `trem.` / `non trem.` label. */
+export function tremoloLabelWidthPx(label: TremoloLabel): number {
+  return TREMOLO_LABEL_TEXT[label].length * TREMOLO_LABEL_CHAR_WIDTH_PX;
+}
+
+/** A `trem.` / `non trem.` label starting at leftX on baselineY. */
+export function createTremoloLabel(
+  leftX: number,
+  baselineY: number,
+  label: TremoloLabel
+): SVGTextElement {
+  const text = document.createElementNS(SVG_NS, 'text');
+  text.classList.add('tremolo-label');
+  text.setAttribute('x', `${leftX}`);
+  text.setAttribute('y', `${baselineY}`);
+  text.setAttribute('text-anchor', 'start');
+  text.setAttribute('font-family', 'serif');
+  text.setAttribute('font-size', `${TREMOLO_LABEL_FONT_SIZE_PX}`);
+  text.setAttribute('fill', 'currentColor');
+  text.textContent = TREMOLO_LABEL_TEXT[label];
+  return text;
 }

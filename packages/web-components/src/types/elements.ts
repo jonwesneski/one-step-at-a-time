@@ -26,7 +26,9 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
   TimeSignature,
+  TremoloLabel,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -77,6 +79,17 @@ export interface INoteElement {
   stemDirection: StemDirection | null;
   // Single-note tremolo strokes through the stem; null for none.
   tremolo: TremoloValue | null;
+  // Tuplet numeral for a measured tremolo; null for none.
+  tremoloTuplet: number | null;
+  // `trem.` / `non trem.` above the stave; null for none.
+  tremoloLabel: TremoloLabel | null;
+  // Repeats the articulation's length mark once per tremolo repetition.
+  articulationRepeat: boolean;
+  // How the tie this element starts is drawn.
+  tieStyle: TieStyle;
+  // Set by the composition on the end of a dotted tie that crosses a barline,
+  // which shows its accidental again.
+  dottedTieAcrossBarline: boolean;
   // Notehead shape; a triangle also forces stemUp and is placed by the staff.
   // null removes the attribute (normal).
   get notehead(): NoteheadType;
@@ -291,6 +304,16 @@ export interface IChordElement {
   stemDirection: StemDirection | null;
   // See INoteElement.tremolo.
   tremolo: TremoloValue | null;
+  // See INoteElement.tremoloTuplet.
+  tremoloTuplet: number | null;
+  // See INoteElement.tremoloLabel.
+  tremoloLabel: TremoloLabel | null;
+  // See INoteElement.articulationRepeat.
+  articulationRepeat: boolean;
+  // See INoteElement.tieStyle.
+  tieStyle: TieStyle;
+  // See INoteElement.dottedTieAcrossBarline.
+  dottedTieAcrossBarline: boolean;
   // Default for every tone; a slotted <music-note>'s own notehead overrides
   // it. Triangles are not supported on chords.
   get notehead(): NoteheadType;

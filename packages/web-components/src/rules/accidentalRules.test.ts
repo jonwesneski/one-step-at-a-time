@@ -175,6 +175,41 @@ describe('computeNoteAccidentals — tie-over-barline suppression', () => {
     expect(noteShowAccidentals.get(tiedEnd)).toBeNull();
   });
 
+  it('shows the accidental again on a dotted tie’s end across a barline', () => {
+    const tiedEnd = makeNote({
+      note: 'F#',
+      octave: 4,
+      duration: 'quarter',
+      tie: 'end',
+    });
+    tiedEnd.dottedTieAcrossBarline = true;
+    const next = makeNote({ note: 'F#', octave: 4, duration: 'quarter' });
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [tiedEnd, next],
+      'C',
+      'major'
+    );
+    expect(noteShowAccidentals.get(tiedEnd)).toBe('sharp');
+    expect(noteShowAccidentals.get(next)).toBeNull();
+  });
+
+  it('shows a chord’s accidentals again on a dotted tie’s end across a barline', () => {
+    const tiedChord = makeChord({
+      notes: [
+        { note: 'F#', octave: 4 },
+        { note: 'A', octave: 4 },
+      ],
+      tie: 'end',
+    });
+    tiedChord.dottedTieAcrossBarline = true;
+    const { chordNoteAccidentals } = computeNoteAccidentals(
+      [tiedChord],
+      'C',
+      'major'
+    );
+    expect(chordNoteAccidentals.get(tiedChord)).toEqual(['sharp', null]);
+  });
+
   it('note after a tied-end is evaluated normally against key signature', () => {
     const tiedEnd = makeNote({
       note: 'F#',

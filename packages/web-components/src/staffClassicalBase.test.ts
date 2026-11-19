@@ -3,7 +3,7 @@
  */
 import './index';
 import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
-import { ChordElementType } from './types/elements';
+import { ChordElementType, StaffElementType } from './types/elements';
 import type { Chord, DurationType, Octave } from './types/theory';
 import {
   COMMON_ATTRIBUTES,
@@ -13,6 +13,7 @@ import {
   MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_TUPLET,
+  MUSIC_VOICE,
   STAFF_EVENTS,
 } from './utils/consts';
 import {
@@ -24,11 +25,17 @@ import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  STAFF_Y_PADDING,
+  TREMOLO_LABEL_FONT_SIZE_PX,
+  TREMOLO_LABEL_GAP_PX,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
+  TRILL_ABOVE_STAFF_GAP_PX,
+  TRILL_SIGN_HEIGHT_PX,
 } from './utils/notationDimensions';
 import {
   flagStemExtensionPx,
+  NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
@@ -1697,4 +1704,120 @@ describe('staffClassicalBase stems', () => {
       );
     }
   );
+});
+
+describe('tremolo labels and numerals', () => {
+  // The note Y map maps onto the staff's overlay containers this way.
+  const containerY = (staffY: number) =>
+    STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+  function renderStaff(time: string, content: Element[]): StaffElementType {
+    const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, time);
+    staff.append(...content);
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot!.querySelector('slot') as any;
+    slot.assignedElements = () => content;
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  function note(attributes: Record<string, string>): HTMLElement {
+    const element = document.createElement(MUSIC_NOTE);
+    for (const [name, value] of Object.entries({
+      note: 'C',
+      octave: '5',
+      duration: 'quarter',
+      ...attributes,
+    })) {
+      element.setAttribute(name, value);
+    }
+    return element;
+  }
+
+  const labels = (staff: StaffElementType) =>
+    Array.from(
+      staff.shadowRoot!.querySelectorAll(
+        '.tremolo-labels-container .tremolo-label'
+      )
+    );
+
+  it('draws a label above the stave', () => {
+    const staff = renderStaff('4/4', [note({ 'tremolo-label': 'trem' })]);
+    const [label] = labels(staff);
+    expect(label.textContent).toBe('trem.');
+    expect(Number(label.getAttribute('y'))).toBeLessThanOrEqual(
+      containerY(STAFF_TOP_LINE_Y) - TREMOLO_LABEL_GAP_PX
+    );
+  });
+
+  it('puts a label above a trill sign over its note', () => {
+    const staff = renderStaff('4/4', [
+      note({ 'tremolo-label': 'non-trem', trill: '' }),
+    ]);
+    const [label] = labels(staff);
+    expect(Number(label.getAttribute('y'))).toBeLessThanOrEqual(
+      containerY(STAFF_TOP_LINE_Y) -
+        TRILL_ABOVE_STAFF_GAP_PX -
+        TRILL_SIGN_HEIGHT_PX -
+        TREMOLO_LABEL_GAP_PX
+    );
+  });
+
+  it('stacks labels from two voices on one beat', () => {
+    // Different rhythms, so the voices don't combine onto one stem.
+    const voice1 = document.createElement(MUSIC_VOICE);
+    voice1.append(
+      note({ 'tremolo-label': 'trem', duration: 'half' }),
+      note({ duration: 'half' })
+    );
+    const voice2 = document.createElement(MUSIC_VOICE);
+    voice2.append(
+      note({
+        'tremolo-label': 'trem',
+        note: 'A',
+        octave: '4',
+        duration: 'whole',
+      })
+    );
+    const staff = renderStaff('4/4', [voice1, voice2]);
+    const ys = labels(staff)
+      .map((label) => Number(label.getAttribute('y')))
+      .sort((a, b) => a - b);
+    expect(ys).toHaveLength(2);
+    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(TREMOLO_LABEL_FONT_SIZE_PX);
+  });
+
+  it('draws no label inside the note on a staff', () => {
+    const labelled = note({ 'tremolo-label': 'trem' });
+    renderStaff('4/4', [labelled]);
+    expect(labelled.shadowRoot!.querySelector('.tremolo-label')).toBeNull();
+  });
+
+  it('keeps a tuplet bracket clear of tremolo numerals', () => {
+    const bracketTop = (numerals: boolean) => {
+      const tuplet = document.createElement(MUSIC_TUPLET);
+      tuplet.setAttribute('ratio', '3');
+      for (let i = 0; i < 3; i++) {
+        tuplet.append(
+          note({
+            note: 'E',
+            octave: '4',
+            tremolo: '1',
+            ...(numerals ? { 'tremolo-tuplet': '3' } : {}),
+          })
+        );
+      }
+      const staff = renderStaff('2/4', [tuplet]);
+      const ys = Array.from(
+        staff.shadowRoot!.querySelectorAll('.tuplet-bracket')
+      ).flatMap((line) => [
+        Number(line.getAttribute('y1')),
+        Number(line.getAttribute('y2')),
+      ]);
+      document.body.innerHTML = '';
+      return Math.min(...ys);
+    };
+    expect(bracketTop(true)).toBeLessThan(bracketTop(false));
+  });
 });

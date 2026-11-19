@@ -355,6 +355,17 @@ describe('pairConnectors', () => {
     expect(pairs[0].end).toBe(b);
   });
 
+  it('marks a tie dotted when its start sets tie-style="dotted"', () => {
+    const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
+    a.setAttribute('tie-style', 'dotted');
+    const b = makeNote({ note: 'C', octave: '4', tie: 'end' });
+    const solidStart = makeNote({ note: 'D', octave: '4', tie: 'start' });
+    const solidEnd = makeNote({ note: 'D', octave: '4', tie: 'end' });
+    const pairs = pairConnectors([a, b, solidStart, solidEnd]);
+    expect(pairs.find((pair) => pair.start === a)?.dotted).toBe(true);
+    expect(pairs.find((pair) => pair.start === solidStart)?.dotted).toBe(false);
+  });
+
   it('pairs slurs using LIFO stack for nested starts', () => {
     const a = makeNote({ slur: 'start' });
     const b = makeNote({ slur: 'start' });

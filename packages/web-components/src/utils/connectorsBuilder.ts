@@ -60,7 +60,7 @@ import {
   STAFF_LINE_SPACING,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
-import { parseGlissandoHint } from './parsers';
+import { parseGlissandoHint, parseTieStyle } from './parsers';
 import {
   BULGE_STEP_PX,
   computeWrittenTrillNoteWidth,
@@ -68,6 +68,7 @@ import {
   createOpenTieSvg,
   CurveBulge,
   DEFAULT_BULGE_HEIGHT,
+  setCurveDotted,
 } from './svgCreator';
 import {
   computeYHeadOffset,
@@ -137,6 +138,8 @@ export type ConnectorPair = {
   lvToneIndex?: number;
   /** `l.v.` when the element sets `lv-label`. */
   label?: string;
+  /** A tie whose start element sets `tie-style="dotted"`. */
+  dotted?: boolean;
 };
 
 export const collectNoteLikeElements = (
@@ -375,6 +378,7 @@ export const pairConnectors = (
               laissezVibrer: true,
               lvToneIndex: isChord ? toneIndex : undefined,
               label,
+              dotted: isDottedTie(note),
             });
           }
           continue;
@@ -444,6 +448,7 @@ export const pairConnectors = (
         startIndex: startEntry.startIndex,
         endIndex: noteIndex,
         label: glissandoHint ? GLISSANDO_HINT_LABELS[glissandoHint] : undefined,
+        dotted: kind === 'tie' ? isDottedTie(startEntry.note) : undefined,
       });
     }
   });
@@ -466,8 +471,12 @@ export const pairConnectors = (
     lvToneIndex: pair.lvToneIndex,
     label: pair.label,
     nestingLevel: nestingLevels[index],
+    dotted: pair.dotted,
   }));
 };
+
+const isDottedTie = (note: NoteLikeElementType): boolean =>
+  parseTieStyle(note.getAttribute('tie-style')) === 'dotted';
 
 type Anchor = {
   x: number;
@@ -1343,8 +1352,19 @@ export const buildConnectorSvgs = (
   } = options;
   const rowRight = rootRect.width;
   const elements: SVGGElement[] = [];
+  // A dotted tie is styled once its curves are built: each branch below ends
+  // its pair with `continue`, so the previous pair's curves are styled at the
+  // top of the next iteration and the last pair's after the loop.
+  let dottedPairStart: number | null = null;
+  const styleDottedPair = (): void => {
+    if (dottedPairStart !== null) {
+      elements.slice(dottedPairStart).forEach(setCurveDotted);
+    }
+  };
 
   for (const pair of pairs) {
+    styleDottedPair();
+    dottedPairStart = pair.dotted ? elements.length : null;
     if (pair.kind === 'slur') {
       const groupStaves = groupSlurStaves?.get(pair);
       if (groupStaves) {
@@ -1652,5 +1672,6 @@ export const buildConnectorSvgs = (
     );
   }
 
+  styleDottedPair();
   return elements;
 };

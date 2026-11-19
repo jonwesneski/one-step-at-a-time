@@ -1852,6 +1852,141 @@ describe('tremolo', () => {
   });
 });
 
+describe('tremolo numeral, label and repeated articulation', () => {
+  function standalone(attributes: Record<string, string>): NoteElementType {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    for (const [name, value] of Object.entries(attributes)) {
+      noteElement.setAttribute(name, value);
+    }
+    document.body.appendChild(noteElement);
+    return noteElement;
+  }
+
+  const stemEnds = (noteElement: HTMLElement) => {
+    const stem = noteElement.shadowRoot!.querySelector('.stem')!;
+    return [
+      Number(stem.getAttribute('y1')) * NOTE_SCALE,
+      Number(stem.getAttribute('y2')) * NOTE_SCALE,
+    ];
+  };
+
+  it('round-trips its attributes, ignoring values that don’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standalone({});
+    expect(noteElement.tremoloTuplet).toBeNull();
+    expect(noteElement.tremoloLabel).toBeNull();
+    expect(noteElement.articulationRepeat).toBe(false);
+    expect(noteElement.tieStyle).toBe('solid');
+
+    noteElement.tremoloTuplet = 6;
+    noteElement.tremoloLabel = 'non-trem';
+    noteElement.articulationRepeat = true;
+    noteElement.tieStyle = 'dotted';
+    expect(noteElement.getAttribute('tremolo-tuplet')).toBe('6');
+    expect(noteElement.getAttribute('tremolo-label')).toBe('non-trem');
+    expect(noteElement.hasAttribute('articulation-repeat')).toBe(true);
+    expect(noteElement.getAttribute('tie-style')).toBe('dotted');
+
+    noteElement.setAttribute('tremolo-tuplet', '1');
+    expect(noteElement.tremoloTuplet).toBeNull();
+    noteElement.setAttribute('tremolo-label', 'tremolando');
+    expect(noteElement.tremoloLabel).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('tremolo-tuplet="1"')
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('tremolo-label="tremolando"')
+    );
+
+    noteElement.tieStyle = 'solid';
+    expect(noteElement.hasAttribute('tie-style')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws the numeral beyond an up-stem’s tip', () => {
+    const noteElement = standalone({ tremolo: '1', 'tremolo-tuplet': '3' });
+    const numeral = noteElement.shadowRoot!.querySelector('.tremolo-numeral')!;
+    expect(numeral.textContent).toBe('3');
+    expect(Number(numeral.getAttribute('y'))).toBeLessThan(
+      Math.min(...stemEnds(noteElement))
+    );
+  });
+
+  it('draws the numeral beyond a down-stem’s tip', () => {
+    const noteElement = standalone({ tremolo: '1', 'tremolo-tuplet': '3' });
+    noteElement.stemUp = false;
+    const numeral = noteElement.shadowRoot!.querySelector('.tremolo-numeral')!;
+    expect(Number(numeral.getAttribute('y'))).toBeGreaterThan(
+      Math.max(...stemEnds(noteElement))
+    );
+  });
+
+  it('draws no numeral without a stroke count, and says so once connected', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standalone({ 'tremolo-tuplet': '3' });
+    expect(
+      noteElement.shadowRoot!.querySelector('.tremolo-numeral')
+    ).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('needs a tremolo stroke count')
+    );
+    warn.mockRestore();
+  });
+
+  it('draws a standalone label above the note’s ink', () => {
+    const noteElement = standalone({
+      tremolo: '3',
+      'tremolo-label': 'trem',
+    });
+    const label = noteElement.shadowRoot!.querySelector('.tremolo-label')!;
+    expect(label.textContent).toBe('trem.');
+    expect(Number(label.getAttribute('y'))).toBeLessThan(
+      Math.min(...stemEnds(noteElement))
+    );
+  });
+
+  it('repeats the articulation once per repetition', () => {
+    const noteElement = standalone({
+      tremolo: '2',
+      articulation: 'staccato',
+      'articulation-repeat': '',
+    });
+    expect(noteElement.shadowRoot!.querySelectorAll('.staccato')).toHaveLength(
+      4
+    );
+  });
+
+  it('dispatches NOTE_Y_CHANGE for a numeral or label and a connector change for a tie style', () => {
+    const noteElement = standalone({});
+    const relayout = jest.fn();
+    const connectors = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, relayout);
+    noteElement.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      connectors
+    );
+
+    noteElement.tremoloTuplet = 3;
+    noteElement.tremoloLabel = 'trem';
+    noteElement.tieStyle = 'dotted';
+
+    expect(relayout).toHaveBeenCalledTimes(2);
+    expect(connectors).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-lays out once when marked as a dotted tie’s end across a barline', () => {
+    const noteElement = standalone({});
+    const relayout = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, relayout);
+
+    noteElement.dottedTieAcrossBarline = true;
+    noteElement.dottedTieAcrossBarline = true;
+
+    expect(noteElement.dottedTieAcrossBarline).toBe(true);
+    expect(relayout).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();

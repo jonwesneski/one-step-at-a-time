@@ -1440,3 +1440,41 @@ export const TREMOLO_STROKE_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
  * = 0.5 × STAFF_LINE_SPACING
  */
 export const TREMOLO_STEM_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between a stem's end (or the outermost stroke on a stemless head)
+ * and the tremolo tuplet numeral beyond it.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Font size (px) of the `trem.` / `non trem.` labels. */
+export const TREMOLO_LABEL_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
+
+/**
+ * Estimated width (px) of one label character, for stacking labels that
+ * would overlap; the usual estimate-don't-measure ratio (× 0.55).
+ * = TREMOLO_LABEL_FONT_SIZE_PX × 0.55
+ */
+export const TREMOLO_LABEL_CHAR_WIDTH_PX = TREMOLO_LABEL_FONT_SIZE_PX * 0.55;
+
+/**
+ * Gap (px) between a `trem.` / `non trem.` label's baseline and whatever it
+ * sits above: the stave, its note, a tuplet bracket, a trill or another label.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Dotted ties ──────────────────────────────────────────────────────────────
+
+/**
+ * Dash length (px) of a dotted tie.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const TIE_DASH_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Gap (px) between a dotted tie's dashes.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const TIE_DASH_GAP_PX = STAFF_LINE_SPACING * 0.3;

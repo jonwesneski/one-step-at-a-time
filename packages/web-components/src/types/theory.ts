@@ -404,6 +404,19 @@ export type TremoloStrokeCount = 1 | 2 | 3 | 4;
 export type TremoloValue = TremoloStrokeCount | 'unmeasured';
 
 /**
+ * Tremolo technique label above the stave: `trem.` marks the start of an
+ * unmeasured passage, `non trem.` the first measured or plain note after one.
+ */
+export type TremoloLabel = 'trem' | 'non-trem';
+
+/**
+ * How a tie is drawn. A `dotted` tie is the less literal form some editions
+ * use for unmeasured tremolos; it repeats the tied note's accidental across
+ * a barline.
+ */
+export type TieStyle = 'solid' | 'dotted';
+
+/**
  * Controls how an octave-transposition span's numeral restates itself after
  * a system break: `'bracketed'` (default) redraws it in parentheses at the
  * start of the new row; `'line-only'` lets the line resume with no restated

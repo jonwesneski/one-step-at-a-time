@@ -11,9 +11,11 @@ import {
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
+  articulationRepeatCount,
+  drawnTremoloTuplet,
   resolveStrokeCount,
   STAFF_BAND,
-  tremoloStrokeCountWarning,
+  tremoloConsistencyWarnings,
   unbeamedTremoloStemExtensionPx,
 } from '../rules/tremoloRules';
 import type { ResolvedTrillPitch } from '../rules/trillRules';
@@ -51,6 +53,8 @@ import type {
   OctaveShiftAmount,
   StemDirection,
   StressType,
+  TieStyle,
+  TremoloLabel,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -86,8 +90,11 @@ import {
   parseOctaveShiftAmount,
   parseStemDirection,
   parseStress,
+  parseTieStyle,
   parseTieValue,
   parseTremolo,
+  parseTremoloLabel,
+  parseTremoloTuplet,
   parseTrillContinuationMode,
   parseTrillFinishSlur,
   parseTrillLineMode,
@@ -165,6 +172,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
    * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.
    * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them.
+   * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
+   * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+   * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single.
+   * @attr {TieStyle} tie-style - `dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`.
    * @attr {StemDirection} stem-direction - Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
@@ -227,6 +238,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'notehead',
         'grace-notehead',
         'tremolo',
+        'tremolo-tuplet',
+        'tremolo-label',
+        'articulation-repeat',
+        'tie-style',
       ];
     }
 
@@ -235,6 +250,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #stemUp = true;
     #stemExtension = 0;
+    #dottedTieAcrossBarline = false;
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
     #augmentationDotRows: number[] | null = null;
@@ -641,6 +657,73 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('tremolo', String(value));
       }
+    }
+
+    get tremoloTuplet(): number | null {
+      return parseTremoloTuplet(this.getAttribute('tremolo-tuplet'));
+    }
+    set tremoloTuplet(value: number | null) {
+      if (value === null) {
+        this.removeAttribute('tremolo-tuplet');
+      } else {
+        this.setAttribute('tremolo-tuplet', String(value));
+      }
+    }
+
+    get tremoloLabel(): TremoloLabel | null {
+      return parseTremoloLabel(this.getAttribute('tremolo-label'));
+    }
+    set tremoloLabel(value: TremoloLabel | null) {
+      if (value === null) {
+        this.removeAttribute('tremolo-label');
+      } else {
+        this.setAttribute('tremolo-label', value);
+      }
+    }
+
+    get articulationRepeat(): boolean {
+      return this.hasAttribute('articulation-repeat');
+    }
+    set articulationRepeat(value: boolean) {
+      this.toggleAttribute('articulation-repeat', value);
+    }
+
+    get tieStyle(): TieStyle {
+      return parseTieStyle(this.getAttribute('tie-style'));
+    }
+    set tieStyle(value: TieStyle) {
+      if (value === 'solid') {
+        this.removeAttribute('tie-style');
+      } else {
+        this.setAttribute('tie-style', value);
+      }
+    }
+
+    get dottedTieAcrossBarline(): boolean {
+      return this.#dottedTieAcrossBarline;
+    }
+    set dottedTieAcrossBarline(value: boolean) {
+      if (value === this.#dottedTieAcrossBarline) {
+        return;
+      }
+      this.#dottedTieAcrossBarline = value;
+      // The staff re-resolves accidentals on a full re-layout.
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
+
+    #repeatCount(): number {
+      return articulationRepeatCount({
+        articulationRepeat: this.articulationRepeat,
+        articulation: this.articulation,
+        tremolo: this.tremolo,
+        tuplet: this.tremoloTuplet,
+        duration: this.duration,
+      });
     }
 
     #tremoloStrokeCount(): number {
@@ -1067,6 +1150,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     connectedCallback(): void {
       upgradeShadowedProperties(this);
+      this.#warnAboutTremolo(null, null);
       this.render();
       this.#childObserver = new MutationObserver(() => {
         this.#scheduleRender();
@@ -1122,9 +1206,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       }
 
-      if (name === 'tremolo' || name === 'duration') {
-        this.#warnAboutTremolo(name === 'tremolo' ? newValue : null);
-      }
+      this.#warnAboutTremolo(name, newValue);
 
       if (!this.isConnected) {
         return;
@@ -1136,7 +1218,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'lv-label' ||
         name === 'glissando' ||
         name === 'glissando-hint' ||
-        name === 'slur-group'
+        name === 'slur-group' ||
+        name === 'tie-style'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
@@ -1306,7 +1389,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-finish-octave' ||
         name === 'trill-finish-slur' ||
         name === 'duration' ||
-        name === 'tremolo'
+        name === 'tremolo' ||
+        name === 'tremolo-tuplet' ||
+        name === 'tremolo-label'
       ) {
         // `duration` moves every later entry (beat time) and its dots widen
         // the rightward footprint.
@@ -1317,7 +1402,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // draws. `trill-finish-slur` never changes the footprint itself but
         // shares this dispatch since the ancestor staff's cross-element
         // "slur to next" pass depends on it too. `tremolo` strokes lengthen
-        // the stem.
+        // the stem; a `tremolo-tuplet` numeral and a `tremolo-label` change
+        // what the staff clears above it.
         if (
           name === 'trill-note' &&
           newValue !== null &&
@@ -1341,6 +1427,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (
+        (name === 'articulation' || name === 'stress') &&
+        this.tremoloLabel !== null &&
+        this.closest(STAFF_TAGS)
+      ) {
+        // The staff's tremolo label sits above this element's marks.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
       this.render();
     }
 
@@ -1366,19 +1465,38 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#lastDotMismatchWarning = warning;
     }
 
-    #warnAboutTremolo(rawTremolo: string | null): void {
-      if (rawTremolo !== null && parseTremolo(rawTremolo) === null) {
+    // A value that doesn't parse warns as soon as it's set. Attributes that
+    // don't fit together warn once connected, so markup built one attribute
+    // at a time doesn't warn about a state it passes through.
+    #warnAboutTremolo(changed: string | null, newValue: string | null): void {
+      const invalid =
+        newValue === null
+          ? null
+          : changed === 'tremolo' && parseTremolo(newValue) === null
+          ? 'is not a stroke count (1–4) or "unmeasured"'
+          : changed === 'tremolo-tuplet' &&
+            parseTremoloTuplet(newValue) === null
+          ? 'is not a whole number of at least 2'
+          : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
+          ? 'is not "trem" or "non-trem"'
+          : null;
+      if (invalid !== null) {
         console.warn(
-          `[music-chord] tremolo="${rawTremolo}" is not a stroke count (1–4) or "unmeasured"; ignoring it`
+          `[music-chord] ${changed}="${newValue}" ${invalid}; ignoring it`
         );
         return;
       }
-      const tremolo = this.tremolo;
-      const warning =
-        tremolo === null
-          ? null
-          : tremoloStrokeCountWarning(tremolo, this.duration);
-      if (warning) {
+      if (!this.isConnected) {
+        return;
+      }
+      for (const warning of tremoloConsistencyWarnings({
+        changed,
+        tremolo: this.tremolo,
+        tuplet: this.tremoloTuplet,
+        articulationRepeat: this.articulationRepeat,
+        articulation: this.articulation,
+        duration: this.duration,
+      })) {
         console.warn(`[music-chord] ${warning}`);
       }
     }
@@ -1426,6 +1544,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           trillFinishNotes: this.#buildTrillFinishDescriptors(this.notes),
           trillFinishSlur: this.trillFinishSlur,
           tremoloStrokeCount: this.#tremoloStrokeCount(),
+          tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
+          articulationRepeatCount: this.#repeatCount(),
+          tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
         });
         chordSvg.setAttribute('overflow', 'visible');
         addLedgerLines(
@@ -1539,6 +1660,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           trillFinishNotes: this.#buildTrillFinishDescriptors(notes),
           trillFinishSlur: this.trillFinishSlur,
           tremoloStrokeCount: this.#tremoloStrokeCount(),
+          tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
+          articulationRepeatCount: this.#repeatCount(),
+          tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
         });
         chordSvg.setAttribute('overflow', 'visible');
 

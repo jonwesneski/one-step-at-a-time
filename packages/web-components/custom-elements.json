@@ -199,6 +199,15 @@
             },
             {
               "kind": "field",
+              "name": "#dottedTieAcrossBarline",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#trillSignExtraLift",
               "privacy": "private",
               "type": {
@@ -575,6 +584,51 @@
               }
             },
             {
+              "kind": "field",
+              "name": "tremoloTuplet",
+              "type": {
+                "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloLabel",
+              "type": {
+                "text": "TremoloLabel | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationRepeat",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tieStyle",
+              "type": {
+                "text": "TieStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dottedTieAcrossBarline",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
               "kind": "method",
               "name": "#tremoloStrokeCount",
               "privacy": "private",
@@ -883,7 +937,13 @@
               },
               "parameters": [
                 {
-                  "name": "rawTremolo",
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
                   "type": {
                     "text": "string | null"
                   }
@@ -1313,6 +1373,34 @@
               "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them."
             },
             {
+              "name": "tremolo-tuplet",
+              "type": {
+                "text": "number"
+              },
+              "description": "Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count."
+            },
+            {
+              "name": "tremolo-label",
+              "type": {
+                "text": "TremoloLabel"
+              },
+              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one."
+            },
+            {
+              "name": "articulation-repeat",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single."
+            },
+            {
+              "name": "tie-style",
+              "type": {
+                "text": "TieStyle"
+              },
+              "description": "`dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`."
+            },
+            {
               "type": {
                 "text": "Chord"
               },
@@ -1562,6 +1650,30 @@
               "kind": "method",
               "name": "#redrawConnectors",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#markDottedTiesAcrossBarlines",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "noteLikeElements",
+                  "type": {
+                    "text": "readonly Element[]"
+                  }
+                },
+                {
+                  "name": "pairs",
+                  "type": {
+                    "text": "readonly ConnectorPair[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -2934,6 +3046,15 @@
             },
             {
               "kind": "field",
+              "name": "#dottedTieAcrossBarline",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#trillSignExtraLift",
               "privacy": "private",
               "type": {
@@ -3349,6 +3470,51 @@
               }
             },
             {
+              "kind": "field",
+              "name": "tremoloTuplet",
+              "type": {
+                "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloLabel",
+              "type": {
+                "text": "TremoloLabel | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationRepeat",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tieStyle",
+              "type": {
+                "text": "TieStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dottedTieAcrossBarline",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
               "kind": "method",
               "name": "#drawnStemExtension",
               "privacy": "private",
@@ -3638,7 +3804,13 @@
               },
               "parameters": [
                 {
-                  "name": "rawTremolo",
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
                   "type": {
                     "text": "string | null"
                   }
@@ -4066,6 +4238,34 @@
                 "text": "TremoloValue"
               },
               "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them."
+            },
+            {
+              "name": "tremolo-tuplet",
+              "type": {
+                "text": "number"
+              },
+              "description": "Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count."
+            },
+            {
+              "name": "tremolo-label",
+              "type": {
+                "text": "TremoloLabel"
+              },
+              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one."
+            },
+            {
+              "name": "articulation-repeat",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single."
+            },
+            {
+              "name": "tie-style",
+              "type": {
+                "text": "TieStyle"
+              },
+              "description": "`dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`."
             },
             {
               "type": {
@@ -4634,6 +4834,19 @@
             {
               "kind": "field",
               "name": "#octaveSignsContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#tremoloLabelContainers",
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, SVGSVGElement>"
@@ -6172,6 +6385,118 @@
             },
             {
               "kind": "method",
+              "name": "#renderTremoloLabels",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelBaselineY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelInkTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#renderDynamics",
               "privacy": "private",
               "return": {
@@ -6747,6 +7072,40 @@
                 {
                   "name": "skipSharedBeamNumerals",
                   "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletGroupExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -9369,6 +9728,19 @@
             },
             {
               "kind": "field",
+              "name": "#tremoloLabelContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -10908,6 +11280,118 @@
             },
             {
               "kind": "method",
+              "name": "#renderTremoloLabels",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelBaselineY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelInkTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#renderDynamics",
               "privacy": "private",
               "return": {
@@ -11483,6 +11967,40 @@
                 {
                   "name": "skipSharedBeamNumerals",
                   "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletGroupExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {

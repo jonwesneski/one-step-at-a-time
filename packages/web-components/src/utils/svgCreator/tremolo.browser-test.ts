@@ -103,3 +103,47 @@ test('adding a tremolo to one of two beamed notes splits the beam', async ({
 
   expect(await beamGroups()).toBe(0);
 });
+
+test('a dotted tie across a barline repeats the accidental, and a solid one drops it again', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-composition>
+       <music-measure>
+         <music-staff clef="treble" time="2/4">
+           <music-note id="from" note="F#" octave="4" duration="half" tremolo="3" tie="start"></music-note>
+         </music-staff>
+       </music-measure>
+       <music-measure>
+         <music-staff clef="treble" time="2/4">
+           <music-note id="to" note="F#" octave="4" duration="half" tremolo="3" tie="end"></music-note>
+         </music-staff>
+       </music-measure>
+     </music-composition>`
+  );
+  const tiedInAccidental = () =>
+    page.evaluate(
+      () =>
+        (
+          document.getElementById('to') as unknown as {
+            showAccidental: unknown;
+          }
+        ).showAccidental ?? null
+    );
+  const setTieStyle = async (style: string) => {
+    await page.evaluate((value) => {
+      document.getElementById('from')?.setAttribute('tie-style', value);
+    }, style);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+
+  expect(await tiedInAccidental()).toBeNull();
+
+  await setTieStyle('dotted');
+  expect(await tiedInAccidental()).toBe('sharp');
+
+  await setTieStyle('solid');
+  expect(await tiedInAccidental()).toBeNull();
+});

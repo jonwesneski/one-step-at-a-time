@@ -21,6 +21,7 @@ import {
   resolveStrokePlacement,
   STAFF_BAND,
   stemEndingFor,
+  TREMOLO_STROKE_HALF_HEIGHT_PX,
 } from '../../rules/tremoloRules';
 import type {
   AccidentalType,
@@ -31,6 +32,7 @@ import type {
   HairpinKind,
   NoteheadType,
   StressType,
+  TremoloLabel,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -53,7 +55,10 @@ import {
   STAFF_TOP_LINE_Y,
   STEM_OVERLAP_PX,
   STEM_STROKE_WIDTH_PX,
+  TREMOLO_LABEL_GAP_PX,
+  TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import {
@@ -61,14 +66,21 @@ import {
   createArpeggioSvg,
   isArpeggioWaveVariant,
 } from './arpeggio';
-import { createArticulationMarks } from './articulations';
+import {
+  articulationStackDepth,
+  createArticulationMarks,
+} from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
 import {
   createNoteheadGlyphPath,
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
-import { createTremoloStrokes } from './tremolo';
+import {
+  createTremoloLabel,
+  createTremoloNumeral,
+  createTremoloStrokes,
+} from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -202,6 +214,12 @@ export type NoteProps = {
   omitsHead?: boolean;
   // Tremolo strokes to draw (resolved from the `tremolo` value); 0 for none.
   tremoloStrokeCount?: number;
+  // Tuplet numeral beyond the stem's end (or the strokes on a stemless head).
+  tremoloTuplet?: number | null;
+  // Times the articulation's length mark repeats across a row.
+  articulationRepeatCount?: number;
+  // Drawn above the note only standalone; a staff draws its own row.
+  tremoloLabel?: TremoloLabel | null;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -259,6 +277,9 @@ export const createNoteSvg = ({
   augmentationDotShiftPx = 0,
   omitsHead = false,
   tremoloStrokeCount = 0,
+  tremoloTuplet = null,
+  articulationRepeatCount = 1,
+  tremoloLabel = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -449,6 +470,7 @@ export const createNoteSvg = ({
             articulationStemAnchorBeamLevels
           )
         : null,
+    repeatCount: articulationRepeatCount,
   });
   if (articulationMarks) {
     g.appendChild(articulationMarks);
@@ -458,6 +480,17 @@ export const createNoteSvg = ({
   svg.appendChild(g);
 
   const stemless = isStemlessDuration(duration);
+  const headCenterPxY = headGeometry.cy * NOTE_SCALE;
+  // Outermost ink (px) on the side above the head, for a standalone label.
+  let inkTopY = headCenterPxY - headGeometry.halfHeight * NOTE_SCALE;
+  if (!stemUp) {
+    inkTopY = Math.min(
+      inkTopY,
+      headCenterPxY - articulationStackDepth(articulation, stress) * NOTE_SCALE
+    );
+  } else if (!stemless && !noStem) {
+    inkTopY = Math.min(inkTopY, stemTipY * NOTE_SCALE);
+  }
   if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
     // Standalone, the head stands in for staff Y 0 and nothing snaps to lines.
     const headStaffY = staffY ?? 0;
@@ -475,12 +508,41 @@ export const createNoteSvg = ({
       ending,
       canLengthenStem: false,
     });
-    const headCenterY = headGeometry.cy * NOTE_SCALE;
+    const strokeX = (stemless ? headGeometry.cx : stemX) * NOTE_SCALE;
+    const strokeYs = centerYs.map((y) => headCenterPxY + y - headStaffY);
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(createTremoloStrokes(strokeX, strokeYs));
+    if (stemless && stemUp) {
+      inkTopY = Math.min(
+        inkTopY,
+        strokeYs[strokeYs.length - 1] - TREMOLO_STROKE_HALF_HEIGHT_PX
+      );
+    }
+
+    if (tremoloTuplet !== null) {
+      const outward = stemUp ? -1 : 1;
+      const outerEdgeY = stemless
+        ? strokeYs[strokeYs.length - 1] +
+          outward * TREMOLO_STROKE_HALF_HEIGHT_PX
+        : stemTipY * NOTE_SCALE +
+          (ending.kind === 'beam' ? outward * STEM_OVERLAP_PX : 0);
+      const numeralY =
+        outerEdgeY +
+        outward * (TREMOLO_NUMERAL_GAP_PX + TUPLET_NUMERAL_FONT_SIZE / 2);
+      svg.appendChild(createTremoloNumeral(strokeX, numeralY, tremoloTuplet));
+      if (stemUp) {
+        inkTopY = Math.min(inkTopY, numeralY - TUPLET_NUMERAL_FONT_SIZE / 2);
+      }
+    }
+  }
+
+  if (tremoloLabel !== null && qualifiedElementName === 'svg') {
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(
-      createTremoloStrokes(
-        (stemless ? headGeometry.cx : stemX) * NOTE_SCALE,
-        centerYs.map((y) => headCenterY + y - headStaffY)
+      createTremoloLabel(
+        (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE,
+        inkTopY - TREMOLO_LABEL_GAP_PX,
+        tremoloLabel
       )
     );
   }

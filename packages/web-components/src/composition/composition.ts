@@ -63,6 +63,7 @@ import {
   collectNoteLikeElements,
   collectPhraseSlurPairs,
   collectStemRects,
+  type ConnectorPair,
   type EntryObstacles,
   pairConnectors,
   partitionByVoice,
@@ -691,6 +692,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ...collectArpeggioTiePairs(this),
         ...collectPhraseSlurPairs(this),
       ];
+      this.#markDottedTiesAcrossBarlines(noteLikeElements, pairs);
       if (pairs.length === 0) {
         return;
       }
@@ -720,6 +722,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         entryObstacles: collectEntryObstacles(this, rootRect, measureElements),
       });
       for (const svg of svgs) overlay.appendChild(svg);
+    }
+
+    // Only a composition sees a tie cross a barline. Marking its end note
+    // re-lays that staff out; the setter ignores an unchanged value, so the
+    // redraw that follows settles.
+    #markDottedTiesAcrossBarlines(
+      noteLikeElements: readonly Element[],
+      pairs: readonly ConnectorPair[]
+    ): void {
+      const crossing = new Set<Element>(
+        pairs
+          .filter(
+            (pair) =>
+              pair.kind === 'tie' &&
+              pair.dotted === true &&
+              pair.start.closest(MUSIC_MEASURE) !==
+                pair.end.closest(MUSIC_MEASURE)
+          )
+          .map((pair) => pair.end)
+      );
+      for (const element of noteLikeElements) {
+        if ('dottedTieAcrossBarline' in element) {
+          (element as NoteOrChordElementType).dottedTieAcrossBarline =
+            crossing.has(element);
+        }
+      }
     }
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {

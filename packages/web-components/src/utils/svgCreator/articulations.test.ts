@@ -2,7 +2,10 @@
  * @jest-environment jsdom
  */
 import type { ArticulationType } from '../../types/theory';
-import { createArticulationMarks } from './articulations';
+import {
+  articulationStackDepth,
+  createArticulationMarks,
+} from './articulations';
 
 const ANCHOR_Y = 1000;
 
@@ -76,5 +79,84 @@ describe('createArticulationMarks — stem-anchored', () => {
 describe('createArticulationMarks — notehead-anchored', () => {
   it('keeps the fixed spacing for ordinary marks', () => {
     expect(centerOffsets('portato', false)).toEqual([150, 300]);
+  });
+});
+
+describe('repeated length marks', () => {
+  const marks = (
+    articulation: ArticulationType,
+    repeatCount: number,
+    stemAnchor: { x: number; y: number } | null = null
+  ) =>
+    createArticulationMarks({
+      articulation,
+      stemUp: true,
+      noteHeadCenterX: 300,
+      noteHeadCenterY: 0,
+      stemAnchor,
+      repeatCount,
+    });
+
+  it('draws the length mark once per repetition, centred on the head', () => {
+    const dots = Array.from(
+      marks('staccato', 4)?.querySelectorAll('.staccato') ?? []
+    );
+    expect(dots).toHaveLength(4);
+    const xs = dots.map((dot) => Number(dot.getAttribute('cx')));
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(300);
+    expect(new Set(dots.map((dot) => dot.getAttribute('cy'))).size).toBe(1);
+  });
+
+  it('keeps each portato dot under its line', () => {
+    const group = marks('portato', 3);
+    const dotXs = Array.from(group?.querySelectorAll('.staccato') ?? []).map(
+      (dot) => Number(dot.getAttribute('cx'))
+    );
+    const lineXs = Array.from(group?.querySelectorAll('.tenuto') ?? []).map(
+      (line) =>
+        (Number(line.getAttribute('x1')) + Number(line.getAttribute('x2'))) / 2
+    );
+    expect(dotXs).toHaveLength(3);
+    dotXs.forEach((x, i) => expect(x).toBeCloseTo(lineXs[i]));
+  });
+
+  it('draws an accent once', () => {
+    const group = marks('accent-staccato', 4);
+    expect(group?.querySelectorAll('.staccato')).toHaveLength(4);
+    expect(group?.querySelectorAll('.accent')).toHaveLength(1);
+  });
+
+  it('keeps a stem-anchored mark single', () => {
+    expect(
+      marks('staccato', 4, { x: 400, y: ANCHOR_Y })?.querySelectorAll(
+        '.staccato'
+      )
+    ).toHaveLength(1);
+  });
+});
+
+describe('articulationStackDepth', () => {
+  it('is 0 without marks', () => {
+    expect(articulationStackDepth(null, null)).toBe(0);
+  });
+
+  it('reaches as far as the outermost mark', () => {
+    const group = createArticulationMarks({
+      articulation: 'accent-staccato',
+      stemUp: true,
+      noteHeadCenterX: 300,
+      noteHeadCenterY: 0,
+    });
+    const accentPoints = (
+      group?.querySelector('.accent')?.getAttribute('points') ?? ''
+    )
+      .split(' ')
+      .map((point) => Number(point.split(',')[1]));
+    expect(articulationStackDepth('accent-staccato', null)).toBeGreaterThan(
+      Math.max(...accentPoints)
+    );
+    expect(articulationStackDepth('accent-staccato', null)).toBeGreaterThan(
+      articulationStackDepth('staccato', null)
+    );
   });
 });

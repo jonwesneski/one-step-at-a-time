@@ -22,6 +22,8 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
+  TremoloLabel,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -47,6 +49,8 @@ import {
   STAFF_GROUPS,
   STEM_DIRECTIONS,
   STRESSES,
+  TIE_STYLES,
+  TREMOLO_LABELS,
   TREMOLO_VALUES,
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
@@ -75,6 +79,8 @@ const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
 const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
 const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
 const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
+const VALID_TREMOLO_LABELS = new Set<string>(TREMOLO_LABELS);
+const VALID_TIE_STYLES = new Set<string>(TIE_STYLES);
 const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
@@ -274,6 +280,24 @@ export const parseTremolo = (value: string | null): TremoloValue | null => {
   }
   return value === 'unmeasured' ? value : (Number(value) as TremoloValue);
 };
+
+// A whole number of at least 2, written as an attribute string.
+export const parseTremoloTuplet = (value: string | null): number | null => {
+  if (value === null || !/^\d+$/.test(value.trim())) {
+    return null;
+  }
+  const parsed = Number(value);
+  return parsed >= 2 ? parsed : null;
+};
+
+export const parseTremoloLabel = (value: string | null): TremoloLabel | null =>
+  value !== null && VALID_TREMOLO_LABELS.has(value)
+    ? (value as TremoloLabel)
+    : null;
+
+// Defaults to a solid tie.
+export const parseTieStyle = (value: string | null): TieStyle =>
+  value !== null && VALID_TIE_STYLES.has(value) ? (value as TieStyle) : 'solid';
 
 export const parseOctaveContinuationMode = (
   value: string | null

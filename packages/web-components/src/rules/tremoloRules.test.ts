@@ -15,13 +15,22 @@ import {
   TREMOLO_TAIL_ROOM_PX,
 } from '../utils/notationDimensions';
 import {
+  articulationRepeatCount,
+  articulationRepeatWarning,
   beamedTremoloMinimumStemPx,
+  drawnTremoloTuplet,
+  repetitionCount,
   resolveStrokeCount,
   resolveStrokePlacement,
   STAFF_BAND,
   stemEndingFor,
+  stemlessTremoloReachPx,
+  TREMOLO_NUMERAL_EXTENT_PX,
+  tremoloConsistencyWarnings,
+  tremoloInkPastStemPx,
   tremoloStemFloorPx,
   tremoloStrokeCountWarning,
+  tremoloTupletWarning,
   unbeamedTremoloStemExtensionPx,
 } from './tremoloRules';
 
@@ -379,5 +388,155 @@ describe('beamedTremoloMinimumStemPx', () => {
         TREMOLO_STROKE_END_CLEARANCE_PX +
         BEAM_THICKNESS_PX
     );
+  });
+});
+
+describe('repetitionCount', () => {
+  it.each<[DurationType, number, number | null, number]>([
+    ['quarter', 2, null, 4],
+    ['quarter', 1, null, 2],
+    ['half', 1, null, 4],
+    ['whole', 1, null, 8],
+    ['dotted-quarter', 1, null, 3],
+    ['eighth', 1, null, 2],
+    ['half', 1, 6, 6],
+    ['quarter', 1, 3, 3],
+  ])(
+    'a %s with %i stroke(s) and numeral %s stands for %i notes',
+    (duration, strokes, tuplet, expected) => {
+      expect(repetitionCount(duration, strokes, tuplet)).toBe(expected);
+    }
+  );
+});
+
+describe('drawnTremoloTuplet', () => {
+  it('draws a numeral only with a measured stroke count', () => {
+    expect(drawnTremoloTuplet(1, 3)).toBe(3);
+    expect(drawnTremoloTuplet('unmeasured', 3)).toBeNull();
+    expect(drawnTremoloTuplet(null, 3)).toBeNull();
+    expect(drawnTremoloTuplet(2, null)).toBeNull();
+  });
+
+  it('warns about a numeral it won’t draw', () => {
+    expect(tremoloTupletWarning(null, 6)).toContain('tremolo-tuplet="6"');
+    expect(tremoloTupletWarning('unmeasured', 6)).not.toBeNull();
+    expect(tremoloTupletWarning(1, 6)).toBeNull();
+    expect(tremoloTupletWarning(null, null)).toBeNull();
+  });
+});
+
+describe('articulationRepeatCount', () => {
+  const base = {
+    articulationRepeat: true,
+    articulation: 'staccato' as const,
+    tremolo: 2 as const,
+    tuplet: null,
+    duration: 'quarter' as const,
+  };
+
+  it('repeats once per repetition', () => {
+    expect(articulationRepeatCount(base)).toBe(4);
+    expect(articulationRepeatCount({ ...base, tremolo: 1, tuplet: 3 })).toBe(3);
+  });
+
+  it('draws once without the attribute, a measured tremolo or a length mark', () => {
+    expect(
+      articulationRepeatCount({ ...base, articulationRepeat: false })
+    ).toBe(1);
+    expect(articulationRepeatCount({ ...base, tremolo: 'unmeasured' })).toBe(1);
+    expect(articulationRepeatCount({ ...base, articulation: 'accent' })).toBe(
+      1
+    );
+  });
+
+  it('repeats the length mark of an accented articulation', () => {
+    expect(
+      articulationRepeatCount({ ...base, articulation: 'marcato-tenuto' })
+    ).toBe(4);
+  });
+
+  it('explains why it draws once', () => {
+    expect(articulationRepeatWarning('staccato', null)).not.toBeNull();
+    expect(articulationRepeatWarning('fermata', 2)).toContain('fermata');
+    expect(articulationRepeatWarning('accent-portato', 2)).toBeNull();
+  });
+});
+
+describe('tremoloConsistencyWarnings', () => {
+  const input = {
+    tremolo: null,
+    tuplet: 3,
+    articulationRepeat: true,
+    articulation: 'staccato' as const,
+    duration: 'quarter' as const,
+  };
+
+  it('checks only what the changed attribute affects', () => {
+    expect(
+      tremoloConsistencyWarnings({ ...input, changed: 'duration' })
+    ).toHaveLength(0);
+    expect(
+      tremoloConsistencyWarnings({ ...input, changed: 'tremolo-tuplet' })
+    ).toHaveLength(1);
+    expect(
+      tremoloConsistencyWarnings({ ...input, changed: 'articulation-repeat' })
+    ).toHaveLength(1);
+  });
+
+  it('checks everything when nothing changed', () => {
+    expect(
+      tremoloConsistencyWarnings({ ...input, changed: null })
+    ).toHaveLength(2);
+  });
+});
+
+describe('tremolo ink past the stem', () => {
+  it('is the numeral on a stemmed note', () => {
+    expect(
+      tremoloInkPastStemPx({
+        tremolo: 1,
+        tuplet: 3,
+        duration: 'quarter',
+        headY: E4,
+        stemUp: true,
+      })
+    ).toBe(TREMOLO_NUMERAL_EXTENT_PX);
+    expect(
+      tremoloInkPastStemPx({
+        tremolo: 1,
+        tuplet: null,
+        duration: 'quarter',
+        headY: E4,
+        stemUp: true,
+      })
+    ).toBe(0);
+  });
+
+  it('measures a stemless head’s strokes and numeral', () => {
+    const plain = stemlessTremoloReachPx({
+      tremolo: 3,
+      tuplet: null,
+      duration: 'whole',
+      headY: F4,
+      stemUp: true,
+    });
+    const numbered = stemlessTremoloReachPx({
+      tremolo: 3,
+      tuplet: 12,
+      duration: 'whole',
+      headY: F4,
+      stemUp: true,
+    });
+    expect(plain).toBeGreaterThan(0);
+    expect(numbered - plain).toBeCloseTo(TREMOLO_NUMERAL_EXTENT_PX);
+    expect(
+      tremoloInkPastStemPx({
+        tremolo: 3,
+        tuplet: 12,
+        duration: 'whole',
+        headY: F4,
+        stemUp: true,
+      })
+    ).toBeCloseTo(Math.max(0, numbered - BASE_STEM_LENGTH_PX));
   });
 });

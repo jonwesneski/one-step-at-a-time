@@ -1,7 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../../index';
-import { DURATIONS, NOTES, OCTAVES, TREMOLO_VALUES } from '../../utils';
+import {
+  DURATIONS,
+  NOTES,
+  OCTAVES,
+  TIE_STYLES,
+  TREMOLO_VALUES,
+} from '../../utils';
 
 const meta: Meta = {
   title: 'Universal Notations/Tremolos',
@@ -350,5 +356,332 @@ export const SeparateBeaming: Story = {
       <music-note note="B" octave="4" duration="sixteenth"></music-note>
       <music-note note="G" octave="4" duration="sixteenth"></music-note>
     </music-staff>
+  `,
+};
+
+// A numeral above (or below) the stem gives the divisions of the note's
+// value: triplets, quintuplets and septuplets.
+export const TupletNumerals: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="G"
+        octave="4"
+        tremolo="1"
+        tremolo-tuplet="3"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        duration="eighth"
+        tremolo="1"
+        tremolo-tuplet="3"
+      ></music-note>
+      <music-note note="G" octave="4" duration="eighth"></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        tremolo="1"
+        tremolo-tuplet="5"
+      ></music-note>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        tremolo="1"
+        tremolo-tuplet="7"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        tremolo="2"
+        tremolo-tuplet="5"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        tremolo="2"
+        tremolo-tuplet="7"
+      ></music-note>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        tremolo="1"
+        tremolo-tuplet="6"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        tremolo="1"
+        tremolo-tuplet="6"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+// Each stem carries its own numeral, beyond its tip whichever way it points.
+export const NumeralPlacement: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="E"
+        octave="4"
+        tremolo="1"
+        tremolo-tuplet="3"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        tremolo="1"
+        tremolo-tuplet="3"
+      ></music-note>
+      <music-note
+        note="C"
+        octave="5"
+        tremolo="1"
+        tremolo-tuplet="3"
+      ></music-note>
+      <music-note
+        note="E"
+        octave="5"
+        tremolo="1"
+        tremolo-tuplet="3"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+// One articulation mark per repetition, centred on the head.
+export const RepeatedArticulation: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note note="D" octave="4" duration="sixteenth"></music-note>
+      <music-note note="D" octave="4" duration="sixteenth"></music-note>
+      <music-note note="D" octave="4" duration="sixteenth"></music-note>
+      <music-note note="D" octave="4" duration="sixteenth"></music-note>
+      <music-note
+        note="D"
+        octave="4"
+        tremolo="2"
+        articulation="staccato"
+        articulation-repeat
+      ></music-note>
+      <music-note
+        note="C"
+        octave="5"
+        tremolo="1"
+        tremolo-tuplet="3"
+        articulation="tenuto"
+        articulation-repeat
+      ></music-note>
+      <music-note
+        note="A"
+        octave="5"
+        tremolo="1"
+        articulation="portato"
+        articulation-repeat
+      ></music-note>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-chord
+        duration="half"
+        tremolo="1"
+        tremolo-tuplet="6"
+        articulation="staccato"
+        articulation-repeat
+      >
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+      </music-chord>
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        tremolo="unmeasured"
+        articulation="accent"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+// A single accent applies to the first note of the repetition only.
+export const SingleAccent: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        tremolo="1"
+        articulation="accent"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        tremolo="2"
+        articulation="accent"
+      ></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        tremolo="2"
+        articulation="accent"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+// `trem.` starts an unmeasured passage; `non trem.` marks the first note
+// after it, or the first measured abbreviation.
+export const TechniqueLabels: Story = {
+  render: () => html`
+    <music-composition>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="C"
+            octave="5"
+            duration="whole"
+            tremolo="unmeasured"
+            tremolo-label="trem"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="D"
+            octave="5"
+            duration="sixteenth"
+            tremolo="2"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="5"
+            duration="sixteenth"
+            tremolo="2"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="eighth"
+            tremolo-label="non-trem"
+            tie="start"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="dotted-half"
+            tie="end"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="2/4">
+          <music-note note="A" octave="4" duration="sixteenth"></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="sixteenth"
+            tremolo="1"
+          ></music-note>
+          <music-note
+            note="B"
+            octave="4"
+            duration="sixteenth"
+            tremolo="1"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="4"
+            duration="sixteenth"
+            tremolo="1"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="4"
+            duration="sixteenth"
+            tremolo="1"
+          ></music-note>
+          <music-note note="A" octave="4" duration="sixteenth"></music-note>
+          <music-note note="B" octave="4" duration="sixteenth"></music-note>
+          <music-note note="G" octave="4" duration="sixteenth"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// Ties join unmeasured tremolo notes; a dotted tie repeats its accidental
+// over the barline, which a solid tie doesn't need.
+export const Ties: Story = {
+  args: {
+    tieStyle: 'solid',
+  },
+  argTypes: {
+    tieStyle: { control: 'select', options: TIE_STYLES },
+  },
+  render: (args) => html`
+    <music-composition>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="A"
+            octave="4"
+            duration="half"
+            tremolo="unmeasured"
+            tie="start"
+            tie-style=${args.tieStyle}
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="eighth"
+            tie="end"
+            tremolo="unmeasured"
+          ></music-note>
+          <music-note
+            note="C#"
+            octave="5"
+            duration="eighth"
+            tremolo="unmeasured"
+          ></music-note>
+          <music-note
+            note="C#"
+            octave="5"
+            duration="quarter"
+            tremolo="unmeasured"
+            tie="start"
+            tie-style=${args.tieStyle}
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="C#"
+            octave="5"
+            duration="quarter"
+            tremolo="unmeasured"
+            tie="end"
+          ></music-note>
+          <music-note
+            note="C#"
+            octave="5"
+            duration="dotted-quarter"
+            tremolo="unmeasured"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
   `,
 };

@@ -23,7 +23,9 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
   TimeSignature,
+  TremoloLabel,
   TremoloStrokeCount,
   TremoloValue,
   TrillContinuationMode,
@@ -332,6 +334,10 @@ export const TREMOLO_VALUES: TremoloValue[] = [
   ...TREMOLO_STROKE_COUNTS,
   'unmeasured',
 ];
+
+export const TREMOLO_LABELS: TremoloLabel[] = ['trem', 'non-trem'];
+
+export const TIE_STYLES: TieStyle[] = ['solid', 'dotted'];
 
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
 

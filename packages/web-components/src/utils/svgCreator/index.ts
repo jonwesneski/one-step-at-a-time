@@ -18,6 +18,7 @@ export {
   createCurveSvg,
   createOpenTieSvg,
   DEFAULT_BULGE_HEIGHT,
+  setCurveDotted,
   type CurveBulge,
   type CurveProps,
   type CurveStyle,
@@ -88,7 +89,12 @@ export { createSharedStemLine } from './sharedStem';
 export { createSharpSvg } from './sharp';
 export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';
-export { createTremoloStrokes } from './tremolo';
+export {
+  createTremoloLabel,
+  createTremoloNumeral,
+  createTremoloStrokes,
+  tremoloLabelWidthPx,
+} from './tremolo';
 export {
   computeWrittenTrillNoteWidth,
   createTrillContinuationSignSvg,
@@ -104,5 +110,5 @@ export {
   type WrittenTrillNoteProps,
   type WrittenTrillNoteResult,
 } from './trill';
-export { createTupletBracketSvg } from './tuplet';
+export { createTupletBracketSvg, createTupletNumeralText } from './tuplet';
 export { createUnisonBracketSvg } from './unison';
