@@ -112,6 +112,7 @@ import {
 import {
   MUSIC_CHORD,
   MUSIC_NOTE,
+  MUSIC_TREMOLO_NODE,
   NOTE_EVENTS,
   OCTAVES,
   STAFF_TAGS,
@@ -178,7 +179,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
    * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
    * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
-   * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them.
+   * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
    * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
    * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
    * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single.
@@ -598,8 +599,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // `id` shared by every element across a measure's two adjacent grand-staff
     // staves that joins one cross-staff double-stemmed beam group. Resolved
     // by the ancestor <music-measure>.
+    // Ignored on a triangle, which stands alone, and on a <music-tremolo>
+    // member, which its own tremolo beams.
     get beamGroup(): string | null {
-      return isTriangle(this.notehead) ? null : this.getAttribute('beam-group');
+      return isTriangle(this.notehead) ||
+        this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+        ? null
+        : this.getAttribute('beam-group');
     }
     set beamGroup(value: string | null) {
       if (value === null) {
@@ -668,7 +674,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // A <music-tremolo>'s own beams stand for the repetition, so a member's
+    // strokes are ignored.
     get tremolo(): TremoloValue | null {
+      if (this.parentElement?.nodeName === MUSIC_TREMOLO_NODE) {
+        return null;
+      }
       return parseTremolo(this.getAttribute('tremolo'));
     }
     set tremolo(value: TremoloValue | null) {
@@ -763,8 +774,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // `id` of the other-staff element this note shares a single stem with.
     // Resolved by the ancestor <music-measure>.
+    // Ignored on a <music-tremolo> member, whose stem its tremolo sets.
     get sharedStemFor(): string | null {
-      return this.getAttribute('shared-stem-for');
+      return this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+        ? null
+        : this.getAttribute('shared-stem-for');
     }
     set sharedStemFor(value: string | null) {
       if (value === null) {

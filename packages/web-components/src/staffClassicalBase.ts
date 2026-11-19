@@ -11,7 +11,11 @@ import {
 } from './rules/arpeggioRules';
 import type { BeamObstacle } from './rules/beamPlacementRules';
 import { buildBeamsRenderer } from './rules/beamRules';
-import { computeBeatOffsets, durationContribution } from './rules/beatRules';
+import {
+  computeBeatOffsets,
+  computeTremoloScaleByIndex,
+  durationContribution,
+} from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import {
   activeClefChangeIndex,
@@ -138,6 +142,7 @@ import type {
   NoteLetterOctave,
   NoteOrChordElementType,
   RestElementType,
+  TremoloGroupPlacement,
   TupletElementType,
   UnisonPart,
   YCoordinates,
@@ -192,12 +197,14 @@ import {
   MUSIC_NOTE_NODE,
   MUSIC_REST,
   MUSIC_REST_NODE,
+  MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
   NOTE_EVENTS,
   STAFF_EVENTS,
   STAFF_TAGS,
   SVG_NS,
+  TREMOLO_EVENTS,
   TUPLET_EVENTS,
 } from './utils/consts';
 import {
@@ -506,6 +513,8 @@ type VoiceRenderState = {
   // How far each entry's tremolo reaches past its stem's end on the stem
   // side (a numeral, or a stemless head's strokes); counted as stem ink.
   tremoloInkPastStemPx: number[];
+  // Each `<music-tremolo>` member's share of its written value.
+  tremoloScaleByIndex: Map<number, number>;
   beamedIndices: Set<number>;
   // Indices joined to a cross-staff double-stemmed beam group — their real
   // stemExtension is resolved and written directly by the ancestor
@@ -565,6 +574,18 @@ function reindexTupletsByIndex(
     result.set(remapIndexAfterRemoval(oldIndex, removedIndices), tuplets);
   }
   return result;
+}
+
+function reindexTremoloGroups(
+  groups: readonly TremoloGroupPlacement[],
+  removedIndices: ReadonlySet<number>
+): TremoloGroupPlacement[] {
+  return groups.map((group) => ({
+    ...group,
+    memberIndices: group.memberIndices.map((i) =>
+      remapIndexAfterRemoval(i, removedIndices)
+    ),
+  }));
 }
 
 function reindexArpeggioGroups(
@@ -702,9 +723,23 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       this.#renderOctaveSigns(voiceKey);
     }
   };
-  #boundNoteYChange = () => {
+  #boundNoteYChange = (event?: Event) => {
+    if (this.#voices.size === 0) {
+      return;
+    }
+    // A tremolo member's change can make or break its group (every member
+    // shares one duration), which only flattening decides.
+    const target = event?.target as Element | null | undefined;
+    if (target?.parentElement?.nodeName === MUSIC_TREMOLO_NODE) {
+      this.#reRenderFromCurrentSlot();
+      return;
+    }
+    this.#renderNotes();
+  };
+  // Which children a <music-tremolo> accepts depends on its `tremolo-group`.
+  #boundTremoloChange = () => {
     if (this.#voices.size > 0) {
-      this.#renderNotes();
+      this.#reRenderFromCurrentSlot();
     }
   };
   #boundClefMarkerChange = () => {
@@ -1191,7 +1226,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         position: absolute;
       }
 
-      ::slotted(music-tuplet) {
+      ::slotted(music-tuplet),
+      ::slotted(music-tremolo) {
         display: contents;
       }
     `;
@@ -1267,6 +1303,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.addEventListener(
       TUPLET_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundNoteYChange
+    );
+    this.addEventListener(
+      TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
+      this.#boundTremoloChange
     );
   }
 
@@ -1409,6 +1449,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       TUPLET_EVENTS.ATTRIBUTE_CHANGE,
       this.#boundNoteYChange
     );
+    this.removeEventListener(
+      TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
+      this.#boundTremoloChange
+    );
   }
 
   override attributeChangedCallback(
@@ -1477,6 +1521,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         e.nodeName === MUSIC_REST_NODE ||
         e.nodeName === MUSIC_TUPLET_NODE ||
         e.nodeName === MUSIC_ARPEGGIO_NODE ||
+        e.nodeName === MUSIC_TREMOLO_NODE ||
         e.nodeName === MUSIC_CLEF_NODE ||
         e.nodeName === MUSIC_VOICE_NODE
     );
@@ -1690,6 +1735,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     beatOffsets: number[],
     tupletsByIndex: Map<number, TupletElementType[]>,
     arpeggioGroups: ArpeggioGroupPlacement[],
+    tremoloGroups: TremoloGroupPlacement[],
     direction: VoiceDirection,
     pitchDriven: boolean,
     accidentals: ReturnType<typeof computeNoteAccidentals>,
@@ -1815,7 +1861,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       stemDirectionsOverride,
       externallyBeamedIndices,
       combinedStemOverrides,
-      this.#clefMarkers.map((marker) => this.#clefMarkerBeatOffset(marker))
+      this.#clefMarkers.map((marker) => this.#clefMarkerBeatOffset(marker)),
+      tremoloGroups
     );
     // Beamed lengths come from the beam line and cross-staff ones from the
     // ancestor <music-measure>, so only unbeamed stems take their rule length.
@@ -1985,6 +2032,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       stemDirections,
       unbeamedStemTipExtensionsPx,
       tremoloInkPastStemPx: tremoloInks,
+      tremoloScaleByIndex: computeTremoloScaleByIndex(tremoloGroups),
       beamedIndices,
       externallyBeamedIndices,
       externallyPositionedRestIndices,
@@ -2016,6 +2064,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       beatOffsets: number[];
       tupletsByIndex: Map<number, TupletElementType[]>;
       arpeggioGroups: ArpeggioGroupPlacement[];
+      tremoloGroups: TremoloGroupPlacement[];
     };
     const pass1ByVoice = new Map<VoiceNumber, Pass1Voice>();
     this.#beatOffsetByElement = new Map();
@@ -2028,7 +2077,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         voiceData.flatElements,
         this.effectiveTimeSig,
         voiceData.tupletsByIndex,
-        voiceData.arpeggioGroups
+        voiceData.arpeggioGroups,
+        voiceData.tremoloGroups
       );
       if (error !== null) {
         console.warn(isMultiVoice ? `[voice ${voiceNumber}] ${error}` : error);
@@ -2041,10 +2091,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const arpeggioRunIndices = new Set<number>(
         voiceData.arpeggioGroups.flatMap((group) => group.runIndices)
       );
+      // A tremolo cut by the bar-fit falls back to plain notes.
+      const tremoloGroups = voiceData.tremoloGroups.filter((group) =>
+        group.memberIndices.every((index) => index < allowedElementCount)
+      );
       const beatOffsets = computeBeatOffsets(
         elements,
         voiceData.tupletsByIndex,
-        arpeggioRunIndices
+        arpeggioRunIndices,
+        computeTremoloScaleByIndex(tremoloGroups)
       );
       elements.forEach((element, i) =>
         this.#beatOffsetByElement.set(element, beatOffsets[i])
@@ -2054,6 +2109,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         beatOffsets,
         tupletsByIndex: voiceData.tupletsByIndex,
         arpeggioGroups: voiceData.arpeggioGroups,
+        tremoloGroups,
       });
     }
 
@@ -2077,7 +2133,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           element,
           i,
           voice1?.tupletsByIndex ?? new Map(),
-          voice1ArpeggioRunIndices
+          voice1ArpeggioRunIndices,
+          computeTremoloScaleByIndex(voice1?.tremoloGroups ?? [])
         )
     );
     const survivingClefMarkers: ClefMarkerPlacement[] = [];
@@ -2132,6 +2189,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         beatOffsets: [0],
         tupletsByIndex: new Map(),
         arpeggioGroups: [],
+        tremoloGroups: [],
       });
     } else {
       const combineInputs = new Map<VoiceNumber, VoiceCombineInput>();
@@ -2145,6 +2203,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           ),
           arpeggioTargetIndices: new Set(
             p.arpeggioGroups.map((group) => group.targetIndex)
+          ),
+          tremoloMemberIndices: new Set(
+            p.tremoloGroups.flatMap((group) => group.memberIndices)
           ),
           staffYsOf: (index) => {
             const coords = yCoordsByVoice.get(voiceNumber);
@@ -2193,6 +2254,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           beatOffsets: keptBeatOffsets,
           tupletsByIndex: reindexTupletsByIndex(p.tupletsByIndex, removed),
           arpeggioGroups: reindexArpeggioGroups(p.arpeggioGroups, removed),
+          tremoloGroups: reindexTremoloGroups(p.tremoloGroups, removed),
         });
       }
 
@@ -2205,6 +2267,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           beatOffsets: combinedGroups.map((group) => group.beatOffset),
           tupletsByIndex: new Map(),
           arpeggioGroups: [],
+          tremoloGroups: [],
         });
       }
     }
@@ -2271,6 +2334,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         input.beatOffsets,
         input.tupletsByIndex,
         input.arpeggioGroups,
+        input.tremoloGroups,
         direction,
         pitchDriven,
         accidentals,
@@ -2368,9 +2432,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         leftwardWidth,
         rightwardWidth
       );
+      const tupletScales = computeTupletScaleByIndex(
+        state.elements,
+        state.tupletsByIndex
+      );
       const { totalWeight } = computeSpacingWeights(
         state.elements,
-        computeTupletScaleByIndex(state.elements, state.tupletsByIndex)
+        new Map(
+          state.elements.map((_, i) => [
+            i,
+            (tupletScales.get(i) ?? 1) *
+              (state.tremoloScaleByIndex.get(i) ?? 1),
+          ])
+        )
       );
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
       if (minWidth > maxMinWidth) {

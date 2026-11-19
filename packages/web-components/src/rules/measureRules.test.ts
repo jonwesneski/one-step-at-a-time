@@ -9,6 +9,7 @@ import {
   NoteChordOrRestElementType,
   TupletElementType,
 } from '../types/elements';
+import type { Note } from '../types/theory';
 import { MUSIC_TUPLET } from '../utils/consts';
 import { computeAllowedElementCount } from './measureRules';
 
@@ -202,5 +203,60 @@ describe('computeAllowedElementCount', () => {
       // The first quarter fits; the run + whole target don't → drop from index 1.
       expect(allowedElementCount).toBe(1);
     });
+  });
+});
+
+describe('computeAllowedElementCount with tremolos', () => {
+  const tremolo = (memberIndices: number[]) => ({
+    memberIndices,
+    element: document.createElement('div') as never,
+  });
+
+  it('fits two semibreves of a tremolo in one 4/4 bar', () => {
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'F', duration: 'whole' }),
+      makeNote({ note: 'A', duration: 'whole' }),
+    ];
+    expect(
+      computeAllowedElementCount(
+        elements,
+        [4, 4],
+        new Map(),
+        [],
+        [tremolo([0, 1])]
+      )
+    ).toEqual({ allowedElementCount: 2, error: null });
+  });
+
+  it('fits three semibreves of a tremolo in one 4/4 bar', () => {
+    const elements: NoteChordOrRestElementType[] = ['A', 'B', 'C'].map((note) =>
+      makeNote({ note: note as Note, duration: 'whole' })
+    );
+    expect(
+      computeAllowedElementCount(
+        elements,
+        [4, 4],
+        new Map(),
+        [],
+        [tremolo([0, 1, 2])]
+      ).allowedElementCount
+    ).toBe(3);
+  });
+
+  it('drops a tremolo that overflows as a whole', () => {
+    const elements: NoteChordOrRestElementType[] = [
+      makeNote({ note: 'C', duration: 'half' }),
+      makeNote({ note: 'F', duration: 'whole' }),
+      makeNote({ note: 'A', duration: 'whole' }),
+    ];
+    const { allowedElementCount, error } = computeAllowedElementCount(
+      elements,
+      [4, 4],
+      new Map(),
+      [],
+      [tremolo([1, 2])]
+    );
+    expect(allowedElementCount).toBe(1);
+    expect(error).not.toBeNull();
   });
 });

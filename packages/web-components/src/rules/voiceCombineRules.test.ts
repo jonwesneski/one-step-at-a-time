@@ -65,6 +65,7 @@ function voiceInput(
     tupletsByIndex: new Map(),
     arpeggioRunIndices: new Set(),
     arpeggioTargetIndices: new Set(),
+    tremoloMemberIndices: new Set(),
     staffYsOf: (index) => staffYs?.[index] ?? staffYsOfTones(elements[index]),
   };
 }

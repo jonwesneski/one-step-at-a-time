@@ -6,6 +6,8 @@ import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  TREMOLO_BEAM_MAX_LENGTH_PX,
+  TREMOLO_BEAM_STEM_GAP_PX,
   TREMOLO_STEM_OVERSHOOT_PX,
   TREMOLO_STROKE_END_CLEARANCE_PX,
   TREMOLO_STROKE_HEAD_CLEARANCE_PX,
@@ -15,17 +17,22 @@ import {
   TREMOLO_TAIL_ROOM_PX,
 } from '../utils/notationDimensions';
 import {
+  acceptsBeamAttach,
   articulationRepeatCount,
   articulationRepeatWarning,
   beamedTremoloMinimumStemPx,
+  canPlaceTremoloBetween,
   drawnTremoloTuplet,
   repetitionCount,
+  resolveBetweenTremoloBeams,
   resolveStrokeCount,
   resolveStrokePlacement,
+  resolveTremoloGroupLayout,
   STAFF_BAND,
   stemEndingFor,
   stemlessTremoloReachPx,
   TREMOLO_NUMERAL_EXTENT_PX,
+  tremoloBeamCounts,
   tremoloConsistencyWarnings,
   tremoloInkPastStemPx,
   tremoloStemFloorPx,
@@ -538,5 +545,120 @@ describe('tremolo ink past the stem', () => {
         stemUp: true,
       })
     ).toBeCloseTo(Math.max(0, numbered - BASE_STEM_LENGTH_PX));
+  });
+});
+
+describe('tremoloBeamCounts', () => {
+  it.each<[DurationType, 'all' | 'outer' | null, number, number]>([
+    ['whole', null, 0, 3],
+    ['quarter', null, 0, 3],
+    ['half', null, 0, 3],
+    ['half', 'all', 3, 3],
+    ['half', 'outer', 1, 3],
+    ['dotted-half', 'outer', 1, 3],
+    ['eighth', null, 1, 4],
+    ['sixteenth', null, 2, 5],
+  ])(
+    'a %s tremolo with beam-attach %s attaches %i of %i beams',
+    (duration, beamAttach, attached, total) => {
+      expect(tremoloBeamCounts(duration, 3, beamAttach)).toEqual({
+        attached,
+        total,
+      });
+    }
+  );
+
+  it('only lets minims choose which beams attach', () => {
+    expect(acceptsBeamAttach('half')).toBe(true);
+    expect(acceptsBeamAttach('dotted-half')).toBe(true);
+    expect(acceptsBeamAttach('quarter')).toBe(false);
+  });
+});
+
+describe('canPlaceTremoloBetween', () => {
+  it('needs an octave or more between the nearest heads', () => {
+    const G4 = 60;
+    const G5 = 25;
+    const F5 = 30;
+    expect(canPlaceTremoloBetween([G4], [G5])).toBe(true);
+    expect(canPlaceTremoloBetween([G4], [F5])).toBe(false);
+  });
+});
+
+describe('resolveTremoloGroupLayout', () => {
+  const pair = (attached: number, total: number, gap = 50) =>
+    resolveTremoloGroupLayout({
+      members: [
+        { stemX: 0, nearestHeadY: F4 },
+        { stemX: gap, nearestHeadY: F4 },
+      ],
+      stemUp: true,
+      attached,
+      total,
+    });
+
+  it('draws every beam, detached ones stopping short of both stems', () => {
+    const { beams } = pair(0, 3);
+    expect(beams).toHaveLength(3);
+    for (const beam of beams) {
+      expect(beam.x1).toBeCloseTo(TREMOLO_BEAM_STEM_GAP_PX);
+      expect(beam.x2).toBeCloseTo(50 - TREMOLO_BEAM_STEM_GAP_PX);
+    }
+  });
+
+  it('runs attached beams stem to stem and stacks the rest inside them', () => {
+    const { beams, levelOffset } = pair(1, 3);
+    expect(beams[0].x1).toBe(0);
+    expect(beams[0].x2).toBe(50);
+    expect(beams[1].x1).toBeGreaterThan(0);
+    expect(beams[1].top1 - beams[0].top1).toBeCloseTo(levelOffset);
+  });
+
+  it('caps a long detached beam and centres it', () => {
+    const { beams } = pair(0, 3, 300);
+    expect(beams[0].x2 - beams[0].x1).toBeCloseTo(TREMOLO_BEAM_MAX_LENGTH_PX);
+    expect((beams[0].x1 + beams[0].x2) / 2).toBeCloseTo(150);
+  });
+
+  it('puts the primary beam at each stem where the stems end', () => {
+    const { primaryTops, beams } = pair(0, 3);
+    expect(primaryTops).toHaveLength(2);
+    expect(primaryTops[0]).toBeLessThan(F4);
+    expect(beams[0].top1).toBeGreaterThanOrEqual(
+      Math.min(...primaryTops) - 1e-6
+    );
+  });
+
+  it('centres detached beams on the middle note of three, and between the middle two of four', () => {
+    const layout = (xs: number[]) =>
+      resolveTremoloGroupLayout({
+        members: xs.map((stemX) => ({ stemX, nearestHeadY: F4 })),
+        stemUp: true,
+        attached: 0,
+        total: 3,
+      }).beams[0];
+    const three = layout([0, 40, 120]);
+    expect((three.x1 + three.x2) / 2).toBeCloseTo(40);
+    const four = layout([0, 40, 80, 120]);
+    expect((four.x1 + four.x2) / 2).toBeCloseTo(60);
+  });
+});
+
+describe('resolveBetweenTremoloBeams', () => {
+  it('stacks the beams on the line between the heads, sloping with it but no steeper than a short beam', () => {
+    const beams = resolveBetweenTremoloBeams({
+      from: { edgeX: 0, centerY: 60 },
+      to: { edgeX: 40, centerY: 25 },
+      strokes: 3,
+    });
+    expect(beams).toHaveLength(3);
+    const middle = beams[1];
+    expect((middle.top1 + middle.top2) / 2 + BEAM_THICKNESS_PX / 2).toBeCloseTo(
+      42.5
+    );
+    expect(middle.top2).toBeLessThan(middle.top1);
+    expect(middle.top1 - middle.top2).toBeLessThanOrEqual(
+      STAFF_LINE_SPACING + 1e-6
+    );
   });
 });

@@ -6,6 +6,7 @@ import {
   BeamLineDescriptor,
   computeBeamLevelStructure,
 } from '../rules/beamStructureRules';
+import { computeTremoloScaleByIndex } from '../rules/beatRules';
 import { mergeClefChangeBeats } from '../rules/clefChangeRules';
 import {
   type ObstacleRect,
@@ -159,6 +160,7 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import { parseMeasureNumberDisplay } from '../utils/parsers';
+import { flattenSlotElements } from '../utils/slotElements';
 import {
   measureVerticalExtents,
   VerticalSpaceReservations,
@@ -245,6 +247,21 @@ function hangingTupletNumeralShapes(
     right: Math.max(...xs),
     topOffset: stemUp ? -far : near,
     bottomOffset: stemUp ? -near : far,
+  }));
+}
+
+// A cross-staff tuplet's members with the share of their written value each
+// takes: 1/N inside a <music-tremolo> of N members, else all of it.
+function tupletMembers(
+  tuplet: TupletElementType
+): { element: NoteChordOrRestElementType; share: number }[] {
+  const { flatElements, tremoloGroups } = flattenSlotElements(
+    Array.from(tuplet.children)
+  );
+  const shares = computeTremoloScaleByIndex(tremoloGroups);
+  return flatElements.map((element, i) => ({
+    element,
+    share: shares.get(i) ?? 1,
   }));
 }
 
@@ -2071,10 +2088,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             isNested:
               tuplet.parentElement?.closest(MUSIC_TUPLET) != null ||
               tuplet.querySelector(MUSIC_TUPLET) !== null,
-            members: tuplet.flatElements.map((element) => ({
+            members: tupletMembers(tuplet).map(({ element, share }) => ({
               element,
               isRest: element.nodeName === MUSIC_REST_NODE,
-              beatLength: durationToFactor[element.duration],
+              beatLength: durationToFactor[element.duration] * share,
               inBeamGroup: element.beamGroup !== null,
             })),
           });

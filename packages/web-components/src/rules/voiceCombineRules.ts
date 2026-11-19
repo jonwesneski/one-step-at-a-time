@@ -20,6 +20,9 @@ export type VoiceCombineInput = {
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>;
   arpeggioRunIndices: ReadonlySet<number>;
   arpeggioTargetIndices: ReadonlySet<number>;
+  // `<music-tremolo>` members: each takes a share of the written value, so
+  // no member can merge onto another voice's stem.
+  tremoloMemberIndices: ReadonlySet<number>;
   // Staff Ys an element sounds, with its clef and chord voicing resolved.
   staffYsOf: (index: number) => readonly number[];
 };
@@ -69,7 +72,8 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   }
   if (
     voice.arpeggioRunIndices.has(index) ||
-    voice.arpeggioTargetIndices.has(index)
+    voice.arpeggioTargetIndices.has(index) ||
+    voice.tremoloMemberIndices.has(index)
   ) {
     return false;
   }

@@ -1478,3 +1478,26 @@ export const TIE_DASH_PX = STAFF_LINE_SPACING * 0.3;
  * = 0.3 × STAFF_LINE_SPACING
  */
 export const TIE_DASH_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+// ─── Two-note tremolos ────────────────────────────────────────────────────────
+
+/**
+ * Gap (px) a detached tremolo beam stops short of each stem (or where a
+ * semibreve's stem would be).
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_BEAM_STEM_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Longest (px) a detached tremolo beam is drawn; widely spaced notes take a
+ * shorter, centred beam rather than a long one.
+ * = 6 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_BEAM_MAX_LENGTH_PX = STAFF_LINE_SPACING * 6;
+
+/**
+ * Shortest distance (px) between two notes' heads for `beam-position="between"`:
+ * an octave.
+ * = 7 × STAFF_Y_STEP
+ */
+export const TREMOLO_BETWEEN_MIN_INTERVAL_PX = 7 * STAFF_Y_STEP;

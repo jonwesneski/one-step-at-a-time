@@ -11,7 +11,11 @@ export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';
-export { BeamsBuilder, type NoteYPosition } from './beams';
+export {
+  BeamsBuilder,
+  type NoteYPosition,
+  type TremoloBeamGroupSpec,
+} from './beams';
 export { createChordSvg } from './chord';
 export {
   BULGE_STEP_PX,

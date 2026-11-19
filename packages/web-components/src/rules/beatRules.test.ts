@@ -6,7 +6,11 @@ import { makeNote } from '../test-fixtures/unitHelpers';
 import '../tuplet/index';
 import { TupletElementType } from '../types/elements';
 import { MUSIC_TUPLET } from '../utils/consts';
-import { durationContribution } from './beatRules';
+import {
+  computeBeatOffsets,
+  computeTremoloScaleByIndex,
+  durationContribution,
+} from './beatRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -66,5 +70,58 @@ describe('durationContribution', () => {
     expect(durationContribution(note, 0, new Map(), runIndices)).toBeCloseTo(
       0.25
     );
+  });
+});
+
+describe('tremolo shares', () => {
+  const groups = (memberIndices: number[]) => [
+    { memberIndices, element: document.createElement('div') as never },
+  ];
+
+  it('gives each of N members 1/N of its written value', () => {
+    const scales = computeTremoloScaleByIndex(groups([1, 2, 3]));
+    expect(scales.get(0)).toBeUndefined();
+    expect(scales.get(1)).toBeCloseTo(1 / 3);
+  });
+
+  it('places the second of two halves halfway through the pair', () => {
+    const elements = [
+      makeNote({ note: 'F', duration: 'half' }),
+      makeNote({ note: 'A', duration: 'half' }),
+      makeNote({ note: 'C', duration: 'half' }),
+    ];
+    expect(
+      computeBeatOffsets(
+        elements,
+        new Map(),
+        new Set(),
+        computeTremoloScaleByIndex(groups([0, 1]))
+      )
+    ).toEqual([0, 0.25, 0.5]);
+  });
+
+  it('shares a dotted value', () => {
+    expect(
+      durationContribution(
+        makeNote({ note: 'F', duration: 'double-dotted-half' }),
+        0,
+        new Map(),
+        new Set(),
+        computeTremoloScaleByIndex(groups([0, 1]))
+      )
+    ).toBeCloseTo(7 / 16);
+  });
+
+  it('multiplies with a tuplet', () => {
+    const tuplet = makeTuplet('3');
+    expect(
+      durationContribution(
+        makeNote({ note: 'F', duration: 'quarter' }),
+        0,
+        new Map([[0, [tuplet]]]),
+        new Set(),
+        computeTremoloScaleByIndex(groups([0, 1]))
+      )
+    ).toBeCloseTo((1 / 4) * (2 / 3) * (1 / 2));
   });
 });

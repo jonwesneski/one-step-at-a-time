@@ -1,6 +1,7 @@
 import type {
   ArticulationType,
   DurationType,
+  TremoloBeamAttach,
   TremoloValue,
 } from '../types/theory';
 import {
@@ -8,9 +9,13 @@ import {
   BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
   FLAG_STEM_STEP_PX,
+  MAX_BEAM_SLOPE_SHORT_GROUP_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  TREMOLO_BEAM_MAX_LENGTH_PX,
+  TREMOLO_BEAM_STEM_GAP_PX,
+  TREMOLO_BETWEEN_MIN_INTERVAL_PX,
   TREMOLO_NUMERAL_GAP_PX,
   TREMOLO_STEM_OVERSHOOT_PX,
   TREMOLO_STROKE_END_CLEARANCE_PX,
@@ -21,6 +26,7 @@ import {
   TREMOLO_TAIL_ROOM_PX,
   TUPLET_NUMERAL_FONT_SIZE,
 } from '../utils/notationDimensions';
+import { resolveBeamPlacement } from './beamPlacementRules';
 import {
   durationToBase,
   durationToFactor,
@@ -519,4 +525,158 @@ export function tremoloInkPastStemPx(input: TremoloInkInput): number {
   return drawnTremoloTuplet(input.tremolo, input.tuplet) !== null
     ? TREMOLO_NUMERAL_EXTENT_PX
     : 0;
+}
+
+// ─── Two-note tremolos ────────────────────────────────────────────────────────
+
+/**
+ * How many beams a two-note tremolo draws, and how many of them (the outermost)
+ * join the stems: a quaver or shorter keeps its own beams attached, a minim
+ * attaches per `beam-attach`, and crotchets and semibreves attach none.
+ */
+export function tremoloBeamCounts(
+  duration: DurationType,
+  strokes: number,
+  beamAttach: TremoloBeamAttach | null
+): { attached: number; total: number } {
+  if (durationToBase[duration] === 'half') {
+    const attached =
+      beamAttach === 'all' ? strokes : beamAttach === 'outer' ? 1 : 0;
+    return { attached, total: strokes };
+  }
+  const flagCount = flagCountOf(duration);
+  return { attached: flagCount, total: flagCount + strokes };
+}
+
+/** True when `beam-attach` applies to a tremolo of this duration (minims). */
+export function acceptsBeamAttach(duration: DurationType): boolean {
+  return durationToBase[duration] === 'half';
+}
+
+/**
+ * True when two members' heads are an octave or more apart, so their beams
+ * can sit between them.
+ */
+export function canPlaceTremoloBetween(
+  firstHeadYs: readonly number[],
+  secondHeadYs: readonly number[]
+): boolean {
+  const nearest = Math.min(
+    ...firstHeadYs.flatMap((a) => secondHeadYs.map((b) => Math.abs(a - b)))
+  );
+  return nearest >= TREMOLO_BETWEEN_MIN_INTERVAL_PX - EPSILON;
+}
+
+/** One tremolo beam: its top edge at each end. */
+export type TremoloBeamSegment = {
+  x1: number;
+  x2: number;
+  top1: number;
+  top2: number;
+};
+
+export type TremoloGroupLayout = {
+  beams: TremoloBeamSegment[];
+  /** The outermost beam's top edge at each member's stem. */
+  primaryTops: number[];
+  /** Signed distance from one beam level to the next. */
+  levelOffset: number;
+};
+
+// A detached beam is centred on the middle of the group (a lone middle note,
+// or the middle two), stops short of the outer stems and is capped.
+function detachedSpan(xs: readonly number[]): { x1: number; x2: number } {
+  const count = xs.length;
+  const first = xs[0];
+  const last = xs[count - 1];
+  const center =
+    count % 2 === 1
+      ? xs[(count - 1) / 2]
+      : (xs[count / 2 - 1] + xs[count / 2]) / 2;
+  const half = Math.max(
+    0,
+    Math.min(
+      TREMOLO_BEAM_MAX_LENGTH_PX / 2,
+      center - (first + TREMOLO_BEAM_STEM_GAP_PX),
+      last - TREMOLO_BEAM_STEM_GAP_PX - center
+    )
+  );
+  return { x1: center - half, x2: center + half };
+}
+
+/**
+ * A two-note (or multi-note) tremolo's beams, in the note Y map: placed as if
+ * every beam joined the stems, so they sit where an ordinary beam of that many
+ * levels would, with the `attached` outermost ones spanning stem to stem and
+ * the rest detached. Stems (or a semibreve's notional ones) reach the outer
+ * edge of the outermost beam, enclosing them all.
+ */
+export function resolveTremoloGroupLayout(input: {
+  members: readonly { stemX: number; nearestHeadY: number }[];
+  stemUp: boolean;
+  attached: number;
+  total: number;
+}): TremoloGroupLayout {
+  const { members, stemUp, attached, total } = input;
+  const placement = resolveBeamPlacement({
+    notes: members.map((member) => ({
+      x: member.stemX,
+      nearestHeadY: member.nearestHeadY,
+      beamCount: total,
+    })),
+    stemUp,
+  });
+  const xs = members.map((member) => member.stemX);
+  const first = xs[0];
+  const span = xs[xs.length - 1] - first;
+  const topAt = (x: number): number =>
+    span === 0 || !Number.isFinite(span)
+      ? placement.primaryTopAtFirst
+      : placement.primaryTopAtFirst +
+        ((placement.primaryTopAtLast - placement.primaryTopAtFirst) *
+          (x - first)) /
+          span;
+  const detached = detachedSpan(xs);
+  const beams = Array.from({ length: total }, (_, level) => {
+    const { x1, x2 } =
+      level < attached ? { x1: first, x2: xs[xs.length - 1] } : detached;
+    const shift = level * placement.levelOffset;
+    return { x1, x2, top1: topAt(x1) + shift, top2: topAt(x2) + shift };
+  });
+  return {
+    beams,
+    primaryTops: xs.map(topAt),
+    levelOffset: placement.levelOffset,
+  };
+}
+
+/**
+ * Beams between two noteheads an octave or more apart: centred on the line
+ * between the heads' centres, sloping with it no more than an ordinary short
+ * beam, and spanning the gap between the heads, capped and centred.
+ */
+export function resolveBetweenTremoloBeams(input: {
+  from: { edgeX: number; centerY: number };
+  to: { edgeX: number; centerY: number };
+  strokes: number;
+}): TremoloBeamSegment[] {
+  const { from, to, strokes } = input;
+  const { x1, x2 } = detachedSpan([from.edgeX, to.edgeX]);
+  const run = to.edgeX - from.edgeX;
+  const slope = run === 0 ? 0 : (to.centerY - from.centerY) / run;
+  const middleY = from.centerY + slope * ((x1 + x2) / 2 - from.edgeX);
+  const halfRise = Math.max(
+    -MAX_BEAM_SLOPE_SHORT_GROUP_PX / 2,
+    Math.min(MAX_BEAM_SLOPE_SHORT_GROUP_PX / 2, (slope * (x2 - x1)) / 2)
+  );
+  const stackHeight = BEAM_THICKNESS_PX + (strokes - 1) * BEAM_STEP_PX;
+  return Array.from({ length: strokes }, (_, level) => {
+    const top = middleY - stackHeight / 2 + level * BEAM_STEP_PX;
+    return {
+      x1,
+      x2,
+      top1: top - halfRise,
+      top2: top + halfRise,
+    };
+  });
 }

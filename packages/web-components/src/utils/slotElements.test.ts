@@ -7,6 +7,7 @@ import {
   MUSIC_CLEF,
   MUSIC_NOTE,
   MUSIC_REST,
+  MUSIC_TREMOLO,
   MUSIC_TUPLET,
   MUSIC_VOICE,
 } from './consts';
@@ -235,6 +236,86 @@ describe('flattenStaffSlotElements', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('nest it inside the first <music-voice>')
     );
+    warn.mockRestore();
+  });
+});
+
+describe('flattenSlotElements — tremoloGroups', () => {
+  function tremolo(children: HTMLElement[], group?: string): HTMLElement {
+    const el = document.createElement(MUSIC_TREMOLO);
+    if (group !== undefined) {
+      el.setAttribute('tremolo-group', group);
+    }
+    el.append(...children);
+    return el;
+  }
+
+  it('records its members, in order, amidst plain notes', () => {
+    const wrapper = tremolo([note('F'), note('A')]);
+    const { flatElements, tremoloGroups } = flattenSlotElements([
+      note('C'),
+      wrapper,
+      note('D'),
+    ]);
+    expect(flatElements).toHaveLength(4);
+    expect(tremoloGroups).toEqual([
+      { memberIndices: [1, 2], element: wrapper },
+    ]);
+  });
+
+  it('warns and flattens plain with fewer than two notes', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { flatElements, tremoloGroups } = flattenSlotElements([
+      tremolo([note('F')]),
+    ]);
+    expect(flatElements).toHaveLength(1);
+    expect(tremoloGroups).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('at least two'));
+    warn.mockRestore();
+  });
+
+  it('warns and flattens plain when the members’ durations differ', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const long = note('A');
+    long.setAttribute('duration', 'half');
+    const { tremoloGroups } = flattenSlotElements([tremolo([note('F'), long])]);
+    expect(tremoloGroups).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('same duration'));
+    warn.mockRestore();
+  });
+
+  it('refuses a visible rest but takes hidden spacers in a tremolo-group', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(
+      flattenSlotElements([tremolo([note('F'), rest()])]).tremoloGroups
+    ).toHaveLength(0);
+    const spacer = rest();
+    spacer.setAttribute('duration', 'eighth');
+    spacer.setAttribute('hidden', '');
+    expect(
+      flattenSlotElements([tremolo([note('F'), spacer], 't1')]).tremoloGroups
+    ).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('keeps a tremolo inside a tuplet, members carrying the tuplet', () => {
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.append(tremolo([note('F'), note('A')]), note('C'));
+    const { tremoloGroups, tupletsByIndex } = flattenSlotElements([tuplet]);
+    expect(tremoloGroups[0].memberIndices).toEqual([0, 1]);
+    expect(tupletsByIndex.get(0)).toEqual([tuplet]);
+  });
+
+  it('warns once about a tie on a member, keeping the group', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const tied = note('F');
+    tied.setAttribute('tie', 'start');
+    const wrapper = tremolo([tied, note('A')]);
+    flattenSlotElements([wrapper]);
+    const { tremoloGroups } = flattenSlotElements([wrapper]);
+    expect(tremoloGroups).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('slur'));
     warn.mockRestore();
   });
 });

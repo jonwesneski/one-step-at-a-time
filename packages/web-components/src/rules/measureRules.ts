@@ -1,10 +1,11 @@
 import {
   ArpeggioGroupPlacement,
   NoteChordOrRestElementType,
+  TremoloGroupPlacement,
   TupletElementType,
 } from '../types/elements';
 import { BeatsInMeasure, BeatTypeInMeasure } from '../types/theory';
-import { durationContribution } from './beatRules';
+import { computeTremoloScaleByIndex, durationContribution } from './beatRules';
 import { factorToDuration } from './theoryConsts';
 
 export type MeasureFitResult = {
@@ -20,12 +21,15 @@ export type MeasureFitResult = {
  * `<music-arpeggio>` run notes (a written-out arpeggiated chord) do not consume
  * measure duration — only the group's target chord/note does. If the target
  * overflows, the whole group is dropped (never a run whose target didn't fit).
+ * A `<music-tremolo>` fits or drops as a whole too, its members each counting
+ * their share of the written value.
  */
 export function computeAllowedElementCount(
   elements: NoteChordOrRestElementType[],
   timeSig: [BeatsInMeasure, BeatTypeInMeasure],
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
-  arpeggioGroups: readonly ArpeggioGroupPlacement[] = []
+  arpeggioGroups: readonly ArpeggioGroupPlacement[] = [],
+  tremoloGroups: readonly TremoloGroupPlacement[] = []
 ): MeasureFitResult {
   const [beatsInMeasure, beatType] = timeSig;
   const measureDuration = beatsInMeasure / beatType;
@@ -40,6 +44,12 @@ export function computeAllowedElementCount(
       groupFirstIndexByMember.set(index, first);
     }
   }
+  for (const { memberIndices } of tremoloGroups) {
+    for (const index of memberIndices) {
+      groupFirstIndexByMember.set(index, memberIndices[0]);
+    }
+  }
+  const tremoloScaleByIndex = computeTremoloScaleByIndex(tremoloGroups);
 
   let beatOffset = 0;
   for (let i = 0; i < elements.length; i++) {
@@ -48,10 +58,11 @@ export function computeAllowedElementCount(
       element,
       i,
       tupletsByIndex,
-      runIndexSet
+      runIndexSet,
+      tremoloScaleByIndex
     );
 
-    if (beatOffset + contribution > measureDuration) {
+    if (beatOffset + contribution > measureDuration + 1e-9) {
       const error = `no more room for note(s); remaining duration is "${
         factorToDuration.get(measureDuration - beatOffset) ??
         measureDuration - beatOffset

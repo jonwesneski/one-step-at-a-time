@@ -1,6 +1,6 @@
 import { IRestElement } from '../types/elements';
 import { DurationType, RestStaffSide } from '../types/theory';
-import { MUSIC_REST, NOTE_EVENTS } from '../utils/consts';
+import { MUSIC_REST, MUSIC_TREMOLO_NODE, NOTE_EVENTS } from '../utils/consts';
 import { parseRestStaffSide } from '../utils/parsers';
 import {
   createRestSvg,
@@ -50,8 +50,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // `id` shared by every element across a measure's two adjacent grand-staff
     // staves that joins one cross-staff double-stemmed beam group. Resolved
     // by the ancestor <music-measure>.
+    // Ignored on a <music-tremolo> spacer.
     get beamGroup(): string | null {
-      return this.getAttribute('beam-group');
+      return this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+        ? null
+        : this.getAttribute('beam-group');
     }
     set beamGroup(value: string | null) {
       if (value === null) {

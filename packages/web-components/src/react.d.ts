@@ -39,7 +39,10 @@ import type {
   TieStyle,
   TieValue,
   TimeSignature,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
   TremoloLabel,
+  TremoloStrokeCount,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -121,6 +124,12 @@ declare module 'react' {
         hidden?: boolean;
       };
       'music-voice': WebComponentProps;
+      'music-tremolo': WebComponentProps & {
+        strokes?: TremoloStrokeCount;
+        'beam-attach'?: TremoloBeamAttach;
+        'beam-position'?: TremoloBeamPosition;
+        'tremolo-group'?: string;
+      };
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
         'tuplet-group'?: string;

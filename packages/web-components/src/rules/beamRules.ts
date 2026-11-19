@@ -2,6 +2,7 @@ import type {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
+  TremoloGroupPlacement,
   TupletElementType,
 } from '../types/elements';
 import type {
@@ -10,7 +11,11 @@ import type {
   DurationType,
   TremoloValue,
 } from '../types/theory';
-import { BeamsBuilder, type NoteYPosition } from '../utils';
+import {
+  BeamsBuilder,
+  type NoteYPosition,
+  type TremoloBeamGroupSpec,
+} from '../utils';
 import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
 import {
   BEAM_ESTIMATE_NOTE_SPACING_PX,
@@ -21,10 +26,14 @@ import {
   resolveKneedBeamPlacement,
   resolveKneedBeamSplit,
 } from './beamPlacementRules';
-import { durationContribution } from './beatRules';
+import { computeTremoloScaleByIndex, durationContribution } from './beatRules';
 import { determineStemDirections } from './stemRules';
 import { durationToFlagCountMap } from './theoryConsts';
-import { beamedTremoloMinimumStemPx } from './tremoloRules';
+import {
+  acceptsBeamAttach,
+  beamedTremoloMinimumStemPx,
+  canPlaceTremoloBetween,
+} from './tremoloRules';
 
 export function buildBeamsRenderer(
   elements: NoteChordOrRestElementType[],
@@ -39,7 +48,8 @@ export function buildBeamsRenderer(
   crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>,
   // Where mid-stream clef changes take effect, in the same beat-offset space
   // as `elements` (a change applies to entries starting at or after it).
-  clefChangeBeatOffsets: readonly number[] = []
+  clefChangeBeatOffsets: readonly number[] = [],
+  tremoloGroups: readonly TremoloGroupPlacement[] = []
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -47,16 +57,27 @@ export function buildBeamsRenderer(
 } {
   // A `<music-arpeggio>` run note's zero contribution keeps the whole run
   // inside one beat-group window (it cannot straddle an edge).
+  const tremoloScaleByIndex = computeTremoloScaleByIndex(tremoloGroups);
   const elementDurationFactors = elements.map((element, i) =>
-    durationContribution(element, i, tupletsByIndex, arpeggioRunIndices)
+    durationContribution(
+      element,
+      i,
+      tupletsByIndex,
+      arpeggioRunIndices,
+      tremoloScaleByIndex
+    )
   );
   const beatOffsets =
     elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors);
+  const headExtents = elements.map((element) =>
+    headStaffYExtent(element, noteStaffYCoords, chordStaffYCoords)
+  );
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
     beatOffsets,
-    externallyBeamedIndices
+    externallyBeamedIndices,
+    resolveTremoloBeamSpecs(elements, tremoloGroups, headExtents)
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -105,9 +126,6 @@ export function buildBeamsRenderer(
     );
   }
 
-  const headExtents = elements.map((element) =>
-    headStaffYExtent(element, noteStaffYCoords, chordStaffYCoords)
-  );
   if (stemDirectionsOverride === undefined) {
     applyKneedBeams(
       elements,
@@ -122,7 +140,7 @@ export function buildBeamsRenderer(
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {
-      if (!beamsBuilder.isBeamed(i)) {
+      if (!beamsBuilder.needsYPosition(i)) {
         return null;
       }
       const stemUp = stemDirections[i];
@@ -196,7 +214,8 @@ function applyKneedBeams(
       group.some(
         (index) =>
           forcedDirections?.has(elements[index]) ||
-          tremoloOf(elements[index]) !== null
+          tremoloOf(elements[index]) !== null ||
+          beamsBuilder.isTremoloMember(index)
       )
     ) {
       continue;
@@ -286,5 +305,78 @@ function applyOverridesToWholeBeamGroups(
     for (const index of group) {
       stemDirections[index] = forced[0];
     }
+  }
+}
+
+// Flattening keeps any <music-tremolo> whose children can make one; what its
+// beams can do depends on the members' pitches and value, checked here. A
+// cross-staff wrapper with one note on this staff has no beams of its own.
+function resolveTremoloBeamSpecs(
+  elements: readonly NoteChordOrRestElementType[],
+  groups: readonly TremoloGroupPlacement[],
+  headExtents: readonly { highest: number; lowest: number }[]
+): TremoloBeamGroupSpec[] {
+  const specs: TremoloBeamGroupSpec[] = [];
+  for (const { memberIndices, element } of groups) {
+    const notes = memberIndices.filter(
+      (index) =>
+        elements[index] !== undefined &&
+        elements[index].nodeName !== MUSIC_REST_NODE
+    );
+    if (notes.length < 2) {
+      continue;
+    }
+    const duration = elements[notes[0]].duration;
+    const warnings: string[] = [];
+    let beamAttach = element.beamAttach;
+    if (beamAttach !== null && !acceptsBeamAttach(duration)) {
+      warnings.push(
+        `beam-attach only applies to minims; ignoring it on a ${duration} tremolo`
+      );
+      beamAttach = null;
+    }
+    let between = element.beamPosition === 'between';
+    if (between) {
+      const extentYs = (index: number) => [
+        headExtents[index].highest,
+        headExtents[index].lowest,
+      ];
+      const fits =
+        notes.length === 2 &&
+        (durationToFlagCountMap.get(duration) ?? 0) === 0 &&
+        canPlaceTremoloBetween(extentYs(notes[0]), extentYs(notes[1]));
+      if (!fits) {
+        warnings.push(
+          'beam-position="between" needs two unbeamed notes an octave or more apart; placing the beams between the stems'
+        );
+        between = false;
+      }
+    }
+    warnOncePerTremolo(
+      element,
+      warnings.length > 0 ? `[music-tremolo] ${warnings.join('; ')}` : null
+    );
+    specs.push({
+      memberIndices: notes,
+      duration,
+      strokes: element.strokes,
+      beamAttach,
+      between,
+    });
+  }
+  return specs;
+}
+
+// Beams are rebuilt on every render; a wrapper's warning repeats only once
+// its text changes.
+const lastTremoloWarnings = new WeakMap<Element, string>();
+function warnOncePerTremolo(element: Element, warning: string | null): void {
+  if (warning === null) {
+    lastTremoloWarnings.delete(element);
+    return;
+  }
+  if (lastTremoloWarnings.get(element) !== warning) {
+    lastTremoloWarnings.set(element, warning);
+    console.warn(warning);
   }
 }

@@ -23,7 +23,10 @@ import type {
   StemDirection,
   StressType,
   TieStyle,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
   TremoloLabel,
+  TremoloStrokeCount,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -50,7 +53,10 @@ import {
   STEM_DIRECTIONS,
   STRESSES,
   TIE_STYLES,
+  TREMOLO_BEAM_ATTACHES,
+  TREMOLO_BEAM_POSITIONS,
   TREMOLO_LABELS,
+  TREMOLO_STROKE_COUNTS,
   TREMOLO_VALUES,
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
@@ -81,6 +87,11 @@ const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
 const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
 const VALID_TREMOLO_LABELS = new Set<string>(TREMOLO_LABELS);
 const VALID_TIE_STYLES = new Set<string>(TIE_STYLES);
+const VALID_TREMOLO_STROKE_COUNTS = new Set<string>(
+  TREMOLO_STROKE_COUNTS.map(String)
+);
+const VALID_TREMOLO_BEAM_ATTACHES = new Set<string>(TREMOLO_BEAM_ATTACHES);
+const VALID_TREMOLO_BEAM_POSITIONS = new Set<string>(TREMOLO_BEAM_POSITIONS);
 const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
@@ -293,6 +304,28 @@ export const parseTremoloTuplet = (value: string | null): number | null => {
 export const parseTremoloLabel = (value: string | null): TremoloLabel | null =>
   value !== null && VALID_TREMOLO_LABELS.has(value)
     ? (value as TremoloLabel)
+    : null;
+
+// A two-note tremolo's beam count; null when unset or not 1–4.
+export const parseTremoloStrokes = (
+  value: string | null
+): TremoloStrokeCount | null =>
+  value !== null && VALID_TREMOLO_STROKE_COUNTS.has(value)
+    ? (Number(value) as TremoloStrokeCount)
+    : null;
+
+export const parseTremoloBeamAttach = (
+  value: string | null
+): TremoloBeamAttach | null =>
+  value !== null && VALID_TREMOLO_BEAM_ATTACHES.has(value)
+    ? (value as TremoloBeamAttach)
+    : null;
+
+export const parseTremoloBeamPosition = (
+  value: string | null
+): TremoloBeamPosition | null =>
+  value !== null && VALID_TREMOLO_BEAM_POSITIONS.has(value)
+    ? (value as TremoloBeamPosition)
     : null;
 
 // Defaults to a solid tie.

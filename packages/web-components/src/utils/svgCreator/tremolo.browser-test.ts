@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { waitForRedrawCycle } from '../../../test-fixtures/helpers';
+import { resizeHost, waitForRedrawCycle } from '../../../test-fixtures/helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -146,4 +146,78 @@ test('a dotted tie across a barline repeats the accidental, and a solid one drop
 
   await setTieStyle('solid');
   expect(await tiedInAccidental()).toBeNull();
+});
+
+test('resizing keeps a two-note tremolo’s beams centred between its stems', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-tremolo strokes="3">
+         <music-note note="F" octave="4" duration="half"></music-note>
+         <music-note note="A" octave="4" duration="half"></music-note>
+       </music-tremolo>
+       <music-note note="C" octave="5" duration="half"></music-note>
+     </music-staff>`
+  );
+  const offCentre = () =>
+    page.evaluate(() => {
+      const staff = document.querySelector('music-staff');
+      const beam = staff?.shadowRoot
+        ?.querySelector('.tremolo-beam')
+        ?.getBoundingClientRect();
+      const stems = Array.from(
+        document.querySelectorAll('music-tremolo music-note')
+      ).map(
+        (note) =>
+          note.shadowRoot?.querySelector('.stem')?.getBoundingClientRect().x ??
+          Number.NaN
+      );
+      if (beam === undefined) {
+        return Number.NaN;
+      }
+      return beam.x + beam.width / 2 - (stems[0] + stems[1]) / 2;
+    });
+
+  expect(Math.abs(await offCentre())).toBeLessThan(1);
+
+  await resizeHost(page, 360);
+  await waitForRedrawCycle(page);
+
+  expect(Math.abs(await offCentre())).toBeLessThan(1);
+});
+
+test('changing a member’s value breaks the tremolo and respaces the bar', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-tremolo strokes="3">
+         <music-note note="F" octave="4" duration="half"></music-note>
+         <music-note id="second" note="A" octave="4" duration="half"></music-note>
+       </music-tremolo>
+       <music-note id="after" note="C" octave="5" duration="quarter"></music-note>
+     </music-staff>`
+  );
+  const state = () =>
+    page.evaluate(() => ({
+      beams:
+        document
+          .querySelector('music-staff')
+          ?.shadowRoot?.querySelectorAll('.tremolo-beam').length ?? 0,
+      afterX: document.getElementById('after')?.getBoundingClientRect().x ?? 0,
+    }));
+  const before = await state();
+  expect(before.beams).toBe(3);
+
+  await page.evaluate(() => {
+    document.getElementById('second')?.setAttribute('duration', 'quarter');
+  });
+  await waitForRedrawCycle(page);
+
+  const after = await state();
+  expect(after.beams).toBe(0);
+  expect(after.afterX).not.toBeCloseTo(before.afterX, 0);
 });

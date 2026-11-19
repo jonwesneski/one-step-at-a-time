@@ -410,6 +410,19 @@ export type TremoloValue = TremoloStrokeCount | 'unmeasured';
 export type TremoloLabel = 'trem' | 'non-trem';
 
 /**
+ * Which of a minim two-note tremolo's beams join its stems: `all` of them, or
+ * only the `outer` one. Unset leaves every beam detached.
+ */
+export type TremoloBeamAttach = 'all' | 'outer';
+
+/**
+ * `between` places a two-note tremolo's beams between the noteheads, each
+ * note keeping its own stem direction; only for notes an octave or more
+ * apart.
+ */
+export type TremoloBeamPosition = 'between';
+
+/**
  * How a tie is drawn. A `dotted` tie is the less literal form some editions
  * use for unmeasured tremolos; it repeats the tied note's accidental across
  * a barline.

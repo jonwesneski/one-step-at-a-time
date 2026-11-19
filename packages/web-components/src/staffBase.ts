@@ -20,6 +20,7 @@ import {
   MUSIC_ARPEGGIO_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
   STAFF_EVENTS,
@@ -454,6 +455,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       if (
         element.nodeName === MUSIC_TUPLET_NODE ||
         element.nodeName === MUSIC_ARPEGGIO_NODE ||
+        element.nodeName === MUSIC_TREMOLO_NODE ||
         element.nodeName === MUSIC_VOICE_NODE
       ) {
         this.upgradeAssignedElements(element.children);

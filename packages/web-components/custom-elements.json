@@ -1370,7 +1370,7 @@
               "type": {
                 "text": "TremoloValue"
               },
-              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them."
+              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member."
             },
             {
               "name": "tremolo-tuplet",
@@ -4237,7 +4237,7 @@
               "type": {
                 "text": "TremoloValue"
               },
-              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them."
+              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member."
             },
             {
               "name": "tremolo-tuplet",
@@ -4887,6 +4887,15 @@
             {
               "kind": "field",
               "name": "#boundNoteYChange",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundTremoloChange",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5565,6 +5574,12 @@
                   "name": "arpeggioGroups",
                   "type": {
                     "text": "ArpeggioGroupPlacement[]"
+                  }
+                },
+                {
+                  "name": "tremoloGroups",
+                  "type": {
+                    "text": "TremoloGroupPlacement[]"
                   }
                 },
                 {
@@ -9777,6 +9792,15 @@
             },
             {
               "kind": "field",
+              "name": "#boundTremoloChange",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundClefMarkerChange",
               "privacy": "private",
               "inheritedFrom": {
@@ -10447,6 +10471,12 @@
                   "name": "arpeggioGroups",
                   "type": {
                     "text": "ArpeggioGroupPlacement[]"
+                  }
+                },
+                {
+                  "name": "tremoloGroups",
+                  "type": {
+                    "text": "TremoloGroupPlacement[]"
                   }
                 },
                 {
@@ -13136,6 +13166,107 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/tremolo/tremolo.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "A two-note (or multi-note) tremolo: wraps two or more `<music-note>` /\n`<music-chord>` children, each written at the tremolo's full duration,\nthat alternate for that duration once between them. Each member takes an\nequal share of the bar (the second of two sits halfway through), and the\nstaff joins them with tremolo beams. The wrapper itself is layout-only.",
+          "name": "TremoloElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "strokes",
+              "type": {
+                "text": "TremoloStrokeCount"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamAttach",
+              "type": {
+                "text": "TremoloBeamAttach | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamPosition",
+              "type": {
+                "text": "TremoloBeamPosition | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "flatElements",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "strokes",
+              "type": {
+                "text": "TremoloStrokeCount"
+              },
+              "description": "Number of tremolo beams between the notes (`1`–`4`), on top of the notes' own beams (a quaver tremolo keeps its quaver beam). Defaults to `3`."
+            },
+            {
+              "name": "beam-attach",
+              "type": {
+                "text": "TremoloBeamAttach"
+              },
+              "description": "For a minim tremolo, which beams join the stems: `all` or only the `outer` one. Unset leaves every beam detached, as for every other value. Ignored, with a warning, on other note values."
+            },
+            {
+              "name": "beam-position",
+              "type": {
+                "text": "TremoloBeamPosition"
+              },
+              "description": "`between` places the beams between the noteheads, each note keeping its own stem direction, for two notes an octave or more apart. Ignored, with a warning, otherwise."
+            },
+            {
+              "name": "tremolo-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by one `<music-tremolo>` on each of a measure's two adjacent grand-staff staves, joining them into one tremolo between the hands. Each wrapper holds its own staff's notes plus `<music-rest hidden>` for the other hand's. Requires a `<music-measure>` ancestor; standalone, each wrapper renders as an ordinary tremolo."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "music-tremolo",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_TREMOLO",
+          "declaration": {
+            "name": "TremoloElement",
+            "module": "src/tremolo/tremolo.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/tuplet/tuplet.ts",
       "declarations": [
         {
@@ -13227,7 +13358,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\ntremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
           "name": "VoiceElement",
           "members": [
             {

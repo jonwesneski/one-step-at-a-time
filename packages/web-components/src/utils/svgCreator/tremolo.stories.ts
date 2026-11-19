@@ -1,11 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
-import { html } from 'lit';
+import { html, nothing } from 'lit';
 import '../../index';
 import {
+  BASE_DURATIONS,
   DURATIONS,
   NOTES,
   OCTAVES,
   TIE_STYLES,
+  TREMOLO_BEAM_ATTACHES,
+  TREMOLO_BEAM_POSITIONS,
+  TREMOLO_STROKE_COUNTS,
   TREMOLO_VALUES,
 } from '../../utils';
 
@@ -683,5 +687,435 @@ export const Ties: Story = {
         </music-staff>
       </music-measure>
     </music-composition>
+  `,
+};
+
+// Two-note tremolos: each note is written with the tremolo's whole value, and
+// together they fill it once.
+export const TwoNoteTremolo: Story = {
+  args: {
+    duration: 'half',
+    strokes: 3,
+    beamAttach: '',
+    beamPosition: '',
+    first: 'F',
+    second: 'A',
+  },
+  argTypes: {
+    duration: { control: 'select', options: BASE_DURATIONS },
+    strokes: { control: 'select', options: TREMOLO_STROKE_COUNTS },
+    beamAttach: { control: 'select', options: ['', ...TREMOLO_BEAM_ATTACHES] },
+    beamPosition: {
+      control: 'select',
+      options: ['', ...TREMOLO_BEAM_POSITIONS],
+    },
+    first: { control: 'select', options: NOTES },
+    second: { control: 'select', options: NOTES },
+  },
+  render: (args) => html`
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo
+        strokes=${args.strokes}
+        beam-attach=${args.beamAttach || nothing}
+        beam-position=${args.beamPosition || nothing}
+      >
+        <music-note
+          note=${args.first}
+          octave="4"
+          duration=${args.duration}
+        ></music-note>
+        <music-note
+          note=${args.second}
+          octave=${args.beamPosition ? 5 : 4}
+          duration=${args.duration}
+        ></music-note>
+      </music-tremolo>
+    </music-staff>
+  `,
+};
+
+// Unmeasured semibreves and dotted minim chords, then measured notes.
+export const WrittenNoteValues: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="F" octave="4" duration="whole"></music-note>
+        <music-note note="A" octave="4" duration="whole"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-chord duration="dotted-half">
+          <music-note note="C" octave="4"></music-note>
+          <music-note note="E" octave="4"></music-note>
+        </music-chord>
+        <music-chord duration="dotted-half">
+          <music-note note="G" octave="4"></music-note>
+          <music-note note="B" octave="4"></music-note>
+        </music-chord>
+      </music-tremolo>
+      <music-tremolo>
+        <music-note note="C" octave="5" duration="quarter"></music-note>
+        <music-note note="G" octave="5" duration="quarter"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo strokes="2">
+        <music-note note="B" octave="4" duration="eighth"></music-note>
+        <music-note note="G" octave="4" duration="eighth"></music-note>
+      </music-tremolo>
+      <music-tremolo strokes="2">
+        <music-note note="B" octave="4" duration="eighth"></music-note>
+        <music-note note="G" octave="4" duration="eighth"></music-note>
+      </music-tremolo>
+      <music-note note="B" octave="4" duration="dotted-half"></music-note>
+    </music-staff>
+  `,
+};
+
+// Crotchet tremolos take detached beams only, never a quaver beam.
+export const CrotchetTremolos: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      ${[
+        ['F', 'A'],
+        ['G', 'B'],
+        ['A', 'C'],
+        ['F', 'A'],
+      ].map(
+        ([low, high]) => html`
+          <music-tremolo>
+            <music-note note=${low} octave="4" duration="quarter"></music-note>
+            <music-note
+              note=${high}
+              octave=${high === 'C' ? 5 : 4}
+              duration="quarter"
+            ></music-note>
+          </music-tremolo>
+        `
+      )}
+    </music-staff>
+  `,
+};
+
+// Minim tremolos: every beam detached (default), all attached, or only the
+// outer one attached.
+export const MinimBeams: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      ${[null, 'all', 'outer'].map(
+        (beamAttach) => html`
+          <music-tremolo beam-attach=${beamAttach ?? nothing}>
+            <music-note note="F" octave="4" duration="half"></music-note>
+            <music-note note="A" octave="4" duration="half"></music-note>
+          </music-tremolo>
+        `
+      )}
+      <music-rest duration="quarter"></music-rest>
+    </music-staff>
+  `,
+};
+
+// Both stems point one way and enclose every beam; notes an octave or more
+// apart may take the beams between them, keeping their own stems.
+export const StemsAndPositions: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="A" octave="4" duration="half"></music-note>
+        <music-note note="F" octave="5" duration="half"></music-note>
+      </music-tremolo>
+      <music-tremolo>
+        <music-note note="G" octave="4" duration="quarter"></music-note>
+        <music-note note="D" octave="5" duration="quarter"></music-note>
+      </music-tremolo>
+      <music-tremolo>
+        <music-note note="D" octave="5" duration="quarter"></music-note>
+        <music-note note="G" octave="4" duration="quarter"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo beam-position="between">
+        <music-note note="G" octave="4" duration="half"></music-note>
+        <music-note note="G" octave="5" duration="half"></music-note>
+      </music-tremolo>
+      <music-tremolo beam-position="between">
+        <music-note note="F" octave="5" duration="quarter"></music-note>
+        <music-note note="A" octave="3" duration="quarter"></music-note>
+      </music-tremolo>
+      <music-rest duration="quarter"></music-rest>
+    </music-staff>
+  `,
+};
+
+// Semibreves take their beams where their stems would be.
+export const TwoNoteSemibreves: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="C" octave="4" duration="whole"></music-note>
+        <music-note note="D" octave="5" duration="whole"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="C" octave="6" duration="whole"></music-note>
+        <music-note note="E" octave="5" duration="whole"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="D" octave="5" duration="whole"></music-note>
+        <music-note note="Bb" octave="4" duration="whole"></music-note>
+      </music-tremolo>
+    </music-staff>
+  `,
+};
+
+// The second note sits halfway through the tremolo's value, so it lines up
+// with the other parts in a score.
+export const SecondNoteAlignment: Story = {
+  render: () => html`
+    <music-measure>
+      <music-staff clef="treble" time="4/4">
+        <music-tremolo>
+          <music-note note="G" octave="5" duration="whole"></music-note>
+          <music-note note="B" octave="5" duration="whole"></music-note>
+        </music-tremolo>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        ${Array.from(
+          { length: 8 },
+          () =>
+            html`<music-note
+              note="E"
+              octave="4"
+              duration="eighth"
+            ></music-note>`
+        )}
+      </music-staff>
+    </music-measure>
+    <music-measure>
+      <music-staff clef="treble" time="4/4">
+        <music-tremolo>
+          <music-note
+            note="G"
+            octave="4"
+            duration="double-dotted-half"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="4"
+            duration="double-dotted-half"
+          ></music-note>
+        </music-tremolo>
+        <music-rest duration="eighth"></music-rest>
+      </music-staff>
+      <music-staff clef="treble" time="4/4">
+        ${Array.from(
+          { length: 16 },
+          () =>
+            html`<music-note
+              note="E"
+              octave="4"
+              duration="sixteenth"
+            ></music-note>`
+        )}
+      </music-staff>
+    </music-measure>
+    <music-measure>
+      <music-staff clef="treble" time="9/8">
+        <music-tremolo>
+          <music-note note="G" octave="4" duration="dotted-half"></music-note>
+          <music-note note="G" octave="4" duration="dotted-half"></music-note>
+        </music-tremolo>
+        <music-tremolo>
+          <music-note
+            note="G"
+            octave="4"
+            duration="dotted-quarter"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="dotted-quarter"
+          ></music-note>
+        </music-tremolo>
+      </music-staff>
+      <music-staff clef="treble" time="9/8">
+        ${Array.from(
+          { length: 9 },
+          () =>
+            html`<music-note
+              note="E"
+              octave="4"
+              duration="eighth"
+            ></music-note>`
+        )}
+      </music-staff>
+    </music-measure>
+  `,
+};
+
+// Beams stop short of each part's own stems, so two parts' beams don't line
+// up; widely spaced notes take shorter, centred beams.
+export const BeamLength: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>
+        <music-tremolo>
+          <music-note note="D" octave="5" duration="quarter"></music-note>
+          <music-note note="F" octave="5" duration="quarter"></music-note>
+        </music-tremolo>
+        <music-tremolo>
+          <music-note note="C" octave="5" duration="half"></music-note>
+          <music-note note="E" octave="5" duration="half"></music-note>
+        </music-tremolo>
+        <music-note note="E" octave="5" duration="quarter"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-tremolo>
+          <music-note note="F" octave="4" duration="quarter"></music-note>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+        </music-tremolo>
+        <music-tremolo>
+          <music-note note="F" octave="4" duration="half"></music-note>
+          <music-note note="G" octave="4" duration="half"></music-note>
+        </music-tremolo>
+        <music-note note="G" octave="4" duration="quarter"></music-note>
+      </music-voice>
+    </music-staff>
+    <music-composition>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-tremolo>
+            <music-note note="B" octave="4" duration="whole"></music-note>
+            <music-note note="E" octave="5" duration="whole"></music-note>
+          </music-tremolo>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// Each two-note tremolo is beamed on its own, never with its neighbours.
+export const SeparateTremolos: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="2/4">
+      ${[
+        ['B', 'E'],
+        ['F', 'A'],
+        ['D', 'E'],
+        ['A', 'F'],
+      ].map(
+        ([first, second]) => html`
+          <music-tremolo strokes="2">
+            <music-note
+              note=${first}
+              octave=${first === 'D' ? 5 : 4}
+              duration="eighth"
+            ></music-note>
+            <music-note
+              note=${second}
+              octave=${second === 'E' ? 5 : 4}
+              duration="eighth"
+            ></music-note>
+          </music-tremolo>
+        `
+      )}
+    </music-staff>
+  `,
+};
+
+// A slur only when that is the articulation; a slur over the whole figure
+// stands in for a tie between tremolos.
+export const Slurs: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="2/4">
+      <music-tremolo strokes="2">
+        <music-note
+          note="A"
+          octave="4"
+          duration="eighth"
+          slur="start"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="4"
+          duration="eighth"
+          slur="end"
+        ></music-note>
+      </music-tremolo>
+      <music-tremolo strokes="2">
+        <music-note
+          note="E"
+          octave="4"
+          duration="eighth"
+          slur="start"
+        ></music-note>
+        <music-note
+          note="B"
+          octave="4"
+          duration="eighth"
+          slur="end"
+        ></music-note>
+      </music-tremolo>
+      <music-note note="G" octave="4" duration="quarter"></music-note>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note
+          note="E"
+          octave="4"
+          duration="whole"
+          slur="start"
+        ></music-note>
+        <music-note note="G" octave="4" duration="whole"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="E" octave="4" duration="dotted-half"></music-note>
+        <music-note
+          note="G"
+          octave="4"
+          duration="dotted-half"
+          slur="end"
+        ></music-note>
+      </music-tremolo>
+      <music-tremolo>
+        <music-note note="C" octave="5" duration="quarter"></music-note>
+        <music-note note="F" octave="4" duration="quarter"></music-note>
+      </music-tremolo>
+    </music-staff>
+  `,
+};
+
+// Three or more pitches repeat in turn, each placed its share of the way
+// through; minims may beam together.
+export const ThreeOrMorePitches: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-tremolo>
+        <music-note note="A" octave="4" duration="whole"></music-note>
+        <music-note note="B" octave="4" duration="whole"></music-note>
+        <music-note note="C" octave="5" duration="whole"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="3/4">
+      <music-tremolo>
+        <music-note note="B" octave="4" duration="dotted-half"></music-note>
+        <music-note note="A" octave="4" duration="dotted-half"></music-note>
+        <music-note note="G" octave="4" duration="dotted-half"></music-note>
+        <music-note note="F" octave="4" duration="dotted-half"></music-note>
+      </music-tremolo>
+    </music-staff>
+    <music-staff clef="treble" time="2/4">
+      <music-tremolo beam-attach="all">
+        <music-note note="G" octave="4" duration="half"></music-note>
+        <music-note note="A" octave="4" duration="half"></music-note>
+        <music-note note="D" octave="4" duration="half"></music-note>
+      </music-tremolo>
+    </music-staff>
   `,
 };

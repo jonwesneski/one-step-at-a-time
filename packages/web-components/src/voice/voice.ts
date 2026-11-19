@@ -4,6 +4,7 @@ import {
   MUSIC_CLEF_NODE,
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
+  MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE,
   MUSIC_VOICE_NODE,
@@ -19,7 +20,7 @@ import {
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
    * Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/
-   * arpeggio subtree within a `<music-staff>`. A staff either has zero
+   * tremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero
    * `<music-voice>` children (a single, implicit voice — today's behavior,
    * unchanged) or two-or-three, wrapping every one of its active voices in
    * sibling order: the 1st `<music-voice>` is voice 1 (always stems up), the
@@ -85,6 +86,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           child.nodeName !== MUSIC_CHORD_NODE &&
           child.nodeName !== MUSIC_REST_NODE &&
           child.nodeName !== MUSIC_TUPLET_NODE &&
+          child.nodeName !== MUSIC_TREMOLO_NODE &&
           child.nodeName !== MUSIC_ARPEGGIO_NODE &&
           child.nodeName !== MUSIC_CLEF_NODE
         ) {

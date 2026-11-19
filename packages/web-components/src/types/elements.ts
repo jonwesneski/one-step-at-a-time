@@ -28,7 +28,10 @@ import type {
   StressType,
   TieStyle,
   TimeSignature,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
   TremoloLabel,
+  TremoloStrokeCount,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
@@ -519,6 +522,19 @@ export interface IClefElement {
   clef: ClefType;
 }
 
+/**
+ * `<music-tremolo>` — a two-note (or multi-note) tremolo: its notes or chords
+ * are each written at the tremolo's full duration and together fill it once,
+ * joined by tremolo beams.
+ */
+export interface ITremoloElement {
+  strokes: TremoloStrokeCount;
+  beamAttach: TremoloBeamAttach | null;
+  beamPosition: TremoloBeamPosition | null;
+  tremoloGroup: string | null;
+  readonly flatElements: NoteChordOrRestElementType[];
+}
+
 export interface ITupletElement {
   ratio: TupletRatio;
   tupletGroup: string | null;
@@ -574,6 +590,7 @@ export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
+export type TremoloElementType = HTMLElement & ITremoloElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -603,6 +620,13 @@ export type ClefMarkerPlacement = {
 // A `<music-arpeggio>` group found in a staff's slotted content. `runIndices`
 // and `targetIndex` are indices into the resulting flatElements array (the run
 // notes and the final chord/note, which all render as ordinary elements).
+// A valid <music-tremolo> found while flattening: the flat indices of its
+// members, in order. Each member takes 1/N of its written duration.
+export type TremoloGroupPlacement = {
+  memberIndices: number[];
+  element: TremoloElementType;
+};
+
 export type ArpeggioGroupPlacement = {
   runIndices: number[];
   targetIndex: number;

@@ -1133,7 +1133,9 @@ export const collectEntryObstacles = (
   for (const staff of Array.from(root.querySelectorAll(STAFF_TAGS))) {
     beamPolygons.push(
       ...Array.from(
-        staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>('.beam') ?? []
+        staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
+          '.beam, .tremolo-beam'
+        ) ?? []
       )
     );
   }
