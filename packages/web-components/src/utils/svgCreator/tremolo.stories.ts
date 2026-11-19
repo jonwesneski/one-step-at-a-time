@@ -1119,3 +1119,57 @@ export const ThreeOrMorePitches: Story = {
     </music-staff>
   `,
 };
+
+// Between two staves: one `<music-tremolo tremolo-group>` per hand, each
+// holding a hidden rest for the other hand's share. The beams sit mid-system;
+// with a beam joining the stems, the tremolo beams hang below it.
+export const BetweenTwoStaves: Story = {
+  render: () => html`
+    <music-composition>
+      <music-measure>
+        <music-staff clef="treble" time="4/4" group="grand">
+          <music-tremolo tremolo-group="bar-1">
+            <music-rest duration="whole" hidden></music-rest>
+            <music-note note="E" octave="5" duration="whole"></music-note>
+          </music-tremolo>
+        </music-staff>
+        <music-staff clef="bass" time="4/4">
+          <music-tremolo tremolo-group="bar-1">
+            <music-note note="A" octave="2" duration="whole"></music-note>
+            <music-rest duration="whole" hidden></music-rest>
+          </music-tremolo>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4" group="grand">
+          <music-tremolo tremolo-group="bar-2">
+            <music-note note="C" octave="6" duration="whole"></music-note>
+            <music-rest duration="whole" hidden></music-rest>
+          </music-tremolo>
+        </music-staff>
+        <music-staff clef="bass" time="4/4">
+          <music-tremolo tremolo-group="bar-2">
+            <music-rest duration="whole" hidden></music-rest>
+            <music-note note="C" octave="4" duration="whole"></music-note>
+          </music-tremolo>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4" group="grand">
+          <music-tremolo tremolo-group="bar-3" strokes="2">
+            <music-rest duration="half" hidden></music-rest>
+            <music-note note="F" octave="5" duration="half"></music-note>
+          </music-tremolo>
+          <music-rest duration="half"></music-rest>
+        </music-staff>
+        <music-staff clef="bass" time="4/4">
+          <music-tremolo tremolo-group="bar-3" strokes="2" beam-attach="outer">
+            <music-note note="A" octave="2" duration="half"></music-note>
+            <music-rest duration="half" hidden></music-rest>
+          </music-tremolo>
+          <music-rest duration="half"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};

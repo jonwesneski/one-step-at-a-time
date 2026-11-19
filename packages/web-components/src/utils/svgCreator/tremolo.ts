@@ -1,6 +1,8 @@
+import type { TremoloBeamSegment } from '../../rules/tremoloRules';
 import type { TremoloLabel } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  BEAM_THICKNESS_PX,
   TREMOLO_LABEL_CHAR_WIDTH_PX,
   TREMOLO_LABEL_FONT_SIZE_PX,
   TREMOLO_STROKE_RISE_PX,
@@ -82,4 +84,28 @@ export function createTremoloLabel(
   text.setAttribute('fill', 'currentColor');
   text.textContent = TREMOLO_LABEL_TEXT[label];
   return text;
+}
+
+/** `points` for a tremolo beam whose top edge runs along `segment`. */
+export function tremoloBeamPoints(segment: TremoloBeamSegment): string {
+  const { x1, x2, top1, top2 } = segment;
+  return [
+    [x1, top1],
+    [x2, top2],
+    [x2, top2 + BEAM_THICKNESS_PX],
+    [x1, top1 + BEAM_THICKNESS_PX],
+  ]
+    .map(([x, y]) => `${x},${y}`)
+    .join(' ');
+}
+
+/** One tremolo beam, ordinary beam thickness, with vertical ends. */
+export function createTremoloBeamPolygon(
+  segment: TremoloBeamSegment
+): SVGPolygonElement {
+  const beam = document.createElementNS(SVG_NS, 'polygon');
+  beam.classList.add('tremolo-beam');
+  beam.setAttribute('fill', 'currentColor');
+  beam.setAttribute('points', tremoloBeamPoints(segment));
+  return beam;
 }

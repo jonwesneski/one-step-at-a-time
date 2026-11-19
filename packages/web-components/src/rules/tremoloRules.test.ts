@@ -7,6 +7,7 @@ import {
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   TREMOLO_BEAM_MAX_LENGTH_PX,
+  TREMOLO_BEAM_MIN_LENGTH_PX,
   TREMOLO_BEAM_STEM_GAP_PX,
   TREMOLO_STEM_OVERSHOOT_PX,
   TREMOLO_STROKE_END_CLEARANCE_PX,
@@ -34,6 +35,7 @@ import {
   TREMOLO_NUMERAL_EXTENT_PX,
   tremoloBeamCounts,
   tremoloConsistencyWarnings,
+  tremoloDetachedSpan,
   tremoloInkPastStemPx,
   tremoloStemFloorPx,
   tremoloStrokeCountWarning,
@@ -660,5 +662,19 @@ describe('resolveBetweenTremoloBeams', () => {
     expect(middle.top1 - middle.top2).toBeLessThanOrEqual(
       STAFF_LINE_SPACING + 1e-6
     );
+  });
+});
+
+describe('tremoloDetachedSpan', () => {
+  it('keeps a minimum length between stems too close for the usual gap', () => {
+    const { x1, x2 } = tremoloDetachedSpan([0, 12]);
+    expect(x2 - x1).toBeCloseTo(TREMOLO_BEAM_MIN_LENGTH_PX);
+    expect((x1 + x2) / 2).toBeCloseTo(6);
+  });
+
+  it('never reaches past the stems', () => {
+    const { x1, x2 } = tremoloDetachedSpan([0, 4]);
+    expect(x1).toBeGreaterThanOrEqual(0);
+    expect(x2).toBeLessThanOrEqual(4);
   });
 });

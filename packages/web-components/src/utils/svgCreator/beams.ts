@@ -42,8 +42,8 @@ import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import {
   resolveBetweenTremoloBeams,
   resolveTremoloGroupLayout,
-  type TremoloBeamSegment,
   tremoloBeamCounts,
+  type TremoloBeamSegment,
 } from '../../rules/tremoloRules';
 import type { NoteChordOrRestElementType } from '../../types/elements';
 import type {
@@ -73,6 +73,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   NOTEHEAD_WIDTH_PX,
 } from './note';
+import { tremoloBeamPoints } from './tremolo';
 
 /** Y-position data for a single beamed note, passed to BeamsBuilder.buildRenderer(). */
 export type NoteYPosition = {
@@ -544,17 +545,7 @@ class TremoloGroupRenderer implements GroupRenderer {
     this.#recomputePlacement();
     const polygons = this.svgGroup.querySelectorAll('polygon');
     this.#beams.forEach((beam, i) => {
-      polygons[i].setAttribute(
-        'points',
-        [
-          [beam.x1, beam.top1],
-          [beam.x2, beam.top2],
-          [beam.x2, beam.top2 + BEAM_THICKNESS_PX],
-          [beam.x1, beam.top1 + BEAM_THICKNESS_PX],
-        ]
-          .map(([x, y]) => `${x},${y}`)
-          .join(' ')
-      );
+      polygons[i].setAttribute('points', tremoloBeamPoints(beam));
     });
   }
 }

@@ -2227,6 +2227,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawCrossStaffTremolos",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "#boundLayoutSystemDecorations",
               "privacy": "private"
             },
@@ -2719,6 +2724,25 @@
             {
               "kind": "method",
               "name": "#redrawDoubleStemmedBeams",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTremolos",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#lastCrossStaffTremoloWarnings",
+              "privacy": "private",
+              "type": {
+                "text": "string"
+              },
+              "default": "''"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTremolosImpl",
               "privacy": "private"
             },
             {
@@ -4621,6 +4645,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffTremoloRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#crossStaffDynamicsOverrides",
               "privacy": "private",
               "type": {
@@ -5065,6 +5102,17 @@
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTremoloRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5528,6 +5576,28 @@
                   "optional": true,
                   "type": {
                     "text": "(index: number) => {\n      stemUp: boolean;\n      stemExtensionPx: number;\n      noFlags: boolean;\n    }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#crossStaffTremoloRoleOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "CrossStaffTremoloRole | undefined"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
                   }
                 }
               ],
@@ -9518,6 +9588,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffTremoloRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#crossStaffDynamicsOverrides",
               "privacy": "private",
               "type": {
@@ -9962,6 +10045,17 @@
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTremoloRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -10425,6 +10519,28 @@
                   "optional": true,
                   "type": {
                     "text": "(index: number) => {\n      stemUp: boolean;\n      stemExtensionPx: number;\n      noFlags: boolean;\n    }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#crossStaffTremoloRoleOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "CrossStaffTremoloRole | undefined"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
                   }
                 }
               ],

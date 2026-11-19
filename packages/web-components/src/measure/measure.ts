@@ -13,6 +13,14 @@ import {
   sliceConvexPolygon,
 } from '../rules/connectorPlacementRules';
 import {
+  centredCrossStaffTremoloLine,
+  crossStaffTremoloBeamShapes,
+  type CrossStaffTremoloEntry,
+  type CrossStaffTremoloRole,
+  resolveCrossStaffTremoloBeams,
+  resolveCrossStaffTremoloGroups,
+} from '../rules/crossStaffTremoloRules';
+import {
   type CrossStaffTupletEntry,
   crossStaffTupletGapBand,
   type CrossStaffTupletRole,
@@ -70,6 +78,7 @@ import {
   durationToFactor,
   durationToFlagCountMap,
 } from '../rules/theoryConsts';
+import { acceptsBeamAttach, tremoloBeamCounts } from '../rules/tremoloRules';
 import {
   parseTupletRatio,
   type TupletBracketGeometry,
@@ -80,9 +89,14 @@ import type {
   NoteOrChordElementType,
   RestElementType,
   StaffElementBaseType,
+  TremoloElementType,
   TupletElementType,
 } from '../types/elements';
-import type { DynamicMarking, HairpinKind } from '../types/theory';
+import type {
+  DurationType,
+  DynamicMarking,
+  HairpinKind,
+} from '../types/theory';
 import {
   appendArpeggioHairpin,
   COMMON_ATTRIBUTES,
@@ -94,8 +108,10 @@ import {
   createDynamicMarkingSvg,
   createHairpinSvg,
   createSharedStemLine,
+  createTremoloBeamPolygon,
   createTupletBracketSvg,
   isStaffNodeName,
+  MUSIC_ARPEGGIO,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -103,6 +119,7 @@ import {
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_STAFF_GUITAR_TAB_NODE,
+  MUSIC_TREMOLO,
   MUSIC_TUPLET,
   MUSIC_VOICE,
   NOTE_EVENTS,
@@ -110,6 +127,7 @@ import {
   STAFF_EVENTS,
   STAFF_TAGS,
   SVG_NS,
+  TREMOLO_EVENTS,
   TUPLET_EVENTS,
 } from '../utils';
 import {
@@ -127,6 +145,7 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   ARPEGGIO_CHORD_GAP_PX,
+  BASE_STEM_LENGTH_PX,
   BEAM_GAP_PX,
   BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
@@ -159,7 +178,11 @@ import {
   TUPLET_NUMERAL_FONT_SIZE,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
-import { parseMeasureNumberDisplay } from '../utils/parsers';
+import {
+  parseMeasureNumberDisplay,
+  parseTremoloBeamAttach,
+  parseTremoloStrokes,
+} from '../utils/parsers';
 import { flattenSlotElements } from '../utils/slotElements';
 import {
   measureVerticalExtents,
@@ -415,6 +438,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#syncClefChangeBeats();
       this.#redrawArpeggios();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawCrossStaffTremolos();
       this.#redrawCrossStaffTuplets();
       this.#redrawMeasureDynamics();
       this.#redrawConnectors();
@@ -423,6 +447,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
     #boundRedrawCrossStaffTuplets = () => this.#redrawCrossStaffTuplets();
+    #boundRedrawCrossStaffTremolos = () => this.#redrawCrossStaffTremolos();
     // A staff's margin can change mid-render (its own headroom) or from the
     // composition's row alignment; either moves its lines, so only the
     // system decorations re-lay — not the beam/connector redraw chain, which
@@ -519,6 +544,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.addEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawCrossStaffTremolos
+      );
+      this.addEventListener(
+        TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedrawCrossStaffTremolos
       );
       this.addEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
@@ -623,6 +656,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.removeEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawDoubleStemmedBeams
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundRedrawCrossStaffTremolos
+      );
+      this.removeEventListener(
+        TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedrawCrossStaffTremolos
       );
       this.removeEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
@@ -870,6 +911,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             color: currentColor;
           }
 
+          .cross-staff-tremolos-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
+
           .cross-staff-tuplets-overlay {
             position: absolute;
             inset: 0;
@@ -906,6 +955,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                group, spanning both staves' gap — see
                #redrawDoubleStemmedBeams -->
           <svg class="double-stemmed-beams-overlay"></svg>
+          <!-- a tremolo-group's beams, between the hands — see
+               #redrawCrossStaffTremolos -->
+          <svg class="cross-staff-tremolos-overlay"></svg>
           <!-- a tuplet-group bracket centred in the gap between the hands —
                see #redrawCrossStaffTuplets -->
           <svg class="cross-staff-tuplets-overlay"></svg>
@@ -945,6 +997,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       staffConnector.classList.toggle('hidden', !isFirstInRow);
       this.#redrawArpeggios();
       this.#redrawDoubleStemmedBeams();
+      this.#redrawCrossStaffTremolos();
       this.#redrawCrossStaffTuplets();
       this.#redrawMeasureDynamics();
       this.#redrawConnectors();
@@ -2051,6 +2104,318 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#guardedRedraw('double-stemmed beam', () =>
         this.#redrawDoubleStemmedBeamsImpl()
       );
+    }
+
+    #redrawCrossStaffTremolos() {
+      this.#guardedRedraw('cross-staff tremolo', () =>
+        this.#redrawCrossStaffTremolosImpl()
+      );
+    }
+
+    // Warnings repeat only once their text changes: this pass runs on every
+    // layout of either staff.
+    #lastCrossStaffTremoloWarnings = '';
+
+    // Joins one `<music-tremolo tremolo-group>` on each of two adjacent
+    // staves into one tremolo between the hands. Like the double-stemmed beam
+    // pass: push each staff's stem directions (top down, bottom up) and let
+    // it re-lay out, then measure the real stems, place the beams in the gap,
+    // write each stem's length and draw the beams here. The staff beams none
+    // of these notes itself (externallyBeamedIndices).
+    #redrawCrossStaffTremolosImpl() {
+      const staves = Array.from(this.children).filter((el) =>
+        isStaffNodeName(el.nodeName)
+      ) as StaffElementBaseType[];
+
+      const entries: CrossStaffTremoloEntry<
+        TremoloElementType,
+        NoteChordOrRestElementType
+      >[] = [];
+      staves.forEach((staff, staffIndex) => {
+        const wrappers = staff.querySelectorAll<TremoloElementType>(
+          `${MUSIC_TREMOLO}[tremolo-group]`
+        );
+        for (const tremolo of Array.from(wrappers)) {
+          const { flatElements, tremoloGroups } = flattenSlotElements([
+            tremolo,
+          ]);
+          const share = 1 / Math.max(1, flatElements.length);
+          const first = flatElements[0];
+          const beatOffsetOf = (
+            staff as unknown as {
+              beatOffsetOf?: (element: Element) => number | null;
+            }
+          ).beatOffsetOf;
+          entries.push({
+            staffIndex,
+            tremolo,
+            // Read from attributes: the pass can run before a wrapper parsed
+            // from markup has upgraded.
+            tremoloGroup: tremolo.getAttribute('tremolo-group') ?? '',
+            strokes: parseTremoloStrokes(tremolo.getAttribute('strokes')) ?? 3,
+            valid: tremoloGroups.length === 1,
+            isNested:
+              tremolo.parentElement?.closest(
+                `${MUSIC_TUPLET}, ${MUSIC_ARPEGGIO}, ${MUSIC_TREMOLO}`
+              ) != null,
+            startBeat:
+              first !== undefined && beatOffsetOf !== undefined
+                ? beatOffsetOf.call(staff, first)
+                : null,
+            members: flatElements.map((element) => {
+              const duration = (element.getAttribute('duration') ??
+                'quarter') as DurationType;
+              return {
+                element,
+                isRest: element.nodeName === MUSIC_REST_NODE,
+                duration,
+                beatLength: durationToFactor[duration] * share,
+              };
+            }),
+          });
+        }
+      });
+
+      const { groups, warnings } = resolveCrossStaffTremoloGroups(entries);
+      const warningText = warnings.join('\n');
+      if (warningText !== this.#lastCrossStaffTremoloWarnings) {
+        for (const warning of warnings) {
+          console.warn(`[music-measure] ${warning}`);
+        }
+      }
+      this.#lastCrossStaffTremoloWarnings = warningText;
+
+      const rolesByStaffIndex = new Map<
+        number,
+        Map<TremoloElementType, CrossStaffTremoloRole>
+      >();
+      const assignRole = (
+        staffIndex: number,
+        tremolo: TremoloElementType,
+        stemUp: boolean
+      ) => {
+        const roles = rolesByStaffIndex.get(staffIndex) ?? new Map();
+        roles.set(tremolo, { stemUp });
+        rolesByStaffIndex.set(staffIndex, roles);
+      };
+      for (const group of groups) {
+        assignRole(group.topStaffIndex, group.topTremolo, false);
+        assignRole(group.bottomStaffIndex, group.bottomTremolo, true);
+      }
+      staves.forEach((staff, staffIndex) => {
+        if ('crossStaffTremoloRoles' in staff) {
+          (
+            staff as unknown as {
+              crossStaffTremoloRoles: ReadonlyMap<
+                TremoloElementType,
+                CrossStaffTremoloRole
+              > | null;
+            }
+          ).crossStaffTremoloRoles = rolesByStaffIndex.get(staffIndex) ?? null;
+        }
+      });
+
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.cross-staff-tremolos-overlay'
+      );
+      if (overlay) {
+        while (overlay.firstChild) {
+          overlay.removeChild(overlay.firstChild);
+        }
+      }
+      const clearanceByStaff = new Map<StaffElementBaseType, VerticalBand>();
+      if (groups.length === 0 || !overlay) {
+        this.#applyGapClearance('tremolos', clearanceByStaff, staves);
+        return;
+      }
+
+      const measureRect = this.getBoundingClientRect();
+      for (const group of groups) {
+        const topGapEdgeY =
+          this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
+          measureRect.top;
+        const bottomGapEdgeY =
+          this.#staffContainerRect(staves[group.bottomStaffIndex]).top -
+          measureRect.top;
+
+        // Each note's stem, or where a semibreve's would be, and where it
+        // would end at its base length (a drawn stem's own extension taken
+        // back off, so repeated passes measure the same input).
+        const stems: {
+          element: NoteOrChordElementType;
+          staffIndex: number;
+          stemUp: boolean;
+          stemmed: boolean;
+          x: number;
+          naturalY: number;
+        }[] = [];
+        for (const note of group.notes) {
+          const element = note.element as NoteOrChordElementType;
+          const stemUp = note.staffIndex === group.bottomStaffIndex;
+          const stemRect = this.#stemRect(element);
+          if (stemRect) {
+            const measuredTipY =
+              (stemUp ? stemRect.top : stemRect.bottom) - measureRect.top;
+            stems.push({
+              element,
+              staffIndex: note.staffIndex,
+              stemUp,
+              stemmed: true,
+              x: (stemRect.left + stemRect.right) / 2 - measureRect.left,
+              naturalY: stemUp
+                ? measuredTipY + element.stemExtension
+                : measuredTipY - element.stemExtension,
+            });
+            continue;
+          }
+          const heads = this.#headRects(element);
+          if (heads.length === 0) {
+            continue;
+          }
+          const head = stemUp
+            ? heads.reduce((a, b) => (b.top < a.top ? b : a))
+            : heads.reduce((a, b) => (b.bottom > a.bottom ? b : a));
+          const centerY = (head.top + head.bottom) / 2 - measureRect.top;
+          stems.push({
+            element,
+            staffIndex: note.staffIndex,
+            stemUp,
+            stemmed: false,
+            x: (stemUp ? head.right : head.left) - measureRect.left,
+            naturalY: centerY + (stemUp ? -1 : 1) * BASE_STEM_LENGTH_PX,
+          });
+        }
+        if (stems.length < 2) {
+          continue;
+        }
+        // Before a staff has spaced its notes, its successive notes share an
+        // x; its NOTES_POSITIONED re-runs this pass.
+        const notSpacedYet = stems.some((stem, i) =>
+          stems
+            .slice(0, i)
+            .some(
+              (earlier) =>
+                earlier.staffIndex === stem.staffIndex &&
+                Math.abs(earlier.x - stem.x) < 0.5
+            )
+        );
+        if (notSpacedYet) {
+          continue;
+        }
+
+        const requestedAttach =
+          parseTremoloBeamAttach(
+            group.topTremolo.getAttribute('beam-attach')
+          ) ??
+          parseTremoloBeamAttach(
+            group.bottomTremolo.getAttribute('beam-attach')
+          );
+        const beamAttach =
+          requestedAttach !== null && acceptsBeamAttach(group.duration)
+            ? requestedAttach
+            : null;
+        const { attached, total } = tremoloBeamCounts(
+          group.duration,
+          group.strokes,
+          beamAttach
+        );
+        const firstX = stems[0].x;
+        const lastX = stems[stems.length - 1].x;
+        const resolved = resolveDoubleStemmedBeamLine(
+          stems.map((stem) => ({
+            x: stem.x,
+            naturalY: stem.naturalY,
+            isTopStaff: stem.staffIndex === group.topStaffIndex,
+          })),
+          topGapEdgeY,
+          bottomGapEdgeY
+        );
+        const centred = centredCrossStaffTremoloLine({
+          firstX,
+          lastX,
+          slope:
+            lastX === firstX
+              ? 0
+              : (resolved.yAtLastX - resolved.yAtFirstX) / (lastX - firstX),
+          topGapEdgeY,
+          bottomGapEdgeY,
+          total,
+        });
+        const stackLine: DoubleStemmedBeamLine = {
+          yAtFirstX: centred.yAtFirstX,
+          yAtLastX: centred.yAtLastX,
+        };
+        const shapes = crossStaffTremoloBeamShapes({
+          stemXs: stems.map((stem) => stem.x),
+          attached,
+          total,
+        });
+        const clearance = resolveDoubleStemmedBeamClearance({
+          line: stackLine,
+          firstX,
+          lastX,
+          beamShapes: shapes,
+          hangingShapes: [],
+          keepOuts: [
+            ...this.#octaveSignRects(
+              staves[group.topStaffIndex],
+              'below',
+              measureRect
+            ).map((rect) => ({ ...rect, staff: 'top' as const })),
+            ...this.#octaveSignRects(
+              staves[group.bottomStaffIndex],
+              'above',
+              measureRect
+            ).map((rect) => ({ ...rect, staff: 'bottom' as const })),
+          ],
+          noteheads: stems.flatMap(({ element, stemUp }) =>
+            this.#headRects(element).map((head) => ({
+              left: head.left - measureRect.left,
+              right: head.right - measureRect.left,
+              top: head.top - measureRect.top,
+              bottom: head.bottom - measureRect.top,
+              stemUp,
+            }))
+          ),
+          clearance: OCTAVE_SIGN_BEAM_CLEARANCE_PX,
+          minStemLength: DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
+        });
+        if (clearance.reserveOn !== null) {
+          addGapNeed(
+            clearanceByStaff,
+            staves[
+              clearance.reserveOn === 'bottom'
+                ? group.bottomStaffIndex
+                : group.topStaffIndex
+            ],
+            clearance.reserveOn === 'bottom' ? 'top' : 'bottom',
+            clearance.deficit
+          );
+        }
+
+        const { beams, stemTipYs } = resolveCrossStaffTremoloBeams({
+          stems,
+          line: {
+            firstX,
+            lastX,
+            yAtFirstX: stackLine.yAtFirstX + clearance.shift,
+            yAtLastX: stackLine.yAtLastX + clearance.shift,
+          },
+          attached,
+          total,
+        });
+        stems.forEach((stem, i) => {
+          if (stem.stemmed) {
+            stem.element.stemExtension = stem.stemUp
+              ? stem.naturalY - stemTipYs[i]
+              : stemTipYs[i] - stem.naturalY;
+          }
+        });
+        for (const beam of beams) {
+          overlay.appendChild(createTremoloBeamPolygon(beam));
+        }
+      }
+      this.#applyGapClearance('tremolos', clearanceByStaff, staves);
     }
 
     #redrawCrossStaffTuplets() {
@@ -3466,6 +3831,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Everything placed in the gap between staves, in dependency order.
     #redrawGapPasses() {
       this.#redrawDoubleStemmedBeams();
+      this.#redrawCrossStaffTremolos();
       this.#redrawCrossStaffTuplets();
       this.#redrawMeasureDynamics();
       this.#redrawConnectors();

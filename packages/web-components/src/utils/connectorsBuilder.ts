@@ -1143,7 +1143,7 @@ export const collectEntryObstacles = (
     beamPolygons.push(
       ...Array.from(
         measure.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
-          '.double-stemmed-beam'
+          '.double-stemmed-beam, .tremolo-beam'
         ) ?? []
       )
     );

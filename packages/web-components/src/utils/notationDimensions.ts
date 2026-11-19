@@ -1496,6 +1496,13 @@ export const TREMOLO_BEAM_STEM_GAP_PX = STAFF_LINE_SPACING * 0.5;
 export const TREMOLO_BEAM_MAX_LENGTH_PX = STAFF_LINE_SPACING * 6;
 
 /**
+ * Shortest (px) a detached tremolo beam is drawn; between stems closer than
+ * that it may come nearer them than TREMOLO_BEAM_STEM_GAP_PX.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_BEAM_MIN_LENGTH_PX = STAFF_LINE_SPACING;
+
+/**
  * Shortest distance (px) between two notes' heads for `beam-position="between"`:
  * an octave.
  * = 7 × STAFF_Y_STEP

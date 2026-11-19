@@ -14,6 +14,7 @@ import {
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   TREMOLO_BEAM_MAX_LENGTH_PX,
+  TREMOLO_BEAM_MIN_LENGTH_PX,
   TREMOLO_BEAM_STEM_GAP_PX,
   TREMOLO_BETWEEN_MIN_INTERVAL_PX,
   TREMOLO_NUMERAL_GAP_PX,
@@ -583,9 +584,15 @@ export type TremoloGroupLayout = {
   levelOffset: number;
 };
 
-// A detached beam is centred on the middle of the group (a lone middle note,
-// or the middle two), stops short of the outer stems and is capped.
-function detachedSpan(xs: readonly number[]): { x1: number; x2: number } {
+/**
+ * A detached beam is centred on the middle of the group (a lone middle note,
+ * or the middle two), stops short of the outer stems and is capped; between
+ * stems too close for that, it keeps a minimum length instead.
+ */
+export function tremoloDetachedSpan(xs: readonly number[]): {
+  x1: number;
+  x2: number;
+} {
   const count = xs.length;
   const first = xs[0];
   const last = xs[count - 1];
@@ -593,12 +600,16 @@ function detachedSpan(xs: readonly number[]): { x1: number; x2: number } {
     count % 2 === 1
       ? xs[(count - 1) / 2]
       : (xs[count / 2 - 1] + xs[count / 2]) / 2;
+  const clearOfStems = Math.min(
+    center - (first + TREMOLO_BEAM_STEM_GAP_PX),
+    last - TREMOLO_BEAM_STEM_GAP_PX - center
+  );
+  const room = Math.min(center - first, last - center);
   const half = Math.max(
     0,
     Math.min(
       TREMOLO_BEAM_MAX_LENGTH_PX / 2,
-      center - (first + TREMOLO_BEAM_STEM_GAP_PX),
-      last - TREMOLO_BEAM_STEM_GAP_PX - center
+      Math.max(clearOfStems, Math.min(TREMOLO_BEAM_MIN_LENGTH_PX / 2, room))
     )
   );
   return { x1: center - half, x2: center + half };
@@ -636,7 +647,7 @@ export function resolveTremoloGroupLayout(input: {
         ((placement.primaryTopAtLast - placement.primaryTopAtFirst) *
           (x - first)) /
           span;
-  const detached = detachedSpan(xs);
+  const detached = tremoloDetachedSpan(xs);
   const beams = Array.from({ length: total }, (_, level) => {
     const { x1, x2 } =
       level < attached ? { x1: first, x2: xs[xs.length - 1] } : detached;
@@ -661,7 +672,7 @@ export function resolveBetweenTremoloBeams(input: {
   strokes: number;
 }): TremoloBeamSegment[] {
   const { from, to, strokes } = input;
-  const { x1, x2 } = detachedSpan([from.edgeX, to.edgeX]);
+  const { x1, x2 } = tremoloDetachedSpan([from.edgeX, to.edgeX]);
   const run = to.edgeX - from.edgeX;
   const slope = run === 0 ? 0 : (to.centerY - from.centerY) / run;
   const middleY = from.centerY + slope * ((x1 + x2) / 2 - from.edgeX);

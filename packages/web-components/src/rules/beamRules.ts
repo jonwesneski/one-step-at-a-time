@@ -77,7 +77,12 @@ export function buildBeamsRenderer(
     timeSig,
     beatOffsets,
     externallyBeamedIndices,
-    resolveTremoloBeamSpecs(elements, tremoloGroups, headExtents)
+    resolveTremoloBeamSpecs(
+      elements,
+      tremoloGroups,
+      headExtents,
+      externallyBeamedIndices ?? new Set()
+    )
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -310,18 +315,22 @@ function applyOverridesToWholeBeamGroups(
 
 // Flattening keeps any <music-tremolo> whose children can make one; what its
 // beams can do depends on the members' pitches and value, checked here. A
-// cross-staff wrapper with one note on this staff has no beams of its own.
+// wrapper the measure joins across staves, or one with a single note on this
+// staff, has no beams of its own.
 function resolveTremoloBeamSpecs(
   elements: readonly NoteChordOrRestElementType[],
   groups: readonly TremoloGroupPlacement[],
-  headExtents: readonly { highest: number; lowest: number }[]
+  headExtents: readonly { highest: number; lowest: number }[],
+  // Members the measure beams across both staves (a tremolo-group).
+  externallyBeamedIndices: ReadonlySet<number>
 ): TremoloBeamGroupSpec[] {
   const specs: TremoloBeamGroupSpec[] = [];
   for (const { memberIndices, element } of groups) {
     const notes = memberIndices.filter(
       (index) =>
         elements[index] !== undefined &&
-        elements[index].nodeName !== MUSIC_REST_NODE
+        elements[index].nodeName !== MUSIC_REST_NODE &&
+        !externallyBeamedIndices.has(index)
     );
     if (notes.length < 2) {
       continue;

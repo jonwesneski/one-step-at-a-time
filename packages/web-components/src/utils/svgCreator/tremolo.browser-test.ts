@@ -221,3 +221,95 @@ test('changing a member’s value breaks the tremolo and respaces the bar', asyn
   expect(after.beams).toBe(0);
   expect(after.afterX).not.toBeCloseTo(before.afterX, 0);
 });
+
+const grandStaffTremolo = (groupOnBottom = 't1') => `
+  <music-measure>
+    <music-staff clef="treble" time="4/4" group="grand">
+      <music-tremolo id="top-tremolo" tremolo-group="t1">
+        <music-note id="top-note" note="E" octave="5" duration="half"></music-note>
+        <music-rest duration="half" hidden></music-rest>
+      </music-tremolo>
+      <music-rest duration="half"></music-rest>
+    </music-staff>
+    <music-staff clef="bass" time="4/4">
+      <music-tremolo tremolo-group="${groupOnBottom}">
+        <music-rest duration="half" hidden></music-rest>
+        <music-note id="bottom-note" note="A" octave="2" duration="half"></music-note>
+      </music-tremolo>
+      <music-rest duration="half"></music-rest>
+    </music-staff>
+  </music-measure>`;
+
+async function crossStaffBeamCentreOffset(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const measure = document.querySelector('music-measure');
+    const beams = Array.from(
+      measure?.shadowRoot?.querySelectorAll(
+        '.cross-staff-tremolos-overlay .tremolo-beam'
+      ) ?? []
+    ).map((beam) => beam.getBoundingClientRect());
+    const staves = Array.from(document.querySelectorAll('music-staff')).map(
+      (staff) =>
+        staff.shadowRoot
+          ?.querySelector('.staff-container')
+          ?.getBoundingClientRect()
+    );
+    if (beams.length === 0 || !staves[0] || !staves[1]) {
+      return Number.NaN;
+    }
+    const stackMiddle =
+      (Math.min(...beams.map((beam) => beam.top)) +
+        Math.max(...beams.map((beam) => beam.bottom))) /
+      2;
+    return stackMiddle - (staves[0].bottom + staves[1].top) / 2;
+  });
+}
+
+test('a tremolo-group draws its beams between the hands and keeps them there on resize', async ({
+  page,
+}) => {
+  await render(page, grandStaffTremolo());
+  expect(Math.abs(await crossStaffBeamCentreOffset(page))).toBeLessThan(2);
+
+  await resizeHost(page, 380);
+  await waitForRedrawCycle(page);
+
+  expect(Math.abs(await crossStaffBeamCentreOffset(page))).toBeLessThan(2);
+});
+
+test('breaking a tremolo-group falls back to each staff on its own and restores the stems', async ({
+  page,
+}) => {
+  await render(page, grandStaffTremolo());
+  const state = () =>
+    page.evaluate(() => ({
+      measureBeams:
+        document
+          .querySelector('music-measure')
+          ?.shadowRoot?.querySelectorAll(
+            '.cross-staff-tremolos-overlay .tremolo-beam'
+          ).length ?? 0,
+      topStemUp: (
+        document.getElementById('top-note') as unknown as { stemUp: boolean }
+      ).stemUp,
+      topExtension: (
+        document.getElementById('top-note') as unknown as {
+          stemExtension: number;
+        }
+      ).stemExtension,
+    }));
+  const joined = await state();
+  expect(joined.measureBeams).toBe(3);
+  expect(joined.topStemUp).toBe(false);
+  expect(joined.topExtension).toBeGreaterThan(0);
+
+  await page.evaluate(() => {
+    document.getElementById('top-tremolo')?.removeAttribute('tremolo-group');
+  });
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+
+  const apart = await state();
+  expect(apart.measureBeams).toBe(0);
+  expect(apart.topExtension).toBe(0);
+});

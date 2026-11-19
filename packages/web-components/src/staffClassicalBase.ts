@@ -25,6 +25,7 @@ import {
   mergeClefChangeBeats,
 } from './rules/clefChangeRules';
 import { getClefRenderData } from './rules/clefRules';
+import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
   pairHairpinsWithLeftovers,
@@ -142,6 +143,7 @@ import type {
   NoteLetterOctave,
   NoteOrChordElementType,
   RestElementType,
+  TremoloElementType,
   TremoloGroupPlacement,
   TupletElementType,
   UnisonPart,
@@ -636,6 +638,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     TupletElementType,
     CrossStaffTupletRole
   > | null = null;
+  #crossStaffTremoloRoles: ReadonlyMap<
+    TremoloElementType,
+    CrossStaffTremoloRole
+  > | null = null;
   #crossStaffDynamicsOverrides: ReadonlyMap<
     NoteOrChordElementType,
     CrossStaffDynamicsOverride
@@ -902,6 +908,37 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // Set by the ancestor <music-measure> for each of this staff's
+  // `<music-tremolo tremolo-group>` wrappers that joined a resolved
+  // cross-staff tremolo (measure.ts#redrawCrossStaffTremolos): their notes'
+  // stems point into the gap, and the measure draws the beams and writes the
+  // stem lengths, so this staff beams none of them. Compared by content, like
+  // crossStaffTupletRoles below.
+  get crossStaffTremoloRoles(): ReadonlyMap<
+    TremoloElementType,
+    CrossStaffTremoloRole
+  > | null {
+    return this.#crossStaffTremoloRoles;
+  }
+
+  set crossStaffTremoloRoles(
+    value: ReadonlyMap<TremoloElementType, CrossStaffTremoloRole> | null
+  ) {
+    const current = this.#crossStaffTremoloRoles;
+    const unchanged =
+      current === value ||
+      (current !== null &&
+        value !== null &&
+        current.size === value.size &&
+        [...current].every(
+          ([tremolo, role]) => value.get(tremolo)?.stemUp === role.stemUp
+        ));
+    if (unchanged) {
+      return;
+    }
+    this.#crossStaffTremoloRoles = value;
+    this.#renderNotes();
+  }
+
   // `<music-tuplet tuplet-group>` wrappers that joined a resolved cross-staff
   // tuplet (measure.ts#redrawCrossStaffTuplets): forces its members' stems
   // into the gap and either suppresses its bracket or forces its side.
@@ -1722,6 +1759,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
   }
 
+  #crossStaffTremoloRoleOf(
+    element: NoteChordOrRestElementType
+  ): CrossStaffTremoloRole | undefined {
+    const parent = element.parentElement;
+    return parent?.nodeName === MUSIC_TREMOLO_NODE
+      ? this.#crossStaffTremoloRoles?.get(parent as TremoloElementType)
+      : undefined;
+  }
+
   // Builds one voice key's full VoiceRenderState: Y-coordinate resolution,
   // beam/stem resolution (policy-driven for a real multi-voice track,
   // pitch-driven for the single-voice case and the 'combined' track — see
@@ -1763,7 +1809,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           const element = elements[i];
           return (
             element.nodeName !== MUSIC_REST_NODE &&
-            (element as NoteElementType | ChordElementType).beamGroup !== null
+            ((element as NoteElementType | ChordElementType).beamGroup !==
+              null ||
+              this.#crossStaffTremoloRoleOf(element) !== undefined)
           );
         })
     );
@@ -1834,15 +1882,27 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
       }
     }
+    const crossStaffTremoloStemOverrides = new Map<
+      NoteChordOrRestElementType,
+      boolean
+    >();
+    for (const element of elements) {
+      const role = this.#crossStaffTremoloRoleOf(element);
+      if (role !== undefined && element.nodeName !== MUSIC_REST_NODE) {
+        crossStaffTremoloStemOverrides.set(element, role.stemUp);
+      }
+    }
     const combinedStemOverrides:
       | ReadonlyMap<NoteChordOrRestElementType, boolean>
       | undefined =
       authoredStemOverrides.size > 0 ||
       crossStaffTupletStemOverrides.size > 0 ||
+      crossStaffTremoloStemOverrides.size > 0 ||
       this.#crossStaffBeamStemOverrides
         ? new Map([
             ...(this.#crossStaffBeamStemOverrides ?? []),
             ...crossStaffTupletStemOverrides,
+            ...crossStaffTremoloStemOverrides,
             ...authoredStemOverrides,
           ])
         : undefined;
