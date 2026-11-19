@@ -13,7 +13,16 @@ import {
 } from '../../rules/augmentationDotRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
-import { durationToBase, durationToDotCount } from '../../rules/theoryConsts';
+import {
+  durationToBase,
+  durationToDotCount,
+  isStemlessDuration,
+} from '../../rules/theoryConsts';
+import {
+  resolveStrokePlacement,
+  STAFF_BAND,
+  stemEndingFor,
+} from '../../rules/tremoloRules';
 import type {
   AccidentalType,
   DurationType,
@@ -33,6 +42,7 @@ import {
   GRACE_MAIN_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
+  STEM_OVERLAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
@@ -55,10 +65,12 @@ import {
   noteHeadGeometry,
   noteHeadLeftOverhangPx,
   stemBeamJunctionPosition,
+  stemTipPosition,
   upTailDotClearX,
   type NoteDotLayout,
   type NoteProps,
 } from './note';
+import { createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // A chord draws its tones itself, so the per-note head/accidental/staff
@@ -117,6 +129,7 @@ export const createChordSvg = ({
   trillFinishNotes,
   trillFinishSlur = 'to-main',
   augmentationDotRows = null,
+  tremoloStrokeCount = 0,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -194,6 +207,42 @@ export const createChordSvg = ({
       (STAFF_Y_PADDING + staffYCoordinate - yOffset).toString()
     );
     svg.appendChild(noteSvg);
+  }
+
+  const stemless = isStemlessDuration(duration);
+  if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
+    const base = durationToBase[duration];
+    // Strokes start past the head nearest the stem's open end. A stemless
+    // chord centres them on its undisplaced column, the side a stem's heads
+    // normally sit.
+    const headY = stemUp
+      ? Math.min(...staffYCoordinates)
+      : Math.max(...staffYCoordinates);
+    const ending = stemEndingFor(duration, noFlags);
+    const { centerYs } = resolveStrokePlacement({
+      headY,
+      stemUp,
+      strokeCount: tremoloStrokeCount,
+      staff: STAFF_BAND,
+      stemLengthPx: stemless
+        ? null
+        : BASE_STEM_LENGTH_PX +
+          (noFlags ? stemExtension - chordSpread : stemExtension) +
+          (ending.kind === 'beam' ? STEM_OVERLAP_PX : 0),
+      ending,
+      canLengthenStem: false,
+    });
+    const centerX = stemless
+      ? noteHeadGeometry(stemUp, base, noFlags).cx * NOTE_SCALE
+      : extremalXOffset +
+        stemTipPosition(stemUp, base, noFlags, 0).x * NOTE_SCALE;
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createTremoloStrokes(
+        centerX,
+        centerYs.map((y) => chordToneHeadCenterY(y, stemUp, base, noFlags))
+      )
+    );
   }
 
   const dotLayout = chordAugmentationDotLayout({

@@ -569,6 +569,23 @@
             },
             {
               "kind": "field",
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloStrokeCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
@@ -854,6 +871,24 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "rawTremolo",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1269,6 +1304,13 @@
                 "text": "string"
               },
               "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`."
+            },
+            {
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue"
+              },
+              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them."
             },
             {
               "type": {
@@ -3301,6 +3343,23 @@
             },
             {
               "kind": "field",
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawnStemExtension",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
@@ -3567,6 +3626,24 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "rawTremolo",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -3982,6 +4059,13 @@
                 "text": "string"
               },
               "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`."
+            },
+            {
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue"
+              },
+              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them."
             },
             {
               "type": {

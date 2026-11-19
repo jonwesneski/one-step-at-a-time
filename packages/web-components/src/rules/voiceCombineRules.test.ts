@@ -308,6 +308,33 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('does not combine differing tremolos', () => {
+    const v1Note = note('C', 4);
+    const v2Note = note('E', 4);
+    v1Note.setAttribute('tremolo', '3');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Note], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
+  it('combines matching tremolos, which then share one set of strokes', () => {
+    const v1Note = note('C', 4);
+    const v2Note = note('E', 4);
+    v1Note.setAttribute('tremolo', 'unmeasured');
+    v2Note.setAttribute('tremolo', 'unmeasured');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Note], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(1);
+  });
+
   it('combines matching dynamic markings', () => {
     const v1Note = note('C', 4);
     const v2Note = note('E', 4);

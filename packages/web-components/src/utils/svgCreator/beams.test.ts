@@ -938,3 +938,51 @@ describe('beams', () => {
     });
   });
 });
+
+describe('beams with tremolo strokes', () => {
+  function staffWith(notes: HTMLElement[]): StaffElementType {
+    const staff = document.createElement(MUSIC_STAFF) as StaffElementType;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    triggerSlotChange(staff, notes);
+    return staff;
+  }
+
+  function eighths(tremolos: (string | null)[]): HTMLElement[] {
+    return tremolos.map((tremolo) => {
+      const note = makeNote({ note: 'E', octave: 4, duration: 'eighth' });
+      if (tremolo !== null) {
+        note.setAttribute('tremolo', tremolo);
+      }
+      return note;
+    });
+  }
+
+  it('breaks the beam where notes change between tremolo and plain', () => {
+    const staff = staffWith(eighths(['1', '1', null, null]));
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(2);
+  });
+
+  it('keeps tremolo notes beamed together', () => {
+    const staff = staffWith(eighths(['1', '1', '1', '1']));
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('lengthens the stems so the strokes clear the beam', () => {
+    const plain = eighths([null, null]);
+    staffWith(plain);
+    const plainExtension = (plain[0] as unknown as { stemExtension: number })
+      .stemExtension;
+    document.body.innerHTML = '';
+
+    const tremolo = eighths(['2', '2']);
+    staffWith(tremolo);
+    const tremoloExtension = (
+      tremolo[0] as unknown as { stemExtension: number }
+    ).stemExtension;
+    expect(tremoloExtension).toBeGreaterThan(plainExtension);
+    expect(
+      tremolo[0].shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(2);
+  });
+});

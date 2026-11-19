@@ -46,6 +46,11 @@ export type BeamPlacementNote = {
   /** The head nearest the beam. */
   nearestHeadY: number;
   beamCount: number;
+  /**
+   * Shortest stem (px, head to the beam's outer edge) this note needs on top
+   * of the usual floors, e.g. to carry tremolo strokes.
+   */
+  minimumStemPx?: number;
 };
 
 export type BeamObstacle = {
@@ -400,7 +405,8 @@ function headInStave(y: number): boolean {
 }
 
 // 3½ spaces, a step further for each beam past the second, and reaching the
-// middle line from a head far enough out that 3½ spaces falls short.
+// middle line from a head far enough out that 3½ spaces falls short; never
+// shorter than the note's own minimum.
 function idealStemPx(
   note: BeamPlacementNote,
   stemUp: boolean,
@@ -414,7 +420,8 @@ function idealStemPx(
     : 0;
   return Math.max(
     BASE_STEM_LENGTH_PX + Math.max(0, note.beamCount - 2) * step,
-    reachMiddle
+    reachMiddle,
+    note.minimumStemPx ?? 0
   );
 }
 
@@ -422,7 +429,11 @@ function minimumStemPx(note: BeamPlacementNote, step: number): number {
   const base = headInStave(note.nearestHeadY)
     ? BEAMED_STEM_MIN_IN_STAVE_PX
     : MIN_STEM_LENGTH_PX;
-  return Math.max(base, MIN_STEM_LENGTH_PX + (note.beamCount - 1) * step);
+  return Math.max(
+    base,
+    MIN_STEM_LENGTH_PX + (note.beamCount - 1) * step,
+    note.minimumStemPx ?? 0
+  );
 }
 
 // Band [top, bottom] of beam `level`, counted from the outer edge toward the

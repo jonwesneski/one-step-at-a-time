@@ -22,6 +22,7 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -46,6 +47,7 @@ import {
   STAFF_GROUPS,
   STEM_DIRECTIONS,
   STRESSES,
+  TREMOLO_VALUES,
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
@@ -72,6 +74,7 @@ const VALID_OCTAVE_SHIFT_AMOUNTS = new Set<string>(OCTAVE_SHIFT_AMOUNTS);
 const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
 const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
 const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
+const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
 const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
@@ -262,6 +265,14 @@ export const parseStemDirection = (
     return value as StemDirection;
   }
   return null;
+};
+
+// Stroke counts arrive as attribute strings (`"2"`); `unmeasured` stays a word.
+export const parseTremolo = (value: string | null): TremoloValue | null => {
+  if (value === null || !VALID_TREMOLO_VALUES.has(value)) {
+    return null;
+  }
+  return value === 'unmeasured' ? value : (Number(value) as TremoloValue);
 };
 
 export const parseOctaveContinuationMode = (

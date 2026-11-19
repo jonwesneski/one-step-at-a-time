@@ -17,6 +17,11 @@ import {
   isOpenDuration,
   isStemlessDuration,
 } from '../../rules/theoryConsts';
+import {
+  resolveStrokePlacement,
+  STAFF_BAND,
+  stemEndingFor,
+} from '../../rules/tremoloRules';
 import type {
   AccidentalType,
   ArpeggioType,
@@ -63,6 +68,7 @@ import {
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
+import { createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -194,6 +200,8 @@ export type NoteProps = {
   // Another voice draws the head this note shares in a unison; the stem,
   // flags, ledger lines and accidental are still drawn.
   omitsHead?: boolean;
+  // Tremolo strokes to draw (resolved from the `tremolo` value); 0 for none.
+  tremoloStrokeCount?: number;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -250,6 +258,7 @@ export const createNoteSvg = ({
   augmentationDotRows = null,
   augmentationDotShiftPx = 0,
   omitsHead = false,
+  tremoloStrokeCount = 0,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -447,6 +456,34 @@ export const createNoteSvg = ({
   }
 
   svg.appendChild(g);
+
+  const stemless = isStemlessDuration(duration);
+  if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
+    // Standalone, the head stands in for staff Y 0 and nothing snaps to lines.
+    const headStaffY = staffY ?? 0;
+    const ending = stemEndingFor(duration, noFlags);
+    const { centerYs } = resolveStrokePlacement({
+      headY: headStaffY,
+      stemUp,
+      strokeCount: tremoloStrokeCount,
+      staff: staffY === null ? null : STAFF_BAND,
+      stemLengthPx: stemless
+        ? null
+        : BASE_STEM_LENGTH_PX +
+          stemExtension +
+          (ending.kind === 'beam' ? STEM_OVERLAP_PX : 0),
+      ending,
+      canLengthenStem: false,
+    });
+    const headCenterY = headGeometry.cy * NOTE_SCALE;
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createTremoloStrokes(
+        (stemless ? headGeometry.cx : stemX) * NOTE_SCALE,
+        centerYs.map((y) => headCenterY + y - headStaffY)
+      )
+    );
+  }
 
   const dotLayout = noteAugmentationDotLayout({
     duration,

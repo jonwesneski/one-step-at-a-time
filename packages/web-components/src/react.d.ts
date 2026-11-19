@@ -38,6 +38,7 @@ import type {
   StressType,
   TieValue,
   TimeSignature,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -177,6 +178,7 @@ declare module 'react' {
         'slur-group'?: string;
         'stem-direction'?: StemDirection;
         notehead?: NoteheadType;
+        tremolo?: TremoloValue;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -228,6 +230,7 @@ declare module 'react' {
         'slur-group'?: string;
         'stem-direction'?: StemDirection;
         notehead?: NoteheadType;
+        tremolo?: TremoloValue;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

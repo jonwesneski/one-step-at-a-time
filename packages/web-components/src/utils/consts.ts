@@ -24,6 +24,8 @@ import type {
   StemDirection,
   StressType,
   TimeSignature,
+  TremoloStrokeCount,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -323,6 +325,13 @@ export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 
 export const STEM_DIRECTIONS: StemDirection[] = ['up', 'down'];
+
+export const TREMOLO_STROKE_COUNTS: TremoloStrokeCount[] = [1, 2, 3, 4];
+
+export const TREMOLO_VALUES: TremoloValue[] = [
+  ...TREMOLO_STROKE_COUNTS,
+  'unmeasured',
+];
 
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
 

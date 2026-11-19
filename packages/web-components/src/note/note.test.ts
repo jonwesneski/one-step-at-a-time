@@ -1747,6 +1747,111 @@ describe('unison part', () => {
   });
 });
 
+describe('tremolo', () => {
+  function stemLengthPx(note: HTMLElement): number {
+    const stem = note.shadowRoot!.querySelector('.stem')!;
+    return (
+      Math.abs(
+        Number(stem.getAttribute('y2')) - Number(stem.getAttribute('y1'))
+      ) * NOTE_SCALE
+    );
+  }
+
+  function standaloneNote(duration: DurationType, tremolo?: string) {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('duration', duration);
+    if (tremolo !== undefined) {
+      noteElement.setAttribute('tremolo', tremolo);
+    }
+    document.body.appendChild(noteElement);
+    return noteElement;
+  }
+
+  it('round-trips stroke counts and unmeasured, ignoring anything else with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standaloneNote('quarter');
+    expect(noteElement.tremolo).toBeNull();
+
+    noteElement.tremolo = 3;
+    expect(noteElement.getAttribute('tremolo')).toBe('3');
+    expect(noteElement.tremolo).toBe(3);
+
+    noteElement.tremolo = 'unmeasured';
+    expect(noteElement.tremolo).toBe('unmeasured');
+
+    noteElement.setAttribute('tremolo', '7');
+    expect(noteElement.tremolo).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('tremolo="7"'));
+
+    noteElement.tremolo = null;
+    expect(noteElement.hasAttribute('tremolo')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws one stroke per count through the stem', () => {
+    const noteElement = standaloneNote('quarter', '2');
+    expect(
+      noteElement.shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(2);
+  });
+
+  it('draws unmeasured as three beams’ worth, counting the tail', () => {
+    const noteElement = standaloneNote('eighth', 'unmeasured');
+    expect(
+      noteElement.shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(2);
+  });
+
+  it('lengthens a standalone stem to carry three strokes', () => {
+    const plain = standaloneNote('quarter');
+    const tremolo = standaloneNote('quarter', '3');
+    expect(stemLengthPx(tremolo)).toBeGreaterThan(stemLengthPx(plain));
+  });
+
+  it('puts a semibreve’s strokes beside its head, with no stem', () => {
+    const noteElement = standaloneNote('whole', '3');
+    expect(noteElement.shadowRoot!.querySelector('.stem')).toBeNull();
+    expect(
+      noteElement.shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(3);
+  });
+
+  it('warns when the strokes and tails pass a 128th', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    standaloneNote('sixtyfourth', '2');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('128th'));
+    warn.mockRestore();
+  });
+
+  it('dispatches NOTE_Y_CHANGE so the staff re-sizes the stem', () => {
+    const noteElement = standaloneNote('quarter');
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    noteElement.tremolo = 2;
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('lengthens the stem on a staff and redraws the strokes when the value changes', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'G', 5) as unknown as NoteElementType;
+    expect(note.stemExtension).toBe(0);
+
+    note.setAttribute('tremolo', '3');
+
+    expect(note.stemExtension).toBeGreaterThan(0);
+    expect(note.shadowRoot!.querySelectorAll('.tremolo-stroke')).toHaveLength(
+      3
+    );
+
+    note.removeAttribute('tremolo');
+
+    expect(note.stemExtension).toBe(0);
+    expect(note.shadowRoot!.querySelector('.tremolo-stroke')).toBeNull();
+  });
+});
+
 describe('staff integration', () => {
   it('repositions Y and preserves X when note attribute changes', () => {
     const staff = makeStaff();

@@ -9,6 +9,8 @@ Beam grouping implemented here:
   they never cross a measure (the builder is invoked once per staff's note
   stream).
 - A rest always breaks the current run (no beaming over rests).
+- A run also breaks where notes change between tremolo and plain, so a
+  change of technique reads from the beaming.
 - Notes in one beam group share a single stem direction, resolved from the
   whole group (determineStemDirections in stemRules.ts), except a kneed
   group, whose stems point both ways (rules/beamRules.ts).
@@ -49,7 +51,7 @@ import {
   STAFF_Y_PADDING,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
-import { parseNotehead } from '../parsers';
+import { parseNotehead, parseTremolo } from '../parsers';
 import {
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
@@ -66,6 +68,8 @@ export type NoteYPosition = {
   /** Highest and lowest head in the note Y map; equal for a single note. */
   highestHeadStaffY: number;
   lowestHeadStaffY: number;
+  /** See BeamPlacementNote.minimumStemPx. */
+  minimumStemPx?: number;
 };
 
 interface NoteData {
@@ -77,6 +81,7 @@ interface NoteData {
   /** Number of beams on this note (= flag count): 1 = eighth, 2 = sixteenth, etc. */
   beamCount: number;
   stemUp: boolean;
+  minimumStemPx?: number;
 }
 
 // A single beam line drawn across two stems (or as a fractional beam stub).
@@ -192,6 +197,7 @@ class BeamGroupRenderer {
               ? note.highestHeadStaffY
               : note.lowestHeadStaffY,
             beamCount: note.beamCount,
+            minimumStemPx: note.minimumStemPx,
           })),
           stemUp,
           obstacles,
@@ -360,7 +366,8 @@ class BeamGroup {
     if (localIndex === -1) {
       return;
     }
-    const { stemUp, highestHeadStaffY, lowestHeadStaffY } = position;
+    const { stemUp, highestHeadStaffY, lowestHeadStaffY, minimumStemPx } =
+      position;
     // Top of the note's SVG in the beams container; the stem belongs to the
     // head farthest from the beam.
     const y =
@@ -378,6 +385,7 @@ class BeamGroup {
     note.highestHeadStaffY = highestHeadStaffY;
     note.lowestHeadStaffY = lowestHeadStaffY;
     note.stemUp = stemUp;
+    note.minimumStemPx = minimumStemPx;
   }
 
   /**
@@ -581,6 +589,7 @@ export class BeamsBuilder {
       const beatWindowEnd = beatWindowStart + beatWindowSize;
       let pendingFlagCounts: number[] = [];
       let pendingNoteIndices: number[] = [];
+      let pendingHasTremolo = false;
 
       for (let i = 0; i < elements.length; i++) {
         const elOffset = elementOffsets[i];
@@ -614,10 +623,13 @@ export class BeamsBuilder {
             : durationToFlagCountMap.get(dur);
 
         if (flagCount !== undefined) {
+          const hasTremolo =
+            parseTremolo(elements[i].getAttribute('tremolo')) !== null;
           // A non-adjacent index means a non-beamable note broke the run.
           if (
             pendingNoteIndices.length > 0 &&
-            pendingNoteIndices[pendingNoteIndices.length - 1] !== i - 1
+            (pendingNoteIndices[pendingNoteIndices.length - 1] !== i - 1 ||
+              hasTremolo !== pendingHasTremolo)
           ) {
             flushRun(pendingFlagCounts, pendingNoteIndices);
             pendingFlagCounts = [];
@@ -625,6 +637,7 @@ export class BeamsBuilder {
           }
           pendingFlagCounts.push(flagCount);
           pendingNoteIndices.push(i);
+          pendingHasTremolo = hasTremolo;
         } else {
           flushRun(pendingFlagCounts, pendingNoteIndices);
           pendingFlagCounts = [];

@@ -1943,6 +1943,86 @@ describe(`${MUSIC_CHORD} stem length`, () => {
   });
 });
 
+describe(`${MUSIC_CHORD} tremolo`, () => {
+  const strokePoints = (chord: ChordElementType) =>
+    Array.from(chord.shadowRoot!.querySelectorAll('.tremolo-stroke')).map(
+      (stroke) =>
+        (stroke.getAttribute('points') ?? '')
+          .trim()
+          .split(/\s+/)
+          .map((point) => point.split(',').map(Number))
+    );
+
+  const placedChord = (
+    staffYCoordinates: number[],
+    stemUp: boolean,
+    duration: DurationType,
+    tremolo: string
+  ) => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C');
+    chord.setAttribute('duration', duration);
+    chord.setAttribute('tremolo', tremolo);
+    document.body.appendChild(chord);
+    chord.staffYCoordinates = staffYCoordinates;
+    chord.stemUp = stemUp;
+    return chord;
+  };
+
+  it('draws strokes once, past the head nearest the open end', () => {
+    const chord = placedChord([60, 40], true, 'quarter', '2');
+    const strokes = strokePoints(chord);
+    expect(strokes).toHaveLength(2);
+    const topHeadCenterY = STAFF_Y_PADDING + 40 - 10;
+    for (const points of strokes) {
+      for (const [, y] of points) {
+        expect(y).toBeLessThan(topHeadCenterY);
+      }
+    }
+  });
+
+  it('centres a semibreve second’s strokes on its undisplaced column', () => {
+    const chord = placedChord([40, 45], false, 'whole', '3');
+    const strokes = strokePoints(chord);
+    expect(strokes).toHaveLength(3);
+    const xs = strokes[0].map(([x]) => x);
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(
+      NOTE_HEAD_CX_STEM_DOWN_PX
+    );
+  });
+
+  it('lengthens a standalone chord’s stem to carry three strokes', () => {
+    const stemLength = (chord: ChordElementType) => {
+      const stem = chord.shadowRoot!.querySelector('.stem')!;
+      return Math.abs(
+        Number(stem.getAttribute('y2')) - Number(stem.getAttribute('y1'))
+      );
+    };
+    const plain = document.createElement(MUSIC_CHORD) as ChordElementType;
+    plain.setAttribute('chord', 'C');
+    document.body.appendChild(plain);
+    const tremolo = document.createElement(MUSIC_CHORD) as ChordElementType;
+    tremolo.setAttribute('chord', 'C');
+    tremolo.setAttribute('tremolo', '3');
+    document.body.appendChild(tremolo);
+    expect(stemLength(tremolo)).toBeGreaterThan(stemLength(plain));
+  });
+
+  it('lengthens the stem on a staff', () => {
+    const staff = makeStaff();
+    const chord = renderChordByNotes(staff, [
+      { value: 'C', octave: 5 },
+      { value: 'E', octave: 5 },
+    ]);
+    expect(chord.stemExtension).toBe(0);
+
+    chord.setAttribute('tremolo', '3');
+
+    expect(chord.stemExtension).toBeGreaterThan(0);
+    expect(strokePoints(chord)).toHaveLength(3);
+  });
+});
+
 describe('augmentation dots', () => {
   const makeDottedChord = (
     duration: DurationType,

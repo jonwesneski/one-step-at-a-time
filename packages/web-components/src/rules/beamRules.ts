@@ -1,16 +1,17 @@
-import {
+import type {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
-import {
+import type {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
+  TremoloValue,
 } from '../types/theory';
 import { BeamsBuilder, type NoteYPosition } from '../utils';
-import { MUSIC_NOTE_NODE } from '../utils/consts';
+import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
 import {
   BEAM_ESTIMATE_NOTE_SPACING_PX,
   KNEED_BEAM_TRIGGER_STEM_PX,
@@ -23,6 +24,7 @@ import {
 import { durationContribution } from './beatRules';
 import { determineStemDirections } from './stemRules';
 import { durationToFlagCountMap } from './theoryConsts';
+import { beamedTremoloMinimumStemPx } from './tremoloRules';
 
 export function buildBeamsRenderer(
   elements: NoteChordOrRestElementType[],
@@ -129,6 +131,12 @@ export function buildBeamsRenderer(
         stemUp,
         highestHeadStaffY: highest,
         lowestHeadStaffY: lowest,
+        minimumStemPx: beamedTremoloMinimumStemPx({
+          tremolo: tremoloOf(element),
+          duration: element.duration,
+          nearestHeadY: stemUp ? highest : lowest,
+          stemUp,
+        }),
       };
     }
   );
@@ -155,11 +163,19 @@ function headStaffYExtent(
   return { highest: Math.min(...staffYs), lowest: Math.max(...staffYs) };
 }
 
+function tremoloOf(element: NoteChordOrRestElementType): TremoloValue | null {
+  return element.nodeName === MUSIC_REST_NODE
+    ? null
+    : (element as NoteElementType | ChordElementType).tremolo ?? null;
+}
+
 // A wide-interval group whose one-direction beam would need a very long stem
 // takes a beam between its noteheads instead, with stems both ways, when that
 // fits however the notes end up spaced. Only pitch-driven groups qualify: a
 // forced direction keeps its beam, and so does a group a clef change falls
-// inside, since the clef sits in the stave where a kneed beam would run.
+// inside, since the clef sits in the stave where a kneed beam would run. A
+// group with tremolo strokes keeps its beam too: the strokes need the stem
+// length a kneed beam takes away.
 function applyKneedBeams(
   elements: NoteChordOrRestElementType[],
   beamsBuilder: BeamsBuilder,
@@ -176,7 +192,13 @@ function applyKneedBeams(
       continue;
     }
     group.forEach((index) => visited.add(index));
-    if (group.some((index) => forcedDirections?.has(elements[index]))) {
+    if (
+      group.some(
+        (index) =>
+          forcedDirections?.has(elements[index]) ||
+          tremoloOf(elements[index]) !== null
+      )
+    ) {
       continue;
     }
     const firstBeat = beatOffsets[group[0]];

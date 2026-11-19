@@ -80,6 +80,10 @@ import {
 } from './rules/theoryConsts';
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
 import {
+  STAFF_BAND,
+  unbeamedTremoloStemExtensionPx,
+} from './rules/tremoloRules';
+import {
   resolveTrillPitch,
   resolveTrillSpans,
   type TrillLineSpan,
@@ -1475,7 +1479,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   // Builds a synthetic <music-chord> for a v1-scoped auto-combine group
   // (rules/voiceCombineRules.ts) — one synthetic <music-note> child per
-  // deduplicated tone, plus the shared articulation/dynamic/hairpin
+  // deduplicated tone, plus the shared articulation/dynamic/hairpin/tremolo
   // attributes the combine condition already guarantees are equal across
   // every member. Constructed fully (children + attributes) before being
   // connected to the document, so its own `.notes` getter (a live query
@@ -1495,6 +1499,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     if (reference.decrescendo !== null) {
       chord.setAttribute('decrescendo', reference.decrescendo);
+    }
+    if (reference.tremolo !== null) {
+      chord.setAttribute('tremolo', String(reference.tremolo));
     }
     for (const tone of group.tones) {
       const note = document.createElement(MUSIC_NOTE);
@@ -1788,18 +1795,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         !isStemlessDuration(duration)
       );
     };
-    const unbeamedExtensionPx = (i: number): number =>
-      hasOwnStem(i)
-        ? unbeamedStemExtensionPx(
-            getStaffYs(elements[i], noteStaffYCoords, chordStaffYCoords),
-            stemDirections[i],
-            durationToFlagCountMap.get(elements[i].duration) ?? 0,
-            !(
-              elements[i].nodeName === MUSIC_NOTE_NODE &&
-              isTriangle((elements[i] as NoteElementType).notehead)
-            )
+    const unbeamedExtensionPx = (i: number): number => {
+      if (!hasOwnStem(i)) {
+        return 0;
+      }
+      const element = elements[i] as NoteElementType | ChordElementType;
+      const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      return unbeamedTremoloStemExtensionPx({
+        tremolo: element.tremolo,
+        duration: element.duration,
+        headYs,
+        stemUp: stemDirections[i],
+        staff: STAFF_BAND,
+        stemExtensionPx: unbeamedStemExtensionPx(
+          headYs,
+          stemDirections[i],
+          durationToFlagCountMap.get(element.duration) ?? 0,
+          !(
+            element.nodeName === MUSIC_NOTE_NODE &&
+            isTriangle((element as NoteElementType).notehead)
           )
-        : 0;
+        ),
+      });
+    };
     this.#placeTriangles(
       elements,
       noteStaffYCoords,

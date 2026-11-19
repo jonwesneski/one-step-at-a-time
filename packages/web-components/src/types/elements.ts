@@ -27,6 +27,7 @@ import type {
   StemDirection,
   StressType,
   TimeSignature,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -74,6 +75,8 @@ export interface INoteElement {
   // inconsistently across notes that end up sharing one same-staff beam
   // group is the author's own responsibility to avoid (see StemDirection).
   stemDirection: StemDirection | null;
+  // Single-note tremolo strokes through the stem; null for none.
+  tremolo: TremoloValue | null;
   // Notehead shape; a triangle also forces stemUp and is placed by the staff.
   // null removes the attribute (normal).
   get notehead(): NoteheadType;
@@ -286,6 +289,8 @@ export interface IChordElement {
   stemUp: boolean;
   // See INoteElement.stemDirection.
   stemDirection: StemDirection | null;
+  // See INoteElement.tremolo.
+  tremolo: TremoloValue | null;
   // Default for every tone; a slotted <music-note>'s own notehead overrides
   // it. Triangles are not supported on chords.
   get notehead(): NoteheadType;

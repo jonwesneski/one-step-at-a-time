@@ -93,9 +93,9 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   );
 }
 
-// duration/articulation/dynamic/crescendo/decrescendo must all match — pitch
-// content is deliberately excluded (that's what gets unioned into the
-// combined chord's tone set).
+// duration/articulation/dynamic/crescendo/decrescendo/tremolo must all match
+// — pitch content is deliberately excluded (that's what gets unioned into the
+// combined chord's tone set). Matching tremolos share one set of strokes.
 function combineKey(element: NoteOrChordElementType): string {
   return JSON.stringify([
     element.duration,
@@ -103,6 +103,7 @@ function combineKey(element: NoteOrChordElementType): string {
     element.dynamic,
     element.crescendo,
     element.decrescendo,
+    element.tremolo ?? null,
   ]);
 }
 

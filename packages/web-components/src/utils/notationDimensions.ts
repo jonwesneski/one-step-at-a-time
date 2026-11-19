@@ -1386,3 +1386,57 @@ export const TRIANGLE_OUTSIDE_STAFF_PX = STAFF_LINE_SPACING * 2.5;
  * = 2.5 × STAFF_LINE_SPACING
  */
 export const TRIANGLE_RUN_CLEARANCE_PX = STAFF_LINE_SPACING * 2.5;
+
+// ─── Tremolos ─────────────────────────────────────────────────────────────────
+
+/**
+ * Thickness (px) of a tremolo stroke: a little thinner than a beam, so the
+ * gaps between strokes stay open against stave lines.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_STROKE_THICKNESS_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Width (px) of a tremolo stroke: about a black notehead's drawn width, the
+ * same for every note value.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_STROKE_WIDTH_PX = STAFF_LINE_SPACING;
+
+/**
+ * How much higher (px) a stroke's right end sits than its left end.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_STROKE_RISE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Centre-to-centre distance (px) between stacked strokes: the beam step.
+ * = BEAM_STEP_PX
+ */
+export const TREMOLO_STROKE_STEP_PX = BEAM_STEP_PX;
+
+/**
+ * Distance (px) from the notehead's centre to the nearest edge of two or more
+ * strokes, and to the centre of a single stroke.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_STROKE_HEAD_CLEARANCE_PX = STAFF_LINE_SPACING;
+
+/**
+ * Stem length (px) taken by the root of a tail, where it still runs beside
+ * the stem; strokes stay clear of it. Each further tail adds FLAG_STEM_STEP_PX.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_TAIL_ROOM_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) kept between the outermost stroke and a beam.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_STROKE_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Length (px) of plain stem left past the outermost stroke.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const TREMOLO_STEM_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;

@@ -393,6 +393,16 @@ export type TupletPlacement = 'above' | 'below';
  */
 export type StemDirection = 'up' | 'down';
 
+/** Number of tremolo strokes drawn through a stem (or over a stemless head). */
+export type TremoloStrokeCount = 1 | 2 | 3 | 4;
+
+/**
+ * A single-note tremolo: a stroke count, or `'unmeasured'` for the standard
+ * unmeasured indication (three beams' worth, counting the note's own tails or
+ * beams, never fewer than one stroke).
+ */
+export type TremoloValue = TremoloStrokeCount | 'unmeasured';
+
 /**
  * Controls how an octave-transposition span's numeral restates itself after
  * a system break: `'bracketed'` (default) redraws it in parentheses at the

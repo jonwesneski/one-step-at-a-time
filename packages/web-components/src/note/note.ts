@@ -17,6 +17,11 @@ import {
   triangleDurationWarning,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
+import {
+  resolveStrokeCount,
+  tremoloStrokeCountWarning,
+  unbeamedTremoloStemExtensionPx,
+} from '../rules/tremoloRules';
 import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type {
   ConnectorRole,
@@ -49,6 +54,7 @@ import type {
   OctaveShiftAmount,
   StemDirection,
   StressType,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -90,6 +96,7 @@ import {
   parseStemDirection,
   parseStress,
   parseTieValue,
+  parseTremolo,
   parseTrillContinuationMode,
   parseTrillFinishSlur,
   parseTrillLineMode,
@@ -164,6 +171,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
    * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
    * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
+   * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them.
    * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
@@ -223,6 +231,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'stem-direction',
         'notehead',
         'grace-notehead',
+        'tremolo',
       ];
     }
 
@@ -622,7 +631,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noFlags: this.#noFlags,
           noStem: this.#noStem,
           notehead: this.notehead,
-          stemExtension: this.#stemExtension,
+          stemExtension: this.#drawnStemExtension(),
           staffY: this.#staffY,
           rowStaffYs: this.#augmentationDotRows,
           columnShiftPx: this.#augmentationDotShiftPx,
@@ -641,6 +650,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('stem-direction', value);
       }
+    }
+
+    get tremolo(): TremoloValue | null {
+      return parseTremolo(this.getAttribute('tremolo'));
+    }
+    set tremolo(value: TremoloValue | null) {
+      if (value === null) {
+        this.removeAttribute('tremolo');
+      } else {
+        this.setAttribute('tremolo', String(value));
+      }
+    }
+
+    // Standalone, nothing else lengthens the stem for its tremolo strokes.
+    #drawnStemExtension(): number {
+      if (this.closest(STAFF_TAGS)) {
+        return this.#stemExtension;
+      }
+      return unbeamedTremoloStemExtensionPx({
+        tremolo: this.tremolo,
+        duration: this.duration,
+        headYs: [0],
+        stemUp: this.stemUp,
+        staff: null,
+        stemExtensionPx: this.#stemExtension,
+      });
     }
 
     // `id` of the other-staff element this note shares a single stem with.
@@ -1115,6 +1150,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       }
 
+      if (name === 'tremolo' || name === 'duration') {
+        this.#warnAboutTremolo(name === 'tremolo' ? newValue : null);
+      }
+
       if (!this.isConnected) {
         return;
       }
@@ -1291,7 +1330,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-finish' ||
         name === 'trill-finish-octave' ||
         name === 'trill-finish-slur' ||
-        name === 'duration'
+        name === 'duration' ||
+        name === 'tremolo'
       ) {
         // `duration` moves every later entry (beat time) and its dots widen
         // the rightward footprint.
@@ -1304,7 +1344,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // shares this dispatch since the ancestor staff's cross-element
         // "slur to next" pass depends on it too. `notehead` changes the
         // head's width, and a triangle also moves the note and forces its
-        // stem.
+        // stem. `tremolo` strokes lengthen the stem.
         if (name === 'notehead' && this.hasAttribute('beam-group')) {
           // A triangle leaves or rejoins its cross-staff beam group.
           this.dispatchEvent(
@@ -1338,6 +1378,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.render();
+    }
+
+    #warnAboutTremolo(rawTremolo: string | null): void {
+      if (rawTremolo !== null && parseTremolo(rawTremolo) === null) {
+        console.warn(
+          `[music-note] tremolo="${rawTremolo}" is not a stroke count (1–4) or "unmeasured"; ignoring it`
+        );
+        return;
+      }
+      const tremolo = this.tremolo;
+      const warning =
+        tremolo === null
+          ? null
+          : tremoloStrokeCountWarning(tremolo, this.duration);
+      if (warning) {
+        console.warn(`[music-note] ${warning}`);
+      }
     }
 
     private render(): void {
@@ -1378,7 +1435,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         duration: this.duration,
         stemUp,
         notehead,
-        stemExtension: this.#stemExtension,
+        stemExtension: this.#drawnStemExtension(),
         noFlags: this.#noFlags,
         noStem: this.#noStem,
         accidental,
@@ -1407,6 +1464,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         augmentationDotRows: this.#augmentationDotRows,
         augmentationDotShiftPx: this.#augmentationDotShiftPx,
         omitsHead: this.#unisonPart?.omitsHead ?? false,
+        tremoloStrokeCount:
+          this.tremolo === null
+            ? 0
+            : resolveStrokeCount(this.tremolo, this.duration),
       });
 
       if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
@@ -1526,7 +1587,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // project to). Unused (and harmless to compute) otherwise.
       const mainSlurTargetXPx = cx * NOTE_SCALE;
       const mainSlurTargetYPx = this.stemUp
-        ? stemUpTipYPx(this.#stemExtension)
+        ? stemUpTipYPx(this.#drawnStemExtension())
         : cy * NOTE_SCALE;
       const graceGroup = createGraceNotesSvg({
         graceNotes,
