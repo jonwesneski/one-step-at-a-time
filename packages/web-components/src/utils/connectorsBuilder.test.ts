@@ -295,14 +295,8 @@ describe('partitionByVoice', () => {
   });
 
   it('regression: two voices both sustaining an open (for-less) tie across a measure boundary — partitioning prevents the LIFO stack from mispairing them', () => {
-    // Realistic failure shape: measure 1's staff has voice 1 then voice 2
-    // (document order), each ending with an open `tie="start"` (both parts
-    // held across the barline — a common musical situation). Measure 2's
-    // staff again has voice 1 then voice 2, each starting with `tie="end"`.
-    // In one flat, unpartitioned document-order walk, by the time
-    // measure-2-voice-1's `end` is reached, the LIFO stack top is
-    // measure-1-VOICE-2's start (pushed after voice 1's), not voice 1's —
-    // a real cross-voice mispairing, not a hypothetical one.
+    // Both voices tie across the barline. An unpartitioned walk would pair
+    // measure 2 voice 1's `end` with measure 1 voice 2's `start`.
     const m1Voice1 = document.createElement(MUSIC_VOICE);
     const m1Voice2 = document.createElement(MUSIC_VOICE);
     const m1Staff = document.createElement(MUSIC_STAFF);
@@ -331,7 +325,7 @@ describe('partitionByVoice', () => {
     expect(unpartitionedPairs).toHaveLength(2);
     expect(unpartitionedPairs.find((p) => p.end === v1End)?.start).toBe(
       v2Start
-    ); // the bug, demonstrated
+    ); // mispaired across voices
 
     // With partitioning, each voice pairs independently and correctly.
     const byVoice = partitionByVoice(collectNoteLikeElements(root));
@@ -1294,13 +1288,9 @@ describe('buildConnectorSvgs', () => {
   it('anchors an inner-voice-flagged slur endpoint at the real stem tip instead of the notehead', () => {
     const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 200 });
     const endNote = makeLayoutNote({ stemUp: true, left: 250, top: 100 });
-    // A real stem far above the notehead — computeStemEndAnchor should
-    // anchor near this, not near the notehead's own much-lower y. A plain
-    // (non-namespaced) element stands in for the real SVG <line class="stem">
-    // here — jsdom's class-selector matching has a known quirk with
-    // createElementNS'd SVG elements (works fine in a real browser; only
-    // the .stem query() call itself is under test, not the element's own
-    // namespace/tag).
+    // A stem far above the notehead, where the anchor should land. A plain
+    // element stands in for <line class="stem">: jsdom's class selectors
+    // miss createElementNS'd SVG elements.
     const stem = document.createElement('div');
     stem.classList.add('stem');
     jest.spyOn(stem, 'getBoundingClientRect').mockReturnValue({

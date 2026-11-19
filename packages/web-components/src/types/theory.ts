@@ -155,13 +155,9 @@ export type VocalType =
   | 'bass';
 
 /**
- * Which contrapuntal voice (independent rhythmic/melodic line sharing one
- * staff) a note/chord/rest belongs to — NOT the vocal-range `VocalType`
- * above. 1 = top voice (always stems up), 2 = bottom voice (always stems
- * down), 3 = middle voice (only valid alongside both 1 and 2; contextual
- * stem direction — see rules/voiceRules.ts). Never authored directly —
- * derived from a note's position among `<music-voice>` siblings, see
- * utils/slotElements.ts.
+ * Contrapuntal voice on a staff (not the vocal-range `VocalType`), from the
+ * `<music-voice>`'s position: 1 stems up, 2 down, 3 (only with 1 and 2)
+ * by context.
  */
 export type VoiceNumber = 1 | 2 | 3;
 
@@ -299,9 +295,8 @@ export type GraceDuration = Extract<
 export type GraceSlur = 'auto' | 'none';
 
 /**
- * Which register of key a `glissando` starts on — text shown near the line
- * ("white-note gliss." / "black-note gliss."), matching standard keyboard
- * engraving practice for clarifying which keys a glissando slides across.
+ * Which keys a `glissando` slides across, shown as "white-note gliss." /
+ * "black-note gliss." near the line.
  */
 export type GlissandoHint = 'white-key' | 'black-key';
 
@@ -331,9 +326,7 @@ export type TrillLineMode = 'auto' | 'none';
  * Controls how a trill's line restates itself after a system break, once its
  * tie chain has already carried it into the new row: `'bracketed'` (default)
  * redraws the sign in parentheses at the start of the new row; `'line-only'`
- * lets the line resume with no restated sign. Meaningless (ignored) at an
- * ordinary same-row barline, where the line always resumes with no restated
- * sign regardless of this value.
+ * lets the line resume with no restated sign. Ignored at a same-row barline.
  */
 export type TrillContinuationMode = 'bracketed' | 'line-only';
 
@@ -384,12 +377,8 @@ export type TupletPlacement = 'above' | 'below';
 
 /**
  * Author override for a note/chord's stem direction, independent of its
- * pitch-driven default. Unset (null) leaves today's resolution unchanged
- * (pitch-driven, or a voice/beam-group policy when applicable). Setting it
- * on only some members of a same-staff beamed run is the author's own
- * responsibility to avoid — `BeamGroup` (`utils/svgCreator/beams.ts`) only
- * ever renders one shared stem direction per group, so an inconsistent
- * member renders with the wrong stem attachment.
+ * pitch-driven default. Unset leaves pitch, voice or beam-group policy to
+ * decide. A beamed group draws one direction, so set it on every member.
  */
 export type StemDirection = 'up' | 'down';
 
@@ -433,8 +422,7 @@ export type TieStyle = 'solid' | 'dotted';
  * Controls how an octave-transposition span's numeral restates itself after
  * a system break: `'bracketed'` (default) redraws it in parentheses at the
  * start of the new row; `'line-only'` lets the line resume with no restated
- * numeral. Meaningless (ignored) at an ordinary same-row barline, where the
- * line always resumes with no restatement regardless of this value.
+ * numeral. Ignored at a same-row barline.
  */
 export type OctaveContinuationMode = 'bracketed' | 'line-only';
 

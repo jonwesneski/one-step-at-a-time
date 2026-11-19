@@ -907,10 +907,8 @@ test.describe(`${MUSIC_MEASURE} group connectors`, () => {
 
     const wideRows = await readGroupConnectorGlyphCountsByRow(page);
     expect(wideRows).toHaveLength(1);
-    // Only the very first measure keeps a glyph — measures 2 and 3, which
-    // briefly had their own glyph while first-in-their-own-row at 150px,
-    // must have it cleared now a resize merged them back into measure 1's
-    // row. This is the specific regression this fix targets.
+    // Only the first measure keeps a glyph: measures 2 and 3 had one while
+    // first in their own row at 150px, and lose it once back in measure 1's.
     expect(wideRows[0]).toEqual([1, 0, 0]);
   });
 
@@ -1338,23 +1336,14 @@ test.describe(`${MUSIC_MEASURE} cross-staff arpeggio wave footprint (partner-onl
     await buildLowerAuthoredSpan(page, true);
     const withSpan = await readTrebleChordLeft(page);
 
-    // The upper chord has no local arpeggio/arpeggio-for of its own — before
-    // the fix, its reserved leftward extent came out to 0 regardless of the
-    // span, so its own left edge would be identical (or further left,
-    // overlapping the describe area) with vs. without the lower-authored
-    // wave. With the fix, it reserves the same room a locally-authored wave
-    // would, shifting rightward.
+    // The upper chord has no arpeggio of its own, but reserves room for the
+    // wave authored on the lower end.
     expect(withSpan).toBeGreaterThan(withoutSpan);
   });
 });
 
 test.describe(`${MUSIC_MEASURE} cross-staff connectors (standalone)`, () => {
-  // A standalone <music-measure> (no <music-composition> ancestor) has no
-  // shared coordination point for its staves by default — each staff bails
-  // out of drawing its own connectors once it has a <music-measure>
-  // ancestor (staffBase.ts#drawConnectorsWhenStandalone), so the measure
-  // itself must take over, mirroring how it already does for cross-staff
-  // arpeggio spans.
+  // Without a <music-composition>, a measure draws its staves' connectors.
   test('a slur from one staff to another renders a curve in the measure, with no <music-composition> ancestor', async ({
     page,
   }) => {
@@ -1878,12 +1867,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — multi-voic
   }) => {
     await buildInnerVoiceGroup(page);
 
-    // Bass plays the bottom-staff role in this group, which forces
-    // stem-up — the opposite of voice 2's own always-down policy. Deriving
-    // direction from real geometry (stem above vs. below the head), not
-    // reading the internal stemUp property, so this genuinely checks what
-    // rendered rather than what the (possibly still-buggy) resolution
-    // merely recorded.
+    // The bottom-staff role forces stem-up, against voice 2's down policy.
+    // Read from rendered geometry, not the stemUp property.
     const result = await page.evaluate(() => {
       const note = document.getElementById('inner-note');
       const head = note?.shadowRoot?.querySelector('.head');
@@ -2553,10 +2538,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — coordinate
       };
     });
 
-    // Both tips must land within the polygon's own real vertical extent —
-    // not merely close to each other (the pre-fix bug had the top staff's
-    // tip converge toward the bottom staff's, while both sat outside the
-    // polygon on the top-staff side).
+    // Both tips land within the polygon's vertical extent, not merely close
+    // to each other.
     expect(result.trebleTipY).toBeGreaterThanOrEqual(result.polygonTop - 0.5);
     expect(result.trebleTipY).toBeLessThanOrEqual(result.polygonBottom + 0.5);
     expect(result.bassTipY).toBeGreaterThanOrEqual(result.polygonTop - 0.5);
@@ -2773,13 +2756,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — cross-staf
         host.innerHTML = '';
         const measure = document.createElement(measureTag);
 
-        // Treble (top staff, forced stem-down) carries a triplet, all three
-        // notes cross-staff beamed — the tuplet group itself is staff-local
-        // (a <music-tuplet> can't span staves), but its numeral placement
-        // must still clear the real, both-staves beam, not a same-staff
-        // derivation that has no idea the real beam sits much farther away
-        // (across the whole inter-staff gap, not just past this note's own
-        // ordinary stem tip).
+        // Treble (top staff, stem-down) carries a triplet whose notes are all
+        // cross-staff beamed; its numeral must clear the shared beam.
         const treble = document.createElement(staffTag);
         treble.setAttribute('clef', 'treble');
         treble.id = 'treble';
@@ -2845,29 +2823,16 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — cross-staf
       throw new Error('geometry not ready');
     }
 
-    // Treble is the top staff (forced stem-down), so its numeral sits below
-    // the beam's own far edge, close to it — a plain staff-coord guess
-    // (what the pre-fix code fell back to, since this staff's own
-    // beamRenderer never covers a cross-staff-beamed index) would instead
-    // land close to the treble notes themselves, far short of the real
-    // beam, which sits most of the way across the inter-staff gap.
+    // Treble is the top staff (stem-down), so its numeral sits just below the
+    // beam's far edge, most of the way across the gap.
     expect(result.numeralCenterY).toBeGreaterThan(result.beamBottom);
     expect(result.numeralCenterY - result.beamBottom).toBeLessThan(30);
   });
 
-  test('repeated resizes settle without hanging the page — regression lock for the crossStaffTupletBeamY infinite-redraw freeze', async ({
-    page,
-  }) => {
-    // A single static render (the test above) doesn't exercise repeated
-    // redraw cycles — this is exactly the shape a real, live browser tab
-    // hits (window resizes, layout settling) that surfaced the original
-    // bug: crossStaffTupletBeamY's dirty-check setter compared its
-    // live-geometry-derived delta with exact float equality, so harmless
-    // sub-pixel jitter between passes never converged to "unchanged,"
-    // and the setter's own #renderNotes() call re-triggered the ancestor
-    // measure's redraw (via the synchronous NOTES_POSITIONED dispatch)
-    // forever, freezing the tab. A bounded test timeout here means a
-    // regression fails fast instead of hanging the whole suite.
+  test('repeated resizes settle without hanging the page', async ({ page }) => {
+    // crossStaffTupletBeamY's setter re-renders, which re-triggers the
+    // measure's redraw, so sub-pixel jitter between passes must settle. The
+    // bounded timeout fails fast instead of hanging the suite.
     test.setTimeout(15_000);
     await buildCrossStaffTupletGroup(page);
 
@@ -2887,21 +2852,9 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — cross-staf
   test('genuinely non-convergent geometry stops after a bounded number of passes instead of recursing forever — regression lock for the live-reproduced freeze', async ({
     page,
   }) => {
-    // The epsilon fix (previous test) absorbs harmless sub-pixel jitter,
-    // but real-world use showed it wasn't sufficient on its own: during a
-    // live CDP-attached debugging session, a genuine, unbounded storm of
-    // "Maximum call stack size exceeded" was observed for over a minute
-    // straight — the underlying geometry can fail to *actually* converge
-    // (not just jitter within epsilon), specifically during a Storybook
-    // story teardown/mount transition. This test doesn't try to reproduce
-    // that exact transition timing (headless automation never managed to,
-    // even with real SPA navigation and rapid viewport storms) — instead
-    // it forces the same failure shape directly and deterministically, by
-    // making a stem's own measured position genuinely oscillate beyond the
-    // epsilon on every single measurement, and asserts the reentrancy-depth
-    // guard in #redrawDoubleStemmedBeams stops it (a console.warn fires,
-    // the page stays responsive) rather than recursing until the stack
-    // overflows.
+    // Geometry that never converges (forced here by a stem whose measured
+    // position keeps moving past the epsilon) must be stopped by the
+    // re-entry depth guard: it warns and the page stays responsive.
     test.setTimeout(15_000);
     await buildCrossStaffTupletGroup(page);
 
@@ -2920,15 +2873,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — cross-staf
         if (!this.classList.contains('stem')) {
           return rect;
         }
-        // Monotonically growing, large offset on every single stem
-        // measurement — guarantees no two passes ever measure the same Y,
-        // so the geometry can never "agree" with its own previous pass. A
-        // small jitter (a few px) turned out to dampen out within a couple
-        // of passes in practice (the beam-line/epsilon math absorbs modest
-        // perturbation even though it isn't designed to) — only a large,
-        // sustained divergence reliably keeps tripping the "changed"
-        // branch long enough to reach the reentrancy-depth cap this test
-        // is actually verifying.
+        // A large, growing offset per measurement, so no two passes agree; a
+        // small jitter settles before reaching the depth cap.
         call++;
         const jitter = call * 500;
         return new DOMRect(rect.x, rect.y + jitter, rect.width, rect.height);
@@ -3709,17 +3655,14 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — slurs`, ()
 });
 
 test.describe(`${MUSIC_MEASURE} phrase slurs (slur-group)`, () => {
-  // Literal replica of a reference engraving illustration: two "legs" of a
+  // Two "legs" of a
   // single-line hand-crossing passage (bass eighths beamed on their own,
   // then treble eighths beamed on their own — plain per-staff beaming, no
   // beam-group at all), chained by a short bridging slur between legs.
   // Four breakpoint notes share one slur-group id, in temporal order:
   // bass1-first (F2), treble1-last (D5), bass2-first (C3), treble2-last
-  // (G5) — collectPhraseSlurPairs should connect them pairwise into
-  // exactly 3 curves (F2->D5, D5->C3, C3->G5), ordered by each pair's own
-  // real rendered x, not DOM order (the treble staff is listed first in
-  // the DOM for correct visual layering, but its own marked notes are not
-  // always first in time).
+  // (G5): exactly 3 curves (F2->D5, D5->C3, C3->G5), in rendered x order,
+  // not DOM order (the treble staff comes first in the DOM).
   test('a slur-group chain across two legs draws exactly 3 curves, each between the correct real noteheads', async ({
     page,
   }) => {
@@ -3820,12 +3763,8 @@ test.describe(`${MUSIC_MEASURE} phrase slurs (slur-group)`, () => {
 
     const result = await page.evaluate(() => {
       const composition = document.querySelector('music-composition');
-      // redrawConnectors() roots its curve coordinates at the real
-      // .composition-wrapper rect, not the outer <music-composition> host's
-      // own box — the wrapper is centered/inset within the host whenever
-      // the host is wider than the composition's max-width, so comparing
-      // against the host's own rect silently reintroduces that inset as a
-      // constant offset error.
+      // Curves are rooted at .composition-wrapper, which is inset in a host
+      // wider than max-width.
       const wrapperRect = composition?.shadowRoot
         ?.querySelector('.composition-wrapper')
         ?.getBoundingClientRect();
@@ -4591,12 +4530,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — rests`, ()
       throw new Error('geometry not ready');
     }
 
-    // Both the rest and the bass note it precedes land at the same real X
-    // (same beat), so the bass note's own stem — which spans the entire
-    // distance between its notehead and the shared beam — would otherwise
-    // run directly through the rest regardless of how much *vertical*
-    // clearance it has from the notehead. The rest's own box must end
-    // clear of the stem's real horizontal footprint.
+    // The rest shares a beat with the bass note, whose stem runs to the beam,
+    // so the rest must end left of the stem.
     expect(result.trebleRestRight).toBeLessThan(result.bassStemLeft);
   });
 
@@ -4665,12 +4600,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — rests`, ()
       if (treble === null || bass === null || bassRest === undefined) {
         throw new Error('geometry not ready');
       }
-      // The real inter-staff gap is bounded by each staff's own visible
-      // lines (`.staff-container`, whose border-top/bottom render the
-      // outermost lines) — not the whole custom element's outer box, which
-      // always includes its own STAFF_LINE_START/STAFF_BOTTOM_MARGIN
-      // padding and so is flush against its sibling regardless of how much
-      // real visual room that padding gives the lines themselves.
+      // The gap is bounded by each `.staff-container` (its borders are the
+      // outer lines), not the padded element box.
       const topGapEdgeY = treble.shadowRoot
         ?.querySelector('.staff-container')
         ?.getBoundingClientRect().bottom;
@@ -4703,12 +4634,8 @@ test.describe(`${MUSIC_MEASURE} double-stemmed beams (beam-group) — rests`, ()
   }) => {
     await buildTwoRestGroup(page);
 
-    // The treble rest sits at the same beat as the bass note (x = 0.5),
-    // where the beam — sloped steeply here, since it connects only two
-    // real notes half a beat apart across the full staff-to-staff gap — has
-    // already descended most of the way toward the bass staff, well past
-    // the fixed (staff-edge-derived) gap center a naive "centered" target
-    // would otherwise use.
+    // The treble rest shares the bass note's beat (x = 0.5), where the steep
+    // beam has descended well past the gap's centre.
     await page.evaluate(() => {
       document
         .getElementById('treble-rest')

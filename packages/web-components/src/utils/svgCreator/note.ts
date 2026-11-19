@@ -878,12 +878,7 @@ export function noteHeadLeftOverhangPx(
   );
 }
 
-// This note's own real stem-tip position (600-unit space) — the same
-// geometry createNoteSvg's own stem line is drawn to, factored out so a
-// caller (createArticulationMarks, via a passed-through stemAnchor) can
-// anchor there without duplicating the formula. Unlike noteHeadCenter
-// above, this depends on stemExtension, since that's exactly what moves
-// the tip (e.g. to reach a cross-staff double-stemmed beam).
+// The stem tip (600-unit space), as createNoteSvg draws it.
 export function stemTipPosition(
   stemUp: boolean,
   duration: DurationType,
@@ -905,24 +900,10 @@ export function stemTipPosition(
   };
 }
 
-// This note's own real position where its stem meets the double-stemmed
-// beam's actual visible surface (600-unit space) — used as the anchor for
-// an inner-voice articulation mark instead of the raw stem tip.
-// measure.ts#redrawDoubleStemmedBeams extends a member's stem past the
-// beam's near surface by a fixed STEM_OVERLAP_PX (so the drawn line
-// reliably disappears under the beam's opaque fill), and that overlap is
-// asymmetric: a stem-up member's raw tip sits deep inside the polygon body
-// (it travels through BEAM_THICKNESS_PX - STEM_OVERLAP_PX of hidden beam
-// before reaching its own tip target), while a stem-down member's raw tip
-// is only STEM_OVERLAP_PX past its own near surface. A mark placed at the
-// raw tip would therefore often render underneath the beam's fill — this
-// walks back from the tip, toward the notehead, by exactly that hidden
-// distance, landing right at the beam's real visible edge. beamLevels
-// secondary/fractional levels between the tip and the notehead add one
-// beam step each: whether they stack toward this notehead (the stem passes
-// through them) or away from it (the stem is extended out to them), the
-// surface facing the notehead is that many steps nearer the notehead than
-// the tip's own level.
+// Where the stem meets the double-stemmed beam's visible surface facing the
+// notehead (600-unit space): the inner-voice articulation anchor. The tip sits
+// inside the beam polygon (by BEAM_THICKNESS_PX − STEM_OVERLAP_PX stem-up,
+// STEM_OVERLAP_PX stem-down), and each of `beamLevels` adds one beam step.
 export function stemBeamJunctionPosition(
   stemUp: boolean,
   duration: DurationType,
@@ -938,12 +919,8 @@ export function stemBeamJunctionPosition(
   return { x, y: y + (towardNoteSign * hiddenPastSurfacePx) / NOTE_SCALE };
 }
 
-// Pixel Y of where a stem-up tip would sit, regardless of the note's actual
-// stem direction — per createNoteSvg's own stem geometry, a stem-up tip is
-// at NOTE_Y_STEM_START minus any external stemExtension (no flag-count
-// dependency: extra flags on a stem-up note extend the *head* end of the
-// stem, not the tip — see createNoteSvg's stemY1/stemY2). Used only by the
-// grace slur's descending-group stem-tip anchoring (see buildGraceSlur).
+// Pixel Y of a stem-up tip, whatever the note's direction. Flags lengthen
+// the head end, not the tip.
 export function stemUpTipYPx(stemExtension = 0): number {
   return NOTE_STEM_TIP_Y_OFFSET - stemExtension;
 }

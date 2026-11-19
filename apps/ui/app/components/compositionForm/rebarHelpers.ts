@@ -42,10 +42,8 @@ export type RebarResult = {
 // explicit `measure.time` is a fixed point. Parts are matched by staff index,
 // mirroring `connectorsHelpers.ts`'s "same voice = same staff index".
 //
-// Alternatives rejected: padding every region tail with rests (MuseScore's
-// full-measure invariant) — this app already renders under-full measures, so a
-// short final measure is left as-is; and splitting tuplet runs at a barline —
-// a run moves whole instead, since `<music-tuplet>` can't span a measure.
+// A short final measure is left under-full, and a tuplet run moves whole
+// since `<music-tuplet>` can't span a measure.
 export function rebar(
   structure: CompositionStructure,
   fromMeasureIndex: number

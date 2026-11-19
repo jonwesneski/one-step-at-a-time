@@ -1009,12 +1009,8 @@ describe('computeTupletBracketGeometry', () => {
       false
     )!;
 
-    // beamYAtNumeralX is at the stem tip. The outer beam edge is beamYAtNumeralX + BEAM_THICKNESS_PX.
-    // The numeral top edge (numeralY - font/2) must be below that outer beam edge.
-    // We verify: numeralY - font/2 > beamY_at_numeral_X + BEAM_THICKNESS_PX
-    // Equivalently: innerGeom.numeralY > some lower bound derived from beam position.
-    // We test the invariant directly: numeralY must be greater than baseY (staff-ref default)
-    // i.e. further from staff than the staff clearance zone.
+    // The numeral sits past the outer beam edge, further from the staff than
+    // the staff clearance baseY.
     expect(innerGeom.omitBracket).toBe(true);
     // The numeral top edge must be strictly below the numeral bottom edge of the beam outer face.
     // beamOuterEdgeY (stem-down) = staffYPadding + staffY - headOffset + stemTipOffset + flagExtension + BEAM_THICKNESS_PX

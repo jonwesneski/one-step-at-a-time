@@ -168,12 +168,8 @@ function resolveVoiceNumber(note: NoteLikeElementType): VoiceNumber {
   return ((position === -1 ? 0 : position) + 1) as VoiceNumber;
 }
 
-// Groups note-like elements by voice — the fix for cross-voice tie/slur
-// mispairing: today's LIFO stack-top fallback in pairConnectors (used
-// whenever a tie/slur has no explicit `for="id"`) would incorrectly let a
-// voice-2 note with no `for` pop a voice-1 tie's stack entry when voices
-// interleave in document order. Callers partition first, then pair each
-// voice's own notes independently:
+// Groups note-like elements by voice, so pairConnectors' LIFO fallback never
+// pairs across interleaved voices. Partition, then pair each voice:
 //   const byVoice = partitionByVoice(collectNoteLikeElements(root));
 //   const pairs = [...byVoice.values()].flatMap((notes) => pairConnectors(notes));
 export function partitionByVoice(
@@ -241,20 +237,9 @@ export const collectArpeggioTiePairs = (root: ParentNode): ConnectorPair[] => {
   return pairs;
 };
 
-// Collects every note/chord sharing a slur-group id, orders them by measure
-// and then real rendered x (temporal order — same-beat entries land at the
-// same x by construction, see SVG Coordinate System in CLAUDE.md; x restarts
-// on each system, so it can't order measures on its own), and produces one
-// ordinary ConnectorPair per consecutive pair — each flows through
-// buildConnectorSvgs exactly like any other slur pair. Grand-staff/classical
-// specific (note/chord only) — mirrors beam-group's own N:M shared-key
-// shape rather than slur's single-valued start/end pair, since a "phrase
-// slur" spanning more than 2 breakpoints needs a note (the last note of
-// one leg, first of the next) to be simultaneously an end and a start,
-// which `slur`'s single attribute value and pairConnectors's LIFO stack
-// cannot express. Callers concat this with
-// pairConnectors(...)/collectArpeggioTiePairs(root), same shape as the
-// latter is already concatenated in today.
+// One ConnectorPair per consecutive pair of a slur-group, ordered by measure
+// then rendered x (x restarts each system). A slur-group lets one note be both
+// an end and a start, which `slur`'s single value can't.
 export const collectPhraseSlurPairs = (root: ParentNode): ConnectorPair[] => {
   const selector = `${MUSIC_NOTE}[slur-group]:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}[slur-group]`;
   const elements = Array.from(
@@ -485,12 +470,8 @@ type Anchor = {
 };
 
 const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
-  // The note's own rect.top shifts with pitch (higher pitch → smaller top),
-  // so it cannot be used for row detection. The containing <music-measure>
-  // is what wraps in the composition's flex grid, so its top reflects the
-  // actual visual row. A standalone staff (no measure) never wraps, so its own
-  // box is the row reference — falling back to the note there would split every
-  // slur/tie wider than a 2nd into cross-row halves.
+  // A note's top shifts with pitch, so rows come from the containing
+  // <music-measure> (what wraps), or the staff itself when standalone.
   const rowReference =
     (note.closest(MUSIC_MEASURE) as HTMLElement | null) ??
     (note.closest(STAFF_TAGS) as HTMLElement | null) ??
@@ -604,16 +585,9 @@ const computeAnchor = (
   };
 };
 
-// A slur's stem-end anchor — used instead of computeAnchor's notehead
-// anchor when the notehead anchor would be obscured by (or too close to) a
-// double-stemmed beam, or unconditionally for an inner-voice beam-group
-// member (see isInnerVoiceMember) whose ordinary opposite-of-stem territory
-// is occupied by another voice sharing its staff. Pulled back SLUR_STEM_END_CLEARANCE_PX from the true tip — the
-// bare tip itself is exactly where the beam (or that other voice's own
-// content) sits, so anchoring precisely at it would touch it, not clear
-// it. Returns null when the note has no real stem (a whole note, or
-// standalone/degraded rendering with no shadow DOM) — callers fall back to
-// computeAnchor in that case.
+// A slur anchor at the stem end, pulled back SLUR_STEM_END_CLEARANCE_PX: for
+// an inner-voice beam-group member, or where a double-stemmed beam hides the
+// notehead anchor. Null without a stem.
 const computeStemEndAnchor = (
   note: NoteLikeElementType,
   rootRect: DOMRect
@@ -634,12 +608,8 @@ const computeStemEndAnchor = (
   };
 };
 
-// A cross-staff slur endpoint anchor past the stem's own tip, on the far side
-// from the notehead — used when the stem points toward the slur's side (see
-// rules/connectorPlacementRules.ts#slurAnchorKind), so the curve clears that
-// note's own beam or flag instead of reaching through it to the notehead.
-// Returns null when the note has no real stem — callers fall back to the
-// notehead anchor.
+// A cross-staff slur anchor past the stem tip, for a stem pointing toward
+// the slur's side, so it clears the beam or flag. Null without a stem.
 const computeBeyondBeamAnchor = (
   note: NoteLikeElementType,
   rootRect: DOMRect
@@ -762,20 +732,10 @@ const chordOtherToneCenters = (
   return centers;
 };
 
-// A tie must not run through a dotted note's dots, a written trilling
-// notehead (trill-note) or a trill's finishing grace note(s) (trill-finish) —
-// nudge the tie's start point past whichever reserve space there (the two
-// trill decorations are summed, harmless in that rare combination since they
-// aren't laid out to coexist cleanly anyway), computed analytically (matching
-// computeWrittenTrillNoteWidth's/computeGraceFootprintWidth's own math)
-// rather than queried from the DOM. The written notehead is drawn by the
-// staff's own overlay; the finishing grace note(s) are drawn locally inside
-// the note/chord's own shadow DOM — neither is reachable via
-// getBoundingClientRect() from here. Approximation: when a short main note
-// defers its written notehead to the second tied note (see
-// rules/trillRules.ts's writtenNoteAnchorIndex), this still nudges from the
-// first note's own position — a harmless overshoot in that rare
-// combination, not a visual bug.
+// Nudges a tie's start past dots, a written trilling notehead and trill-finish
+// notes, computed from their layout math since neither trill decoration can
+// be measured from here. A written notehead deferred to the second tied note
+// still nudges the first (a small overshoot).
 const tieStartNudgePx = (note: NoteLikeElementType): number => {
   const tag = note.tagName.toLowerCase();
   if (tag !== MUSIC_NOTE && tag !== MUSIC_CHORD) {
@@ -784,12 +744,8 @@ const tieStartNudgePx = (note: NoteLikeElementType): number => {
   const trillCapableNote = note as NoteElementType | ChordElementType;
   let nudge = 0;
   if (trillCapableNote.resolvedTrillPitch?.written === true) {
-    // computeAnchor's startAnchor.x is the note's own rendered *center*
-    // (rect.left + rect.width / 2), but the written notehead's own leftX
-    // (see staffClassicalBase.ts#drawWrittenTrillNote) starts a full
-    // NOTE_SVG_WIDTH past the note's *left* edge — half a notehead further
-    // right than the center. Add that half-width back in, or the nudge
-    // lands short.
+    // The anchor is the note's centre, but the written notehead starts
+    // NOTE_SVG_WIDTH past its left edge.
     nudge +=
       NOTE_SVG_WIDTH / 2 +
       TRILL_WRITTEN_NOTE_GAP_PX +
@@ -799,14 +755,8 @@ const tieStartNudgePx = (note: NoteLikeElementType): number => {
   }
   const trillFinish = trillCapableNote.trillFinish;
   if (trillFinish !== null && trillFinish.length > 0) {
-    // Same center-to-left-edge correction as above; the finishing group's
-    // own anchor (see svgCreator/graceNotes.ts#createTrillFinishNotesSvg)
-    // starts at that same NOTE_SVG_WIDTH point, and
-    // computeGraceFootprintWidth already includes the gap before it. A
-    // single (non-group) finishing note also has its own stem, extending a
-    // couple more px right of this reserved width — clearing the notehead
-    // itself (the real collision risk) is what this targets; grazing a thin
-    // stem line is a minor cosmetic gap, not pursued further here.
+    // Same correction; a lone finishing note's stem may reach a couple of px
+    // further.
     nudge +=
       NOTE_SVG_WIDTH / 2 +
       computeGraceFootprintWidth(
@@ -849,19 +799,9 @@ const pickChordNoteBulge = (
   index: number
 ): CurveBulge => pickChordToneSide(yCoords, index, pickBulge(chord));
 
-// True when element is a real, non-outermost voice sharing its own staff
-// with another concurrently-sounding voice — "when a double-stemmed group
-// is an inner part" per the reference engraving material's own
-// articulation-placement rule (see measure.ts#redrawDoubleStemmedBeams'
-// articulationStemAnchorBeamLevels write-back, which this mirrors for slur
-// stem-end anchoring). A staff with zero or one <music-voice> children is
-// never "inner" (the ordinary single-voice case); voice 1 (the first
-// <music-voice> sibling) is the canonical outer voice and is never "inner"
-// either, mirroring how the rest of this codebase already treats voice 1
-// as the staff's own primary timeline (see Voices in
-// packages/web-components/CLAUDE.md). Exported (not a measure.ts-only
-// private method) since composition.ts's own #redrawConnectors needs the
-// exact same check for a composition-wide slur.
+// True when element is an inner voice of a double-stemmed group: on a staff
+// with two or more <music-voice> children, and not voice 1 (the outer
+// voice). Shared by measure.ts and composition.ts.
 export function isInnerVoiceMember(
   element: NoteOrChordElementType,
   staff: StaffElementBaseType
@@ -879,17 +819,10 @@ export function isInnerVoiceMember(
   );
 }
 
-// Resolves double-stemmed beam-group context for slur placement (Chapter
-// G), across one or more <music-measure> elements — a double-stemmed beam
-// group is always scoped to a single measure's own two sibling staves, but
-// a slur whose endpoints belong to one can be drawn either by that
-// measure's own #redrawConnectors (a standalone measure) or by an
-// ancestor <music-composition>'s own composition-wide equivalent — both
-// need the exact same per-measure resolution, so this takes a *list* of
-// measures (a single-element list for the standalone case) and aggregates
-// across all of them, converting every real rect into the single `rootRect`
-// space the caller's own buildConnectorSvgs call will use (the caller's
-// own root, not any individual measure's).
+// Resolves double-stemmed beam-group context for slur placement across one
+// or more <music-measure> elements: a standalone measure passes itself, a
+// composition passes all of its measures. Rects are converted into the
+// caller's `rootRect` space.
 export function resolveDoubleStemmedBeamConnectorContext(
   measureElements: readonly Element[],
   rootRect: DOMRect
@@ -926,12 +859,7 @@ export function resolveDoubleStemmedBeamConnectorContext(
           nodeName: element.nodeName,
         }))
     );
-    // Warnings are intentionally not logged here — the ancestor
-    // <music-measure>'s own #redrawDoubleStemmedBeams (which every caller
-    // of this function runs first — see the ordering dependency documented
-    // on measure.ts#redrawConnectors/#doubleStemmedBeamRects) already logs
-    // them for this same redraw cycle; logging them again here would just
-    // double every warning.
+    // #redrawDoubleStemmedBeams already logged the warnings this cycle.
     const { groups } = resolveDoubleStemmedBeamGroups(entries);
 
     for (const group of groups) {
@@ -1175,12 +1103,9 @@ export type ConnectorsBuildOptions = {
   // Where a connector that leaves its row starts again on the next row; it
   // runs out to the root's right edge.
   rowLeft: number;
-  // Real double-stemmed-beam polygon rects (root-rect-relative — same
-  // space every anchor in this module uses), already drawn by the
-  // ancestor <music-measure> before this runs (ordering dependency:
-  // measure.ts#redrawConnectors must run after #redrawDoubleStemmedBeams).
-  // A same-staff slur whose curve would otherwise cross one gets pushed
-  // further out; cross-staff slurs avoid them via `entryObstacles`.
+  // Double-stemmed beam rects (root-relative), drawn before this runs. A
+  // same-staff slur is pushed past them; cross-staff slurs use
+  // `entryObstacles`.
   beamRects?: readonly DOMRect[];
   // Slur pairs placed over a double-stemmed beam-group's two staves — see
   // resolveSlurGroupPlacement.

@@ -450,12 +450,8 @@ export const createChordSvg = ({
     const topNoteHeadCenterXPx =
       noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
       (displacementMap.get(topNoteIndex) ?? 0);
-    // Only used for a descending grace group's stem-tip slur anchoring (see
-    // buildGraceSlur): when the chord is stem-up, its real rendered stem
-    // tip (reusing the same stem X and chordSpread/stemExtension geometry
-    // the chord's own stem uses above, lines ~66-97); when stem-down, the
-    // chord's top note instead (no stem is projected in that case).
-    // Unused (and harmless to compute) otherwise.
+    // A descending grace group's slur target: the stem tip when stem-up,
+    // else the top note.
     const bottomNoteHeadCenterYPx =
       STAFF_Y_PADDING +
       Math.max(...staffYCoordinates) -
@@ -491,9 +487,7 @@ export const createChordSvg = ({
   }
 
   // Finishing grace note(s) — placed after the chord's own notehead column.
-  // Chords reserve no rightward decoration today, so (unlike the leading
-  // side) the anchor is the fixed per-entry SVG width every note/chord
-  // shares (NOTE_SVG_WIDTH), not a chord-specific right edge.
+  // Anchored at NOTE_SVG_WIDTH, the per-entry width every note/chord shares.
   if (trillFinishNotes && trillFinishNotes.length > 0) {
     const referenceHeadCenterYPx =
       STAFF_Y_PADDING + staffYCoordinates[0] - NOTE_HEAD_Y_OFFSET_CORRECTION;

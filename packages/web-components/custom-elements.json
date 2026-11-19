@@ -1349,7 +1349,7 @@
               "type": {
                 "text": "StemDirection"
               },
-              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
             },
             {
               "name": "notehead",
@@ -4240,7 +4240,7 @@
               "type": {
                 "text": "StemDirection"
               },
-              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
             },
             {
               "name": "notehead",
@@ -8106,7 +8106,7 @@
                   }
                 }
               ],
-              "description": "Force-upgrade slotted `<music-*>` children (and any nested inside a\n`<music-tuplet>`) before the staff reads their getters. When a staff is\nbuilt from parsed HTML markup its `connectedCallback` runs — and dispatches\nthe first `slotchange` — before its already-present children upgrade, so\nwithout this their getters (`grace`, `note`, `duration`, …) are `undefined`.\n`customElements.upgrade()` is synchronous and a no-op on an already-upgraded\nor unregistered element.",
+              "description": "Upgrades slotted `<music-*>` children before their getters are read: from\nparsed markup, the staff connects before its children upgrade.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -9006,7 +9006,7 @@
                   }
                 }
               ],
-              "description": "Force-upgrade slotted `<music-*>` children (and any nested inside a\n`<music-tuplet>`) before the staff reads their getters. When a staff is\nbuilt from parsed HTML markup its `connectedCallback` runs — and dispatches\nthe first `slotchange` — before its already-present children upgrade, so\nwithout this their getters (`grace`, `note`, `duration`, …) are `undefined`.\n`customElements.upgrade()` is synchronous and a no-op on an already-upgraded\nor unregistered element.",
+              "description": "Upgrades slotted `<music-*>` children before their getters are read: from\nparsed markup, the staff connects before its children upgrade.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -13048,7 +13048,7 @@
                   }
                 }
               ],
-              "description": "Force-upgrade slotted `<music-*>` children (and any nested inside a\n`<music-tuplet>`) before the staff reads their getters. When a staff is\nbuilt from parsed HTML markup its `connectedCallback` runs — and dispatches\nthe first `slotchange` — before its already-present children upgrade, so\nwithout this their getters (`grace`, `note`, `duration`, …) are `undefined`.\n`customElements.upgrade()` is synchronous and a no-op on an already-upgraded\nor unregistered element.",
+              "description": "Upgrades slotted `<music-*>` children before their getters are read: from\nparsed markup, the staff connects before its children upgrade.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -13493,7 +13493,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\ntremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\ntremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice) or two-or-three,\nwrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
           "name": "VoiceElement",
           "members": [
             {

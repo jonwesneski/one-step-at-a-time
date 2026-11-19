@@ -273,8 +273,7 @@ export const parseRestStaffSide = (
   return null;
 };
 
-// No default: null means "no author override," resolved by today's
-// existing pitch-driven/voice/beam-group stem direction logic unchanged.
+// No default: null means no author override.
 export const parseStemDirection = (
   value: string | null
 ): StemDirection | null => {
@@ -435,14 +434,10 @@ export const parseGraceNoteheads = (
   );
 };
 
-// Shared setter body for the array-valued grace properties (`grace`,
-// `graceOctave`, `graceArticulation`). The matching attribute is always a
-// comma-separated string, but the property accepts either that string (React
-// sets the JSX prop as a property; Storybook `control: 'text'` does too) or the
-// rich array (vanilla JS). Returns the attribute string to write, or null to
-// remove the attribute. A string is first routed through the element's own
-// parser so an invalid list is rejected the same way as one set via
-// `setAttribute`.
+// Setter body for the array-valued grace properties, which accept a
+// comma-separated string (as React and Storybook set them) or an array.
+// Returns the attribute string, or null to remove it; a string is validated
+// by `parse` first.
 export const graceListToAttr = (
   value: readonly (string | number | null)[] | string | null,
   parse: (value: string | null) => readonly (string | number | null)[] | null

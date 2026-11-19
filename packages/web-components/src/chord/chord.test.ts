@@ -1097,10 +1097,8 @@ describe(MUSIC_CHORD, () => {
     });
 
     it('arcs the slur above every grace head when the group descends in pitch', () => {
-      // grace="F,E" into a chord referencing C4 — the group's pitch trends
-      // downward (first note F higher than last note E). Mirrors the
-      // note-level regression: stem-tip anchoring must keep the curve
-      // above every grace head, not just the two slur endpoints.
+      // grace="F,E" into a chord on C4: the group descends, and the slur
+      // must stay above every grace head, not just the two endpoints.
       const chordElement = makeChordWithNotes(
         [
           ['C', 4],
@@ -1242,12 +1240,8 @@ describe(MUSIC_CHORD, () => {
       });
 
       it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
-        // Regression test: createArticulationMarks() draws in the same
-        // 600-unit note-space createNoteSvg uses for the head, and
-        // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
-        // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
-        // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
-        // too large and land outside any clipped viewBox (invisible in-staff).
+        // Grace articulation marks need the head's inner scale(NOTE_SCALE)
+        // inside the grace wrapper, or they render ~1/NOTE_SCALE too large.
         const chordElement = makeChordWithNotes(
           [
             ['C', 4],

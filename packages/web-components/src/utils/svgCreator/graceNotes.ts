@@ -73,12 +73,9 @@ const SLUR_STEM_CLEARANCE_PX = 1.5;
 // avoid an accidental, so the visual gap matches on each side. Starting
 // value — tune visually in Storybook.
 const SLUR_ACCIDENTAL_CLEARANCE_PX = 1.5;
-// Vertical clearance above a grace stem/beam tip. Padded beyond
-// SLUR_ACCIDENTAL_CLEARANCE_PX because a group's outer beam layer renders
-// STEM_OVERLAP_PX * GRACE_SCALE above the raw beam Y (a deliberate
-// stem/beam-blend overlap), which would otherwise eat most of the margin —
-// a render-overlap correction, not a stylistic gap choice, so it only
-// applies to this (grace) side.
+// Vertical clearance above a grace stem/beam tip; padded beyond
+// SLUR_ACCIDENTAL_CLEARANCE_PX since the outer beam renders
+// STEM_OVERLAP_PX × GRACE_SCALE above the raw beam Y.
 const SLUR_STEM_TIP_CLEARANCE_PX =
   SLUR_ACCIDENTAL_CLEARANCE_PX + STEM_OVERLAP_PX * GRACE_SCALE;
 
@@ -93,31 +90,19 @@ export type GraceNotesProps = {
   // (staffYCoordinates[0]), not necessarily the lowest pitch.
   mainHeadCenterXPx: number;
   mainHeadCenterYPx: number;
-  // The chord's top (highest-pitch) note — same point as mainHeadCenterXPx/
-  // YPx for a single note. Used only as the slur's landing target when it
-  // bulges above (see buildGraceSlur): after arcing up and over, the curve
-  // should land on the nearest (top) notehead rather than travel back down
-  // past the other chord tones to reach the reference note.
+  // The chord's top note (the head itself for a single note): the slur's
+  // landing target when it bulges above.
   mainTopNoteXPx: number;
   mainTopNoteYPx: number;
-  // The slur's landing point when the grace group is descending (see
-  // buildGraceSlur's descending-group branch) — the main note/chord's real
-  // stem tip when stem-up, or its notehead/top-note when stem-down (no
-  // stem to project to in that case). Unused for every other case
-  // (single-note or ascending-group default, accidental-shown case), which
-  // keep landing on mainHeadCenterXPx/YPx or mainTopNoteXPx/YPx as before.
+  // The slur's landing point for a descending grace group: the main stem tip
+  // when stem-up, else its top notehead.
   mainSlurTargetXPx: number;
   mainSlurTargetYPx: number;
   // Right edge available to the grace group — already left of the main
   // element's accidental footprint, including the grace-to-main gap.
   anchorRightXPx: number;
-  // Whether the main element displays an accidental. True flips the slur
-  // above the heads and anchors its grace-side start at the grace stem/beam
-  // tip instead of the notehead (more clearance altitude). The main-side
-  // endpoint's horizontal pullback (see buildGraceSlur) clears the
-  // accidental's actual rendered edge directly — not an approximated
-  // "footprint width" — so it's correct regardless of the accidental's
-  // type or how many other accidentals/columns the chord has.
+  // A shown main accidental flips the slur above, starting from the grace
+  // stem tip.
   mainAccidentalShown: boolean;
   // Main note's own stem direction. Stem-down puts the main stem on the same
   // (left) side the slur approaches from, so the slur needs extra horizontal
@@ -139,12 +124,9 @@ type OrnamentNoteGroupResult = {
   lastStemTipY: number;
 };
 
-// Heads, stems, beams, ledger lines, and (leading-only) articulation marks
-// and the acciaccatura slash — shared by a leading grace group
-// (createGraceNotesSvg) and a trill's finishing grace note(s)
-// (createTrillFinishNotesSvg). Slurs and accidentals are each caller's own
-// concern (a leading grace has one slur target and a uniform accidental
-// placement rule; a finishing group can slur to either or both neighbors).
+// Heads, stems, beams, ledger lines, and (leading-only) articulations and
+// slash, for leading and trill-finish grace groups. Slurs and accidentals are
+// the caller's.
 function renderOrnamentNoteGroup(
   graceNotes: GraceNoteDescriptor[],
   // The explicit duration attribute, null when unset. Heads and flags draw
@@ -415,13 +397,8 @@ export type TrillFinishNotesResult = {
 };
 
 /**
- * Builds a trill's finishing grace note(s): plain unslashed notehead(s)
- * after the main note, optionally slurred back to it ('to-main' — drawn
- * here, self-contained). A 'to-next'/'both' slur reaches a different
- * element entirely, so it isn't drawn here — the ancestor staff draws it in
- * its own overlay, independently recomputing this same layout math (see
- * staffClassicalBase.ts's trill-finish handling) rather than reading it back
- * from this rendered group.
+ * Builds a trill's finishing grace note(s) after the main note, with the
+ * 'to-main' slur. The staff draws the 'to-next' half.
  */
 export function createTrillFinishNotesSvg({
   trillFinishNotes,
@@ -471,14 +448,8 @@ export function createTrillFinishNotesSvg({
   return { element: group, width: layout.totalWidth };
 }
 
-// A simpler slur than the leading grace's buildGraceSlur: always bulges
-// below, always notehead-to-notehead, no main-stem clearance — no
-// accidental-clearance flip, no descending-group flip (documented v1
-// simplification, see CLAUDE.md's Known Incomplete Areas). Reusable for both
-// halves of a trill-finish slur (main→first-finishing-note, locally here;
-// last-finishing-note→next-element, from staffClassicalBase.ts, which has no
-// other reason to import graceNotes.ts internals) since both are just "two
-// head centers, left one connects to right one, bulging below."
+// A trill-finish slur half: notehead to notehead, always bulging below (a v1
+// simplification of buildGraceSlur's rules).
 export function createOrnamentConnectorSlur(
   fromXCenter: number,
   fromYCenter: number,
@@ -567,19 +538,6 @@ function buildGraceHead(
   return noteGroup as SVGGElement;
 }
 
-// Articulation for a single grace note, scaled and positioned identically to
-// its own head (same translate+scale transform as buildGraceHead) so the
-// mark travels with the grace note regardless of the group's layout. Grace
-// notes are always stem-up, so marks land opposite the stem — below the
-// head — matching the main-note convention and keeping them outside the
-// stave, where a scaled-down mark stays legible.
-//
-// createArticulationMarks() draws in the same 600-unit note-space createNoteSvg
-// uses for the head — createNoteSvg wraps that space in its own inner
-// scale(NOTE_SCALE) before buildGraceHead's outer translate+scale(GRACE_SCALE)
-// is applied. The marks bypass createNoteSvg entirely, so that inner scale
-// must be added explicitly here or the marks render at raw 600-unit-space
-// size (~1/NOTE_SCALE too large, invisible against a clipped staff viewBox).
 // Per grace note, how far (px, at grace scale) its head reaches left of the
 // ellipse head's edge.
 export function graceHeadLeftOverhangsPx(
@@ -604,6 +562,9 @@ function graceStemAnchorOffsetY(
   return GRACE_SCALE * (anchorY - cy) * NOTE_SCALE;
 }
 
+// A grace note's articulation, under the transform buildGraceHead uses. Grace
+// notes are stem-up, so marks sit below the head. The marks bypass
+// createNoteSvg, so its inner scale(NOTE_SCALE) is applied here.
 function buildGraceArticulation(
   articulation: ArticulationType,
   duration: GraceDuration,
@@ -662,61 +623,14 @@ function buildSlash(crossingX: number, crossingY: number): SVGLineElement {
   return slash;
 }
 
-// The slur runs from the first grace note to a main-side target note. By
-// default (no main accidental) it goes below, notehead to notehead, landing
-// on the reference note (the chord's bottom note in a chord, or the only
-// note for a single note) — matching standard engraving practice. When the
-// main accidental would sit in its path, it flips above and its target
-// switches to the chord's *top* note instead: after arcing up and over, the
-// curve should land on the notehead nearest that side rather than travel
-// back down past the other chord tones to reach the reference note (which
-// is what a below-side target would force it to do). This also matches the
-// "slur leads to the pitch that resolves the ornament" engraving guidance.
-// The grace-side start also moves from the notehead to the grace note's
-// stem/beam tip in the above case — a higher "running start" altitude that
-// lets the curve clear a tall or far-reaching accidental without a
-// contorted shape.
+// The slur runs from the first grace note to the main note: below, notehead
+// to notehead, onto the chord's bottom note. A shown main accidental flips it
+// above, from the grace stem tip onto the chord's top note. A descending group
+// also goes above, with both ends at stem tips, so it clears every head.
 //
-// The main-side endpoint's *distance from its target notehead* stays the
-// same constant regardless of whether an accidental is shown, or how many
-// the chord has — it clears the accidental's actual rendered right edge
-// directly (see accidentalClearanceX below), not an approximated
-// "footprint width" tied to the accidental's own size or column depth. That
-// alone is provably sufficient to keep the curve clear of the symbol: since
-// createCurveSvg's control point X is always the exact midpoint of the two
-// endpoints, the quadratic Bezier's X-component collapses to pure linear
-// interpolation between them (the bulge only ever moves Y, never X) — so a
-// `to.x` right of the accidental's right edge (i.e. past it, toward the
-// notehead) keeps *every* point on the curve clear of it, no matter how
-// tall the arc is.
-//
-// Both ends are anchored past their nearest stem (not just the notehead), so
-// the curve never crosses a stem: the grace stem sits right of the grace
-// head (grace notes are always stem-up), so `from.x` is pushed right of it;
-// the main stem only sits on the slur's approach side (left of its head)
-// when the main note is stem-down, and only threatens the curve when it
-// also spans downward from the head center (the same side as a 'below'
-// bulge) — so `to.x` is pushed left of the stem only for that one
-// dangerous combination.
-//
-// A descending grace group (first note higher than the last — the same
-// first-vs-last comparison the group's own beam slant already uses, see
-// computeGraceBeamYs in graceRules.ts) also bulges above, but for a
-// different reason and with a different anchor than the accidental case:
-// a below-bulge's endpoints trend downward across a descending run, so the
-// belly (and every interior note along that downward line) would sit
-// inside or near the arc. Landing both ends at genuine stem tips
-// (mainSlurTargetYPx, resolved by the caller — the real stem tip when
-// stem-up, or the highest notehead when stem-down, since no stem is
-// projected then) instead of noteheads guarantees the curve stays above
-// every note in the group, rather than only reducing the chance of a
-// collision the way a taller-but-still-notehead-anchored bulge would.
-// This is orthogonal to the accidental case: accidental clearance always
-// governs the *horizontal* target/pullback (never intersect the
-// accidental, no matter what), while isDescendingGroup only changes the
-// *vertical* anchor style — so when both are true, the slur still lands on
-// the top note horizontally (clearing the accidental), just anchored at
-// that note's stem tip instead of its notehead.
+// The curve's x is linear between its endpoints (the control point is their
+// midpoint), so a `to.x` past the accidental's right edge keeps the whole
+// curve clear of it. Each end is also pushed past a stem on its approach side.
 function buildGraceSlur(
   firstGraceHeadX: number,
   firstGraceHeadY: number,
@@ -736,13 +650,8 @@ function buildGraceSlur(
   const bulgeAbove = accidentalShown || isDescendingGroup;
   const bulge = bulgeAbove ? 'above' : 'below';
   const direction = bulgeAbove ? -1 : 1;
-  // Horizontal target: accidental clearance always wins when shown,
-  // regardless of isDescendingGroup — the slur must clear the accidental's
-  // actual rendered edge no matter what (see toX below). Otherwise, a
-  // descending group lands on the real stem X (mainSlurTargetXPx — for a
-  // chord this may differ from the reference note's own head X, since the
-  // stem can sit at a displaced position); a plain ascending/single-note
-  // group keeps landing on the reference note's head X as before.
+  // A shown accidental decides the horizontal target; otherwise a descending
+  // group lands on the stem x.
   const targetXPx = accidentalShown
     ? mainTopNoteXPx
     : isDescendingGroup
@@ -767,19 +676,9 @@ function buildGraceSlur(
   const stemClearanceX = mainStemInApproachPath
     ? MAIN_STEM_X_FROM_HEAD_CENTER + SLUR_STEM_CLEARANCE_PX
     : 0;
-  // A shown accidental's *nearest* column (the one closest to the notehead)
-  // always renders with its right edge at exactly -ACCIDENTAL_NOTE_GAP in
-  // the chord/note's own local space — both note.ts's single-accidental
-  // placement (`x = -(width + GAP)`) and accidentalRules.ts's chord-column
-  // placement (column 0's `xOffset = -(0 + width)`, rendered `x = xOffset -
-  // GAP`) reduce to the same `right edge = x + width = -GAP` once the width
-  // term cancels out — independent of the accidental's type/width, and of
-  // how many further (always further-left, never closer) columns the chord
-  // has. So clearing it needs no width/column data at all, only whether an
-  // accidental is shown. This fixes a prior bug: using the *aggregate*
-  // column width (correct for reserving the grace group's own layout space,
-  // wrong here) under-cleared multi-column chords, since the outermost
-  // column's width doesn't predict the nearest column's edge.
+  // The nearest accidental column's right edge is always at
+  // -ACCIDENTAL_NOTE_GAP (note.ts and accidentalRules.ts both place it so),
+  // whatever its width or the number of columns.
   const accidentalClearanceX = accidentalShown
     ? targetXPx + ACCIDENTAL_NOTE_GAP - SLUR_HEAD_CLEARANCE_PX
     : 0;
@@ -793,19 +692,12 @@ function buildGraceSlur(
     isDescendingGroup || accidentalShown
       ? firstGraceStemTipY + direction * SLUR_STEM_TIP_CLEARANCE_PX
       : firstGraceHeadY + direction * (graceHeadRy + SLUR_HEAD_CLEARANCE_PX);
-  // Main-side landing: a descending group's targetYPx is already a stem
-  // tip/highest-notehead (mainSlurTargetYPx), which needs the same
-  // stem-tip-style margin as the grace side rather than a notehead-ellipse
-  // margin; the other two cases land on an actual notehead and need the
-  // full head-radius clearance.
+  // A descending group lands at a stem tip, needing the stem-tip margin;
+  // otherwise it lands on a notehead.
   const toY = isDescendingGroup
     ? targetYPx + direction * SLUR_STEM_TIP_CLEARANCE_PX
     : targetYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX);
-  // The default bulge assumes endpoints close to their noteheads; an
-  // accidental (or a descending group's taller stem-tip anchors) can push
-  // fromY/toY far past that, so grow the bulge to keep the curve's control
-  // point beyond both endpoints instead of dipping back toward whatever it
-  // was supposed to clear.
+  // Grow the bulge so the control point stays beyond both endpoints.
   const bulgeHeight = Math.max(
     DEFAULT_BULGE_HEIGHT,
     Math.abs(fromY - toY) / 2 + SLUR_HEAD_CLEARANCE_PX

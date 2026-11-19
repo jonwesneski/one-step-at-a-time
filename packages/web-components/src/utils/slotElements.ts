@@ -271,18 +271,10 @@ export type StaffFlattenResult = {
   clefMarkers: ClefMarkerPlacement[];
 };
 
-// Partitions a staff's slotted content into one or more independent voices.
-// A staff is either wholly single-voice (zero <music-voice> children — the
-// ordinary case, behaves byte-identical to flattenSlotElements()) or wholly
-// multi-voice (every <music-voice> child's own subtree flattened
-// independently, numbered by sibling order: the 1st is voice 1, the 2nd is
-// voice 2, the 3rd is voice 3). Mixing bare top-level notes/chords/rests with
-// one or more <music-voice> siblings is invalid — the bare content is
-// discarded (not silently folded into voice 1) so a real authoring mistake
-// doesn't render silently wrong. <music-clef> is a special case of this: a
-// clef change is staff-wide, but it's authored nested inside the first
-// <music-voice> (voice 1's own timeline is its canonical anchor point) —
-// never as a bare top-level sibling, and never inside voice 2/3.
+// Partitions a staff's slotted content into voices: no <music-voice>
+// children is one voice; otherwise each child is a voice, numbered by order.
+// Bare entries beside <music-voice> siblings are discarded. A <music-clef>
+// belongs inside the first <music-voice>.
 export function flattenStaffSlotElements(
   assigned: Element[]
 ): StaffFlattenResult {
@@ -320,12 +312,8 @@ export function flattenStaffSlotElements(
     (voiceElement as HTMLElement).style.display = i < MAX_VOICES ? '' : 'none';
   });
 
-  // <music-clef> is no longer exempt here: once voice 1 can carry its own
-  // nested markers (see below), a bare top-level sibling clef has no way to
-  // express a real anchor point (its DOM position among <music-voice>
-  // siblings can only ever mean "before all voice content" or "after all of
-  // it", never a genuine mid-measure point) — nest it inside the first
-  // <music-voice> instead.
+  // A bare top-level <music-clef> beside <music-voice> siblings can't mark a
+  // mid-measure point; it belongs inside the first <music-voice>.
   for (const element of assigned) {
     if (element.nodeName !== MUSIC_VOICE_NODE) {
       if (element.nodeName === MUSIC_CLEF_NODE) {

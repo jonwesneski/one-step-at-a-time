@@ -12,12 +12,9 @@ import { parseTupletRatio, resolveInnermostTuplet } from './tupletRules';
  * N members contributes 1/N of its written value, so together they fill it
  * once.
  *
- * Single source of truth for "how much beat-time does this entry occupy",
- * shared by bar-fit (measureRules.ts), beam grouping (beamRules.ts), and
- * horizontal spacing (spacingRules.ts) — previously computed three times with
- * the same logic. Takes a structural `{ duration }` shape (matching
- * spacingRules.ts's computeSpacingWeights) rather than the note/chord/rest
- * union so guitar tab's simpler element type can reuse it too.
+ * Shared by bar-fit (measureRules.ts), beam grouping (beamRules.ts) and
+ * horizontal spacing (spacingRules.ts). Takes a structural `{ duration }`
+ * shape so guitar tab's simpler element type can use it too.
  */
 export function durationContribution(
   element: { readonly duration: DurationType },
@@ -55,11 +52,7 @@ export function computeTremoloScaleByIndex(
 
 /**
  * Cumulative whole-note-fraction offset at which each entry starts, relative
- * to the start of the measure (offsets[0] is always 0). Depends only on the
- * entries before it — appending a new entry never changes an earlier entry's
- * offset. Used by spacingRules.ts to position each entry as a fraction of the
- * measure's fixed beat capacity (from the time signature), not of the
- * current entry count.
+ * to the start of the measure (offsets[0] is always 0).
  */
 export function computeBeatOffsets(
   elements: ReadonlyArray<{ readonly duration: DurationType }>,

@@ -184,7 +184,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
    * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
    * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
-   * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
+   * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -661,8 +661,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
     }
 
-    // Author override for stemUp, independent of pitch. null = today's
-    // pitch-driven/voice/beam-group resolution, unchanged.
+    // Author override for stemUp; null leaves the pitch, voice or beam-group
+    // default.
     get stemDirection(): StemDirection | null {
       return parseStemDirection(this.getAttribute('stem-direction'));
     }
@@ -1207,14 +1207,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      // diminuendo is an alias for decrescendo — normalize immediately so
-      // decrescendo is the only hairpin attribute any other code ever sees.
-      // Runs even before the element is connected (unlike the rest of this
-      // callback) since callers commonly set attributes before appending.
-      // Only forward when diminuendo is being set (newValue !== null); the
-      // follow-up removeAttribute('diminuendo') below re-enters this callback
-      // with newValue === null and must be a no-op, or it would immediately
-      // clear the decrescendo value we just set.
+      // `diminuendo` is rewritten to `decrescendo`, even before connecting.
+      // The removeAttribute below re-enters with null, which must be a no-op.
       if (name === 'diminuendo') {
         if (newValue !== null) {
           this.setAttribute('decrescendo', newValue);
@@ -1333,16 +1327,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-accidental' ||
         name === 'trill-continuation'
       ) {
-        // The ancestor staff resolves the trill line span (walking this
-        // element's own tie chain), re-resolves the key-signature-aware
-        // trilling pitch, and redraws the line in its own overlay — both
-        // synchronously within this dispatchEvent call, so the render()
-        // below already sees the fresh resolvedTrillPitch. No staff-driven
-        // layout/footprint dependency otherwise — re-render locally
-        // unconditionally, standalone or not. `trill-continuation` affects
-        // none of that (it only controls a system-break restatement an
-        // ancestor <music-composition> draws), but shares the same dispatch
-        // so that pass re-runs too.
+        // The staff re-resolves the trill synchronously, so render() below
+        // sees the fresh resolvedTrillPitch.
         if (
           name === 'trill-accidental' &&
           newValue !== null &&
@@ -1433,20 +1419,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'tremolo-label' ||
         name === 'articulation-repeat'
       ) {
-        // `duration` moves every later entry (beat time) and its dots widen
-        // the rightward footprint.
-        // arpeggio/grace changes the element's leftward footprint, and
-        // trill-note/trill-finish the rightward one, the same way: the staff
-        // re-runs its layout pass on NOTE_Y_CHANGE, and standalone we
-        // re-render here. `arpeggio-for` reserves the same footprint for the
-        // lower end of a cross-staff span, whose wave the ancestor measure
-        // draws. `trill-finish-slur` never changes the footprint itself but
-        // shares this dispatch since the ancestor staff's cross-element
-        // "slur to next" pass depends on it too. `notehead` changes the
-        // head's width, and a triangle also moves the note and forces its
-        // stem. `tremolo` strokes lengthen the stem; a `tremolo-tuplet`
-        // numeral and a `tremolo-label` change what the staff clears above it.
-        // `articulation-repeat` is part of the voice-combine key.
+        // Each of these changes layout (beat time, a leftward or rightward
+        // footprint, stem length, what the staff clears above) or the
+        // voice-combine key, so the staff re-lays out.
         if (name === 'notehead' && this.hasAttribute('beam-group')) {
           // A triangle leaves or rejoins its cross-staff beam group.
           this.dispatchEvent(

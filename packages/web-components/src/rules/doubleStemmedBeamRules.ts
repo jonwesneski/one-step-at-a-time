@@ -29,22 +29,11 @@ export type DoubleStemmedBeamResolution = {
 };
 
 /**
- * Resolves which entries across a measure's staves join one cross-staff
- * double-stemmed beam group, purely from each entry's own `beam-group` value
- * — mirrors rules/staffGroupRules.ts#resolveStaffGroups' shape (pure,
- * unit-testable, since jsdom's ResizeObserver polyfill never fires, so
- * measure.ts's real render path only executes in browser tests).
- *
- * `members` is ordered by `entryIndex` (each staff's own per-measure
- * position), with `staffIndex` as a tiebreak — the same "same-beat notes on
- * sibling staves land at the same index position" assumption this codebase's
- * beat-proportional spacing already relies on elsewhere, not a new one.
- *
- * A group is warned and dropped (its members fall back to ordinary
- * per-staff pitch-driven stem/no-beam rendering — the same failure shape an
- * unmatched `arpeggio-for` has today) when it doesn't span exactly two
- * staves, those two staves aren't immediately adjacent siblings, or it has
- * fewer than 2 non-rest members.
+ * Resolves which entries across a measure's staves join one double-stemmed
+ * beam group, from their `beam-group` values. `members` is ordered by
+ * `entryIndex`, then `staffIndex`. A group that doesn't span exactly two
+ * adjacent staves, or has fewer than 2 non-rest members, is warned and
+ * dropped.
  */
 export function resolveDoubleStemmedBeamGroups(
   entries: readonly DoubleStemmedBeamEntry[]
@@ -128,24 +117,11 @@ const BEAM_ANGLE_DEAD_ZONE = 0.05;
 const MAX_BEAM_ANGLE = 0.15;
 
 /**
- * Resolves the shared beam's `Y = f(X)` line for a double-stemmed group from
- * its members' own natural (unshifted) stem-tip targets — pure geometry, no
- * DOM. Assumes the caller has already excluded rest members and sorted
- * `points` by ascending X (`resolveDoubleStemmedBeamGroups`'s own
- * `members` order, mapped to real positions).
- *
- * Classifies the group's overall net contour (first vs. last point's
- * `naturalY`) and whether every consecutive step agrees with that trend. A
- * genuinely consistent rise or fall slopes the beam toward it, clamped to
- * the same angle bound `rules/tupletRules.ts` already uses for its own
- * bracket slope (dead zone below 0.05, capped at 0.15) — reused for
- * consistency, not re-derived. Anything else (no net change, an interior
- * step reversing the trend, or a clamped-to-zero angle) falls back to
- * horizontal at the mean of every point's `naturalY`, clamped into
- * `[topStaffGapEdgeY, bottomStaffGapEdgeY]` — "stay clear of the staves"
- * outranks equal stem length for a horizontal beam. The sloped case
- * deliberately skips that clamp: the source engraving rule only ranks
- * staying-out-of-the-staff above equal-length stems for the horizontal case.
+ * Resolves the shared beam's `Y = f(X)` line from the non-rest members'
+ * unshifted stem tips, sorted by x. A consistent rise or fall slopes the beam
+ * (tupletRules.ts's bound: dead zone below 0.05, capped at 0.15). Anything
+ * else is horizontal at the mean tip, clamped into the gap: for a horizontal
+ * beam, staying clear of the staves outranks equal stem lengths.
  */
 export function resolveDoubleStemmedBeamLine(
   points: readonly DoubleStemmedBeamPoint[],
@@ -354,33 +330,17 @@ export function resolveDoubleStemmedBeamClearance(input: {
 export type DoubleStemmedBeamSegmentSide = 'top' | 'bottom';
 
 /**
- * Where a secondary/fractional beam segment sits relative to the group's
- * own overall span — only matters for the "genuine conflict" tie-break in
- * resolveSecondaryBeamVerticalSide below. A segment that both starts and
- * ends the group (i.e. spans every member) is 'start' — moot in practice,
- * since a whole-group-spanning segment is necessarily single-direction and
- * never reaches that tie-break.
+ * Where a secondary beam segment sits in its group, for
+ * resolveSecondaryBeamVerticalSide's conflict tie-break. A whole-group segment
+ * is 'start'.
  */
 export type DoubleStemmedBeamSegmentPosition = 'start' | 'end' | 'middle';
 
 /**
- * Resolves which staff's side a secondary or fractional beam segment
- * stacks toward — a question the single-staff model never has to answer,
- * since a same-staff group only ever has one uniform stem direction for
- * every level. Impossible to answer here without knowing, per member in
- * the segment's own index range, which staff it belongs to (`members`,
- * `groupTopStaffIndex` — the complementary `bottomStaffIndex` is implied,
- * since a resolved group always spans exactly two staves).
- *
- * Order of rules: every member in the segment's range is on the same
- * staff → that side. Otherwise (mixed): the segment's own first and last
- * member (its "outer" notes) agree → that side. Otherwise (a genuine
- * outer-direction conflict) → the opposite of the first member's side when
- * the segment sits at the very start of the group's own span, or the first
- * member's own side otherwise (both the group's own end and any interior
- * segment — the source engraving rule only specifies the start/end case;
- * extending the end rule to an interior conflict is the least arbitrary
- * default absent a directional bias to prefer flipping it there).
+ * Which staff's side a secondary beam segment stacks toward: its members'
+ * staff when they share one; else its outer notes' staff when they agree;
+ * else, at the group's start, opposite the first member's side, and
+ * elsewhere the first member's side.
  */
 export function resolveSecondaryBeamVerticalSide(
   segment: BeamLineDescriptor,
@@ -415,17 +375,11 @@ export function resolveSecondaryBeamVerticalSide(
 /**
  * Auto-classifies which side of the shared beam a rest (a member with
  * `isRest: true`) should sit against, when its own `restStaffSide` is
- * unset — approximates two rules from the reference engraving material:
- * "at the beginning/end of a subdivision, place the rest on the same
- * stave as the remainder of the subdivision" and "in the middle of a
- * beat, place it on the stave of the note it precedes." No beat-subdivision
- * machinery exists anywhere in this codebase (beam levels track flag-count
- * runs, not raw beat subdivisions), so this approximates both rules using
- * only adjacency in `members` (ascending beat order, from
- * resolveDoubleStemmedBeamGroups): a rest interior to a same-staff run of
- * neighbors takes that staff's side; otherwise it prefers the following
- * member's side (the literal "the note it precedes" rule) over the
- * preceding one.
+ * unset. The rule: at the start or end of a subdivision a rest goes on the
+ * stave of the rest of the subdivision; mid-beat, on the stave of the note it
+ * precedes. With no beat-subdivision data, this approximates it from
+ * adjacency in `members` (beat order): a rest inside a same-staff run takes
+ * that staff's side, otherwise the following member's side.
  */
 export function classifyAutoRestStaffSide(
   members: readonly DoubleStemmedBeamMember[],
@@ -443,12 +397,8 @@ export function classifyAutoRestStaffSide(
 }
 
 /**
- * "Keep all secondary beams on the same side" — the group-wide post-pass
- * resolveSecondaryBeamVerticalSide's own per-segment result still needs. A
- * clear majority across every segment in the group wins; an exact tie
- * breaks toward `tieBreakSide` (the group's own pitch-contour lean —
- * resolveDoubleStemmedBeamLine's net ascend/descend classification, supplied
- * by the caller since this function has no access to real geometry).
+ * All secondary beams on one side: the segments' majority, a tie going to
+ * `tieBreakSide` (the beam's contour lean).
  */
 export function resolveGroupSecondaryBeamSide(
   segmentSides: readonly DoubleStemmedBeamSegmentSide[],

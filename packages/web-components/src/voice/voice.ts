@@ -21,8 +21,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
    * Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/
    * tremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero
-   * `<music-voice>` children (a single, implicit voice — today's behavior,
-   * unchanged) or two-or-three, wrapping every one of its active voices in
+   * `<music-voice>` children (a single, implicit voice) or two-or-three,
+   * wrapping every one of its active voices in
    * sibling order: the 1st `<music-voice>` is voice 1 (always stems up), the
    * 2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual
    * direction). Voice number is never authored on the element itself — it is

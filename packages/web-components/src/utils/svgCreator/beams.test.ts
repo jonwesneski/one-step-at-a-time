@@ -676,11 +676,8 @@ describe('beams', () => {
   });
 
   describe('beamed chords with octave-ambiguous notes use close-voicing resolution', () => {
-    // Regression test: chords with notes that lack an explicit octave must use
-    // close-voicing resolution (same as chord rendering) when computing beam Y
-    // and stem direction. Without the fix, the simple octave-search order
-    // returned the wrong octave (e.g. E4 instead of E5), causing the wrong
-    // stem direction and a beam that floated in the middle of the stems.
+    // Octave-less chord notes resolve by close voicing (as the chord renders
+    // them) for beam Y and stem direction, e.g. E5 rather than E4.
     function makeAmbiguousChord(duration: DurationType): ChordElementType {
       const chord = document.createElement(MUSIC_CHORD);
       chord.setAttribute('duration', duration);

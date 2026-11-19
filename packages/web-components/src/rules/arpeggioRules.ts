@@ -21,14 +21,8 @@ import { noteSemitoneMap } from './theoryConsts';
 
 // ─── Cross-staff (grand staff) unbroken arpeggio ─────────────────────────────
 //
-// Pure resolution/validation, kept out of measure.ts so it is unit-testable
-// (jsdom's ResizeObserver polyfill never fires, so measure.ts's real render
-// path only runs in browser tests). Mirrors resolveStaffGroups.
-//
-// A cross-staff span is only ever formed by an explicit `arpeggio-for`. Two
-// unlinked `arpeggio` marks — even a same-index pair on a grand staff — stay
-// as independent per-staff signs (the "broken" grand-staff form), which is
-// otherwise impossible to express.
+// Only an explicit `arpeggio-for` forms a span; two unlinked `arpeggio` marks
+// stay separate per-staff signs (the "broken" form).
 
 export type ArpeggioEntry = {
   /** Ordinal of the staff this element sits in, within the measure. */
@@ -62,21 +56,11 @@ const isWaveVariant = (
 /**
  * Pairs the two ends of each unbroken cross-staff arpeggio.
  *
- * A pair is formed only by an explicit `arpeggio-for="<id>"` on the lower
- * element, matching the element whose `id` it names when that element is in a
- * different staff. If both ends carry `arpeggio` and disagree, the lower
- * element's value wins (with a warning). Two `arpeggio` marks with no
- * `arpeggio-for` between them are never joined — they stay as separate
- * per-staff signs (the "broken" form), whether or not the measure is a grand
- * staff.
- *
- * Each element is an endpoint of at most one span; an `arpeggio-for` that
- * references an element already paired (by an earlier reference, or as the
- * upper end of another span) is rejected so connectors never branch from a
- * shared notehead.
- *
- * Any failure produces a warning and no span — the two elements then keep their
- * own per-staff signs.
+ * A pair is the lower element's `arpeggio-for="<id>"` and the element on
+ * another staff with that `id`. If both carry differing `arpeggio` values, the
+ * lower one wins with a warning. Each element ends at most one span, so a
+ * reference to an already-paired element is rejected. A failure warns and
+ * leaves each element its own sign.
  */
 export function resolveArpeggioSpans(
   entries: ArpeggioEntry[]

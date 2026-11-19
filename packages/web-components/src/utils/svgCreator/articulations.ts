@@ -16,17 +16,9 @@ const MARK_GAP = 90;
 const MARK_STEP = 150;
 // Marks are roughly one notehead wide.
 const MARK_HALF_WIDTH = 70;
-// Ink clearance from the stem-anchor point to the near edge of the first
-// (closest) mark, when stem-anchored — a historically-attested alternative
-// to notehead-centered placement (common pre-1920, still used for an inner
-// double-stemmed voice per the reference engraving material this mirrors),
-// so marks nestle at the stem end rather than the fixed, much larger
-// MARK_GAP a notehead anchor uses. The anchor point itself (stemAnchor,
-// computed by note.ts#stemBeamJunctionPosition) already sits at the visible
-// beam surface facing the notehead, so this only needs to be a small,
-// clearly-visible margin (≈2.5px) beyond that. Measured edge-to-edge rather
-// than to the mark's center, since a stem-anchored fermata's dome points
-// back at the beam.
+// Ink clearance (≈2.5px) from the stem anchor (already at the beam surface,
+// note.ts#stemBeamJunctionPosition) to the first mark's near edge. Measured
+// edge-to-edge since a stem-anchored fermata's dome points back at the beam.
 const STEM_ANCHOR_INK_GAP = 48;
 // Minimum ink clearance between consecutive stacked marks. Every ordinary
 // pair already clears this at MARK_STEP, so it only spreads a pair
@@ -65,12 +57,9 @@ export type ArticulationMarksProps = {
   // Notehead center in the 600-unit note coordinate space.
   noteHeadCenterX: number;
   noteHeadCenterY: number;
-  // This note's own real stem-tip position (600-unit space) — set when it's
-  // an inner voice of a double-stemmed beam group, so marks anchor at the
-  // stem end (next to the shared beam) instead of the notehead, matching
-  // the reference engraving material's own placement for that case (see
-  // measure.ts#redrawDoubleStemmedBeams). null/undefined = the ordinary
-  // notehead-relative default.
+  // Stem-end anchor (600-unit space) for an inner voice of a double-stemmed
+  // beam group, whose marks sit next to the shared beam; null anchors at the
+  // notehead.
   stemAnchor?: { x: number; y: number } | null;
   // Times the length mark is drawn across a row (a measured tremolo's
   // repetitions); 1 draws it once.
@@ -422,16 +411,9 @@ export const createArticulationMarks = ({
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('articulations');
 
-  // +1 places marks below the head (stem-up), -1 above (stem-down) — the
-  // ordinary default, opposite the stem. stemAnchor flips this: the stem
-  // tip sits on the *stem's own* side, not the opposite one — an
-  // inner-voice group anchors its marks there instead (see
-  // measure.ts#redrawDoubleStemmedBeams), since the ordinary
-  // opposite-of-stem side is occupied by the outer voice's own content. dir
-  // still drives each glyph's own internal shape orientation (e.g. a wedge
-  // apex pointing toward the notehead) either way, since that's about the
-  // mark's position relative to the notehead, not about which direction
-  // marks stack away from their anchor.
+  // +1 places marks below the head, -1 above: opposite the stem, or on the
+  // stem side when stem-anchored. Also orients each glyph toward the
+  // notehead.
   const dir = stemAnchor !== null ? (stemUp ? -1 : 1) : stemUp ? 1 : -1;
   // markX follows suit: the stem's own X (already offset from the notehead
   // center, same as the stem line itself), pushed out further by
@@ -442,13 +424,8 @@ export const createArticulationMarks = ({
       ? stemAnchor.x + (stemUp ? 1 : -1) * STEM_ANCHOR_X_OFFSET
       : noteHeadCenterX;
   const anchorY = stemAnchor?.y ?? noteHeadCenterY;
-  // Marks always stack from their anchor toward the side that's actually
-  // free. For the ordinary notehead anchor that's dir itself (away from the
-  // notehead, into the opposite-of-stem territory). For a stem anchor it's
-  // the opposite of dir: the anchor already sits at the beam's own visible
-  // surface (the far end of the only safe space), so stacking must walk
-  // back toward the notehead, into the corridor beside the stem — which
-  // numerically always works out to stemUp ? 1 : -1 regardless of anchoring.
+  // Marks stack toward free space: away from a notehead anchor, back toward
+  // the notehead from a stem anchor. Both come out as stemUp ? 1 : -1.
   const stackDir = stemUp ? 1 : -1;
   // A glyph's notehead-facing side faces the anchor when notehead-anchored,
   // and faces away from it when stem-anchored (stacking runs toward the

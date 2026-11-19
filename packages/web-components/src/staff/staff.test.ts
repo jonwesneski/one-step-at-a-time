@@ -40,11 +40,9 @@ const CLEF_RANGES: Record<ClefType, [NoteLetterOctave, NoteLetterOctave]> = {
 const MIDDLE_STAFF_Y = 50;
 const STAFF_Y_PADDING = 8;
 
-// Expected `style.top` value on the positioned <music-note> element, derived
-// from the same generateYCoordinates helper the staff itself uses — this
-// verifies the staff wires its `clef` attribute to the correct table rather
-// than re-deriving the table by hand (already regression-locked separately
-// in rules/clefRules.test.ts).
+// Expected `style.top` on the positioned <music-note>, from the same
+// generateYCoordinates helper the staff uses: checks the `clef` attribute
+// picks the right table.
 function expectedNoteTop(clef: ClefType, value: NoteLetterOctave): string {
   const [highest, lowest] = CLEF_RANGES[clef];
   const yCoordinates = generateYCoordinates(highest, lowest);
@@ -397,10 +395,8 @@ describe(`${MUSIC_STAFF} clef changes`, () => {
   });
 
   it('noteToYCoordinate extrapolates a real below/above-staff position for a note outside the clef\'s own table, instead of the "not found" sentinel', () => {
-    // A treble staff still legitimately accepts octave 2/3 and octave 6+
-    // notes (the `octave` attribute isn't clef-restricted) — they just fall
-    // outside the pre-generated C6-C4 table and used to silently resolve to
-    // 0 (the top of the SVG) instead of a real ledger-line position.
+    // The `octave` attribute isn't clef-restricted, so a treble staff
+    // accepts notes outside its pre-generated C6-C4 table.
     const staff = makeStaff('treble');
     renderElements(staff, []);
 

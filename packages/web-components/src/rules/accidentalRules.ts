@@ -4,7 +4,6 @@
 - **Cautionary accidentals** (brackets/parentheses around reminders)
 - **Octave-specific tracking** (book: each octave needs its own accidental; implementation tracks by letter only)
 - **Cross-stave accidental tracking** (multi-stave instruments like piano)
-- **Multi-voice accidental sharing** (one accidental applies to all parts on a stave — not repeated per voice in same bar)
 - **Clef-change re-confirmation** (accidental holds only in the clef it was written)
 - **Key-change natural rendering** (naturals that cancel the old key signature before displaying the new one)
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)

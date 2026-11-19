@@ -157,22 +157,10 @@ export function computeGraceLayout(
   return { headXCenters, totalWidth: runningX };
 }
 
-// Absolute X (px, staff/beams-container space) of the first grace note's
-// head center, given the host note/chord's own left edge (noteX, as stored
-// in #noteXPositions) and its total leftward overhang (leftwardWidth — main
-// accidental footprint plus the grace group's own footprint, exactly as
-// already computed for spacing via computeGraceFootprintWidth). Used to
-// place a grace-group dynamic under the first grace note rather than under
-// the host's own column.
-//
-// Derivation: the grace group's own local origin (its layout's X=0 point)
-// sits at `noteX - leftwardWidth` in staff space — leftwardWidth already
-// equals the grace group's full rendered span (its footprint, which itself
-// equals GRACE_MAIN_GAP_PX + totalWidth) plus any main accidental width
-// reserved ahead of it, so no separate accounting for the gap or the main
-// accidental is needed here. Only the first grace note's own accidental
-// column (if any) needs resolving — mirrors computeGraceFootprintWidth's
-// resolved-vs-suffix-fallback preference, applied to index 0 only.
+// Staff-space X of the first grace note's head centre, for a grace-dynamic.
+// The group's origin is `noteX - leftwardWidth` (leftwardWidth covers the
+// group and the main accidental), so only the first grace note's own
+// accidental needs adding.
 export function computeFirstGraceHeadX(
   noteX: number,
   leftwardWidth: number,

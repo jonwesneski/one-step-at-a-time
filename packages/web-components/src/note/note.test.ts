@@ -745,13 +745,9 @@ describe('grace notes', () => {
       NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX
     );
 
-    // Only stemUp and accidental-shown vary. The stem-down + no-accidental
-    // combination is the only one where the main stem sits in the slur's
-    // approach path (the notehead-radius clearance and the stem clearance
-    // both apply — whichever is larger wins), but the accidental-shown case
-    // clears the accidental's own rendered edge, a fixed ~8.5px pullback
-    // that's larger than the stem clearance in this codebase's current
-    // constants — so the accidental case pulls back the most of the three.
+    // Only stemUp and accidental-shown vary. Stem-down without an accidental
+    // clears the main stem; with an accidental, the ~8.5px accidental pullback
+    // is the largest of the three.
     const stemDownNoAccidental = document.createElement(
       MUSIC_NOTE
     ) as NoteElementType;
@@ -824,11 +820,8 @@ describe('grace notes', () => {
         ?.getAttribute('d') ?? '';
 
     it('arcs the slur above every grace head when the group descends in pitch, stem-up main note', () => {
-      // grace="F,E" before main note G4 — the group's pitch trends downward
-      // (first note F higher than last note E). This exact case previously
-      // let the slur cross the second grace note's head; stem-tip anchoring
-      // guarantees the curve stays above every head, not just the two
-      // slur endpoints.
+      // grace="F,E" before main note G4: the group descends, and the slur
+      // must stay above every head, not just the two endpoints.
       const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
       noteElement.setAttribute('note', 'G' satisfies Note);
       noteElement.setAttribute('octave', '4');
@@ -991,12 +984,8 @@ describe('grace notes', () => {
     });
 
     it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
-      // Regression test: createArticulationMarks() draws in the same
-      // 600-unit note-space createNoteSvg uses for the head, and
-      // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
-      // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
-      // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
-      // too large and land outside any clipped viewBox (invisible in-staff).
+      // Grace articulation marks need the head's inner scale(NOTE_SCALE)
+      // inside the grace wrapper, or they render ~1/NOTE_SCALE too large.
       const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
       noteElement.setAttribute('note', 'C' satisfies Note);
       noteElement.setAttribute('octave', '5');

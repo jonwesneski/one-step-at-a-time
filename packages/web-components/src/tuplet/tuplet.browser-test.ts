@@ -18,13 +18,8 @@ async function render(page: Page, markup: string): Promise<void> {
   await waitForRedrawCycle(page);
 }
 
-// Reproduces the `BelowStaff` story (src/tuplet/tuplet.stories.ts) — a
-// triplet reaching down to B3/A3 (octave 3), outside treble clef's own
-// C6-C4 Y-coordinate table. Before the noteToYCoordinate extrapolation fix,
-// B3/A3 silently resolved to Y=0 (the top of the SVG) instead of a real
-// below-staff position; before the below-staff budget, even a correctly
-// positioned numeral this far down could poke past the staff's fixed-height
-// SVG. Both together are what this regression-locks.
+// The `BelowStaff` story: a triplet reaching B3/A3, outside treble clef's
+// C6-C4 Y-coordinate table, whose numeral must stay inside the staff's SVG.
 test("BelowStaff tuplet: notes resolve to real below-staff positions, and the numeral stays within the staff's rendered SVG", async ({
   page,
 }) => {

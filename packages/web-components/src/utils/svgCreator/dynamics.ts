@@ -15,9 +15,6 @@ import {
 /**
  * Renders a dynamic marking (e.g. "mf", "pp", "sfz") as italic serif text
  * centered at (x, y) in the staff SVG coordinate space.
- *
- * Dynamic markings are always placed below the staff — the caller is
- * responsible for passing an appropriate y value (see DYNAMICS_BASELINE_Y).
  */
 export function createDynamicMarkingSvg(
   marking: DynamicMarking,
@@ -43,15 +40,10 @@ export function createDynamicMarkingSvg(
  * Crescendo (<): lines converge to a point at startX, open to openHeight at endX.
  * Decrescendo (>): lines open to openHeight at startX, converge to a point at endX.
  *
- * openAtStart: left end starts at half-spread (centerY ± openHeight/4) instead of
- *   its normal position. For crescendo this means already-spreading (not a point);
- *   for decrescendo this means a reduced spread (not fully open). Used when rendering
- *   the second segment of a cross-system hairpin to signal the change is in progress.
- *
- * openAtEnd: right end stops at half-spread instead of its normal position. For
- *   decrescendo this prevents the wedge from fully closing to a point at the system
- *   edge ("remains open" per engraving convention). Ignored for crescendo since its
- *   right end is already the natural open side.
+ * openAtStart: the left end starts at half-spread, for the continuation of a
+ *   hairpin across a system break.
+ * openAtEnd: the right end stops at half-spread, so a decrescendo stays open at
+ *   a system edge. Ignored for crescendo.
  */
 export function createHairpinSvg(
   kind: HairpinKind,

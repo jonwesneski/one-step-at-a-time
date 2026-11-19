@@ -307,9 +307,7 @@ class BeamGroupRenderer implements GroupRenderer {
 
   /**
    * The outer edge, on the `above` side, of the whole beam stack at this
-   * note's stem. Null if the note is not in this group. Consumers that need to
-   * sit clear of the beams (the tuplet numeral / bracket) read this rather
-   * than re-deriving it from staff coords.
+   * note's stem. Null if the note is not in this group.
    */
   beamStackEdgeYForIndex(globalIndex: number, above: boolean): number | null {
     const localIndex = this.#globalIndices.indexOf(globalIndex);
@@ -921,12 +919,9 @@ export class BeamsBuilder {
   }
 
   /**
-   * Phase 2 entry point. Applies Y positions to all beam groups, places each
-   * group's beam, builds SVG elements, and returns a
-   * BeamRenderer ready for X positioning (setX / spaceAll).
-   *
-   * noteYPositions must be indexed by the same global note index used everywhere
-   * else. Pass null for non-beamed notes — they are ignored.
+   * Phase 2: places each group's beam from `noteYPositions` (global note
+   * index; null for unbeamed notes) and returns a BeamRenderer for setX /
+   * spaceAll.
    */
   buildRenderer(noteYPositions: (NoteYPosition | null)[]): BeamRenderer {
     for (let i = 0; i < noteYPositions.length; i++) {

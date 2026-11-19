@@ -104,19 +104,8 @@ export function buildBeamsRenderer(
         forcedDirections: crossStaffStemOverrides,
       }
     );
-  // crossStaffStemOverrides (the ancestor <music-measure>'s own
-  // double-stemmed-beam resolution) is a sparse overlay applied on top of
-  // whichever base policy above produced — it needs BeamsBuilder's own
-  // beam-group data (via determineStemDirections) to exist first, so it
-  // can't be folded into stemDirectionsOverride itself without duplicating
-  // that construction at the call site. Keyed by the element itself, not a
-  // positional index: the ancestor <music-measure> resolves it from a
-  // staff-flat DOM traversal, but `elements` here is this one voice's own
-  // local array (staffClassicalBase.ts#buildVoiceRenderState) — those two
-  // index spaces only coincide for a single-voice staff, so an index-keyed
-  // map would silently misapply on a multi-voice one. Object identity
-  // sidesteps the mismatch entirely, since both sides reference the same
-  // live DOM elements.
+  // crossStaffStemOverrides overlays the base policy. Keyed by element, since
+  // `elements` is one voice's local array, not the measure's staff-wide one.
   const stemDirections = crossStaffStemOverrides
     ? baseStemDirections.map(
         (d, i) => crossStaffStemOverrides.get(elements[i]) ?? d

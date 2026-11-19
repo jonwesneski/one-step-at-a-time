@@ -29,8 +29,7 @@ import { createDynamicMarkingSvg, createVerticalHairpinSvg } from './dynamics';
 //   wiggleArpeggiatoUp:rotate90 wiggleArpeggiatoUpArrow:rotate90 \
 //   wiggleArpeggiatoDownArrow:rotate90`). Each outline is normalized to a
 // top-left origin, staff-space units, y-down, and rotated so the wiggle runs
-// vertically (top to bottom). See README.md's "Drawing / SMuFL glyphs" section
-// and CLAUDE.md's "Known Incomplete Areas" for provenance. `advance` is the
+// vertically (top to bottom). `advance` is the
 // repeat pitch along the vertical axis; a tile's own height exceeds it, so
 // stacked tiles overlap and read as one continuous line.
 

@@ -6,11 +6,8 @@ import {
 } from '../utils/svgCreator/rest';
 import { restToYCoordinate } from './restRules';
 
-// element.style.top positions a rest's own box-top, not its visible glyph
-// feature directly — restToYCoordinate's cross-staff branch must subtract
-// this same per-duration offset computeTopY already subtracts for the
-// plain (staff-line-targeted) case, or the glyph renders well past its
-// intended target (Bug fix #3 in the double-stemmed-beams plan).
+// element.style.top positions a rest's box-top, not its glyph, so the
+// cross-staff branch subtracts the same per-duration offset computeTopY does.
 const SIXTEENTH_OFFSET = getFirstBallYPx(hookCountMap.sixteenth);
 const QUARTER_OFFSET = QUARTER_SY_PX - 2;
 

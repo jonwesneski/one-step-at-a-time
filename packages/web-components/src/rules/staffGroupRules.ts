@@ -18,10 +18,7 @@ export type StaffGroupResolution = {
   warnings: string[];
 };
 
-// Resolves which staves should be joined by a brace/bracket connector. Kept
-// separate from measure.ts so it's unit-testable — jsdom's ResizeObserver
-// polyfill never fires, so measure.ts's actual render path only runs in
-// browser tests.
+// Resolves which staves should be joined by a brace/bracket connector.
 //
 // group="grand" always pairs positionally with the immediate next sibling
 // (groupId is ignored) — a warning with no span is produced if there's no

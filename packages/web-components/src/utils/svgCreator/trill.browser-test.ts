@@ -425,11 +425,9 @@ test('pushes the following note rightward to make room for the written trilling 
   });
 
   expect(writtenRect).not.toBeNull();
-  // The following note starts clear of the written notehead's own right
-  // edge, modulo a sub-pixel rounding remainder in the parenthesis curve's
-  // rendered bbox vs. its reserved footprint (pre-existing approximation,
-  // not introduced by beat-proportional spacing — just newly visible now
-  // that spacing is tight enough to expose it).
+  // The following note starts clear of the written notehead's right edge,
+  // within 1px: the parenthesis curve's bbox slightly exceeds its reserved
+  // footprint.
   expect(followingRect.left).toBeGreaterThanOrEqual(writtenRect!.right - 1);
   expect(followingRect.left).toBeGreaterThan(trilledRect.right);
 });

@@ -56,16 +56,9 @@ const GAP_CLEARANCE_SOURCE = 'gap-clearance';
 export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected readonly staffContainer: HTMLDivElement;
   protected readonly staffResizeObserver: ResizeObserver;
-  // The `.staff-wrapper` div — the `position: relative` containing block
-  // shared by the <slot> (and therefore every slotted note/chord/rest,
-  // which resolve `position: absolute` against it via the flat tree) and
-  // `staffContainer`/`transcribeContainer` (its `position: absolute;
-  // inset: 0` siblings). Exposed so a subclass can append a DOM element
-  // that needs pixel-identical positioning to a slotted note without
-  // actually being slotted — e.g. a synthesized combined-voice chord or
-  // shared whole-measure rest (see staffClassicalBase.ts's voice
-  // auto-combine / shared-rest passes), which isn't a light-DOM child of
-  // the host element and so can't go through the <slot> at all.
+  // The `.staff-wrapper` containing block that slotted entries position
+  // against. Exposed so a subclass can append an element positioned like a
+  // slotted note, such as a synthetic combined-voice chord.
   protected wrapperElement: HTMLDivElement | null = null;
   #lastStaffWidth: number;
 
@@ -113,12 +106,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected abstract onStaffResize(): void;
 
-  // Called by an ancestor <music-composition> after a pass that can change
-  // measure widths (showing/hiding a clef, key or time signature), so this
-  // staff re-spaces before the ancestor draws connectors from its note
-  // positions, rather than in the next ResizeObserver callback, after that
-  // frame has already painted stale connectors. The observer then sees an
-  // unchanged width and does nothing.
+  // Called by <music-composition> after a pass that can change widths, so
+  // the staff re-spaces before connectors are drawn this frame.
   respaceToCurrentWidth(): void {
     const style = getComputedStyle(this.staffContainer);
     this.#respaceIfWidthChanged(
@@ -374,13 +363,9 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     if (slot && this.isConnected) {
       slot.addEventListener('slotchange', this.#slotChangeHandler);
       this.onConnectedCallback();
-      // Deferred to a microtask so it runs after the synchronous module-load
-      // stack unwinds — when a staff is built from parsed markup, its sibling
-      // element modules (music-note, music-chord, …) finish registering in that
-      // same synchronous pass, so an immediate dispatch would read not-yet-
-      // upgraded children. The browser's own initial slotchange also fires
-      // after imports settle; #initialSlotSyncDone keeps whichever loses the
-      // race from re-rendering.
+      // A microtask, so sibling element modules finish registering first.
+      // #initialSlotSyncDone stops the browser's own initial slotchange from
+      // rendering a second time.
       queueMicrotask(() => {
         if (this.#initialSlotSyncDone || !this.isConnected) {
           return;
@@ -438,13 +423,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   protected abstract onHandleSlotChange(event: Event): void;
 
   /**
-   * Force-upgrade slotted `<music-*>` children (and any nested inside a
-   * `<music-tuplet>`) before the staff reads their getters. When a staff is
-   * built from parsed HTML markup its `connectedCallback` runs — and dispatches
-   * the first `slotchange` — before its already-present children upgrade, so
-   * without this their getters (`grace`, `note`, `duration`, …) are `undefined`.
-   * `customElements.upgrade()` is synchronous and a no-op on an already-upgraded
-   * or unregistered element.
+   * Upgrades slotted `<music-*>` children before their getters are read: from
+   * parsed markup, the staff connects before its children upgrade.
    */
   protected upgradeAssignedElements(elements: Iterable<Element>): void {
     for (const element of elements) {

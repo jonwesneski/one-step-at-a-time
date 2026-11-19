@@ -2,13 +2,8 @@ import { SVG_NS } from '../consts';
 import { SHARED_STEM_WIDTH_PX } from '../notationDimensions';
 
 /**
- * The real stem line directly connecting two noteheads on adjacent staves
- * that share one stem (`shared-stem-for`) — both hands occasionally playing
- * the same beat simultaneously in otherwise single-part writing, instead of
- * each drawing its own. Coordinates are real px, measure-relative
- * (measure.ts#redrawSharedStems already resolves them there via real
- * notehead `getBoundingClientRect()`s) — 1:1 with the
- * `.shared-stems-overlay` SVG it's appended into, no further scaling.
+ * The `shared-stem-for` stem between two noteheads on adjacent staves, in
+ * measure-relative px.
  */
 export function createSharedStemLine(
   x: number,

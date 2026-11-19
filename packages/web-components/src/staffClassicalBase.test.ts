@@ -48,7 +48,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// I'm using <music-staff /> (default clef="treble") to test staffClassicalBase specific scenarios
+// <music-staff> (default clef="treble") stands in for StaffClassicalElementBase.
 describe('staffClassicalBase', () => {
   it('logs a warning when adding another note on a filled measure', () => {
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
