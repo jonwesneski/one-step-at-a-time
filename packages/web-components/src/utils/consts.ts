@@ -23,7 +23,13 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
   TimeSignature,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
+  TremoloLabel,
+  TremoloStrokeCount,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -39,6 +45,7 @@ export const MUSIC_REST = 'music-rest';
 export const MUSIC_CHORD = 'music-chord';
 export const MUSIC_TUPLET = 'music-tuplet';
 export const MUSIC_ARPEGGIO = 'music-arpeggio';
+export const MUSIC_TREMOLO = 'music-tremolo';
 export const MUSIC_VOICE = 'music-voice';
 export const MUSIC_GUITAR_NOTE = 'music-guitar-note';
 export const MUSIC_GUITAR_CHORD = 'music-guitar-chord';
@@ -65,6 +72,7 @@ export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
 export const MUSIC_CHORD_NODE = MUSIC_CHORD.toUpperCase();
 export const MUSIC_TUPLET_NODE = MUSIC_TUPLET.toUpperCase();
 export const MUSIC_ARPEGGIO_NODE = MUSIC_ARPEGGIO.toUpperCase();
+export const MUSIC_TREMOLO_NODE = MUSIC_TREMOLO.toUpperCase();
 export const MUSIC_VOICE_NODE = MUSIC_VOICE.toUpperCase();
 export const MUSIC_GUITAR_NOTE_NODE = MUSIC_GUITAR_NOTE.toUpperCase();
 export const MUSIC_GUITAR_CHORD_NODE = MUSIC_GUITAR_CHORD.toUpperCase();
@@ -103,6 +111,10 @@ export const CLEF_EVENTS = {
 
 export const TUPLET_EVENTS = {
   ATTRIBUTE_CHANGE: 'tuplet-attribute-change',
+} as const;
+
+export const TREMOLO_EVENTS = {
+  ATTRIBUTE_CHANGE: 'tremolo-attribute-change',
 } as const;
 
 export const STAFF_EVENTS = {
@@ -323,6 +335,21 @@ export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 
 export const STEM_DIRECTIONS: StemDirection[] = ['up', 'down'];
+
+export const TREMOLO_STROKE_COUNTS: TremoloStrokeCount[] = [1, 2, 3, 4];
+
+export const TREMOLO_VALUES: TremoloValue[] = [
+  ...TREMOLO_STROKE_COUNTS,
+  'unmeasured',
+];
+
+export const TREMOLO_LABELS: TremoloLabel[] = ['trem', 'non-trem'];
+
+export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
+
+export const TREMOLO_BEAM_POSITIONS: TremoloBeamPosition[] = ['between'];
+
+export const TIE_STYLES: TieStyle[] = ['solid', 'dotted'];
 
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
 

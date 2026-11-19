@@ -32,12 +32,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return ['ratio', 'tuplet-group', 'placement'];
     }
 
-    constructor() {
-      super();
-      // todo: I may want to revisit this if I do standalone mode
-      // this.attachShadow({ mode: 'open' });
-      // this.shadowRoot!.innerHTML = '<slot></slot>';
-    }
+    // TODO: a standalone <music-tuplet> would need a shadow root with a
+    // <slot> to render its children.
 
     get ratio(): TupletRatio {
       return (this.getAttribute('ratio') ?? '3') as TupletRatio;

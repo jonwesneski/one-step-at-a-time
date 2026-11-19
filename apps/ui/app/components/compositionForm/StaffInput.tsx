@@ -200,11 +200,8 @@ export function StaffInput({
 
   // A tuplet run renders as a <music-tuplet> wrapper (a direct child of
   // <music-voice>, as the library's slot walker requires); loose runs render
-  // their entries inline. Each voice renders as its own <music-voice> —
-  // wrapping even a single implicit voice this way is byte-identical to no
-  // wrapper at all (the library's own direction/stem-policy resolution keys
-  // off how many <music-voice> children exist, not whether the tag is
-  // present), so this needs no rework once Phase 5 lets a staff carry 2-3.
+  // their entries inline. Each voice renders as its own <music-voice>; a
+  // single wrapped voice renders the same as no wrapper.
   const voiceNodes = staff.voiceOrder.map((voiceId) => {
     const voice = staff.voicesById[voiceId];
     const runs = resolveTupletRuns(voice.entryIds, entriesById);

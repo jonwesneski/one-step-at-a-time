@@ -1,8 +1,12 @@
 /**
  * @jest-environment jsdom
  */
-import { CONNECTOR_LABEL_CHAR_WIDTH_PX } from '../notationDimensions';
-import { BULGE_STEP_PX, createCurveSvg } from './curve';
+import {
+  CONNECTOR_LABEL_CHAR_WIDTH_PX,
+  TIE_DASH_GAP_PX,
+  TIE_DASH_PX,
+} from '../notationDimensions';
+import { BULGE_STEP_PX, createCurveSvg, setCurveDotted } from './curve';
 
 describe('createCurveSvg', () => {
   it('renders a quadratic bezier path for smooth curves', () => {
@@ -139,5 +143,44 @@ describe('createCurveSvg', () => {
     );
     // 'above' → control point y < endpoint y; nestedCy should be further above (smaller).
     expect(baseCy - nestedCy).toBeCloseTo(2 * BULGE_STEP_PX, 5);
+  });
+});
+
+describe('dotted curves', () => {
+  const dash = `${TIE_DASH_PX} ${TIE_DASH_GAP_PX}`;
+
+  it('draws a dotted curve with a dashed stroke', () => {
+    const group = createCurveSvg({
+      from: { x: 0, y: 100 },
+      to: { x: 100, y: 100 },
+      bulge: 'below',
+      dotted: true,
+    });
+    expect(group.querySelector('path')?.getAttribute('stroke-dasharray')).toBe(
+      dash
+    );
+  });
+
+  it('leaves a curve solid by default', () => {
+    const group = createCurveSvg({
+      from: { x: 0, y: 100 },
+      to: { x: 100, y: 100 },
+      bulge: 'below',
+    });
+    expect(group.querySelector('path')?.hasAttribute('stroke-dasharray')).toBe(
+      false
+    );
+  });
+
+  it('dots an already built curve', () => {
+    const group = createCurveSvg({
+      from: { x: 0, y: 100 },
+      to: { x: 100, y: 100 },
+      bulge: 'above',
+    });
+    setCurveDotted(group);
+    expect(group.querySelector('path')?.getAttribute('stroke-dasharray')).toBe(
+      dash
+    );
   });
 });

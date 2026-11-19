@@ -63,6 +63,7 @@ import {
   collectNoteLikeElements,
   collectPhraseSlurPairs,
   collectStemRects,
+  type ConnectorPair,
   type EntryObstacles,
   pairConnectors,
   partitionByVoice,
@@ -119,11 +120,8 @@ import { measureVerticalExtents } from '../utils/verticalSpace';
 // x within one measure overtake the next measure.
 const MEASURE_ORDINAL_STRIDE = 1_000_000;
 
-// The trill line's own local Y offset from the top of its staff (see
-// staffClassicalBase.ts#redrawTrillLines) — reused here so a cross-measure
-// continuation segment lines up exactly with the segment the staff itself
-// already drew, despite being computed in root rather than staff-local
-// coordinates.
+// The trill line's Y offset from its staff's top, matching
+// staffClassicalBase.ts#redrawTrillLines so continuations line up.
 const TRILL_LINE_ROOT_Y_OFFSET =
   STAFF_Y_PADDING +
   STAFF_TOP_LINE_Y -
@@ -516,12 +514,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       this.#redrawScheduled = true;
-      // Passes that move notes run before every pass that draws from note
-      // positions, so the frame paints connectors, hairpins, trills and octave
-      // signs from final geometry instead of correcting them a frame later: a
-      // staff showing or hiding its clef/key/time re-lays itself out at once,
-      // and the measure widths that change as a result are re-spaced here
-      // rather than in the next ResizeObserver callback.
+      // Passes that move notes run before passes that draw from note
+      // positions, so each frame paints from final geometry. Width changes
+      // from showing/hiding clef/key/time are re-spaced here, not on the next
+      // ResizeObserver callback.
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
         this.#alignRowStaffSpace();
@@ -551,14 +547,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
-    // Reserves the same room on every measure in a row so connectors that
-    // rise above or dip below that row stay on the page and clear of the
-    // neighboring row — like engraving software widening system spacing. Row
-    // bands are border boxes (margin excluded) snapshotted before any write,
-    // and curves move with their row, so the next pass computes the same
-    // values. A measure no longer in this composition releases what was
-    // reserved on it. Returns whether any margin changed, so the caller can
-    // redraw the overlay against the shifted rows.
+    // Reserves the same room on every measure in a row for connectors past
+    // the row. Row bands exclude margin and curves move with their row, so
+    // the next pass is stable. Returns whether any margin changed.
     #reserveRowOverlaySpace(): boolean {
       const overlay = this.shadowRoot?.querySelector('.connectors-overlay');
       if (!overlay) {
@@ -596,14 +587,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return changed;
     }
 
-    // Gives the Nth staff of every measure in a row the same margin — the
-    // largest its own content needs anywhere in that row — so a bracket or
-    // dynamic above one measure's staff doesn't push that measure's staves
-    // out of line with its neighbors. Staves are matched by ordinal position
-    // (same assumption as #updateClefContinuity). Reads each staff's own
-    // content headroom, never the alignment it was given, so the next pass
-    // computes the same values. A staff no longer in this composition is
-    // released.
+    // Gives the Nth staff of every measure in a row the largest margin its
+    // content needs anywhere in the row, so staves stay in line. Reads content
+    // headroom, not the alignment given, so the next pass is stable.
     #alignRowStaffSpace(): void {
       const alignedStaves = new Set<StaffElementBaseType>();
       for (const row of this.#computeMeasureRows()) {
@@ -691,6 +677,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ...collectArpeggioTiePairs(this),
         ...collectPhraseSlurPairs(this),
       ];
+      this.#markDottedTiesAcrossBarlines(noteLikeElements, pairs);
       if (pairs.length === 0) {
         return;
       }
@@ -698,15 +685,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const rootRect = wrapper.getBoundingClientRect();
       const rowLeft = this.#computeNotesAreaLeft(rootRect);
 
-      // Double-stemmed beam-group awareness — same resolution
-      // measure.ts#redrawConnectors uses for a standalone measure, shared
-      // via resolveDoubleStemmedBeamConnectorContext since a slur whose
-      // endpoints belong to a beam-group is drawn here whenever the measure
-      // has a <music-composition> ancestor. Runs safely after every
-      // measure's own #redrawDoubleStemmedBeams has drawn its real beam
-      // polygon(s): #scheduleRedraw defers this whole pass to the next
-      // animation frame, by which point that synchronous, same-event
-      // measure-level work has already finished.
+      // Double-stemmed beam context, as measure.ts#redrawConnectors resolves
+      // it. This runs a frame after each measure drew its beam polygons.
       const measureElements = Array.from(this.querySelectorAll(MUSIC_MEASURE));
       const { beamRects, elementToGroup, innerVoiceStemAnchorElements } =
         resolveDoubleStemmedBeamConnectorContext(measureElements, rootRect);
@@ -720,6 +700,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         entryObstacles: collectEntryObstacles(this, rootRect, measureElements),
       });
       for (const svg of svgs) overlay.appendChild(svg);
+    }
+
+    // Only a composition sees a tie cross a barline. Marking its end note
+    // re-lays that staff out; the setter ignores an unchanged value, so the
+    // redraw that follows settles.
+    #markDottedTiesAcrossBarlines(
+      noteLikeElements: readonly Element[],
+      pairs: readonly ConnectorPair[]
+    ): void {
+      const crossing = new Set<Element>(
+        pairs
+          .filter(
+            (pair) =>
+              pair.kind === 'tie' &&
+              pair.dotted === true &&
+              pair.start.closest(MUSIC_MEASURE) !==
+                pair.end.closest(MUSIC_MEASURE)
+          )
+          .map((pair) => pair.end)
+      );
+      for (const element of noteLikeElements) {
+        if ('dottedTieAcrossBarline' in element) {
+          (element as NoteOrChordElementType).dottedTieAcrossBarline =
+            crossing.has(element);
+        }
+      }
     }
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {
@@ -1063,12 +1069,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       };
     }
 
-    // Groups every measure's Nth staff (by ordinal position) into its own
-    // "track" across the whole composition, in row order — the same
-    // ordinal-matching assumption #updateClefContinuity already makes for
-    // adjacent pairs (consistent voice ordering across measures), extended
-    // here into full chains since a trill's tie chain can run through many
-    // measures, not just one adjacent pair.
+    // Groups every measure's Nth staff into a "track" across the
+    // composition, in row order.
     #buildStaffTracks(): { staff: HTMLElement; rowIndex: number }[][] {
       const rows = this.#computeMeasureRows();
       const rowIndexByMeasure = new Map<HTMLElement, number>();
@@ -1106,16 +1108,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return tracks;
     }
 
-    // Extends a trill's same-measure line (drawn by the staff itself, see
-    // staffClassicalBase.ts#redrawTrillLines) across measure boundaries: a
-    // span whose own tie chain runs past its starting measure's last element
-    // continues automatically here, with no repeated `trill` attribute.
-    // Reuses that same tie-chain walk (resolveTrillSpans) over each staff
-    // track's own elements concatenated across every measure it spans, since
-    // index-based tie-walking already crosses a concatenation boundary
-    // transparently — the only genuinely new work is splitting the result
-    // into one segment per measure, with real per-measure geometry, and
-    // restating the sign when a segment also happens to start a new row.
+    // Continues a trill line whose tie chain runs past its measure: the
+    // tie-chain walk runs over each track's concatenated elements, split into
+    // one segment per measure, restating the sign at a new row.
     #redrawTrills() {
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.trill-continuation-overlay'
@@ -1227,18 +1222,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    // Extends an octave-transposition span's own-measure line (drawn by the
-    // staff itself, see staffClassicalBase.ts#renderOctaveSigns) across
-    // measure boundaries — the octave-sign equivalent of #redrawTrills()
-    // above, with two deliberate differences: voice-aware flattening
-    // (flattenStaffSlotElements, looping every active voice number
-    // independently — #redrawTrills()'s use of the plain flattenSlotElements
-    // is a documented bug this pass does not repeat) since a staff can carry
-    // 2-3 independent voices each needing their own span-tracking track; and
-    // no tie-chain walk at all — an octave span has no tie chain, its
-    // startIndex/stopIndex are already fully resolved by resolveOctaveSpans.
-    //
-    // Resolved apart from drawing so each measure learns which of its
+    // Octave lines across barlines, one track per voice. Resolved apart from
+    // drawing so each measure learns which of its
     // elements a continuing line covers before its gap passes run (see
     // <music-measure>'s applyOctaveContinuationCoverage).
     #resolveOctaveContinuations(): OctaveContinuation[] {
@@ -1544,15 +1529,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           lineStartX = signX + signWidth;
         });
 
-        // The corner terminator (when this segment closes the span) and the
-        // line's own end share the same X — matches the starting measure's
-        // own-measure render, where the extension line and corner both land
-        // at stopNoteX + trailing gap. With no stop here the line runs to this
-        // row's own last barline, never beyond — the staff element's own
-        // right edge is that barline position. Never short of lineStartX
-        // plus the corner's backward-drawn foot: a restated label wider than
-        // the room before the stop note would otherwise send the line and
-        // corner back across it.
+        // Line and corner end at the stop note plus the trailing gap, else at
+        // the staff's right edge (its barline); never before lineStartX plus
+        // the corner's foot, so a wide restated label can't fold it back.
         const lineEndX = Math.max(
           lineStartX + OCTAVE_SIGN_CORNER_PX,
           stopElement === null
@@ -1621,28 +1600,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    // Clef changes at a measure boundary are a corollary of the same
-    // clef-segment machinery StaffClassicalElementBase uses for mid-stream
-    // <music-clef> markers, not a separate concept — effectiveStartClef/
-    // effectiveEndClef (duck-typed; only staves with a genuine clef, i.e.
-    // <music-staff>, implement them) do the actual clef determination. This
-    // method only handles row-layout detection and courtesy-glyph rendering.
-    //
-    // Two distinct behaviors, both driven by comparing EVERY pair of
-    // adjacent measures (not just row-boundary pairs) — a measure-boundary
-    // clef change is just two neighboring <music-staff> instances with
-    // different `clef` attributes, and it can happen mid-row just as often
-    // as at a row wrap (e.g. a cello part switching bass→tenor→treble):
-    //   1. clefChangeAtBoundary — the incoming measure's staff must show its
-    //      clef even when it isn't first-in-row (mirrors the existing
-    //      mid-composition time-signature-change precedent). Applies to
-    //      every differing pair, row wrap or not.
-    //   2. Courtesy clef preview — only drawn when the differing pair also
-    //      happens to fall exactly at a row wrap, matching standard
-    //      engraving practice (a courtesy clef previews the next line's
-    //      clef at the end of the current line; there's nothing to preview
-    //      for a mid-row change since the new clef is already visible
-    //      inline via behavior 1).
+    // Compares every pair of adjacent measures (effectiveStartClef/
+    // effectiveEndClef). A differing pair sets clefChangeAtBoundary so the
+    // incoming staff shows its clef; at a row wrap it also draws a courtesy
+    // clef at the end of the outgoing row.
     #updateClefContinuity() {
       const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
         '.courtesy-clef-overlay'
@@ -1668,11 +1629,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const measures = rows.flat();
       const rootRect = wrapper.getBoundingClientRect();
 
-      // Computed first, assigned once at the end — flipping a staff's flag
-      // false-then-true within one pass (rather than assigning its final
-      // value once) would fire the setter's re-render/dispatch twice per
-      // pass even when the net value is unchanged from the prior pass,
-      // which perpetually reschedules a redraw via staff-notes-positioned.
+      // Assigned once at the end: toggling a flag off and on within a pass
+      // re-renders and reschedules a redraw forever.
       const staffsNeedingClefChangeFlag = new Set<HTMLElement>();
 
       for (let i = 1; i < measures.length; i++) {
@@ -1754,11 +1712,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // A time signature is shown only on the first measure, or on a later
     // measure whose resolved time signature differs from the measure right
-    // before it (including redefining the original signature after a change)
-    // — mirrors #updateClefContinuity's adjacent-pair comparison. Every staff
-    // type has a real `.time` (StaffElementBase), but `timeChangeAtBoundary`
-    // (the flag that actually shows the glyph) stays classical-only — guitar
-    // tab never renders a time signature, so it has nothing to flag.
+    // before it. Guitar tab draws no time signature, so only classical
+    // staves are flagged.
     #updateTimeSignatureContinuity() {
       const measures = this.#computeMeasureRows().flat();
 
@@ -1820,11 +1775,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         measure.setAttribute('number', (index + 1).toString());
       });
 
-      // This runs from the childList MutationObserver, i.e. after a framework
-      // commit has settled the DOM. Nudge the first measure's staves to rebuild
-      // their describe area so the "first measure" time-signature glyph is
-      // correct even when they connected before the first measure took its final
-      // position (e.g. a new measure 1 inserted before the old one is removed).
+      // Runs after a framework commit has settled the DOM: the first measure's
+      // staves rebuild their describe area in case they connected before it
+      // took its final position.
       const firstMeasure = measures[0];
       if (firstMeasure !== undefined) {
         Array.from(firstMeasure.children)

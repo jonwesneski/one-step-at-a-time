@@ -1,4 +1,4 @@
-import { TupletElementType } from '../types/elements';
+import { TremoloGroupPlacement, TupletElementType } from '../types/elements';
 import { DurationType } from '../types/theory';
 import { durationToFactor } from './theoryConsts';
 import { parseTupletRatio, resolveInnermostTuplet } from './tupletRules';
@@ -8,44 +8,57 @@ import { parseTupletRatio, resolveInnermostTuplet } from './tupletRules';
  * consumes. A tupleted entry contributes its ratio-scaled duration (e.g. a
  * triplet eighth contributes 2/3 of a plain eighth's duration); an
  * `<music-arpeggio>` run note contributes zero — the run itself consumes no
- * beat time, only its target chord/note does.
+ * beat time, only its target chord/note does; and each of a `<music-tremolo>`'s
+ * N members contributes 1/N of its written value, so together they fill it
+ * once.
  *
- * Single source of truth for "how much beat-time does this entry occupy",
- * shared by bar-fit (measureRules.ts), beam grouping (beamRules.ts), and
- * horizontal spacing (spacingRules.ts) — previously computed three times with
- * the same logic. Takes a structural `{ duration }` shape (matching
- * spacingRules.ts's computeSpacingWeights) rather than the note/chord/rest
- * union so guitar tab's simpler element type can reuse it too.
+ * Shared by bar-fit (measureRules.ts), beam grouping (beamRules.ts) and
+ * horizontal spacing (spacingRules.ts). Takes a structural `{ duration }`
+ * shape so guitar tab's simpler element type can use it too.
  */
 export function durationContribution(
   element: { readonly duration: DurationType },
   index: number,
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
-  arpeggioRunIndices: ReadonlySet<number> = new Set()
+  arpeggioRunIndices: ReadonlySet<number> = new Set(),
+  tremoloScaleByIndex: ReadonlyMap<number, number> = new Map()
 ): number {
   if (arpeggioRunIndices.has(index)) {
     return 0;
   }
+  const tremoloScale = tremoloScaleByIndex.get(index) ?? 1;
   const innermostTuplet = resolveInnermostTuplet(tupletsByIndex, index);
   if (innermostTuplet !== undefined) {
     const { actual, normal } = parseTupletRatio(innermostTuplet.ratio);
-    return durationToFactor[element.duration] * (normal / actual);
+    return (
+      durationToFactor[element.duration] * (normal / actual) * tremoloScale
+    );
   }
-  return durationToFactor[element.duration];
+  return durationToFactor[element.duration] * tremoloScale;
+}
+
+/** Each `<music-tremolo>` member's share of its written value (1/N). */
+export function computeTremoloScaleByIndex(
+  tremoloGroups: readonly TremoloGroupPlacement[]
+): Map<number, number> {
+  const scales = new Map<number, number>();
+  for (const { memberIndices } of tremoloGroups) {
+    for (const index of memberIndices) {
+      scales.set(index, 1 / memberIndices.length);
+    }
+  }
+  return scales;
 }
 
 /**
  * Cumulative whole-note-fraction offset at which each entry starts, relative
- * to the start of the measure (offsets[0] is always 0). Depends only on the
- * entries before it — appending a new entry never changes an earlier entry's
- * offset. Used by spacingRules.ts to position each entry as a fraction of the
- * measure's fixed beat capacity (from the time signature), not of the
- * current entry count.
+ * to the start of the measure (offsets[0] is always 0).
  */
 export function computeBeatOffsets(
   elements: ReadonlyArray<{ readonly duration: DurationType }>,
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>,
-  arpeggioRunIndices: ReadonlySet<number> = new Set()
+  arpeggioRunIndices: ReadonlySet<number> = new Set(),
+  tremoloScaleByIndex: ReadonlyMap<number, number> = new Map()
 ): number[] {
   const offsets: number[] = [];
   let offset = 0;
@@ -55,7 +68,8 @@ export function computeBeatOffsets(
       elements[i],
       i,
       tupletsByIndex,
-      arpeggioRunIndices
+      arpeggioRunIndices,
+      tremoloScaleByIndex
     );
   }
   return offsets;

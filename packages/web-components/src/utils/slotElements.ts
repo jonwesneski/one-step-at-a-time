@@ -4,6 +4,8 @@ import {
   ClefElementType,
   ClefMarkerPlacement,
   NoteChordOrRestElementType,
+  TremoloElementType,
+  TremoloGroupPlacement,
   TupletElementType,
 } from '../types/elements';
 import { VoiceNumber } from '../types/theory';
@@ -14,6 +16,7 @@ import {
   MUSIC_CLEF_NODE,
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
+  MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
 } from './consts';
@@ -23,11 +26,13 @@ export function flattenSlotElements(assigned: Element[]): {
   tupletsByIndex: Map<number, TupletElementType[]>;
   clefMarkers: ClefMarkerPlacement[];
   arpeggioGroups: ArpeggioGroupPlacement[];
+  tremoloGroups: TremoloGroupPlacement[];
 } {
   const flatElements: NoteChordOrRestElementType[] = [];
   const tupletsByIndex = new Map<number, TupletElementType[]>();
   const clefMarkers: ClefMarkerPlacement[] = [];
   const arpeggioGroups: ArpeggioGroupPlacement[] = [];
+  const tremoloGroups: TremoloGroupPlacement[] = [];
 
   function flatten(
     element: Element,
@@ -49,6 +54,8 @@ export function flattenSlotElements(assigned: Element[]): {
       }
     } else if (tag === MUSIC_ARPEGGIO_NODE) {
       flattenArpeggio(element as ArpeggioElementType, tupletAncestors);
+    } else if (tag === MUSIC_TREMOLO_NODE) {
+      flattenTremolo(element as TremoloElementType, tupletAncestors);
     } else if (tag === MUSIC_CLEF_NODE) {
       if (tupletAncestors.length > 0) {
         console.warn(
@@ -124,6 +131,70 @@ export function flattenSlotElements(assigned: Element[]): {
     arpeggioGroups.push({ runIndices, targetIndex, element });
   }
 
+  // A <music-tremolo> flattens its members as ordinary elements and records
+  // their flat indices. Anything that can't make a tremolo warns and
+  // flattens as plain notes, so the music still shows.
+  function flattenTremolo(
+    element: TremoloElementType,
+    tupletAncestors: TupletElementType[]
+  ): void {
+    const children = Array.from(element.children);
+    const grouped = element.hasAttribute('tremolo-group');
+    const isMember = (child: Element): boolean =>
+      child.nodeName === MUSIC_NOTE_NODE ||
+      child.nodeName === MUSIC_CHORD_NODE ||
+      (grouped &&
+        child.nodeName === MUSIC_REST_NODE &&
+        child.hasAttribute('hidden'));
+    const members = children.filter(isMember) as NoteChordOrRestElementType[];
+    const notes = members.filter(
+      (member) => member.nodeName !== MUSIC_REST_NODE
+    );
+    const problem = tremoloProblem(children, members, notes, grouped);
+    if (problem !== null) {
+      warnOncePerElement(element, `[music-tremolo] ${problem}`);
+      for (const child of children) {
+        if (child.nodeName === MUSIC_CLEF_NODE) {
+          (child as ClefElementType).style.display = 'none';
+          continue;
+        }
+        flatten(child, tupletAncestors);
+      }
+      return;
+    }
+    const memberWarnings = notes.flatMap((note) => [
+      ...(note.hasAttribute('tremolo')
+        ? [
+            'a member’s own `tremolo` strokes are ignored inside a two-note tremolo',
+          ]
+        : []),
+      ...(note.hasAttribute('beam-group') ||
+      note.hasAttribute('shared-stem-for')
+        ? [
+            '`beam-group` and `shared-stem-for` are ignored on a two-note tremolo member',
+          ]
+        : []),
+      ...(note.getAttribute('tie') === 'start' ||
+      note.getAttribute('tie') === 'end'
+        ? [
+            'tying two-note tremolos is impractical; slur the whole figure instead',
+          ]
+        : []),
+    ]);
+    warnOncePerElement(
+      element,
+      memberWarnings.length > 0
+        ? `[music-tremolo] ${[...new Set(memberWarnings)].join('; ')}`
+        : null
+    );
+    const memberIndices: number[] = [];
+    for (const member of members) {
+      memberIndices.push(flatElements.length);
+      flatten(member, tupletAncestors);
+    }
+    tremoloGroups.push({ memberIndices, element });
+  }
+
   for (const element of assigned) {
     if (element.nodeName === MUSIC_CLEF_NODE) {
       (element as ClefElementType).style.display = '';
@@ -131,13 +202,67 @@ export function flattenSlotElements(assigned: Element[]): {
     flatten(element, []);
   }
 
-  return { flatElements, tupletsByIndex, clefMarkers, arpeggioGroups };
+  return {
+    flatElements,
+    tupletsByIndex,
+    clefMarkers,
+    arpeggioGroups,
+    tremoloGroups,
+  };
+}
+
+// Why a <music-tremolo>'s children can't make a tremolo, or null when they
+// can.
+function tremoloProblem(
+  children: readonly Element[],
+  members: readonly NoteChordOrRestElementType[],
+  notes: readonly NoteChordOrRestElementType[],
+  grouped: boolean
+): string | null {
+  const stray = children.find(
+    (child) => !members.includes(child as NoteChordOrRestElementType)
+  );
+  if (stray !== undefined) {
+    const name = stray.nodeName.toLowerCase();
+    return stray.nodeName === MUSIC_REST_NODE
+      ? 'a visible <music-rest> can’t be part of a tremolo (a cross-staff tremolo-group takes <music-rest hidden> spacers); drawing the notes plainly'
+      : `<${name}> can’t go inside <music-tremolo>; drawing the notes plainly`;
+  }
+  if (notes.length === 0 || members.length < 2) {
+    return grouped
+      ? 'a tremolo-group wrapper needs at least one note plus spacer rests; drawing the notes plainly'
+      : 'a tremolo needs at least two notes or chords; drawing the notes plainly';
+  }
+  // Read from the attribute: flattening can run before members upgrade.
+  const durations = members.map(
+    (member) => member.getAttribute('duration') ?? 'quarter'
+  );
+  if (new Set(durations).size > 1) {
+    return 'every note of a tremolo is written with the same duration; drawing the notes plainly';
+  }
+  return null;
+}
+
+// Flattening re-runs on every slot change, so a wrapper's warning is only
+// repeated once its text changes.
+const lastWarnings = new WeakMap<Element, string>();
+function warnOncePerElement(element: Element, warning: string | null): void {
+  if (warning === null) {
+    lastWarnings.delete(element);
+    return;
+  }
+  if (lastWarnings.get(element) === warning) {
+    return;
+  }
+  lastWarnings.set(element, warning);
+  console.warn(warning);
 }
 
 export type VoiceFlattenResult = {
   flatElements: NoteChordOrRestElementType[];
   tupletsByIndex: Map<number, TupletElementType[]>;
   arpeggioGroups: ArpeggioGroupPlacement[];
+  tremoloGroups: TremoloGroupPlacement[];
 };
 
 export type StaffFlattenResult = {
@@ -146,18 +271,10 @@ export type StaffFlattenResult = {
   clefMarkers: ClefMarkerPlacement[];
 };
 
-// Partitions a staff's slotted content into one or more independent voices.
-// A staff is either wholly single-voice (zero <music-voice> children — the
-// ordinary case, behaves byte-identical to flattenSlotElements()) or wholly
-// multi-voice (every <music-voice> child's own subtree flattened
-// independently, numbered by sibling order: the 1st is voice 1, the 2nd is
-// voice 2, the 3rd is voice 3). Mixing bare top-level notes/chords/rests with
-// one or more <music-voice> siblings is invalid — the bare content is
-// discarded (not silently folded into voice 1) so a real authoring mistake
-// doesn't render silently wrong. <music-clef> is a special case of this: a
-// clef change is staff-wide, but it's authored nested inside the first
-// <music-voice> (voice 1's own timeline is its canonical anchor point) —
-// never as a bare top-level sibling, and never inside voice 2/3.
+// Partitions a staff's slotted content into voices: no <music-voice>
+// children is one voice; otherwise each child is a voice, numbered by order.
+// Bare entries beside <music-voice> siblings are discarded. A <music-clef>
+// belongs inside the first <music-voice>.
 export function flattenStaffSlotElements(
   assigned: Element[]
 ): StaffFlattenResult {
@@ -166,10 +283,17 @@ export function flattenStaffSlotElements(
   );
 
   if (voiceElements.length === 0) {
-    const { flatElements, tupletsByIndex, clefMarkers, arpeggioGroups } =
-      flattenSlotElements(assigned);
+    const {
+      flatElements,
+      tupletsByIndex,
+      clefMarkers,
+      arpeggioGroups,
+      tremoloGroups,
+    } = flattenSlotElements(assigned);
     return {
-      voices: new Map([[1, { flatElements, tupletsByIndex, arpeggioGroups }]]),
+      voices: new Map([
+        [1, { flatElements, tupletsByIndex, arpeggioGroups, tremoloGroups }],
+      ]),
       clefMarkers,
     };
   }
@@ -188,12 +312,8 @@ export function flattenStaffSlotElements(
     (voiceElement as HTMLElement).style.display = i < MAX_VOICES ? '' : 'none';
   });
 
-  // <music-clef> is no longer exempt here: once voice 1 can carry its own
-  // nested markers (see below), a bare top-level sibling clef has no way to
-  // express a real anchor point (its DOM position among <music-voice>
-  // siblings can only ever mean "before all voice content" or "after all of
-  // it", never a genuine mid-measure point) — nest it inside the first
-  // <music-voice> instead.
+  // A bare top-level <music-clef> beside <music-voice> siblings can't mark a
+  // mid-measure point; it belongs inside the first <music-voice>.
   for (const element of assigned) {
     if (element.nodeName !== MUSIC_VOICE_NODE) {
       if (element.nodeName === MUSIC_CLEF_NODE) {
@@ -218,11 +338,13 @@ export function flattenStaffSlotElements(
       tupletsByIndex,
       clefMarkers: voiceClefMarkers,
       arpeggioGroups,
+      tremoloGroups,
     } = flattenSlotElements(Array.from(voiceElement.children));
     voices.set((i + 1) as VoiceNumber, {
       flatElements,
       tupletsByIndex,
       arpeggioGroups,
+      tremoloGroups,
     });
     if (i === 0) {
       // A clef change is staff-wide, but voice 1 is its canonical anchor —

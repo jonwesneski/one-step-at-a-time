@@ -10,6 +10,14 @@ import {
 } from '../rules/noteheadRules';
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
+import {
+  articulationRepeatCount,
+  drawnTremoloTuplet,
+  resolveStrokeCount,
+  STAFF_BAND,
+  tremoloConsistencyWarnings,
+  unbeamedTremoloStemExtensionPx,
+} from '../rules/tremoloRules';
 import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type {
   ChordNote,
@@ -45,6 +53,9 @@ import type {
   OctaveShiftAmount,
   StemDirection,
   StressType,
+  TieStyle,
+  TremoloLabel,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -79,7 +90,11 @@ import {
   parseOctaveShiftAmount,
   parseStemDirection,
   parseStress,
+  parseTieStyle,
   parseTieValue,
+  parseTremolo,
+  parseTremoloLabel,
+  parseTremoloTuplet,
   parseTrillContinuationMode,
   parseTrillFinishSlur,
   parseTrillLineMode,
@@ -88,6 +103,7 @@ import {
   CHORD_EVENTS,
   MUSIC_CHORD,
   MUSIC_NOTE,
+  MUSIC_TREMOLO_NODE,
   NOTE_EVENTS,
   STAFF_TAGS,
   SVG_NS,
@@ -156,7 +172,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} slur-group - `id` shared by every breakpoint note/chord of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone chord).
    * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
    * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.
-   * @attr {StemDirection} stem-direction - Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
+   * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
+   * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
+   * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+   * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
+   * @attr {TieStyle} tie-style - `dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`.
+   * @attr {StemDirection} stem-direction - Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -217,6 +238,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'stem-direction',
         'notehead',
         'grace-notehead',
+        'tremolo',
+        'tremolo-tuplet',
+        'tremolo-label',
+        'articulation-repeat',
+        'tie-style',
       ];
     }
 
@@ -225,6 +251,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #stemUp = true;
     #stemExtension = 0;
+    #dottedTieAcrossBarline = false;
     #trillSignExtraLift = 0;
     #articulationStemAnchorBeamLevels: number | null = null;
     #augmentationDotRows: number[] | null = null;
@@ -530,8 +557,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // `id` shared by every element across a measure's two adjacent grand-staff
     // staves that joins one cross-staff double-stemmed beam group. Resolved
     // by the ancestor <music-measure>.
+    // Ignored on a <music-tremolo> member, which its own tremolo beams.
     get beamGroup(): string | null {
-      return this.getAttribute('beam-group');
+      return this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+        ? null
+        : this.getAttribute('beam-group');
     }
     set beamGroup(value: string | null) {
       if (value === null) {
@@ -622,10 +652,101 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // A <music-tremolo>'s own beams stand for the repetition, so a member's
+    // strokes are ignored.
+    get tremolo(): TremoloValue | null {
+      if (this.parentElement?.nodeName === MUSIC_TREMOLO_NODE) {
+        return null;
+      }
+      return parseTremolo(this.getAttribute('tremolo'));
+    }
+    set tremolo(value: TremoloValue | null) {
+      if (value === null) {
+        this.removeAttribute('tremolo');
+      } else {
+        this.setAttribute('tremolo', String(value));
+      }
+    }
+
+    get tremoloTuplet(): number | null {
+      return parseTremoloTuplet(this.getAttribute('tremolo-tuplet'));
+    }
+    set tremoloTuplet(value: number | null) {
+      if (value === null) {
+        this.removeAttribute('tremolo-tuplet');
+      } else {
+        this.setAttribute('tremolo-tuplet', String(value));
+      }
+    }
+
+    get tremoloLabel(): TremoloLabel | null {
+      return parseTremoloLabel(this.getAttribute('tremolo-label'));
+    }
+    set tremoloLabel(value: TremoloLabel | null) {
+      if (value === null) {
+        this.removeAttribute('tremolo-label');
+      } else {
+        this.setAttribute('tremolo-label', value);
+      }
+    }
+
+    get articulationRepeat(): boolean {
+      return this.hasAttribute('articulation-repeat');
+    }
+    set articulationRepeat(value: boolean) {
+      this.toggleAttribute('articulation-repeat', value);
+    }
+
+    get tieStyle(): TieStyle {
+      return parseTieStyle(this.getAttribute('tie-style'));
+    }
+    set tieStyle(value: TieStyle) {
+      if (value === 'solid') {
+        this.removeAttribute('tie-style');
+      } else {
+        this.setAttribute('tie-style', value);
+      }
+    }
+
+    get dottedTieAcrossBarline(): boolean {
+      return this.#dottedTieAcrossBarline;
+    }
+    set dottedTieAcrossBarline(value: boolean) {
+      if (value === this.#dottedTieAcrossBarline) {
+        return;
+      }
+      this.#dottedTieAcrossBarline = value;
+      // The staff re-resolves accidentals on a full re-layout.
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
+
+    #repeatCount(): number {
+      return articulationRepeatCount({
+        articulationRepeat: this.articulationRepeat,
+        articulation: this.articulation,
+        tremolo: this.tremolo,
+        tuplet: this.tremoloTuplet,
+        duration: this.duration,
+      });
+    }
+
+    #tremoloStrokeCount(): number {
+      const tremolo = this.tremolo;
+      return tremolo === null ? 0 : resolveStrokeCount(tremolo, this.duration);
+    }
+
     // `id` of the other-staff element this chord shares a single stem with.
     // Resolved by the ancestor <music-measure>.
+    // Ignored on a <music-tremolo> member, whose stem its tremolo sets.
     get sharedStemFor(): string | null {
-      return this.getAttribute('shared-stem-for');
+      return this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+        ? null
+        : this.getAttribute('shared-stem-for');
     }
     set sharedStemFor(value: string | null) {
       if (value === null) {
@@ -1041,6 +1162,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     connectedCallback(): void {
       upgradeShadowedProperties(this);
+      this.#warnAboutTremolo(null, null);
       this.render();
       this.#childObserver = new MutationObserver(() => {
         this.#scheduleRender();
@@ -1067,14 +1189,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      // diminuendo is an alias for decrescendo — normalize immediately so
-      // decrescendo is the only hairpin attribute any other code ever sees.
-      // Runs even before the element is connected (unlike the rest of this
-      // callback) since callers commonly set attributes before appending.
-      // Only forward when diminuendo is being set (newValue !== null); the
-      // follow-up removeAttribute('diminuendo') below re-enters this callback
-      // with newValue === null and must be a no-op, or it would immediately
-      // clear the decrescendo value we just set.
+      // `diminuendo` is rewritten to `decrescendo`, even before connecting.
+      // The removeAttribute below re-enters with null, which must be a no-op.
       if (name === 'diminuendo') {
         if (newValue !== null) {
           this.setAttribute('decrescendo', newValue);
@@ -1096,6 +1212,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       }
 
+      this.#warnAboutTremolo(name, newValue);
+
       if (!this.isConnected) {
         return;
       }
@@ -1106,7 +1224,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'lv-label' ||
         name === 'glissando' ||
         name === 'glissando-hint' ||
-        name === 'slur-group'
+        name === 'slur-group' ||
+        name === 'tie-style'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
@@ -1168,16 +1287,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-accidental' ||
         name === 'trill-continuation'
       ) {
-        // The ancestor staff resolves the trill line span (walking this
-        // chord's own tie chain), re-resolves the key-signature-aware
-        // trilling pitch, and redraws the line in its own overlay — both
-        // synchronously within this dispatchEvent call, so the render()
-        // below already sees the fresh resolvedTrillPitch. No staff-driven
-        // layout/footprint dependency otherwise — re-render locally
-        // unconditionally, standalone or not. `trill-continuation` affects
-        // none of that (it only controls a system-break restatement an
-        // ancestor <music-composition> draws), but shares the same dispatch
-        // so that pass re-runs too.
+        // The staff re-resolves the trill synchronously, so render() below
+        // sees the fresh resolvedTrillPitch.
         if (
           name === 'trill-accidental' &&
           newValue !== null &&
@@ -1275,17 +1386,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'trill-finish' ||
         name === 'trill-finish-octave' ||
         name === 'trill-finish-slur' ||
-        name === 'duration'
+        name === 'duration' ||
+        name === 'tremolo' ||
+        name === 'tremolo-tuplet' ||
+        name === 'tremolo-label' ||
+        name === 'articulation-repeat'
       ) {
-        // `duration` moves every later entry (beat time) and its dots widen
-        // the rightward footprint.
-        // arpeggio/grace changes the chord's leftward footprint, and
-        // trill-note/trill-finish the rightward one, the same way: it takes
-        // the same path. `arpeggio-for` reserves the same footprint for the
-        // lower end of a cross-staff span, whose wave the ancestor measure
-        // draws. `trill-finish-slur` never changes the footprint itself but
-        // shares this dispatch since the ancestor staff's cross-element
-        // "slur to next" pass depends on it too.
+        // Each of these changes layout (beat time, a leftward or rightward
+        // footprint, stem length, what the staff clears above) or the
+        // voice-combine key, so the staff re-lays out.
         if (
           name === 'trill-note' &&
           newValue !== null &&
@@ -1309,6 +1418,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (
+        (name === 'articulation' || name === 'stress') &&
+        this.tremoloLabel !== null &&
+        this.closest(STAFF_TAGS)
+      ) {
+        // The staff's tremolo label sits above this element's marks.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
       this.render();
     }
 
@@ -1332,6 +1454,42 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         console.warn(`[music-chord] ${warning}`);
       }
       this.#lastDotMismatchWarning = warning;
+    }
+
+    // A value that doesn't parse warns as soon as it's set. Attributes that
+    // don't fit together warn once connected, so markup built one attribute
+    // at a time doesn't warn about a state it passes through.
+    #warnAboutTremolo(changed: string | null, newValue: string | null): void {
+      const invalid =
+        newValue === null
+          ? null
+          : changed === 'tremolo' && parseTremolo(newValue) === null
+          ? 'is not a stroke count (1–4) or "unmeasured"'
+          : changed === 'tremolo-tuplet' &&
+            parseTremoloTuplet(newValue) === null
+          ? 'is not a whole number of at least 2'
+          : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
+          ? 'is not "trem" or "non-trem"'
+          : null;
+      if (invalid !== null) {
+        console.warn(
+          `[music-chord] ${changed}="${newValue}" ${invalid}; ignoring it`
+        );
+        return;
+      }
+      if (!this.isConnected) {
+        return;
+      }
+      for (const warning of tremoloConsistencyWarnings({
+        changed,
+        tremolo: this.tremolo,
+        tuplet: this.tremoloTuplet,
+        articulationRepeat: this.articulationRepeat,
+        articulation: this.articulation,
+        duration: this.duration,
+      })) {
+        console.warn(`[music-chord] ${warning}`);
+      }
     }
 
     private render(): void {
@@ -1376,6 +1534,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           graceLedgerStaffY: this.#staffYCoordinates[0] ?? null,
           trillFinishNotes: this.#buildTrillFinishDescriptors(this.notes),
           trillFinishSlur: this.trillFinishSlur,
+          tremoloStrokeCount: this.#tremoloStrokeCount(),
+          tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
+          articulationRepeatCount: this.#repeatCount(),
+          tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
         });
         chordSvg.setAttribute('overflow', 'visible');
         addLedgerLines(
@@ -1471,7 +1633,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           noteheads: toneNoteheads,
           noFlags: false,
           noStem: this.#noStem,
-          stemExtension: 0,
+          // Standalone, nothing else lengthens the stem for tremolo strokes.
+          stemExtension: unbeamedTremoloStemExtensionPx({
+            tremolo: this.tremolo,
+            duration: this.duration,
+            headYs: standaloneYCoordinates,
+            stemUp,
+            staff: STAFF_BAND,
+            stemExtensionPx: 0,
+          }),
           articulation: this.articulation,
           stress: this.stress,
           graceNotes: this.#buildGraceDescriptors(notes),
@@ -1480,6 +1650,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           graceSlur: this.graceSlur,
           trillFinishNotes: this.#buildTrillFinishDescriptors(notes),
           trillFinishSlur: this.trillFinishSlur,
+          tremoloStrokeCount: this.#tremoloStrokeCount(),
+          tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
+          articulationRepeatCount: this.#repeatCount(),
+          tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
         });
         chordSvg.setAttribute('overflow', 'visible');
 

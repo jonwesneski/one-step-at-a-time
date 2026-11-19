@@ -75,13 +75,8 @@ export function moveEntryInVoice(
   return pruneBrokenTies(pruneInvalidNotationLinks(next));
 }
 
-// Moves an entry to a different voice of the same staff — a genuinely
-// different structural operation from moveEntryInVoice above, not a variant
-// call of it (that one only ever reorders within a single voice's own
-// entryIds). Always appends at the end of the target voice; the entry's
-// exact position within its new voice can be fixed up afterward with the
-// existing single-voice reorder-drag. A tuplet run can't span voices, so the
-// moved entry's own tupletId is cleared rather than carried over.
+// Moves an entry to the end of another voice on the same staff, clearing its
+// tupletId since a tuplet can't span voices.
 export function moveEntryToVoice(
   structure: CompositionStructure,
   staffId: string,

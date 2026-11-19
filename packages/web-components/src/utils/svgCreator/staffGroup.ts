@@ -8,25 +8,10 @@ import {
 
 // ─── Brace ──────────────────────────────────────────────────────────────────
 //
-// Path data below is derived from an engraved brace glyph outline via a
-// one-off extraction/processing script (not checked in), keeping the
-// glyph's original 20-segment cubic-bezier structure intact. The outline
-// traces both walls of the brace's curved "ribbon" (an outer wall out to
-// each tip, an inner wall back from each tip to the mid-junction pinch);
-// every point in the path — anchors and control points alike — is tagged
-// with which of those four wall arcs it belongs to, matched against its
-// nearest (by vertical position) point on the opposite wall of the same
-// tip's ribbon, and moved 25% of the way toward that match. Since both
-// sides of a matched pair move toward each other by the same fraction, the
-// gap between them (the local stroke width) shrinks to half its original
-// size — verified by sampling cross-sections at several heights (~43-48%
-// width reduction at the humps, converging naturally to ~0 at the tips and
-// pinch where the two walls already meet). Finally the origin is
-// normalized so the path's own coordinate space is already
-// X ∈ [0, BRACE_NATURAL_WIDTH], Y ∈ [0, BRACE_NATURAL_HEIGHT]
-// (top-left origin, Y-down) — so no translation is needed at render time,
-// only the scale below. See CLAUDE.md's "Grand Staff / Part Connectors"
-// section for provenance details.
+// An engraved brace outline, thinned to half its stroke width (each wall
+// point moved 25% toward the opposite wall) and normalized to
+// X ∈ [0, BRACE_NATURAL_WIDTH], Y ∈ [0, BRACE_NATURAL_HEIGHT], top-left
+// origin, so rendering only scales it.
 const BRACE_PATH_D =
   'M 6.25 504 ' +
   'C 30.5 477.5, 60 406, 60 346 ' +
@@ -54,18 +39,14 @@ const BRACE_PATH_D =
 const BRACE_NATURAL_WIDTH = 60.75;
 
 /**
- * Full height (units) of the thinned+normalized glyph outline's bounding
- * box — its default/natural size. The source glyph is meant to be scaled
- * disproportionately (Y independent of X) to fit whatever gap the connected
- * staves need, which is what createBraceSvg does below.
+ * Natural height (units) of the brace outline; createBraceSvg scales Y
+ * independently of X to fit the span.
  */
 const BRACE_NATURAL_HEIGHT = 997;
 
 /**
- * Brace renderer built from an engraved glyph outline (see BRACE_PATH_D
- * above; provenance in CLAUDE.md). Right edge sits at x=BRACE_WIDTH_PX,
- * matching the positioning convention used by the other connector
- * renderers below.
+ * Brace renderer; its right edge sits at x=BRACE_WIDTH_PX, like the other
+ * connector renderers.
  */
 export function createBraceSvg(height: number): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -94,30 +75,12 @@ export function createBraceSvg(height: number): SVGSVGElement {
 
 // ─── Bracket ────────────────────────────────────────────────────────────────
 //
-// A bracket is a straight stem with a curled hook flourish at each end.
-// Unlike the brace above, that hook must never stretch — real engraving
-// keeps it a fixed size no matter how many staves the bracket spans; only
-// the straight stem between the hooks gets longer. So rather than one glyph
-// scaled to fit, this is built from two independent, fixed-size hook
-// outlines (traced from an engraved reference glyph, one per end, each
-// already normalized to this file's px coordinate scale) plus a stem
-// rectangle sized to whatever span is requested.
-//
-// Both hooks share one outline shape (mirror images of each other), traced
-// with its own top-left origin, X ∈ [0, 18.76], Y ∈ [0, 11.8]. Within that
-// shape, X ∈ [0, 5] (matching the stem's own thickness) is the flat edge
-// that meets the stem; the curled tip reaches out toward X=18.76. For the
-// top hook, that meeting edge must land at Y=0 (flush with the stem's own
-// top) with the tip curling out to Y=-11.8 (up and away) — i.e. the outline
-// is *mirrored* (Y negated), not shifted, relative to its natural Y ∈
-// [0, 11.8]. BRACKET_TOP_PATH_D below is that mirrored outline, with
-// BRACKET_LEFT_MARGIN_PX also added to every X so the whole hook (and the
-// stem it caps) sits with a bit of breathing room left of the connector's
-// own bounding box. The bottom hook needs the same mirroring, but can't be
-// pre-computed the same way since how far down it sits depends on the
-// requested height, so it's kept as per-point (x, y) data and re-serialized
-// into a `d` string with that mirror + offset applied at call time — see
-// `bracketBottomPathD` — rather than repositioned with a `transform`.
+// A straight stem with a fixed-size hook at each end: the hooks never
+// stretch, only the stem lengthens. Both hooks share one outline
+// (X ∈ [0, 18.76], Y ∈ [0, 11.8]; X ∈ [0, 5] meets the stem), mirrored so
+// the tip curls away from the stem. BRACKET_TOP_PATH_D is that mirrored
+// outline shifted right by BRACKET_LEFT_MARGIN_PX; the bottom hook depends on
+// the height, so bracketBottomPathD builds it per call.
 const BRACKET_TOP_PATH_D =
   `M ${0 + BRACKET_LEFT_MARGIN_PX} 0 L ${5 + BRACKET_LEFT_MARGIN_PX} 0 ` +
   `C ${11.4 + BRACKET_LEFT_MARGIN_PX} -1.2, ${
@@ -222,10 +185,8 @@ const BRACKET_BOTTOM_PATH_SEGMENTS: PathSegment[] = [
 ];
 
 /**
- * Re-serializes the bottom hook's outline mirrored (Y negated relative to
- * its own natural height) and shifted down by `offsetY` — see the comment
- * above BRACKET_TOP_PATH_D for why the meeting edge needs to land at
- * `offsetY` (flush with the stem's bottom) with the tip curling out past it.
+ * The bottom hook's outline with its meeting edge at `offsetY` (the stem's
+ * bottom) and its tip curling down past it.
  */
 function bracketBottomPathD(offsetY: number): string {
   const y = (naturalY: number) =>
@@ -249,15 +210,8 @@ function bracketBottomPathD(offsetY: number): string {
 }
 
 /**
- * Bracket renderer built from the two hook outlines above plus a stem
- * rectangle, in a local coordinate space where the hook tips sit at the
- * right edge (x=BRACKET_WIDTH_PX) and BRACKET_LEFT_MARGIN_PX of breathing
- * room is reserved on the left — see `measure.ts`'s `#renderGroupConnectors`
- * for how that right edge is placed relative to the staff barline
- * (BRACKET_STAFF_GAP_PX). No `transform` is used — the bottom hook's
- * placement and the stem's length are both plain arithmetic on `height`, so
- * this scales cleanly to any span (a 2-staff pair or a many-staff bracket)
- * without distorting either hook.
+ * Bracket renderer: two hooks and a stem, hook tips at x=BRACKET_WIDTH_PX.
+ * Any height keeps the hooks undistorted.
  */
 export function createBracketSvg(height: number): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');

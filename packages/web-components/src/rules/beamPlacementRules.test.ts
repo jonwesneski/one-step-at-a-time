@@ -243,6 +243,34 @@ describe('resolveBeamPlacement', () => {
     });
   });
 
+  describe('a note’s own minimum stem', () => {
+    it('moves the beam out until every stem reaches its minimum, still sloping with the interval', () => {
+      const notes = notesOf({ heads: [F4, A4], stemUp: true });
+      const plain = resolveBeamPlacement({ notes, stemUp: true });
+      const lengthened = resolveBeamPlacement({
+        notes: notes.map((note) => ({ ...note, minimumStemPx: spaces(5) })),
+        stemUp: true,
+      });
+      expect(F4 - lengthened.primaryTopAtFirst).toBeGreaterThanOrEqual(
+        spaces(5)
+      );
+      expect(A4 - lengthened.primaryTopAtLast).toBeGreaterThanOrEqual(
+        spaces(5)
+      );
+      expect(Math.sign(slopeOf(lengthened))).toBe(Math.sign(slopeOf(plain)));
+    });
+
+    it('leaves the beam alone when the minimum is already met', () => {
+      const notes = notesOf({ heads: [F4, F4], stemUp: true });
+      expect(
+        resolveBeamPlacement({
+          notes: notes.map((note) => ({ ...note, minimumStemPx: spaces(2) })),
+          stemUp: true,
+        })
+      ).toEqual(resolveBeamPlacement({ notes, stemUp: true }));
+    });
+  });
+
   describe('notes on ledger lines', () => {
     it('keeps one clear stave line between the innermost beam and the first ledger line', () => {
       for (const beamCount of [2, 3, 4]) {

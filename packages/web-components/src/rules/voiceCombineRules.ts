@@ -20,6 +20,9 @@ export type VoiceCombineInput = {
   tupletsByIndex: ReadonlyMap<number, TupletElementType[]>;
   arpeggioRunIndices: ReadonlySet<number>;
   arpeggioTargetIndices: ReadonlySet<number>;
+  // `<music-tremolo>` members: each takes a share of the written value, so
+  // no member can merge onto another voice's stem.
+  tremoloMemberIndices: ReadonlySet<number>;
   // Staff Ys an element sounds, with its clef and chord voicing resolved.
   staffYsOf: (index: number) => readonly number[];
 };
@@ -54,14 +57,9 @@ function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
 }
 
 /**
- * A note/chord is combine-eligible only when every one of these is absent —
- * excluded from combining entirely, not merely "must match" — since a
- * tie/slur/arpeggio/trill/grace/glissando/stress/dynamic-shared attached to
- * one voice's note has no unambiguous meaning once merged and un-merged
- * downstream: the synthetic chord never copies these onto itself, so they'd
- * silently vanish when the original element is hidden. A non-normal notehead
- * is excluded the same way: merged tones are deduplicated by pitch, so a tone
- * couldn't keep a head of its own, and a triangle can't be a chord tone at all.
+ * Combine-eligible only when none of these is set: the synthetic chord
+ * doesn't copy them, so they'd vanish. A non-normal notehead is excluded too,
+ * since merged tones dedupe by pitch.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   if (voice.tupletsByIndex.has(index)) {
@@ -69,7 +67,8 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   }
   if (
     voice.arpeggioRunIndices.has(index) ||
-    voice.arpeggioTargetIndices.has(index)
+    voice.arpeggioTargetIndices.has(index) ||
+    voice.tremoloMemberIndices.has(index)
   ) {
     return false;
   }
@@ -93,9 +92,10 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   );
 }
 
-// duration/articulation/dynamic/crescendo/decrescendo must all match — pitch
-// content is deliberately excluded (that's what gets unioned into the
-// combined chord's tone set).
+// duration/articulation/dynamic/crescendo/decrescendo and the tremolo
+// attributes must all match — pitch content is deliberately excluded (that's
+// what gets unioned into the combined chord's tone set). Matching tremolos
+// share one set of strokes, numeral and label.
 function combineKey(element: NoteOrChordElementType): string {
   return JSON.stringify([
     element.duration,
@@ -103,6 +103,10 @@ function combineKey(element: NoteOrChordElementType): string {
     element.dynamic,
     element.crescendo,
     element.decrescendo,
+    element.tremolo ?? null,
+    element.tremoloTuplet ?? null,
+    element.tremoloLabel ?? null,
+    element.articulationRepeat ?? false,
   ]);
 }
 
@@ -157,12 +161,8 @@ function dedupeTones(tones: readonly ChordNote[]): ChordNote[] {
 
 /**
  * Detects rhythmically-identical notes/chords across 2-3 voices at the same
- * beat that may combine onto one shared, pitch-driven stem — real engraving
- * practice for parts in rhythmic unison with matching articulation/dynamics.
- * Rests never combine (see voiceRestRules.ts's separate shared-rest
- * detection). Returns one CombinedGroup per beat-offset column where 2 or
- * more voices' candidates match; a beat-offset column where only one voice
- * has an eligible candidate (or none match each other) produces no group.
+ * beat that combine onto one pitch-driven stem: one CombinedGroup per beat
+ * column where 2+ voices match. Rests never combine.
  */
 export function detectCombinableGroups(
   voices: ReadonlyMap<VoiceNumber, VoiceCombineInput>

@@ -3,6 +3,8 @@ import { SVG_NS } from '../consts';
 import {
   CONNECTOR_LABEL_CHAR_WIDTH_PX,
   STAFF_LINE_SPACING,
+  TIE_DASH_GAP_PX,
+  TIE_DASH_PX,
 } from '../notationDimensions';
 
 export type CurveBulge = 'above' | 'below';
@@ -25,6 +27,8 @@ export type CurveProps = {
   // rules/connectorPlacementRules.ts#cubicSlurControlPoints). Overrides
   // bulgeHeight/nestingLevel.
   controlHeights?: readonly [number, number];
+  // Draws the curve as a dotted line (a dotted tie).
+  dotted?: boolean;
 };
 
 export const DEFAULT_BULGE_HEIGHT = STAFF_LINE_SPACING * 0.9;
@@ -41,6 +45,7 @@ export const createCurveSvg = ({
   nestingLevel = 0,
   bulgeHeight,
   controlHeights,
+  dotted = false,
 }: CurveProps): SVGGElement => {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('connector');
@@ -110,8 +115,20 @@ export const createCurveSvg = ({
     group.appendChild(text);
   }
 
+  if (dotted) {
+    setCurveDotted(group);
+  }
+
   return group;
 };
+
+/** Redraws an already built curve's line as a dotted one. */
+export function setCurveDotted(curve: SVGGElement): void {
+  for (const path of Array.from(curve.querySelectorAll('path'))) {
+    path.classList.add('dotted');
+    path.setAttribute('stroke-dasharray', `${TIE_DASH_PX} ${TIE_DASH_GAP_PX}`);
+  }
+}
 
 export type OpenTieProps = {
   anchor: { x: number; y: number };

@@ -17,6 +17,12 @@ import {
   isOpenDuration,
   isStemlessDuration,
 } from '../../rules/theoryConsts';
+import {
+  resolveStrokePlacement,
+  STAFF_BAND,
+  stemEndingFor,
+  TREMOLO_STROKE_HALF_HEIGHT_PX,
+} from '../../rules/tremoloRules';
 import type {
   AccidentalType,
   ArpeggioType,
@@ -26,6 +32,7 @@ import type {
   HairpinKind,
   NoteheadType,
   StressType,
+  TremoloLabel,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
@@ -48,7 +55,10 @@ import {
   STAFF_TOP_LINE_Y,
   STEM_OVERLAP_PX,
   STEM_STROKE_WIDTH_PX,
+  TREMOLO_LABEL_GAP_PX,
+  TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import {
@@ -56,13 +66,21 @@ import {
   createArpeggioSvg,
   isArpeggioWaveVariant,
 } from './arpeggio';
-import { createArticulationMarks } from './articulations';
+import {
+  articulationStackDepth,
+  createArticulationMarks,
+} from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
 import {
   createNoteheadGlyphPath,
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
+import {
+  createTremoloLabel,
+  createTremoloNumeral,
+  createTremoloStrokes,
+} from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.
@@ -194,6 +212,14 @@ export type NoteProps = {
   // Another voice draws the head this note shares in a unison; the stem,
   // flags, ledger lines and accidental are still drawn.
   omitsHead?: boolean;
+  // Tremolo strokes to draw (resolved from the `tremolo` value); 0 for none.
+  tremoloStrokeCount?: number;
+  // Tuplet numeral beyond the stem's end (or the strokes on a stemless head).
+  tremoloTuplet?: number | null;
+  // Times the articulation's length mark repeats across a row.
+  articulationRepeatCount?: number;
+  // Drawn above the note only standalone; a staff draws its own row.
+  tremoloLabel?: TremoloLabel | null;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -250,6 +276,10 @@ export const createNoteSvg = ({
   augmentationDotRows = null,
   augmentationDotShiftPx = 0,
   omitsHead = false,
+  tremoloStrokeCount = 0,
+  tremoloTuplet = null,
+  articulationRepeatCount = 1,
+  tremoloLabel = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -440,6 +470,7 @@ export const createNoteSvg = ({
             articulationStemAnchorBeamLevels
           )
         : null,
+    repeatCount: articulationRepeatCount,
   });
   if (articulationMarks) {
     g.appendChild(articulationMarks);
@@ -447,6 +478,74 @@ export const createNoteSvg = ({
   }
 
   svg.appendChild(g);
+
+  const stemless = isStemlessDuration(duration);
+  const headCenterPxY = headGeometry.cy * NOTE_SCALE;
+  // Outermost ink (px) on the side above the head, for a standalone label.
+  let inkTopY = headCenterPxY - headGeometry.halfHeight * NOTE_SCALE;
+  if (!stemUp) {
+    inkTopY = Math.min(
+      inkTopY,
+      headCenterPxY - articulationStackDepth(articulation, stress) * NOTE_SCALE
+    );
+  } else if (!stemless && !noStem) {
+    inkTopY = Math.min(inkTopY, stemTipY * NOTE_SCALE);
+  }
+  if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
+    // Standalone, the head stands in for staff Y 0 and nothing snaps to lines.
+    const headStaffY = staffY ?? 0;
+    const ending = stemEndingFor(duration, noFlags);
+    const { centerYs } = resolveStrokePlacement({
+      headY: headStaffY,
+      stemUp,
+      strokeCount: tremoloStrokeCount,
+      staff: staffY === null ? null : STAFF_BAND,
+      stemLengthPx: stemless
+        ? null
+        : BASE_STEM_LENGTH_PX +
+          stemExtension +
+          (ending.kind === 'beam' ? STEM_OVERLAP_PX : 0),
+      ending,
+      canLengthenStem: false,
+    });
+    const strokeX = (stemless ? headGeometry.cx : stemX) * NOTE_SCALE;
+    const strokeYs = centerYs.map((y) => headCenterPxY + y - headStaffY);
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(createTremoloStrokes(strokeX, strokeYs));
+    if (stemless && stemUp) {
+      inkTopY = Math.min(
+        inkTopY,
+        strokeYs[strokeYs.length - 1] - TREMOLO_STROKE_HALF_HEIGHT_PX
+      );
+    }
+
+    if (tremoloTuplet !== null) {
+      const outward = stemUp ? -1 : 1;
+      const outerEdgeY = stemless
+        ? strokeYs[strokeYs.length - 1] +
+          outward * TREMOLO_STROKE_HALF_HEIGHT_PX
+        : stemTipY * NOTE_SCALE +
+          (ending.kind === 'beam' ? outward * STEM_OVERLAP_PX : 0);
+      const numeralY =
+        outerEdgeY +
+        outward * (TREMOLO_NUMERAL_GAP_PX + TUPLET_NUMERAL_FONT_SIZE / 2);
+      svg.appendChild(createTremoloNumeral(strokeX, numeralY, tremoloTuplet));
+      if (stemUp) {
+        inkTopY = Math.min(inkTopY, numeralY - TUPLET_NUMERAL_FONT_SIZE / 2);
+      }
+    }
+  }
+
+  if (tremoloLabel !== null && qualifiedElementName === 'svg') {
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createTremoloLabel(
+        (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE,
+        inkTopY - TREMOLO_LABEL_GAP_PX,
+        tremoloLabel
+      )
+    );
+  }
 
   const dotLayout = noteAugmentationDotLayout({
     duration,
@@ -779,12 +878,7 @@ export function noteHeadLeftOverhangPx(
   );
 }
 
-// This note's own real stem-tip position (600-unit space) — the same
-// geometry createNoteSvg's own stem line is drawn to, factored out so a
-// caller (createArticulationMarks, via a passed-through stemAnchor) can
-// anchor there without duplicating the formula. Unlike noteHeadCenter
-// above, this depends on stemExtension, since that's exactly what moves
-// the tip (e.g. to reach a cross-staff double-stemmed beam).
+// The stem tip (600-unit space), as createNoteSvg draws it.
 export function stemTipPosition(
   stemUp: boolean,
   duration: DurationType,
@@ -806,24 +900,10 @@ export function stemTipPosition(
   };
 }
 
-// This note's own real position where its stem meets the double-stemmed
-// beam's actual visible surface (600-unit space) — used as the anchor for
-// an inner-voice articulation mark instead of the raw stem tip.
-// measure.ts#redrawDoubleStemmedBeams extends a member's stem past the
-// beam's near surface by a fixed STEM_OVERLAP_PX (so the drawn line
-// reliably disappears under the beam's opaque fill), and that overlap is
-// asymmetric: a stem-up member's raw tip sits deep inside the polygon body
-// (it travels through BEAM_THICKNESS_PX - STEM_OVERLAP_PX of hidden beam
-// before reaching its own tip target), while a stem-down member's raw tip
-// is only STEM_OVERLAP_PX past its own near surface. A mark placed at the
-// raw tip would therefore often render underneath the beam's fill — this
-// walks back from the tip, toward the notehead, by exactly that hidden
-// distance, landing right at the beam's real visible edge. beamLevels
-// secondary/fractional levels between the tip and the notehead add one
-// beam step each: whether they stack toward this notehead (the stem passes
-// through them) or away from it (the stem is extended out to them), the
-// surface facing the notehead is that many steps nearer the notehead than
-// the tip's own level.
+// Where the stem meets the double-stemmed beam's visible surface facing the
+// notehead (600-unit space): the inner-voice articulation anchor. The tip sits
+// inside the beam polygon (by BEAM_THICKNESS_PX − STEM_OVERLAP_PX stem-up,
+// STEM_OVERLAP_PX stem-down), and each of `beamLevels` adds one beam step.
 export function stemBeamJunctionPosition(
   stemUp: boolean,
   duration: DurationType,
@@ -839,12 +919,8 @@ export function stemBeamJunctionPosition(
   return { x, y: y + (towardNoteSign * hiddenPastSurfacePx) / NOTE_SCALE };
 }
 
-// Pixel Y of where a stem-up tip would sit, regardless of the note's actual
-// stem direction — per createNoteSvg's own stem geometry, a stem-up tip is
-// at NOTE_Y_STEM_START minus any external stemExtension (no flag-count
-// dependency: extra flags on a stem-up note extend the *head* end of the
-// stem, not the tip — see createNoteSvg's stemY1/stemY2). Used only by the
-// grace slur's descending-group stem-tip anchoring (see buildGraceSlur).
+// Pixel Y of a stem-up tip, whatever the note's direction. Flags lengthen
+// the head end, not the tip.
 export function stemUpTipYPx(stemExtension = 0): number {
   return NOTE_STEM_TIP_Y_OFFSET - stemExtension;
 }

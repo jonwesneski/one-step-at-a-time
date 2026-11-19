@@ -9,20 +9,9 @@ import { timeSignatureOfEntry } from './timeSignaturesHelpers';
 import type { CompositionStructure, MusicEntry } from './types';
 import { isPitchedEntry } from './types';
 
-// Replaces one entry in place, keyed by id. Returns the structure unchanged when
-// the entry is not present (a stale selection). Kept pure and colocated with a
-// test; the `updateEntry` mutator in CompositionInput just wraps this in
-// `record()`.
-//
-// A duration that would overfill the entry's measure (under that measure's
-// effective time signature) is clamped down to the largest value that fits — the
-// last line of defense behind the filtered `DurationSelect`, so no caller can
-// push the measure past its budget (the renderer silently drops entries beyond
-// it).
-//
-// The edit can also break a tie — a new pitch/octave, changed chord notes, a
-// note→rest conversion — so `pruneBrokenTies` drops any tie that no longer joins
-// a single sustained pitch afterward.
+// Replaces one entry in place, keyed by id; unchanged when the entry is gone.
+// A duration that would overfill the measure is clamped to the largest that
+// fits (the renderer drops overflow). Ties the edit breaks are pruned.
 export function applyEntryUpdate(
   structure: CompositionStructure,
   entry: MusicEntry

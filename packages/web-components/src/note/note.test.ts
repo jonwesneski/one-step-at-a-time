@@ -745,13 +745,9 @@ describe('grace notes', () => {
       NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX
     );
 
-    // Only stemUp and accidental-shown vary. The stem-down + no-accidental
-    // combination is the only one where the main stem sits in the slur's
-    // approach path (the notehead-radius clearance and the stem clearance
-    // both apply — whichever is larger wins), but the accidental-shown case
-    // clears the accidental's own rendered edge, a fixed ~8.5px pullback
-    // that's larger than the stem clearance in this codebase's current
-    // constants — so the accidental case pulls back the most of the three.
+    // Only stemUp and accidental-shown vary. Stem-down without an accidental
+    // clears the main stem; with an accidental, the ~8.5px accidental pullback
+    // is the largest of the three.
     const stemDownNoAccidental = document.createElement(
       MUSIC_NOTE
     ) as NoteElementType;
@@ -824,11 +820,8 @@ describe('grace notes', () => {
         ?.getAttribute('d') ?? '';
 
     it('arcs the slur above every grace head when the group descends in pitch, stem-up main note', () => {
-      // grace="F,E" before main note G4 — the group's pitch trends downward
-      // (first note F higher than last note E). This exact case previously
-      // let the slur cross the second grace note's head; stem-tip anchoring
-      // guarantees the curve stays above every head, not just the two
-      // slur endpoints.
+      // grace="F,E" before main note G4: the group descends, and the slur
+      // must stay above every head, not just the two endpoints.
       const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
       noteElement.setAttribute('note', 'G' satisfies Note);
       noteElement.setAttribute('octave', '4');
@@ -991,12 +984,8 @@ describe('grace notes', () => {
     });
 
     it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
-      // Regression test: createArticulationMarks() draws in the same
-      // 600-unit note-space createNoteSvg uses for the head, and
-      // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
-      // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
-      // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
-      // too large and land outside any clipped viewBox (invisible in-staff).
+      // Grace articulation marks need the head's inner scale(NOTE_SCALE)
+      // inside the grace wrapper, or they render ~1/NOTE_SCALE too large.
       const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
       noteElement.setAttribute('note', 'C' satisfies Note);
       noteElement.setAttribute('octave', '5');
@@ -1744,6 +1733,268 @@ describe('unison part', () => {
     noteElement.unisonPart = null;
 
     expect(noteElement.shadowRoot?.querySelector('.head')).not.toBeNull();
+  });
+});
+
+describe('tremolo', () => {
+  function stemLengthPx(note: HTMLElement): number {
+    const stem = note.shadowRoot!.querySelector('.stem')!;
+    return (
+      Math.abs(
+        Number(stem.getAttribute('y2')) - Number(stem.getAttribute('y1'))
+      ) * NOTE_SCALE
+    );
+  }
+
+  function standaloneNote(duration: DurationType, tremolo?: string) {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('duration', duration);
+    if (tremolo !== undefined) {
+      noteElement.setAttribute('tremolo', tremolo);
+    }
+    document.body.appendChild(noteElement);
+    return noteElement;
+  }
+
+  it('round-trips stroke counts and unmeasured, ignoring anything else with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standaloneNote('quarter');
+    expect(noteElement.tremolo).toBeNull();
+
+    noteElement.tremolo = 3;
+    expect(noteElement.getAttribute('tremolo')).toBe('3');
+    expect(noteElement.tremolo).toBe(3);
+
+    noteElement.tremolo = 'unmeasured';
+    expect(noteElement.tremolo).toBe('unmeasured');
+
+    noteElement.setAttribute('tremolo', '7');
+    expect(noteElement.tremolo).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('tremolo="7"'));
+
+    noteElement.tremolo = null;
+    expect(noteElement.hasAttribute('tremolo')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws one stroke per count through the stem', () => {
+    const noteElement = standaloneNote('quarter', '2');
+    expect(
+      noteElement.shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(2);
+  });
+
+  it('draws unmeasured as three beams’ worth, counting the tail', () => {
+    const noteElement = standaloneNote('eighth', 'unmeasured');
+    expect(
+      noteElement.shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(2);
+  });
+
+  it('lengthens a standalone stem to carry three strokes', () => {
+    const plain = standaloneNote('quarter');
+    const tremolo = standaloneNote('quarter', '3');
+    expect(stemLengthPx(tremolo)).toBeGreaterThan(stemLengthPx(plain));
+  });
+
+  it('puts a semibreve’s strokes beside its head, with no stem', () => {
+    const noteElement = standaloneNote('whole', '3');
+    expect(noteElement.shadowRoot!.querySelector('.stem')).toBeNull();
+    expect(
+      noteElement.shadowRoot!.querySelectorAll('.tremolo-stroke')
+    ).toHaveLength(3);
+  });
+
+  it('warns when the strokes and tails pass a 128th', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    standaloneNote('sixtyfourth', '2');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('128th'));
+    warn.mockRestore();
+  });
+
+  it('dispatches NOTE_Y_CHANGE so the staff re-sizes the stem', () => {
+    const noteElement = standaloneNote('quarter');
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    noteElement.tremolo = 2;
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('lengthens the stem on a staff and redraws the strokes when the value changes', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'G', 5) as unknown as NoteElementType;
+    expect(note.stemExtension).toBe(0);
+
+    note.setAttribute('tremolo', '3');
+
+    expect(note.stemExtension).toBeGreaterThan(0);
+    expect(note.shadowRoot!.querySelectorAll('.tremolo-stroke')).toHaveLength(
+      3
+    );
+
+    note.removeAttribute('tremolo');
+
+    expect(note.stemExtension).toBe(0);
+    expect(note.shadowRoot!.querySelector('.tremolo-stroke')).toBeNull();
+  });
+});
+
+describe('tremolo numeral, label and repeated articulation', () => {
+  function standalone(attributes: Record<string, string>): NoteElementType {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    for (const [name, value] of Object.entries(attributes)) {
+      noteElement.setAttribute(name, value);
+    }
+    document.body.appendChild(noteElement);
+    return noteElement;
+  }
+
+  const stemEnds = (noteElement: HTMLElement) => {
+    const stem = noteElement.shadowRoot!.querySelector('.stem')!;
+    return [
+      Number(stem.getAttribute('y1')) * NOTE_SCALE,
+      Number(stem.getAttribute('y2')) * NOTE_SCALE,
+    ];
+  };
+
+  it('round-trips its attributes, ignoring values that don’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standalone({});
+    expect(noteElement.tremoloTuplet).toBeNull();
+    expect(noteElement.tremoloLabel).toBeNull();
+    expect(noteElement.articulationRepeat).toBe(false);
+    expect(noteElement.tieStyle).toBe('solid');
+
+    noteElement.tremoloTuplet = 6;
+    noteElement.tremoloLabel = 'non-trem';
+    noteElement.articulationRepeat = true;
+    noteElement.tieStyle = 'dotted';
+    expect(noteElement.getAttribute('tremolo-tuplet')).toBe('6');
+    expect(noteElement.getAttribute('tremolo-label')).toBe('non-trem');
+    expect(noteElement.hasAttribute('articulation-repeat')).toBe(true);
+    expect(noteElement.getAttribute('tie-style')).toBe('dotted');
+
+    noteElement.setAttribute('tremolo-tuplet', '1');
+    expect(noteElement.tremoloTuplet).toBeNull();
+    noteElement.setAttribute('tremolo-tuplet', '9'.repeat(309));
+    expect(noteElement.tremoloTuplet).toBeNull();
+    noteElement.setAttribute('tremolo-tuplet', '9007199254740993');
+    expect(noteElement.tremoloTuplet).toBeNull();
+    noteElement.setAttribute('tremolo-label', 'tremolando');
+    expect(noteElement.tremoloLabel).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('tremolo-tuplet="1"')
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('tremolo-label="tremolando"')
+    );
+
+    noteElement.tieStyle = 'solid';
+    expect(noteElement.hasAttribute('tie-style')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws the numeral beyond an up-stem’s tip', () => {
+    const noteElement = standalone({ tremolo: '1', 'tremolo-tuplet': '3' });
+    const numeral = noteElement.shadowRoot!.querySelector('.tremolo-numeral')!;
+    expect(numeral.textContent).toBe('3');
+    expect(Number(numeral.getAttribute('y'))).toBeLessThan(
+      Math.min(...stemEnds(noteElement))
+    );
+  });
+
+  it('draws the numeral beyond a down-stem’s tip', () => {
+    const noteElement = standalone({ tremolo: '1', 'tremolo-tuplet': '3' });
+    noteElement.stemUp = false;
+    const numeral = noteElement.shadowRoot!.querySelector('.tremolo-numeral')!;
+    expect(Number(numeral.getAttribute('y'))).toBeGreaterThan(
+      Math.max(...stemEnds(noteElement))
+    );
+  });
+
+  it('draws no numeral without a stroke count, and says so once connected', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standalone({ 'tremolo-tuplet': '3' });
+    expect(
+      noteElement.shadowRoot!.querySelector('.tremolo-numeral')
+    ).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('needs a tremolo stroke count')
+    );
+    warn.mockRestore();
+  });
+
+  it('draws a standalone label above the note’s ink', () => {
+    const noteElement = standalone({
+      tremolo: '3',
+      'tremolo-label': 'trem',
+    });
+    const label = noteElement.shadowRoot!.querySelector('.tremolo-label')!;
+    expect(label.textContent).toBe('trem.');
+    expect(Number(label.getAttribute('y'))).toBeLessThan(
+      Math.min(...stemEnds(noteElement))
+    );
+  });
+
+  it('repeats the articulation once per repetition', () => {
+    const noteElement = standalone({
+      tremolo: '2',
+      articulation: 'staccato',
+      'articulation-repeat': '',
+    });
+    expect(noteElement.shadowRoot!.querySelectorAll('.staccato')).toHaveLength(
+      4
+    );
+  });
+
+  it('draws the articulation once, with a warning, when the row is too long to write out', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standalone({
+      tremolo: '1',
+      'tremolo-tuplet': '1000',
+      articulation: 'staccato',
+      'articulation-repeat': '',
+    });
+    expect(noteElement.shadowRoot!.querySelectorAll('.staccato')).toHaveLength(
+      1
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('1000 repetitions')
+    );
+    warn.mockRestore();
+  });
+
+  it('dispatches NOTE_Y_CHANGE for a numeral or label and a connector change for a tie style', () => {
+    const noteElement = standalone({});
+    const relayout = jest.fn();
+    const connectors = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, relayout);
+    noteElement.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      connectors
+    );
+
+    noteElement.tremoloTuplet = 3;
+    noteElement.tremoloLabel = 'trem';
+    noteElement.articulationRepeat = true;
+    noteElement.tieStyle = 'dotted';
+
+    expect(relayout).toHaveBeenCalledTimes(3);
+    expect(connectors).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-lays out once when marked as a dotted tie’s end across a barline', () => {
+    const noteElement = standalone({});
+    const relayout = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, relayout);
+
+    noteElement.dottedTieAcrossBarline = true;
+    noteElement.dottedTieAcrossBarline = true;
+
+    expect(noteElement.dottedTieAcrossBarline).toBe(true);
+    expect(relayout).toHaveBeenCalledTimes(1);
   });
 });
 

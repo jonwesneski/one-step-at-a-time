@@ -156,23 +156,11 @@ function expectedNoteTop(
   return `${STAFF_Y_PADDING + staffY - yHeadOffset}px`;
 }
 
+// Built from markup: with createElement + setAttribute, attributeChangedCallback
+// sometimes doesn't fire under jsdom; root cause not diagnosed.
 function makeStaff(voice = 'soprano', keySig = 'C', mode = 'major'): Element {
   document.body.innerHTML = `<${MUSIC_STAFF_VOCAL} voice="${voice}" ${COMMON_ATTRIBUTES.KEY_SIG}="${keySig}" ${COMMON_ATTRIBUTES.MODE}="${mode}" ${COMMON_ATTRIBUTES.TIME}="4/4"></${MUSIC_STAFF_VOCAL}>`;
   return document.body.querySelector(MUSIC_STAFF_VOCAL)!;
-  /**
-   * After change: https://github.com/jonwesneski/one-step-at-a-time/pull/21
-   * I am getting a weird issue where attributeChangedCallback doesn't
-   * fire sometimes when calling setAttribute. It may just be a
-   * js-dom-jest issue or it may be with the code. But keeping this
-   * here in case I want to reproduce and investigate further
-   */
-  // const el = document.createElement('music-staff-vocal') as any;
-  // el.setAttribute('voice', voice);
-  // el.setAttribute('key-sig', 'C');
-  // el.setAttribute('mode', 'major');
-  // el.setAttribute('time', '4/4');
-  // document.body.appendChild(el);
-  // return el;
 }
 
 function renderNote(staff: Element, value: NoteLetterOctave): HTMLElement {

@@ -36,15 +36,9 @@ export type VoiceDirectionInput = {
 };
 
 /**
- * Voice 1 (top) always stems up, voice 2 (bottom) always stems down —
- * unconditionally, not pitch-driven. Voice 3 (middle, only reachable with
- * all three voices active) is contextual — see resolveMiddleVoiceDirection.
- * This is what distinguishes multi-voice stem direction from the
- * pitch-driven single-voice logic in stemRules.ts#determineStemDirections,
- * which is untouched and still used whenever only one voice is active.
- *
- * `staffYsByVoice` is only read for a 3-voice call — omit it (or call with
- * only 1-2 voice numbers) and the 1/2-voice behavior is unchanged.
+ * Voice 1 always stems up and voice 2 down, whatever the pitch; voice 3 is
+ * contextual (resolveMiddleVoiceDirection). `staffYsByVoice` is read only
+ * with three voices.
  */
 export function resolveVoiceDirections(
   voiceNumbers: readonly VoiceNumber[],
@@ -71,20 +65,10 @@ export function resolveVoiceDirections(
 }
 
 /**
- * Contextual middle-voice (voice 3) direction for one measure: for each of
- * voice 3's own elements, finds the concurrently-sounding voice-1 and
- * voice-2 element (nearest by beat-offset — the shared "physical time"
- * coordinate every voice's positions already align on) and measures which
- * neighbor voice 3 sits closer to (smaller staff-Y gap = more crowded).
- * Voice 3 leans AWAY from whichever neighbor crowds it more on a given
- * element — crowds voice 1 (above) -> stems down; crowds voice 2 (below) ->
- * stems up — real engraving practice (never introduce an avoidable stem/
- * notehead collision with a genuine neighboring voice). One direction is
- * then held for every note in the measure (majority vote across voice 3's
- * own elements) rather than flipping per-note, per standard practice. Ties
- * (per-element or overall) break toward 'down', matching voice 3's prior
- * unconditional placeholder so behavior degrades gracefully when there's too
- * little voice-1/voice-2 content in the measure to meaningfully compare.
+ * Voice 3's direction for one measure. For each of its elements, the
+ * nearest-by-beat voice-1 and voice-2 elements are compared, and voice 3
+ * leans away from the closer one (near voice 1: down; near voice 2: up). The
+ * majority holds for the whole measure; ties go 'down'.
  */
 export function resolveMiddleVoiceDirection(
   voice3: readonly VoiceDirectionInput[],

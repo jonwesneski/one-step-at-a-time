@@ -273,14 +273,10 @@ export function resolveConnectorAttributes(
   return result;
 }
 
-// Adds a connector between the endpoints, replacing any existing connector of
-// the same family (tie/slur, or hairpin) on the same endpoints — so a slur and
-// a crescendo can coexist over one pair, but not a tie and a slur — and
-// dropping any other same-kind connector that already starts at startEntryId or
-// ends at endEntryId, since the renderer allows only one role of each kind per
-// element. For hairpins it goes further and drops any same-kind hairpin whose
-// span overlaps the new one: the library's nearest-end pairing can't resolve
-// two overlapping same-kind hairpins (see resolveConnectorAttributes).
+// Adds a connector, replacing one of the same family (tie/slur, or hairpin) on
+// the same endpoints, and dropping same-kind connectors already starting or
+// ending there (one role of each kind per element). Overlapping same-kind
+// hairpins are dropped too, since the renderer can't pair them.
 export function upsertConnector(
   structure: CompositionStructure,
   startEntryId: string,
@@ -354,11 +350,8 @@ export function upsertConnector(
 // `canTie` as the authority — an entry edit (`applyEntryUpdate`) can change a
 // tied note's pitch/octave, a tied chord's notes, or a `<music-clef>` marker that
 // shifts a downstream tie's octave resolution, none of which the editor blocks.
-// A full scan (not just ties touching the edited entry) because a clef edit
-// invalidates ties it doesn't share an endpoint with. Slurs and hairpins carry
-// no pitch constraint and are left alone. Chosen over blocking the edit in
-// `EntryEditInput` to match the delete cascade in `deleteSelectionHelpers.ts` —
-// repair dangling references rather than prevent the mutation.
+// A full scan, since a clef edit breaks ties it doesn't touch. Slurs and
+// hairpins carry no pitch constraint and are left alone.
 export function pruneBrokenTies(
   structure: CompositionStructure
 ): CompositionStructure {
@@ -392,17 +385,8 @@ export function pruneBrokenTies(
   };
 }
 
-// Drops every connector (tie, slur, or hairpin — any kind) whose start or
-// end entry id is in `entryIds`. The kind-agnostic counterpart to
-// `pruneBrokenTies` above: that one re-validates every tie in the structure
-// against `canTie` (needed because a pitch/clef edit can invalidate a tie
-// that doesn't touch the edited entry at all), but has no equivalent for
-// slurs/hairpins, which carry no pitch constraint to re-check — they're
-// simply invalid once either endpoint is gone or has moved to a different
-// voice (the renderer pairs connectors per voice). Mirrors
-// `deleteSelectionHelpers.ts`'s own "drop any tie/slur/hairpin whose start
-// or end entry is gone" filter, generalized for reuse by callers whose
-// entries didn't necessarily get deleted (e.g. moved to another voice).
+// Drops every connector of any kind whose start or end entry id is in
+// `entryIds`: gone, or moved to another voice (connectors pair per voice).
 export function pruneConnectorsForEntries(
   structure: CompositionStructure,
   entryIds: ReadonlySet<string>

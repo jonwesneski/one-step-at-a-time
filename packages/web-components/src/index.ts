@@ -6,6 +6,7 @@ import './measure';
 import './staff'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
 import './staffGuitarTab';
 import './staffVocal';
+import './tremolo';
 import './tuplet';
 import './voice';
 
@@ -57,7 +58,13 @@ export {
   STAFF_GROUPS,
   STEM_DIRECTIONS,
   STRESSES,
+  TIE_STYLES,
   TIMES,
+  TREMOLO_BEAM_ATTACHES,
+  TREMOLO_BEAM_POSITIONS,
+  TREMOLO_LABELS,
+  TREMOLO_STROKE_COUNTS,
+  TREMOLO_VALUES,
   TUPLET_PLACEMENTS,
   TUPLET_RATIOS,
   VOICES,

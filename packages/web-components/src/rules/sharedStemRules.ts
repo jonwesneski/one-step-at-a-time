@@ -17,19 +17,9 @@ export type SharedStemResolution = {
 };
 
 /**
- * Pairs the two ends of each `shared-stem-for` — both hands occasionally
- * playing the same beat simultaneously in otherwise single-part writing,
- * joined by one real stem instead of each drawing its own. Same `id`-lookup
- * shape as `rules/arpeggioRules.ts#resolveArpeggioSpans` (pure,
- * unit-testable, since jsdom's ResizeObserver polyfill never fires, so
- * measure.ts's real render path only executes in browser tests).
- *
- * A pair is formed only by an explicit `shared-stem-for="<id>"` matching
- * another element's `id`; two elements with no such reference never join.
- * Each element is an endpoint of at most one pair — a `shared-stem-for`
- * that references an element already paired is rejected so a stem never
- * branches from a shared notehead. Any failure produces a warning and no
- * pair — both elements then keep drawing their own local stem.
+ * Pairs the two ends of each `shared-stem-for="<id>"`. Each element ends at
+ * most one pair, so a reference to an already-paired element is rejected. A
+ * failure warns and both elements keep their own stems.
  */
 export function resolveSharedStemPairs(
   entries: readonly SharedStemEntry[]

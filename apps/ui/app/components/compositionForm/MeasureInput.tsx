@@ -52,11 +52,8 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
     useMeasureTimeSignatures().get(measureId) ?? structure.timeSig;
 
   const isMeasureSelected = session.selection.measureIds.includes(measureId);
-  // Overfull is checked per voice, not per staff — each voice has its own
-  // independent capacity budget (see measureCapacityHelpers.ts), so summing
-  // across voices before comparing would wrongly flag a staff whose voices
-  // each individually fit. This still can't happen with today's UI (every
-  // staff has exactly one voice), but stays correct once Phase 5 adds more.
+  // Overfull is checked per voice: each voice has its own capacity budget
+  // (measureCapacityHelpers.ts).
   const isOverfull = measure.staffIds.some((sid) => {
     const staff = structure.stavesById[sid];
     return staff?.voiceOrder.some(

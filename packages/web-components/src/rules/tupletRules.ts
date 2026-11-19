@@ -181,16 +181,9 @@ export function getStaffYForIndex(
 }
 
 /**
- * This note/chord's own natural (unbeamed) stem-tip Y, in the staff's local
- * coordinate space — the same quantity computeTupletBracketGeometry's own
- * `beamTipYForIndex` falls back to when no beam renderer covers `index`,
- * factored out so a caller with a real, externally-resolved beam Y (e.g.
- * measure.ts, for a cross-staff double-stemmed beam) can add its own offset
- * to a value guaranteed to align with this staff's own coordinate space,
- * without duplicating the offset formula. Uses this note's own actual
- * rendered direction (`stemDirections[index]`), not a group-level vote —
- * right for a single note's own real tip, unlike the bracket/gap-clearance
- * uses elsewhere in this file that intentionally use the group's vote.
+ * A note/chord's unbeamed stem-tip Y in staff space, from its own direction
+ * (not the group's vote): `beamTipYForIndex`'s fallback, also used to apply
+ * crossStaffTupletBeamY deltas.
  */
 export function naturalStemTipY(
   index: number,
@@ -435,13 +428,8 @@ export function computeTupletBracketGeometry(
     );
   };
 
-  // Push baseY outward past the extreme stem tip so the bracket never
-  // overlaps a stem, beam, or (for a non-beamed group sitting well past the
-  // staff, e.g. ledger-line notes) the noteheads themselves — the nominal
-  // staffBaseY above is only a safe default when the group's notes sit
-  // close to the staff. A no-op (baseY unchanged) whenever the nominal
-  // clearance already suffices, since this only ever pushes baseY further
-  // out via the Math.max/min below.
+  // Push baseY past the extreme stem tip (or notehead) so the bracket clears
+  // notes far outside the staff; only ever moves it outward.
   const nonRestIndicesForClamping = group.indices.filter(
     (i) => elements[i].nodeName !== MUSIC_REST_NODE
   );

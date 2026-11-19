@@ -370,22 +370,14 @@ test.describe('multi-voice staff', () => {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       geometry.svgRect!.bottom + 1
     );
-    // ...and never vertically overlaps voice 1's own notes/stems — the
-    // direct regression check for the reported "bracket crosses through the
-    // other voice" bug.
+    // ...and never vertically overlaps voice 1's own notes/stems.
     for (const noteRect of geometry.voice1NoteRects) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       expect(geometry.groupRect!.top).toBeGreaterThanOrEqual(noteRect.bottom);
     }
 
-    // The bracket's own arm/hook lines never visually overlap the tuplet's
-    // own noteheads — the direct regression check for the "bracket sits at
-    // notehead height, numeral unreadable" bug (a non-beamed tuplet whose
-    // notes sit well past the staff needs baseY clamped past its own
-    // extreme notehead, not just the nominal fixed clearance). A true
-    // rectangle-overlap test, not just a top/bottom edge comparison — a
-    // hook is a short vertical mark anchored to one specific note's own x
-    // position and only needs to clear that note, not the group's worst.
+    // The bracket's arm/hook lines never overlap the tuplet's own noteheads.
+    // A rectangle-overlap test: a hook only needs to clear its own note.
     expect(geometry.bracketRects.length).toBeGreaterThan(0);
     for (const bracketRect of geometry.bracketRects) {
       for (const noteheadRect of geometry.tupletNoteheadRects) {
@@ -472,10 +464,7 @@ test.describe('multi-voice staff', () => {
     expect(result.hairpinWidth).not.toBeNull();
     expect(result.hairpinWidth ?? 0).toBeGreaterThan(0);
 
-    // Voice 2's own dynamic marking never visually overlaps voice 2's own
-    // note/stem — the direct regression check for the "pp sits through the
-    // stem" bug (a fixed baseline that doesn't clear a genuinely low,
-    // down-stem note).
+    // Voice 2's dynamic marking never overlaps its own low, down-stem note.
     expect(result.voice2MarkingRects.length).toBeGreaterThan(0);
     for (const markingRect of result.voice2MarkingRects) {
       for (const noteRect of result.voice2NoteRects) {
@@ -483,11 +472,8 @@ test.describe('multi-voice staff', () => {
       }
     }
 
-    // Voice 1's own dynamic marking renders on its OWN side of the staff
-    // (above, matching its up-stem direction) rather than always below —
-    // the direct regression check for the "voice 1's f overlaps voice 2's
-    // note" bug, and confirms the multi-voice placement convention: never
-    // overlaps voice 2's notes, and sits above voice 2's own marking.
+    // Voice 1's dynamic marking sits above the staff (its stem side): clear
+    // of voice 2's notes and above voice 2's marking.
     expect(result.voice1MarkingRects.length).toBeGreaterThan(0);
     for (const markingRect of result.voice1MarkingRects) {
       for (const noteRect of result.voice2NoteRects) {
@@ -496,13 +482,8 @@ test.describe('multi-voice staff', () => {
       for (const voice2MarkingRect of result.voice2MarkingRects) {
         expect(markingRect.top).toBeLessThan(voice2MarkingRect.top);
       }
-      // Renders within the actual visible page (top >= 0), not clipped
-      // above the viewport — getBoundingClientRect() happily returns a
-      // valid, non-empty rect for an off-screen element too, so this is
-      // the direct regression check for the "correctly positioned in SVG
-      // coordinates, but the page never grew to show it" bug (Fix 9):
-      // above-staff budget must reach the host element's own margin, not
-      // just its internal transcribeContainer viewBox.
+      // Renders within the visible page: the above-staff budget must reach
+      // the host's margin, not just the internal viewBox.
       expect(markingRect.top).toBeGreaterThanOrEqual(0);
     }
   });
@@ -562,11 +543,9 @@ test.describe('multi-voice staff', () => {
     expect(result.lineRect).not.toBeNull();
     expect(result.lineRect?.width ?? 0).toBeGreaterThan(0);
 
-    // Neither the trill sign glyph nor the line ever visually overlaps
-    // voice 1's own notehead/stem — the direct regression check for the
-    // reported "sign/line crosses through the other voice" bug. The sign
-    // is checked separately from the line since they're drawn by two
-    // independent code paths (see #trillLineLiftClearingOtherVoices).
+    // Neither the trill sign nor the line overlaps voice 1's notehead/stem;
+    // they're checked separately since two code paths draw them
+    // (#trillLineLiftClearingOtherVoices).
     for (const noteRect of result.voice1NoteRects) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       expect(rectsOverlap(result.signRect!, noteRect)).toBe(false);
@@ -578,13 +557,8 @@ test.describe('multi-voice staff', () => {
   test("a trill line raises above another voice's own content directly in its horizontal path", async ({
     page,
   }) => {
-    // A trill line's own natural end point is the trilling note's own next
-    // note (see rules/trillRules.ts#resolveTrillSpans' endBeforeIndex) — a
-    // whole-note trill has no next note in its own voice, so its line runs
-    // the full remaining measure width, guaranteeing it crosses voice 1's
-    // later, up-stem note in this span. The direct exercise of
-    // #trillLineYClearingOtherVoices, independent of whether any specific
-    // story's own geometry happens to trigger it.
+    // A whole-note trill has no next note in its voice, so its line runs to
+    // the bar's end, crossing voice 1's later up-stem note.
     await render(
       page,
       `<music-staff clef="treble" time="4/4">
@@ -719,10 +693,8 @@ test.describe('multi-voice staff', () => {
   }) => {
     // Voice 3 crowds voice 1 for 3 of its 4 notes (resolves 'down' overall,
     // same as voice 2), but its last note dips down a diatonic second above
-    // voice 2's own last note — a same-direction collision only reachable
-    // once voice 3's direction is contextual (rules/voiceRules.ts#
-    // computeCrossVoiceDisplacements' same-direction branch, previously
-    // unexercised by any real rendered data).
+    // voice 2's own last note — a same-direction collision
+    // (rules/voiceRules.ts#computeCrossVoiceDisplacements).
     await render(
       page,
       `<music-staff clef="treble" time="4/4">

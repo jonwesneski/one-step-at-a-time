@@ -199,6 +199,15 @@
             },
             {
               "kind": "field",
+              "name": "#dottedTieAcrossBarline",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#trillSignExtraLift",
               "privacy": "private",
               "type": {
@@ -569,6 +578,68 @@
             },
             {
               "kind": "field",
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloTuplet",
+              "type": {
+                "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloLabel",
+              "type": {
+                "text": "TremoloLabel | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationRepeat",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tieStyle",
+              "type": {
+                "text": "TieStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dottedTieAcrossBarline",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloStrokeCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
@@ -854,6 +925,30 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1254,7 +1349,7 @@
               "type": {
                 "text": "StemDirection"
               },
-              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+              "description": "Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
             },
             {
               "name": "notehead",
@@ -1269,6 +1364,41 @@
                 "text": "string"
               },
               "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`."
+            },
+            {
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue"
+              },
+              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member."
+            },
+            {
+              "name": "tremolo-tuplet",
+              "type": {
+                "text": "number"
+              },
+              "description": "Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count."
+            },
+            {
+              "name": "tremolo-label",
+              "type": {
+                "text": "TremoloLabel"
+              },
+              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one."
+            },
+            {
+              "name": "articulation-repeat",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single."
+            },
+            {
+              "name": "tie-style",
+              "type": {
+                "text": "TieStyle"
+              },
+              "description": "`dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`."
             },
             {
               "type": {
@@ -1520,6 +1650,30 @@
               "kind": "method",
               "name": "#redrawConnectors",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#markDottedTiesAcrossBarlines",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "noteLikeElements",
+                  "type": {
+                    "text": "readonly Element[]"
+                  }
+                },
+                {
+                  "name": "pairs",
+                  "type": {
+                    "text": "readonly ConnectorPair[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -2073,6 +2227,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRedrawCrossStaffTremolos",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "#boundLayoutSystemDecorations",
               "privacy": "private"
             },
@@ -2569,6 +2728,25 @@
             },
             {
               "kind": "method",
+              "name": "#redrawCrossStaffTremolos",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
+              "name": "#lastCrossStaffTremoloWarnings",
+              "privacy": "private",
+              "type": {
+                "text": "string"
+              },
+              "default": "''"
+            },
+            {
+              "kind": "method",
+              "name": "#redrawCrossStaffTremolosImpl",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
               "name": "#redrawCrossStaffTuplets",
               "privacy": "private"
             },
@@ -2889,6 +3067,15 @@
                 "text": "number"
               },
               "default": "0"
+            },
+            {
+              "kind": "field",
+              "name": "#dottedTieAcrossBarline",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
             },
             {
               "kind": "field",
@@ -3301,6 +3488,68 @@
             },
             {
               "kind": "field",
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloTuplet",
+              "type": {
+                "text": "number | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloLabel",
+              "type": {
+                "text": "TremoloLabel | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationRepeat",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tieStyle",
+              "type": {
+                "text": "TieStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dottedTieAcrossBarline",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawnStemExtension",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "sharedStemFor",
               "type": {
                 "text": "string | null"
@@ -3567,6 +3816,30 @@
                   "text": "void"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -3967,7 +4240,7 @@
               "type": {
                 "text": "StemDirection"
               },
-              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
+              "description": "Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged."
             },
             {
               "name": "notehead",
@@ -3982,6 +4255,41 @@
                 "text": "string"
               },
               "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`."
+            },
+            {
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue"
+              },
+              "description": "Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member."
+            },
+            {
+              "name": "tremolo-tuplet",
+              "type": {
+                "text": "number"
+              },
+              "description": "Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count."
+            },
+            {
+              "name": "tremolo-label",
+              "type": {
+                "text": "TremoloLabel"
+              },
+              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one."
+            },
+            {
+              "name": "articulation-repeat",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single."
+            },
+            {
+              "name": "tie-style",
+              "type": {
+                "text": "TieStyle"
+              },
+              "description": "`dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`."
             },
             {
               "type": {
@@ -4337,6 +4645,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffTremoloRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#crossStaffDynamicsOverrides",
               "privacy": "private",
               "type": {
@@ -4562,6 +4883,19 @@
             },
             {
               "kind": "field",
+              "name": "#tremoloLabelContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -4590,6 +4924,15 @@
             {
               "kind": "field",
               "name": "#boundNoteYChange",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundTremoloChange",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -4759,6 +5102,17 @@
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTremoloRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -5232,6 +5586,28 @@
             },
             {
               "kind": "method",
+              "name": "#crossStaffTremoloRoleOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "CrossStaffTremoloRole | undefined"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#buildVoiceRenderState",
               "privacy": "private",
               "return": {
@@ -5268,6 +5644,12 @@
                   "name": "arpeggioGroups",
                   "type": {
                     "text": "ArpeggioGroupPlacement[]"
+                  }
+                },
+                {
+                  "name": "tremoloGroups",
+                  "type": {
+                    "text": "TremoloGroupPlacement[]"
                   }
                 },
                 {
@@ -6088,6 +6470,118 @@
             },
             {
               "kind": "method",
+              "name": "#renderTremoloLabels",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelBaselineY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelInkTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#renderDynamics",
               "privacy": "private",
               "return": {
@@ -6663,6 +7157,40 @@
                 {
                   "name": "skipSharedBeamNumerals",
                   "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletGroupExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -7578,7 +8106,7 @@
                   }
                 }
               ],
-              "description": "Force-upgrade slotted `<music-*>` children (and any nested inside a\n`<music-tuplet>`) before the staff reads their getters. When a staff is\nbuilt from parsed HTML markup its `connectedCallback` runs — and dispatches\nthe first `slotchange` — before its already-present children upgrade, so\nwithout this their getters (`grace`, `note`, `duration`, …) are `undefined`.\n`customElements.upgrade()` is synchronous and a no-op on an already-upgraded\nor unregistered element.",
+              "description": "Upgrades slotted `<music-*>` children before their getters are read: from\nparsed markup, the staff connects before its children upgrade.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -8478,7 +9006,7 @@
                   }
                 }
               ],
-              "description": "Force-upgrade slotted `<music-*>` children (and any nested inside a\n`<music-tuplet>`) before the staff reads their getters. When a staff is\nbuilt from parsed HTML markup its `connectedCallback` runs — and dispatches\nthe first `slotchange` — before its already-present children upgrade, so\nwithout this their getters (`grace`, `note`, `duration`, …) are `undefined`.\n`customElements.upgrade()` is synchronous and a no-op on an already-upgraded\nor unregistered element.",
+              "description": "Upgrades slotted `<music-*>` children before their getters are read: from\nparsed markup, the staff connects before its children upgrade.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -9060,6 +9588,19 @@
             },
             {
               "kind": "field",
+              "name": "#crossStaffTremoloRoles",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#crossStaffDynamicsOverrides",
               "privacy": "private",
               "type": {
@@ -9285,6 +9826,19 @@
             },
             {
               "kind": "field",
+              "name": "#tremoloLabelContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -9313,6 +9867,15 @@
             {
               "kind": "field",
               "name": "#boundNoteYChange",
+              "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundTremoloChange",
               "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -9482,6 +10045,17 @@
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crossStaffTremoloRoles",
+              "type": {
+                "text": "ReadonlyMap<\n    TremoloElementType,\n    CrossStaffTremoloRole\n  > | null"
               },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
@@ -9955,6 +10529,28 @@
             },
             {
               "kind": "method",
+              "name": "#crossStaffTremoloRoleOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "CrossStaffTremoloRole | undefined"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#buildVoiceRenderState",
               "privacy": "private",
               "return": {
@@ -9991,6 +10587,12 @@
                   "name": "arpeggioGroups",
                   "type": {
                     "text": "ArpeggioGroupPlacement[]"
+                  }
+                },
+                {
+                  "name": "tremoloGroups",
+                  "type": {
+                    "text": "TremoloGroupPlacement[]"
                   }
                 },
                 {
@@ -10824,6 +11426,118 @@
             },
             {
               "kind": "method",
+              "name": "#renderTremoloLabels",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelBaselineY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelInkTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloLabelTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#renderDynamics",
               "privacy": "private",
               "return": {
@@ -11399,6 +12113,40 @@
                 {
                   "name": "skipSharedBeamNumerals",
                   "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tupletGroupExtremeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "group",
+                  "type": {
+                    "text": "TupletGroup"
+                  }
+                },
+                {
+                  "name": "stemUp",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -12300,7 +13048,7 @@
                   }
                 }
               ],
-              "description": "Force-upgrade slotted `<music-*>` children (and any nested inside a\n`<music-tuplet>`) before the staff reads their getters. When a staff is\nbuilt from parsed HTML markup its `connectedCallback` runs — and dispatches\nthe first `slotchange` — before its already-present children upgrade, so\nwithout this their getters (`grace`, `note`, `duration`, …) are `undefined`.\n`customElements.upgrade()` is synchronous and a no-op on an already-upgraded\nor unregistered element.",
+              "description": "Upgrades slotted `<music-*>` children before their getters are read: from\nparsed markup, the staff connects before its children upgrade.",
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -12534,6 +13282,126 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/tremolo/tremolo.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "A two-note (or multi-note) tremolo: wraps two or more `<music-note>` /\n`<music-chord>` children, each written at the tremolo's full duration,\nthat alternate for that duration once between them. Each member takes an\nequal share of the bar (the second of two sits halfway through), and the\nstaff joins them with tremolo beams. The wrapper itself is layout-only.",
+          "name": "TremoloElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#childObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "strokes",
+              "type": {
+                "text": "TremoloStrokeCount"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamAttach",
+              "type": {
+                "text": "TremoloBeamAttach | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamPosition",
+              "type": {
+                "text": "TremoloBeamPosition | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloGroup",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "flatElements",
+              "type": {
+                "text": "NoteChordOrRestElementType[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "#notify",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            }
+          ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "strokes",
+              "type": {
+                "text": "TremoloStrokeCount"
+              },
+              "description": "Number of tremolo beams between the notes (`1`–`4`), on top of the notes' own beams (a quaver tremolo keeps its quaver beam). Defaults to `3`."
+            },
+            {
+              "name": "beam-attach",
+              "type": {
+                "text": "TremoloBeamAttach"
+              },
+              "description": "For a minim tremolo, which beams join the stems: `all` or only the `outer` one. Unset leaves every beam detached, as for every other value. Ignored, with a warning, on other note values."
+            },
+            {
+              "name": "beam-position",
+              "type": {
+                "text": "TremoloBeamPosition"
+              },
+              "description": "`between` places the beams between the noteheads, each note keeping its own stem direction, for two notes an octave or more apart. Ignored, with a warning, otherwise."
+            },
+            {
+              "name": "tremolo-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` shared by one `<music-tremolo>` on each of a measure's two adjacent grand-staff staves, joining them into one tremolo between the hands. Each wrapper holds its own staff's notes plus `<music-rest hidden>` for the other hand's. Requires a `<music-measure>` ancestor; standalone, each wrapper renders as an ordinary tremolo."
+            }
+          ],
+          "superclass": {
+            "name": "HTMLElement"
+          },
+          "tagName": "music-tremolo",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_TREMOLO",
+          "declaration": {
+            "name": "TremoloElement",
+            "module": "src/tremolo/tremolo.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/tuplet/tuplet.ts",
       "declarations": [
         {
@@ -12625,7 +13493,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\narpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice — today's behavior,\nunchanged) or two-or-three, wrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\ntremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice) or two-or-three,\nwrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
           "name": "VoiceElement",
           "members": [
             {

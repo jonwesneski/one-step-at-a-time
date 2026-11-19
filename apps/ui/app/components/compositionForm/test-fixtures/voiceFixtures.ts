@@ -8,8 +8,7 @@ export function buildVoice(id: string, entryIds: string[]): NormalizedVoice {
   return { id, entryIds };
 }
 
-// A staff with exactly one voice — the shape every staff has today, since
-// nothing in the app's UI can create a second voice yet.
+// A staff with exactly one voice.
 export function buildSingleVoiceStaff(
   id: string,
   entryIds: string[],

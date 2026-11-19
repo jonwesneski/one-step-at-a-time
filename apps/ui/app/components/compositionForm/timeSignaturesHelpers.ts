@@ -4,12 +4,9 @@ import { staffEntryIds } from './voiceHelpers';
 
 // The time signature is a positional value: `structure.timeSig` is the
 // composition (measure 1) time signature, and any later measure may carry a
-// sparse `time` override that holds from that measure until the next override.
-// This mirrors the library's staff → measure → composition `time` inheritance
-// (`staffBase.ts` resolveInheritedValue), except the app resolves the effective
-// time signature itself and writes it explicitly onto every `<music-measure>`, so
-// there is no inheritance ambiguity and none of the measure-1-goes-stale runtime
-// gap the library has when its composition `time` changes.
+// sparse `time` override that holds until the next one. The app writes the
+// effective value onto every `<music-measure>` rather than relying on the
+// library's inheritance.
 
 // Effective time signature of every measure, aligned with `structure.measureOrder`.
 export function effectiveTimeSignatures(

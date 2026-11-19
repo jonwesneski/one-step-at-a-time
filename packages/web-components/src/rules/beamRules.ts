@@ -1,16 +1,22 @@
-import {
+import type {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
+  TremoloGroupPlacement,
   TupletElementType,
 } from '../types/elements';
-import {
+import type {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
+  TremoloValue,
 } from '../types/theory';
-import { BeamsBuilder, type NoteYPosition } from '../utils';
-import { MUSIC_NOTE_NODE } from '../utils/consts';
+import {
+  BeamsBuilder,
+  type NoteYPosition,
+  type TremoloBeamGroupSpec,
+} from '../utils';
+import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
 import {
   BEAM_ESTIMATE_NOTE_SPACING_PX,
   KNEED_BEAM_TRIGGER_STEM_PX,
@@ -20,9 +26,14 @@ import {
   resolveKneedBeamPlacement,
   resolveKneedBeamSplit,
 } from './beamPlacementRules';
-import { durationContribution } from './beatRules';
+import { computeTremoloScaleByIndex, durationContribution } from './beatRules';
 import { determineStemDirections } from './stemRules';
 import { durationToFlagCountMap } from './theoryConsts';
+import {
+  acceptsBeamAttach,
+  beamedTremoloMinimumStemPx,
+  canPlaceTremoloBetween,
+} from './tremoloRules';
 
 export function buildBeamsRenderer(
   elements: NoteChordOrRestElementType[],
@@ -37,7 +48,8 @@ export function buildBeamsRenderer(
   crossStaffStemOverrides?: ReadonlyMap<NoteChordOrRestElementType, boolean>,
   // Where mid-stream clef changes take effect, in the same beat-offset space
   // as `elements` (a change applies to entries starting at or after it).
-  clefChangeBeatOffsets: readonly number[] = []
+  clefChangeBeatOffsets: readonly number[] = [],
+  tremoloGroups: readonly TremoloGroupPlacement[] = []
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -45,16 +57,32 @@ export function buildBeamsRenderer(
 } {
   // A `<music-arpeggio>` run note's zero contribution keeps the whole run
   // inside one beat-group window (it cannot straddle an edge).
+  const tremoloScaleByIndex = computeTremoloScaleByIndex(tremoloGroups);
   const elementDurationFactors = elements.map((element, i) =>
-    durationContribution(element, i, tupletsByIndex, arpeggioRunIndices)
+    durationContribution(
+      element,
+      i,
+      tupletsByIndex,
+      arpeggioRunIndices,
+      tremoloScaleByIndex
+    )
   );
   const beatOffsets =
     elementBeatOffsets ?? cumulativeOffsets(elementDurationFactors);
+  const headExtents = elements.map((element) =>
+    headStaffYExtent(element, noteStaffYCoords, chordStaffYCoords)
+  );
   const beamsBuilder = new BeamsBuilder(
     elements,
     timeSig,
     beatOffsets,
-    externallyBeamedIndices
+    externallyBeamedIndices,
+    resolveTremoloBeamSpecs(
+      elements,
+      tremoloGroups,
+      headExtents,
+      externallyBeamedIndices ?? new Set()
+    )
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -76,19 +104,8 @@ export function buildBeamsRenderer(
         forcedDirections: crossStaffStemOverrides,
       }
     );
-  // crossStaffStemOverrides (the ancestor <music-measure>'s own
-  // double-stemmed-beam resolution) is a sparse overlay applied on top of
-  // whichever base policy above produced — it needs BeamsBuilder's own
-  // beam-group data (via determineStemDirections) to exist first, so it
-  // can't be folded into stemDirectionsOverride itself without duplicating
-  // that construction at the call site. Keyed by the element itself, not a
-  // positional index: the ancestor <music-measure> resolves it from a
-  // staff-flat DOM traversal, but `elements` here is this one voice's own
-  // local array (staffClassicalBase.ts#buildVoiceRenderState) — those two
-  // index spaces only coincide for a single-voice staff, so an index-keyed
-  // map would silently misapply on a multi-voice one. Object identity
-  // sidesteps the mismatch entirely, since both sides reference the same
-  // live DOM elements.
+  // crossStaffStemOverrides overlays the base policy. Keyed by element, since
+  // `elements` is one voice's local array, not the measure's staff-wide one.
   const stemDirections = crossStaffStemOverrides
     ? baseStemDirections.map(
         (d, i) => crossStaffStemOverrides.get(elements[i]) ?? d
@@ -103,9 +120,6 @@ export function buildBeamsRenderer(
     );
   }
 
-  const headExtents = elements.map((element) =>
-    headStaffYExtent(element, noteStaffYCoords, chordStaffYCoords)
-  );
   if (stemDirectionsOverride === undefined) {
     applyKneedBeams(
       elements,
@@ -120,7 +134,7 @@ export function buildBeamsRenderer(
 
   const noteYPositions: (NoteYPosition | null)[] = elements.map(
     (element, i) => {
-      if (!beamsBuilder.isBeamed(i)) {
+      if (!beamsBuilder.needsYPosition(i)) {
         return null;
       }
       const stemUp = stemDirections[i];
@@ -129,6 +143,12 @@ export function buildBeamsRenderer(
         stemUp,
         highestHeadStaffY: highest,
         lowestHeadStaffY: lowest,
+        minimumStemPx: beamedTremoloMinimumStemPx({
+          tremolo: tremoloOf(element),
+          duration: element.duration,
+          nearestHeadY: stemUp ? highest : lowest,
+          stemUp,
+        }),
       };
     }
   );
@@ -155,11 +175,19 @@ function headStaffYExtent(
   return { highest: Math.min(...staffYs), lowest: Math.max(...staffYs) };
 }
 
+function tremoloOf(element: NoteChordOrRestElementType): TremoloValue | null {
+  return element.nodeName === MUSIC_REST_NODE
+    ? null
+    : (element as NoteElementType | ChordElementType).tremolo ?? null;
+}
+
 // A wide-interval group whose one-direction beam would need a very long stem
 // takes a beam between its noteheads instead, with stems both ways, when that
 // fits however the notes end up spaced. Only pitch-driven groups qualify: a
 // forced direction keeps its beam, and so does a group a clef change falls
-// inside, since the clef sits in the stave where a kneed beam would run.
+// inside, since the clef sits in the stave where a kneed beam would run. A
+// group with tremolo strokes keeps its beam too: the strokes need the stem
+// length a kneed beam takes away.
 function applyKneedBeams(
   elements: NoteChordOrRestElementType[],
   beamsBuilder: BeamsBuilder,
@@ -176,7 +204,14 @@ function applyKneedBeams(
       continue;
     }
     group.forEach((index) => visited.add(index));
-    if (group.some((index) => forcedDirections?.has(elements[index]))) {
+    if (
+      group.some(
+        (index) =>
+          forcedDirections?.has(elements[index]) ||
+          tremoloOf(elements[index]) !== null ||
+          beamsBuilder.isTremoloMember(index)
+      )
+    ) {
       continue;
     }
     const firstBeat = beatOffsets[group[0]];
@@ -264,5 +299,82 @@ function applyOverridesToWholeBeamGroups(
     for (const index of group) {
       stemDirections[index] = forced[0];
     }
+  }
+}
+
+// Flattening keeps any <music-tremolo> whose children can make one; what its
+// beams can do depends on the members' pitches and value, checked here. A
+// wrapper the measure joins across staves, or one with a single note on this
+// staff, has no beams of its own.
+function resolveTremoloBeamSpecs(
+  elements: readonly NoteChordOrRestElementType[],
+  groups: readonly TremoloGroupPlacement[],
+  headExtents: readonly { highest: number; lowest: number }[],
+  // Members the measure beams across both staves (a tremolo-group).
+  externallyBeamedIndices: ReadonlySet<number>
+): TremoloBeamGroupSpec[] {
+  const specs: TremoloBeamGroupSpec[] = [];
+  for (const { memberIndices, element } of groups) {
+    const notes = memberIndices.filter(
+      (index) =>
+        elements[index] !== undefined &&
+        elements[index].nodeName !== MUSIC_REST_NODE &&
+        !externallyBeamedIndices.has(index)
+    );
+    if (notes.length < 2) {
+      continue;
+    }
+    const duration = elements[notes[0]].duration;
+    const warnings: string[] = [];
+    let beamAttach = element.beamAttach;
+    if (beamAttach !== null && !acceptsBeamAttach(duration)) {
+      warnings.push(
+        `beam-attach only applies to minims; ignoring it on a ${duration} tremolo`
+      );
+      beamAttach = null;
+    }
+    let between = element.beamPosition === 'between';
+    if (between) {
+      const extentYs = (index: number) => [
+        headExtents[index].highest,
+        headExtents[index].lowest,
+      ];
+      const fits =
+        notes.length === 2 &&
+        (durationToFlagCountMap.get(duration) ?? 0) === 0 &&
+        canPlaceTremoloBetween(extentYs(notes[0]), extentYs(notes[1]));
+      if (!fits) {
+        warnings.push(
+          'beam-position="between" needs two unbeamed notes an octave or more apart; placing the beams between the stems'
+        );
+        between = false;
+      }
+    }
+    warnOncePerTremolo(
+      element,
+      warnings.length > 0 ? `[music-tremolo] ${warnings.join('; ')}` : null
+    );
+    specs.push({
+      memberIndices: notes,
+      duration,
+      strokes: element.strokes,
+      beamAttach,
+      between,
+    });
+  }
+  return specs;
+}
+
+// Beams are rebuilt on every render; a wrapper's warning repeats only once
+// its text changes.
+const lastTremoloWarnings = new WeakMap<Element, string>();
+function warnOncePerTremolo(element: Element, warning: string | null): void {
+  if (warning === null) {
+    lastTremoloWarnings.delete(element);
+    return;
+  }
+  if (lastTremoloWarnings.get(element) !== warning) {
+    lastTremoloWarnings.set(element, warning);
+    console.warn(warning);
   }
 }

@@ -1,7 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index';
-import { ARTICULATIONS, DURATIONS, NOTEHEADS, STRESSES } from '../utils';
+import {
+  ARTICULATIONS,
+  DURATIONS,
+  NOTEHEADS,
+  STRESSES,
+  TREMOLO_VALUES,
+} from '../utils';
 
 const meta: Meta = {
   title: 'Note',
@@ -98,6 +104,25 @@ export const ArticulationGallery: Story = {
       <music-note articulation="accent-fermata"></music-note>
       <music-note stress="stressed"></music-note>
       <music-note stress="unstressed"></music-note>
+    </div>
+  `,
+};
+
+export const WithTremolo: Story = {
+  args: {
+    duration: 'quarter',
+    tremolo: 3,
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+    tremolo: { control: 'select', options: TREMOLO_VALUES },
+  },
+  render: (args) => html`
+    <div style="padding: 40px">
+      <music-note
+        duration=${args.duration}
+        tremolo=${args.tremolo}
+      ></music-note>
     </div>
   `,
 };

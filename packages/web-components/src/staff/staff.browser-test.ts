@@ -599,7 +599,7 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
 
     expect(Math.abs(slur.left - firstNoteCenter)).toBeLessThan(20);
     expect(Math.abs(slur.right - lastNoteCenter)).toBeLessThan(20);
-    // The cross-row split bug would run one half to the staff's right edge.
+    // A slur split across rows would run one half to the staff's right edge.
     expect(geometry.staffRight - slur.right).toBeGreaterThan(40);
   });
 
@@ -1389,8 +1389,7 @@ test.describe(`${MUSIC_STAFF} beat-proportional spacing`, () => {
     // Position is the entry's beat-offset as a fraction of the measure's
     // FIXED capacity (4 beats), not a fraction of "however many entries
     // exist" — note 2 starts at beat 1 of 4, i.e. 25% of the notes area,
-    // not 50% (the original bug: stretching to fill regardless of how much
-    // of the measure is actually used).
+    // not 50%.
     await buildStaffWithDurations(page, ['quarter', 'quarter']);
 
     const lefts = await readNoteLefts(page);
@@ -1406,9 +1405,7 @@ test.describe(`${MUSIC_STAFF} beat-proportional spacing`, () => {
     page,
   }) => {
     // 4 quarter notes exactly fill a 4/4 measure: beats 0, 1, 2, 3 of 4 ->
-    // 0%, 25%, 50%, 75% of the notes area — the direct regression case for
-    // "4 quarter notes bunch near the start of a wide staff instead of
-    // filling it."
+    // 0%, 25%, 50%, 75% of the notes area.
     await buildStaffWithDurations(page, [
       'quarter',
       'quarter',

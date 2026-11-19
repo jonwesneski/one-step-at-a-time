@@ -106,7 +106,7 @@ describe('computeMeasureProportionalOffsets (position)', () => {
   });
 
   it('is independent of how many other entries exist, unlike distributing among current entries', () => {
-    // the core original bug: 2 quarter notes should land at 25%, not 50%
+    // 2 quarter notes land at 25%, not 50%
     const offsets = computeMeasureProportionalOffsets([0, 0.25], 1, 800);
     expect(offsets[1]).toBeCloseTo(0.25 * 800);
     expect(offsets[1]).not.toBeCloseTo(0.5 * 800);

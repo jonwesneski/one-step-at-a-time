@@ -36,8 +36,14 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
   TieValue,
   TimeSignature,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
+  TremoloLabel,
+  TremoloStrokeCount,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -118,6 +124,12 @@ declare module 'react' {
         hidden?: boolean;
       };
       'music-voice': WebComponentProps;
+      'music-tremolo': WebComponentProps & {
+        strokes?: TremoloStrokeCount;
+        'beam-attach'?: TremoloBeamAttach;
+        'beam-position'?: TremoloBeamPosition;
+        'tremolo-group'?: string;
+      };
       'music-tuplet': WebComponentProps & {
         ratio?: TupletRatio;
         'tuplet-group'?: string;
@@ -177,6 +189,11 @@ declare module 'react' {
         'slur-group'?: string;
         'stem-direction'?: StemDirection;
         notehead?: NoteheadType;
+        tremolo?: TremoloValue;
+        'tremolo-tuplet'?: number;
+        'tremolo-label'?: TremoloLabel;
+        'articulation-repeat'?: boolean;
+        'tie-style'?: TieStyle;
       };
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
@@ -228,6 +245,11 @@ declare module 'react' {
         'slur-group'?: string;
         'stem-direction'?: StemDirection;
         notehead?: NoteheadType;
+        tremolo?: TremoloValue;
+        'tremolo-tuplet'?: number;
+        'tremolo-label'?: TremoloLabel;
+        'articulation-repeat'?: boolean;
+        'tie-style'?: TieStyle;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

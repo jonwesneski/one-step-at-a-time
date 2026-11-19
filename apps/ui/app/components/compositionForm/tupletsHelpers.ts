@@ -13,12 +13,9 @@ import { isPitchedEntry } from './types';
 
 // Tuplet resolution for the composition form. A tuplet groups a contiguous run
 // of entries within one staff; membership is a flat `tupletId` on each entry,
-// order comes from `staff.entryIds`. Mirrors the shape of staffGroupsHelpers.ts — this
-// app is the sole writer, so the helpers only handle well-formed data.
-//
-// The library renderer wants each `<music-tuplet>` as a direct child of
-// `<music-staff>`, and rejects a `<music-clef>` inside one — so a run never
-// spans a clef entry (see resolveTupletRuns).
+// order comes from `staff.entryIds`. Only well-formed data is handled. A run
+// never spans a clef entry, since a `<music-tuplet>` can't hold a
+// `<music-clef>`.
 
 export type TupletRun = {
   tupletId: string | null;

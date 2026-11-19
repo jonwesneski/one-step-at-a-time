@@ -33,13 +33,8 @@ export function isOctaveRaise(amount: OctaveShiftAmount): boolean {
 }
 
 /**
- * The real staff-Y of the most extreme pitched member in a span — the
- * topmost (smallest) Y for a raise span, the bottommost (largest) Y for a
- * lower span. A rest member contributes nothing (`getStaffYsForIndex`
- * returns `[]` for one); a chord member contributes every one of its
- * simultaneous pitches, so only that chord's own most-extreme note ends up
- * selected. Returns `null` when the span has no pitched member at all
- * (every member a rest) — callers fall back to a fixed nominal position.
+ * The most extreme staff-Y in a span (topmost for a raise, bottommost for a
+ * lower), over every chord tone; null when every member is a rest.
  */
 export function resolveOctaveSpanExtremalStaffY(
   span: OctaveSpan,
@@ -55,16 +50,9 @@ export function resolveOctaveSpanExtremalStaffY(
 
 /**
  * Resolves octave-transposition spans over a flat element stream with a
- * single forward scan, maintaining "currently open span" state. An
- * `octave-shift` value equal to the currently-open span's own amount is a
- * no-op continuation (not a restart) — an author restating the same value on
- * every note of a phrase out of habit must not fragment the span. A rest
- * never opens, closes, or carries an amount itself; it simply passes through
- * as a member of whatever span is currently open, if any.
- *
- * `loco` takes precedence over `octave-stop` when both are set on the same
- * element: it closes the span first, so the `octave-stop` check that follows
- * sees `open === null` and becomes a no-op rather than double-closing it.
+ * single forward scan. Restating the open span's amount continues it rather
+ * than restarting. A rest only passes through as a member. `loco` wins over
+ * `octave-stop` on the same element.
  */
 export function resolveOctaveSpans(elements: readonly OctaveSpanElement[]): {
   spans: OctaveSpan[];
@@ -167,18 +155,9 @@ const measureIndexOfGlobalIndex = (
 };
 
 /**
- * Given an `OctaveSpan` resolved over a staff-track's global element array
- * (the concatenation of every measure's own note/chord/rest stream, in row
- * order), returns the additional segments needed in measures *after* the one
- * the span started in. Empty when the span never leaves its starting
- * measure — that case is already fully drawn by that measure's own
- * staff-local render pass. Simpler than trill's own
- * `resolveTrillContinuationSegments`: an octave span has no tie chain to
- * walk — `startIndex`/`stopIndex` are already fully resolved by
- * `resolveOctaveSpans`, so this is pure index math over the measure
- * boundaries. Pure; the caller supplies real geometry per segment
- * (`staffClassicalBase.ts` for the starting measure, `composition.ts` for
- * every measure this returns).
+ * For a span resolved over a staff-track's concatenated elements, the
+ * segments needed in measures after the starting one (whose staff draws its
+ * own part). Empty when the span stays in its measure.
  */
 export function resolveOctaveContinuationSegments(
   measureBoundaries: readonly OctaveMeasureBoundary[],

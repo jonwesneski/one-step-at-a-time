@@ -22,6 +22,12 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
+  TremoloLabel,
+  TremoloStrokeCount,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -46,6 +52,12 @@ import {
   STAFF_GROUPS,
   STEM_DIRECTIONS,
   STRESSES,
+  TIE_STYLES,
+  TREMOLO_BEAM_ATTACHES,
+  TREMOLO_BEAM_POSITIONS,
+  TREMOLO_LABELS,
+  TREMOLO_STROKE_COUNTS,
+  TREMOLO_VALUES,
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
@@ -72,6 +84,14 @@ const VALID_OCTAVE_SHIFT_AMOUNTS = new Set<string>(OCTAVE_SHIFT_AMOUNTS);
 const VALID_OCTAVE_DISPLAY_MODES = new Set<string>(OCTAVE_DISPLAY_MODES);
 const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
 const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
+const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
+const VALID_TREMOLO_LABELS = new Set<string>(TREMOLO_LABELS);
+const VALID_TIE_STYLES = new Set<string>(TIE_STYLES);
+const VALID_TREMOLO_STROKE_COUNTS = new Set<string>(
+  TREMOLO_STROKE_COUNTS.map(String)
+);
+const VALID_TREMOLO_BEAM_ATTACHES = new Set<string>(TREMOLO_BEAM_ATTACHES);
+const VALID_TREMOLO_BEAM_POSITIONS = new Set<string>(TREMOLO_BEAM_POSITIONS);
 const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
@@ -253,8 +273,7 @@ export const parseRestStaffSide = (
   return null;
 };
 
-// No default: null means "no author override," resolved by today's
-// existing pitch-driven/voice/beam-group stem direction logic unchanged.
+// No default: null means no author override.
 export const parseStemDirection = (
   value: string | null
 ): StemDirection | null => {
@@ -263,6 +282,54 @@ export const parseStemDirection = (
   }
   return null;
 };
+
+// Stroke counts arrive as attribute strings (`"2"`); `unmeasured` stays a word.
+export const parseTremolo = (value: string | null): TremoloValue | null => {
+  if (value === null || !VALID_TREMOLO_VALUES.has(value)) {
+    return null;
+  }
+  return value === 'unmeasured' ? value : (Number(value) as TremoloValue);
+};
+
+// A whole number of at least 2, written as an attribute string.
+export const parseTremoloTuplet = (value: string | null): number | null => {
+  if (value === null || !/^\d+$/.test(value.trim())) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 2 ? parsed : null;
+};
+
+export const parseTremoloLabel = (value: string | null): TremoloLabel | null =>
+  value !== null && VALID_TREMOLO_LABELS.has(value)
+    ? (value as TremoloLabel)
+    : null;
+
+// A two-note tremolo's beam count; null when unset or not 1–4.
+export const parseTremoloStrokes = (
+  value: string | null
+): TremoloStrokeCount | null =>
+  value !== null && VALID_TREMOLO_STROKE_COUNTS.has(value)
+    ? (Number(value) as TremoloStrokeCount)
+    : null;
+
+export const parseTremoloBeamAttach = (
+  value: string | null
+): TremoloBeamAttach | null =>
+  value !== null && VALID_TREMOLO_BEAM_ATTACHES.has(value)
+    ? (value as TremoloBeamAttach)
+    : null;
+
+export const parseTremoloBeamPosition = (
+  value: string | null
+): TremoloBeamPosition | null =>
+  value !== null && VALID_TREMOLO_BEAM_POSITIONS.has(value)
+    ? (value as TremoloBeamPosition)
+    : null;
+
+// Defaults to a solid tie.
+export const parseTieStyle = (value: string | null): TieStyle =>
+  value !== null && VALID_TIE_STYLES.has(value) ? (value as TieStyle) : 'solid';
 
 export const parseOctaveContinuationMode = (
   value: string | null
@@ -367,14 +434,10 @@ export const parseGraceNoteheads = (
   );
 };
 
-// Shared setter body for the array-valued grace properties (`grace`,
-// `graceOctave`, `graceArticulation`). The matching attribute is always a
-// comma-separated string, but the property accepts either that string (React
-// sets the JSX prop as a property; Storybook `control: 'text'` does too) or the
-// rich array (vanilla JS). Returns the attribute string to write, or null to
-// remove the attribute. A string is first routed through the element's own
-// parser so an invalid list is rejected the same way as one set via
-// `setAttribute`.
+// Setter body for the array-valued grace properties, which accept a
+// comma-separated string (as React and Storybook set them) or an array.
+// Returns the attribute string, or null to remove it; a string is validated
+// by `parse` first.
 export const graceListToAttr = (
   value: readonly (string | number | null)[] | string | null,
   parse: (value: string | null) => readonly (string | number | null)[] | null

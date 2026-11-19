@@ -95,17 +95,34 @@ export function createTupletBracketSvg(
     }
   }
 
+  group.appendChild(
+    createTupletNumeralText(
+      numeralX,
+      numeralY,
+      parsedRatio.displayString,
+      'tuplet-numeral'
+    )
+  );
+
+  return group;
+}
+
+/** An italic tuplet numeral centred on (x, y). */
+export function createTupletNumeralText(
+  x: number,
+  y: number,
+  value: string,
+  className: string
+): SVGTextElement {
   const text = document.createElementNS(SVG_NS, 'text');
-  text.classList.add('tuplet-numeral');
-  text.setAttribute('x', `${numeralX}`);
-  text.setAttribute('y', `${numeralY}`);
+  text.classList.add(className);
+  text.setAttribute('x', `${x}`);
+  text.setAttribute('y', `${y}`);
   text.setAttribute('text-anchor', 'middle');
   text.setAttribute('dominant-baseline', 'middle');
   text.setAttribute('font-style', 'italic');
   text.setAttribute('font-size', `${TUPLET_NUMERAL_FONT_SIZE}`);
   text.setAttribute('fill', 'currentColor');
-  text.textContent = parsedRatio.displayString;
-  group.appendChild(text);
-
-  return group;
+  text.textContent = value;
+  return text;
 }

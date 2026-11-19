@@ -545,8 +545,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
 
     // With viewBox tracking the container 1:1, the clef's fixed pixel
     // offset (CLEF_X_OFFSET) renders unscaled — every staff should show the
-    // same left offset and the same glyph width, regardless of which row it
-    // wrapped to or how wide that staff used to be.
+    // same left offset and the same glyph width, whichever row it wrapped to.
     const offsets = narrow.map((s) => s.clefOffsetX as number);
     const widths = narrow.map((s) => s.clefWidth as number);
     for (let i = 1; i < offsets.length; i++) {
@@ -1067,8 +1066,8 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
   test('grand-staff first measure keeps its time signature through a multi-measure remount', async ({
     page,
   }) => {
-    // A grand staff in each measure; the reported failure was a rebar to 1/4
-    // that remounted several such measures at once.
+    // A grand staff in each measure, several remounted at once (as a rebar
+    // to 1/4 does).
     await page.evaluate(
       ({ compositionTag, measureTag, staffTag, noteTag, clefs, times }) => {
         const host = document.getElementById('host');
@@ -1309,13 +1308,10 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
   test('all measures share the same row when composition is inside a flex justify-center container (regression for 1-measure-per-row bug)', async ({
     page,
   }) => {
-    // Replicates MusicScore.tsx: 3 measures (treble+bass, treble+bass+vocal-with-lyrics,
-    // treble+bass) inside a flex justify-center parent with no explicit width on the
-    // composition. Before :host { width: 100% }, the composition sized to the max-content
-    // of its widest measure (~389px), causing each measure to wrap to its own row.
-    // max-width is raised to match the host so the test isn't coupled to the exact
-    // natural-width formula — the default 900px cap is narrower than these three
-    // measures' combined beat-proportional natural width.
+    // Like MusicScore.tsx: 3 measures in a flex justify-center parent with no
+    // width on the composition, which must still fill the parent
+    // (:host { width: 100% }). max-width is raised so the test doesn't depend
+    // on the natural-width formula.
     await page.evaluate(
       ({
         compositionTag,
@@ -2994,14 +2990,9 @@ test.describe(`${MUSIC_COMPOSITION} measure numbers`, () => {
     }
   });
 
-  // The earlier unstyled stub rendered `number` as an inline element sharing
-  // normal document flow with the slotted staves — its presence/absence
-  // shifted the staff's real position, throwing off the brace's own fixed-px
-  // position (position: absolute, unaffected by flow) relative to it. This
-  // proves the new implementation, built entirely from absolutely-positioned
-  // overlays, can't repeat that: toggling measure-numbers on must not move
-  // the brace at all.
-  test('turning measure-numbers on does not move a grand-staff brace (regression)', async ({
+  // Measure numbers are an absolutely positioned overlay, so showing them
+  // can't shift the staves under the brace.
+  test('turning measure-numbers on does not move a grand-staff brace', async ({
     page,
   }) => {
     await page.evaluate(

@@ -223,12 +223,9 @@ function appendOctaveParenthesis(
 /**
  * Restates an octave-transposition span's numeral/label at the start of a
  * new row, after a system break — the octave-sign equivalent of
- * `createTrillContinuationSignSvg`. `bracketed` true wraps the sign (built
- * via `createOctaveSignSvg`) in a small parenthesis pair on either side,
- * matching the reference engraving convention of restating a span mid-flight
- * as e.g. "(8)"; false returns the plain sign with no parens. Either way,
- * returns the total horizontal width consumed so the caller can advance its
- * line-start X past it.
+ * `createTrillContinuationSignSvg`. `bracketed` wraps the sign in
+ * parentheses, e.g. "(8)". Returns the total width consumed so the caller
+ * can advance its line-start X past it.
  */
 export function createOctaveContinuationSignSvg(
   amount: OctaveShiftAmount,

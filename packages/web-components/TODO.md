@@ -85,7 +85,7 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 | &#x2610; | Arco                     | `arco`                   | Return to bowing (after pizzicato)          |
 | &#x2610; | Pizzicato                | `pizz.`                  | Pluck the string                            |
 | &#x2610; | Snap Pizzicato (BartÃ³k) | Circle with line         | Snap string against fingerboard             |
-| &#x2610; | Tremolo (bowed)          | Slashes through stem     | Very rapid repeated bowing                  |
+| &#x2611; | Tremolo (bowed)          | Slashes through stem     | Very rapid repeated bowing                  |
 | &#x2610; | Double Stop              | Two notes stacked        | Play two strings simultaneously             |
 | &#x2610; | Triple/Quad Stop         | Three/four notes stacked | Play three or four strings                  |
 
@@ -141,7 +141,7 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 |          | Name          | Notation           | Description                           |
 | -------- | ------------- | ------------------ | ------------------------------------- |
 | &#x2610; | Roll (closed) | `z` on stem        | Sustained tremolo roll                |
-| &#x2610; | Roll (open)   | Measured beams     | Measured individual strokes           |
+| &#x2611; | Roll (open)   | Measured beams     | Measured individual strokes           |
 | &#x2610; | Rim Shot      | `x` notehead       | Hit head and rim simultaneously       |
 | &#x2610; | Cross Stick   | `x` on staff       | Place tip of stick on head, hit rim   |
 | &#x2610; | Dead Stroke   | Parenthesized note | Dampen immediately after striking     |

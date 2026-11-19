@@ -41,6 +41,7 @@ const preview: Preview = {
             'Arpeggio',
             'Grace Notes',
             'Trills',
+            'Tremolos',
             'Octave Signs',
             'Clef Changes',
             'Beams',

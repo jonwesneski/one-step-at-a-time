@@ -13,7 +13,17 @@ import {
 } from '../../rules/augmentationDotRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
-import { durationToBase, durationToDotCount } from '../../rules/theoryConsts';
+import {
+  durationToBase,
+  durationToDotCount,
+  isStemlessDuration,
+} from '../../rules/theoryConsts';
+import {
+  resolveStrokePlacement,
+  STAFF_BAND,
+  stemEndingFor,
+  TREMOLO_STROKE_HALF_HEIGHT_PX,
+} from '../../rules/tremoloRules';
 import type {
   AccidentalType,
   DurationType,
@@ -33,7 +43,11 @@ import {
   GRACE_MAIN_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
+  STEM_OVERLAP_PX,
+  TREMOLO_LABEL_GAP_PX,
+  TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
+  TUPLET_NUMERAL_FONT_SIZE,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import {
@@ -41,12 +55,16 @@ import {
   createArpeggioSvg,
   isArpeggioWaveVariant,
 } from './arpeggio';
-import { createArticulationMarks } from './articulations';
+import {
+  articulationStackDepth,
+  createArticulationMarks,
+} from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
 import { createGraceNotesSvg, createTrillFinishNotesSvg } from './graceNotes';
 import {
   computeYHeadOffset,
   createNoteSvg,
+  flagStemExtensionPx,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
@@ -55,10 +73,16 @@ import {
   noteHeadGeometry,
   noteHeadLeftOverhangPx,
   stemBeamJunctionPosition,
+  stemTipPosition,
   upTailDotClearX,
   type NoteDotLayout,
   type NoteProps,
 } from './note';
+import {
+  createTremoloLabel,
+  createTremoloNumeral,
+  createTremoloStrokes,
+} from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // A chord draws its tones itself, so the per-note head/accidental/staff
@@ -117,6 +141,10 @@ export const createChordSvg = ({
   trillFinishNotes,
   trillFinishSlur = 'to-main',
   augmentationDotRows = null,
+  tremoloStrokeCount = 0,
+  tremoloTuplet = null,
+  articulationRepeatCount = 1,
+  tremoloLabel = null,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -194,6 +222,98 @@ export const createChordSvg = ({
       (STAFF_Y_PADDING + staffYCoordinate - yOffset).toString()
     );
     svg.appendChild(noteSvg);
+  }
+
+  const stemless = isStemlessDuration(duration);
+  const base = durationToBase[duration];
+  const outward = stemUp ? -1 : 1;
+  // Strokes start past the head nearest the stem's open end.
+  const nearestHeadY = stemUp
+    ? Math.min(...staffYCoordinates)
+    : Math.max(...staffYCoordinates);
+  const ending = stemEndingFor(duration, noFlags);
+  // Base-length stem from that head, to a beam's outer edge when beamed.
+  const nearestHeadStemLengthPx =
+    BASE_STEM_LENGTH_PX +
+    (noFlags ? stemExtension - chordSpread : stemExtension) +
+    (ending.kind === 'beam' ? STEM_OVERLAP_PX : 0);
+  const nearestHeadCenterY = chordToneHeadCenterY(
+    nearestHeadY,
+    stemUp,
+    base,
+    noFlags
+  );
+  const stemOuterY =
+    nearestHeadCenterY +
+    outward *
+      (nearestHeadStemLengthPx +
+        (ending.kind === 'tail' ? flagStemExtensionPx(ending.flagCount) : 0));
+  const topHeadCenterY = chordToneHeadCenterY(
+    Math.min(...staffYCoordinates),
+    stemUp,
+    base,
+    noFlags
+  );
+  // Outermost ink (px) above the chord, for a standalone label.
+  let inkTopY =
+    topHeadCenterY -
+    noteHeadGeometry(stemUp, base, noFlags).halfHeight * NOTE_SCALE;
+  if (!stemUp) {
+    inkTopY = Math.min(
+      inkTopY,
+      topHeadCenterY - articulationStackDepth(articulation, stress) * NOTE_SCALE
+    );
+  } else if (!stemless && !noStem) {
+    inkTopY = Math.min(inkTopY, stemOuterY);
+  }
+  if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
+    const { centerYs } = resolveStrokePlacement({
+      headY: nearestHeadY,
+      stemUp,
+      strokeCount: tremoloStrokeCount,
+      staff: STAFF_BAND,
+      stemLengthPx: stemless ? null : nearestHeadStemLengthPx,
+      ending,
+      canLengthenStem: false,
+    });
+    // A stemless chord centres its strokes on its undisplaced column, the
+    // side a stem's heads normally sit.
+    const centerX = stemless
+      ? noteHeadGeometry(stemUp, base, noFlags).cx * NOTE_SCALE
+      : extremalXOffset +
+        stemTipPosition(stemUp, base, noFlags, 0).x * NOTE_SCALE;
+    const strokeYs = centerYs.map((y) =>
+      chordToneHeadCenterY(y, stemUp, base, noFlags)
+    );
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(createTremoloStrokes(centerX, strokeYs));
+    const outerStrokeY = strokeYs[strokeYs.length - 1];
+    if (stemless && stemUp) {
+      inkTopY = Math.min(inkTopY, outerStrokeY - TREMOLO_STROKE_HALF_HEIGHT_PX);
+    }
+    if (tremoloTuplet !== null) {
+      const outerEdgeY = stemless
+        ? outerStrokeY + outward * TREMOLO_STROKE_HALF_HEIGHT_PX
+        : stemOuterY;
+      const numeralY =
+        outerEdgeY +
+        outward * (TREMOLO_NUMERAL_GAP_PX + TUPLET_NUMERAL_FONT_SIZE / 2);
+      svg.appendChild(createTremoloNumeral(centerX, numeralY, tremoloTuplet));
+      if (stemUp) {
+        inkTopY = Math.min(inkTopY, numeralY - TUPLET_NUMERAL_FONT_SIZE / 2);
+      }
+    }
+  }
+  if (tremoloLabel !== null) {
+    const { cx, halfWidth } = noteHeadGeometry(stemUp, base, noFlags);
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createTremoloLabel(
+        (cx - halfWidth) * NOTE_SCALE,
+        inkTopY - TREMOLO_LABEL_GAP_PX,
+        tremoloLabel
+      )
+    );
   }
 
   const dotLayout = chordAugmentationDotLayout({
@@ -330,12 +450,8 @@ export const createChordSvg = ({
     const topNoteHeadCenterXPx =
       noteHeadCenter(stemUp, duration, noFlags).cx * NOTE_SCALE +
       (displacementMap.get(topNoteIndex) ?? 0);
-    // Only used for a descending grace group's stem-tip slur anchoring (see
-    // buildGraceSlur): when the chord is stem-up, its real rendered stem
-    // tip (reusing the same stem X and chordSpread/stemExtension geometry
-    // the chord's own stem uses above, lines ~66-97); when stem-down, the
-    // chord's top note instead (no stem is projected in that case).
-    // Unused (and harmless to compute) otherwise.
+    // A descending grace group's slur target: the stem tip when stem-up,
+    // else the top note.
     const bottomNoteHeadCenterYPx =
       STAFF_Y_PADDING +
       Math.max(...staffYCoordinates) -
@@ -371,9 +487,7 @@ export const createChordSvg = ({
   }
 
   // Finishing grace note(s) — placed after the chord's own notehead column.
-  // Chords reserve no rightward decoration today, so (unlike the leading
-  // side) the anchor is the fixed per-entry SVG width every note/chord
-  // shares (NOTE_SVG_WIDTH), not a chord-specific right edge.
+  // Anchored at NOTE_SVG_WIDTH, the per-entry width every note/chord shares.
   if (trillFinishNotes && trillFinishNotes.length > 0) {
     const referenceHeadCenterYPx =
       STAFF_Y_PADDING + staffYCoordinates[0] - NOTE_HEAD_Y_OFFSET_CORRECTION;
@@ -476,6 +590,7 @@ export const createChordSvg = ({
             articulationStemAnchorBeamLevels
           )
         : null,
+    repeatCount: articulationRepeatCount,
   });
   if (articulationMarks) {
     const wrapper = document.createElementNS(SVG_NS, 'svg');

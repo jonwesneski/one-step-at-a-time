@@ -10,12 +10,9 @@ import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
  * feed <music-measure>'s flex. Where each entry sits *within* that width is
  * rules/spacingRules.ts.
  *
- * Every staff reports two widths:
- *  - a strut min width — the collision floor, becomes the measure's CSS min-width
- *    so noteheads never overlap however narrow the container gets;
- *  - a natural width — strut plus the total beat-proportional slack the entries
- *    want, becomes the measure's flex-basis and flex-grow (kept equal) so
- *    measures on a row share width in proportion to their musical content.
+ * Every staff reports a strut min width (the collision floor, the measure's
+ * CSS min-width) and a natural width (strut plus the entries' slack, the
+ * measure's flex-basis and flex-grow).
  */
 
 /**

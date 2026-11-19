@@ -4,7 +4,9 @@
 import '../chord/index';
 import '../composition/index';
 import '../note/index';
+import '../rest/index';
 import '../staff/index';
+import '../tremolo/index';
 import type { ChordElementType } from '../types/elements';
 import type { Chord } from '../types/theory';
 import {
@@ -13,6 +15,7 @@ import {
   MUSIC_MEASURE,
   MUSIC_STAFF,
   STAFF_EVENTS,
+  TREMOLO_EVENTS,
 } from '../utils/consts';
 import './index';
 
@@ -295,5 +298,37 @@ describe(MUSIC_MEASURE, () => {
       expect(withoutHairpin).toBeGreaterThan(0);
       expect(withHairpin).toBeGreaterThan(withoutHairpin);
     });
+  });
+});
+
+describe('cross-staff tremolo', () => {
+  it('does not join a wrapper that only holds a nested tremolo', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const measure = document.createElement(MUSIC_MEASURE);
+    measure.innerHTML = `
+      <music-staff clef="treble">
+        <music-tremolo tremolo-group="t1">
+          <music-tremolo>
+            <music-note note="F" octave="5" duration="half"></music-note>
+            <music-note note="A" octave="5" duration="half"></music-note>
+          </music-tremolo>
+        </music-tremolo>
+      </music-staff>
+      <music-staff clef="bass">
+        <music-tremolo tremolo-group="t1">
+          <music-rest hidden duration="half"></music-rest>
+          <music-note note="C" octave="3" duration="half"></music-note>
+        </music-tremolo>
+      </music-staff>`;
+    document.body.appendChild(measure);
+
+    measure.dispatchEvent(new CustomEvent(TREMOLO_EVENTS.ATTRIBUTE_CHANGE));
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'tremolo-group "t1" has a wrapper whose children can\'t make a tremolo'
+      )
+    );
+    warn.mockRestore();
   });
 });

@@ -1,12 +1,7 @@
 // Glyph extractor for the notation library.
 //
-// AUTHOR-TIME ONLY. This script is never run by the build, tests, CI, or the
-// published package, and `opentype.js` is a dev-only dependency. Its OUTPUT —
-// the `*_PATH_D` / `*_NATURAL_*` constants you paste into a
-// `src/utils/svgCreator/*.ts` file — is the source of truth and the only thing
-// that ships. The script is kept in the repo purely so that extraction is
-// reproducible for the next glyph (or a reference-font version bump). Deleting
-// it after a commit breaks nothing.
+// AUTHOR-TIME ONLY: never run by the build, tests or CI. The pasted
+// `*_PATH_D` / `*_NATURAL_*` constants are the source of truth.
 //
 // One generic script for every glyph — pass glyph names as arguments:
 //
@@ -20,23 +15,16 @@
 // normalized space: stem-up = the rightmost on-curve point (ties -> topmost),
 // stem-down = the leftmost (ties -> bottommost). For an X these are the NE
 // and SW arm tips; for a diamond, its side corners.
-// It prints one ready-to-paste constant block per glyph. See the "Drawing /
-// SMuFL glyphs" section of README.md for the full workflow, and CLAUDE.md's
-// "Known Incomplete Areas" for provenance context. Per repo convention the
-// pasted constants and their surrounding comments do NOT name the reference
-// font in source.
+// It prints one ready-to-paste constant block per glyph (workflow in
+// README.md's "Drawing / SMuFL glyphs"). Pasted constants and their comments
+// don't name the font.
 //
-// Normalization (matches the existing `BRACE_PATH_D` convention in
-// svgCreator/staffGroup.ts): the outline is translated so its bounding box's
-// min corner sits at (0, 0) and scaled from font units into staff-space units
-// (1 staff space = unitsPerEm / 4), keeping the y-down orientation
-// opentype.js's getPath already produces. The result's own coordinate space is
-// therefore X in [0, naturalWidth], Y in [0, naturalHeight] — a renderer only
-// needs to multiply by STAFF_LINE_SPACING and position it.
+// Normalization: the bounding box's min corner moves to (0, 0) and font units
+// become staff spaces (unitsPerEm / 4), y-down, so a renderer only multiplies
+// by STAFF_LINE_SPACING.
 //
-// NOTE: the checked-in reference metadata JSON has drifted from the checked-in
-// reference .otf (its glyph bounding boxes no longer match), so this script
-// reads geometry straight from the font outline and ignores the metadata.
+// The checked-in metadata JSON's bounding boxes don't match the .otf, so
+// geometry comes from the font outline.
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

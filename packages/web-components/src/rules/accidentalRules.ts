@@ -4,7 +4,6 @@
 - **Cautionary accidentals** (brackets/parentheses around reminders)
 - **Octave-specific tracking** (book: each octave needs its own accidental; implementation tracks by letter only)
 - **Cross-stave accidental tracking** (multi-stave instruments like piano)
-- **Multi-voice accidental sharing** (one accidental applies to all parts on a stave — not repeated per voice in same bar)
 - **Clef-change re-confirmation** (accidental holds only in the clef it was written)
 - **Key-change natural rendering** (naturals that cancel the old key signature before displaying the new one)
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
@@ -146,7 +145,12 @@ export function computeNoteAccidentals(
       );
       // A triangle's nominal pitch is undefined, so like a tied note it neither
       // shows an accidental nor changes the measure's state. Its ornaments do.
-      if (noteElement.tie === 'end' || isTriangle(noteElement.notehead)) {
+      // A dotted tie across a barline is not literal enough to carry the
+      // accidental, so its end note shows it again.
+      if (
+        (noteElement.tie === 'end' && !noteElement.dottedTieAcrossBarline) ||
+        isTriangle(noteElement.notehead)
+      ) {
         noteShowAccidentals.set(noteElement, null);
         resolveOrnamentAccidentals(
           noteElement.trillFinish,
@@ -175,7 +179,7 @@ export function computeNoteAccidentals(
         graceShowAccidentals,
         chordElement
       );
-      if (chordElement.tie === 'end') {
+      if (chordElement.tie === 'end' && !chordElement.dottedTieAcrossBarline) {
         chordNoteAccidentals.set(
           chordElement,
           chordElement.notes.map(() => null)

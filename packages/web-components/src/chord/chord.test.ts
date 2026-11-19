@@ -1097,10 +1097,8 @@ describe(MUSIC_CHORD, () => {
     });
 
     it('arcs the slur above every grace head when the group descends in pitch', () => {
-      // grace="F,E" into a chord referencing C4 — the group's pitch trends
-      // downward (first note F higher than last note E). Mirrors the
-      // note-level regression: stem-tip anchoring must keep the curve
-      // above every grace head, not just the two slur endpoints.
+      // grace="F,E" into a chord on C4: the group descends, and the slur
+      // must stay above every grace head, not just the two endpoints.
       const chordElement = makeChordWithNotes(
         [
           ['C', 4],
@@ -1242,12 +1240,8 @@ describe(MUSIC_CHORD, () => {
       });
 
       it('nests the marks in the same two scale levels (GRACE_SCALE, then NOTE_SCALE) as the grace head itself', () => {
-        // Regression test: createArticulationMarks() draws in the same
-        // 600-unit note-space createNoteSvg uses for the head, and
-        // createNoteSvg wraps that space in its own inner scale(NOTE_SCALE)
-        // before the outer translate+scale(GRACE_SCALE) grace wrapper — the
-        // marks must mirror that exact nesting or they render ~1/NOTE_SCALE
-        // too large and land outside any clipped viewBox (invisible in-staff).
+        // Grace articulation marks need the head's inner scale(NOTE_SCALE)
+        // inside the grace wrapper, or they render ~1/NOTE_SCALE too large.
         const chordElement = makeChordWithNotes(
           [
             ['C', 4],
@@ -1940,6 +1934,135 @@ describe(`${MUSIC_CHORD} stem length`, () => {
     const chord = renderChord([60, 40], true, 12);
     chord.noFlags = true;
     expect(stemLengthPx(chord)).toBeCloseTo(BASE_STEM_LENGTH_PX + 12);
+  });
+});
+
+describe(`${MUSIC_CHORD} tremolo`, () => {
+  const strokePoints = (chord: ChordElementType) =>
+    Array.from(chord.shadowRoot!.querySelectorAll('.tremolo-stroke')).map(
+      (stroke) =>
+        (stroke.getAttribute('points') ?? '')
+          .trim()
+          .split(/\s+/)
+          .map((point) => point.split(',').map(Number))
+    );
+
+  const placedChord = (
+    staffYCoordinates: number[],
+    stemUp: boolean,
+    duration: DurationType,
+    tremolo: string
+  ) => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C');
+    chord.setAttribute('duration', duration);
+    chord.setAttribute('tremolo', tremolo);
+    document.body.appendChild(chord);
+    chord.staffYCoordinates = staffYCoordinates;
+    chord.stemUp = stemUp;
+    return chord;
+  };
+
+  it('draws strokes once, past the head nearest the open end', () => {
+    const chord = placedChord([60, 40], true, 'quarter', '2');
+    const strokes = strokePoints(chord);
+    expect(strokes).toHaveLength(2);
+    const topHeadCenterY = STAFF_Y_PADDING + 40 - 10;
+    for (const points of strokes) {
+      for (const [, y] of points) {
+        expect(y).toBeLessThan(topHeadCenterY);
+      }
+    }
+  });
+
+  it('centres a semibreve second’s strokes on its undisplaced column', () => {
+    const chord = placedChord([40, 45], false, 'whole', '3');
+    const strokes = strokePoints(chord);
+    expect(strokes).toHaveLength(3);
+    const xs = strokes[0].map(([x]) => x);
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(
+      NOTE_HEAD_CX_STEM_DOWN_PX
+    );
+  });
+
+  it('lengthens a standalone chord’s stem to carry three strokes', () => {
+    const stemLength = (chord: ChordElementType) => {
+      const stem = chord.shadowRoot!.querySelector('.stem')!;
+      return Math.abs(
+        Number(stem.getAttribute('y2')) - Number(stem.getAttribute('y1'))
+      );
+    };
+    const plain = document.createElement(MUSIC_CHORD) as ChordElementType;
+    plain.setAttribute('chord', 'C');
+    document.body.appendChild(plain);
+    const tremolo = document.createElement(MUSIC_CHORD) as ChordElementType;
+    tremolo.setAttribute('chord', 'C');
+    tremolo.setAttribute('tremolo', '3');
+    document.body.appendChild(tremolo);
+    expect(stemLength(tremolo)).toBeGreaterThan(stemLength(plain));
+  });
+
+  it('lengthens the stem on a staff', () => {
+    const staff = makeStaff();
+    const chord = renderChordByNotes(staff, [
+      { value: 'C', octave: 5 },
+      { value: 'E', octave: 5 },
+    ]);
+    expect(chord.stemExtension).toBe(0);
+
+    chord.setAttribute('tremolo', '3');
+
+    expect(chord.stemExtension).toBeGreaterThan(0);
+    expect(strokePoints(chord)).toHaveLength(3);
+  });
+});
+
+describe(`${MUSIC_CHORD} tremolo numeral, label and repeated articulation`, () => {
+  const standaloneChord = (attributes: Record<string, string>) => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C');
+    for (const [name, value] of Object.entries(attributes)) {
+      chord.setAttribute(name, value);
+    }
+    document.body.appendChild(chord);
+    return chord;
+  };
+
+  it('round-trips its attributes', () => {
+    const chord = standaloneChord({});
+    chord.tremoloTuplet = 5;
+    chord.tremoloLabel = 'trem';
+    chord.articulationRepeat = true;
+    chord.tieStyle = 'dotted';
+    expect(chord.tremoloTuplet).toBe(5);
+    expect(chord.tremoloLabel).toBe('trem');
+    expect(chord.articulationRepeat).toBe(true);
+    expect(chord.tieStyle).toBe('dotted');
+  });
+
+  it('draws one numeral beyond the stem', () => {
+    const chord = standaloneChord({ tremolo: '1', 'tremolo-tuplet': '6' });
+    const numerals = chord.shadowRoot!.querySelectorAll('.tremolo-numeral');
+    expect(numerals).toHaveLength(1);
+    expect(numerals[0].textContent).toBe('6');
+  });
+
+  it('repeats the articulation once per repetition', () => {
+    const chord = standaloneChord({
+      duration: 'half',
+      tremolo: '1',
+      'tremolo-tuplet': '6',
+      articulation: 'staccato',
+      'articulation-repeat': '',
+    });
+    expect(chord.shadowRoot!.querySelectorAll('.staccato')).toHaveLength(6);
+  });
+
+  it('draws a standalone label', () => {
+    const chord = standaloneChord({ 'tremolo-label': 'non-trem' });
+    expect(chord.shadowRoot!.querySelector('.tremolo-label')?.textContent).toBe(
+      'non trem.'
+    );
   });
 });
 

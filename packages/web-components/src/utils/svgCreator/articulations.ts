@@ -16,17 +16,9 @@ const MARK_GAP = 90;
 const MARK_STEP = 150;
 // Marks are roughly one notehead wide.
 const MARK_HALF_WIDTH = 70;
-// Ink clearance from the stem-anchor point to the near edge of the first
-// (closest) mark, when stem-anchored — a historically-attested alternative
-// to notehead-centered placement (common pre-1920, still used for an inner
-// double-stemmed voice per the reference engraving material this mirrors),
-// so marks nestle at the stem end rather than the fixed, much larger
-// MARK_GAP a notehead anchor uses. The anchor point itself (stemAnchor,
-// computed by note.ts#stemBeamJunctionPosition) already sits at the visible
-// beam surface facing the notehead, so this only needs to be a small,
-// clearly-visible margin (≈2.5px) beyond that. Measured edge-to-edge rather
-// than to the mark's center, since a stem-anchored fermata's dome points
-// back at the beam.
+// Ink clearance (≈2.5px) from the stem anchor (already at the beam surface,
+// note.ts#stemBeamJunctionPosition) to the first mark's near edge. Measured
+// edge-to-edge since a stem-anchored fermata's dome points back at the beam.
 const STEM_ANCHOR_INK_GAP = 48;
 // Minimum ink clearance between consecutive stacked marks. Every ordinary
 // pair already clears this at MARK_STEP, so it only spreads a pair
@@ -65,13 +57,13 @@ export type ArticulationMarksProps = {
   // Notehead center in the 600-unit note coordinate space.
   noteHeadCenterX: number;
   noteHeadCenterY: number;
-  // This note's own real stem-tip position (600-unit space) — set when it's
-  // an inner voice of a double-stemmed beam group, so marks anchor at the
-  // stem end (next to the shared beam) instead of the notehead, matching
-  // the reference engraving material's own placement for that case (see
-  // measure.ts#redrawDoubleStemmedBeams). null/undefined = the ordinary
-  // notehead-relative default.
+  // Stem-end anchor (600-unit space) for an inner voice of a double-stemmed
+  // beam group, whose marks sit next to the shared beam; null anchors at the
+  // notehead.
   stemAnchor?: { x: number; y: number } | null;
+  // Times the length mark is drawn across a row (a measured tremolo's
+  // repetitions); 1 draws it once.
+  repeatCount?: number;
 };
 
 // Split a combined articulation value into its optional accent prefix and its
@@ -249,6 +241,146 @@ const createFermataSvg = (cx: number, cy: number, dir: number): SVGGElement => {
   return fermata;
 };
 
+// Ink gap between repeated length marks in one row.
+const REPEATED_MARK_GAP = 90;
+
+// A length mark's half-width, for spacing a repeated row.
+const STACCATO_HALF_WIDTH = 22;
+const STACCATISSIMO_HALF_WIDTH = 26;
+// The tenuto line plus its round caps.
+const TENUTO_HALF_WIDTH = MARK_HALF_WIDTH + 12;
+
+type MarkRow = {
+  extent: MarkExtent;
+  // Draws the mark centred at (x, y); `dir` as in createArticulationMarks.
+  draw: (x: number, y: number, dir: number) => SVGElement;
+  // Length marks repeat across the row; accents, fermatas and stress don't.
+  repeats: boolean;
+};
+
+// The rows of marks for one articulation and stress, nearest the notehead
+// first, with the step between repeated length marks.
+function markRows(
+  articulation: ArticulationType | null | undefined,
+  stress: StressType | null | undefined
+): { rows: MarkRow[]; repeatStep: number } {
+  const { accent, length } = articulation
+    ? decomposeArticulation(articulation)
+    : {};
+  const rows: MarkRow[] = [];
+  const staccato: MarkRow = {
+    extent: STACCATO_EXTENT,
+    draw: (x, y) => createStaccatoDot(x, y),
+    repeats: true,
+  };
+  const staccatissimo: MarkRow = {
+    extent: STACCATISSIMO_EXTENT,
+    draw: createStaccatissimoWedge,
+    repeats: true,
+  };
+  const tenuto: MarkRow = {
+    extent: TENUTO_EXTENT,
+    draw: (x, y) => createTenutoLine(x, y),
+    repeats: true,
+  };
+  let lengthHalfWidth = 0;
+  // portato / tenuto-staccatissimo are the two legal within-length
+  // combinations and stack the dot/wedge nearest the head with the tenuto
+  // line just beyond it; repeated, both rows share the line's spacing so each
+  // dot stays under its line. (fermata is handled separately.)
+  if (length === 'staccato') {
+    rows.push(staccato);
+    lengthHalfWidth = STACCATO_HALF_WIDTH;
+  } else if (length === 'staccatissimo') {
+    rows.push(staccatissimo);
+    lengthHalfWidth = STACCATISSIMO_HALF_WIDTH;
+  } else if (length === 'tenuto') {
+    rows.push(tenuto);
+    lengthHalfWidth = TENUTO_HALF_WIDTH;
+  } else if (length === 'portato') {
+    rows.push(staccato, tenuto);
+    lengthHalfWidth = TENUTO_HALF_WIDTH;
+  } else if (length === 'tenuto-staccatissimo') {
+    rows.push(staccatissimo, tenuto);
+    lengthHalfWidth = TENUTO_HALF_WIDTH;
+  }
+
+  // Accent — outside the length marks.
+  if (accent === 'accent') {
+    rows.push({
+      extent: ACCENT_EXTENT,
+      draw: (x, y) => createAccentMark(x, y),
+      repeats: false,
+    });
+  } else if (accent === 'marcato') {
+    rows.push({
+      extent: MARCATO_EXTENT,
+      draw: createMarcatoMark,
+      repeats: false,
+    });
+  }
+
+  // Fermata — outermost after any accent. Never coexists with a length mark.
+  if (length === 'fermata') {
+    rows.push({
+      extent: FERMATA_EXTENT,
+      draw: createFermataSvg,
+      repeats: false,
+    });
+  }
+
+  // Schoenberg stress — outermost of all.
+  if (stress === 'stressed') {
+    rows.push({
+      extent: STRESS_EXTENT,
+      draw: (x, y) => createStressMark(x, y),
+      repeats: false,
+    });
+  } else if (stress === 'unstressed') {
+    rows.push({
+      extent: UNSTRESS_EXTENT,
+      draw: createUnstressMark,
+      repeats: false,
+    });
+  }
+
+  return { rows, repeatStep: 2 * lengthHalfWidth + REPEATED_MARK_GAP };
+}
+
+// Centre offsets of each row from the notehead centre, notehead-anchored.
+function headAnchoredOffsets(rows: readonly MarkRow[]): number[] {
+  const offsets: number[] = [];
+  let previous: { offset: number; far: number } | null = null;
+  for (const { extent } of rows) {
+    const offset: number =
+      previous === null
+        ? HEAD_HALF_HEIGHT + MARK_GAP
+        : previous.offset +
+          Math.max(MARK_STEP, previous.far + MARK_INK_GAP + extent.towardHead);
+    offsets.push(offset);
+    previous = { offset, far: extent.awayFromHead };
+  }
+  return offsets;
+}
+
+/**
+ * How far (600-unit space) notehead-anchored marks reach from the notehead's
+ * centre, on the side opposite the stem; 0 with no marks.
+ */
+export function articulationStackDepth(
+  articulation: ArticulationType | null | undefined,
+  stress: StressType | null | undefined
+): number {
+  const { rows } = markRows(articulation, stress);
+  if (rows.length === 0) {
+    return 0;
+  }
+  const offsets = headAnchoredOffsets(rows);
+  return (
+    offsets[offsets.length - 1] + rows[rows.length - 1].extent.awayFromHead
+  );
+}
+
 /**
  * Build the articulation marks for one note/chord as an SVG <g> in the note's
  * 600-unit coordinate space. The combined `articulation` value is split into its
@@ -256,7 +388,8 @@ const createFermataSvg = (cx: number, cy: number, dir: number): SVGGElement => {
  * the stem (below the head for a stem-up note, above it for stem-down), stacking
  * outward: length mark closest, then accent, then a fermata (outermost, since it
  * never coexists with a length mark). The Schoenberg stress mark (a separate
- * attribute) is outermost of all.
+ * attribute) is outermost of all. With `repeatCount` above 1 the length mark is
+ * drawn that many times in a row centred on the notehead; the others once.
  *
  * Returns null when nothing is set, so callers can skip appending / setting
  * overflow.
@@ -268,28 +401,19 @@ export const createArticulationMarks = ({
   noteHeadCenterX,
   noteHeadCenterY,
   stemAnchor = null,
+  repeatCount = 1,
 }: ArticulationMarksProps): SVGGElement | null => {
   if (!articulation && !stress) {
     return null;
   }
-
-  const { accent, length } = articulation
-    ? decomposeArticulation(articulation)
-    : {};
+  const { rows, repeatStep } = markRows(articulation, stress);
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('articulations');
 
-  // +1 places marks below the head (stem-up), -1 above (stem-down) — the
-  // ordinary default, opposite the stem. stemAnchor flips this: the stem
-  // tip sits on the *stem's own* side, not the opposite one — an
-  // inner-voice group anchors its marks there instead (see
-  // measure.ts#redrawDoubleStemmedBeams), since the ordinary
-  // opposite-of-stem side is occupied by the outer voice's own content. dir
-  // still drives each glyph's own internal shape orientation (e.g. a wedge
-  // apex pointing toward the notehead) either way, since that's about the
-  // mark's position relative to the notehead, not about which direction
-  // marks stack away from their anchor.
+  // +1 places marks below the head, -1 above: opposite the stem, or on the
+  // stem side when stem-anchored. Also orients each glyph toward the
+  // notehead.
   const dir = stemAnchor !== null ? (stemUp ? -1 : 1) : stemUp ? 1 : -1;
   // markX follows suit: the stem's own X (already offset from the notehead
   // center, same as the stem line itself), pushed out further by
@@ -300,13 +424,8 @@ export const createArticulationMarks = ({
       ? stemAnchor.x + (stemUp ? 1 : -1) * STEM_ANCHOR_X_OFFSET
       : noteHeadCenterX;
   const anchorY = stemAnchor?.y ?? noteHeadCenterY;
-  // Marks always stack from their anchor toward the side that's actually
-  // free. For the ordinary notehead anchor that's dir itself (away from the
-  // notehead, into the opposite-of-stem territory). For a stem anchor it's
-  // the opposite of dir: the anchor already sits at the beam's own visible
-  // surface (the far end of the only safe space), so stacking must walk
-  // back toward the notehead, into the corridor beside the stem — which
-  // numerically always works out to stemUp ? 1 : -1 regardless of anchoring.
+  // Marks stack toward free space: away from a notehead anchor, back toward
+  // the notehead from a stem anchor. Both come out as stemUp ? 1 : -1.
   const stackDir = stemUp ? 1 : -1;
   // A glyph's notehead-facing side faces the anchor when notehead-anchored,
   // and faces away from it when stem-anchored (stacking runs toward the
@@ -334,45 +453,15 @@ export const createArticulationMarks = ({
     return anchorY + stackDir * offset;
   };
 
-  // Length family — closest to the notehead. portato / tenuto-staccatissimo are
-  // the two legal within-length combinations and stack the dot/wedge nearest the
-  // head with the tenuto line just beyond it. (fermata is handled separately.)
-  if (length === 'staccato') {
-    group.appendChild(createStaccatoDot(markX, nextY(STACCATO_EXTENT)));
-  } else if (length === 'staccatissimo') {
-    group.appendChild(
-      createStaccatissimoWedge(markX, nextY(STACCATISSIMO_EXTENT), dir)
-    );
-  } else if (length === 'tenuto') {
-    group.appendChild(createTenutoLine(markX, nextY(TENUTO_EXTENT)));
-  } else if (length === 'portato') {
-    group.appendChild(createStaccatoDot(markX, nextY(STACCATO_EXTENT)));
-    group.appendChild(createTenutoLine(markX, nextY(TENUTO_EXTENT)));
-  } else if (length === 'tenuto-staccatissimo') {
-    group.appendChild(
-      createStaccatissimoWedge(markX, nextY(STACCATISSIMO_EXTENT), dir)
-    );
-    group.appendChild(createTenutoLine(markX, nextY(TENUTO_EXTENT)));
-  }
-
-  // Accent — outside the length marks.
-  if (accent === 'accent') {
-    group.appendChild(createAccentMark(markX, nextY(ACCENT_EXTENT)));
-  } else if (accent === 'marcato') {
-    group.appendChild(createMarcatoMark(markX, nextY(MARCATO_EXTENT), dir));
-  }
-
-  // Fermata — opposite the stem like the other marks, outermost (after any
-  // accent). Never coexists with a length mark.
-  if (length === 'fermata') {
-    group.appendChild(createFermataSvg(markX, nextY(FERMATA_EXTENT), dir));
-  }
-
-  // Schoenberg stress — outermost on the opposite-stem side.
-  if (stress === 'stressed') {
-    group.appendChild(createStressMark(markX, nextY(STRESS_EXTENT)));
-  } else if (stress === 'unstressed') {
-    group.appendChild(createUnstressMark(markX, nextY(UNSTRESS_EXTENT), dir));
+  // Repetition is notehead-anchored only; a stem-anchored mark stays single.
+  const count = stemAnchor === null ? Math.max(1, repeatCount) : 1;
+  for (const row of rows) {
+    const y = nextY(row.extent);
+    const copies = row.repeats ? count : 1;
+    for (let i = 0; i < copies; i++) {
+      const x = markX + (i - (copies - 1) / 2) * repeatStep;
+      group.appendChild(row.draw(x, y, dir));
+    }
   }
 
   return group;

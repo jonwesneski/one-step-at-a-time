@@ -11,13 +11,18 @@ export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';
-export { BeamsBuilder, type NoteYPosition } from './beams';
+export {
+  BeamsBuilder,
+  type NoteYPosition,
+  type TremoloBeamGroupSpec,
+} from './beams';
 export { createChordSvg } from './chord';
 export {
   BULGE_STEP_PX,
   createCurveSvg,
   createOpenTieSvg,
   DEFAULT_BULGE_HEIGHT,
+  setCurveDotted,
   type CurveBulge,
   type CurveProps,
   type CurveStyle,
@@ -89,6 +94,14 @@ export { createSharpSvg } from './sharp';
 export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';
 export {
+  createTremoloBeamPolygon,
+  createTremoloLabel,
+  createTremoloNumeral,
+  createTremoloStrokes,
+  tremoloBeamPoints,
+  tremoloLabelWidthPx,
+} from './tremolo';
+export {
   computeWrittenTrillNoteWidth,
   createTrillContinuationSignSvg,
   createTrillLineSvg,
@@ -103,5 +116,5 @@ export {
   type WrittenTrillNoteProps,
   type WrittenTrillNoteResult,
 } from './trill';
-export { createTupletBracketSvg } from './tuplet';
+export { createTupletBracketSvg, createTupletNumeralText } from './tuplet';
 export { createUnisonBracketSvg } from './unison';

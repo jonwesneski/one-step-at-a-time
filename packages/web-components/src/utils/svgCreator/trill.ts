@@ -30,8 +30,7 @@ import {
 // `scripts/extract-glyphs.mjs` (regenerate with
 // `pnpm --filter @one-step-at-a-time/web-components extract-glyphs -- \
 //   ornamentTrill wiggleTrill`). Each outline is normalized to a top-left
-// origin, staff-space units, y-down. See README.md's "Drawing / SMuFL glyphs"
-// section and CLAUDE.md's "Known Incomplete Areas" for provenance.
+// origin, staff-space units, y-down.
 
 const ORNAMENT_TRILL_PATH_D =
   'M 1.064 0 C 1.048 0 1.024 0.008 1.012 0.012 L 0.816 0.076 C 0.78 0.088 0.764 0.1 0.748 0.14 L 0.604 0.492 C 0.588 0.532 0.584 0.54 0.572 0.54 C 0.556 0.54 0.532 0.52 0.496 0.504 C 0.44 0.48 0.388 0.468 0.328 0.468 C 0.14 0.468 0 0.58 0 0.748 C 0 0.872 0.084 0.976 0.264 0.976 C 0.312 0.976 0.364 0.968 0.388 0.968 C 0.396 0.968 0.4 0.972 0.4 0.98 C 0.4 0.988 0.396 1 0.388 1.02 L 0.344 1.128 C 0.3 1.236 0.268 1.316 0.268 1.4 C 0.268 1.512 0.344 1.6 0.496 1.6 C 0.704 1.6 0.904 1.432 0.904 1.136 C 0.904 1.04 0.888 0.952 0.852 0.864 C 0.844 0.844 0.84 0.836 0.84 0.824 C 0.84 0.8 0.864 0.78 0.928 0.744 L 0.952 0.732 C 1.092 0.648 1.188 0.592 1.264 0.592 C 1.3 0.592 1.316 0.604 1.316 0.652 C 1.316 0.692 1.304 0.74 1.292 0.768 L 1 1.492 C 0.992 1.512 0.988 1.524 0.988 1.536 C 0.988 1.552 1 1.56 1.032 1.56 L 1.228 1.56 C 1.264 1.56 1.276 1.552 1.292 1.512 L 1.552 0.864 C 1.604 0.732 1.732 0.584 1.82 0.584 C 1.844 0.584 1.86 0.592 1.86 0.608 C 1.86 0.644 1.772 0.656 1.772 0.768 C 1.772 0.848 1.832 0.896 1.916 0.896 C 2.012 0.896 2.084 0.816 2.084 0.676 C 2.084 0.56 2.024 0.464 1.876 0.464 C 1.772 0.464 1.688 0.52 1.628 0.588 C 1.592 0.628 1.588 0.644 1.572 0.644 C 1.552 0.644 1.568 0.616 1.536 0.556 C 1.508 0.504 1.448 0.468 1.36 0.468 C 1.2 0.468 1.048 0.548 0.964 0.592 C 0.912 0.62 0.888 0.636 0.868 0.636 C 0.86 0.636 0.856 0.632 0.856 0.624 C 0.856 0.608 0.868 0.584 0.876 0.564 L 1.076 0.068 C 1.084 0.048 1.088 0.036 1.088 0.024 C 1.088 0.008 1.08 0 1.064 0 M 0.328 0.56 C 0.372 0.56 0.532 0.596 0.532 0.656 C 0.532 0.668 0.524 0.688 0.516 0.708 L 0.5 0.748 C 0.48 0.8 0.464 0.812 0.412 0.824 C 0.36 0.836 0.312 0.844 0.272 0.844 C 0.14 0.844 0.108 0.78 0.108 0.724 C 0.108 0.652 0.168 0.56 0.328 0.56 M 0.756 0.892 C 0.792 0.892 0.812 1.104 0.812 1.14 C 0.812 1.316 0.704 1.476 0.588 1.476 C 0.556 1.476 0.544 1.456 0.544 1.428 C 0.544 1.396 0.56 1.344 0.576 1.304 C 0.576 1.3 0.58 1.3 0.732 0.92 C 0.74 0.9 0.744 0.892 0.756 0.892';
@@ -51,10 +50,8 @@ export type TrillSignProps = {
   /** Local-space Y at which the sign's bottom edge sits. */
   bottomY: number;
   /**
-   * The trilling (auxiliary) pitch's accidental, when it needs to be shown —
-   * drawn small, above the sign, centered on it. v1 always places it above,
-   * never beside, regardless of available horizontal space (see
-   * CLAUDE.md's Known Incomplete Areas).
+   * The trilling pitch's accidental, drawn small and centred above the sign
+   * (v1: never beside it).
    */
   accidental?: AccidentalType | null;
 };
@@ -198,13 +195,8 @@ export type TrillContinuationSignResult = {
 };
 
 /**
- * Restates the trill sign, in parentheses, at the start of a new row, once a
- * trill's own tie chain has carried its line across a system break — reuses
- * the same parenthesis primitive as the written trilling notehead. Callers
- * only draw this at all when the crossing is a system break (an ordinary
- * same-row barline never restates anything) and `trill-continuation` is not
- * `'line-only'` (which drops the restated sign entirely, not just the
- * brackets — there is no unbracketed variant of this glyph).
+ * Restates the trill sign in parentheses at the start of a new row, after a
+ * system break (not drawn for `trill-continuation="line-only"`).
  */
 export function createTrillContinuationSignSvg({
   leftX,
@@ -247,10 +239,8 @@ export function createTrillNotchSvg(
 
 // ─── Written trilling note ─────────────────────────────────────────────────
 //
-// A small notehead in parentheses after the main notehead — required when
-// the trilling pitch can't be expressed as "the diatonic upper neighbor,
-// optionally re-accidentalled" (e.g. it shares the main note's own letter).
-// Never a grace note: no stem, no flag, no slur.
+// A small notehead in parentheses after the main notehead, with no stem,
+// flag or slur.
 
 function appendParenthesis(
   group: SVGGElement,
@@ -276,20 +266,14 @@ function appendParenthesis(
   group.appendChild(path);
 }
 
-// A function, not a module-level constant: svgCreator/note.ts imports the
-// sign builders from this file, so a top-level `NOTE_HEAD_RADIUS_PX * ...`
-// constant here would evaluate during that circular import's module init,
-// before note.ts finishes assigning NOTE_HEAD_RADIUS_PX ("cannot access
-// before initialization"). Deferring the read into a function body, only
-// called after both modules have finished loading, avoids that.
+// A function, not a constant: note.ts imports this file, so reading
+// NOTE_HEAD_RADIUS_PX at module init hits the circular import.
 const writtenNoteHeadWidthPx = (): number =>
   2 * NOTE_HEAD_RADIUS_PX * TRILL_WRITTEN_NOTE_SCALE;
 
 /**
- * Rightward footprint (px) a written trilling notehead (`trill-note`)
- * reserves — mirrors `createWrittenTrillNoteSvg`'s own layout math exactly,
- * without building the SVG, so `staffClassicalBase.ts` can reserve the space
- * before positions are known.
+ * Rightward footprint (px) of a written trilling notehead, from
+ * `createWrittenTrillNoteSvg`'s layout math.
  */
 export function computeWrittenTrillNoteWidth(
   accidental: AccidentalType | null

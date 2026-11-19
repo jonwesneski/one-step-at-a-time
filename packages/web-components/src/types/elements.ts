@@ -26,7 +26,13 @@ import type {
   StaffGroupType,
   StemDirection,
   StressType,
+  TieStyle,
   TimeSignature,
+  TremoloBeamAttach,
+  TremoloBeamPosition,
+  TremoloLabel,
+  TremoloStrokeCount,
+  TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
@@ -69,11 +75,22 @@ export interface INoteElement {
   note: Note;
   octave: Octave | null;
   stemUp: boolean;
-  // Author override for stemUp, independent of pitch. Unset (null) leaves
-  // today's pitch-driven/voice/beam-group resolution unchanged. Setting it
-  // inconsistently across notes that end up sharing one same-staff beam
-  // group is the author's own responsibility to avoid (see StemDirection).
+  // Author override for stemUp; null leaves the pitch, voice or beam-group
+  // default. A beamed group draws one direction (see StemDirection).
   stemDirection: StemDirection | null;
+  // Single-note tremolo strokes through the stem; null for none.
+  tremolo: TremoloValue | null;
+  // Tuplet numeral for a measured tremolo; null for none.
+  tremoloTuplet: number | null;
+  // `trem.` / `non trem.` above the stave; null for none.
+  tremoloLabel: TremoloLabel | null;
+  // Repeats the articulation's length mark once per tremolo repetition.
+  articulationRepeat: boolean;
+  // How the tie this element starts is drawn.
+  tieStyle: TieStyle;
+  // Set by the composition on the end of a dotted tie that crosses a barline,
+  // which shows its accidental again.
+  dottedTieAcrossBarline: boolean;
   // Notehead shape; a triangle also forces stemUp and is placed by the staff.
   // null removes the attribute (normal).
   get notehead(): NoteheadType;
@@ -88,22 +105,13 @@ export interface INoteElement {
   // `id` shared by every element across a measure's two adjacent grand-staff
   // staves that joins one cross-staff double-stemmed beam group.
   beamGroup: string | null;
-  // `id` of the other-staff element this one shares a single stem with —
-  // both hands occasionally playing the same beat simultaneously in
-  // otherwise single-part writing. Resolved by the ancestor
-  // <music-measure>, which suppresses each end's own local stem (noStem)
-  // and draws one real stem line between the two real notehead positions.
+  // `id` of the other-staff element this one shares a stem with; the
+  // ancestor <music-measure> draws it.
   sharedStemFor: string | null;
-  // Set by the ancestor <music-measure> when this element is a
-  // double-stemmed beam-group member on an inner voice (a real second
-  // <music-voice> sharing its staff) — anchors its articulation marks at
-  // the beam's surface facing its notehead instead of the notehead, so they
-  // land right next to the shared beam rather than on the outer voice's own
-  // territory. The value is how many secondary/fractional beam levels the
-  // stem passes beyond the primary beam (0 for a plain eighth); those levels
-  // sit between the stem tip and that surface. null on every other element
-  // (outer voice, single-voice staff, or not a beam-group member at all).
-  // Not an attribute.
+  // Set by the ancestor <music-measure> on an inner-voice double-stemmed
+  // member, whose articulations then sit at the beam: the number of secondary
+  // beam levels past the primary (0 for a plain eighth). Null otherwise. Not
+  // an attribute.
   articulationStemAnchorBeamLevels: number | null;
   // Staff Ys of the dot rows, set by the staff when another voice decides
   // where this element's dots go (an empty array draws none); null uses the
@@ -177,19 +185,11 @@ export interface INoteElement {
   // Never changes the letter itself. Ignored (with a warning) when
   // `trillNote` is also set.
   trillAccidental: AccidentalType | null;
-  // Full override of the trilling (auxiliary) pitch — letter and accidental
-  // — rendered as a small written notehead in parentheses after the main
-  // notehead rather than an accidental-only symbol above the sign. Required
-  // whenever the trilling pitch shares the main note's own letter (a
-  // chromatic/semitone trill) or otherwise isn't the plain diatonic
-  // neighbor. Wins over `trillAccidental` when both are set.
+  // Full override of the trilling pitch, drawn as a small parenthesized
+  // notehead after the main one. Wins over `trillAccidental`.
   trillNote: Note | null;
-  // Controls how a trill's line restates itself after a system break, once
-  // the tie chain has carried it into the new row: 'bracketed' (default)
-  // redraws the sign in parentheses there; 'line-only' resumes the line with
-  // no restated sign. Ignored at an ordinary same-row barline, where the line
-  // always resumes silently regardless of this value. Meaningful only on the
-  // element that started the trill.
+  // How a trill restates itself after a system break; read from the element
+  // that starts the trill.
   trillContinuation: TrillContinuationMode;
   // Set by the staff to the resolved trilling pitch for a trill-marked
   // element. null when not trilling, or in standalone mode (trills render
@@ -257,10 +257,8 @@ export interface INoteElement {
   // rendering a "loco" label alongside the closing corner — or, with no open
   // span, a standalone "(loco)" reminder.
   loco: boolean;
-  // Meaningful only on the element that started the octave-transposition
-  // span — controls the system-break restatement, resolved by the ancestor
-  // composition. Ignored at an ordinary same-row barline, where the line
-  // always resumes silently regardless of this value.
+  // How an octave line restates itself after a system break; read from the
+  // element that starts the span.
   octaveContinuation: OctaveContinuationMode;
   // undefined = auto-detect from note attribute (standalone)
   // AccidentalType = show this symbol (set by staff)
@@ -286,6 +284,18 @@ export interface IChordElement {
   stemUp: boolean;
   // See INoteElement.stemDirection.
   stemDirection: StemDirection | null;
+  // See INoteElement.tremolo.
+  tremolo: TremoloValue | null;
+  // See INoteElement.tremoloTuplet.
+  tremoloTuplet: number | null;
+  // See INoteElement.tremoloLabel.
+  tremoloLabel: TremoloLabel | null;
+  // See INoteElement.articulationRepeat.
+  articulationRepeat: boolean;
+  // See INoteElement.tieStyle.
+  tieStyle: TieStyle;
+  // See INoteElement.dottedTieAcrossBarline.
+  dottedTieAcrossBarline: boolean;
   // Default for every tone; a slotted <music-note>'s own notehead overrides
   // it. Triangles are not supported on chords.
   get notehead(): NoteheadType;
@@ -370,19 +380,11 @@ export interface IChordElement {
   // Never changes the letter itself. Ignored (with a warning) when
   // `trillNote` is also set.
   trillAccidental: AccidentalType | null;
-  // Full override of the trilling (auxiliary) pitch — letter and accidental
-  // — rendered as a small written notehead in parentheses after the main
-  // notehead rather than an accidental-only symbol above the sign. Required
-  // whenever the trilling pitch shares the main note's own letter (a
-  // chromatic/semitone trill) or otherwise isn't the plain diatonic
-  // neighbor. Wins over `trillAccidental` when both are set.
+  // Full override of the trilling pitch, drawn as a small parenthesized
+  // notehead after the main one. Wins over `trillAccidental`.
   trillNote: Note | null;
-  // Controls how a trill's line restates itself after a system break, once
-  // the tie chain has carried it into the new row: 'bracketed' (default)
-  // redraws the sign in parentheses there; 'line-only' resumes the line with
-  // no restated sign. Ignored at an ordinary same-row barline, where the line
-  // always resumes silently regardless of this value. Meaningful only on the
-  // element that started the trill.
+  // How a trill restates itself after a system break; read from the element
+  // that starts the trill.
   trillContinuation: TrillContinuationMode;
   // Set by the staff to the resolved trilling pitch for a trill-marked
   // element. null when not trilling, or in standalone mode (trills render
@@ -450,10 +452,8 @@ export interface IChordElement {
   // rendering a "loco" label alongside the closing corner — or, with no open
   // span, a standalone "(loco)" reminder.
   loco: boolean;
-  // Meaningful only on the element that started the octave-transposition
-  // span — controls the system-break restatement, resolved by the ancestor
-  // composition. Ignored at an ordinary same-row barline, where the line
-  // always resumes silently regardless of this value.
+  // How an octave line restates itself after a system break; read from the
+  // element that starts the span.
   octaveContinuation: OctaveContinuationMode;
   batchUpdate(fn: () => void): void;
 }
@@ -489,6 +489,19 @@ export interface IRestElement {
 
 export interface IClefElement {
   clef: ClefType;
+}
+
+/**
+ * `<music-tremolo>` — a two-note (or multi-note) tremolo: its notes or chords
+ * are each written at the tremolo's full duration and together fill it once,
+ * joined by tremolo beams.
+ */
+export interface ITremoloElement {
+  strokes: TremoloStrokeCount;
+  beamAttach: TremoloBeamAttach | null;
+  beamPosition: TremoloBeamPosition | null;
+  tremoloGroup: string | null;
+  readonly flatElements: NoteChordOrRestElementType[];
 }
 
 export interface ITupletElement {
@@ -546,6 +559,7 @@ export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;
 export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
+export type TremoloElementType = HTMLElement & ITremoloElement;
 export type ClefElementType = HTMLElement & IClefElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
@@ -559,22 +573,22 @@ export type NoteLikeElementType =
   | GuitarNoteElementType
   | ChordElementType;
 
-// A <music-clef> encountered in a staff's slotted content, marking a
-// mid-stream clef change. `afterElementIndex` is the index (into the
-// resulting flatElements array) of the note/chord/rest this marker follows;
-// -1 means the marker appears before any note/chord/rest. On a multi-voice
-// staff this is always relative to voice 1's own flatElements array — a
-// clef change is staff-wide, so it's only ever authored inside the first
-// <music-voice> (voice.ts rejects it elsewhere) — staffClassicalBase.ts
-// converts the index into a beat-offset to apply it to every other voice.
+// A mid-stream <music-clef>. `afterElementIndex` is the flat index of the
+// entry it follows (-1: before any), always into voice 1, the only voice that
+// carries clefs.
 export type ClefMarkerPlacement = {
   afterElementIndex: number;
   element: ClefElementType;
 };
 
-// A `<music-arpeggio>` group found in a staff's slotted content. `runIndices`
-// and `targetIndex` are indices into the resulting flatElements array (the run
-// notes and the final chord/note, which all render as ordinary elements).
+// A valid <music-tremolo> found while flattening: the flat indices of its
+// members, in order. Each member takes 1/N of its written duration.
+export type TremoloGroupPlacement = {
+  memberIndices: number[];
+  element: TremoloElementType;
+};
+
+// A `<music-arpeggio>` group: flat indices of its run notes and target.
 export type ArpeggioGroupPlacement = {
   runIndices: number[];
   targetIndex: number;

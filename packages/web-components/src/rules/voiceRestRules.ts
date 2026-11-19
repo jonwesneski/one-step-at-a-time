@@ -13,22 +13,10 @@ import { durationToFactor } from './theoryConsts';
 const EPSILON = 1e-9;
 
 /**
- * Detects a fully empty measure — every voice present is 100% rests summing
- * exactly to the measure's beat capacity — the only case a single shared
- * whole-bar rest is engraved instead of one rest inventory per voice.
- * Sum-based, not duration-literal-based: a literal 'whole' rest would
- * already overflow/get dropped in any measure with capacity < 1 (e.g. 3/4,
- * where a whole-bar rest is still a whole rest, never a dotted half), so
- * "every voice's rests sum to the full measure" is the only reliable signal. Deliberately narrow: no
- * partial-bar alignment (too fuzzy to specify safely), and no tuplet-ratio
- * scaling (an empty measure built from tupleted rests is not a case this
- * optimization needs to handle — its sum simply won't match exactly, so
- * this safely does not fire rather than mis-detecting).
- *
- * Returns 'whole' when capacity <= 1, 'double-whole' when <= 2 (matching
- * real full-bar-rest convention), or null (skip the optimization) for any
- * larger meter — this library has no numbered whole-bar-rest glyph
- * convention beyond those two values.
+ * Detects a measure where every voice's rests sum exactly to its capacity,
+ * which takes one shared whole-bar rest. Sum-based, since a literal whole
+ * rest won't fit a 3/4 bar. Tupleted rests don't match, so it doesn't fire.
+ * Returns 'whole' for capacity <= 1, 'double-whole' for <= 2, else null.
  */
 export function detectSharedWholeMeasureRest(
   truncatedVoices: ReadonlyMap<

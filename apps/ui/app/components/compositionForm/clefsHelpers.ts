@@ -6,15 +6,10 @@ import type {
 import { CAPACITY_EPSILON, entryFactor } from './measureCapacityHelpers';
 import type { ChordNote, CompositionStructure } from './types';
 
-// Effective clef and clef-derived octave for a note/chord entry. Mirrors the
-// library's render-time resolution: `staffClassicalBase.ts` tracks mid-stream
-// `<music-clef>` markers (`#activeClefAt`) and, for a note with no explicit
-// octave, searches the active clef's octave list for the first pitch that lands
-// on the staff (`noteToYCoordinate`); chords stack bare notes into an ascending
-// close voicing (`#resolveChordStaffYCoordinates`). The per-clef ranges/lists
-// come from `rules/clefRules.ts` `CLEF_DEFINITIONS` + `generateYCoordinates`
-// (treble spans C4–C6, bass E2–E4, inclusive). This app is the sole writer of
-// the composition data, so only well-formed input is handled.
+// Effective clef and clef-derived octave for a note/chord entry, mirroring the
+// library's resolution (staffClassicalBase.ts#activeClefAt and
+// noteToYCoordinate; chords stack into an ascending close voicing). Only
+// well-formed input is handled, since this app is the sole writer.
 
 const DIATONIC = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
@@ -66,15 +61,8 @@ function beatOffsetOf(
   return cumulative;
 }
 
-// The clef in effect at `entryId`: the containing staff's base clef,
-// overridden by any `ClefEntry` earlier in that staff's stream. A clef
-// change is staff-wide but only ever authored in voice 1 (see
-// NormalizedStaff's own doc comment), so this resolves `entryId`'s own beat
-// offset within its own voice, then walks voice 1's stream comparing each
-// clef marker's beat offset against it — correct for an entry in voice 1
-// itself (array position in that same stream) and for one in voice 2/3
-// (compared by beat offset, not document position, since the two voices'
-// streams aren't otherwise comparable).
+// The clef in effect at `entryId`: the staff's clef, overridden by any earlier
+// `ClefEntry`. Clefs live in voice 1, so markers are compared by beat offset.
 export function effectiveClefOfEntry(
   structure: CompositionStructure,
   entryId: string

@@ -57,16 +57,10 @@ export function addVoiceToStaff(
   };
 }
 
-// Removes a voice from a staff and cascades the repair: deletes its entries
-// from `entriesById`, drops any tuplet left under 2 members (mirrors
-// deleteSelectionHelpers.ts's own repair — this app's sole-writer contract
-// means neither file can just call the other without a circular import, since
-// deleteSelectionHelpers.ts already depends on staffEntryIds below), and
-// drops any tie/slur/hairpin whose endpoint was one of the removed entries
-// via `pruneConnectorsForEntries` (kind-agnostic — mirrors
-// deleteSelectionHelpers.ts's own delete-cascade connector filter). A no-op
-// (warns) when it's the staff's only voice — a staff always needs at least
-// one.
+// Removes a voice and its entries, dropping tuplets left under 2 members and
+// connectors to removed entries. Warns and does nothing for a staff's only
+// voice. The tuplet repair duplicates deleteSelectionHelpers.ts's, which
+// imports this file.
 export function removeVoiceFromStaff(
   structure: CompositionStructure,
   staffId: string,

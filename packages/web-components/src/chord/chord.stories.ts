@@ -1,7 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
 import '../index';
-import { ARTICULATIONS, DURATIONS, NOTEHEADS, NOTES, OCTAVES } from '../utils';
+import {
+  ARTICULATIONS,
+  DURATIONS,
+  NOTEHEADS,
+  NOTES,
+  OCTAVES,
+  TREMOLO_VALUES,
+} from '../utils';
 
 const CHORDS = [
   'Cmaj',
@@ -116,6 +123,28 @@ export const WithNoteheads: Story = {
         notehead=${args.chordNotehead}
       ></music-chord>
     </music-staff>
+  `,
+};
+
+export const WithTremolo: Story = {
+  args: {
+    chord: 'Cmaj',
+    duration: 'quarter',
+    tremolo: 3,
+  },
+  argTypes: {
+    chord: { control: 'select', options: CHORDS },
+    duration: { control: 'select', options: DURATIONS },
+    tremolo: { control: 'select', options: TREMOLO_VALUES },
+  },
+  render: (args) => html`
+    <div style="padding: 40px">
+      <music-chord
+        chord=${args.chord}
+        duration=${args.duration}
+        tremolo=${args.tremolo}
+      ></music-chord>
+    </div>
   `,
 };
 

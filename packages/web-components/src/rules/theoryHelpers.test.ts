@@ -70,7 +70,7 @@ describe('Theory Helpers', () => {
       expect(getChordNotes('G#')).toEqual(['G#', 'B#', 'D#']);
     });
 
-    // Level 1: flat-biased — latent Cbsus4 bug fix
+    // Level 1: flat-biased
     it('Gb sus4', () => {
       expect(getChordNotes('Gbsus4')).toEqual(['Gb', 'Cb', 'Db']);
     });

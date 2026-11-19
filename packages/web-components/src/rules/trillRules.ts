@@ -75,12 +75,8 @@ const trillSourceAt = (
   return isTrillCapable(element) ? element : null;
 };
 
-// Walks forward from `startIndex` through the element's own `tie` chain — in
-// a single staff's note stream a tie always connects to the very next
-// note/chord (no multi-voice interleaving within one staff), so "next link"
-// is simply the next array index. Stops early at the first `trill-stop`
-// encountered anywhere in the chain (including on the starting element
-// itself), which cuts the span short regardless of how far the ties run.
+// Walks the `tie` chain from `startIndex` (a tie links to the next index),
+// stopping at the first `trill-stop`, the start included.
 const walkTieChain = (
   elements: readonly NoteChordOrRestElementType[],
   startIndex: number
@@ -112,9 +108,7 @@ function buildTrillSpan(
   elements: readonly NoteChordOrRestElementType[],
   startIndex: number
 ): TrillLineSpan {
-  // Guaranteed non-null: callers only build a span from a position they've
-  // already confirmed is trill-marked.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- see above
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- callers only pass a trill-marked index
   const source = trillSourceAt(elements, startIndex)!;
   const { lastTiedIndex, stopped } = walkTieChain(elements, startIndex);
   const hasLine = source.trillLine !== 'none';
@@ -136,11 +130,8 @@ function buildTrillSpan(
 }
 
 /**
- * Resolves every `trill`-marked element in `elements` (a staff's own
- * rendered note/chord/rest stream, in document order) to a same-measure
- * `TrillLineSpan`. Pure index-based logic — no DOM geometry — so a caller
- * with real pixel positions (`staffClassicalBase.ts`) only has to look up
- * `startIndex` / `endBeforeIndex` / `lastTiedIndex` to draw the line.
+ * Resolves every `trill`-marked element in a staff's element stream to a
+ * same-measure `TrillLineSpan`, by index.
  */
 export function resolveTrillSpans(
   elements: readonly NoteChordOrRestElementType[]
@@ -193,16 +184,9 @@ const measureIndexOfGlobalIndex = (
 };
 
 /**
- * Given a `TrillLineSpan` resolved over a staff-track's global element array
- * (the concatenation of every measure's own note/chord/rest stream, in row
- * order — same-index-based `resolveTrillSpans` already walks a tie chain
- * across that concatenation transparently, since it only ever looks at
- * `elements[index + 1]`), returns the additional segments needed in measures
- * *after* the one the span started in. Empty when the span never leaves its
- * starting measure — that case is already fully drawn by that measure's own
- * staff-local render pass. Pure index math; the caller supplies real
- * geometry per segment (`staffClassicalBase.ts` for the starting measure,
- * `composition.ts` for every measure this returns).
+ * For a span resolved over a staff-track's concatenated elements, the
+ * segments needed in measures after the starting one (whose staff draws its
+ * own part). Empty when the tie chain stays in its measure.
  */
 export function resolveTrillContinuationSegments(
   measureBoundaries: readonly TrillMeasureBoundary[],
@@ -212,14 +196,9 @@ export function resolveTrillContinuationSegments(
     measureBoundaries,
     span.startIndex
   );
-  // Whether continuation is needed at all is decided by the tie chain's own
-  // end (lastTiedIndex), not by endBeforeIndex — endBeforeIndex is the next
-  // element the *line* stops short of, which is always lastTiedIndex + 1 and
-  // so can land in the following measure even when the tie chain itself
-  // never left the starting measure (an untied trill on a measure's last
-  // element). That trailing sliver of line is already drawn by the starting
-  // measure's own staff-local render (it simply runs to the measure's own
-  // right edge), so it must not also trigger a continuation segment here.
+  // Decided by lastTiedIndex: endBeforeIndex can fall in the next measure
+  // for an untied trill on a measure's last element, whose line the staff
+  // already draws to its edge.
   const lastTiedMeasure = measureIndexOfGlobalIndex(
     measureBoundaries,
     span.lastTiedIndex
@@ -272,11 +251,8 @@ export type ResolvedTrillPitch = {
   /** Accidental to show on the letter, or null when unaltered (no symbol drawn). */
   accidental: AccidentalType | null;
   /**
-   * True when `trill-note` was set — render as a small written notehead in
-   * parentheses after the main notehead, rather than an accidental-only
-   * symbol above the sign. Required whenever the trilling pitch shares the
-   * main note's own letter (only the accidental differs) or otherwise can't
-   * be expressed as "the diatonic neighbor, optionally re-accidentalled".
+   * True when `trill-note` was set: drawn as a small parenthesized notehead
+   * after the main one, not an accidental above the sign.
    */
   written: boolean;
   /** Octave for the written notehead's staff position — set only when `written` is true. */
@@ -301,12 +277,8 @@ const octaveAbove = (
  * diatonic neighbor, modified by the key signature — e.g. a trill on "F" in a
  * key with F# in its signature implies an upper neighbor of G, not G#, since
  * G is unaltered by that signature. `accidentalOverride` (`trill-accidental`)
- * replaces only the computed accidental, never the letter. `noteOverride`
- * (`trill-note`) replaces the whole resolved pitch — letter and accidental —
- * and takes precedence over `accidentalOverride` when both are set; this is
- * the only path that can express a trilling note sharing the main note's own
- * letter (a chromatic/semitone trill) or one that otherwise isn't the plain
- * diatonic neighbor.
+ * replaces only the accidental; `noteOverride` (`trill-note`) replaces the
+ * whole pitch and wins over it.
  */
 export function resolveTrillPitch(
   note: Note,
