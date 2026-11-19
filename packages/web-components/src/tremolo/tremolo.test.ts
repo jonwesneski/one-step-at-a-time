@@ -94,6 +94,26 @@ describe(MUSIC_TREMOLO, () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('dispatches a change when its children change, until disconnected', async () => {
+    const element = tremolo([note('F', 4, 'half')]);
+    document.body.appendChild(element);
+    const handler = jest.fn();
+    element.addEventListener(TREMOLO_EVENTS.ATTRIBUTE_CHANGE, handler);
+
+    element.appendChild(note('A', 4, 'half'));
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    element.firstElementChild!.remove();
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledTimes(2);
+
+    element.remove();
+    element.appendChild(note('C', 5, 'half'));
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
   it('lists its members as flat elements', () => {
     const members = [note('F', 4, 'half'), note('A', 4, 'half')];
     expect(tremolo(members).flatElements).toEqual(members);
@@ -182,6 +202,23 @@ describe('staff integration', () => {
 
     expect(tremoloBeams(staff)).toHaveLength(0);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('same duration'));
+    warn.mockRestore();
+  });
+
+  it('redraws when a member is added or removed', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const second = note('A', 4, 'half');
+    const wrapper = tremolo([note('F', 4, 'half'), second]);
+    const staff = renderStaff('4/4', [wrapper]);
+    expect(tremoloBeams(staff)).toHaveLength(3);
+
+    second.remove();
+    await Promise.resolve();
+    expect(tremoloBeams(staff)).toHaveLength(0);
+
+    wrapper.appendChild(second);
+    await Promise.resolve();
+    expect(tremoloBeams(staff)).toHaveLength(3);
     warn.mockRestore();
   });
 

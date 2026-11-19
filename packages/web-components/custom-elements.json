@@ -1391,7 +1391,7 @@
               "type": {
                 "text": "boolean"
               },
-              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single."
+              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single."
             },
             {
               "name": "tie-style",
@@ -4282,7 +4282,7 @@
               "type": {
                 "text": "boolean"
               },
-              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single."
+              "description": "Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single."
             },
             {
               "name": "tie-style",
@@ -13291,6 +13291,15 @@
           "members": [
             {
               "kind": "field",
+              "name": "#childObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "strokes",
               "type": {
                 "text": "TremoloStrokeCount"
@@ -13324,6 +13333,16 @@
                 "text": "NoteChordOrRestElementType[]"
               },
               "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "#notify",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
             }
           ],
           "events": [

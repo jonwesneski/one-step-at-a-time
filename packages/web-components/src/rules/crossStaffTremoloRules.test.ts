@@ -81,11 +81,16 @@ describe('resolveCrossStaffTremoloGroups', () => {
       ],
     ],
     [
-      'a different share on each staff',
+      // Each wrapper's members fill its written value, so totals match.
+      'a different number of members on each staff',
       [
         entry(),
         bottom({
-          members: [member('rest', true), member('C4'), member('rest2', true)],
+          members: [
+            { ...member('rest', true), beatLength: 1 / 3 },
+            { ...member('C4'), beatLength: 1 / 3 },
+            { ...member('rest2', true), beatLength: 1 / 3 },
+          ],
         }),
       ],
     ],

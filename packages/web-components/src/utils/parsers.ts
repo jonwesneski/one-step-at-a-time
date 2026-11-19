@@ -298,7 +298,7 @@ export const parseTremoloTuplet = (value: string | null): number | null => {
     return null;
   }
   const parsed = Number(value);
-  return parsed >= 2 ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= 2 ? parsed : null;
 };
 
 export const parseTremoloLabel = (value: string | null): TremoloLabel | null =>

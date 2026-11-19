@@ -2153,7 +2153,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             // from markup has upgraded.
             tremoloGroup: tremolo.getAttribute('tremolo-group') ?? '',
             strokes: parseTremoloStrokes(tremolo.getAttribute('strokes')) ?? 3,
-            valid: tremoloGroups.length === 1,
+            valid: tremoloGroups.some((group) => group.element === tremolo),
             isNested:
               tremolo.parentElement?.closest(
                 `${MUSIC_TUPLET}, ${MUSIC_ARPEGGIO}, ${MUSIC_TREMOLO}`

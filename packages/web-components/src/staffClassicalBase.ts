@@ -742,7 +742,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     this.#renderNotes();
   };
-  // Which children a <music-tremolo> accepts depends on its `tremolo-group`.
+  // A <music-tremolo>'s children, and which it accepts (its `tremolo-group`),
+  // decide its members.
   #boundTremoloChange = () => {
     if (this.#voices.size > 0) {
       this.#reRenderFromCurrentSlot();

@@ -182,7 +182,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
    * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
    * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
-   * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head. Accents, fermatas and stress marks stay single.
+   * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
    * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
    * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves today's resolution unchanged. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
    *
@@ -1430,7 +1430,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'duration' ||
         name === 'tremolo' ||
         name === 'tremolo-tuplet' ||
-        name === 'tremolo-label'
+        name === 'tremolo-label' ||
+        name === 'articulation-repeat'
       ) {
         // `duration` moves every later entry (beat time) and its dots widen
         // the rightward footprint.
@@ -1445,6 +1446,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // head's width, and a triangle also moves the note and forces its
         // stem. `tremolo` strokes lengthen the stem; a `tremolo-tuplet`
         // numeral and a `tremolo-label` change what the staff clears above it.
+        // `articulation-repeat` is part of the voice-combine key.
         if (name === 'notehead' && this.hasAttribute('beam-group')) {
           // A triangle leaves or rejoins its cross-staff beam group.
           this.dispatchEvent(

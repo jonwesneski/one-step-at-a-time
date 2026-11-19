@@ -37,6 +37,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * </music-staff>
    */
   class TremoloElement extends HTMLElement implements ITremoloElement {
+    #childObserver: MutationObserver | null = null;
+
     static get observedAttributes(): string[] {
       return ['strokes', 'beam-attach', 'beam-position', 'tremolo-group'];
     }
@@ -91,6 +93,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return flattenSlotElements([this]).flatElements;
     }
 
+    // A change to the wrapper's children doesn't fire the staff's slotchange,
+    // so the wrapper reports it. Initial insertion is covered by slotchange.
+    connectedCallback(): void {
+      this.#childObserver = new MutationObserver(() => this.#notify());
+      this.#childObserver.observe(this, { childList: true });
+    }
+
+    disconnectedCallback(): void {
+      this.#childObserver?.disconnect();
+      this.#childObserver = null;
+    }
+
     attributeChangedCallback(
       name: string,
       oldValue: string | null,
@@ -117,7 +131,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (!this.isConnected) {
         return;
       }
-      // The wrapper renders nothing itself: the staff redraws its beams.
+      this.#notify();
+    }
+
+    // The wrapper renders nothing itself: the staff redraws its beams.
+    #notify(): void {
       this.dispatchEvent(
         new CustomEvent(TREMOLO_EVENTS.ATTRIBUTE_CHANGE, {
           bubbles: true,

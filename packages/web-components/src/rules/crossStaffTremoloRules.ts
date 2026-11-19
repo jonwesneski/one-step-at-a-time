@@ -56,10 +56,6 @@ export type CrossStaffTremoloResolution<TTremolo, TElement> = {
 
 const BEAT_EPSILON = 1e-9;
 
-const totalBeatLength = <TElement>(
-  members: readonly CrossStaffTremoloMember<TElement>[]
-): number => members.reduce((sum, member) => sum + member.beatLength, 0);
-
 /**
  * Joins one `<music-tremolo tremolo-group>` on each of two adjacent staves
  * into one tremolo between the hands. Same warn-and-drop shape as
@@ -126,10 +122,7 @@ export function resolveCrossStaffTremoloGroups<TTremolo, TElement>(
       skip('has members of different durations');
       continue;
     }
-    if (
-      Math.abs(totalBeatLength(top.members) - totalBeatLength(bottom.members)) >
-      BEAT_EPSILON
-    ) {
+    if (top.members.length !== bottom.members.length) {
       skip('holds a different number of notes and spacers on each staff');
       continue;
     }

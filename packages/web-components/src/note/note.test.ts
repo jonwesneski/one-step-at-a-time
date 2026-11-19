@@ -1889,6 +1889,10 @@ describe('tremolo numeral, label and repeated articulation', () => {
 
     noteElement.setAttribute('tremolo-tuplet', '1');
     expect(noteElement.tremoloTuplet).toBeNull();
+    noteElement.setAttribute('tremolo-tuplet', '9'.repeat(309));
+    expect(noteElement.tremoloTuplet).toBeNull();
+    noteElement.setAttribute('tremolo-tuplet', '9007199254740993');
+    expect(noteElement.tremoloTuplet).toBeNull();
     noteElement.setAttribute('tremolo-label', 'tremolando');
     expect(noteElement.tremoloLabel).toBeNull();
     expect(warn).toHaveBeenCalledWith(
@@ -1956,6 +1960,23 @@ describe('tremolo numeral, label and repeated articulation', () => {
     );
   });
 
+  it('draws the articulation once, with a warning, when the row is too long to write out', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = standalone({
+      tremolo: '1',
+      'tremolo-tuplet': '1000',
+      articulation: 'staccato',
+      'articulation-repeat': '',
+    });
+    expect(noteElement.shadowRoot!.querySelectorAll('.staccato')).toHaveLength(
+      1
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('1000 repetitions')
+    );
+    warn.mockRestore();
+  });
+
   it('dispatches NOTE_Y_CHANGE for a numeral or label and a connector change for a tie style', () => {
     const noteElement = standalone({});
     const relayout = jest.fn();
@@ -1968,9 +1989,10 @@ describe('tremolo numeral, label and repeated articulation', () => {
 
     noteElement.tremoloTuplet = 3;
     noteElement.tremoloLabel = 'trem';
+    noteElement.articulationRepeat = true;
     noteElement.tieStyle = 'dotted';
 
-    expect(relayout).toHaveBeenCalledTimes(2);
+    expect(relayout).toHaveBeenCalledTimes(3);
     expect(connectors).toHaveBeenCalledTimes(1);
   });
 

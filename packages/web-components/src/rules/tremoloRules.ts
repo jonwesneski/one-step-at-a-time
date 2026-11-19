@@ -43,6 +43,8 @@ const EPSILON = 1e-6;
 const MAX_BEAMS = 5;
 // Unmeasured tremolo is three beams' worth: strokes plus the note's own tails.
 const UNMEASURED_BEAMS = 3;
+// The longest row of repeated articulation marks drawn; longer rows draw once.
+export const MAX_ARTICULATION_REPEATS = 32;
 
 export type StaffBand = { topLineY: number; bottomLineY: number };
 
@@ -140,18 +142,15 @@ const REPEATABLE_LENGTHS = new Set([
   'tenuto-staccatissimo',
 ]);
 
-/**
- * How many times the articulation's length mark is drawn: once per
- * repetition with `articulation-repeat` on a measured tremolo, otherwise
- * once.
- */
-export function articulationRepeatCount(input: {
+type ArticulationRepeatInput = {
   articulationRepeat: boolean;
   articulation: ArticulationType | null;
   tremolo: TremoloValue | null;
   tuplet: number | null;
   duration: DurationType;
-}): number {
+};
+
+function requestedRepeatCount(input: ArticulationRepeatInput): number {
   const { articulationRepeat, articulation, tremolo, tuplet, duration } = input;
   if (
     !articulationRepeat ||
@@ -166,6 +165,28 @@ export function articulationRepeatCount(input: {
     resolveStrokeCount(tremolo, duration),
     drawnTremoloTuplet(tremolo, tuplet)
   );
+}
+
+/**
+ * How many times the articulation's length mark is drawn: once per
+ * repetition with `articulation-repeat` on a measured tremolo, otherwise
+ * once. A row longer than `MAX_ARTICULATION_REPEATS` draws once.
+ */
+export function articulationRepeatCount(
+  input: ArticulationRepeatInput
+): number {
+  const count = requestedRepeatCount(input);
+  return count > MAX_ARTICULATION_REPEATS ? 1 : count;
+}
+
+/** Warning text when `articulation-repeat` asks for too long a row. */
+export function articulationRepeatCountWarning(
+  input: ArticulationRepeatInput
+): string | null {
+  const count = requestedRepeatCount(input);
+  return count > MAX_ARTICULATION_REPEATS
+    ? `articulation-repeat stands for ${count} repetitions; more than ${MAX_ARTICULATION_REPEATS} can't be written out, drawing the articulation once`
+    : null;
 }
 
 /** Warning text when `articulation-repeat` has nothing to repeat. */
@@ -434,13 +455,13 @@ export function beamedTremoloMinimumStemPx(input: {
 
 const CHECKS_BY_ATTRIBUTE: Record<
   string,
-  readonly ('strokes' | 'tuplet' | 'repeat')[]
+  readonly ('strokes' | 'tuplet' | 'repeat' | 'repeat-count')[]
 > = {
-  tremolo: ['strokes', 'tuplet', 'repeat'],
-  duration: ['strokes'],
-  'tremolo-tuplet': ['tuplet'],
-  articulation: ['repeat'],
-  'articulation-repeat': ['repeat'],
+  tremolo: ['strokes', 'tuplet', 'repeat', 'repeat-count'],
+  duration: ['strokes', 'repeat-count'],
+  'tremolo-tuplet': ['tuplet', 'repeat-count'],
+  articulation: ['repeat', 'repeat-count'],
+  'articulation-repeat': ['repeat', 'repeat-count'],
 };
 
 /**
@@ -458,7 +479,7 @@ export function tremoloConsistencyWarnings(input: {
   const { changed, tremolo, tuplet, articulationRepeat, articulation } = input;
   const checks =
     changed === null
-      ? ['strokes', 'tuplet', 'repeat']
+      ? ['strokes', 'tuplet', 'repeat', 'repeat-count']
       : CHECKS_BY_ATTRIBUTE[changed] ?? [];
   const warnings: (string | null)[] = [];
   if (checks.includes('strokes') && tremolo !== null) {
@@ -469,6 +490,9 @@ export function tremoloConsistencyWarnings(input: {
   }
   if (checks.includes('repeat') && articulationRepeat) {
     warnings.push(articulationRepeatWarning(articulation, tremolo));
+  }
+  if (checks.includes('repeat-count')) {
+    warnings.push(articulationRepeatCountWarning(input));
   }
   return warnings.filter((warning): warning is string => warning !== null);
 }

@@ -20,10 +20,12 @@ import {
 import {
   acceptsBeamAttach,
   articulationRepeatCount,
+  articulationRepeatCountWarning,
   articulationRepeatWarning,
   beamedTremoloMinimumStemPx,
   canPlaceTremoloBetween,
   drawnTremoloTuplet,
+  MAX_ARTICULATION_REPEATS,
   repetitionCount,
   resolveBetweenTremoloBeams,
   resolveStrokeCount,
@@ -458,6 +460,24 @@ describe('articulationRepeatCount', () => {
     );
   });
 
+  it('draws once when the row would be too long to write out', () => {
+    expect(
+      articulationRepeatCount({ ...base, tuplet: MAX_ARTICULATION_REPEATS })
+    ).toBe(MAX_ARTICULATION_REPEATS);
+    expect(
+      articulationRepeatCount({ ...base, tuplet: MAX_ARTICULATION_REPEATS + 1 })
+    ).toBe(1);
+    expect(articulationRepeatCountWarning({ ...base, tuplet: 1000 })).toContain(
+      '1000 repetitions'
+    );
+    expect(
+      articulationRepeatCountWarning({
+        ...base,
+        tuplet: MAX_ARTICULATION_REPEATS,
+      })
+    ).toBeNull();
+  });
+
   it('repeats the length mark of an accented articulation', () => {
     expect(
       articulationRepeatCount({ ...base, articulation: 'marcato-tenuto' })
@@ -490,6 +510,17 @@ describe('tremoloConsistencyWarnings', () => {
     expect(
       tremoloConsistencyWarnings({ ...input, changed: 'articulation-repeat' })
     ).toHaveLength(1);
+  });
+
+  it('warns about too long a row when the numeral changes', () => {
+    expect(
+      tremoloConsistencyWarnings({
+        ...input,
+        tremolo: 1,
+        tuplet: 1000,
+        changed: 'tremolo-tuplet',
+      })
+    ).toEqual([expect.stringContaining('1000 repetitions')]);
   });
 
   it('checks everything when nothing changed', () => {

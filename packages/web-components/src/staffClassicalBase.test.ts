@@ -719,6 +719,63 @@ describe('staffClassicalBase', () => {
       ]);
     });
 
+    describe('re-combines when articulation-repeat changes', () => {
+      function makeRepeatedStaccato(element: HTMLElement): HTMLElement {
+        element.setAttribute('tremolo', '2');
+        element.setAttribute('articulation', 'staccato');
+        element.setAttribute('articulation-repeat', '');
+        return element;
+      }
+
+      function renderVoices(first: HTMLElement, second: HTMLElement): any {
+        const staff = document.createElement(MUSIC_STAFF) as any;
+        staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+        document.body.appendChild(staff);
+        const voice1 = document.createElement('music-voice');
+        voice1.appendChild(first);
+        const voice2 = document.createElement('music-voice');
+        voice2.appendChild(second);
+        staff.append(voice1, voice2);
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [voice1, voice2];
+        slot.dispatchEvent(new Event('slotchange'));
+        return staff;
+      }
+
+      it('on a note', () => {
+        const voice1Note = makeRepeatedStaccato(makeQuarterNote('C'));
+        const voice2Note = makeRepeatedStaccato(makeQuarterNote('E'));
+        const staff = renderVoices(voice1Note, voice2Note);
+        const synthesizedChord = staff.shadowRoot.querySelector(MUSIC_CHORD);
+        expect(
+          synthesizedChord.shadowRoot.querySelectorAll('.staccato')
+        ).toHaveLength(4);
+
+        voice2Note.removeAttribute('articulation-repeat');
+
+        expect(staff.shadowRoot.querySelector(MUSIC_CHORD)).toBeNull();
+        expect(voice1Note.style.display).not.toBe('none');
+        expect(voice2Note.style.display).not.toBe('none');
+      });
+
+      it('on a chord', () => {
+        const voice1Note = makeRepeatedStaccato(makeQuarterNote('B'));
+        const voice2Chord = document.createElement(
+          MUSIC_CHORD
+        ) as ChordElementType;
+        voice2Chord.setAttribute('chord', 'Cmaj' satisfies Chord);
+        voice2Chord.setAttribute('duration', 'quarter');
+        makeRepeatedStaccato(voice2Chord);
+        const staff = renderVoices(voice1Note, voice2Chord);
+        expect(staff.shadowRoot.querySelector(MUSIC_CHORD)).not.toBeNull();
+
+        voice2Chord.removeAttribute('articulation-repeat');
+
+        expect(staff.shadowRoot.querySelector(MUSIC_CHORD)).toBeNull();
+        expect(voice2Chord.style.display).not.toBe('none');
+      });
+    });
+
     it('renders one centered shared rest when every voice is silent for the whole measure (v1-scoped shared rest)', () => {
       const staff = document.createElement(MUSIC_STAFF) as any;
       staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
