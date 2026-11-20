@@ -133,3 +133,43 @@ test('the bracket keeps clear of a fermata added to the 2nd ending', async ({
   await waitForRedrawCycle(page);
   expect(await gap()).toBeGreaterThan(before);
 });
+
+test('the bracket keeps clear of a note raised in two voices that combine', async ({
+  page,
+}) => {
+  const voices = (octave: number) =>
+    `<music-voice><music-note note="C" octave="${octave}" duration="whole"></music-note></music-voice>
+     <music-voice><music-note note="E" octave="${octave}" duration="whole"></music-note></music-voice>`;
+  await render(
+    page,
+    `<music-composition time="4/4">${bar('')}
+      <music-measure ending="1" barline="repeat-end"><music-staff clef="treble">${voices(
+        5
+      )}</music-staff></music-measure>
+      ${bar('ending="2"')}</music-composition>`,
+    900
+  );
+  const gap = () =>
+    page.evaluate(() => {
+      const measure = document.querySelectorAll('music-measure')[1];
+      const line = measure
+        .querySelector('music-staff')
+        ?.shadowRoot?.querySelector('.staff-container')
+        ?.getBoundingClientRect().top;
+      const bracket = measure.shadowRoot
+        ?.querySelector('.ending-segment rect')
+        ?.getBoundingClientRect().top;
+      return (line ?? 0) - (bracket ?? 0);
+    });
+
+  const before = await gap();
+  await page.evaluate(() =>
+    document
+      .querySelectorAll('music-measure')[1]
+      .querySelectorAll('music-note')
+      .forEach((note) => note.setAttribute('octave', '6'))
+  );
+  await waitForRedrawCycle(page);
+  await waitForRedrawCycle(page);
+  expect(await gap()).toBeGreaterThan(before);
+});

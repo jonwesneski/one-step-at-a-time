@@ -1,5 +1,6 @@
 import {
   barlineGlyphWidth,
+  endBarlineInset,
   endBarlineReserve,
   type ResolvedEndBarline,
   type StartRepeatMode,
@@ -322,10 +323,16 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       return;
     }
     // A zero-width <svg> isn't painted, so the box is as wide as the glyph.
-    const width = Math.ceil(barlineGlyphWidth(this.#endBarline));
+    const inset = endBarlineInset(this.#endBarline);
+    const width = Math.ceil(barlineGlyphWidth(this.#endBarline) + inset);
     this.#endBarlineSvg.style.width = `${width}px`;
     this.#endBarlineSvg.appendChild(
-      createBarlineSvg(this.#endBarline, this.staffLineCount, width, 'end')
+      createBarlineSvg(
+        this.#endBarline,
+        this.staffLineCount,
+        width - inset,
+        'end'
+      )
     );
   }
 
@@ -680,9 +687,15 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       }
     };
     visit(this.transcribeContainer);
-    const entries = Array.from(
-      (this as unknown as ParentNode).querySelectorAll(ENTRY_SELECTOR)
-    );
+    // A combined-voices chord lives in the shadow wrapper, not the light DOM.
+    const entries = [
+      ...Array.from(
+        (this as unknown as ParentNode).querySelectorAll(ENTRY_SELECTOR)
+      ),
+      ...Array.from(
+        this.wrapperElement?.querySelectorAll(ENTRY_SELECTOR) ?? []
+      ),
+    ];
     for (const entry of entries) {
       visit(entry.shadowRoot);
     }

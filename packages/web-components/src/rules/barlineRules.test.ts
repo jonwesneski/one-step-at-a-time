@@ -1,8 +1,13 @@
-import { STAFF_LINE_SPACING } from '../utils/notationDimensions';
+import {
+  BARLINE_THICK_PX,
+  BARLINE_THIN_PX,
+  STAFF_LINE_SPACING,
+} from '../utils/notationDimensions';
 import {
   barlineGlyphWidth,
   barlinePieces,
   barlineVerticalSpan,
+  endBarlineInset,
   endBarlineReserve,
   type JunctionInput,
   type RepeatEvent,
@@ -59,6 +64,15 @@ describe('barlinePieces / barlineGlyphWidth', () => {
     expect(endBarlineReserve('single')).toBe(0);
     expect(endBarlineReserve('none')).toBe(0);
     expect(endBarlineReserve('final')).toBeGreaterThan(0);
+  });
+
+  it('holds the left half of a back-to-back repeat clear of the shared thick line', () => {
+    const inset = endBarlineInset('repeat-end-thin');
+    expect(inset).toBeGreaterThan(BARLINE_THICK_PX / 2);
+    expect(endBarlineInset('repeat-end')).toBe(0);
+    expect(endBarlineReserve('repeat-end-thin')).toBe(
+      barlineGlyphWidth('repeat-end-thin') - BARLINE_THIN_PX + inset
+    );
   });
 });
 

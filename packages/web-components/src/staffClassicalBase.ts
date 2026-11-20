@@ -1865,6 +1865,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     if (reference.dynamic !== null) {
       chord.setAttribute('dynamic', reference.dynamic);
     }
+    if (reference.dynamicReminder) {
+      chord.setAttribute('dynamic-reminder', '');
+    }
     if (reference.crescendo !== null) {
       chord.setAttribute('crescendo', reference.crescendo);
     }

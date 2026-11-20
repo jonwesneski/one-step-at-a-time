@@ -161,3 +161,52 @@ test('a mid-bar barline written in one staff lines up through every staff of the
   expect(Math.abs(narrowTop - narrowBottom)).toBeLessThan(1);
   expect(narrowTop).not.toBe(top);
 });
+
+test('a tab staff keeps its notes right of a mid-bar barline another staff pushed along', async ({
+  page,
+}) => {
+  const sixteenths = Array.from(
+    { length: 8 },
+    () => '<music-note note="E" octave="5" duration="sixteenth"></music-note>'
+  ).join('');
+  await render(
+    page,
+    `<music-measure time="4/4">
+      <music-staff clef="treble">
+        ${sixteenths}
+        <music-barline type="repeat-start"></music-barline>
+        <music-note note="C" octave="5" duration="half"></music-note>
+      </music-staff>
+      <music-staff-guitar-tab>
+        <music-guitar-note fret="1" string="2" duration="half"></music-guitar-note>
+        <music-guitar-note fret="3" string="2" duration="half"></music-guitar-note>
+      </music-staff-guitar-tab>
+    </music-measure>`,
+    420
+  );
+  const layout = () =>
+    page.evaluate(() => {
+      const notation = document.querySelector('music-staff');
+      const tab = document.querySelector('music-staff-guitar-tab');
+      const thickLeft = (staff: Element | null, selector: string) =>
+        staff?.shadowRoot
+          ?.querySelector(`${selector} .barline-thick`)
+          ?.getBoundingClientRect().left ?? Number.NaN;
+      const notes = Array.from(
+        document.querySelectorAll('music-guitar-note')
+      ).map((note) => note.getBoundingClientRect().left);
+      return {
+        notation: thickLeft(notation, '.mid-bar-barlines-container'),
+        tab: thickLeft(tab, '.barlines-container'),
+        afterBarline: notes[1],
+      };
+    });
+
+  for (const width of [330, 420, 700]) {
+    await resizeHost(page, width);
+    await waitForRedrawCycle(page);
+    const { notation, tab, afterBarline } = await layout();
+    expect(Math.abs(notation - tab)).toBeLessThan(1);
+    expect(afterBarline).toBeGreaterThan(tab);
+  }
+});

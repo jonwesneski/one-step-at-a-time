@@ -719,6 +719,30 @@ describe('staffClassicalBase', () => {
       ]);
     });
 
+    it('keeps a dynamic reminder on the combined chord', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1Note = makeQuarterNote('C');
+      const voice2Note = makeQuarterNote('E');
+      for (const note of [voice1Note, voice2Note]) {
+        note.setAttribute('dynamic', 'p');
+        note.setAttribute('dynamic-reminder', '');
+      }
+      const voice1 = document.createElement('music-voice');
+      voice1.appendChild(voice1Note);
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(voice2Note);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      const synthesizedChord = staff.shadowRoot.querySelector(MUSIC_CHORD);
+      expect(synthesizedChord.dynamicReminder).toBe(true);
+    });
+
     describe('re-combines when articulation-repeat changes', () => {
       function makeRepeatedStaccato(element: HTMLElement): HTMLElement {
         element.setAttribute('tremolo', '2');

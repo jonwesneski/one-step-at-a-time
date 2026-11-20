@@ -84,11 +84,25 @@ export function midBarBarlineSlotWidth(type: BarlineType): number {
 }
 
 /**
+ * How far an end barline's glyph sits left of the staff's right edge. The left
+ * half of a back-to-back repeat clears the next bar's thick line, which is
+ * centred on that edge.
+ */
+export function endBarlineInset(type: ResolvedEndBarline): number {
+  return type === 'repeat-end-thin'
+    ? BARLINE_THICK_PX / 2 + BARLINE_LINE_GAP_PX
+    : 0;
+}
+
+/**
  * Extra room an end barline needs inside the staff beyond the plain 1px
  * barline every measure already has.
  */
 export function endBarlineReserve(type: ResolvedEndBarline): number {
-  return Math.max(0, barlineGlyphWidth(type) - BARLINE_THIN_PX);
+  return (
+    Math.max(0, barlineGlyphWidth(type) - BARLINE_THIN_PX) +
+    endBarlineInset(type)
+  );
 }
 
 /**

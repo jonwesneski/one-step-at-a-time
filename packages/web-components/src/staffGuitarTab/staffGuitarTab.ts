@@ -10,6 +10,7 @@ import {
 } from '../rules/staffWidth';
 import {
   MARKER_BEAT_EPSILON,
+  type MarkerBeat,
   markerWidthReached,
   totalMarkerWidth,
 } from '../rules/streamMarkerRules';
@@ -308,25 +309,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         proportionalWidth
       );
 
-      let previousNoteX: number | null = null;
-      for (let i = 0; i < assignedElements.length; i++) {
-        const element = assignedElements[i];
-        const xOffsetInNotesSpace =
-          LEADING_NOTE_GAP_PX +
-          markerWidthReached(markers, beatOffsets[i]) +
-          measureOffsets[i];
-        let x = this.#describeEndX + xOffsetInNotesSpace;
-        if (previousNoteX !== null) {
-          x = Math.max(x, previousNoteX + MIN_NOTE_WIDTH);
-        }
-        previousNoteX = x;
-        element.style.left = `${x}px`;
-        element.style.top = `${stringToY(element.string)}px`;
-      }
-
       // A barline's slot sits just before the entries on its beat, at the
       // measure's shared x so it runs through every staff.
       const ownSlotLefts: BarlineSlotLeft[] = [];
+      const slots: { marker: MarkerBeat; left: number }[] = [];
       markers.forEach((marker, index) => {
         if (marker.kind !== 'barline' || marker.barlineType === null) {
           return;
@@ -346,14 +332,41 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           (slot) => Math.abs(slot.beat - marker.beat) <= MARKER_BEAT_EPSILON
         );
         const left = Math.max(ownLeft, shared?.left ?? ownLeft);
+        slots.push({ marker, left });
+        // The glyph keeps to the slot's right edge, as the notation staff's
+        // does, so a slot widened by another staff's warning still lines up.
         this.#barlinesContainer.appendChild(
           createBarlineSvg(
             marker.barlineType,
             TAB_STRING_COUNT,
-            left + MID_BAR_BARLINE_PADDING_PX
+            left +
+              marker.width -
+              MID_BAR_BARLINE_PADDING_PX -
+              barlineGlyphWidth(marker.barlineType)
           )
         );
       });
+
+      let previousNoteX: number | null = null;
+      for (let i = 0; i < assignedElements.length; i++) {
+        const element = assignedElements[i];
+        const xOffsetInNotesSpace =
+          LEADING_NOTE_GAP_PX +
+          markerWidthReached(markers, beatOffsets[i]) +
+          measureOffsets[i];
+        let x = this.#describeEndX + xOffsetInNotesSpace;
+        for (const slot of slots) {
+          if (slot.marker.beat <= beatOffsets[i] + MARKER_BEAT_EPSILON) {
+            x = Math.max(x, slot.left + slot.marker.width);
+          }
+        }
+        if (previousNoteX !== null) {
+          x = Math.max(x, previousNoteX + MIN_NOTE_WIDTH);
+        }
+        previousNoteX = x;
+        element.style.left = `${x}px`;
+        element.style.top = `${stringToY(element.string)}px`;
+      }
       this.#ownBarlineSlotLefts = ownSlotLefts;
     }
 

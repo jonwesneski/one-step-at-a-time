@@ -22,6 +22,7 @@ import {
   ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
+  STAFF_LINE_SPACING,
 } from '../utils/notationDimensions';
 import { isTriangle } from './noteheadRules';
 import { MINOR_TO_RELATIVE_MAJOR } from './theoryConsts';
@@ -301,6 +302,29 @@ export function accidentalSymbolWidth(
   );
 }
 
+/** The height of a reminder's parentheses; they outgrow a short glyph. */
+export function accidentalReminderParenHeight(
+  accidental: AccidentalType
+): number {
+  return Math.max(
+    ACCIDENTAL_SYMBOL_HEIGHT[accidental] * 0.8,
+    STAFF_LINE_SPACING * 2
+  );
+}
+
+/** An accidental's drawn height, with its parentheses when it's a reminder. */
+export function accidentalSymbolHeight(
+  accidental: AccidentalType,
+  parenthesized = false
+): number {
+  return parenthesized
+    ? Math.max(
+        ACCIDENTAL_SYMBOL_HEIGHT[accidental],
+        accidentalReminderParenHeight(accidental)
+      )
+    : ACCIDENTAL_SYMBOL_HEIGHT[accidental];
+}
+
 // A reminder shows the accidental already in force, in parentheses: the
 // note's own, or a natural. One that is required anyway draws plainly.
 function withReminder(
@@ -349,12 +373,21 @@ function hasVerticalStrokes(type: AccidentalType): boolean {
   return type === 'sharp' || type === 'natural';
 }
 
-function minVerticalClearance(a: AccidentalType, b: AccidentalType): number {
+function minVerticalClearance(
+  a: AccidentalType,
+  b: AccidentalType,
+  aParenthesized = false,
+  bParenthesized = false
+): number {
   if (hasVerticalStrokes(a) || hasVerticalStrokes(b)) {
     // Vertical strokes must not join — require clearance just over a sixth (~25px).
     return 26;
   }
-  return (ACCIDENTAL_SYMBOL_HEIGHT[a] + ACCIDENTAL_SYMBOL_HEIGHT[b]) / 2;
+  return (
+    (accidentalSymbolHeight(a, aParenthesized) +
+      accidentalSymbolHeight(b, bParenthesized)) /
+    2
+  );
 }
 
 export function computeChordAccidentalPlacements(
@@ -396,7 +429,12 @@ export function computeChordAccidentalPlacements(
       const fits = columns[col].every(
         (existing) =>
           Math.abs(existing.yPixel - item.yPixel) >=
-          minVerticalClearance(existing.accidental, item.accidental)
+          minVerticalClearance(
+            existing.accidental,
+            item.accidental,
+            existing.parenthesized,
+            item.parenthesized
+          )
       );
       if (fits) {
         assignedColumn = col;

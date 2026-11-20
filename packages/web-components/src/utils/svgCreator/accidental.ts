@@ -1,10 +1,10 @@
+import { accidentalReminderParenHeight } from '../../rules/accidentalRules';
 import { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
-  STAFF_LINE_SPACING,
 } from '../notationDimensions';
 import { createDoubleFlatSvg } from './doubleFlat';
 import { createDoubleSharpSvg } from './doubleSharp';
@@ -43,7 +43,7 @@ export function createAccidentalSvg(
   const glyphWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental];
   const glyphHeight = ACCIDENTAL_SYMBOL_HEIGHT[accidental];
   const parenWidth = ACCIDENTAL_REMINDER_PAREN_WIDTH_PX;
-  const parenHeight = Math.max(glyphHeight * 0.8, STAFF_LINE_SPACING * 2);
+  const parenHeight = accidentalReminderParenHeight(accidental);
   const parenTop = (glyphHeight - parenHeight) / 2;
   const wrapper = document.createElementNS(SVG_NS, 'svg');
   wrapper.classList.add('accidental-reminder');

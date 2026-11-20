@@ -6,10 +6,14 @@ import '@/src/index';
 import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
 import {
   ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
+  ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../utils/notationDimensions';
 import {
+  accidentalReminderParenHeight,
+  accidentalSymbolHeight,
   accidentalSymbolWidth,
+  computeChordAccidentalPlacements,
   computeInterNoteSpacing,
   computeNoteAccidentals,
   getKeySignatureAccidentals,
@@ -423,6 +427,48 @@ describe('accidentalSymbolWidth', () => {
     expect(accidentalSymbolWidth('natural')).toBe(
       ACCIDENTAL_SYMBOL_WIDTH.natural
     );
+  });
+});
+
+describe('accidentalSymbolHeight', () => {
+  it('grows to the parentheses when they are taller than the glyph', () => {
+    expect(accidentalSymbolHeight('double-sharp')).toBe(
+      ACCIDENTAL_SYMBOL_HEIGHT['double-sharp']
+    );
+    expect(accidentalSymbolHeight('double-sharp', true)).toBe(
+      accidentalReminderParenHeight('double-sharp')
+    );
+    expect(accidentalSymbolHeight('double-sharp', true)).toBeGreaterThan(
+      ACCIDENTAL_SYMBOL_HEIGHT['double-sharp']
+    );
+  });
+});
+
+describe('computeChordAccidentalPlacements — reminders', () => {
+  const pair = (parenthesized: boolean) =>
+    computeChordAccidentalPlacements([
+      {
+        noteIndex: 0,
+        accidental: 'double-sharp',
+        yPixel: 100,
+        parenthesized,
+      },
+      {
+        noteIndex: 1,
+        accidental: 'double-sharp',
+        yPixel: 110,
+        parenthesized,
+      },
+    ]);
+
+  it('keeps close double-sharps in one column', () => {
+    const [a, b] = pair(false);
+    expect(a.xOffset).toBe(b.xOffset);
+  });
+
+  it('puts close double-sharp reminders in separate columns', () => {
+    const [a, b] = pair(true);
+    expect(a.xOffset).not.toBe(b.xOffset);
   });
 });
 
