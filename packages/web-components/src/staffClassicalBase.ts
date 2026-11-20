@@ -9,6 +9,10 @@ import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
 } from './rules/arpeggioRules';
+import {
+  barlineGlyphWidth,
+  midBarBarlineSlotWidth,
+} from './rules/barlineRules';
 import type { BeamObstacle } from './rules/beamPlacementRules';
 import { buildBeamsRenderer } from './rules/beamRules';
 import {
@@ -17,19 +21,12 @@ import {
   durationContribution,
 } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
-import {
-  activeClefChangeIndex,
-  CLEF_BEAT_EPSILON,
-  clefChangeBeat,
-  clefChangesReached,
-  mergeClefChangeBeats,
-} from './rules/clefChangeRules';
 import { getClefRenderData } from './rules/clefRules';
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
-  pairHairpinsWithLeftovers,
   type HairpinPair,
+  pairHairpinsWithLeftovers,
 } from './rules/dynamicsRules';
 import {
   applyResolvedGraceAccidentals,
@@ -77,6 +74,15 @@ import {
   determineVoiceStemDirections,
   unbeamedStemExtensionPx,
 } from './rules/stemRules';
+import {
+  activeClefChangeIndex,
+  MARKER_BEAT_EPSILON,
+  type MarkerBeat,
+  markerBeat,
+  markerWidthReached,
+  mergeMarkerBeats,
+  totalMarkerWidth,
+} from './rules/streamMarkerRules';
 import {
   durationToBase,
   durationToDotCount,
@@ -130,12 +136,11 @@ import {
   VoiceNoteheadPlacement,
   VoicePartGeometry,
 } from './rules/voiceRules';
-import { StaffElementBase } from './staffBase';
+import { type BarlineSlotLeft, StaffElementBase } from './staffBase';
 import type {
   ArpeggioGroupPlacement,
   ChordElementType,
   ChordNote,
-  ClefMarkerPlacement,
   IChordElement,
   INoteElement,
   NoteChordOrRestElementType,
@@ -143,6 +148,7 @@ import type {
   NoteLetterOctave,
   NoteOrChordElementType,
   RestElementType,
+  StreamMarkerPlacement,
   TremoloElementType,
   TremoloGroupPlacement,
   TupletElementType,
@@ -152,6 +158,7 @@ import type {
 import type {
   AccidentalType,
   ArpeggioType,
+  BarlineType,
   ClefType,
   DurationType,
   DynamicMarking,
@@ -168,6 +175,7 @@ import type {
 import {
   BeamsBuilder,
   computeYHeadOffset,
+  createBarlineSvg,
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
@@ -178,6 +186,7 @@ import {
   createOrnamentConnectorSlur,
   createSempreArpeggiandoText,
   createSharpSvg,
+  createStartRepeatSvg,
   createTimeSignatureSvg,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
@@ -190,6 +199,7 @@ import {
   COMMON_ATTRIBUTES,
   isStaffNodeName,
   MUSIC_ARPEGGIO_NODE,
+  MUSIC_BARLINE_NODE,
   MUSIC_CHORD,
   MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
@@ -215,6 +225,7 @@ import {
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
   ARPEGGIO_TEXT_ABOVE_STAFF_PX,
   ARPEGGIO_TEXT_FONT_SIZE,
+  BARLINE_THICK_PX,
   BASE_STEM_LENGTH_PX,
   BEAM_THICKNESS_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
@@ -230,6 +241,7 @@ import {
   KEY_SIG_FLAT_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
+  MID_BAR_BARLINE_PADDING_PX,
   MID_STREAM_CLEF_SVG_HEIGHT_PX,
   MID_STREAM_CLEF_WIDTH_PX,
   MID_STREAM_CLEF_Y_OFFSET,
@@ -244,6 +256,7 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  REPEAT_START_LEAD_PX,
   REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   STAFF_BOTTOM_LINE_Y,
@@ -578,6 +591,14 @@ function reindexArpeggioGroups(
   }));
 }
 
+type ClefMarker = Extract<StreamMarkerPlacement, { kind: 'clef' }>;
+type MarkerSlot = {
+  marker: MarkerBeat;
+  /** Index into the measure-wide marker list. */
+  layoutIndex: number;
+  clef: ClefMarker | null;
+};
+
 export abstract class StaffClassicalElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
@@ -596,6 +617,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #effectiveMode: Mode;
   #effectiveKeySig: Note;
   #describeContainer: SVGGElement;
+  // Kept apart from #describeContainer so the describe area's own extent
+  // decides where a start repeat goes.
+  #startRepeatContainer: SVGGElement;
+  #midBarBarlinesContainer: SVGGElement;
   #ownDescribeEndX = 0;
   #currentStrutInputs: StaffStrutInputs | null = null;
   #showDescribe = true;
@@ -625,7 +650,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     null;
   #octaveContinuations: ReadonlyMap<Element, OctaveContinuationRow> | null =
     null;
-  #clefMarkers: ClefMarkerPlacement[] = [];
+  #streamMarkers: StreamMarkerPlacement[] = [];
+  // #streamMarkers' clef changes, refreshed whenever it changes.
+  #clefMarkers: ClefMarker[] = [];
+  // Where each mid-bar barline's slot would sit from this staff's own
+  // entries, per #spaceElements() pass (see ownBarlineSlotLefts).
+  #ownBarlineSlotLefts: BarlineSlotLeft[] = [];
   // Voice 1's beat-offsets, per #renderNotes() pass: clef markers and
   // noteToYCoordinate()'s `elementIndex` both index into voice 1.
   #voice1BeatOffsets: number[] = [];
@@ -1171,6 +1201,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     ) as Note;
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
+    this.#startRepeatContainer = document.createElementNS(SVG_NS, 'g');
+    this.#startRepeatContainer.classList.add('start-repeat-container');
+    this.#midBarBarlinesContainer = document.createElementNS(SVG_NS, 'g');
+    this.#midBarBarlinesContainer.classList.add('mid-bar-barlines-container');
   }
 
   get staffLineCount(): number {
@@ -1474,12 +1508,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         e.nodeName === MUSIC_ARPEGGIO_NODE ||
         e.nodeName === MUSIC_TREMOLO_NODE ||
         e.nodeName === MUSIC_CLEF_NODE ||
+        e.nodeName === MUSIC_BARLINE_NODE ||
         e.nodeName === MUSIC_VOICE_NODE
     );
 
-    const { voices, clefMarkers } = flattenStaffSlotElements(assigned);
+    const { voices, streamMarkers } = flattenStaffSlotElements(assigned);
     this.#voices = voices;
-    this.#clefMarkers = clefMarkers;
+    this.#setStreamMarkers(streamMarkers);
     this.#renderNotes();
   }
 
@@ -1810,8 +1845,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       stemDirectionsOverride,
       externallyBeamedIndices,
       combinedStemOverrides,
-      this.#clefMarkers.map((marker) => this.#clefMarkerBeatOffset(marker)),
-      tremoloGroups
+      this.#clefMarkers.map((marker) => this.#markerBeatOffset(marker)),
+      tremoloGroups,
+      mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats)
+        .filter((marker) => marker.kind === 'barline')
+        .map((marker) => marker.beat)
     );
     // Beamed lengths come from the beam line and cross-staff ones from the
     // ancestor <music-measure>, so only unbeamed stems take their rule length.
@@ -2073,15 +2111,15 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           computeTremoloScaleByIndex(voice1?.tremoloGroups ?? [])
         )
     );
-    const survivingClefMarkers: ClefMarkerPlacement[] = [];
-    for (const marker of this.#clefMarkers) {
+    const survivingMarkers: StreamMarkerPlacement[] = [];
+    for (const marker of this.#streamMarkers) {
       if (marker.afterElementIndex < allowedElementCount) {
-        survivingClefMarkers.push(marker);
+        survivingMarkers.push(marker);
       } else {
         marker.element.style.display = 'none';
       }
     }
-    this.#clefMarkers = survivingClefMarkers;
+    this.#setStreamMarkers(survivingMarkers);
 
     // Cross-voice pre-pass: shared-rest detection (v1-scoped, only ever
     // considered once 2+ voices are active), then — only if it didn't fire
@@ -2334,10 +2372,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         leftwardWidth += this.#entryLeftwardExtent(state.elements[i], false);
       }
       let rightwardWidth =
-        mergeClefChangeBeats(
-          this.ownClefChangeBeats,
-          this.measureClefChangeBeats
-        ).length * CLEF_CHANGE_RESERVED_WIDTH_PX;
+        totalMarkerWidth(
+          mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats)
+        ) + this.endBarlineReserve;
       for (let i = 0; i < state.elements.length; i++) {
         rightwardWidth += this.#rightwardFootprint(voiceKey, i);
         if (i > 0) {
@@ -2441,16 +2478,40 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // for the staff's own clef. Beat-anchored so it works for every voice.
   #activeClefAt(beatOffset: number): ClefType | null {
     const active = activeClefChangeIndex(
-      this.#clefMarkers.map((marker) => this.#clefMarkerBeatOffset(marker)),
+      this.#clefMarkers.map((marker) => this.#markerBeatOffset(marker)),
       beatOffset
     );
     return active === -1 ? null : this.#clefMarkers[active].element.clef;
   }
 
-  // Each marker's voice-1 `afterElementIndex` as a beat-offset.
-  override get ownClefChangeBeats(): readonly number[] {
-    return this.#clefMarkers.map((marker) =>
-      this.#clefMarkerBeatOffset(marker)
+  // Each marker's voice-1 `afterElementIndex` as a beat-offset, in stream
+  // order, with the room it takes.
+  override get ownMarkerBeats(): readonly MarkerBeat[] {
+    return this.#streamMarkers.map((marker) =>
+      marker.kind === 'clef'
+        ? {
+            beat: this.#markerBeatOffset(marker),
+            kind: 'clef',
+            width: CLEF_CHANGE_RESERVED_WIDTH_PX,
+            barlineType: null,
+          }
+        : {
+            beat: this.#markerBeatOffset(marker),
+            kind: 'barline',
+            width: midBarBarlineSlotWidth(marker.element.type),
+            barlineType: marker.element.type,
+          }
+    );
+  }
+
+  override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
+    return this.#ownBarlineSlotLefts;
+  }
+
+  #setStreamMarkers(markers: StreamMarkerPlacement[]): void {
+    this.#streamMarkers = markers;
+    this.#clefMarkers = markers.filter(
+      (marker): marker is ClefMarker => marker.kind === 'clef'
     );
   }
 
@@ -2462,8 +2523,74 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#renderNotes();
   }
 
-  #clefMarkerBeatOffset(marker: ClefMarkerPlacement): number {
-    return clefChangeBeat(marker.afterElementIndex, this.#voice1BeatEnds);
+  protected override onBarlinesChange(): void {
+    if (this.#voices.size > 0) {
+      this.#renderNotes();
+    }
+  }
+
+  // The markers whose slots this staff fills, with their index in `markers`:
+  // its own clef changes and every barline in the measure.
+  #markerSlots(markers: readonly MarkerBeat[]): MarkerSlot[] {
+    const sameBeat = (marker: StreamMarkerPlacement, beat: number) =>
+      Math.abs(this.#markerBeatOffset(marker) - beat) <= MARKER_BEAT_EPSILON;
+    const unusedClefs = [...this.#clefMarkers];
+    const slots: MarkerSlot[] = [];
+    markers.forEach((marker, layoutIndex) => {
+      if (marker.kind === 'barline') {
+        slots.push({ marker, layoutIndex, clef: null });
+        return;
+      }
+      const ownIndex = unusedClefs.findIndex((own) =>
+        sameBeat(own, marker.beat)
+      );
+      if (ownIndex !== -1) {
+        const [clef] = unusedClefs.splice(ownIndex, 1);
+        slots.push({ marker, layoutIndex, clef });
+      }
+    });
+    return slots;
+  }
+
+  // Each mid-bar barline glyph, centred in its slot.
+  #drawMidBarBarlines(slots: readonly { left: number; type: BarlineType }[]) {
+    if (this.#midBarBarlinesContainer.parentNode !== this.transcribeContainer) {
+      this.transcribeContainer.appendChild(this.#midBarBarlinesContainer);
+    }
+    this.#midBarBarlinesContainer.replaceChildren(
+      ...slots.map(({ left, type }) =>
+        createBarlineSvg(
+          type,
+          this.staffLineCount,
+          left + MID_BAR_BARLINE_PADDING_PX
+        )
+      )
+    );
+  }
+
+  // Draws the start repeat after the clef/key/time glyphs (or centred on the
+  // barline it replaces) and returns where the start area now ends.
+  #drawStartRepeat(describeEndX: number): number {
+    if (this.#startRepeatContainer.parentNode !== this.transcribeContainer) {
+      this.transcribeContainer.appendChild(this.#startRepeatContainer);
+    }
+    this.#startRepeatContainer.replaceChildren();
+    const mode = this.startRepeat;
+    if (mode === 'none') {
+      return describeEndX;
+    }
+    const x = mode === 'shared-thick' ? 0 : describeEndX + REPEAT_START_LEAD_PX;
+    const glyph = createStartRepeatSvg(mode, this.staffLineCount, x);
+    this.#startRepeatContainer.appendChild(glyph);
+    const width = barlineGlyphWidth('repeat-start');
+    return Math.max(
+      describeEndX,
+      mode === 'shared-thick' ? width - BARLINE_THICK_PX / 2 : x + width
+    );
+  }
+
+  #markerBeatOffset(marker: StreamMarkerPlacement): number {
+    return markerBeat(marker.afterElementIndex, this.#voice1BeatEnds);
   }
 
   #renderDataForBeatOffset(beatOffset: number): {
@@ -2657,40 +2784,59 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // An entry's x (wrapper px) from its beat alone: its share of the width
-  // left after the leading gap and every clef change's reserved room, shifted
-  // past each clef change it comes after. Every voice uses the same formula,
-  // so entries on the same beat line up across voices.
+  // left after the leading gap and every marker's reserved room, shifted
+  // past each marker it comes after. Every voice uses the same formula, so
+  // entries on the same beat line up across voices.
   #proportionalEntryX(
     state: VoiceRenderState,
-    clefChangeBeats: readonly number[],
+    markers: readonly MarkerBeat[],
     remainingWidth: number,
     measureCapacity: number
   ): (i: number) => number {
     const measureOffsets = computeMeasureProportionalOffsets(
       state.beatOffsets,
       measureCapacity,
-      remainingWidth -
-        LEADING_NOTE_GAP_PX -
-        clefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX
+      remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers)
     );
     return (i) =>
       this.describeEndX +
       LEADING_NOTE_GAP_PX +
-      clefChangesReached(clefChangeBeats, state.beatOffsets[i]) *
-        CLEF_CHANGE_RESERVED_WIDTH_PX +
+      markerWidthReached(markers, state.beatOffsets[i]) +
       measureOffsets[i];
   }
 
+  // Where the slot of `markers[index]` starts from its beat alone: just
+  // before the entries on its beat, by the same formula as
+  // #proportionalEntryX.
+  #proportionalMarkerLeft(
+    markers: readonly MarkerBeat[],
+    index: number,
+    remainingWidth: number,
+    measureCapacity: number
+  ): number {
+    const [offset] = computeMeasureProportionalOffsets(
+      [Math.max(0, markers[index].beat)],
+      measureCapacity,
+      remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers)
+    );
+    return (
+      this.describeEndX +
+      LEADING_NOTE_GAP_PX +
+      totalMarkerWidth(markers.slice(0, index)) +
+      offset
+    );
+  }
+
   // Each entry's x (wrapper px) and leftward extent, floored against the entry
-  // before it and kept clear of every clef change whose slot is known
-  // (`clefSlotLefts` may cover only the earlier changes). Stops before
-  // `endBeat`. Reads layout state only, so clef slots can be resolved from it
-  // before anything is placed.
+  // before it and kept clear of every marker whose slot is known
+  // (`slotLefts` may cover only the earlier markers). Stops before `endBeat`.
+  // Reads layout state only, so marker slots can be resolved from it before
+  // anything is placed.
   #layoutVoiceEntries(
     voiceKey: VoiceKey,
     state: VoiceRenderState,
-    clefChangeBeats: readonly number[],
-    clefSlotLefts: readonly number[],
+    slots: readonly MarkerBeat[],
+    slotLefts: readonly number[],
     proportionalX: (i: number) => number,
     endBeat = Number.POSITIVE_INFINITY
   ): { x: number; leftwardWidth: number; rightEdge: number }[] {
@@ -2701,21 +2847,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }[] = [];
     let previousNoteX: number | null = null;
     let previousRightEdge = this.describeEndX + LEADING_NOTE_GAP_PX;
-    let changesPassed = 0;
+    let markersPassed = 0;
     for (let i = 0; i < state.elements.length; i++) {
       const beat = state.beatOffsets[i];
-      if (beat >= endBeat - CLEF_BEAT_EPSILON) {
+      if (beat >= endBeat - MARKER_BEAT_EPSILON) {
         break;
       }
-      let clefRight: number | null = null;
+      let markerRight: number | null = null;
       while (
-        changesPassed < clefSlotLefts.length &&
-        clefChangeBeats[changesPassed] <= beat + CLEF_BEAT_EPSILON
+        markersPassed < slotLefts.length &&
+        slots[markersPassed].beat <= beat + MARKER_BEAT_EPSILON
       ) {
-        clefRight =
-          clefSlotLefts[changesPassed] + CLEF_CHANGE_RESERVED_WIDTH_PX;
-        previousRightEdge = Math.max(previousRightEdge, clefRight);
-        changesPassed++;
+        markerRight = slotLefts[markersPassed] + slots[markersPassed].width;
+        previousRightEdge = Math.max(previousRightEdge, markerRight);
+        markersPassed++;
       }
 
       let x = proportionalX(i);
@@ -2744,8 +2889,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (i > 0 && this.#rightwardFootprint(voiceKey, i - 1) > 0) {
         x = Math.max(x, previousRightEdge);
       }
-      if (clefRight !== null) {
-        x = Math.max(x, clefRight + leftwardWidth);
+      if (markerRight !== null) {
+        x = Math.max(x, markerRight + leftwardWidth);
       }
 
       const rightEdge =
@@ -2757,14 +2902,20 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return placements;
   }
 
-  // Left edge (wrapper px) of each clef change's glyph, in #clefMarkers order:
-  // right after the last entry, in any voice, that starts before the change.
-  #resolveClefChangeSlots(
-    clefChangeBeats: readonly number[],
-    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>
+  // Left edge (wrapper px) of each marker's slot, in `slots` order: right
+  // after the last entry, in any voice, that starts before the marker. A
+  // barline also keeps to its proportional place (`barlineFloor`) so it sits
+  // midway between the beats either side, and to the measure's shared x so
+  // it runs through every staff at once.
+  #resolveMarkerSlots(
+    slots: readonly MarkerBeat[],
+    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
+    barlineFloor: (slotIndex: number) => number
   ): number[] {
     const slotLefts: number[] = [];
-    for (const changeBeat of clefChangeBeats) {
+    const ownBarlineSlotLefts: BarlineSlotLeft[] = [];
+    for (const [slotIndex, slot] of slots.entries()) {
+      const changeBeat = slot.beat;
       let left = this.describeEndX + LEADING_NOTE_GAP_PX;
       for (const [voiceKey, proportionalX] of proportionalXByVoice) {
         const state = this.#voiceRenderStates.get(voiceKey);
@@ -2774,7 +2925,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         const before = this.#layoutVoiceEntries(
           voiceKey,
           state,
-          clefChangeBeats,
+          slots,
           slotLefts,
           proportionalX,
           changeBeat
@@ -2783,17 +2934,26 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           left = Math.max(left, before[before.length - 1].rightEdge);
         }
       }
+      if (slot.kind === 'barline') {
+        left = Math.max(left, barlineFloor(slotIndex));
+        ownBarlineSlotLefts.push({ beat: changeBeat, left });
+        const shared = this.measureBarlineSlotLefts.find(
+          (candidate) =>
+            Math.abs(candidate.beat - changeBeat) <= MARKER_BEAT_EPSILON
+        );
+        if (shared !== undefined) {
+          left = Math.max(left, shared.left);
+        }
+      }
       slotLefts.push(left);
     }
+    this.#ownBarlineSlotLefts = ownBarlineSlotLefts;
     return slotLefts;
   }
 
   // The box a mid-stream clef glyph covers, in beams-container px: measured
   // from the glyph when laid out, otherwise the clef's whole drawing box.
-  #clefBeamObstacle(
-    marker: ClefMarkerPlacement,
-    leftInWrapper: number
-  ): BeamObstacle {
+  #clefBeamObstacle(marker: ClefMarker, leftInWrapper: number): BeamObstacle {
     const left = leftInWrapper - this.describeEndX;
     const hostTop = marker.element.getBoundingClientRect().top;
     const glyphRects = Array.from(
@@ -3103,19 +3263,21 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // #rightwardFootprint reserves it on every voice's entry at that beat. Reserving room can move a
   // later unison's parts apart, changing what that one needs, so this repeats
   // until nothing changes; each pass settles at least one more column, in beat
-  // order. Returns the clef-change slots for the final reservation.
+  // order. Returns the marker slots for the final reservation.
   #reserveUnisonRoom(
     isMultiVoice: boolean,
-    clefChangeBeats: readonly number[],
-    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>
+    slots: readonly MarkerBeat[],
+    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
+    barlineFloor: (slotIndex: number) => number
   ): number[] {
     this.#unisonReserves = new Map();
-    let clefSlotLefts = this.#resolveClefChangeSlots(
-      clefChangeBeats,
-      proportionalXByVoice
+    let slotLefts = this.#resolveMarkerSlots(
+      slots,
+      proportionalXByVoice,
+      barlineFloor
     );
     if (!isMultiVoice) {
-      return clefSlotLefts;
+      return slotLefts;
     }
     let passesLeft = Infinity;
     while (passesLeft-- > 0) {
@@ -3128,8 +3290,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             this.#layoutVoiceEntries(
               voiceKey,
               state,
-              clefChangeBeats,
-              clefSlotLefts,
+              slots,
+              slotLefts,
               proportionalX
             ).map((placement) => placement.x)
           );
@@ -3184,12 +3346,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         break;
       }
       this.#unisonReserves = reserves;
-      clefSlotLefts = this.#resolveClefChangeSlots(
-        clefChangeBeats,
-        proportionalXByVoice
+      slotLefts = this.#resolveMarkerSlots(
+        slots,
+        proportionalXByVoice,
+        barlineFloor
       );
     }
-    return clefSlotLefts;
+    return slotLefts;
   }
 
   // The square bracket over a stemless cluster, drawn from final positions.
@@ -3299,16 +3462,19 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #spaceElements(): void {
     const transcribeRect = this.transcribeContainer.getBoundingClientRect();
+    let describeEndX: number;
     if (typeof this.#describeContainer.getBBox === 'function') {
       const describeBBox = this.#describeContainer.getBBox();
-      this.#ownDescribeEndX = Math.round(describeBBox.x + describeBBox.width);
+      describeEndX = describeBBox.x + describeBBox.width;
     } else {
       const describeRect = this.#describeContainer.getBoundingClientRect();
-      this.#ownDescribeEndX = Math.round(
-        describeRect.right - transcribeRect.left
-      );
+      describeEndX = describeRect.right - transcribeRect.left;
     }
-    const remainingWidth = transcribeRect.width - this.describeEndX;
+    this.#ownDescribeEndX = Math.round(this.#drawStartRepeat(describeEndX));
+    // A drawn end barline is wider than the plain one, so the notes stop
+    // short of it.
+    const remainingWidth =
+      transcribeRect.width - this.describeEndX - this.endBarlineReserve;
 
     // Conservative budgets, before notes are positioned.
     const aboveStaffBudget = this.#estimateAboveStaffBudget();
@@ -3339,16 +3505,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const measureCapacity = beatsInMeasure / beatType;
     const isMultiVoice = this.#voices.size > 1;
 
-    // Clef changes are staff-wide: every voice makes room for each glyph, and
-    // every voice's beams keep clear of it.
-    const clefChangeBeats = this.#clefMarkers.map((marker) =>
-      this.#clefMarkerBeatOffset(marker)
-    );
-    // Every staff in the measure makes room for each other's clef changes too,
-    // so same-beat entries stay aligned across staves.
-    const layoutChangeBeats = mergeClefChangeBeats(
-      clefChangeBeats,
-      this.measureClefChangeBeats
+    // Markers are staff-wide: every voice makes room for each one, and every
+    // staff in the measure makes room for each other's too, so same-beat
+    // entries stay aligned across voices and staves.
+    const layoutMarkers = mergeMarkerBeats(
+      this.ownMarkerBeats,
+      this.measureMarkerBeats
     );
     const proportionalXByVoice = new Map<VoiceKey, (i: number) => number>();
     for (const [voiceKey, state] of this.#voiceRenderStates) {
@@ -3357,25 +3519,49 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           voiceKey,
           this.#proportionalEntryX(
             state,
-            layoutChangeBeats,
+            layoutMarkers,
             remainingWidth,
             measureCapacity
           )
         );
       }
     }
-    const clefSlotLefts = this.#reserveUnisonRoom(
+    // The slots this staff fills: its own clef changes (other staves' only
+    // shift its entries) and every barline in the measure, which runs
+    // through all of its staves.
+    const slots = this.#markerSlots(layoutMarkers);
+    const slotLefts = this.#reserveUnisonRoom(
       isMultiVoice,
-      clefChangeBeats,
-      proportionalXByVoice
+      slots.map((slot) => slot.marker),
+      proportionalXByVoice,
+      (slotIndex) =>
+        this.#proportionalMarkerLeft(
+          layoutMarkers,
+          slots[slotIndex].layoutIndex,
+          remainingWidth,
+          measureCapacity
+        )
     );
-    const clefObstacles: BeamObstacle[] = this.#clefMarkers.map((marker, k) => {
-      marker.element.style.position = 'absolute';
-      marker.element.style.left = `${clefSlotLefts[k]}px`;
-      marker.element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
-      marker.element.style.display = '';
-      return this.#clefBeamObstacle(marker, clefSlotLefts[k]);
+    const clefObstacles: BeamObstacle[] = [];
+    const barlineSlots: { left: number; type: BarlineType }[] = [];
+    slots.forEach((slot, k) => {
+      if (slot.clef !== null) {
+        const element = slot.clef.element;
+        element.style.position = 'absolute';
+        element.style.left = `${slotLefts[k]}px`;
+        element.style.top = `${MID_STREAM_CLEF_Y_OFFSET}px`;
+        element.style.display = '';
+        clefObstacles.push(this.#clefBeamObstacle(slot.clef, slotLefts[k]));
+      }
+      if (slot.marker.kind === 'barline' && slot.marker.barlineType !== null) {
+        barlineSlots.push({
+          left: slotLefts[k],
+          type: slot.marker.barlineType,
+        });
+      }
     });
+    this.#drawMidBarBarlines(barlineSlots);
+    const slotMarkers = slots.map((slot) => slot.marker);
 
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       state.noteXPositions.clear();
@@ -3411,8 +3597,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       const placements = this.#layoutVoiceEntries(
         voiceKey,
         state,
-        clefChangeBeats,
-        clefSlotLefts,
+        slotMarkers,
+        slotLefts,
         proportionalXByVoice.get(voiceKey) ?? (() => this.describeEndX)
       );
 

@@ -862,6 +862,51 @@ export const COURTESY_CLEF_SCALE = 0.7;
  */
 export const COURTESY_CLEF_MARGIN_RIGHT_PX = STAFF_LINE_SPACING * 0.5;
 
+// ─── Barlines ──────────────────────────────────────────────────────────────────
+
+/**
+ * Width (px) of a barline's thin line, the same as the plain barline.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const BARLINE_THIN_PX = STAFF_LINE_THICKNESS_PX;
+
+/**
+ * Width (px) of the thick line of a final or repeat barline: beam weight.
+ * = BEAM_THICKNESS_PX
+ */
+export const BARLINE_THICK_PX = BEAM_THICKNESS_PX;
+
+/**
+ * Gap (px) between the two lines of a double, final or repeat barline.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const BARLINE_LINE_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Radius (px) of a repeat barline's dot: half a space across.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const REPEAT_DOT_RADIUS_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Gap (px) from a repeat barline's thin line to the near edge of its dots.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const REPEAT_DOT_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) from the clef/key/time glyphs to the thick line of a start repeat
+ * that follows them.
+ * = 0.6 × STAFF_LINE_SPACING
+ */
+export const REPEAT_START_LEAD_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * Clear space (px) on each side of a mid-bar barline's slot.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const MID_BAR_BARLINE_PADDING_PX = STAFF_LINE_SPACING * 0.8;
+
 // ─── Grand staff / part connectors ─────────────────────────────────────────────
 
 /**

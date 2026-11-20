@@ -8,6 +8,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BarlineType,
   Chord,
   ClefType,
   ConnectorRole,
@@ -24,6 +25,7 @@ import type {
   GuitarFret,
   HairpinKind,
   HairpinRole,
+  MeasureEndBarline,
   MeasureNumberDisplay,
   Mode,
   Note,
@@ -76,12 +78,15 @@ declare module 'react' {
         time?: TimeSignature;
         'max-width'?: number | 'none';
         'measure-numbers'?: MeasureNumberDisplay;
+        'double-bar-before-repeat'?: boolean;
       };
       'music-measure': WebComponentProps & {
         number?: number;
         'key-sig'?: Note;
         mode?: Mode;
         time?: TimeSignature;
+        barline?: MeasureEndBarline;
+        'repeat-start'?: boolean;
       };
       'music-staff': WebComponentProps & {
         clef?: ClefType;
@@ -116,6 +121,9 @@ declare module 'react' {
       };
       'music-clef': WebComponentNoChildrenProps & {
         clef?: ClefType;
+      };
+      'music-barline': WebComponentNoChildrenProps & {
+        type?: BarlineType;
       };
       'music-rest': WebComponentNoChildrenProps & {
         duration?: DurationType;

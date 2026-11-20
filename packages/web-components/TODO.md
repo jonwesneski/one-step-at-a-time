@@ -228,7 +228,7 @@ These alter the rhythmic length of a note.
 
 |          | Symbol    | Name                | Description                   |
 | -------- | --------- | ------------------- | ----------------------------- |
-| &#x2610; | `: :`     | Repeat barlines     | Repeat the enclosed section   |
+| &#x2611; | `: :`     | Repeat barlines     | Repeat the enclosed section   |
 | &#x2610; | `1. / 2.` | First/Second Ending | Different endings for repeats |
 | &#x2610; | `D.C.`    | Da Capo             | Go back to the beginning      |
 | &#x2610; | `D.S.`    | Dal Segno           | Go back to the `ð„‹` sign     |

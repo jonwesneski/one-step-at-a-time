@@ -1,3 +1,12 @@
+import {
+  type RepeatEvent,
+  repeatPickupWarning,
+  resolveBarlineJunction,
+  type ResolvedEndBarline,
+  resolveEndBarline,
+  resolveRepeatSpans,
+  type StartRepeatMode,
+} from '../rules/barlineRules';
 import { getClefRenderData } from '../rules/clefRules';
 import type { ObstacleRect } from '../rules/connectorPlacementRules';
 import {
@@ -18,6 +27,7 @@ import {
   resolveOctaveContinuationSegments,
   resolveOctaveSpans,
 } from '../rules/octaveRules';
+import type { MarkerBeat } from '../rules/streamMarkerRules';
 import {
   resolveTrillContinuationSegments,
   resolveTrillSpans,
@@ -71,8 +81,10 @@ import {
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
 import {
+  BARLINE_EVENTS,
   COMMON_ATTRIBUTES,
   isStaffNodeName,
+  MEASURE_EVENTS,
   MUSIC_CHORD,
   MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
@@ -109,7 +121,10 @@ import {
   TRILL_SIGN_LINE_GAP_PX,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
-import { parseMeasureNumberDisplay } from '../utils/parsers';
+import {
+  parseMeasureEndBarline,
+  parseMeasureNumberDisplay,
+} from '../utils/parsers';
 import {
   flattenSlotElements,
   flattenStaffSlotElements,
@@ -129,6 +144,18 @@ const TRILL_LINE_ROOT_Y_OFFSET =
   TRILL_ABOVE_STAFF_GAP_PX;
 
 const ROW_OVERLAY_SOURCE = 'row-overlay';
+
+// The staff accessors the barline passes read and set, duck-typed so this
+// module needn't import the staff classes.
+type BarlineStaff = HTMLElement & {
+  time: string;
+  endBarline: ResolvedEndBarline;
+  startRepeat: StartRepeatMode;
+  measureMarkerBeats?: readonly MarkerBeat[];
+  showDescribe?: boolean;
+  clefChangeAtBoundary?: boolean;
+  timeChangeAtBoundary?: boolean;
+};
 
 // The measure an octave line crossing a barline starts in, which its own
 // staff draws.
@@ -221,6 +248,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TimeSignature} time - Beats per measure (e.g. `4/4`, `6/8`). Defaults to `4/4`.
    * @attr {number | 'none'} max-width - Caps the rendered score width in px (default 900); `none` fills the container.
    * @attr {'none' | 'all' | 'row-start' | 'row-end' | 'odd' | 'even'} measure-numbers - Which measures show their own `number`. Defaults to `none`. A standalone `<music-measure>` (no composition ancestor) has no way to opt in and never shows its number.
+   * @attr {boolean} double-bar-before-repeat - Ends a row with a thin double barline when the next row starts with a start repeat, as some editions do.
    *
    * @example
    * <music-composition key-sig="G" mode="major" time="4/4">
@@ -241,6 +269,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         COMMON_ATTRIBUTES.TIME,
         'max-width',
         'measure-numbers',
+        'double-bar-before-repeat',
       ];
     }
 
@@ -356,6 +385,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
+      this.removeEventListener(
+        MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
+      this.removeEventListener(
+        BARLINE_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
     }
 
     attributeChangedCallback(
@@ -384,6 +421,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
           (measure as any).refreshMeasureNumberDisplay?.();
         });
+      }
+      if (name === 'double-bar-before-repeat') {
+        this.#scheduleRedraw();
       }
       if (name === 'max-width') {
         // Push the new cap onto the live wrapper rather than re-rendering: a
@@ -506,6 +546,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
+      this.addEventListener(
+        MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
+      this.addEventListener(BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw);
     }
 
     #scheduleRedraw() {
@@ -524,6 +569,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#updateDescribeVisibility();
         this.#updateClefContinuity();
         this.#updateTimeSignatureContinuity();
+        this.#updateBarlineJunctions();
+        this.#validateRepeats();
         for (const staff of Array.from(
           this.querySelectorAll<StaffElementBaseType>(STAFF_TAGS)
         )) {
@@ -1750,6 +1797,140 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           staff as StaffElementBaseType
         );
       });
+    }
+
+    // Where two bars meet decides what each draws: a start repeat replaces
+    // the barline it touches, shares its thick line with an end repeat, or
+    // follows the clef/key/time glyphs at a row start or a change. Values are
+    // assigned once at the end, as in #updateClefContinuity.
+    #updateBarlineJunctions() {
+      const rows = this.#computeMeasureRows();
+      const rowIndexByMeasure = new Map<HTMLElement, number>();
+      rows.forEach((row, rowIndex) => {
+        for (const measure of row) {
+          rowIndexByMeasure.set(measure, rowIndex);
+        }
+      });
+      const measures = rows.flat();
+      const doubleBarBeforeRepeat = this.hasAttribute(
+        'double-bar-before-repeat'
+      );
+      const stavesOf = (measure: HTMLElement) =>
+        Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as BarlineStaff[];
+
+      const ends = new Map<BarlineStaff, ResolvedEndBarline>();
+      const starts = new Map<BarlineStaff, StartRepeatMode>();
+      measures.forEach((measure, i) => {
+        const { barline } = resolveEndBarline({
+          authored: parseMeasureEndBarline(measure.getAttribute('barline')),
+          fine: false,
+          jump: false,
+        });
+        const repeatStart = measure.hasAttribute('repeat-start');
+        const staves = stavesOf(measure);
+        for (const staff of staves) {
+          ends.set(staff, barline);
+          starts.set(staff, repeatStart ? 'full' : 'none');
+        }
+        if (i === 0) {
+          return;
+        }
+        const outgoingMeasure = measures[i - 1];
+        const outgoingStaves = stavesOf(outgoingMeasure);
+        const outgoingBarline = resolveEndBarline({
+          authored: parseMeasureEndBarline(
+            outgoingMeasure.getAttribute('barline')
+          ),
+          fine: false,
+          jump: false,
+        }).barline;
+        const sameRow =
+          rowIndexByMeasure.get(outgoingMeasure) ===
+          rowIndexByMeasure.get(measure);
+        const pairCount = Math.min(outgoingStaves.length, staves.length);
+        for (let staffIndex = 0; staffIndex < pairCount; staffIndex++) {
+          const incoming = staves[staffIndex];
+          const result = resolveBarlineJunction({
+            outgoing: outgoingBarline,
+            incomingRepeatStart: repeatStart,
+            incomingHasStartGlyphs:
+              incoming.showDescribe === true ||
+              incoming.clefChangeAtBoundary === true ||
+              incoming.timeChangeAtBoundary === true,
+            sameRow,
+            doubleBarBeforeRepeat,
+          });
+          ends.set(outgoingStaves[staffIndex], result.outgoing);
+          starts.set(incoming, result.incomingStartRepeat);
+        }
+      });
+      for (const [staff, barline] of ends) {
+        staff.endBarline = barline;
+      }
+      for (const [staff, mode] of starts) {
+        staff.startRepeat = mode;
+      }
+    }
+
+    #lastRepeatWarnings = new Set<string>();
+
+    // A repeated section must hold whole bars, and every end repeat needs a
+    // start to return to. Warns once per distinct message set.
+    #validateRepeats() {
+      const events: RepeatEvent[] = [];
+      this.#computeMeasureRows()
+        .flat()
+        .forEach((measure, measureIndex) => {
+          const staves = Array.from(measure.children).filter((el) =>
+            isStaffNodeName(el.nodeName)
+          ) as BarlineStaff[];
+          const [beats, beatType] = (staves[0]?.time ?? '4/4')
+            .split('/')
+            .map(Number);
+          const barCapacity = beats / beatType;
+          const base = { measureIndex, barCapacity, endingGroup: null };
+          if (measure.hasAttribute('repeat-start')) {
+            events.push({ ...base, kind: 'start', beatInBar: 0 });
+          }
+          for (const marker of staves[0]?.measureMarkerBeats ?? []) {
+            const beatInBar = Math.max(0, marker.beat);
+            if (
+              marker.barlineType === 'repeat-end' ||
+              marker.barlineType === 'repeat-both'
+            ) {
+              events.push({ ...base, kind: 'end', beatInBar });
+            }
+            if (
+              marker.barlineType === 'repeat-start' ||
+              marker.barlineType === 'repeat-both'
+            ) {
+              events.push({ ...base, kind: 'start', beatInBar });
+            }
+          }
+          if (
+            parseMeasureEndBarline(measure.getAttribute('barline')) ===
+            'repeat-end'
+          ) {
+            events.push({ ...base, kind: 'end', beatInBar: barCapacity });
+          }
+        });
+      const { spans, warnings } = resolveRepeatSpans(events);
+      const current = new Set(
+        [
+          ...warnings,
+          ...spans
+            .map(repeatPickupWarning)
+            .filter((warning): warning is string => warning !== null),
+        ].map((warning) => `[music-composition] ${warning}`)
+      );
+      for (const warning of current) {
+        if (!this.#lastRepeatWarnings.has(warning)) {
+          console.warn(warning);
+        }
+      }
+      this.#lastRepeatWarnings = current;
     }
 
     #manageMeasureCount() {

@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import '../index';
+import type { MarkerBeat } from '../rules/streamMarkerRules';
 import {
   extrapolateYCoordinate,
   generateYCoordinates,
@@ -16,6 +17,7 @@ import type {
 import type { ClefType } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_BARLINE,
   MUSIC_CLEF,
   MUSIC_NOTE,
   MUSIC_STAFF,
@@ -211,10 +213,14 @@ describe(`${MUSIC_STAFF} clef changes`, () => {
     const relayouts = jest.fn();
     staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, relayouts);
 
-    staff.measureClefChangeBeats = [1 / 2];
+    staff.measureMarkerBeats = [
+      { beat: 1 / 2, kind: 'clef', width: 40, barlineType: null },
+    ];
     expect(relayouts).toHaveBeenCalledTimes(1);
 
-    staff.measureClefChangeBeats = [0.25 + 0.25];
+    staff.measureMarkerBeats = [
+      { beat: 0.25 + 0.25, kind: 'clef', width: 40, barlineType: null },
+    ];
     expect(relayouts).toHaveBeenCalledTimes(1);
   });
 
@@ -258,7 +264,9 @@ describe(`${MUSIC_STAFF} clef changes`, () => {
       quarter(),
     ]);
 
-    expect(staff.ownClefChangeBeats).toEqual([-1, 1 / 2]);
+    expect(
+      staff.ownMarkerBeats.map((marker: MarkerBeat) => marker.beat)
+    ).toEqual([-1, 1 / 2]);
   });
 
   it('mutating an already-slotted marker clef attribute relayouts notes after it, without a new slotchange', () => {
@@ -557,5 +565,100 @@ describe(`${MUSIC_STAFF} clef changes`, () => {
     expect(secondClef.style.display).not.toBe('none');
     expect(inserted.style.top).toBe(expectedNoteTop('bass', 'C4'));
     expect(noteAfter.style.top).toBe(expectedNoteTop('treble', 'C4'));
+  });
+});
+
+describe(`${MUSIC_STAFF} barlines`, () => {
+  function quarter(pitch = 'C'): NoteElementType {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'quarter');
+    note.setAttribute('note', pitch);
+    note.setAttribute('octave', '4');
+    return note;
+  }
+
+  function render(staff: any, elements: Element[]): void {
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => elements;
+    slot.dispatchEvent(new Event('slotchange'));
+  }
+
+  const container = (staff: any): HTMLElement =>
+    staff.shadowRoot.querySelector('.staff-container');
+
+  it('keeps a plain end barline as the container border', () => {
+    const staff = makeStaff();
+    render(staff, [quarter()]);
+
+    expect(staff.endBarline).toBe('single');
+    expect(container(staff).style.borderRightWidth).toBe('');
+    expect(staff.shadowRoot.querySelector('.end-barline g')).toBeNull();
+  });
+
+  it('draws any other end barline itself, in place of the border', () => {
+    const staff = makeStaff();
+    render(staff, [quarter()]);
+
+    staff.endBarline = 'final';
+    expect(container(staff).style.borderRightWidth).toBe('0px');
+    expect(
+      staff.shadowRoot.querySelector('.end-barline g.barline-final')
+    ).not.toBeNull();
+
+    staff.endBarline = 'single';
+    expect(container(staff).style.borderRightWidth).toBe('');
+    expect(staff.shadowRoot.querySelector('.end-barline g')).toBeNull();
+  });
+
+  it('widens its start area for a start repeat and relays out its notes', () => {
+    const staff = makeStaff();
+    const notes = [quarter(), quarter('D')];
+    render(staff, notes);
+    const firstX = parseFloat(notes[0].style.left);
+    const startX = staff.ownNotesStartX;
+
+    staff.startRepeat = 'full';
+
+    expect(staff.ownNotesStartX).toBeGreaterThan(startX);
+    expect(parseFloat(notes[0].style.left)).toBeGreaterThan(firstX);
+    expect(
+      staff.shadowRoot.querySelector(
+        '.start-repeat-container g.barline-repeat-start'
+      )
+    ).not.toBeNull();
+  });
+
+  it('draws a mid-bar barline in its slot', () => {
+    const staff = makeStaff();
+    const barline = document.createElement(MUSIC_BARLINE);
+    barline.setAttribute('type', 'repeat-start');
+    const before = [quarter(), quarter('D')];
+    const after = [quarter('E'), quarter('F')];
+    render(staff, [...before, barline, ...after]);
+
+    expect(staff.ownMarkerBeats).toEqual([
+      expect.objectContaining({ beat: 1 / 2, kind: 'barline' }),
+    ]);
+    expect(
+      staff.shadowRoot.querySelector(
+        '.mid-bar-barlines-container g.barline-repeat-start'
+      )
+    ).not.toBeNull();
+  });
+
+  it("draws a sibling staff's mid-bar barline too", () => {
+    const staff = makeStaff();
+    render(staff, [quarter(), quarter(), quarter(), quarter()]);
+
+    staff.measureMarkerBeats = [
+      { beat: 1 / 2, kind: 'barline', width: 20, barlineType: 'final' },
+    ];
+
+    expect(
+      staff.shadowRoot.querySelector(
+        '.mid-bar-barlines-container g.barline-final'
+      )
+    ).not.toBeNull();
+    expect(staff.ownBarlineSlotLefts).toHaveLength(1);
   });
 });

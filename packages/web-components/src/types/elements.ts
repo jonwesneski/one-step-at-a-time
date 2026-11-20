@@ -4,6 +4,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BarlineType,
   Chord,
   ClefType,
   DurationType,
@@ -491,6 +492,11 @@ export interface IClefElement {
   clef: ClefType;
 }
 
+/** `<music-barline>` — a mid-bar barline in a staff's note stream. */
+export interface IBarlineElement {
+  type: BarlineType;
+}
+
 /**
  * `<music-tremolo>` — a two-note (or multi-note) tremolo: its notes or chords
  * are each written at the tremolo's full duration and together fill it once,
@@ -561,6 +567,7 @@ export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
 export type TremoloElementType = HTMLElement & ITremoloElement;
 export type ClefElementType = HTMLElement & IClefElement;
+export type BarlineElementType = HTMLElement & IBarlineElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
@@ -573,13 +580,12 @@ export type NoteLikeElementType =
   | GuitarNoteElementType
   | ChordElementType;
 
-// A mid-stream <music-clef>. `afterElementIndex` is the flat index of the
-// entry it follows (-1: before any), always into voice 1, the only voice that
-// carries clefs.
-export type ClefMarkerPlacement = {
-  afterElementIndex: number;
-  element: ClefElementType;
-};
+// A mid-stream <music-clef> or mid-bar <music-barline>. `afterElementIndex`
+// is the flat index of the entry it follows (-1: before any), always into
+// voice 1, the only voice that carries markers.
+export type StreamMarkerPlacement =
+  | { kind: 'clef'; afterElementIndex: number; element: ClefElementType }
+  | { kind: 'barline'; afterElementIndex: number; element: BarlineElementType };
 
 // A valid <music-tremolo> found while flattening: the flat indices of its
 // members, in order. Each member takes 1/N of its written duration.

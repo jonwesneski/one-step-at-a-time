@@ -3,6 +3,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BarlineType,
   ClefType,
   DynamicMarking,
   GlissandoHint,
@@ -11,6 +12,7 @@ import type {
   GraceType,
   HairpinKind,
   HairpinRole,
+  MeasureEndBarline,
   MeasureNumberDisplay,
   Note,
   NoteheadType,
@@ -36,12 +38,14 @@ import {
   ACCIDENTAL_TYPES,
   ARPEGGIOS,
   ARTICULATIONS,
+  BARLINE_TYPES,
   CLEFS,
   DYNAMICS,
   GLISSANDO_HINTS,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
+  MEASURE_END_BARLINES,
   MEASURE_NUMBER_DISPLAYS,
   NOTEHEADS,
   OCTAVE_CONTINUATION_MODES,
@@ -97,6 +101,8 @@ const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
 );
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
 const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
+const VALID_BARLINE_TYPES = new Set<string>(BARLINE_TYPES);
+const VALID_MEASURE_END_BARLINES = new Set<string>(MEASURE_END_BARLINES);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
 const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
@@ -175,6 +181,18 @@ export const parseGlissandoHint = (
   }
   return null;
 };
+
+export const parseBarlineType = (value: string | null): BarlineType | null =>
+  value !== null && VALID_BARLINE_TYPES.has(value)
+    ? (value as BarlineType)
+    : null;
+
+export const parseMeasureEndBarline = (
+  value: string | null
+): MeasureEndBarline | null =>
+  value !== null && VALID_MEASURE_END_BARLINES.has(value)
+    ? (value as MeasureEndBarline)
+    : null;
 
 export const parseMeasureNumberDisplay = (
   value: string | null

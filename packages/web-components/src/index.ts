@@ -1,4 +1,5 @@
 import './arpeggio';
+import './barline';
 import './chord';
 import './clef';
 import './composition';
@@ -39,6 +40,7 @@ export * from './types/theory';
 export {
   ARPEGGIOS,
   ARTICULATIONS,
+  BARLINE_TYPES,
   BASE_DURATIONS,
   CLEFS,
   DURATIONS,
@@ -46,6 +48,7 @@ export {
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
+  MEASURE_END_BARLINES,
   MODES,
   NOTEHEADS,
   NOTES,

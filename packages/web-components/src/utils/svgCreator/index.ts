@@ -11,6 +11,7 @@ export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';
+export { createBarlineSvg, createStartRepeatSvg } from './barlines';
 export {
   BeamsBuilder,
   type NoteYPosition,

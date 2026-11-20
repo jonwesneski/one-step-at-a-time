@@ -1,5 +1,5 @@
+import { barlineGlyphWidth } from '../rules/barlineRules';
 import { computeBeatOffsets } from '../rules/beatRules';
-import { clefChangesReached } from '../rules/clefChangeRules';
 import {
   computeMeasureProportionalOffsets,
   computeSpacingWeights,
@@ -8,7 +8,12 @@ import {
   calculateGuitarTabMinWidth,
   calculateStaffNaturalWidth,
 } from '../rules/staffWidth';
-import { StaffElementBase } from '../staffBase';
+import {
+  MARKER_BEAT_EPSILON,
+  markerWidthReached,
+  totalMarkerWidth,
+} from '../rules/streamMarkerRules';
+import { type BarlineSlotLeft, StaffElementBase } from '../staffBase';
 import { GuitarNoteElementType } from '../types/elements';
 import {
   COMMON_ATTRIBUTES,
@@ -21,12 +26,18 @@ import {
   SVG_NS,
 } from '../utils/consts';
 import {
-  CLEF_CHANGE_RESERVED_WIDTH_PX,
+  BARLINE_THICK_PX,
   LEADING_NOTE_GAP_PX,
+  MID_BAR_BARLINE_PADDING_PX,
   MIN_NOTE_WIDTH,
+  REPEAT_START_LEAD_PX,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
 } from '../utils/notationDimensions';
+import {
+  createBarlineSvg,
+  createStartRepeatSvg,
+} from '../utils/svgCreator/barlines';
 
 const TAB_STRING_COUNT = 6;
 
@@ -72,6 +83,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       </svg>
     `;
     #describeContainer: SVGGElement;
+    #barlinesContainer: SVGGElement;
+    #ownBarlineSlotLefts: BarlineSlotLeft[] = [];
     #describeEndX = 0;
     #ownDescribeEndX = 0;
     #showDescribe = true;
@@ -92,6 +105,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     constructor() {
       super();
       this.#describeContainer = document.createElementNS(SVG_NS, 'g');
+      this.#barlinesContainer = document.createElementNS(SVG_NS, 'g');
+      this.#barlinesContainer.setAttribute('class', 'barlines-container');
+    }
+
+    override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
+      return this.#ownBarlineSlotLefts;
+    }
+
+    protected override onBarlinesChange(): void {
+      this.#relayout();
     }
 
     get staffLineCount(): number {
@@ -190,6 +213,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         ? StaffGuitarTabElement.#tabSvg
         : '';
       this.transcribeContainer.appendChild(this.#describeContainer);
+      this.transcribeContainer.appendChild(this.#barlinesContainer);
     }
 
     #refreshDescribe() {
@@ -234,7 +258,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       const minWidth =
         calculateGuitarTabMinWidth(this.#describeEndX, elements.length) +
-        this.measureClefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
+        totalMarkerWidth(this.measureMarkerBeats) +
+        this.endBarlineReserve;
       const { totalWeight } = computeSpacingWeights(elements);
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
       this.dispatchEvent(
@@ -249,14 +274,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
       const transcribeRect = this.transcribeContainer.getBoundingClientRect();
       const describeRect = this.#describeContainer.getBoundingClientRect();
+      this.#barlinesContainer.replaceChildren();
       this.#ownDescribeEndX = Math.round(
-        describeRect.right - transcribeRect.left
+        this.#drawStartRepeat(describeRect.right - transcribeRect.left)
       );
       this.#describeEndX = Math.max(
         this.#ownDescribeEndX,
         this.measureNotesStartX
       );
-      const remainingWidth = transcribeRect.width - this.#describeEndX;
+      const remainingWidth =
+        transcribeRect.width - this.#describeEndX - this.endBarlineReserve;
 
       // Same fixed measure-capacity-proportional model as the classical
       // staff (see rules/spacingRules.ts) — guitar tab has no tuplets or
@@ -264,14 +291,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const [beatsInMeasure, beatType] = this.effectiveTimeSig;
       const measureCapacity = beatsInMeasure / beatType;
       const beatOffsets = computeBeatOffsets(assignedElements, new Map());
-      // A mirrored notation staff's clef changes take room in the measure
-      // (measureClefChangeBeats, set only when `tab-for` links this tab), so
-      // the tab leaves the same room to stay aligned with it.
-      const clefChangeBeats = this.measureClefChangeBeats;
+      // Every barline in the measure, and a mirrored notation staff's clef
+      // changes (measureMarkerBeats; clefs arrive only when `tab-for` links
+      // this tab), take room in the measure, so the tab leaves the same room
+      // to stay aligned with the other staves.
+      const markers = this.measureMarkerBeats;
       const proportionalWidth =
-        remainingWidth -
-        LEADING_NOTE_GAP_PX -
-        clefChangeBeats.length * CLEF_CHANGE_RESERVED_WIDTH_PX;
+        remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers);
       const measureOffsets = computeMeasureProportionalOffsets(
         beatOffsets,
         measureCapacity,
@@ -283,8 +309,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const element = assignedElements[i];
         const xOffsetInNotesSpace =
           LEADING_NOTE_GAP_PX +
-          clefChangesReached(clefChangeBeats, beatOffsets[i]) *
-            CLEF_CHANGE_RESERVED_WIDTH_PX +
+          markerWidthReached(markers, beatOffsets[i]) +
           measureOffsets[i];
         let x = this.#describeEndX + xOffsetInNotesSpace;
         if (previousNoteX !== null) {
@@ -294,6 +319,57 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         element.style.left = `${x}px`;
         element.style.top = `${stringToY(element.string)}px`;
       }
+
+      // A barline's slot sits just before the entries on its beat, at the
+      // measure's shared x so it runs through every staff.
+      const ownSlotLefts: BarlineSlotLeft[] = [];
+      markers.forEach((marker, index) => {
+        if (marker.kind !== 'barline' || marker.barlineType === null) {
+          return;
+        }
+        const [offset] = computeMeasureProportionalOffsets(
+          [Math.max(0, marker.beat)],
+          measureCapacity,
+          proportionalWidth
+        );
+        const ownLeft =
+          this.#describeEndX +
+          LEADING_NOTE_GAP_PX +
+          totalMarkerWidth(markers.slice(0, index)) +
+          offset;
+        ownSlotLefts.push({ beat: marker.beat, left: ownLeft });
+        const shared = this.measureBarlineSlotLefts.find(
+          (slot) => Math.abs(slot.beat - marker.beat) <= MARKER_BEAT_EPSILON
+        );
+        const left = Math.max(ownLeft, shared?.left ?? ownLeft);
+        this.#barlinesContainer.appendChild(
+          createBarlineSvg(
+            marker.barlineType,
+            TAB_STRING_COUNT,
+            left + MID_BAR_BARLINE_PADDING_PX
+          )
+        );
+      });
+      this.#ownBarlineSlotLefts = ownSlotLefts;
+    }
+
+    // Draws the start repeat after the TAB label (or centred on the barline
+    // it replaces) and returns where the start area now ends.
+    #drawStartRepeat(describeEndX: number): number {
+      const mode = this.startRepeat;
+      if (mode === 'none') {
+        return describeEndX;
+      }
+      const x =
+        mode === 'shared-thick' ? 0 : describeEndX + REPEAT_START_LEAD_PX;
+      this.#barlinesContainer.appendChild(
+        createStartRepeatSvg(mode, TAB_STRING_COUNT, x)
+      );
+      const width = barlineGlyphWidth('repeat-start');
+      return Math.max(
+        describeEndX,
+        mode === 'shared-thick' ? width - BARLINE_THICK_PX / 2 : x + width
+      );
     }
 
     protected override onStaffResize(): void {

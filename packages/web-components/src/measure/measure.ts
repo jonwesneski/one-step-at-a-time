@@ -2,12 +2,12 @@ import {
   type ArpeggioEntry,
   resolveArpeggioSpans,
 } from '../rules/arpeggioRules';
+import { resolveEndBarline } from '../rules/barlineRules';
 import {
   BeamLineDescriptor,
   computeBeamLevelStructure,
 } from '../rules/beamStructureRules';
 import { computeTremoloScaleByIndex } from '../rules/beatRules';
-import { mergeClefChangeBeats } from '../rules/clefChangeRules';
 import {
   type ObstacleRect,
   sliceConvexPolygon,
@@ -73,6 +73,12 @@ import {
 } from '../rules/sharedStemRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
+import {
+  barlineTypeConflicts,
+  MARKER_BEAT_EPSILON,
+  type MarkerBeat,
+  mergeMarkerBeats,
+} from '../rules/streamMarkerRules';
 import { resolveTabMirrors } from '../rules/tabMirrorRules';
 import {
   durationToFactor,
@@ -96,6 +102,7 @@ import type {
   DurationType,
   DynamicMarking,
   HairpinKind,
+  MeasureEndBarline,
 } from '../types/theory';
 import {
   appendArpeggioHairpin,
@@ -111,6 +118,7 @@ import {
   createTremoloBeamPolygon,
   createTupletBracketSvg,
   isStaffNodeName,
+  MEASURE_EVENTS,
   MUSIC_ARPEGGIO,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
@@ -179,6 +187,7 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
+  parseMeasureEndBarline,
   parseMeasureNumberDisplay,
   parseTremoloBeamAttach,
   parseTremoloStrokes,
@@ -301,6 +310,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {Note} key-sig - Overrides the inherited key-signature tonic from this bar on.
    * @attr {'major' | 'minor'} mode - Overrides the inherited key-signature mode.
    * @attr {TimeSignature} time - Overrides the inherited time signature from this bar on.
+   * @attr {MeasureEndBarline} barline - The barline ending this bar: `single` (default), `double` (thin double), `final` (thin–thick) or `repeat-end` (:‖).
+   * @attr {boolean} repeat-start - Starts a repeated section at this bar with a start repeat barline (‖:), drawn after any clef, key or time signature at the start of the bar. A repeat from the very beginning of a piece needs none.
    *
    * @example
    * <music-measure number="1">
@@ -316,6 +327,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         COMMON_ATTRIBUTES.KEY_SIG,
         COMMON_ATTRIBUTES.MODE,
         COMMON_ATTRIBUTES.TIME,
+        'barline',
+        'repeat-start',
       ];
     }
 
@@ -335,8 +348,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     >();
     // Relative to each staff's top line (see applyOctaveContinuationRects).
     #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
-    #boundSyncClefChangeBeats = () => this.#syncClefChangeBeats();
+    #boundSyncMarkerBeats = () => this.#syncMarkerBeats();
+    #boundSyncBarlineSlots = () => this.#syncBarlineSlots();
     #lastTabMirrorWarnings = new Set<string>();
+    #lastBarlineWarnings = new Set<string>();
 
     // Every staff starts its notes after the widest start area in the
     // measure, so same-beat entries line up from the first beat. Each staff's
@@ -359,20 +374,21 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
-    // Every notation staff makes room for every other's mid-bar clef changes,
-    // and so does a tab staff that mirrors one (`tab-for` → `part`), so
-    // same-beat entries stay aligned past them. A staff ignores an unchanged
+    // Every notation staff makes room for every other's mid-bar markers, and
+    // so does a tab staff that mirrors one (`tab-for` → `part`), so same-beat
+    // entries stay aligned past them. A tab staff that mirrors none still
+    // makes room for, and draws, every barline. A staff ignores an unchanged
     // value, so its re-render coming back through here ends the exchange.
-    #syncClefChangeBeats(): void {
+    #syncMarkerBeats(): void {
       const staves = Array.from(this.children).filter(
         (child) =>
           isStaffNodeName(child.nodeName) &&
           // A staff parsed from markup before its definition has run is not
           // upgraded yet, so it has none of these accessors.
-          'measureClefChangeBeats' in child
+          'measureMarkerBeats' in child
       ) as unknown as (StaffElementBaseType & {
-        ownClefChangeBeats: readonly number[];
-        measureClefChangeBeats: readonly number[];
+        ownMarkerBeats: readonly MarkerBeat[];
+        measureMarkerBeats: readonly MarkerBeat[];
         part: string | null;
         tabFor?: string | null;
       })[];
@@ -381,11 +397,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ? ('tab' as const)
           : ('notation' as const)
       );
-      const union = mergeClefChangeBeats(
-        ...staves
-          .filter((_, i) => kinds[i] === 'notation')
-          .map((staff) => staff.ownClefChangeBeats)
-      );
+      const notationLists = staves
+        .filter((_, i) => kinds[i] === 'notation')
+        .map((staff) => staff.ownMarkerBeats);
+      const union = mergeMarkerBeats(...notationLists);
+      const barlinesOnly = union.filter((marker) => marker.kind === 'barline');
       const { links, warnings } = resolveTabMirrors(
         staves.map((staff, i) => ({
           kind: kinds[i],
@@ -400,10 +416,76 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       }
       this.#lastTabMirrorWarnings = currentWarnings;
+      const barlineWarnings = new Set(
+        barlineTypeConflicts(...notationLists).map(
+          (warning) => `[music-measure] ${warning}`
+        )
+      );
+      for (const warning of barlineWarnings) {
+        if (!this.#lastBarlineWarnings.has(warning)) {
+          console.warn(warning);
+        }
+      }
+      this.#lastBarlineWarnings = barlineWarnings;
       staves.forEach((staff, i) => {
-        staff.measureClefChangeBeats =
-          kinds[i] === 'notation' || links.has(i) ? union : [];
+        staff.measureMarkerBeats =
+          kinds[i] === 'notation' || links.has(i) ? union : barlinesOnly;
       });
+    }
+
+    // A mid-bar barline runs through every staff at one x: each staff places
+    // its slot from its own entries, and every staff takes the furthest
+    // right. A staff only moves a slot right, so the exchange settles.
+    #syncBarlineSlots(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) && 'measureBarlineSlotLefts' in child
+      ) as unknown as {
+        ownBarlineSlotLefts: readonly { beat: number; left: number }[];
+        measureBarlineSlotLefts: readonly { beat: number; left: number }[];
+      }[];
+      const shared: { beat: number; left: number }[] = [];
+      for (const staff of staves) {
+        for (const slot of staff.ownBarlineSlotLefts) {
+          const existing = shared.find(
+            (candidate) =>
+              Math.abs(candidate.beat - slot.beat) <= MARKER_BEAT_EPSILON
+          );
+          if (existing === undefined) {
+            shared.push({ ...slot });
+          } else {
+            existing.left = Math.max(existing.left, slot.left);
+          }
+        }
+      }
+      shared.sort((a, b) => a.beat - b.beat);
+      for (const staff of staves) {
+        staff.measureBarlineSlotLefts = shared;
+      }
+    }
+
+    // A standalone measure draws its own barlines; inside a
+    // <music-composition>, the composition sets them, since where two bars
+    // meet decides what each draws.
+    #pushBarlinesToStaves(): void {
+      if (this.closest(MUSIC_COMPOSITION) !== null) {
+        return;
+      }
+      const { barline } = resolveEndBarline({
+        authored: this.barline,
+        fine: false,
+        jump: false,
+      });
+      for (const staff of Array.from(this.children)) {
+        if (isStaffNodeName(staff.nodeName) && 'endBarline' in staff) {
+          const target = staff as unknown as {
+            endBarline: string;
+            startRepeat: string;
+          };
+          target.endBarline = barline;
+          target.startRepeat = this.repeatStart ? 'full' : 'none';
+        }
+      }
     }
 
     #onStaffMinWidth = (event: Event): void => {
@@ -428,8 +510,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.style.minWidth = `${Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX)}px`;
       // Connectors run after double-stemmed beams: a slur reads the drawn
       // beam polygon to avoid crossing it.
+      this.#pushBarlinesToStaves();
       this.#syncNotesStartX();
-      this.#syncClefChangeBeats();
+      this.#syncMarkerBeats();
+      this.#syncBarlineSlots();
       this.#redrawArpeggios();
       this.#redrawDoubleStemmedBeams();
       this.#redrawCrossStaffTremolos();
@@ -488,6 +572,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     set number(value: number | null) {
       if (value === null) this.removeAttribute('number');
       else this.setAttribute('number', value.toString());
+    }
+
+    get barline(): MeasureEndBarline | null {
+      return parseMeasureEndBarline(this.getAttribute('barline'));
+    }
+
+    set barline(value: MeasureEndBarline | null) {
+      if (value === null) {
+        this.removeAttribute('barline');
+      } else {
+        this.setAttribute('barline', value);
+      }
+    }
+
+    get repeatStart(): boolean {
+      return this.hasAttribute('repeat-start');
+    }
+
+    set repeatStart(value: boolean) {
+      this.toggleAttribute('repeat-start', value);
     }
 
     get keySig(): string {
@@ -557,6 +661,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
         this.#boundLayoutSystemDecorations
       );
+      this.addEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundSyncBarlineSlots
+      );
       // Registered after the beams listener above: a slur reads the drawn
       // beam polygon to avoid crossing it, so connectors redraw after beams.
       this.addEventListener(
@@ -573,7 +681,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.addEventListener(
         STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
-        this.#boundSyncClefChangeBeats
+        this.#boundSyncMarkerBeats
       );
       this.addEventListener(
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
@@ -648,6 +756,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.removeEventListener(
         STAFF_EVENTS.NOTES_POSITIONED,
+        this.#boundSyncBarlineSlots
+      );
+      this.removeEventListener(
+        STAFF_EVENTS.NOTES_POSITIONED,
         this.#boundRedrawConnectors
       );
       this.removeEventListener(
@@ -660,7 +772,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.removeEventListener(
         STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
-        this.#boundSyncClefChangeBeats
+        this.#boundSyncMarkerBeats
       );
       this.removeEventListener(
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
@@ -735,6 +847,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       newValue: string | null
     ): void {
       if (oldValue !== newValue) {
+        if (name === 'barline' || name === 'repeat-start') {
+          if (this.isConnected) {
+            this.#pushBarlinesToStaves();
+            this.dispatchEvent(
+              new CustomEvent(MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE, {
+                bubbles: true,
+                composed: true,
+              })
+            );
+          }
+          return;
+        }
         if (
           this.isConnected &&
           (name === COMMON_ATTRIBUTES.KEY_SIG ||

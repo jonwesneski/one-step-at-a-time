@@ -10,9 +10,11 @@ import '../tremolo/index';
 import type { ChordElementType } from '../types/elements';
 import type { Chord } from '../types/theory';
 import {
+  MEASURE_EVENTS,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
   MUSIC_STAFF,
   STAFF_EVENTS,
   TREMOLO_EVENTS,
@@ -330,5 +332,79 @@ describe('cross-staff tremolo', () => {
       )
     );
     warn.mockRestore();
+  });
+});
+
+describe(`${MUSIC_MEASURE} barlines`, () => {
+  function measureWithStaff(
+    attributes: Record<string, string>,
+    parent: HTMLElement = document.body
+  ): { measure: any; staff: any } {
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    for (const [name, value] of Object.entries(attributes)) {
+      measure.setAttribute(name, value);
+    }
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'whole');
+    staff.appendChild(note);
+    measure.appendChild(staff);
+    parent.appendChild(measure);
+    // jsdom fires no slotchange for parsed children.
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    return { measure, staff };
+  }
+
+  it('parses barline and repeat-start, ignoring an unknown barline', () => {
+    const { measure } = measureWithStaff({
+      barline: 'final',
+      'repeat-start': '',
+    });
+    expect(measure.barline).toBe('final');
+    expect(measure.repeatStart).toBe(true);
+
+    measure.setAttribute('barline', 'zigzag');
+    expect(measure.barline).toBeNull();
+  });
+
+  it('standalone, hands its barlines to its staves', () => {
+    const { measure, staff } = measureWithStaff({
+      barline: 'repeat-end',
+      'repeat-start': '',
+    });
+    expect(staff.endBarline).toBe('repeat-end');
+    expect(staff.startRepeat).toBe('full');
+
+    measure.setAttribute('barline', 'zigzag');
+    measure.removeAttribute('repeat-start');
+    expect(staff.endBarline).toBe('single');
+    expect(staff.startRepeat).toBe('none');
+  });
+
+  it('inside a composition, leaves its barlines to the composition', () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const { staff } = measureWithStaff({ barline: 'final' }, composition);
+    expect(staff.endBarline).toBe('single');
+  });
+
+  it('dispatches a bubbling repeat-attribute event on a barline change', () => {
+    const { measure } = measureWithStaff({});
+    const listener = jest.fn();
+    document.body.addEventListener(
+      MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+      listener
+    );
+    measure.setAttribute('barline', 'double');
+    measure.setAttribute('repeat-start', '');
+    document.body.removeEventListener(
+      MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+      listener
+    );
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 });

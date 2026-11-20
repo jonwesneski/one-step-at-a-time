@@ -419,6 +419,24 @@ export type TremoloBeamPosition = 'between';
 export type TieStyle = 'solid' | 'dotted';
 
 /**
+ * A barline's design: `single`, a thin `double`, a thin–thick `final`, or a
+ * repeat barline (`repeat-start` ‖:, `repeat-end` :‖, `repeat-both` :‖:).
+ */
+export type BarlineType =
+  | 'single'
+  | 'double'
+  | 'final'
+  | 'repeat-start'
+  | 'repeat-end'
+  | 'repeat-both';
+
+/**
+ * The barline that ends a `<music-measure>`. A start repeat is the measure's
+ * own `repeat-start` attribute instead.
+ */
+export type MeasureEndBarline = 'single' | 'double' | 'final' | 'repeat-end';
+
+/**
  * Controls how an octave-transposition span's numeral restates itself after
  * a system break: `'bracketed'` (default) redraws it in parentheses at the
  * start of the new row; `'line-only'` lets the line resume with no restated

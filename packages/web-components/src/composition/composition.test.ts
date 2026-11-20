@@ -5,8 +5,10 @@ import '../index';
 import type { StaffElementType } from '../types/elements';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_BARLINE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
   MUSIC_STAFF,
 } from '../utils/consts';
 
@@ -308,5 +310,97 @@ describe(`${MUSIC_COMPOSITION} measure numbering`, () => {
 
     expect(first.getAttribute('number')).toBe('1');
     expect(last.getAttribute('number')).toBe('2');
+  });
+});
+
+describe(`${MUSIC_COMPOSITION} barline junctions`, () => {
+  const nextFrame = (): Promise<void> =>
+    new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+  function addMeasure(
+    composition: HTMLElement,
+    attributes: Record<string, string>,
+    content: () => Element[] = () => [whole()]
+  ): any {
+    const measure = document.createElement(MUSIC_MEASURE);
+    for (const [name, value] of Object.entries(attributes)) {
+      measure.setAttribute(name, value);
+    }
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    const elements = content();
+    staff.append(...elements);
+    measure.appendChild(staff);
+    composition.appendChild(measure);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => elements;
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  function whole(): Element {
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'whole');
+    return note;
+  }
+
+  function half(): Element {
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'half');
+    return note;
+  }
+
+  it('joins an end repeat and the next bar’s start repeat on one row', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const first = addMeasure(composition, {});
+    const second = addMeasure(composition, { barline: 'repeat-end' });
+    const third = addMeasure(composition, { 'repeat-start': '' });
+    const fourth = addMeasure(composition, { barline: 'final' });
+    await nextFrame();
+
+    expect(first.startRepeat).toBe('none');
+    expect(second.endBarline).toBe('repeat-end-thin');
+    expect(third.startRepeat).toBe('shared-thick');
+    expect(fourth.endBarline).toBe('final');
+  });
+
+  it('replaces a plain barline with a start repeat', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const first = addMeasure(composition, {});
+    const second = addMeasure(composition, { 'repeat-start': '' });
+    await nextFrame();
+
+    expect(first.endBarline).toBe('none');
+    expect(second.startRepeat).toBe('shared-thick');
+
+    second.parentElement.removeAttribute('repeat-start');
+    await nextFrame();
+    expect(first.endBarline).toBe('single');
+    expect(second.startRepeat).toBe('none');
+  });
+
+  it('warns once about a repeat that does not hold whole bars', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    addMeasure(composition, {}, () => {
+      const barline = document.createElement(MUSIC_BARLINE);
+      barline.setAttribute('type', 'repeat-start');
+      return [half(), barline, half()];
+    });
+    addMeasure(composition, { barline: 'repeat-end' });
+    await nextFrame();
+    await nextFrame();
+
+    const pickupWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('whole bars')
+    );
+    expect(pickupWarnings).toHaveLength(1);
+    warn.mockRestore();
   });
 });
