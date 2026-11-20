@@ -6,6 +6,7 @@ import type {
   BarlineType,
   ClefType,
   DynamicMarking,
+  EndingNumbering,
   GlissandoHint,
   GraceDuration,
   GraceSlur,
@@ -41,6 +42,7 @@ import {
   BARLINE_TYPES,
   CLEFS,
   DYNAMICS,
+  ENDING_NUMBERINGS,
   GLISSANDO_HINTS,
   GRACE_DURATIONS,
   GRACE_SLURS,
@@ -193,6 +195,30 @@ export const parseMeasureEndBarline = (
   value !== null && VALID_MEASURE_END_BARLINES.has(value)
     ? (value as MeasureEndBarline)
     : null;
+
+const VALID_ENDING_NUMBERINGS = new Set<string>(ENDING_NUMBERINGS);
+
+export const parseEndingNumbering = (
+  value: string | null
+): EndingNumbering | null =>
+  value !== null && VALID_ENDING_NUMBERINGS.has(value)
+    ? (value as EndingNumbering)
+    : null;
+
+/**
+ * The passes an ending is played on: comma-separated positive integers,
+ * sorted and de-duplicated. Null for an unset or malformed value.
+ */
+export const parseEnding = (value: string | null): number[] | null => {
+  if (value === null) {
+    return null;
+  }
+  const parts = value.split(',').map((part) => part.trim());
+  if (parts.some((part) => !/^[1-9]\d*$/.test(part))) {
+    return null;
+  }
+  return [...new Set(parts.map(Number))].sort((a, b) => a - b);
+};
 
 export const parseMeasureNumberDisplay = (
   value: string | null

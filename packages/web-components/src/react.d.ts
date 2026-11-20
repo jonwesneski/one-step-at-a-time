@@ -14,6 +14,7 @@ import type {
   ConnectorRole,
   DurationType,
   DynamicMarking,
+  EndingNumbering,
   GlissandoHint,
   GraceArticulationsType,
   GraceDuration,
@@ -79,6 +80,7 @@ declare module 'react' {
         'max-width'?: number | 'none';
         'measure-numbers'?: MeasureNumberDisplay;
         'double-bar-before-repeat'?: boolean;
+        'ending-numbering'?: EndingNumbering;
       };
       'music-measure': WebComponentProps & {
         number?: number;
@@ -87,6 +89,9 @@ declare module 'react' {
         time?: TimeSignature;
         barline?: MeasureEndBarline;
         'repeat-start'?: boolean;
+        /** Comma-separated passes, e.g. `"1"`, `"1,2"`. */
+        ending?: string;
+        'ending-label'?: string;
       };
       'music-staff': WebComponentProps & {
         clef?: ClefType;

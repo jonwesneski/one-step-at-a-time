@@ -28,8 +28,13 @@ import {
 import {
   COMMON_ATTRIBUTES,
   MUSIC_ARPEGGIO_NODE,
+  MUSIC_CHORD,
+  MUSIC_CLEF,
   MUSIC_COMPOSITION,
+  MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
@@ -68,6 +73,12 @@ export type BarlineSlotLeft = { beat: number; left: number };
 export type EndWarningSpace = { width: number; reserved: number };
 
 const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
+
+const INK_SELECTOR =
+  'path, ellipse:not(.head-hit-zone), line, rect, polygon, polyline, circle, text';
+const NON_ENTRY_INK =
+  '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container';
+const ENTRY_SELECTOR = `${MUSIC_NOTE}, ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden]), ${MUSIC_CLEF}, ${MUSIC_GUITAR_NOTE}`;
 
 // Sub-pixel drift between passes must not count as a change, or the measure
 // and its staves would hand the value back and forth.
@@ -637,6 +648,45 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
    */
   reserveGapClearance(space: VerticalBand): boolean {
     return this.#verticalSpace.reserve(GAP_CLEARANCE_SOURCE, space);
+  }
+
+  /**
+   * Room an ancestor's decoration drawn past this staff (an ending bracket)
+   * needs, under its own `source`. Returns whether the margin changed.
+   */
+  reserveDecorationSpace(source: string, space: VerticalBand): boolean {
+    return this.#verticalSpace.reserve(source, space);
+  }
+
+  /**
+   * How far this staff's notes and decorations reach above its top line, in
+   * px, leaving out the clef/key/time area, barlines and end-of-measure
+   * warnings. Measured from the line, so the staff's margin doesn't change it.
+   */
+  get inkAboveTopLine(): number {
+    const lineTop = this.staffContainer.getBoundingClientRect().top;
+    let top = lineTop;
+    const visit = (root: ParentNode | null | undefined) => {
+      for (const element of Array.from(
+        root?.querySelectorAll<SVGGraphicsElement>(INK_SELECTOR) ?? []
+      )) {
+        if (element.closest(NON_ENTRY_INK) !== null) {
+          continue;
+        }
+        const rect = element.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) {
+          top = Math.min(top, rect.top);
+        }
+      }
+    };
+    visit(this.transcribeContainer);
+    const entries = Array.from(
+      (this as unknown as ParentNode).querySelectorAll(ENTRY_SELECTOR)
+    );
+    for (const entry of entries) {
+      visit(entry.shadowRoot);
+    }
+    return Math.max(0, lineTop - top);
   }
 
   protected drawConnectorsWhenStandalone(): void {

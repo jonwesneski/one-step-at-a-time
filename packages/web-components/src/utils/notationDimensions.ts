@@ -949,6 +949,70 @@ export const KEY_SIG_CANCEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
  */
 export const END_WARNING_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
+// ─── Endings ───────────────────────────────────────────────────────────────────
+
+/**
+ * Thickness (px) of an ending bracket, the weight of a stave line.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const ENDING_LINE_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
+
+/**
+ * Distance (px) of an ending bracket's line below its measure's top. Fixed,
+ * like the measure number's spot, so the brackets of a row stay level and
+ * the label sits above the number.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const ENDING_LINE_Y_PX = STAFF_LINE_THICKNESS_PX;
+
+/**
+ * Length (px) of an ending bracket's hooks.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const ENDING_HOOK_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) between an ending bracket's hook and the barline, so brackets
+ * meeting at a barline stay apart.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const ENDING_INSET_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Font size (px) of an ending's label: the time-signature numerals' font and
+ * weight at the height the reference draws them.
+ * = 1.4 × STAFF_LINE_SPACING
+ */
+export const ENDING_LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.4;
+
+/**
+ * Gap (px) between an ending's left hook and its label.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const ENDING_LABEL_INSET_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Height (px) the label hangs below the bracket line, to its baseline: a gap,
+ * then the numerals' cap height (about 0.7 of the font size).
+ * = 0.2 × STAFF_LINE_SPACING + 0.7 × ENDING_LABEL_FONT_SIZE
+ */
+export const ENDING_LABEL_HEIGHT_PX =
+  STAFF_LINE_SPACING * 0.2 + ENDING_LABEL_FONT_SIZE * 0.7;
+
+/**
+ * Least distance (px) from an ending bracket's line down to the top stave
+ * line, over an empty bar.
+ * = 2.5 × STAFF_LINE_SPACING
+ */
+export const ENDING_MIN_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Gap (px) kept between an ending bracket, or a bar number under it, and the
+ * highest ink of the bar's top staff (a fermata over a high note).
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const ENDING_CONTENT_CLEARANCE_PX = STAFF_LINE_SPACING * 0.8;
+
 // ─── Grand staff / part connectors ─────────────────────────────────────────────
 
 /**

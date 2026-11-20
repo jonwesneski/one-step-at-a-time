@@ -22,6 +22,7 @@ import {
   resolveSlurGroupPlacement,
 } from './connectorsBuilder';
 import {
+  MUSIC_CHORD,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
@@ -264,6 +265,22 @@ describe('collectNoteLikeElements', () => {
     expect(notes).toHaveLength(2);
     expect(notes[0].tagName.toLowerCase()).toBe(MUSIC_NOTE);
     expect(notes[1].tagName.toLowerCase()).toBe(MUSIC_GUITAR_NOTE);
+  });
+
+  it('leaves out entries a staff hid, and the notes of a hidden chord', () => {
+    const root = document.createElement('div');
+    const shown = makeNote({ note: 'C', octave: '4' });
+    const hidden = makeNote({ note: 'D', octave: '4' });
+    hidden.style.display = 'none';
+    const chord = document.createElement(MUSIC_CHORD);
+    const chordNote = makeNote({ note: 'E', octave: '4' });
+    chordNote.setAttribute('tie', 'start');
+    chord.appendChild(chordNote);
+    chord.style.display = 'none';
+    root.append(shown, hidden, chord);
+    document.body.appendChild(root);
+
+    expect(collectNoteLikeElements(root)).toEqual([shown]);
   });
 });
 

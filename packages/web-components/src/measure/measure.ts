@@ -50,6 +50,12 @@ import {
   resolveChainSpans,
 } from '../rules/dynamicsRules';
 import {
+  type EndingSegment,
+  endingStaffLineY,
+  resolveEndings,
+  resolveEndingSegments,
+} from '../rules/endingRules';
+import {
   type CrossStaffDynamicsOverride,
   type DynamicsSide,
   dynamicTextCenterClearOfStems,
@@ -113,6 +119,7 @@ import {
   createBracketSvg,
   createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
+  createEndingSegmentSvg,
   createHairpinSvg,
   createSharedStemLine,
   createTremoloBeamPolygon,
@@ -165,6 +172,8 @@ import {
   DOUBLE_STEMMED_BEAM_MIN_STEM_PX,
   DYNAMICS_BASELINE_Y,
   EMPTY_MEASURE_FLEX_BASIS_PX,
+  ENDING_INSET_PX,
+  ENDING_LINE_Y_PX,
   HAIRPIN_OPEN_HEIGHT,
   MEASURE_MIN_WIDTH_PX,
   MEASURE_NUMBER_BOTTOM_MARGIN_PX,
@@ -187,6 +196,7 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
+  parseEnding,
   parseMeasureEndBarline,
   parseMeasureNumberDisplay,
   parseTremoloBeamAttach,
@@ -209,6 +219,23 @@ const MEASURE_NUMBER_TOP_PX = 33;
 const SAME_BEAT_TOLERANCE = 1e-6;
 
 const OVERLAY_SOURCE = 'overlay';
+const ENDING_SOURCE = 'ending';
+
+// Where a shown measure number's box ends, measured down from the measure's
+// top (see .measure-numbers > *).
+const NUMBER_BOTTOM_Y = MEASURE_NUMBER_TOP_PX - MEASURE_NUMBER_BOTTOM_MARGIN_PX;
+
+const sameEndingSegment = (
+  a: EndingSegment | null,
+  b: EndingSegment | null
+): boolean =>
+  a === null || b === null
+    ? a === b
+    : a.label === b.label &&
+      a.labelIsText === b.labelIsText &&
+      a.leftHook === b.leftHook &&
+      a.rightHook === b.rightHook &&
+      a.endsEnding === b.endsEnding;
 const MEASURE_DYNAMICS_SOURCE = 'measure-dynamics';
 
 type ClassicalStaffElement = StaffElementBaseType & {
@@ -312,6 +339,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TimeSignature} time - Overrides the inherited time signature from this bar on.
    * @attr {MeasureEndBarline} barline - The barline ending this bar: `single` (default), `double` (thin double), `final` (thin–thick) or `repeat-end` (:‖).
    * @attr {boolean} repeat-start - Starts a repeated section at this bar with a start repeat barline (‖:), drawn after any clef, key or time signature at the start of the bar. A repeat from the very beginning of a piece needs none.
+   * @attr {string} ending - The passes this bar is played on, as comma-separated numbers (`1`, `2`, `1,2`). Consecutive bars with the same value form one first-/second-time ending, drawn as a bracket over the top staff labelled `1.`, `1.2.`; consecutive endings form a group. The bracket closes with a right hook on an ending ending in `repeat-end` or `final`, and is open-ended otherwise.
+   * @attr {string} ending-label - Italic text drawn in the ending's bracket in place of its numerals (e.g. `Fine`).
    *
    * @example
    * <music-measure number="1">
@@ -329,6 +358,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         COMMON_ATTRIBUTES.TIME,
         'barline',
         'repeat-start',
+        'ending',
+        'ending-label',
       ];
     }
 
@@ -535,6 +566,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // Connectors run after double-stemmed beams: a slur reads the drawn
       // beam polygon to avoid crossing it.
       this.#pushBarlinesToStaves();
+      this.#applyStandaloneEnding();
       this.#syncNotesStartX();
       this.#syncEndWarningSpace();
       this.#syncMarkerBeats();
@@ -618,6 +650,88 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     set repeatStart(value: boolean) {
       this.toggleAttribute('repeat-start', value);
     }
+
+    get ending(): number[] | null {
+      return parseEnding(this.getAttribute('ending'));
+    }
+
+    set ending(value: readonly number[] | null) {
+      if (value === null) {
+        this.removeAttribute('ending');
+      } else {
+        this.setAttribute('ending', value.join(','));
+      }
+    }
+
+    get endingLabel(): string | null {
+      return this.getAttribute('ending-label');
+    }
+
+    set endingLabel(value: string | null) {
+      if (value === null) {
+        this.removeAttribute('ending-label');
+      } else {
+        this.setAttribute('ending-label', value);
+      }
+    }
+
+    // What this bar draws of an ending bracket, set by <music-composition>
+    // (a standalone measure builds its own from its attributes).
+    get endingSegment(): EndingSegment | null {
+      return this.#endingSegment;
+    }
+
+    set endingSegment(value: EndingSegment | null) {
+      this.applyEndingSegment(value);
+    }
+
+    #endingSegment: EndingSegment | null = null;
+
+    /**
+     * Sets this bar's ending segment, draws it, and reserves room for it on
+     * the top staff. Returns whether the staff's margin changed.
+     */
+    applyEndingSegment(segment: EndingSegment | null): boolean {
+      if (!sameEndingSegment(this.#endingSegment, segment)) {
+        this.#endingSegment = segment === null ? null : { ...segment };
+      }
+      const changed = this.#reserveEndingSpace();
+      // Redrawn every pass: the bar's width follows its row.
+      this.#renderEnding();
+      return changed;
+    }
+
+    // The bar's displayed number in place of `number` (e.g. "19a"), set by
+    // <music-composition> for duplicate ending numbering.
+    get numberLabel(): string | null {
+      return this.#numberLabel;
+    }
+
+    set numberLabel(value: string | null) {
+      if (this.#numberLabel === value) {
+        return;
+      }
+      this.#numberLabel = value;
+      this.refreshMeasureNumberDisplay();
+    }
+
+    #numberLabel: string | null = null;
+
+    // Shows this bar's number whatever the `measure-numbers` rule says (an
+    // ending bar), unless that rule is `none`. Set by <music-composition>.
+    get forceNumberDisplay(): boolean {
+      return this.#forceNumberDisplay;
+    }
+
+    set forceNumberDisplay(value: boolean) {
+      if (this.#forceNumberDisplay === value) {
+        return;
+      }
+      this.#forceNumberDisplay = value;
+      this.refreshMeasureNumberDisplay();
+    }
+
+    #forceNumberDisplay = false;
 
     get keySig(): string {
       return this.getAttribute(COMMON_ATTRIBUTES.KEY_SIG) ?? 'C';
@@ -872,9 +986,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       newValue: string | null
     ): void {
       if (oldValue !== newValue) {
-        if (name === 'barline' || name === 'repeat-start') {
+        if (name === 'ending' && newValue !== null && this.ending === null) {
+          console.warn(
+            `[music-measure] ending="${newValue}" isn't a list of positive bar passes like "1" or "1,2"; it is ignored`
+          );
+        }
+        if (
+          name === 'barline' ||
+          name === 'repeat-start' ||
+          name === 'ending' ||
+          name === 'ending-label'
+        ) {
           if (this.isConnected) {
             this.#pushBarlinesToStaves();
+            this.#applyStandaloneEnding();
             this.dispatchEvent(
               new CustomEvent(MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE, {
                 bubbles: true,
@@ -1062,6 +1187,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             overflow: visible;
             color: currentColor;
           }
+
+          .endings-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            color: currentColor;
+          }
         </style>
         <div class="measure-content">
           <div class="staff-connector"></div>
@@ -1101,6 +1236,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                packages/web-components/CLAUDE.md) — this shape can't repeat
                that, since none of these overlays affect :host size. -->
           <div class="measure-numbers"></div>
+          <!-- this bar's piece of a first-/second-time ending bracket — see
+               #renderEnding -->
+          <svg class="endings-overlay"></svg>
           <slot></slot>
         </div>
       `;
@@ -1157,6 +1295,112 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       this.#renderGroupConnectors(this.#firstInRow);
       this.#renderStaffLabels(this.#firstInRow);
+      this.#renderEnding();
+    }
+
+    #topStaff(): StaffElementBaseType | null {
+      return (
+        (Array.from(this.children).find((n) => isStaffNodeName(n.nodeName)) as
+          | StaffElementBaseType
+          | undefined) ?? null
+      );
+    }
+
+    // A standalone measure is its own ending: labelled, with a left hook, and
+    // a right hook when its own barline closes it.
+    #applyStandaloneEnding(): void {
+      if (this.closest(MUSIC_COMPOSITION) !== null) {
+        return;
+      }
+      const ending = this.ending;
+      if (ending === null) {
+        this.applyEndingSegment(null);
+        return;
+      }
+      const { barline } = resolveEndBarline({
+        authored: this.barline,
+        fine: false,
+        jump: false,
+      });
+      const [segment] = resolveEndingSegments(
+        resolveEndings([{ ending, endBarline: barline }]).groups,
+        new Map(
+          this.endingLabel === null ? [] : [[0, this.endingLabel] as const]
+        )
+      ).values();
+      this.applyEndingSegment(segment ?? null);
+    }
+
+    // The bracket line sits at a fixed spot near the measure's top, like the
+    // number below it, so every bracket in a row is level; the top staff
+    // takes enough margin to keep its ink clear of both.
+    #reserveEndingSpace(): boolean {
+      const staff = this.#topStaff();
+      if (
+        staff === null ||
+        typeof staff.reserveDecorationSpace !== 'function'
+      ) {
+        return false;
+      }
+      if (this.#endingSegment === null) {
+        return staff.reserveDecorationSpace(ENDING_SOURCE, {
+          top: 0,
+          bottom: 0,
+        });
+      }
+      const lineAboveBox =
+        this.#staffContainerRect(staff).top - staff.getBoundingClientRect().top;
+      const lineY = endingStaffLineY({
+        inkAboveLine: staff.inkAboveTopLine,
+        labelled: this.#endingSegment.label !== null,
+        numberBottomY:
+          this.#displayedNumber() === null ? null : NUMBER_BOTTOM_Y,
+      });
+      return staff.reserveDecorationSpace(ENDING_SOURCE, {
+        top: Math.max(0, Math.ceil(lineY - lineAboveBox)),
+        bottom: 0,
+      });
+    }
+
+    #renderEnding(): void {
+      const overlay =
+        this.shadowRoot?.querySelector<SVGSVGElement>('.endings-overlay');
+      if (!overlay) {
+        return;
+      }
+      overlay.replaceChildren();
+      const segment = this.#endingSegment;
+      const staff = this.#topStaff();
+      if (segment === null || staff === null || !this.isConnected) {
+        return;
+      }
+      const origin = this.getBoundingClientRect().left + this.clientLeft;
+      const rect = this.#staffContainerRect(staff);
+      const left = rect.left - origin;
+      const allMeasures = Array.from(
+        this.parentNode?.querySelectorAll(MUSIC_MEASURE) ?? [this]
+      );
+      const startsRow = this.#isFirstInRow(
+        allMeasures,
+        allMeasures.indexOf(this)
+      );
+      const x1 =
+        left +
+        (startsRow ? staff.ownNotesStartX : 0) +
+        (segment.leftHook ? ENDING_INSET_PX : 0);
+      const x2 =
+        rect.right - origin - (segment.endsEnding ? ENDING_INSET_PX : 0);
+      overlay.appendChild(
+        createEndingSegmentSvg({
+          x1,
+          x2,
+          y: ENDING_LINE_Y_PX,
+          leftHook: segment.leftHook,
+          rightHook: segment.rightHook,
+          label: segment.label,
+          labelIsText: segment.labelIsText,
+        })
+      );
     }
 
     #isFirstInRow(allMeasures: Element[], currentIndex: number): boolean {
@@ -3576,30 +3820,53 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         container.removeChild(container.firstChild);
       }
 
-      const number = this.number;
-      if (number === null) {
+      const text = this.#numberText(isFirstInRow, isLastInRow);
+      if (text === null) {
         return;
       }
 
+      const el = document.createElement('div');
+      el.classList.add('measure-number');
+      el.textContent = text;
+      container.appendChild(el);
+    }
+
+    // The number this bar shows, or null: none when `measure-numbers` is
+    // `none`, otherwise when its rule picks this bar or the composition
+    // forces it (an ending bar).
+    #numberText(isFirstInRow: boolean, isLastInRow: boolean): string | null {
+      const number = this.number;
+      if (number === null) {
+        return null;
+      }
       const mode =
         parseMeasureNumberDisplay(
           this.closest(MUSIC_COMPOSITION)?.getAttribute('measure-numbers') ??
             null
         ) ?? 'none';
       const shouldShow =
-        mode === 'all' ||
-        (mode === 'row-start' && isFirstInRow) ||
-        (mode === 'row-end' && isLastInRow) ||
-        (mode === 'odd' && number % 2 === 1) ||
-        (mode === 'even' && number % 2 === 0);
-      if (!shouldShow) {
-        return;
-      }
+        mode !== 'none' &&
+        (this.#forceNumberDisplay ||
+          mode === 'all' ||
+          (mode === 'row-start' && isFirstInRow) ||
+          (mode === 'row-end' && isLastInRow) ||
+          (mode === 'odd' && number % 2 === 1) ||
+          (mode === 'even' && number % 2 === 0));
+      return shouldShow ? this.#numberLabel ?? `${number}` : null;
+    }
 
-      const el = document.createElement('div');
-      el.classList.add('measure-number');
-      el.textContent = `${number}`;
-      container.appendChild(el);
+    #displayedNumber(): string | null {
+      if (this.parentNode === null) {
+        return null;
+      }
+      const allMeasures = Array.from(
+        this.parentNode.querySelectorAll(MUSIC_MEASURE)
+      );
+      const index = allMeasures.indexOf(this);
+      return this.#numberText(
+        this.#isFirstInRow(allMeasures, index),
+        this.#isLastInRow(allMeasures, index)
+      );
     }
 
     // Called by composition.ts when its `measure-numbers` changes.

@@ -1613,6 +1613,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRepeatAttributeChange",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "keySig",
               "type": {
                 "text": "string"
@@ -2022,6 +2027,16 @@
               "privacy": "private"
             },
             {
+              "kind": "method",
+              "name": "#updateEndings",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
+            },
+            {
               "kind": "field",
               "name": "#lastRepeatWarnings",
               "privacy": "private",
@@ -2036,6 +2051,34 @@
               "kind": "method",
               "name": "#manageMeasureCount",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#endingInputs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "EndingMeasureInput[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measures",
+                  "type": {
+                    "text": "readonly HTMLElement[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#endingNumbering",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "EndingNumbering"
+                }
+              }
             },
             {
               "kind": "method",
@@ -2064,6 +2107,13 @@
                 "text": "boolean"
               },
               "description": "Ends a row with a thin double barline when the next row starts with a start repeat, as some editions do."
+            },
+            {
+              "name": "ending-numbering",
+              "type": {
+                "text": "'consecutive' | 'duplicate'"
+              },
+              "description": "How bars inside first-/second-time endings are numbered: `consecutive` (default) counts straight through; `duplicate` numbers every ending from the same bar with a letter per ending (19a, 19b). Ending bars show their numbers whenever `measure-numbers` isn't `none`."
             },
             {
               "type": {
@@ -2469,6 +2519,86 @@
             },
             {
               "kind": "field",
+              "name": "ending",
+              "type": {
+                "text": "number[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endingLabel",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endingSegment",
+              "type": {
+                "text": "EndingSegment | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#endingSegment",
+              "privacy": "private",
+              "type": {
+                "text": "EndingSegment | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "applyEndingSegment",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "segment",
+                  "type": {
+                    "text": "EndingSegment | null"
+                  }
+                }
+              ],
+              "description": "Sets this bar's ending segment, draws it, and reserves room for it on\nthe top staff. Returns whether the staff's margin changed."
+            },
+            {
+              "kind": "field",
+              "name": "numberLabel",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#numberLabel",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "forceNumberDisplay",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#forceNumberDisplay",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "keySig",
               "type": {
                 "text": "string"
@@ -2516,6 +2646,46 @@
               "kind": "method",
               "name": "#layoutSystemDecorations",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "#topStaff",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "StaffElementBaseType | null"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#applyStandaloneEnding",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#reserveEndingSpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderEnding",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
             },
             {
               "kind": "method",
@@ -3088,6 +3258,40 @@
             },
             {
               "kind": "method",
+              "name": "#numberText",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "string | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "isFirstInRow",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "isLastInRow",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#displayedNumber",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "string | null"
+                }
+              }
+            },
+            {
+              "kind": "method",
               "name": "refreshMeasureNumberDisplay",
               "return": {
                 "type": {
@@ -3217,6 +3421,20 @@
                 "text": "boolean"
               },
               "description": "Starts a repeated section at this bar with a start repeat barline (‖:), drawn after any clef, key or time signature at the start of the bar. A repeat from the very beginning of a piece needs none."
+            },
+            {
+              "name": "ending",
+              "type": {
+                "text": "string"
+              },
+              "description": "The passes this bar is played on, as comma-separated numbers (`1`, `2`, `1,2`). Consecutive bars with the same value form one first-/second-time ending, drawn as a bracket over the top staff labelled `1.`, `1.2.`; consecutive endings form a group. The bracket closes with a right hook on an ending ending in `repeat-end` or `final`, and is open-ended otherwise."
+            },
+            {
+              "name": "ending-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Italic text drawn in the ending's bracket in place of its numerals (e.g. `Fine`)."
             },
             {
               "type": {
@@ -8978,6 +9196,47 @@
             },
             {
               "kind": "method",
+              "name": "reserveDecorationSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Room an ancestor's decoration drawn past this staff (an ending bracket)\nneeds, under its own `source`. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "inkAboveTopLine",
+              "type": {
+                "text": "number"
+              },
+              "description": "How far this staff's notes and decorations reach above its top line, in\npx, leaving out the clef/key/time area, barlines and end-of-measure\nwarnings. Measured from the line, so the staff's margin doesn't change it.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
               "return": {
@@ -10092,6 +10351,47 @@
                 }
               ],
               "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveDecorationSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Room an ancestor's decoration drawn past this staff (an ending bracket)\nneeds, under its own `source`. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "inkAboveTopLine",
+              "type": {
+                "text": "number"
+              },
+              "description": "How far this staff's notes and decorations reach above its top line, in\npx, leaving out the clef/key/time area, barlines and end-of-measure\nwarnings. Measured from the line, so the staff's margin doesn't change it.",
+              "readonly": true,
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -14685,6 +14985,47 @@
                 }
               ],
               "description": "Extra room the ancestor `<music-measure>` needs on this staff's gap side\nso what it places between the staves (a double-stemmed beam, a tuplet\nbracket) fits beside a gap-side octave sign, which stays next to its own\nstaff. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reserveDecorationSpace",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "source",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "description": "Room an ancestor's decoration drawn past this staff (an ending bracket)\nneeds, under its own `source`. Returns whether the margin changed.",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "inkAboveTopLine",
+              "type": {
+                "text": "number"
+              },
+              "description": "How far this staff's notes and decorations reach above its top line, in\npx, leaving out the clef/key/time area, barlines and end-of-measure\nwarnings. Measured from the line, so the staff's margin doesn't change it.",
+              "readonly": true,
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"

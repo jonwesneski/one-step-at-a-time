@@ -492,3 +492,81 @@ describe(`${MUSIC_COMPOSITION} key changes and courtesy warnings`, () => {
     expect(second.startRepeat).toBe('full');
   });
 });
+
+describe(`${MUSIC_COMPOSITION} endings`, () => {
+  function build(numbering: string | null): any[] {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    if (numbering !== null) {
+      composition.setAttribute('ending-numbering', numbering);
+    }
+    composition.setAttribute('measure-numbers', 'row-start');
+    document.body.appendChild(composition);
+    return [
+      addMeasure(composition, {}),
+      addMeasure(composition, { ending: '1' }),
+      addMeasure(composition, { ending: '1', barline: 'repeat-end' }),
+      addMeasure(composition, { ending: '2' }),
+      addMeasure(composition, { ending: '2' }),
+      addMeasure(composition, {}),
+    ].map((staff) => staff.parentElement);
+  }
+
+  const settle = (): Promise<void> => Promise.resolve();
+
+  it('numbers duplicate endings with a letter each and shows them all', async () => {
+    const measures = build('duplicate');
+    await settle();
+
+    expect(measures.map((measure) => measure.number)).toEqual([
+      1, 2, 3, 2, 3, 4,
+    ]);
+    expect(measures.map((measure) => measure.numberLabel)).toEqual([
+      null,
+      '2a',
+      '3a',
+      '2b',
+      '3b',
+      null,
+    ]);
+    expect(measures.map((measure) => measure.forceNumberDisplay)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it('renumbers when an ending or the numbering changes', async () => {
+    const measures = build(null);
+    await settle();
+    expect(measures.map((measure) => measure.number)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
+    expect(measures[4].forceNumberDisplay).toBe(false);
+
+    measures[4].removeAttribute('ending');
+    measures[3].setAttribute('ending', '2');
+    measures[3].parentElement.setAttribute('ending-numbering', 'duplicate');
+    expect(measures.map((measure) => measure.number)).toEqual([
+      1, 2, 3, 2, 4, 5,
+    ]);
+    expect(measures[3].numberLabel).toBe('2b');
+  });
+
+  it('hands every ending bar its piece of the bracket', async () => {
+    const measures = build(null);
+    await nextFrame();
+
+    expect(
+      measures.map((measure) => measure.endingSegment?.label ?? null)
+    ).toEqual([null, '1.', null, '2.', null, null]);
+    expect(measures[2].endingSegment.rightHook).toBe(true);
+    expect(measures[4].endingSegment.rightHook).toBe(false);
+    expect(
+      measures[1].shadowRoot.querySelector('.endings-overlay .ending-label')
+        ?.textContent
+    ).toBe('1.');
+  });
+});

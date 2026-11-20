@@ -149,7 +149,15 @@ export const collectNoteLikeElements = (
     .map((attr) => `${MUSIC_CHORD} ${MUSIC_NOTE}[${attr}]`)
     .join(', ');
   const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
-  return Array.from(root.querySelectorAll<NoteLikeElementType>(selector));
+  // A staff hides the entries it doesn't draw (those past the end of the
+  // bar), so a connector on one has nothing to anchor to.
+  return Array.from(
+    root.querySelectorAll<NoteLikeElementType>(selector)
+  ).filter(
+    (element) =>
+      ((element.closest(MUSIC_CHORD) as HTMLElement | null) ?? element).style
+        .display !== 'none'
+  );
 };
 
 // Resolves a note-like element's voice number from its nearest <music-voice>

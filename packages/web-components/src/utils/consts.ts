@@ -7,6 +7,7 @@ import type {
   ClefType,
   DurationType,
   DynamicMarking,
+  EndingNumbering,
   GlissandoHint,
   GraceDuration,
   GraceSlur,
@@ -379,6 +380,11 @@ export const MEASURE_END_BARLINES: MeasureEndBarline[] = [
   'double',
   'final',
   'repeat-end',
+];
+
+export const ENDING_NUMBERINGS: EndingNumbering[] = [
+  'consecutive',
+  'duplicate',
 ];
 
 export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [

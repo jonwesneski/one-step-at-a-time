@@ -446,3 +446,78 @@ describe(`${MUSIC_MEASURE} end-of-measure warnings`, () => {
     expect(bass.measureEndWarningSpace).toEqual({ width: 0, reserved: 0 });
   });
 });
+
+describe(`${MUSIC_MEASURE} endings`, () => {
+  function standalone(attributes: Record<string, string>): any {
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    for (const [name, value] of Object.entries(attributes)) {
+      measure.setAttribute(name, value);
+    }
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'whole');
+    staff.appendChild(note);
+    measure.appendChild(staff);
+    document.body.appendChild(measure);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    return measure;
+  }
+
+  it('parses ending and warns about one it cannot read', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const measure = standalone({ ending: '2,1' });
+    expect(measure.ending).toEqual([1, 2]);
+
+    measure.setAttribute('ending', 'a');
+    expect(measure.ending).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ending="a"'));
+    warn.mockRestore();
+  });
+
+  it('standalone, draws its own bracket, closed by its own barline', () => {
+    const measure = standalone({ ending: '1', barline: 'repeat-end' });
+
+    expect(measure.endingSegment).toEqual({
+      label: '1.',
+      labelIsText: false,
+      leftHook: true,
+      rightHook: true,
+      endsEnding: true,
+    });
+    expect(
+      measure.shadowRoot.querySelector('.endings-overlay .ending-hook-right')
+    ).not.toBeNull();
+
+    measure.setAttribute('ending-label', 'Fine');
+    expect(measure.endingSegment.label).toBe('Fine');
+
+    measure.removeAttribute('ending');
+    expect(measure.endingSegment).toBeNull();
+    expect(
+      measure.shadowRoot.querySelector('.endings-overlay').children
+    ).toHaveLength(0);
+  });
+
+  it('shows its number label when the composition forces it', () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    composition.setAttribute('measure-numbers', 'odd');
+    document.body.appendChild(composition);
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    composition.appendChild(measure);
+    measure.setAttribute('number', '2');
+    const text = () =>
+      measure.shadowRoot.querySelector('.measure-number')?.textContent ?? null;
+    expect(text()).toBeNull();
+
+    measure.numberLabel = '2a';
+    measure.forceNumberDisplay = true;
+    expect(text()).toBe('2a');
+
+    composition.setAttribute('measure-numbers', 'none');
+    expect(text()).toBeNull();
+  });
+});

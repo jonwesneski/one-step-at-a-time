@@ -255,6 +255,15 @@ describe('resolveRepeatSpans', () => {
     expect(spans.map((span) => span.start)).toEqual([start, start]);
     expect(warnings).toEqual([]);
   });
+
+  it('returns every ending of a group to the beginning with no start repeat', () => {
+    const { spans, warnings } = resolveRepeatSpans([
+      event('end', 2, 1, 0),
+      event('end', 3, 1, 0),
+    ]);
+    expect(spans.map((span) => span.start)).toEqual([null, null]);
+    expect(warnings).toEqual([]);
+  });
 });
 
 describe('repeatPickupWarning', () => {

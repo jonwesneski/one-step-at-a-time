@@ -15,6 +15,13 @@ import {
   resolveHairpinSegments,
 } from '../rules/dynamicsRules';
 import {
+  type EndingMeasureInput,
+  type EndingSegment,
+  resolveEndingNumberLabels,
+  resolveEndings,
+  resolveEndingSegments,
+} from '../rules/endingRules';
+import {
   dynamicTextCenterClearOfStems,
   type HairpinEndpointText,
   resolveSharedHairpinY,
@@ -54,6 +61,7 @@ import type {
 } from '../types/elements';
 import type {
   ClefType,
+  EndingNumbering,
   HairpinKind,
   MeasureNumberDisplay,
   OctaveShiftAmount,
@@ -126,6 +134,8 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
+  parseEnding,
+  parseEndingNumbering,
   parseMeasureEndBarline,
   parseMeasureNumberDisplay,
 } from '../utils/parsers';
@@ -160,6 +170,17 @@ type BarlineStaff = HTMLElement & {
   clefChangeAtBoundary?: boolean;
   timeChangeAtBoundary?: boolean;
   keyChangeAtBoundary?: KeyChange | null;
+};
+
+// The ending accessors <music-measure> exposes, duck-typed like
+// reserveMeasureSpace below.
+type EndingHost = HTMLElement & {
+  applyEndingSegment?: (segment: EndingSegment | null) => boolean;
+};
+
+type MeasureNumbering = HTMLElement & {
+  numberLabel?: string | null;
+  forceNumberDisplay?: boolean;
 };
 
 // The key-signature accessors the key and end-warning passes read and set;
@@ -262,6 +283,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {number | 'none'} max-width - Caps the rendered score width in px (default 900); `none` fills the container.
    * @attr {'none' | 'all' | 'row-start' | 'row-end' | 'odd' | 'even'} measure-numbers - Which measures show their own `number`. Defaults to `none`. A standalone `<music-measure>` (no composition ancestor) has no way to opt in and never shows its number.
    * @attr {boolean} double-bar-before-repeat - Ends a row with a thin double barline when the next row starts with a start repeat, as some editions do.
+   * @attr {'consecutive' | 'duplicate'} ending-numbering - How bars inside first-/second-time endings are numbered: `consecutive` (default) counts straight through; `duplicate` numbers every ending from the same bar with a letter per ending (19a, 19b). Ending bars show their numbers whenever `measure-numbers` isn't `none`.
    *
    * @example
    * <music-composition key-sig="G" mode="major" time="4/4">
@@ -283,6 +305,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'max-width',
         'measure-numbers',
         'double-bar-before-repeat',
+        'ending-numbering',
       ];
     }
 
@@ -292,6 +315,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #rowAlignedStaves = new Set<StaffElementBaseType>();
     #redrawScheduled: boolean;
     #boundRedraw: () => void;
+    // An ending or barline change can renumber bars, which only the
+    // composition sees whole.
+    #boundRepeatAttributeChange = () => {
+      this.#renumberMeasures();
+      this.#scheduleRedraw();
+    };
 
     constructor() {
       super();
@@ -400,7 +429,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.removeEventListener(
         MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
+        this.#boundRepeatAttributeChange
       );
       this.removeEventListener(
         BARLINE_EVENTS.ATTRIBUTE_CHANGE,
@@ -436,6 +465,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         });
       }
       if (name === 'double-bar-before-repeat') {
+        this.#scheduleRedraw();
+      }
+      if (name === 'ending-numbering') {
+        this.#renumberMeasures();
         this.#scheduleRedraw();
       }
       if (name === 'max-width') {
@@ -550,7 +583,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       );
       this.addEventListener(
         MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
+        this.#boundRepeatAttributeChange
       );
       this.addEventListener(BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw);
     }
@@ -575,6 +608,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#assignEndWarnings(courtesyClefs, courtesyKeys);
         this.#updateBarlineJunctions();
         this.#validateRepeats();
+        if (this.#updateEndings()) {
+          this.#alignRowStaffSpace();
+        }
         for (const staff of Array.from(
           this.querySelectorAll<StaffElementBaseType>(STAFF_TAGS)
         )) {
@@ -1904,52 +1940,95 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    // Hands every bar its piece of an ending bracket; each measure draws it
+    // and reserves room on its top staff. Returns whether any staff's margin
+    // changed, so the row alignment re-runs.
+    #updateEndings(): boolean {
+      const measures = this.#computeMeasureRows().flat() as EndingHost[];
+      const { groups } = resolveEndings(this.#endingInputs(measures));
+      const labels = new Map<number, string>();
+      measures.forEach((measure, index) => {
+        const label = measure.getAttribute('ending-label');
+        if (label !== null) {
+          labels.set(index, label);
+        }
+      });
+      const segments = resolveEndingSegments(groups, labels);
+      let changed = false;
+      measures.forEach((measure, index) => {
+        changed =
+          (measure.applyEndingSegment?.(segments.get(index) ?? null) ??
+            false) ||
+          changed;
+      });
+      return changed;
+    }
+
     #lastRepeatWarnings = new Set<string>();
 
     // A repeated section must hold whole bars, and every end repeat needs a
     // start to return to. Warns once per distinct message set.
     #validateRepeats() {
       const events: RepeatEvent[] = [];
-      this.#computeMeasureRows()
-        .flat()
-        .forEach((measure, measureIndex) => {
-          const staves = Array.from(measure.children).filter((el) =>
-            isStaffNodeName(el.nodeName)
-          ) as BarlineStaff[];
-          const [beats, beatType] = (staves[0]?.time ?? '4/4')
-            .split('/')
-            .map(Number);
-          const barCapacity = beats / beatType;
-          const base = { measureIndex, barCapacity, endingGroup: null };
-          if (measure.hasAttribute('repeat-start')) {
-            events.push({ ...base, kind: 'start', beatInBar: 0 });
+      const measures = this.#computeMeasureRows().flat();
+      const endings = resolveEndings(this.#endingInputs(measures));
+      const groupByMeasure = new Map<number, number>();
+      for (const group of endings.groups) {
+        for (const ending of group.endings) {
+          for (let i = ending.firstMeasure; i <= ending.lastMeasure; i++) {
+            groupByMeasure.set(i, group.id);
           }
-          for (const marker of staves[0]?.measureMarkerBeats ?? []) {
-            const beatInBar = Math.max(0, marker.beat);
-            if (
-              marker.barlineType === 'repeat-end' ||
-              marker.barlineType === 'repeat-both'
-            ) {
-              events.push({ ...base, kind: 'end', beatInBar });
-            }
-            if (
-              marker.barlineType === 'repeat-start' ||
-              marker.barlineType === 'repeat-both'
-            ) {
-              events.push({ ...base, kind: 'start', beatInBar });
-            }
+        }
+      }
+      const numberingWarnings = resolveEndingNumberLabels(
+        measures.length,
+        endings.groups,
+        this.#endingNumbering()
+      ).warnings;
+      measures.forEach((measure, measureIndex) => {
+        const staves = Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as BarlineStaff[];
+        const [beats, beatType] = (staves[0]?.time ?? '4/4')
+          .split('/')
+          .map(Number);
+        const barCapacity = beats / beatType;
+        const base = {
+          measureIndex,
+          barCapacity,
+          endingGroup: groupByMeasure.get(measureIndex) ?? null,
+        };
+        if (measure.hasAttribute('repeat-start')) {
+          events.push({ ...base, kind: 'start', beatInBar: 0 });
+        }
+        for (const marker of staves[0]?.measureMarkerBeats ?? []) {
+          const beatInBar = Math.max(0, marker.beat);
+          if (
+            marker.barlineType === 'repeat-end' ||
+            marker.barlineType === 'repeat-both'
+          ) {
+            events.push({ ...base, kind: 'end', beatInBar });
           }
           if (
-            parseMeasureEndBarline(measure.getAttribute('barline')) ===
-            'repeat-end'
+            marker.barlineType === 'repeat-start' ||
+            marker.barlineType === 'repeat-both'
           ) {
-            events.push({ ...base, kind: 'end', beatInBar: barCapacity });
+            events.push({ ...base, kind: 'start', beatInBar });
           }
-        });
+        }
+        if (
+          parseMeasureEndBarline(measure.getAttribute('barline')) ===
+          'repeat-end'
+        ) {
+          events.push({ ...base, kind: 'end', beatInBar: barCapacity });
+        }
+      });
       const { spans, warnings } = resolveRepeatSpans(events);
       const current = new Set(
         [
           ...warnings,
+          ...endings.warnings,
+          ...numberingWarnings,
           ...spans
             .map(repeatPickupWarning)
             .filter((warning): warning is string => warning !== null),
@@ -1978,12 +2057,41 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
+    // Each child measure's ending and resolved end barline, in DOM order.
+    #endingInputs(measures: readonly HTMLElement[]): EndingMeasureInput[] {
+      return measures.map((measure) => ({
+        ending: parseEnding(measure.getAttribute('ending')),
+        endBarline: resolveEndBarline({
+          authored: parseMeasureEndBarline(measure.getAttribute('barline')),
+          fine: false,
+          jump: false,
+        }).barline,
+      }));
+    }
+
+    #endingNumbering(): EndingNumbering {
+      return (
+        parseEndingNumbering(this.getAttribute('ending-numbering')) ??
+        'consecutive'
+      );
+    }
+
     #renumberMeasures() {
       const measures = Array.from(this.children).filter(
         (node) => node.nodeName === MUSIC_MEASURE_NODE
-      ) as HTMLElement[];
+      ) as MeasureNumbering[];
+      const { groups } = resolveEndings(this.#endingInputs(measures));
+      const { numbers, labels, forceShow } = resolveEndingNumberLabels(
+        measures.length,
+        groups,
+        this.#endingNumbering()
+      );
       measures.forEach((measure, index) => {
-        measure.setAttribute('number', (index + 1).toString());
+        measure.setAttribute('number', numbers[index].toString());
+        if ('numberLabel' in measure) {
+          measure.numberLabel = labels[index];
+          measure.forceNumberDisplay = forceShow[index];
+        }
       });
 
       // Runs after a framework commit has settled the DOM: the first measure's

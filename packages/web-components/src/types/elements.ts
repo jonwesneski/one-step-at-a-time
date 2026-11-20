@@ -548,8 +548,13 @@ export interface IStaffElementBase {
   readonly staffHeight: number;
   readonly staffLineCount: number;
   readonly contentVerticalSpace: VerticalBand;
+  /** How far the staff's notes and decorations reach above its top line. */
+  readonly inkAboveTopLine: number;
+  /** Right edge of the staff's own clef/key/time (or TAB) start area. */
+  readonly ownNotesStartX: number;
   alignVerticalSpace(space: VerticalBand): boolean;
   reserveGapClearance(space: VerticalBand): boolean;
+  reserveDecorationSpace(source: string, space: VerticalBand): boolean;
   respaceToCurrentWidth(): void;
 }
 

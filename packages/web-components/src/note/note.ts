@@ -1454,12 +1454,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      this.render();
       if (
         (name === 'articulation' || name === 'stress') &&
-        this.tremoloLabel !== null &&
         this.closest(STAFF_TAGS)
       ) {
-        // The staff's tremolo label sits above this element's marks.
+        // What sits beyond this element's marks (a tremolo label, an ending
+        // bracket) is laid out by the staff and its ancestors.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -1467,7 +1468,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           })
         );
       }
-      this.render();
     }
 
     // A value that doesn't parse warns as soon as it's set. Attributes that

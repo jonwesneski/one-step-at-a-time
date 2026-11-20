@@ -38,6 +38,7 @@ export {
   createHairpinSvg,
   createVerticalHairpinSvg,
 } from './dynamics';
+export { createEndingSegmentSvg } from './endings';
 export { createFlatSvg } from './flat';
 export {
   createGraceNotesSvg,

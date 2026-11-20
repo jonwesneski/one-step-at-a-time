@@ -316,6 +316,13 @@ export type MeasureNumberDisplay =
   | 'even';
 
 /**
+ * How bars inside first-/second-time endings are numbered: `'consecutive'`
+ * (default) counts straight through every ending; `'duplicate'` numbers each
+ * ending's bars from the same start with a letter per ending (19a, 19b).
+ */
+export type EndingNumbering = 'consecutive' | 'duplicate';
+
+/**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver
  * wants the bare sign only on an isolated, untied note-value.
