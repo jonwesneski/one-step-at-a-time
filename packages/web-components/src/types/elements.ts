@@ -4,6 +4,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BarlineType,
   Chord,
   ClefType,
   DurationType,
@@ -139,6 +140,10 @@ export interface INoteElement {
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
+  /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
+  dynamicReminder: boolean;
+  /** Shows the accidental in force in parentheses, as a reminder. */
+  accidentalReminder: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -264,6 +269,8 @@ export interface INoteElement {
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
   showAccidental: AccidentalType | null | undefined;
+  /** Set by the staff: the shown accidental is a reminder, in parentheses. */
+  accidentalParenthesized: boolean;
   // Set by the staff to enable ledger line rendering. null in standalone mode.
   staffY: number | null;
   // Where the nominal pitch would sit when the head is drawn elsewhere (an
@@ -319,6 +326,10 @@ export interface IChordElement {
   augmentationDotRows: number[] | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
+  /** Set by the staff: per tone, the shown accidental is a reminder. */
+  noteAccidentalsParenthesized: boolean[];
+  /** Per tone: the chord's `accidental-reminder`, or the tone's own. */
+  readonly toneAccidentalReminders: boolean[];
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -334,6 +345,10 @@ export interface IChordElement {
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
+  /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
+  dynamicReminder: boolean;
+  /** Shows the accidental in force in parentheses, as a reminder. */
+  accidentalReminder: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -491,6 +506,11 @@ export interface IClefElement {
   clef: ClefType;
 }
 
+/** `<music-barline>` — a mid-bar barline in a staff's note stream. */
+export interface IBarlineElement {
+  type: BarlineType;
+}
+
 /**
  * `<music-tremolo>` — a two-note (or multi-note) tremolo: its notes or chords
  * are each written at the tremolo's full duration and together fill it once,
@@ -542,8 +562,13 @@ export interface IStaffElementBase {
   readonly staffHeight: number;
   readonly staffLineCount: number;
   readonly contentVerticalSpace: VerticalBand;
+  /** How far the staff's notes and decorations reach above its top line. */
+  readonly inkAboveTopLine: number;
+  /** Right edge of the staff's own clef/key/time (or TAB) start area. */
+  readonly ownNotesStartX: number;
   alignVerticalSpace(space: VerticalBand): boolean;
   reserveGapClearance(space: VerticalBand): boolean;
+  reserveDecorationSpace(source: string, space: VerticalBand): boolean;
   respaceToCurrentWidth(): void;
 }
 
@@ -561,6 +586,7 @@ export type TupletElementType = HTMLElement & ITupletElement;
 export type ArpeggioElementType = HTMLElement & IArpeggioElement;
 export type TremoloElementType = HTMLElement & ITremoloElement;
 export type ClefElementType = HTMLElement & IClefElement;
+export type BarlineElementType = HTMLElement & IBarlineElement;
 export type StaffElementBaseType = HTMLElement & IStaffElementBase;
 export type StaffElementType = HTMLElement & IStaffElement;
 export type NoteOrChordElementType = NoteElementType | ChordElementType;
@@ -573,13 +599,12 @@ export type NoteLikeElementType =
   | GuitarNoteElementType
   | ChordElementType;
 
-// A mid-stream <music-clef>. `afterElementIndex` is the flat index of the
-// entry it follows (-1: before any), always into voice 1, the only voice that
-// carries clefs.
-export type ClefMarkerPlacement = {
-  afterElementIndex: number;
-  element: ClefElementType;
-};
+// A mid-stream <music-clef> or mid-bar <music-barline>. `afterElementIndex`
+// is the flat index of the entry it follows (-1: before any), always into
+// voice 1, the only voice that carries markers.
+export type StreamMarkerPlacement =
+  | { kind: 'clef'; afterElementIndex: number; element: ClefElementType }
+  | { kind: 'barline'; afterElementIndex: number; element: BarlineElementType };
 
 // A valid <music-tremolo> found while flattening: the flat indices of its
 // members, in order. Each member takes 1/N of its written duration.

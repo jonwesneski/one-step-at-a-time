@@ -1,4 +1,5 @@
 import { getClefRenderData } from '../rules/clefRules';
+import type { KeySignatureState } from '../rules/keySignatureChangeRules';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
 import type { YCoordinates } from '../types/elements';
 import { ClefType, Octave } from '../types/theory';
@@ -53,28 +54,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return getClefRenderData(this.clef).octaves;
     }
 
-    public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
+    public getKeyYCoordinatesFor(
+      state: KeySignatureState,
+      clef?: ClefType | null
+    ): { useSharps: boolean; coordinates: number[] } {
       const {
         majorSharpYCoordinates,
         minorSharpYCoordinates,
         majorFlatYCoordinates,
         minorFlatYCoordinates,
-      } = getClefRenderData(this.clef);
-      const _key = this.keySig;
-      const answer: { useSharps: boolean; coordinates: number[] } = {
-        useSharps: false,
-        coordinates: [],
+      } = getClefRenderData(clef ?? this.clef);
+      const [sharps, flats] =
+        state.mode === 'major'
+          ? [majorSharpYCoordinates, majorFlatYCoordinates]
+          : [minorSharpYCoordinates, minorFlatYCoordinates];
+      return {
+        useSharps: !!sharps[state.keySig],
+        coordinates: sharps[state.keySig] ?? flats[state.keySig] ?? [],
       };
-      if (this.mode === 'major') {
-        answer.useSharps = !!majorSharpYCoordinates[_key];
-        answer.coordinates =
-          majorSharpYCoordinates[_key] ?? majorFlatYCoordinates[_key] ?? [];
-      } else {
-        answer.useSharps = !!minorSharpYCoordinates[_key];
-        answer.coordinates =
-          minorSharpYCoordinates[_key] ?? minorFlatYCoordinates[_key] ?? [];
-      }
-      return answer;
     }
 
     protected get clefSvg(): string {

@@ -1,4 +1,12 @@
-import { getClefRenderData } from '../rules/clefRules';
+import {
+  type RepeatEvent,
+  repeatPickupWarning,
+  resolveBarlineJunction,
+  type ResolvedEndBarline,
+  resolveEndBarline,
+  resolveRepeatSpans,
+  type StartRepeatMode,
+} from '../rules/barlineRules';
 import type { ObstacleRect } from '../rules/connectorPlacementRules';
 import {
   type HairpinEndpoint,
@@ -7,10 +15,25 @@ import {
   resolveHairpinSegments,
 } from '../rules/dynamicsRules';
 import {
+  type EndingGroup,
+  type EndingMeasureInput,
+  type EndingSegment,
+  resolveEndingNumberLabels,
+  resolveEndings,
+  resolveEndingSegments,
+} from '../rules/endingRules';
+import {
   dynamicTextCenterClearOfStems,
   type HairpinEndpointText,
   resolveSharedHairpinY,
 } from '../rules/hairpinPlacementRules';
+import {
+  type EndWarnings,
+  type KeyChange,
+  keySignatureEquals,
+  type KeySignatureState,
+  mergeEndWarnings,
+} from '../rules/keySignatureChangeRules';
 import {
   isOctaveRaise,
   type OctaveMeasureBoundary,
@@ -18,6 +41,13 @@ import {
   resolveOctaveContinuationSegments,
   resolveOctaveSpans,
 } from '../rules/octaveRules';
+import {
+  type BoundaryState,
+  type Component,
+  type DescribeReminder,
+  resolveRepeatWarnings,
+} from '../rules/repeatWarningRules';
+import type { MarkerBeat } from '../rules/streamMarkerRules';
 import {
   resolveTrillContinuationSegments,
   resolveTrillSpans,
@@ -37,9 +67,12 @@ import type {
   StaffElementBaseType,
 } from '../types/elements';
 import type {
+  ClefType,
+  EndingNumbering,
   HairpinKind,
   MeasureNumberDisplay,
   OctaveShiftAmount,
+  TimeSignature,
   VoiceNumber,
 } from '../types/theory';
 import {
@@ -71,8 +104,10 @@ import {
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
 import {
+  BARLINE_EVENTS,
   COMMON_ATTRIBUTES,
   isStaffNodeName,
+  MEASURE_EVENTS,
   MUSIC_CHORD,
   MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
@@ -87,12 +122,9 @@ import {
   NOTE_EVENTS,
   STAFF_EVENTS,
   STAFF_TAGS,
-  SVG_NS,
 } from '../utils/consts';
 import {
   COMPOSITION_MAX_WIDTH_PX,
-  COURTESY_CLEF_MARGIN_RIGHT_PX,
-  COURTESY_CLEF_SCALE,
   DYNAMICS_BASELINE_Y,
   HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
@@ -109,7 +141,12 @@ import {
   TRILL_SIGN_LINE_GAP_PX,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
-import { parseMeasureNumberDisplay } from '../utils/parsers';
+import {
+  parseEnding,
+  parseEndingNumbering,
+  parseMeasureEndBarline,
+  parseMeasureNumberDisplay,
+} from '../utils/parsers';
 import {
   flattenSlotElements,
   flattenStaffSlotElements,
@@ -129,6 +166,50 @@ const TRILL_LINE_ROOT_Y_OFFSET =
   TRILL_ABOVE_STAFF_GAP_PX;
 
 const ROW_OVERLAY_SOURCE = 'row-overlay';
+
+// The staff accessors the barline passes read and set, duck-typed so this
+// module needn't import the staff classes.
+type BarlineStaff = HTMLElement & {
+  time: string;
+  endBarline: ResolvedEndBarline;
+  startRepeat: StartRepeatMode;
+  measureMarkerBeats?: readonly MarkerBeat[];
+  showDescribe?: boolean;
+  clefChangeAtBoundary?: boolean;
+  timeChangeAtBoundary?: boolean;
+  keyChangeAtBoundary?: KeyChange | null;
+};
+
+// The state accessors and repeat properties the repeat-continuity pass reads
+// and sets on a staff; absent where a staff has no such concept.
+type RepeatStaff = HTMLElement & {
+  time: string;
+  effectiveStartClef?: ClefType | null;
+  effectiveEndClef?: ClefType | null;
+  clefAtBeat?: (beat: number) => ClefType | null;
+  effectiveKeySignature?: KeySignatureState;
+  describeReminder?: DescribeReminder | null;
+  markerWarnings?: ReadonlyMap<number, ClefType>;
+};
+
+// The ending accessors <music-measure> exposes, duck-typed like
+// reserveMeasureSpace below.
+type EndingHost = HTMLElement & {
+  applyEndingSegment?: (segment: EndingSegment | null) => boolean;
+};
+
+type MeasureNumbering = HTMLElement & {
+  numberLabel?: string | null;
+  forceNumberDisplay?: boolean;
+};
+
+// The key-signature accessors the key and end-warning passes read and set;
+// absent on guitar tab.
+type KeyStaff = HTMLElement & {
+  effectiveKeySignature?: KeySignatureState;
+  keyChangeAtBoundary?: KeyChange | null;
+  endWarnings?: EndWarnings | null;
+};
 
 // The measure an octave line crossing a barline starts in, which its own
 // staff draws.
@@ -221,6 +302,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {TimeSignature} time - Beats per measure (e.g. `4/4`, `6/8`). Defaults to `4/4`.
    * @attr {number | 'none'} max-width - Caps the rendered score width in px (default 900); `none` fills the container.
    * @attr {'none' | 'all' | 'row-start' | 'row-end' | 'odd' | 'even'} measure-numbers - Which measures show their own `number`. Defaults to `none`. A standalone `<music-measure>` (no composition ancestor) has no way to opt in and never shows its number.
+   * @attr {boolean} double-bar-before-repeat - Ends a row with a thin double barline when the next row starts with a start repeat, as some editions do.
+   * @attr {'consecutive' | 'duplicate'} ending-numbering - How bars inside first-/second-time endings are numbered: `consecutive` (default) counts straight through; `duplicate` numbers every ending from the same bar with a letter per ending (19a, 19b). Ending bars show their numbers whenever `measure-numbers` isn't `none`.
    *
    * @example
    * <music-composition key-sig="G" mode="major" time="4/4">
@@ -241,6 +324,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         COMMON_ATTRIBUTES.TIME,
         'max-width',
         'measure-numbers',
+        'double-bar-before-repeat',
+        'ending-numbering',
       ];
     }
 
@@ -250,6 +335,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #rowAlignedStaves = new Set<StaffElementBaseType>();
     #redrawScheduled: boolean;
     #boundRedraw: () => void;
+    // An ending or barline change can renumber bars, which only the
+    // composition sees whole.
+    #boundRepeatAttributeChange = () => {
+      this.#renumberMeasures();
+      this.#scheduleRedraw();
+    };
 
     constructor() {
       super();
@@ -356,6 +447,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
+      this.removeEventListener(
+        MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+        this.#boundRepeatAttributeChange
+      );
+      this.removeEventListener(
+        BARLINE_EVENTS.ATTRIBUTE_CHANGE,
+        this.#boundRedraw
+      );
     }
 
     attributeChangedCallback(
@@ -384,6 +483,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
           (measure as any).refreshMeasureNumberDisplay?.();
         });
+      }
+      if (name === 'double-bar-before-repeat') {
+        this.#scheduleRedraw();
+      }
+      if (name === 'ending-numbering') {
+        this.#renumberMeasures();
+        this.#scheduleRedraw();
       }
       if (name === 'max-width') {
         // Push the new cap onto the live wrapper rather than re-rendering: a
@@ -438,16 +544,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             color: currentColor;
           }
 
-          .courtesy-clef-overlay {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
           .trill-continuation-overlay {
             position: absolute;
             inset: 0;
@@ -473,7 +569,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             <slot></slot>
           </div>
           <svg class="connectors-overlay"></svg>
-          <svg class="courtesy-clef-overlay"></svg>
           <svg class="trill-continuation-overlay"></svg>
           <svg class="octave-continuation-overlay"></svg>
         </div>
@@ -506,6 +601,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
         this.#boundRedraw
       );
+      this.addEventListener(
+        MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+        this.#boundRepeatAttributeChange
+      );
+      this.addEventListener(BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw);
     }
 
     #scheduleRedraw() {
@@ -522,8 +622,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawScheduled = false;
         this.#alignRowStaffSpace();
         this.#updateDescribeVisibility();
-        this.#updateClefContinuity();
-        this.#updateTimeSignatureContinuity();
+        const repeats = this.#resolveRepeatContinuity();
+        const courtesyClefs = this.#updateClefContinuity(repeats.held);
+        this.#updateTimeSignatureContinuity(repeats.held);
+        const courtesyKeys = this.#updateKeySignatureContinuity(repeats.held);
+        this.#assignEndWarnings(
+          courtesyClefs,
+          courtesyKeys,
+          repeats.endWarnings
+        );
+        this.#updateBarlineJunctions();
+        this.#validateRepeats();
+        if (this.#updateEndings()) {
+          this.#alignRowStaffSpace();
+        }
         for (const staff of Array.from(
           this.querySelectorAll<StaffElementBaseType>(STAFF_TAGS)
         )) {
@@ -948,12 +1060,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stems ??= collectStemRects(this, rootRect);
           return {
             marking: element.dynamic,
+            bracketed: element.dynamicReminder,
             centerX: dynamicTextCenterClearOfStems(
               this.#headCenterX(element, rootRect),
               element.dynamic,
               stems,
               gap,
-              awayDirection
+              awayDirection,
+              element.dynamicReminder
             ),
           };
         };
@@ -1003,7 +1117,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             for (const text of [segmentStartText, segmentEndText]) {
               if (text !== null) {
                 overlay.appendChild(
-                  createDynamicMarkingSvg(text.marking, text.centerX, centerY)
+                  createDynamicMarkingSvg(text.marking, text.centerX, centerY, {
+                    bracketed: text.bracketed,
+                  })
                 );
               }
             }
@@ -1602,23 +1718,116 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // Compares every pair of adjacent measures (effectiveStartClef/
     // effectiveEndClef). A differing pair sets clefChangeAtBoundary so the
-    // incoming staff shows its clef; at a row wrap it also draws a courtesy
-    // clef at the end of the outgoing row.
-    #updateClefContinuity() {
-      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
-        '.courtesy-clef-overlay'
-      );
-      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
-        '.composition-wrapper'
-      );
-      if (!overlay || !wrapper) {
-        return;
-      }
+    // incoming staff shows its clef; at a row wrap the outgoing staff warns of
+    // the new clef. Returns those courtesy clefs by outgoing staff.
+    #updateClefContinuity(
+      held: ReadonlyMap<HTMLElement, ReadonlySet<Component>>
+    ): Map<HTMLElement, ClefType> {
+      const courtesyClefs = new Map<HTMLElement, ClefType>();
+      // Assigned once at the end: toggling a flag off and on within a pass
+      // re-renders and reschedules a redraw forever.
+      const staffsNeedingClefChangeFlag = new Set<HTMLElement>();
 
-      while (overlay.firstChild) {
-        overlay.removeChild(overlay.firstChild);
-      }
+      // Staves are matched by ordinal position within their measure (1st
+      // staff vs 1st, 2nd vs 2nd) — assumes consistent voice ordering across
+      // measures, which holds for this library's single-line-per-measure
+      // composition model.
+      this.#forEachAdjacentStaffPair((outgoing, incoming, isRowWrap) => {
+        const outgoingClef: ClefType | null =
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (outgoing as any).effectiveEndClef ?? null;
+        const incomingClef: ClefType | null =
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (incoming as any).effectiveStartClef ?? null;
+        // null means "not clef-comparable" (a vocal or guitar-tab staff).
+        if (
+          outgoingClef === null ||
+          incomingClef === null ||
+          outgoingClef === incomingClef ||
+          held.get(incoming)?.has('clef')
+        ) {
+          return;
+        }
+        staffsNeedingClefChangeFlag.add(incoming);
+        if (isRowWrap) {
+          courtesyClefs.set(outgoing, incomingClef);
+        }
+      });
 
+      Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+        (staff as any).clefChangeAtBoundary = staffsNeedingClefChangeFlag.has(
+          staff as HTMLElement
+        );
+      });
+      return courtesyClefs;
+    }
+
+    // A key change at a barline: the incoming staff draws it (naturals, then
+    // the new key) mid-row; at a row wrap the outgoing staff warns of it and
+    // the new row shows only the new key. Returns those courtesy keys by
+    // outgoing staff.
+    #updateKeySignatureContinuity(
+      held: ReadonlyMap<HTMLElement, ReadonlySet<Component>>
+    ): Map<HTMLElement, KeyChange> {
+      const courtesyKeys = new Map<HTMLElement, KeyChange>();
+      const changes = new Map<HTMLElement, KeyChange>();
+      this.#forEachAdjacentStaffPair((outgoing, incoming, isRowWrap) => {
+        const from: KeySignatureState | undefined = (outgoing as KeyStaff)
+          .effectiveKeySignature;
+        const to: KeySignatureState | undefined = (incoming as KeyStaff)
+          .effectiveKeySignature;
+        if (from === undefined || to === undefined) {
+          return;
+        }
+        if (keySignatureEquals(from, to) || held.get(incoming)?.has('key')) {
+          return;
+        }
+        changes.set(incoming, { from, to });
+        if (isRowWrap) {
+          courtesyKeys.set(outgoing, { from, to });
+        }
+      });
+      this.querySelectorAll<KeyStaff>(STAFF_TAGS).forEach((staff) => {
+        if ('keyChangeAtBoundary' in staff) {
+          staff.keyChangeAtBoundary = changes.get(staff) ?? null;
+        }
+      });
+      return courtesyKeys;
+    }
+
+    // Each staff's end-of-measure warnings, assigned once.
+    #assignEndWarnings(
+      courtesyClefs: ReadonlyMap<HTMLElement, ClefType>,
+      courtesyKeys: ReadonlyMap<HTMLElement, KeyChange>,
+      repeatWarnings: ReadonlyMap<HTMLElement, EndWarnings>
+    ): void {
+      this.querySelectorAll<KeyStaff>(STAFF_TAGS).forEach((staff) => {
+        if (!('endWarnings' in staff)) {
+          return;
+        }
+        const clef = courtesyClefs.get(staff) ?? null;
+        const key = courtesyKeys.get(staff) ?? null;
+        const courtesy: EndWarnings | null =
+          clef === null && key === null
+            ? null
+            : { clef, key, time: null, reservesWidth: false };
+        staff.endWarnings = mergeEndWarnings(
+          courtesy,
+          repeatWarnings.get(staff) ?? null
+        );
+      });
+    }
+
+    // Calls `visit` for every pair of same-ordinal staves in adjacent
+    // measures, in measure order.
+    #forEachAdjacentStaffPair(
+      visit: (
+        outgoing: HTMLElement,
+        incoming: HTMLElement,
+        isRowWrap: boolean
+      ) => void
+    ): void {
       const rows = this.#computeMeasureRows();
       const rowIndexByMeasure = new Map<HTMLElement, number>();
       rows.forEach((row, rowIndex) => {
@@ -1627,94 +1836,37 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       });
       const measures = rows.flat();
-      const rootRect = wrapper.getBoundingClientRect();
-
-      // Assigned once at the end: toggling a flag off and on within a pass
-      // re-renders and reschedules a redraw forever.
-      const staffsNeedingClefChangeFlag = new Set<HTMLElement>();
-
+      const stavesOf = (measure: HTMLElement) =>
+        Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as HTMLElement[];
       for (let i = 1; i < measures.length; i++) {
-        const outgoingMeasure = measures[i - 1];
-        const incomingMeasure = measures[i];
         const isRowWrap =
-          rowIndexByMeasure.get(outgoingMeasure) !==
-          rowIndexByMeasure.get(incomingMeasure);
-
-        const outgoingStaves = Array.from(outgoingMeasure.children).filter(
-          (el) => isStaffNodeName(el.nodeName)
-        ) as HTMLElement[];
-        const incomingStaves = Array.from(incomingMeasure.children).filter(
-          (el) => isStaffNodeName(el.nodeName)
-        ) as HTMLElement[];
-
-        // Staves are matched by ordinal position within their measure (1st
-        // staff vs 1st, 2nd vs 2nd) — assumes consistent voice ordering
-        // across measures, which holds for this library's single-line-per-
-        // measure composition model.
+          rowIndexByMeasure.get(measures[i - 1]) !==
+          rowIndexByMeasure.get(measures[i]);
+        const outgoingStaves = stavesOf(measures[i - 1]);
+        const incomingStaves = stavesOf(measures[i]);
         const pairCount = Math.min(
           outgoingStaves.length,
           incomingStaves.length
         );
         for (let staffIndex = 0; staffIndex < pairCount; staffIndex++) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-          const outgoingStaff = outgoingStaves[staffIndex] as any;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-          const incomingStaff = incomingStaves[staffIndex] as any;
-          const outgoingClef = outgoingStaff.effectiveEndClef ?? null;
-          const incomingClef = incomingStaff.effectiveStartClef ?? null;
-
-          // null means "not clef-comparable" (e.g. a vocal or guitar-tab
-          // staff, which have no ClefType concept) — skip the pair.
-          if (outgoingClef === null || incomingClef === null) {
-            continue;
-          }
-
-          if (outgoingClef !== incomingClef) {
-            staffsNeedingClefChangeFlag.add(incomingStaff);
-
-            if (!isRowWrap) {
-              continue;
-            }
-
-            const outgoingRect = (
-              outgoingStaves[staffIndex] as HTMLElement
-            ).getBoundingClientRect();
-            const glyphWidth = 30 * COURTESY_CLEF_SCALE;
-            const x =
-              outgoingRect.right -
-              rootRect.left -
-              glyphWidth -
-              COURTESY_CLEF_MARGIN_RIGHT_PX;
-            const y = outgoingRect.top - rootRect.top;
-
-            const courtesyGroup = document.createElementNS(SVG_NS, 'g');
-            courtesyGroup.setAttribute(
-              'transform',
-              `translate(${x}, ${y}) scale(${COURTESY_CLEF_SCALE})`
-            );
-            // Courtesy clef previews the UPCOMING clef (next line's), not a
-            // repeat of the current one — that's the entire point of it.
-            courtesyGroup.innerHTML = getClefRenderData(incomingClef).clefSvg;
-            overlay.appendChild(courtesyGroup);
-          }
+          visit(
+            outgoingStaves[staffIndex],
+            incomingStaves[staffIndex],
+            isRowWrap
+          );
         }
       }
-
-      // Single assignment per staff, computed value vs. current — never a
-      // false-then-true round trip in the same pass (see comment above).
-      Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-        (staff as any).clefChangeAtBoundary = staffsNeedingClefChangeFlag.has(
-          staff as HTMLElement
-        );
-      });
     }
 
     // A time signature is shown only on the first measure, or on a later
     // measure whose resolved time signature differs from the measure right
     // before it. Guitar tab draws no time signature, so only classical
     // staves are flagged.
-    #updateTimeSignatureContinuity() {
+    #updateTimeSignatureContinuity(
+      held: ReadonlyMap<HTMLElement, ReadonlySet<Component>>
+    ) {
       const measures = this.#computeMeasureRows().flat();
 
       // Computed first, assigned once at the end — see #updateClefContinuity
@@ -1738,7 +1890,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const outgoingStaff = outgoingStaves[staffIndex];
           const incomingStaff = incomingStaves[staffIndex];
 
-          if (outgoingStaff.time !== incomingStaff.time) {
+          if (
+            outgoingStaff.time !== incomingStaff.time &&
+            !held.get(incomingStaff)?.has('time')
+          ) {
             staffsNeedingTimeChangeFlag.add(incomingStaff);
           }
         }
@@ -1750,6 +1905,336 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           staff as StaffElementBaseType
         );
       });
+    }
+
+    // Where two bars meet decides what each draws: a start repeat replaces
+    // the barline it touches, shares its thick line with an end repeat, or
+    // follows the clef/key/time glyphs at a row start or a change. Values are
+    // assigned once at the end, as in #updateClefContinuity.
+    #updateBarlineJunctions() {
+      const rows = this.#computeMeasureRows();
+      const rowIndexByMeasure = new Map<HTMLElement, number>();
+      rows.forEach((row, rowIndex) => {
+        for (const measure of row) {
+          rowIndexByMeasure.set(measure, rowIndex);
+        }
+      });
+      const measures = rows.flat();
+      const doubleBarBeforeRepeat = this.hasAttribute(
+        'double-bar-before-repeat'
+      );
+      const stavesOf = (measure: HTMLElement) =>
+        Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as BarlineStaff[];
+
+      const ends = new Map<BarlineStaff, ResolvedEndBarline>();
+      const starts = new Map<BarlineStaff, StartRepeatMode>();
+      measures.forEach((measure, i) => {
+        const { barline } = resolveEndBarline({
+          authored: parseMeasureEndBarline(measure.getAttribute('barline')),
+          fine: false,
+          jump: false,
+        });
+        const repeatStart = measure.hasAttribute('repeat-start');
+        const staves = stavesOf(measure);
+        for (const staff of staves) {
+          ends.set(staff, barline);
+          starts.set(staff, repeatStart ? 'full' : 'none');
+        }
+        if (i === 0) {
+          return;
+        }
+        const outgoingMeasure = measures[i - 1];
+        const outgoingStaves = stavesOf(outgoingMeasure);
+        const outgoingBarline = resolveEndBarline({
+          authored: parseMeasureEndBarline(
+            outgoingMeasure.getAttribute('barline')
+          ),
+          fine: false,
+          jump: false,
+        }).barline;
+        const sameRow =
+          rowIndexByMeasure.get(outgoingMeasure) ===
+          rowIndexByMeasure.get(measure);
+        const pairCount = Math.min(outgoingStaves.length, staves.length);
+        for (let staffIndex = 0; staffIndex < pairCount; staffIndex++) {
+          const incoming = staves[staffIndex];
+          const result = resolveBarlineJunction({
+            outgoing: outgoingBarline,
+            incomingRepeatStart: repeatStart,
+            incomingHasStartGlyphs:
+              incoming.showDescribe === true ||
+              incoming.clefChangeAtBoundary === true ||
+              incoming.timeChangeAtBoundary === true ||
+              (incoming.keyChangeAtBoundary ?? null) !== null,
+            sameRow,
+            doubleBarBeforeRepeat,
+          });
+          ends.set(outgoingStaves[staffIndex], result.outgoing);
+          starts.set(incoming, result.incomingStartRepeat);
+        }
+      });
+      for (const [staff, barline] of ends) {
+        staff.endBarline = barline;
+      }
+      for (const [staff, mode] of starts) {
+        staff.startRepeat = mode;
+      }
+    }
+
+    // Hands every bar its piece of an ending bracket; each measure draws it
+    // and reserves room on its top staff. Returns whether any staff's margin
+    // changed, so the row alignment re-runs.
+    #updateEndings(): boolean {
+      const measures = this.#computeMeasureRows().flat() as EndingHost[];
+      const { groups } = resolveEndings(this.#endingInputs(measures));
+      const labels = new Map<number, string>();
+      measures.forEach((measure, index) => {
+        const label = measure.getAttribute('ending-label');
+        if (label !== null) {
+          labels.set(index, label);
+        }
+      });
+      const segments = resolveEndingSegments(groups, labels);
+      let changed = false;
+      measures.forEach((measure, index) => {
+        changed =
+          (measure.applyEndingSegment?.(segments.get(index) ?? null) ??
+            false) ||
+          changed;
+      });
+      return changed;
+    }
+
+    #lastRepeatWarnings = new Set<string>();
+
+    // A repeated section must hold whole bars, and every end repeat needs a
+    // start to return to. Warns once per distinct message set.
+    // What each staff draws around the end repeats: the section's start state
+    // reinstated before :‖ (it doesn't depend on where rows wrap, so it
+    // reserves width), no change after it where the music continues in that
+    // state, and a bracketed reminder at a later ending's start. Runs before
+    // the adjacency continuity passes, which skip the components held here.
+    // Authoring the warnings by hand was rejected: rows reflow, and a bar
+    // can't know its section's start state locally.
+    #resolveRepeatContinuity(): {
+      endWarnings: Map<HTMLElement, EndWarnings>;
+      held: Map<HTMLElement, Set<Component>>;
+    } {
+      const measures = this.#computeMeasureRows().flat();
+      const { events, groups } = this.#repeatEvents(measures);
+      const { spans } = resolveRepeatSpans(events);
+      const stavesOf = (index: number): RepeatStaff[] =>
+        index < 0 || index >= measures.length
+          ? []
+          : (Array.from(measures[index].children).filter((el) =>
+              isStaffNodeName(el.nodeName)
+            ) as RepeatStaff[]);
+      const stateOf = (
+        staff: RepeatStaff,
+        at: 'start' | 'end' | number
+      ): BoundaryState => ({
+        clef:
+          (at === 'start'
+            ? staff.effectiveStartClef
+            : at === 'end'
+            ? staff.effectiveEndClef
+            : staff.clefAtBeat?.(at)) ?? null,
+        key: staff.effectiveKeySignature ?? null,
+        time: staff.time as TimeSignature,
+      });
+
+      const endWarnings = new Map<HTMLElement, EndWarnings>();
+      const held = new Map<HTMLElement, Set<Component>>();
+      const reminders = new Map<HTMLElement, Set<Component>>();
+      const markerWarnings = new Map<HTMLElement, Map<number, ClefType>>();
+      const add = (
+        map: Map<HTMLElement, Set<Component>>,
+        staff: HTMLElement,
+        components: ReadonlySet<Component>
+      ) => {
+        if (components.size > 0) {
+          const set = map.get(staff) ?? new Set<Component>();
+          components.forEach((component) => set.add(component));
+          map.set(staff, set);
+        }
+      };
+
+      for (const { start, end } of spans) {
+        const endIndex = end.measureIndex;
+        const atBarEnd = end.beatInBar >= end.barCapacity - 1e-9;
+        const startIndex = start?.measureIndex ?? 0;
+        const startAt =
+          start === null || start.beatInBar <= 1e-9 ? 'start' : start.beatInBar;
+        const group = groups.find(
+          (candidate) => candidate.id === end.endingGroup
+        );
+        const endingIndex =
+          group?.endings.findIndex(
+            (ending) => ending.lastMeasure === endIndex
+          ) ?? -1;
+        const nextIsLaterEnding =
+          atBarEnd &&
+          group !== undefined &&
+          endingIndex !== -1 &&
+          group.endings[endingIndex + 1]?.firstMeasure === endIndex + 1;
+        const beforeIndex = (group?.endings[0].firstMeasure ?? 0) - 1;
+        stavesOf(endIndex).forEach((endStaff, k) => {
+          const startStaff = stavesOf(startIndex)[k];
+          if (startStaff === undefined) {
+            return;
+          }
+          const nextStaff = atBarEnd ? stavesOf(endIndex + 1)[k] : undefined;
+          const beforeStaff = stavesOf(beforeIndex)[k];
+          const endState = stateOf(endStaff, atBarEnd ? 'end' : end.beatInBar);
+          const display = resolveRepeatWarnings({
+            start: stateOf(startStaff, startAt),
+            end: endState,
+            next: nextStaff === undefined ? null : stateOf(nextStaff, 'start'),
+            nextIsLaterEnding,
+            beforeEndings: !nextIsLaterEnding
+              ? null
+              : beforeStaff === undefined
+              ? stateOf(stavesOf(beforeIndex + 1)[k] ?? endStaff, 'start')
+              : stateOf(beforeStaff, 'end'),
+          });
+          const { warnings } = display;
+          if (!atBarEnd) {
+            if (warnings.clef) {
+              const map = markerWarnings.get(endStaff) ?? new Map();
+              map.set(end.beatInBar, warnings.clef);
+              markerWarnings.set(endStaff, map);
+            }
+            return;
+          }
+          const key =
+            warnings.key && endState.key !== null
+              ? { from: endState.key, to: warnings.key }
+              : null;
+          if (warnings.clef || key !== null || warnings.time) {
+            endWarnings.set(endStaff, {
+              clef: warnings.clef ?? null,
+              key,
+              time: warnings.time ?? null,
+              reservesWidth: true,
+            });
+          }
+          if (nextStaff !== undefined) {
+            add(held, nextStaff, display.suppressAfter);
+            add(held, nextStaff, display.reminderAfter);
+            add(reminders, nextStaff, display.reminderAfter);
+          }
+        });
+      }
+
+      // Assigned once per pass, like the continuity flags.
+      this.querySelectorAll<RepeatStaff>(STAFF_TAGS).forEach((staff) => {
+        if ('describeReminder' in staff) {
+          const reminder = reminders.get(staff);
+          staff.describeReminder =
+            reminder === undefined
+              ? null
+              : {
+                  clef: reminder.has('clef'),
+                  key: reminder.has('key'),
+                  time: reminder.has('time'),
+                };
+        }
+        if ('markerWarnings' in staff) {
+          staff.markerWarnings = markerWarnings.get(staff) ?? new Map();
+        }
+      });
+      return { endWarnings, held };
+    }
+
+    // Every start and end repeat in the piece, from measure attributes and
+    // mid-bar barlines, with the ending group each end closes an ending of.
+    #repeatEvents(measures: readonly HTMLElement[]): {
+      events: RepeatEvent[];
+      groups: EndingGroup[];
+      endingWarnings: string[];
+    } {
+      const events: RepeatEvent[] = [];
+      const endings = resolveEndings(this.#endingInputs(measures));
+      const groupByMeasure = new Map<number, number>();
+      for (const group of endings.groups) {
+        for (const ending of group.endings) {
+          for (let i = ending.firstMeasure; i <= ending.lastMeasure; i++) {
+            groupByMeasure.set(i, group.id);
+          }
+        }
+      }
+      measures.forEach((measure, measureIndex) => {
+        const staves = Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as BarlineStaff[];
+        const [beats, beatType] = (staves[0]?.time ?? '4/4')
+          .split('/')
+          .map(Number);
+        const barCapacity = beats / beatType;
+        const base = {
+          measureIndex,
+          barCapacity,
+          endingGroup: groupByMeasure.get(measureIndex) ?? null,
+        };
+        if (measure.hasAttribute('repeat-start')) {
+          events.push({ ...base, kind: 'start', beatInBar: 0 });
+        }
+        for (const marker of staves[0]?.measureMarkerBeats ?? []) {
+          const beatInBar = Math.max(0, marker.beat);
+          if (
+            marker.barlineType === 'repeat-end' ||
+            marker.barlineType === 'repeat-both'
+          ) {
+            events.push({ ...base, kind: 'end', beatInBar });
+          }
+          if (
+            marker.barlineType === 'repeat-start' ||
+            marker.barlineType === 'repeat-both'
+          ) {
+            events.push({ ...base, kind: 'start', beatInBar });
+          }
+        }
+        if (
+          parseMeasureEndBarline(measure.getAttribute('barline')) ===
+          'repeat-end'
+        ) {
+          events.push({ ...base, kind: 'end', beatInBar: barCapacity });
+        }
+      });
+      return {
+        events,
+        groups: endings.groups,
+        endingWarnings: endings.warnings,
+      };
+    }
+
+    #validateRepeats() {
+      const measures = this.#computeMeasureRows().flat();
+      const { events, groups, endingWarnings } = this.#repeatEvents(measures);
+      const numberingWarnings = resolveEndingNumberLabels(
+        measures.length,
+        groups,
+        this.#endingNumbering()
+      ).warnings;
+      const { spans, warnings } = resolveRepeatSpans(events);
+      const current = new Set(
+        [
+          ...warnings,
+          ...endingWarnings,
+          ...numberingWarnings,
+          ...spans
+            .map(repeatPickupWarning)
+            .filter((warning): warning is string => warning !== null),
+        ].map((warning) => `[music-composition] ${warning}`)
+      );
+      for (const warning of current) {
+        if (!this.#lastRepeatWarnings.has(warning)) {
+          console.warn(warning);
+        }
+      }
+      this.#lastRepeatWarnings = current;
     }
 
     #manageMeasureCount() {
@@ -1767,12 +2252,41 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
+    // Each child measure's ending and resolved end barline, in DOM order.
+    #endingInputs(measures: readonly HTMLElement[]): EndingMeasureInput[] {
+      return measures.map((measure) => ({
+        ending: parseEnding(measure.getAttribute('ending')),
+        endBarline: resolveEndBarline({
+          authored: parseMeasureEndBarline(measure.getAttribute('barline')),
+          fine: false,
+          jump: false,
+        }).barline,
+      }));
+    }
+
+    #endingNumbering(): EndingNumbering {
+      return (
+        parseEndingNumbering(this.getAttribute('ending-numbering')) ??
+        'consecutive'
+      );
+    }
+
     #renumberMeasures() {
       const measures = Array.from(this.children).filter(
         (node) => node.nodeName === MUSIC_MEASURE_NODE
-      ) as HTMLElement[];
+      ) as MeasureNumbering[];
+      const { groups } = resolveEndings(this.#endingInputs(measures));
+      const { numbers, labels, forceShow } = resolveEndingNumberLabels(
+        measures.length,
+        groups,
+        this.#endingNumbering()
+      );
       measures.forEach((measure, index) => {
-        measure.setAttribute('number', (index + 1).toString());
+        measure.setAttribute('number', numbers[index].toString());
+        if ('numberLabel' in measure) {
+          measure.numberLabel = labels[index];
+          measure.forceNumberDisplay = forceShow[index];
+        }
       });
 
       // Runs after a framework commit has settled the DOM: the first measure's

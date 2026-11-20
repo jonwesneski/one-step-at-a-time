@@ -1,5 +1,6 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
+import { accidentalSymbolWidth } from '../../rules/accidentalRules';
 import {
   augmentationDotRowWidthPx,
   resolveNoteDotStaffY,
@@ -38,7 +39,6 @@ import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH,
   ARPEGGIO_CHORD_GAP_PX,
   AUGMENTATION_DOT_DIAMETER_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
@@ -176,6 +176,8 @@ export type NoteProps = {
   // A triangle forces its own stem direction, overriding stemUp.
   notehead?: NoteheadType;
   accidental?: AccidentalType;
+  // A reminder accidental, drawn in parentheses.
+  accidentalParenthesized?: boolean;
   articulation?: ArticulationType | null;
   stress?: StressType | null;
   // Set by the ancestor <music-measure> — see
@@ -262,6 +264,7 @@ export const createNoteSvg = ({
   qualifiedElementName = 'svg',
   notehead = 'normal',
   accidental,
+  accidentalParenthesized = false,
   articulation,
   stress,
   articulationStemAnchorBeamLevels = null,
@@ -569,11 +572,14 @@ export const createNoteSvg = ({
     qualifiedElementName === 'svg' &&
     !suppressesAccidental(notehead)
   ) {
-    const symbolWidth = ACCIDENTAL_SYMBOL_WIDTH[accidental];
+    const symbolWidth = accidentalSymbolWidth(
+      accidental,
+      accidentalParenthesized
+    );
     const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[accidental];
     const yHeadCenter = headGeometry.cy * NOTE_SCALE;
 
-    const symbolSvg = createAccidentalSvg(accidental);
+    const symbolSvg = createAccidentalSvg(accidental, accidentalParenthesized);
 
     symbolSvg.setAttribute(
       'x',
@@ -590,7 +596,7 @@ export const createNoteSvg = ({
     const accidentalLeftX =
       accidental && !suppressesAccidental(notehead)
         ? -(
-            ACCIDENTAL_SYMBOL_WIDTH[accidental] +
+            accidentalSymbolWidth(accidental, accidentalParenthesized) +
             ACCIDENTAL_NOTE_GAP +
             leftOverhang
           )

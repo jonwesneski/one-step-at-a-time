@@ -737,7 +737,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     await buildTwoMeasureClefChange(page, 900);
 
     const result = await page.evaluate(
-      ({ measureTag, overlaySelector }) => {
+      ({ measureTag, courtesySelector }) => {
         const measures = Array.from(
           document.querySelectorAll(measureTag)
         ) as HTMLElement[];
@@ -750,17 +750,19 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
               (el) =>
                 el.nodeName === 'MUSIC-STAFF' ||
                 el.nodeName.startsWith('MUSIC-STAFF-')
-            ) as unknown as { clefChangeAtBoundary: boolean } | undefined
+            ) as unknown as
+              | (HTMLElement & { clefChangeAtBoundary: boolean })
+              | undefined
         );
-        const composition = document.querySelector('music-composition');
-        const overlay = composition?.shadowRoot?.querySelector(overlaySelector);
         return {
           sameRow: Math.abs(tops[1] - tops[0]) <= 5,
           secondClefChangeAtBoundary: staves[1]?.clefChangeAtBoundary ?? null,
-          courtesyGlyphCount: overlay?.children.length ?? -1,
+          courtesyGlyphCount:
+            staves[0]?.shadowRoot?.querySelectorAll(courtesySelector).length ??
+            -1,
         };
       },
-      { measureTag: MUSIC_MEASURE, overlaySelector: '.courtesy-clef-overlay' }
+      { measureTag: MUSIC_MEASURE, courtesySelector: '.courtesy-clef' }
     );
 
     expect(result.sameRow).toBe(true);
@@ -812,7 +814,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     await buildTwoMeasureClefChange(page, 150);
 
     const result = await page.evaluate(
-      ({ measureTag, overlaySelector }) => {
+      ({ measureTag, courtesySelector }) => {
         const measures = Array.from(
           document.querySelectorAll(measureTag)
         ) as HTMLElement[];
@@ -825,22 +827,25 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
               (el) =>
                 el.nodeName === 'MUSIC-STAFF' ||
                 el.nodeName.startsWith('MUSIC-STAFF-')
-            ) as unknown as { clefChangeAtBoundary: boolean } | undefined
+            ) as unknown as
+              | (HTMLElement & { clefChangeAtBoundary: boolean })
+              | undefined
         );
-        const composition = document.querySelector('music-composition');
-        const overlay = composition?.shadowRoot?.querySelector(overlaySelector);
+        const courtesy = Array.from(
+          staves[0]?.shadowRoot?.querySelectorAll(courtesySelector) ?? []
+        );
         return {
           differentRows: Math.abs(tops[1] - tops[0]) > 5,
           secondClefChangeAtBoundary: staves[1]?.clefChangeAtBoundary ?? null,
-          courtesyGlyphCount: overlay?.children.length ?? -1,
+          courtesyGlyphCount: courtesy.length,
           // Bass and treble clef SVGs have distinct viewBox dimensions
           // (createBassClefSvg vs createTrebleClefSvg) — used below to
           // confirm the courtesy glyph previews the UPCOMING (bass) clef,
           // not a repeat of the outgoing (treble) one.
-          courtesyGlyphHtml: overlay?.innerHTML ?? '',
+          courtesyGlyphHtml: courtesy.map((glyph) => glyph.innerHTML).join(''),
         };
       },
-      { measureTag: MUSIC_MEASURE, overlaySelector: '.courtesy-clef-overlay' }
+      { measureTag: MUSIC_MEASURE, courtesySelector: '.courtesy-clef' }
     );
 
     expect(result.differentRows).toBe(true);

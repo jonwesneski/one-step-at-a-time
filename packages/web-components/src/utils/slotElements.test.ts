@@ -3,6 +3,7 @@
  */
 import {
   MUSIC_ARPEGGIO,
+  MUSIC_BARLINE,
   MUSIC_CHORD,
   MUSIC_CLEF,
   MUSIC_NOTE,
@@ -104,11 +105,11 @@ describe('flattenStaffSlotElements', () => {
   it('behaves byte-identical to flattenSlotElements when there are zero <music-voice> siblings', () => {
     const assigned = [note('C'), note('D'), rest()];
     const direct = flattenSlotElements(assigned);
-    const { voices, clefMarkers } = flattenStaffSlotElements(assigned);
+    const { voices, streamMarkers } = flattenStaffSlotElements(assigned);
 
     expect(voices.size).toBe(1);
     expect(voices.get(1)?.flatElements).toEqual(direct.flatElements);
-    expect(clefMarkers).toEqual(direct.clefMarkers);
+    expect(streamMarkers).toEqual(direct.streamMarkers);
   });
 
   it('numbers voices by sibling order among <music-voice> children', () => {
@@ -188,16 +189,16 @@ describe('flattenStaffSlotElements', () => {
   it('collects a <music-clef> nested inside the first <music-voice> as the staff-wide marker list, without warning', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const clef = document.createElement(MUSIC_CLEF);
-    const { voices, clefMarkers } = flattenStaffSlotElements([
+    const { voices, streamMarkers } = flattenStaffSlotElements([
       voice([note('C'), clef, note('D')]),
       voice([note('E')]),
     ]);
 
     expect(voices.size).toBe(2);
     expect(voices.get(1)?.flatElements).toHaveLength(2);
-    expect(clefMarkers).toHaveLength(1);
-    expect(clefMarkers[0].element).toBe(clef);
-    expect(clefMarkers[0].afterElementIndex).toBe(0);
+    expect(streamMarkers).toHaveLength(1);
+    expect(streamMarkers[0].element).toBe(clef);
+    expect(streamMarkers[0].afterElementIndex).toBe(0);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -205,13 +206,13 @@ describe('flattenStaffSlotElements', () => {
   it('warns and hides a <music-clef> nested inside voice 2 or voice 3', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const clef = document.createElement(MUSIC_CLEF) as HTMLElement;
-    const { voices, clefMarkers } = flattenStaffSlotElements([
+    const { voices, streamMarkers } = flattenStaffSlotElements([
       voice([note('C')]),
       voice([note('D'), clef]),
     ]);
 
     expect(voices.size).toBe(2);
-    expect(clefMarkers).toHaveLength(0);
+    expect(streamMarkers).toHaveLength(0);
     expect(clef.style.display).toBe('none');
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining(
@@ -224,14 +225,14 @@ describe('flattenStaffSlotElements', () => {
   it('warns and hides a bare top-level <music-clef> sibling alongside <music-voice> siblings', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const clef = document.createElement(MUSIC_CLEF) as HTMLElement;
-    const { voices, clefMarkers } = flattenStaffSlotElements([
+    const { voices, streamMarkers } = flattenStaffSlotElements([
       voice([note('C')]),
       clef,
       voice([note('D')]),
     ]);
 
     expect(voices.size).toBe(2);
-    expect(clefMarkers).toHaveLength(0);
+    expect(streamMarkers).toHaveLength(0);
     expect(clef.style.display).toBe('none');
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('nest it inside the first <music-voice>')
@@ -316,6 +317,67 @@ describe('flattenSlotElements — tremoloGroups', () => {
     expect(tremoloGroups).toHaveLength(1);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('slur'));
+    warn.mockRestore();
+  });
+});
+
+describe('flattenSlotElements — barline markers', () => {
+  it('collects a mid-bar <music-barline> after the entry it follows', () => {
+    const barline = document.createElement(MUSIC_BARLINE);
+    const { flatElements, streamMarkers } = flattenSlotElements([
+      note('C'),
+      barline,
+      note('D'),
+    ]);
+
+    expect(flatElements).toHaveLength(2);
+    expect(streamMarkers).toEqual([
+      { kind: 'barline', afterElementIndex: 0, element: barline },
+    ]);
+  });
+
+  it('keeps a clef and a barline on one anchor, in stream order', () => {
+    const clef = document.createElement(MUSIC_CLEF);
+    const barline = document.createElement(MUSIC_BARLINE);
+    const { streamMarkers } = flattenSlotElements([
+      note('C'),
+      clef,
+      barline,
+      note('D'),
+    ]);
+
+    expect(streamMarkers.map((marker) => marker.kind)).toEqual([
+      'clef',
+      'barline',
+    ]);
+  });
+
+  it('keeps only the first of two barlines on one anchor', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const first = document.createElement(MUSIC_BARLINE);
+    const second = document.createElement(MUSIC_BARLINE);
+    const { streamMarkers } = flattenSlotElements([note('C'), first, second]);
+
+    expect(streamMarkers).toHaveLength(1);
+    expect(second.style.display).toBe('none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('consecutive <music-barline>')
+    );
+    warn.mockRestore();
+  });
+
+  it('ignores a <music-barline> inside a tuplet', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const barline = document.createElement(MUSIC_BARLINE);
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.append(note('C'), barline, note('D'), note('E'));
+    const { streamMarkers } = flattenSlotElements([tuplet]);
+
+    expect(streamMarkers).toHaveLength(0);
+    expect(barline.style.display).toBe('none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('<music-barline> inside <music-tuplet>')
+    );
     warn.mockRestore();
   });
 });

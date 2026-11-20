@@ -44,6 +44,8 @@ const preview: Preview = {
             'Tremolos',
             'Octave Signs',
             'Clef Changes',
+            'Key Changes',
+            'Repeats',
             'Beams',
             'Voices',
             'Unisons',

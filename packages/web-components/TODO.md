@@ -226,19 +226,21 @@ These alter the rhythmic length of a note.
 
 ## 12. Repeat & Structure Symbols
 
-|          | Symbol    | Name                | Description                   |
-| -------- | --------- | ------------------- | ----------------------------- |
-| &#x2610; | `: :`     | Repeat barlines     | Repeat the enclosed section   |
-| &#x2610; | `1. / 2.` | First/Second Ending | Different endings for repeats |
-| &#x2610; | `D.C.`    | Da Capo             | Go back to the beginning      |
-| &#x2610; | `D.S.`    | Dal Segno           | Go back to the `ð„‹` sign     |
-| &#x2610; | `Fine`    | Fine                | The end (used with D.C./D.S.) |
-| &#x2610; | `ð„‹`     | Segno               | Marker for D.S.               |
-| &#x2610; | `ð„Œ`     | Coda                | A separated closing section   |
-| &#x2610; | `al Coda` | To the Coda         | Jump to the Coda symbol       |
-| &#x2611; | `8va`     | Ottava alta         | Play one octave higher        |
-| &#x2611; | `8vb`     | Ottava bassa        | Play one octave lower         |
-| &#x2611; | `15ma`    | Two octaves higher  | Play two octaves higher       |
+|          | Symbol        | Name                          | Description                                                                                                    |
+| -------- | ------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| &#x2611; | `: :`         | Repeat barlines               | Repeat the enclosed section                                                                                    |
+| &#x2611; | `♮♮ ♯`        | Key-signature change          | Cancellation naturals and courtesy key at a barline                                                            |
+| &#x2611; | `(𝄞) (♮) (f)` | Repeat warnings and reminders | Clef/key/time reinstated before `:‖`, bracketed reminders at a later ending, reminder accidentals and dynamics |
+| &#x2611; | `1. / 2.`     | First/Second Ending           | Different endings for repeats                                                                                  |
+| &#x2610; | `D.C.`        | Da Capo                       | Go back to the beginning                                                                                       |
+| &#x2610; | `D.S.`        | Dal Segno                     | Go back to the `ð„‹` sign                                                                                      |
+| &#x2610; | `Fine`        | Fine                          | The end (used with D.C./D.S.)                                                                                  |
+| &#x2610; | `ð„‹`         | Segno                         | Marker for D.S.                                                                                                |
+| &#x2610; | `ð„Œ`         | Coda                          | A separated closing section                                                                                    |
+| &#x2610; | `al Coda`     | To the Coda                   | Jump to the Coda symbol                                                                                        |
+| &#x2611; | `8va`         | Ottava alta                   | Play one octave higher                                                                                         |
+| &#x2611; | `8vb`         | Ottava bassa                  | Play one octave lower                                                                                          |
+| &#x2611; | `15ma`        | Two octaves higher            | Play two octaves higher                                                                                        |
 
 ---
 
@@ -447,10 +449,10 @@ Horizontal brackets above the staff indicating different endings.
 
 |          | Marking | Name             | Meaning                             |
 | -------- | ------- | ---------------- | ----------------------------------- |
-| &#x2610; | `1.`    | First ending     | Play this on the first pass         |
-| &#x2610; | `2.`    | Second ending    | Play this on the repeat             |
-| &#x2610; | `3.`    | Third ending     | Play on third pass                  |
-| &#x2610; | `1.-3.` | Combined bracket | Play these measures on passes 1â€“3 |
+| &#x2611; | `1.`    | First ending     | Play this on the first pass         |
+| &#x2611; | `2.`    | Second ending    | Play this on the repeat             |
+| &#x2611; | `3.`    | Third ending     | Play on third pass                  |
+| &#x2611; | `1.-3.` | Combined bracket | Play these measures on passes 1â€“3 |
 
 ---
 
@@ -608,7 +610,7 @@ Can appear above or below depending on the instrument/score.
 | &#x2611; | 8va / 15ma                    | Above staff                                           |
 | &#x2610; | Chord symbols                 | Above staff (lead sheets) / Below staff (some styles) |
 | &#x2611; | Trill marks                   | Above staff                                           |
-| &#x2610; | Volta brackets                | Above staff                                           |
+| &#x2611; | Volta brackets                | Above staff                                           |
 | &#x2610; | Score directives (D.C., Coda) | Above staff                                           |
 | &#x2611; | Dynamics                      | Below staff (usually)                                 |
 | &#x2611; | Lyrics                        | Below staff                                           |

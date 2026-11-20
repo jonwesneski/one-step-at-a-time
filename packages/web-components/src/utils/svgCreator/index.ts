@@ -11,6 +11,7 @@ export {
   createArticulationMarks,
   type ArticulationMarksProps,
 } from './articulations';
+export { createBarlineSvg, createStartRepeatSvg } from './barlines';
 export {
   BeamsBuilder,
   type NoteYPosition,
@@ -37,6 +38,7 @@ export {
   createHairpinSvg,
   createVerticalHairpinSvg,
 } from './dynamics';
+export { createEndingSegmentSvg } from './endings';
 export { createFlatSvg } from './flat';
 export {
   createGraceNotesSvg,
@@ -118,3 +120,5 @@ export {
 } from './trill';
 export { createTupletBracketSvg, createTupletNumeralText } from './tuplet';
 export { createUnisonBracketSvg } from './unison';
+
+export { createParenthesisSvg } from './parenthesis';

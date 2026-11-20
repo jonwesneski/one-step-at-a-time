@@ -10,9 +10,11 @@ import '../tremolo/index';
 import type { ChordElementType } from '../types/elements';
 import type { Chord } from '../types/theory';
 import {
+  MEASURE_EVENTS,
   MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
   MUSIC_STAFF,
   STAFF_EVENTS,
   TREMOLO_EVENTS,
@@ -330,5 +332,192 @@ describe('cross-staff tremolo', () => {
       )
     );
     warn.mockRestore();
+  });
+});
+
+describe(`${MUSIC_MEASURE} barlines`, () => {
+  function measureWithStaff(
+    attributes: Record<string, string>,
+    parent: HTMLElement = document.body
+  ): { measure: any; staff: any } {
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    for (const [name, value] of Object.entries(attributes)) {
+      measure.setAttribute(name, value);
+    }
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'whole');
+    staff.appendChild(note);
+    measure.appendChild(staff);
+    parent.appendChild(measure);
+    // jsdom fires no slotchange for parsed children.
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    return { measure, staff };
+  }
+
+  it('parses barline and repeat-start, ignoring an unknown barline', () => {
+    const { measure } = measureWithStaff({
+      barline: 'final',
+      'repeat-start': '',
+    });
+    expect(measure.barline).toBe('final');
+    expect(measure.repeatStart).toBe(true);
+
+    measure.setAttribute('barline', 'zigzag');
+    expect(measure.barline).toBeNull();
+  });
+
+  it('standalone, hands its barlines to its staves', () => {
+    const { measure, staff } = measureWithStaff({
+      barline: 'repeat-end',
+      'repeat-start': '',
+    });
+    expect(staff.endBarline).toBe('repeat-end');
+    expect(staff.startRepeat).toBe('full');
+
+    measure.setAttribute('barline', 'zigzag');
+    measure.removeAttribute('repeat-start');
+    expect(staff.endBarline).toBe('single');
+    expect(staff.startRepeat).toBe('none');
+  });
+
+  it('inside a composition, leaves its barlines to the composition', () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const { staff } = measureWithStaff({ barline: 'final' }, composition);
+    expect(staff.endBarline).toBe('single');
+  });
+
+  it('dispatches a bubbling repeat-attribute event on a barline change', () => {
+    const { measure } = measureWithStaff({});
+    const listener = jest.fn();
+    document.body.addEventListener(
+      MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+      listener
+    );
+    measure.setAttribute('barline', 'double');
+    measure.setAttribute('repeat-start', '');
+    document.body.removeEventListener(
+      MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+      listener
+    );
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe(`${MUSIC_MEASURE} end-of-measure warnings`, () => {
+  function addStaff(measure: HTMLElement, clef: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute('clef', clef);
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', clef === 'bass' ? '3' : '4');
+    note.setAttribute('duration', 'whole');
+    staff.appendChild(note);
+    measure.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  it('gives every staff the widest warning area, so beats stay aligned', () => {
+    const measure = document.createElement(MUSIC_MEASURE);
+    document.body.appendChild(measure);
+    const treble = addStaff(measure, 'treble');
+    const bass = addStaff(measure, 'bass');
+
+    treble.endWarnings = {
+      clef: 'bass',
+      key: null,
+      time: null,
+      reservesWidth: false,
+    };
+    const width = treble.ownEndWarningSpace.width;
+
+    expect(width).toBeGreaterThan(0);
+    expect(bass.measureEndWarningSpace).toEqual({ width, reserved: 0 });
+
+    treble.endWarnings = null;
+    expect(bass.measureEndWarningSpace).toEqual({ width: 0, reserved: 0 });
+  });
+});
+
+describe(`${MUSIC_MEASURE} endings`, () => {
+  function standalone(attributes: Record<string, string>): any {
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    for (const [name, value] of Object.entries(attributes)) {
+      measure.setAttribute(name, value);
+    }
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '4');
+    note.setAttribute('duration', 'whole');
+    staff.appendChild(note);
+    measure.appendChild(staff);
+    document.body.appendChild(measure);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    return measure;
+  }
+
+  it('parses ending and warns about one it cannot read', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const measure = standalone({ ending: '2,1' });
+    expect(measure.ending).toEqual([1, 2]);
+
+    measure.setAttribute('ending', 'a');
+    expect(measure.ending).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ending="a"'));
+    warn.mockRestore();
+  });
+
+  it('standalone, draws its own bracket, closed by its own barline', () => {
+    const measure = standalone({ ending: '1', barline: 'repeat-end' });
+
+    expect(measure.endingSegment).toEqual({
+      label: '1.',
+      labelIsText: false,
+      leftHook: true,
+      rightHook: true,
+      endsEnding: true,
+    });
+    expect(
+      measure.shadowRoot.querySelector('.endings-overlay .ending-hook-right')
+    ).not.toBeNull();
+
+    measure.setAttribute('ending-label', 'Fine');
+    expect(measure.endingSegment.label).toBe('Fine');
+
+    measure.removeAttribute('ending');
+    expect(measure.endingSegment).toBeNull();
+    expect(
+      measure.shadowRoot.querySelector('.endings-overlay').children
+    ).toHaveLength(0);
+  });
+
+  it('shows its number label when the composition forces it', () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    composition.setAttribute('measure-numbers', 'odd');
+    document.body.appendChild(composition);
+    const measure = document.createElement(MUSIC_MEASURE) as any;
+    composition.appendChild(measure);
+    measure.setAttribute('number', '2');
+    const text = () =>
+      measure.shadowRoot.querySelector('.measure-number')?.textContent ?? null;
+    expect(text()).toBeNull();
+
+    measure.numberLabel = '2a';
+    measure.forceNumberDisplay = true;
+    expect(text()).toBe('2a');
+
+    composition.setAttribute('measure-numbers', 'none');
+    expect(text()).toBeNull();
   });
 });

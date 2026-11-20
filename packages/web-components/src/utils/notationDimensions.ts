@@ -526,6 +526,18 @@ export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -1.8;
  */
 export const TIME_SIG_Y_TRANSLATE = STAFF_LINE_SPACING * 3;
 
+/**
+ * Horizontal centre (px) of the time-signature numerals within their SVG.
+ * = 2 × STAFF_LINE_SPACING
+ */
+export const TIME_SIG_GLYPH_CENTER_X_PX = STAFF_LINE_SPACING * 2;
+
+/**
+ * Width (px) of one time-signature digit (bold, font-size 28).
+ * = 1.7 × STAFF_LINE_SPACING
+ */
+export const TIME_SIG_DIGIT_WIDTH_PX = STAFF_LINE_SPACING * 1.7;
+
 // ─── Measure layout ───────────────────────────────────────────────────────────
 
 /**
@@ -610,6 +622,12 @@ export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
  */
 export const ACCIDENTAL_NOTE_GAP = -7;
 
+/**
+ * Width (px) of each parenthesis around a reminder accidental.
+ * = 0.35 × STAFF_LINE_SPACING
+ */
+export const ACCIDENTAL_REMINDER_PAREN_WIDTH_PX = STAFF_LINE_SPACING * 0.35;
+
 // ─── Dynamics ─────────────────────────────────────────────────────────────────
 
 /**
@@ -650,6 +668,12 @@ export const DYNAMICS_FONT_SIZE = STAFF_LINE_SPACING * 1.4;
  * Mirrors AVG_LYRIC_CHAR_WIDTH_PX's estimate-don't-measure approach.
  */
 export const DYNAMICS_CHAR_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.65;
+
+/**
+ * Estimated width (px) of each upright bracket around a reminder dynamic.
+ * = 0.35 × DYNAMICS_FONT_SIZE
+ */
+export const DYNAMIC_REMINDER_BRACKET_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.35;
 
 /**
  * Minimum horizontal gap (px) between a dynamic marking's estimated edge and
@@ -857,10 +881,175 @@ export const MID_STREAM_CLEF_Y_OFFSET = STAFF_LINE_SPACING * 2;
 export const COURTESY_CLEF_SCALE = 0.7;
 
 /**
- * Horizontal gap (px) between a courtesy clef and the right edge of the staff
- * it's drawn on.
+ * Width (px) of a courtesy clef: the clef glyph box at courtesy scale.
+ * = MID_STREAM_CLEF_WIDTH_PX × COURTESY_CLEF_SCALE
  */
-export const COURTESY_CLEF_MARGIN_RIGHT_PX = STAFF_LINE_SPACING * 0.5;
+export const COURTESY_CLEF_WIDTH_PX =
+  MID_STREAM_CLEF_WIDTH_PX * COURTESY_CLEF_SCALE;
+
+// ─── Barlines ──────────────────────────────────────────────────────────────────
+
+/**
+ * Width (px) of a barline's thin line, the same as the plain barline.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const BARLINE_THIN_PX = STAFF_LINE_THICKNESS_PX;
+
+/**
+ * Width (px) of the thick line of a final or repeat barline: beam weight.
+ * = BEAM_THICKNESS_PX
+ */
+export const BARLINE_THICK_PX = BEAM_THICKNESS_PX;
+
+/**
+ * Gap (px) between the two lines of a double, final or repeat barline.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const BARLINE_LINE_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Radius (px) of a repeat barline's dot: half a space across.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const REPEAT_DOT_RADIUS_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Gap (px) from a repeat barline's thin line to the near edge of its dots.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const REPEAT_DOT_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) from the clef/key/time glyphs to the thick line of a start repeat
+ * that follows them.
+ * = 0.6 × STAFF_LINE_SPACING
+ */
+export const REPEAT_START_LEAD_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * Clear space (px) on each side of a mid-bar barline's slot.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const MID_BAR_BARLINE_PADDING_PX = STAFF_LINE_SPACING * 0.8;
+
+// ─── Key-signature changes & reminders ─────────────────────────────────────────
+
+/**
+ * Horizontal step (px) of each cancellation natural; a natural is as narrow
+ * as a flat.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const KEY_SIG_NATURAL_WIDTH = STAFF_LINE_SPACING * 0.8;
+
+/**
+ * Vertical offset (px) of a cancellation natural against the key-signature
+ * coordinates: a natural's centre sits 2px higher in its box than a sharp's.
+ * = 0.2 × STAFF_LINE_SPACING
+ */
+export const KEY_SIG_NATURAL_Y_OFFSET = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Gap (px) between the cancellation naturals and the new key signature.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const KEY_SIG_CANCEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between a barline and the clef/key/time group beside it, and
+ * between those groups.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const END_WARNING_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Width (px) of each parenthesis around a bracketed clef/key/time reminder.
+ * = 0.6 × STAFF_LINE_SPACING
+ */
+export const REMINDER_PAREN_WIDTH_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * Gap (px) between a reminder's parenthesis and what it encloses.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const REMINDER_PAREN_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How far (px) a reminder's parentheses reach past the outer stave lines.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const REMINDER_PAREN_OVERHANG_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Extra room (px) a mid-bar barline's slot takes for a warning clef before
+ * it: the courtesy clef and a gap.
+ * = COURTESY_CLEF_WIDTH_PX + END_WARNING_GAP_PX
+ */
+export const MID_BAR_WARNING_CLEF_WIDTH_PX =
+  COURTESY_CLEF_WIDTH_PX + END_WARNING_GAP_PX;
+
+// ─── Endings ───────────────────────────────────────────────────────────────────
+
+/**
+ * Thickness (px) of an ending bracket, the weight of a stave line.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const ENDING_LINE_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
+
+/**
+ * Distance (px) of an ending bracket's line below its measure's top. Fixed,
+ * like the measure number's spot, so the brackets of a row stay level and
+ * the label sits above the number.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const ENDING_LINE_Y_PX = STAFF_LINE_THICKNESS_PX;
+
+/**
+ * Length (px) of an ending bracket's hooks.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const ENDING_HOOK_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) between an ending bracket's hook and the barline, so brackets
+ * meeting at a barline stay apart.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const ENDING_INSET_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Font size (px) of an ending's label: the time-signature numerals' font and
+ * weight at the height the reference draws them.
+ * = 1.4 × STAFF_LINE_SPACING
+ */
+export const ENDING_LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.4;
+
+/**
+ * Gap (px) between an ending's left hook and its label.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const ENDING_LABEL_INSET_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Height (px) the label hangs below the bracket line, to its baseline: a gap,
+ * then the numerals' cap height (about 0.7 of the font size).
+ * = 0.2 × STAFF_LINE_SPACING + 0.7 × ENDING_LABEL_FONT_SIZE
+ */
+export const ENDING_LABEL_HEIGHT_PX =
+  STAFF_LINE_SPACING * 0.2 + ENDING_LABEL_FONT_SIZE * 0.7;
+
+/**
+ * Least distance (px) from an ending bracket's line down to the top stave
+ * line, over an empty bar.
+ * = 2.5 × STAFF_LINE_SPACING
+ */
+export const ENDING_MIN_ABOVE_STAFF_PX = STAFF_LINE_SPACING * 2.5;
+
+/**
+ * Gap (px) kept between an ending bracket, or a bar number under it, and the
+ * highest ink of the bar's top staff (a fermata over a high note).
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const ENDING_CONTENT_CLEARANCE_PX = STAFF_LINE_SPACING * 0.8;
 
 // ─── Grand staff / part connectors ─────────────────────────────────────────────
 

@@ -748,7 +748,9 @@ export class BeamsBuilder {
     externallyBeamedIndices: ReadonlySet<number> = new Set(),
     // `<music-tremolo>` groups: their members never join a run and are
     // beamed as a group of their own.
-    tremoloSpecs: readonly TremoloBeamGroupSpec[] = []
+    tremoloSpecs: readonly TremoloBeamGroupSpec[] = [],
+    // Beats of mid-bar barlines: a beam never crosses a barline.
+    breakBeats: readonly number[] = []
   ) {
     for (const spec of tremoloSpecs) {
       for (const index of spec.memberIndices) {
@@ -759,7 +761,11 @@ export class BeamsBuilder {
       elements,
       time,
       beatOffsets,
-      new Set([...externallyBeamedIndices, ...this.#tremoloSpecByMember.keys()])
+      new Set([
+        ...externallyBeamedIndices,
+        ...this.#tremoloSpecByMember.keys(),
+      ]),
+      breakBeats
     );
     this.#groups = groups;
     this.#beamedIndices = beamedIndices;
@@ -785,8 +791,15 @@ export class BeamsBuilder {
     elements: NoteChordOrRestElementType[],
     time: [BeatsInMeasure, BeatTypeInMeasure],
     elementOffsets: readonly number[],
-    externallyBeamedIndices: ReadonlySet<number>
+    externallyBeamedIndices: ReadonlySet<number>,
+    breakBeats: readonly number[]
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
+    const barlineBetween = (previous: number, next: number): boolean =>
+      breakBeats.some(
+        (beat) =>
+          beat > elementOffsets[previous] + 1e-9 &&
+          beat <= elementOffsets[next] + 1e-9
+      );
     const [beats, beatType] = time;
     const measureDuration = beats / beatType;
     const beatWindowSize = BeamsBuilder.#beamGroupWindowDuration(
@@ -856,7 +869,8 @@ export class BeamsBuilder {
           if (
             pendingNoteIndices.length > 0 &&
             (pendingNoteIndices[pendingNoteIndices.length - 1] !== i - 1 ||
-              hasTremolo !== pendingHasTremolo)
+              hasTremolo !== pendingHasTremolo ||
+              barlineBetween(i - 1, i))
           ) {
             flushRun(pendingFlagCounts, pendingNoteIndices);
             pendingFlagCounts = [];

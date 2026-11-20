@@ -2,15 +2,18 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BarlineType,
   BaseDurationType,
   ClefType,
   DurationType,
   DynamicMarking,
+  EndingNumbering,
   GlissandoHint,
   GraceDuration,
   GraceSlur,
   GraceType,
   HairpinKind,
+  MeasureEndBarline,
   MeasureNumberDisplay,
   Mode,
   Note,
@@ -53,6 +56,7 @@ export const MUSIC_MEASURE = 'music-measure';
 export const MUSIC_COMPOSITION = 'music-composition';
 export const MUSIC_STAFF = 'music-staff';
 export const MUSIC_CLEF = 'music-clef';
+export const MUSIC_BARLINE = 'music-barline';
 export const MUSIC_STAFF_GUITAR_TAB = 'music-staff-guitar-tab';
 export const MUSIC_STAFF_VOCAL = 'music-staff-vocal';
 export const MUSIC_LYRICS = 'music-lyrics';
@@ -80,6 +84,7 @@ export const MUSIC_MEASURE_NODE = MUSIC_MEASURE.toUpperCase();
 export const MUSIC_COMPOSITION_NODE = MUSIC_COMPOSITION.toUpperCase();
 export const MUSIC_STAFF_NODE = MUSIC_STAFF.toUpperCase();
 export const MUSIC_CLEF_NODE = MUSIC_CLEF.toUpperCase();
+export const MUSIC_BARLINE_NODE = MUSIC_BARLINE.toUpperCase();
 export const MUSIC_STAFF_GUITAR_TAB_NODE = MUSIC_STAFF_GUITAR_TAB.toUpperCase();
 export const MUSIC_STAFF_VOCAL_NODE = MUSIC_STAFF_VOCAL.toUpperCase();
 export const MUSIC_LYRICS_NODE = MUSIC_LYRICS.toUpperCase();
@@ -107,6 +112,14 @@ export const CHORD_EVENTS = {
 
 export const CLEF_EVENTS = {
   ATTRIBUTE_CHANGE: 'clef-attribute-change',
+} as const;
+
+export const BARLINE_EVENTS = {
+  ATTRIBUTE_CHANGE: 'barline-attribute-change',
+} as const;
+
+export const MEASURE_EVENTS = {
+  REPEAT_ATTRIBUTE_CHANGE: 'measure-repeat-attribute-change',
 } as const;
 
 export const TUPLET_EVENTS = {
@@ -352,6 +365,27 @@ export const TREMOLO_BEAM_POSITIONS: TremoloBeamPosition[] = ['between'];
 export const TIE_STYLES: TieStyle[] = ['solid', 'dotted'];
 
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
+
+export const BARLINE_TYPES: BarlineType[] = [
+  'single',
+  'double',
+  'final',
+  'repeat-start',
+  'repeat-end',
+  'repeat-both',
+];
+
+export const MEASURE_END_BARLINES: MeasureEndBarline[] = [
+  'single',
+  'double',
+  'final',
+  'repeat-end',
+];
+
+export const ENDING_NUMBERINGS: EndingNumbering[] = [
+  'consecutive',
+  'duplicate',
+];
 
 export const MEASURE_NUMBER_DISPLAYS: MeasureNumberDisplay[] = [
   'none',

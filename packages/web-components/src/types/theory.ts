@@ -316,6 +316,13 @@ export type MeasureNumberDisplay =
   | 'even';
 
 /**
+ * How bars inside first-/second-time endings are numbered: `'consecutive'`
+ * (default) counts straight through every ending; `'duplicate'` numbers each
+ * ending's bars from the same start with a letter per ending (19a, 19b).
+ */
+export type EndingNumbering = 'consecutive' | 'duplicate';
+
+/**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver
  * wants the bare sign only on an isolated, untied note-value.
@@ -417,6 +424,24 @@ export type TremoloBeamPosition = 'between';
  * a barline.
  */
 export type TieStyle = 'solid' | 'dotted';
+
+/**
+ * A barline's design: `single`, a thin `double`, a thin–thick `final`, or a
+ * repeat barline (`repeat-start` ‖:, `repeat-end` :‖, `repeat-both` :‖:).
+ */
+export type BarlineType =
+  | 'single'
+  | 'double'
+  | 'final'
+  | 'repeat-start'
+  | 'repeat-end'
+  | 'repeat-both';
+
+/**
+ * The barline that ends a `<music-measure>`. A start repeat is the measure's
+ * own `repeat-start` attribute instead.
+ */
+export type MeasureEndBarline = 'single' | 'double' | 'final' | 'repeat-end';
 
 /**
  * Controls how an octave-transposition span's numeral restates itself after

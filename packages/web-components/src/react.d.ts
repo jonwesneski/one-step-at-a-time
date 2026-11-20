@@ -8,11 +8,13 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BarlineType,
   Chord,
   ClefType,
   ConnectorRole,
   DurationType,
   DynamicMarking,
+  EndingNumbering,
   GlissandoHint,
   GraceArticulationsType,
   GraceDuration,
@@ -24,6 +26,7 @@ import type {
   GuitarFret,
   HairpinKind,
   HairpinRole,
+  MeasureEndBarline,
   MeasureNumberDisplay,
   Mode,
   Note,
@@ -76,12 +79,19 @@ declare module 'react' {
         time?: TimeSignature;
         'max-width'?: number | 'none';
         'measure-numbers'?: MeasureNumberDisplay;
+        'double-bar-before-repeat'?: boolean;
+        'ending-numbering'?: EndingNumbering;
       };
       'music-measure': WebComponentProps & {
         number?: number;
         'key-sig'?: Note;
         mode?: Mode;
         time?: TimeSignature;
+        barline?: MeasureEndBarline;
+        'repeat-start'?: boolean;
+        /** Comma-separated passes, e.g. `"1"`, `"1,2"`. */
+        ending?: string;
+        'ending-label'?: string;
       };
       'music-staff': WebComponentProps & {
         clef?: ClefType;
@@ -117,6 +127,9 @@ declare module 'react' {
       'music-clef': WebComponentNoChildrenProps & {
         clef?: ClefType;
       };
+      'music-barline': WebComponentNoChildrenProps & {
+        type?: BarlineType;
+      };
       'music-rest': WebComponentNoChildrenProps & {
         duration?: DurationType;
         'beam-group'?: string;
@@ -151,6 +164,8 @@ declare module 'react' {
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
+        'dynamic-reminder'?: boolean;
+        'accidental-reminder'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -207,6 +222,8 @@ declare module 'react' {
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
+        'dynamic-reminder'?: boolean;
+        'accidental-reminder'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;

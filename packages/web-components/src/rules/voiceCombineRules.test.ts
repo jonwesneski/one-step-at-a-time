@@ -350,6 +350,40 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(1);
   });
 
+  it('combines dynamic reminders only with each other', () => {
+    const matched = (second: boolean) => {
+      const v1Note = note('C', 4);
+      const v2Note = note('E', 4);
+      v1Note.setAttribute('dynamic', 'mf');
+      v2Note.setAttribute('dynamic', 'mf');
+      v1Note.setAttribute('dynamic-reminder', '');
+      if (second) {
+        v2Note.setAttribute('dynamic-reminder', '');
+      }
+      return detectCombinableGroups(
+        new Map([
+          [1, voiceInput([v1Note], [0])],
+          [2, voiceInput([v2Note], [0])],
+        ])
+      );
+    };
+    expect(matched(true)).toHaveLength(1);
+    expect(matched(false)).toHaveLength(0);
+  });
+
+  it('excludes a note with an accidental reminder, which belongs to one tone', () => {
+    const v1Note = note('C', 4);
+    const v2Note = note('E', 4);
+    v2Note.setAttribute('accidental-reminder', '');
+    const groups = detectCombinableGroups(
+      new Map([
+        [1, voiceInput([v1Note], [0])],
+        [2, voiceInput([v2Note], [0])],
+      ])
+    );
+    expect(groups).toHaveLength(0);
+  });
+
   it('excludes a glissando-anchored note from combining, since the synthetic chord would drop the anchor', () => {
     const v1Note = note('C', 4);
     const v2Note = note('E', 4);

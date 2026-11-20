@@ -1,4 +1,15 @@
-import { sameClefChangeBeats } from './rules/clefChangeRules';
+import {
+  barlineGlyphWidth,
+  endBarlineInset,
+  endBarlineReserve,
+  type ResolvedEndBarline,
+  type StartRepeatMode,
+} from './rules/barlineRules';
+import {
+  MARKER_BEAT_EPSILON,
+  type MarkerBeat,
+  sameMarkerBeats,
+} from './rules/streamMarkerRules';
 import { computeBandOverflow, VerticalBand } from './rules/verticalSpaceRules';
 import {
   BeatsInMeasure,
@@ -18,14 +29,20 @@ import {
 import {
   COMMON_ATTRIBUTES,
   MUSIC_ARPEGGIO_NODE,
+  MUSIC_CHORD,
+  MUSIC_CLEF,
   MUSIC_COMPOSITION,
+  MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
+  MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
   STAFF_EVENTS,
 } from './utils/consts';
 import {
+  BARLINE_THIN_PX,
   STAFF_BOTTOM_MARGIN,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -34,6 +51,7 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from './utils/notationDimensions';
 import { parseStaffGroup } from './utils/parsers';
+import { createBarlineSvg } from './utils/svgCreator/barlines';
 import { upgradeShadowedProperties } from './utils/upgradeShadowedProperties';
 import {
   measureVerticalExtents,
@@ -48,6 +66,38 @@ export const _MaybeHTMLElement: any =
     ? // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis.HTMLElement isn't typed as a class constructor
       (globalThis as any).HTMLElement
     : class {};
+
+/** A mid-bar barline's slot: its beat and the slot's left edge (wrapper px). */
+export type BarlineSlotLeft = { beat: number; left: number };
+
+/** Px an end-of-measure warning area takes, and how much of it the strut counts. */
+export type EndWarningSpace = { width: number; reserved: number };
+
+const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
+
+const INK_SELECTOR =
+  'path, ellipse:not(.head-hit-zone), line, rect, polygon, polyline, circle, text';
+const NON_ENTRY_INK =
+  '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container';
+const ENTRY_SELECTOR = `${MUSIC_NOTE}, ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden]), ${MUSIC_CLEF}, ${MUSIC_GUITAR_NOTE}`;
+
+// Sub-pixel drift between passes must not count as a change, or the measure
+// and its staves would hand the value back and forth.
+const BARLINE_SLOT_TOLERANCE_PX = 0.5;
+
+function sameBarlineSlotLefts(
+  a: readonly BarlineSlotLeft[],
+  b: readonly BarlineSlotLeft[]
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (slot, i) =>
+        Math.abs(slot.beat - b[i].beat) <= MARKER_BEAT_EPSILON &&
+        Math.abs(slot.left - b[i].left) <= BARLINE_SLOT_TOLERANCE_PX
+    )
+  );
+}
 
 const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
 const ROW_ALIGNMENT_SOURCE = 'row-alignment';
@@ -64,6 +114,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected readonly transcribeContainer: SVGSVGElement;
   #standaloneConnectorsOverlay: SVGSVGElement;
+  // Right-anchored, so an end barline needs no knowledge of the staff width.
+  #endBarlineSvg: SVGSVGElement;
   // A margin change moves this staff's lines, so the ancestor measure
   // re-lays its brace/barline/labels against them.
   #verticalSpace = new VerticalSpaceReservations(
@@ -93,6 +145,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.staffContainer = document.createElement('div');
     this.transcribeContainer = document.createElementNS(SVG_NS, 'svg');
     this.#standaloneConnectorsOverlay = document.createElementNS(SVG_NS, 'svg');
+    this.#endBarlineSvg = document.createElementNS(SVG_NS, 'svg');
 
     this.#lastStaffWidth = 0;
     this.staffResizeObserver = new ResizeObserver((entries) => {
@@ -176,28 +229,112 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
   }
 
-  // Beats of this staff's own mid-stream clef changes, read by the ancestor
-  // <music-measure> to align its staves past each change.
-  get ownClefChangeBeats(): readonly number[] {
+  // This staff's own mid-stream markers (clef changes, mid-bar barlines), read
+  // by the ancestor <music-measure> to align its staves past each one.
+  get ownMarkerBeats(): readonly MarkerBeat[] {
     return [];
   }
 
-  // Every clef-change beat a staff in the same <music-measure> makes room
-  // for, set by that measure, so same-beat entries stay aligned past a clef
-  // change on any of its staves.
-  get measureClefChangeBeats(): readonly number[] {
-    return this.sharedClefChangeBeats;
+  // Every marker a staff in the same <music-measure> makes room for, set by
+  // that measure, so same-beat entries stay aligned past a marker on any of
+  // its staves.
+  get measureMarkerBeats(): readonly MarkerBeat[] {
+    return this.sharedMarkerBeats;
   }
 
-  set measureClefChangeBeats(value: readonly number[]) {
-    if (sameClefChangeBeats(this.sharedClefChangeBeats, value)) {
+  set measureMarkerBeats(value: readonly MarkerBeat[]) {
+    if (sameMarkerBeats(this.sharedMarkerBeats, value)) {
       return;
     }
-    this.sharedClefChangeBeats = [...value];
+    this.sharedMarkerBeats = [...value];
     this.onMeasureLayoutChange();
   }
 
-  protected sharedClefChangeBeats: readonly number[] = [];
+  protected sharedMarkerBeats: readonly MarkerBeat[] = [];
+
+  // Where this staff would put each mid-bar barline's slot (wrapper px), read
+  // by the ancestor <music-measure>, which hands every staff the furthest
+  // right so the barline runs through them all at one x.
+  get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
+    return [];
+  }
+
+  get measureBarlineSlotLefts(): readonly BarlineSlotLeft[] {
+    return this.sharedBarlineSlotLefts;
+  }
+
+  set measureBarlineSlotLefts(value: readonly BarlineSlotLeft[]) {
+    if (sameBarlineSlotLefts(this.sharedBarlineSlotLefts, value)) {
+      return;
+    }
+    this.sharedBarlineSlotLefts = [...value];
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedBarlineSlotLefts: readonly BarlineSlotLeft[] = [];
+
+  // The barline this staff draws at its right edge, set by its
+  // <music-measure> (and adjusted by <music-composition> where two bars
+  // meet). A plain barline stays the staff container's right border.
+  get endBarline(): ResolvedEndBarline {
+    return this.#endBarline;
+  }
+
+  set endBarline(value: ResolvedEndBarline) {
+    if (this.#endBarline === value) {
+      return;
+    }
+    this.#endBarline = value;
+    this.#drawEndBarline();
+    this.onBarlinesChange();
+  }
+
+  #endBarline: ResolvedEndBarline = 'single';
+
+  // The start repeat this staff draws, set the same way as endBarline.
+  get startRepeat(): StartRepeatMode {
+    return this.#startRepeat;
+  }
+
+  set startRepeat(value: StartRepeatMode) {
+    if (this.#startRepeat === value) {
+      return;
+    }
+    this.#startRepeat = value;
+    this.onBarlinesChange();
+  }
+
+  #startRepeat: StartRepeatMode = 'none';
+
+  // Room the end barline takes inside the staff beyond the plain barline.
+  protected get endBarlineReserve(): number {
+    return endBarlineReserve(this.#endBarline);
+  }
+
+  protected onBarlinesChange(): void {
+    // Staves that space notes override this to relayout.
+  }
+
+  #drawEndBarline(): void {
+    const plain = this.#endBarline === 'single';
+    this.staffContainer.style.borderRightWidth = plain ? '' : '0';
+    this.#endBarlineSvg.replaceChildren();
+    if (plain || this.#endBarline === 'none') {
+      return;
+    }
+    // A zero-width <svg> isn't painted, so the box is as wide as the glyph.
+    const inset = endBarlineInset(this.#endBarline);
+    const width = Math.ceil(barlineGlyphWidth(this.#endBarline) + inset);
+    this.#endBarlineSvg.style.width = `${width}px`;
+    this.#endBarlineSvg.appendChild(
+      createBarlineSvg(
+        this.#endBarline,
+        this.staffLineCount,
+        width - inset,
+        'end'
+      )
+    );
+  }
 
   // Right edge of this staff's own start area (clef/key/time, or the tab
   // label), read by the ancestor <music-measure> to start every staff's
@@ -222,6 +359,39 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected sharedNotesStartX = 0;
+
+  // Room this staff's own end-of-measure warnings take before the end
+  // barline, read by the ancestor <music-measure> so every staff spaces its
+  // notes short of the widest; `reserved` is the part counted in the strut.
+  get ownEndWarningSpace(): EndWarningSpace {
+    return NO_END_WARNING_SPACE;
+  }
+
+  get measureEndWarningSpace(): EndWarningSpace {
+    return this.sharedEndWarningSpace;
+  }
+
+  set measureEndWarningSpace(value: EndWarningSpace) {
+    if (
+      this.sharedEndWarningSpace.width === value.width &&
+      this.sharedEndWarningSpace.reserved === value.reserved
+    ) {
+      return;
+    }
+    this.sharedEndWarningSpace = { ...value };
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedEndWarningSpace: EndWarningSpace = NO_END_WARNING_SPACE;
+
+  // The end-warning room this staff leaves, its own or the measure's.
+  protected get endWarningSpace(): EndWarningSpace {
+    const own = this.ownEndWarningSpace;
+    return {
+      width: Math.max(own.width, this.sharedEndWarningSpace.width),
+      reserved: Math.max(own.reserved, this.sharedEndWarningSpace.reserved),
+    };
+  }
 
   protected onMeasureLayoutChange(): void {
     // Staves that space notes override this to relayout.
@@ -359,6 +529,16 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     );
     wrapper.appendChild(this.#standaloneConnectorsOverlay);
 
+    this.#endBarlineSvg.setAttribute('class', 'end-barline');
+    this.#endBarlineSvg.setAttribute(
+      'style',
+      // The plain barline is the container's 1px right border, just outside
+      // the wrapper, so a drawn end barline ends at the same edge.
+      `position: absolute; top: 0; right: -${BARLINE_THIN_PX}px; width: 0; height: 100%; overflow: visible; pointer-events: none; color: currentColor;`
+    );
+    wrapper.appendChild(this.#endBarlineSvg);
+    this.#drawEndBarline();
+
     const slot = wrapper.querySelector('slot');
     if (slot && this.isConnected) {
       slot.addEventListener('slotchange', this.#slotChangeHandler);
@@ -475,6 +655,51 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
    */
   reserveGapClearance(space: VerticalBand): boolean {
     return this.#verticalSpace.reserve(GAP_CLEARANCE_SOURCE, space);
+  }
+
+  /**
+   * Room an ancestor's decoration drawn past this staff (an ending bracket)
+   * needs, under its own `source`. Returns whether the margin changed.
+   */
+  reserveDecorationSpace(source: string, space: VerticalBand): boolean {
+    return this.#verticalSpace.reserve(source, space);
+  }
+
+  /**
+   * How far this staff's notes and decorations reach above its top line, in
+   * px, leaving out the clef/key/time area, barlines and end-of-measure
+   * warnings. Measured from the line, so the staff's margin doesn't change it.
+   */
+  get inkAboveTopLine(): number {
+    const lineTop = this.staffContainer.getBoundingClientRect().top;
+    let top = lineTop;
+    const visit = (root: ParentNode | null | undefined) => {
+      for (const element of Array.from(
+        root?.querySelectorAll<SVGGraphicsElement>(INK_SELECTOR) ?? []
+      )) {
+        if (element.closest(NON_ENTRY_INK) !== null) {
+          continue;
+        }
+        const rect = element.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) {
+          top = Math.min(top, rect.top);
+        }
+      }
+    };
+    visit(this.transcribeContainer);
+    // A combined-voices chord lives in the shadow wrapper, not the light DOM.
+    const entries = [
+      ...Array.from(
+        (this as unknown as ParentNode).querySelectorAll(ENTRY_SELECTOR)
+      ),
+      ...Array.from(
+        this.wrapperElement?.querySelectorAll(ENTRY_SELECTOR) ?? []
+      ),
+    ];
+    for (const entry of entries) {
+      visit(entry.shadowRoot);
+    }
+    return Math.max(0, lineTop - top);
   }
 
   protected drawConnectorsWhenStandalone(): void {

@@ -719,6 +719,30 @@ describe('staffClassicalBase', () => {
       ]);
     });
 
+    it('keeps a dynamic reminder on the combined chord', () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1Note = makeQuarterNote('C');
+      const voice2Note = makeQuarterNote('E');
+      for (const note of [voice1Note, voice2Note]) {
+        note.setAttribute('dynamic', 'p');
+        note.setAttribute('dynamic-reminder', '');
+      }
+      const voice1 = document.createElement('music-voice');
+      voice1.appendChild(voice1Note);
+      const voice2 = document.createElement('music-voice');
+      voice2.appendChild(voice2Note);
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      const synthesizedChord = staff.shadowRoot.querySelector(MUSIC_CHORD);
+      expect(synthesizedChord.dynamicReminder).toBe(true);
+    });
+
     describe('re-combines when articulation-repeat changes', () => {
       function makeRepeatedStaccato(element: HTMLElement): HTMLElement {
         element.setAttribute('tremolo', '2');
@@ -1876,5 +1900,132 @@ describe('tremolo labels and numerals', () => {
       return Math.min(...ys);
     };
     expect(bracketTop(true)).toBeLessThan(bracketTop(false));
+  });
+});
+
+describe('key changes and end-of-measure warnings', () => {
+  const D_TO_C = {
+    from: { keySig: 'D', mode: 'major' },
+    to: { keySig: 'C', mode: 'major' },
+  } as const;
+  const BB_TO_D = {
+    from: { keySig: 'Bb', mode: 'major' },
+    to: { keySig: 'D', mode: 'major' },
+  } as const;
+
+  function renderStaff(width = 400) {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width,
+      left: 0,
+      right: width,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    const notes = ['C', 'D', 'E', 'F'].map((name) => {
+      const note = document.createElement(MUSIC_NOTE) as any;
+      note.setAttribute('note', name);
+      note.setAttribute('octave', `${4 satisfies Octave}`);
+      note.setAttribute('duration', 'quarter');
+      return note;
+    });
+    staff.append(...notes);
+    const widths = { minWidth: 0, naturalWidth: 0 };
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      Object.assign(widths, (event as CustomEvent).detail);
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => notes;
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, notes, widths };
+  }
+
+  it('draws the naturals, then the new key, at a barline mid-row', () => {
+    const { staff } = renderStaff();
+    staff.showDescribe = false;
+    staff.keyChangeAtBoundary = BB_TO_D;
+
+    const glyphs = Array.from(
+      staff.shadowRoot.querySelectorAll('.describe-container .key-change svg')
+    ) as Element[];
+    expect(
+      glyphs.map((glyph) =>
+        glyph.classList.contains('cancellation-natural') ? 'natural' : 'key'
+      )
+    ).toEqual(['natural', 'natural', 'key', 'key']);
+  });
+
+  it('draws only the new key at a row start', () => {
+    const { staff } = renderStaff();
+    staff.setAttribute(COMMON_ATTRIBUTES.KEY_SIG, 'C');
+    staff.keyChangeAtBoundary = D_TO_C;
+
+    expect(staff.shadowRoot.querySelector('.cancellation-natural')).toBeNull();
+  });
+
+  it('draws the warnings before the end barline, clef first', () => {
+    const { staff } = renderStaff();
+    staff.endWarnings = {
+      clef: 'bass',
+      key: D_TO_C,
+      time: '3/4',
+      reservesWidth: false,
+    };
+
+    const area = staff.shadowRoot.querySelector('.end-warnings-container');
+    expect(
+      Array.from(area.children).map((child: any) =>
+        child.classList.contains('courtesy-clef')
+          ? 'clef'
+          : child.querySelector('.key-change')
+          ? 'key'
+          : 'time'
+      )
+    ).toEqual(['time', 'key', 'clef']);
+    expect(area.querySelectorAll('.cancellation-natural')).toHaveLength(2);
+
+    staff.endWarnings = null;
+    expect(area.children).toHaveLength(0);
+  });
+
+  it('spaces the notes short of a courtesy without reserving width for it', () => {
+    const { staff, notes, widths } = renderStaff();
+    const lastX = parseFloat(notes[3].style.left);
+    const { minWidth, naturalWidth } = widths;
+
+    staff.endWarnings = {
+      clef: 'bass',
+      key: null,
+      time: null,
+      reservesWidth: false,
+    };
+
+    expect(parseFloat(notes[3].style.left)).toBeLessThan(lastX);
+    expect(widths.minWidth).toBe(minWidth);
+    expect(widths.naturalWidth).toBe(naturalWidth);
+  });
+
+  it('reserves width for warnings that ask for it', () => {
+    const { staff, widths } = renderStaff();
+    const { minWidth, naturalWidth } = widths;
+
+    staff.endWarnings = {
+      clef: 'bass',
+      key: null,
+      time: null,
+      reservesWidth: true,
+    };
+
+    expect(widths.minWidth).toBeCloseTo(
+      minWidth + staff.ownEndWarningSpace.width
+    );
+    expect(widths.naturalWidth).toBeCloseTo(
+      naturalWidth + staff.ownEndWarningSpace.width
+    );
   });
 });

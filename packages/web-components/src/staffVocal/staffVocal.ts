@@ -1,4 +1,5 @@
 import { ClefRenderData, getClefRenderData } from '../rules/clefRules';
+import type { KeySignatureState } from '../rules/keySignatureChangeRules';
 import {
   calculateStaffVocalMinWidth,
   calculateStaffVocalNaturalWidth,
@@ -9,12 +10,12 @@ import {
   generateYCoordinates,
 } from '../rules/theoryHelpers';
 import { StaffClassicalElementBase } from '../staffClassicalBase';
-import {
+import type {
   LyricSyllablePosition,
   LyricsElementType,
   YCoordinates,
 } from '../types/elements';
-import { Octave, VocalType } from '../types/theory';
+import type { Octave, VocalType } from '../types/theory';
 import { STAFF_EVENTS } from '../utils/consts';
 import {
   createBassClefSvg,
@@ -148,7 +149,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
-    public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
+    // A vocal staff's clef follows its voice type, so `clef` is ignored.
+    public getKeyYCoordinatesFor(state: KeySignatureState): {
+      useSharps: boolean;
+      coordinates: number[];
+    } {
       const tables: KeySignatureTables =
         this.voice === 'tenor'
           ? StaffVocalElement.#tenorKeyTables
@@ -156,12 +161,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ? StaffVocalElement.#bass
           : StaffVocalElement.#treble;
       const [sharps, flats] =
-        this.mode === 'major'
+        state.mode === 'major'
           ? [tables.majorSharpYCoordinates, tables.majorFlatYCoordinates]
           : [tables.minorSharpYCoordinates, tables.minorFlatYCoordinates];
       return {
-        useSharps: !!sharps[this.keySig],
-        coordinates: sharps[this.keySig] ?? flats[this.keySig] ?? [],
+        useSharps: !!sharps[state.keySig],
+        coordinates: sharps[state.keySig] ?? flats[state.keySig] ?? [],
       };
     }
 
@@ -247,14 +252,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       const strutInputs = this.currentStrutInputs;
       if (strutInputs !== null) {
-        const { noteCount, leftwardWidth, rightwardWidth, totalSlackWeight } =
-          strutInputs;
+        const {
+          noteCount,
+          leftwardWidth,
+          rightwardWidth,
+          endWarningWidth,
+          totalSlackWeight,
+        } = strutInputs;
         const minWidth = calculateStaffVocalMinWidth(
           this.describeEndX,
           noteCount,
           maxLyricChars,
           leftwardWidth,
-          rightwardWidth
+          rightwardWidth,
+          endWarningWidth
         );
         const naturalWidth = calculateStaffVocalNaturalWidth(
           this.describeEndX,
@@ -262,7 +273,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           maxLyricChars,
           totalSlackWeight,
           leftwardWidth,
-          rightwardWidth
+          rightwardWidth,
+          endWarningWidth
         );
         this.dispatchEvent(
           new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {

@@ -1,9 +1,10 @@
 import {
   ArpeggioElementType,
   ArpeggioGroupPlacement,
+  BarlineElementType,
   ClefElementType,
-  ClefMarkerPlacement,
   NoteChordOrRestElementType,
+  StreamMarkerPlacement,
   TremoloElementType,
   TremoloGroupPlacement,
   TupletElementType,
@@ -12,6 +13,7 @@ import { VoiceNumber } from '../types/theory';
 import {
   MAX_VOICES,
   MUSIC_ARPEGGIO_NODE,
+  MUSIC_BARLINE_NODE,
   MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
   MUSIC_NOTE_NODE,
@@ -24,13 +26,13 @@ import {
 export function flattenSlotElements(assigned: Element[]): {
   flatElements: NoteChordOrRestElementType[];
   tupletsByIndex: Map<number, TupletElementType[]>;
-  clefMarkers: ClefMarkerPlacement[];
+  streamMarkers: StreamMarkerPlacement[];
   arpeggioGroups: ArpeggioGroupPlacement[];
   tremoloGroups: TremoloGroupPlacement[];
 } {
   const flatElements: NoteChordOrRestElementType[] = [];
   const tupletsByIndex = new Map<number, TupletElementType[]>();
-  const clefMarkers: ClefMarkerPlacement[] = [];
+  const streamMarkers: StreamMarkerPlacement[] = [];
   const arpeggioGroups: ArpeggioGroupPlacement[] = [];
   const tremoloGroups: TremoloGroupPlacement[] = [];
 
@@ -56,31 +58,45 @@ export function flattenSlotElements(assigned: Element[]): {
       flattenArpeggio(element as ArpeggioElementType, tupletAncestors);
     } else if (tag === MUSIC_TREMOLO_NODE) {
       flattenTremolo(element as TremoloElementType, tupletAncestors);
-    } else if (tag === MUSIC_CLEF_NODE) {
+    } else if (tag === MUSIC_CLEF_NODE || tag === MUSIC_BARLINE_NODE) {
+      const kind = tag === MUSIC_CLEF_NODE ? 'clef' : 'barline';
+      const name = `<music-${kind}>`;
       if (tupletAncestors.length > 0) {
         console.warn(
-          '[flattenSlotElements] <music-clef> inside <music-tuplet> is not supported; ignoring'
+          `[flattenSlotElements] ${name} inside <music-tuplet> is not supported; ignoring`
         );
+        (element as HTMLElement).style.display = 'none';
         return;
       }
       const anchorIndex = flatElements.length - 1;
-      // Consecutive clef markers (no note/chord/rest between them) share one
-      // anchor index and would be positioned on top of each other, so only
-      // the first is honored.
+      // Two markers of one kind with no note/chord/rest between them share
+      // an anchor and would draw on top of each other, so only the first is
+      // honored. A clef and a barline may share one, in stream order.
       if (
-        clefMarkers.length > 0 &&
-        clefMarkers[clefMarkers.length - 1].afterElementIndex === anchorIndex
+        streamMarkers.some(
+          (marker) =>
+            marker.kind === kind && marker.afterElementIndex === anchorIndex
+        )
       ) {
         console.warn(
-          '[flattenSlotElements] consecutive <music-clef> elements are not supported; ignoring all but the first'
+          `[flattenSlotElements] consecutive ${name} elements are not supported; ignoring all but the first`
         );
-        (element as ClefElementType).style.display = 'none';
+        (element as HTMLElement).style.display = 'none';
         return;
       }
-      clefMarkers.push({
-        afterElementIndex: anchorIndex,
-        element: element as ClefElementType,
-      });
+      streamMarkers.push(
+        kind === 'clef'
+          ? {
+              kind,
+              afterElementIndex: anchorIndex,
+              element: element as ClefElementType,
+            }
+          : {
+              kind,
+              afterElementIndex: anchorIndex,
+              element: element as BarlineElementType,
+            }
+      );
     }
   }
 
@@ -196,8 +212,11 @@ export function flattenSlotElements(assigned: Element[]): {
   }
 
   for (const element of assigned) {
-    if (element.nodeName === MUSIC_CLEF_NODE) {
-      (element as ClefElementType).style.display = '';
+    if (
+      element.nodeName === MUSIC_CLEF_NODE ||
+      element.nodeName === MUSIC_BARLINE_NODE
+    ) {
+      (element as HTMLElement).style.display = '';
     }
     flatten(element, []);
   }
@@ -205,7 +224,7 @@ export function flattenSlotElements(assigned: Element[]): {
   return {
     flatElements,
     tupletsByIndex,
-    clefMarkers,
+    streamMarkers,
     arpeggioGroups,
     tremoloGroups,
   };
@@ -268,7 +287,7 @@ export type VoiceFlattenResult = {
 export type StaffFlattenResult = {
   // Ascending by voice number, always >=1 entry.
   voices: Map<VoiceNumber, VoiceFlattenResult>;
-  clefMarkers: ClefMarkerPlacement[];
+  streamMarkers: StreamMarkerPlacement[];
 };
 
 // Partitions a staff's slotted content into voices: no <music-voice>
@@ -286,7 +305,7 @@ export function flattenStaffSlotElements(
     const {
       flatElements,
       tupletsByIndex,
-      clefMarkers,
+      streamMarkers,
       arpeggioGroups,
       tremoloGroups,
     } = flattenSlotElements(assigned);
@@ -294,7 +313,7 @@ export function flattenStaffSlotElements(
       voices: new Map([
         [1, { flatElements, tupletsByIndex, arpeggioGroups, tremoloGroups }],
       ]),
-      clefMarkers,
+      streamMarkers,
     };
   }
 
@@ -312,15 +331,18 @@ export function flattenStaffSlotElements(
     (voiceElement as HTMLElement).style.display = i < MAX_VOICES ? '' : 'none';
   });
 
-  // A bare top-level <music-clef> beside <music-voice> siblings can't mark a
+  // A bare top-level marker beside <music-voice> siblings can't mark a
   // mid-measure point; it belongs inside the first <music-voice>.
   for (const element of assigned) {
     if (element.nodeName !== MUSIC_VOICE_NODE) {
-      if (element.nodeName === MUSIC_CLEF_NODE) {
+      if (
+        element.nodeName === MUSIC_CLEF_NODE ||
+        element.nodeName === MUSIC_BARLINE_NODE
+      ) {
         console.warn(
-          '[flattenStaffSlotElements] a <music-clef> directly under <music-staff> alongside <music-voice> siblings is not supported; nest it inside the first <music-voice> instead'
+          `[flattenStaffSlotElements] a <${element.nodeName.toLowerCase()}> directly under <music-staff> alongside <music-voice> siblings is not supported; nest it inside the first <music-voice> instead`
         );
-        (element as ClefElementType).style.display = 'none';
+        (element as HTMLElement).style.display = 'none';
       } else {
         console.warn(
           `[flattenStaffSlotElements] a bare <${element.nodeName.toLowerCase()}> cannot appear alongside <music-voice> siblings; hiding it — wrap every active voice, including voice 1, in its own <music-voice>`
@@ -331,12 +353,12 @@ export function flattenStaffSlotElements(
   }
 
   const voices = new Map<VoiceNumber, VoiceFlattenResult>();
-  let clefMarkers: ClefMarkerPlacement[] = [];
+  let streamMarkers: StreamMarkerPlacement[] = [];
   voiceElements.slice(0, MAX_VOICES).forEach((voiceElement, i) => {
     const {
       flatElements,
       tupletsByIndex,
-      clefMarkers: voiceClefMarkers,
+      streamMarkers: voiceMarkers,
       arpeggioGroups,
       tremoloGroups,
     } = flattenSlotElements(Array.from(voiceElement.children));
@@ -347,21 +369,23 @@ export function flattenStaffSlotElements(
       tremoloGroups,
     });
     if (i === 0) {
-      // A clef change is staff-wide, but voice 1 is its canonical anchor —
+      // A marker is staff-wide, but voice 1 is its canonical anchor —
       // flattenSlotElements() already collected these with a real,
       // index-based `afterElementIndex` relative to voice 1's own array,
       // exactly like the single-voice case. staffClassicalBase.ts converts
-      // that index into a beat-offset to apply the change to every voice.
-      clefMarkers = voiceClefMarkers;
-    } else if (voiceClefMarkers.length > 0) {
-      console.warn(
-        '[flattenStaffSlotElements] <music-clef> is only supported inside the first <music-voice>; ignoring'
-      );
-      for (const marker of voiceClefMarkers) {
+      // that index into a beat-offset to apply it to every voice.
+      streamMarkers = voiceMarkers;
+    } else if (voiceMarkers.length > 0) {
+      for (const kind of new Set(voiceMarkers.map((marker) => marker.kind))) {
+        console.warn(
+          `[flattenStaffSlotElements] <music-${kind}> is only supported inside the first <music-voice>; ignoring`
+        );
+      }
+      for (const marker of voiceMarkers) {
         marker.element.style.display = 'none';
       }
     }
   });
 
-  return { voices, clefMarkers };
+  return { voices, streamMarkers };
 }

@@ -20,6 +20,8 @@ export type ClefDefinition = {
   octaves: Octave[];
   sharpAccidentalNotes: NoteLetterOctave[];
   flatAccidentalNotes: NoteLetterOctave[];
+  /** The stave line the clef marks (treble G, bass F), counted from the top line. */
+  referenceLineIndex: number;
   clefSvgFactory: () => string;
 };
 
@@ -51,6 +53,7 @@ export const CLEF_DEFINITIONS: Record<ClefType, ClefDefinition> = {
     octaves: [4, 5, 6],
     sharpAccidentalNotes: ['F5', 'C5', 'G5', 'D5', 'A4', 'E5', 'B4'],
     flatAccidentalNotes: ['B4', 'E5', 'A4', 'D5', 'G4', 'C5', 'F4'],
+    referenceLineIndex: 3,
     clefSvgFactory: createTrebleClefSvg,
   },
   bass: {
@@ -59,6 +62,7 @@ export const CLEF_DEFINITIONS: Record<ClefType, ClefDefinition> = {
     octaves: [2, 3, 4],
     sharpAccidentalNotes: ['F3', 'C3', 'G3', 'D3', 'A2', 'E3', 'B2'],
     flatAccidentalNotes: ['B2', 'E3', 'A2', 'D3', 'G2', 'C3', 'F2'],
+    referenceLineIndex: 1,
     clefSvgFactory: createBassClefSvg,
   },
 };

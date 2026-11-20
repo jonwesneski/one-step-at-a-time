@@ -135,6 +135,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
    * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
    * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
+   * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
+   * @attr {boolean} accidental-reminder - Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone.
    * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.
    * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
    * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -200,6 +202,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'glissando-hint',
         'dynamic',
         'dynamic-shared',
+        'dynamic-reminder',
+        'accidental-reminder',
         'crescendo',
         'decrescendo',
         'diminuendo',
@@ -261,6 +265,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #impliedArpeggio: ArpeggioType | null = null;
     #staffYCoordinates: number[] | null = null;
     #noteAccidentals: (AccidentalType | null | undefined)[] = [];
+    #noteAccidentalsParenthesized: boolean[] = [];
     #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
     #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
     #resolvedTrillPitch: ResolvedTrillPitch | null = null;
@@ -401,6 +406,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    get noteAccidentalsParenthesized(): boolean[] {
+      return this.#noteAccidentalsParenthesized;
+    }
+    set noteAccidentalsParenthesized(v: boolean[]) {
+      this.#noteAccidentalsParenthesized = v;
+      this.#scheduleRender();
+    }
+
+    // Per tone, in `notes` order: the chord's own `accidental-reminder`, or
+    // a slotted <music-note>'s.
+    get toneAccidentalReminders(): boolean[] {
+      const chordReminder = this.accidentalReminder;
+      const noteElements = Array.from(this.querySelectorAll(MUSIC_NOTE));
+      return this.notes.map(
+        (_, i) =>
+          chordReminder ||
+          (noteElements[i]?.hasAttribute('accidental-reminder') ?? false)
+      );
+    }
+
     get tie(): TieValue | null {
       return parseTieValue(this.getAttribute('tie'));
     }
@@ -476,6 +501,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.removeAttribute('dynamic-shared');
       }
+    }
+
+    get dynamicReminder(): boolean {
+      return this.hasAttribute('dynamic-reminder');
+    }
+    set dynamicReminder(value: boolean) {
+      this.toggleAttribute('dynamic-reminder', value);
+    }
+
+    get accidentalReminder(): boolean {
+      return this.hasAttribute('accidental-reminder');
+    }
+    set accidentalReminder(value: boolean) {
+      this.toggleAttribute('accidental-reminder', value);
     }
 
     get crescendo(): HairpinRole | null {
@@ -1160,9 +1199,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    #warnedDynamicReminder = false;
+
+    // A bracketed reminder needs a dynamic to bracket; warns once until one
+    // is set.
+    #warnAboutDynamicReminder(): void {
+      const missing = this.dynamicReminder && this.dynamic === null;
+      if (missing && this.isConnected && !this.#warnedDynamicReminder) {
+        console.warn(
+          `[music-chord] dynamic-reminder needs a dynamic to draw in brackets`
+        );
+      }
+      this.#warnedDynamicReminder = missing && this.isConnected;
+    }
+
     connectedCallback(): void {
       upgradeShadowedProperties(this);
       this.#warnAboutTremolo(null, null);
+      this.#warnAboutDynamicReminder();
       this.render();
       this.#childObserver = new MutationObserver(() => {
         this.#scheduleRender();
@@ -1171,7 +1225,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['notehead'],
+        attributeFilter: ['notehead', 'accidental-reminder'],
       });
     }
 
@@ -1241,8 +1295,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'crescendo' ||
         name === 'decrescendo' ||
         name === 'grace-dynamic' ||
-        name === 'dynamic-shared'
+        name === 'dynamic-shared' ||
+        name === 'dynamic-reminder'
       ) {
+        this.#warnAboutDynamicReminder();
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
             bubbles: true,
@@ -1368,6 +1424,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'accidental-reminder' ||
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
         name === 'arpeggio-hairpin' ||
@@ -1418,12 +1475,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      this.render();
       if (
         (name === 'articulation' || name === 'stress') &&
-        this.tremoloLabel !== null &&
         this.closest(STAFF_TAGS)
       ) {
-        // The staff's tremolo label sits above this element's marks.
+        // What sits beyond this element's marks (a tremolo label, an ending
+        // bracket) is laid out by the staff and its ancestors.
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -1431,7 +1489,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           })
         );
       }
-      this.render();
     }
 
     #lastDotMismatchWarning: string | null = null;
@@ -1522,6 +1579,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stemUp: this.#stemUp,
           stemExtension: this.#stemExtension,
           noteAccidentals: this.#noteAccidentals,
+          noteAccidentalsParenthesized: this.#noteAccidentalsParenthesized,
           noteheads: toneNoteheads,
           articulation: this.articulation,
           stress: this.stress,
@@ -1614,7 +1672,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
         const standaloneYCoordinates = this.#resolveStandaloneYCoordinates();
         const stemUp = Math.max(...standaloneYCoordinates) > MIDDLE_STAFF_Y;
-        const noteAccidentals = this.#resolveStandaloneNoteAccidentals();
+        // Standalone, a reminder brackets each tone's own accidental.
+        const reminders = this.toneAccidentalReminders;
+        const noteAccidentals = this.#resolveStandaloneNoteAccidentals().map(
+          (accidental, i) =>
+            reminders[i] ? accidental ?? 'natural' : accidental
+        );
 
         const [chordSvg] = createChordSvg({
           duration: this.duration,
@@ -1630,6 +1693,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           arpeggioHairpinTo: this.arpeggioHairpinTo,
           stemUp,
           noteAccidentals,
+          noteAccidentalsParenthesized: reminders,
           noteheads: toneNoteheads,
           noFlags: false,
           noStem: this.#noStem,

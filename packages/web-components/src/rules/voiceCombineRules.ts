@@ -56,9 +56,19 @@ function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
   );
 }
 
+// A reminder belongs to one tone, and merged tones dedupe by pitch.
+function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
+  return (
+    element.accidentalReminder ||
+    (element.nodeName === MUSIC_CHORD_NODE &&
+      (element as ChordElementType).toneAccidentalReminders.some(Boolean))
+  );
+}
+
 /**
  * Combine-eligible only when none of these is set: the synthetic chord
- * doesn't copy them, so they'd vanish. A non-normal notehead is excluded too,
+ * doesn't copy them, so they'd vanish (a reminder on a tone
+ * included). A non-normal notehead is excluded too,
  * since merged tones dedupe by pitch.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
@@ -88,7 +98,8 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.trillFinish === null &&
     element.glissando === null &&
     element.stress === null &&
-    !element.dynamicShared
+    !element.dynamicShared &&
+    !hasAccidentalReminder(element)
   );
 }
 
@@ -103,6 +114,7 @@ function combineKey(element: NoteOrChordElementType): string {
     element.dynamic,
     element.crescendo,
     element.decrescendo,
+    element.dynamicReminder,
     element.tremolo ?? null,
     element.tremoloTuplet ?? null,
     element.tremoloLabel ?? null,

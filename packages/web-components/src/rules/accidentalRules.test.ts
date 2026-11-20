@@ -3,7 +3,17 @@
  */
 import '@/src/index';
 
+import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
 import {
+  ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
+  ACCIDENTAL_SYMBOL_HEIGHT,
+  ACCIDENTAL_SYMBOL_WIDTH,
+} from '../utils/notationDimensions';
+import {
+  accidentalReminderParenHeight,
+  accidentalSymbolHeight,
+  accidentalSymbolWidth,
+  computeChordAccidentalPlacements,
   computeInterNoteSpacing,
   computeNoteAccidentals,
   getKeySignatureAccidentals,
@@ -11,7 +21,6 @@ import {
   resolveAccidental,
   suffixToType,
 } from './accidentalRules';
-import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
 
 describe('parseAccidentalSuffix', () => {
   it('returns empty string for natural notes', () => {
@@ -362,5 +371,145 @@ describe('computeNoteAccidentals with a triangle', () => {
       'major'
     );
     expect(trillFinishShowAccidentals.get(triangle)).toEqual(['natural']);
+  });
+});
+
+describe('computeNoteAccidentals — reminder accidentals', () => {
+  it('shows a hidden natural in parentheses', () => {
+    const note = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    note.setAttribute('accidental-reminder', '');
+    const { noteShowAccidentals, parenthesizedAccidentals } =
+      computeNoteAccidentals([note], 'C', 'major');
+    expect(noteShowAccidentals.get(note)).toBe('natural');
+    expect(parenthesizedAccidentals.has(note)).toBe(true);
+  });
+
+  it('shows the key’s own accidental in parentheses', () => {
+    const note = makeNote({ note: 'Bb', octave: 4, duration: 'quarter' });
+    note.setAttribute('accidental-reminder', '');
+    const { noteShowAccidentals, parenthesizedAccidentals } =
+      computeNoteAccidentals([note], 'F', 'major');
+    expect(noteShowAccidentals.get(note)).toBe('flat');
+    expect(parenthesizedAccidentals.has(note)).toBe(true);
+  });
+
+  it('draws an accidental that is required anyway plainly', () => {
+    const note = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    note.setAttribute('accidental-reminder', '');
+    const { noteShowAccidentals, parenthesizedAccidentals } =
+      computeNoteAccidentals([note], 'F', 'major');
+    expect(noteShowAccidentals.get(note)).toBe('natural');
+    expect(parenthesizedAccidentals.has(note)).toBe(false);
+  });
+
+  it('brackets only the chord tone whose own note asks for it', () => {
+    const chord = makeChord({
+      notes: [
+        { note: 'C', octave: 4 },
+        { note: 'E', octave: 4 },
+      ],
+    });
+    chord
+      .querySelectorAll('music-note')[1]
+      .setAttribute('accidental-reminder', '');
+    const { chordNoteAccidentals, chordParenthesizedAccidentals } =
+      computeNoteAccidentals([chord], 'C', 'major');
+    expect(chordNoteAccidentals.get(chord)).toEqual([null, 'natural']);
+    expect(chordParenthesizedAccidentals.get(chord)).toEqual([false, true]);
+  });
+});
+
+describe('accidentalSymbolWidth', () => {
+  it('adds both parentheses for a reminder', () => {
+    expect(accidentalSymbolWidth('natural', true)).toBeCloseTo(
+      ACCIDENTAL_SYMBOL_WIDTH.natural + ACCIDENTAL_REMINDER_PAREN_WIDTH_PX * 2
+    );
+    expect(accidentalSymbolWidth('natural')).toBe(
+      ACCIDENTAL_SYMBOL_WIDTH.natural
+    );
+  });
+});
+
+describe('accidentalSymbolHeight', () => {
+  it('grows to the parentheses when they are taller than the glyph', () => {
+    expect(accidentalSymbolHeight('double-sharp')).toBe(
+      ACCIDENTAL_SYMBOL_HEIGHT['double-sharp']
+    );
+    expect(accidentalSymbolHeight('double-sharp', true)).toBe(
+      accidentalReminderParenHeight('double-sharp')
+    );
+    expect(accidentalSymbolHeight('double-sharp', true)).toBeGreaterThan(
+      ACCIDENTAL_SYMBOL_HEIGHT['double-sharp']
+    );
+  });
+});
+
+describe('computeChordAccidentalPlacements — reminders', () => {
+  const pair = (parenthesized: boolean) =>
+    computeChordAccidentalPlacements([
+      {
+        noteIndex: 0,
+        accidental: 'double-sharp',
+        yPixel: 100,
+        parenthesized,
+      },
+      {
+        noteIndex: 1,
+        accidental: 'double-sharp',
+        yPixel: 110,
+        parenthesized,
+      },
+    ]);
+
+  it('keeps close double-sharps in one column', () => {
+    const [a, b] = pair(false);
+    expect(a.xOffset).toBe(b.xOffset);
+  });
+
+  it('puts close double-sharp reminders in separate columns', () => {
+    const [a, b] = pair(true);
+    expect(a.xOffset).not.toBe(b.xOffset);
+  });
+});
+
+describe('computeNoteAccidentals — a natural earlier in the bar', () => {
+  it('holds for the rest of the bar against the key', () => {
+    const first = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    const second = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    const flat = makeNote({ note: 'Bb', octave: 4, duration: 'quarter' });
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [first, second, flat],
+      'F',
+      'major'
+    );
+    expect(noteShowAccidentals.get(first)).toBe('natural');
+    expect(noteShowAccidentals.get(second)).toBeNull();
+    expect(noteShowAccidentals.get(flat)).toBe('flat');
+  });
+
+  it('holds across a chord tone too', () => {
+    const note = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    const chord = makeChord({
+      notes: [
+        { note: 'D', octave: 4 },
+        { note: 'B', octave: 4 },
+      ],
+    });
+    const { chordNoteAccidentals } = computeNoteAccidentals(
+      [note, chord],
+      'F',
+      'major'
+    );
+    expect(chordNoteAccidentals.get(chord)).toEqual([null, null]);
+  });
+
+  it('lets a reminder bracket the repeated natural', () => {
+    const first = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    const reminder = makeNote({ note: 'B', octave: 4, duration: 'quarter' });
+    reminder.setAttribute('accidental-reminder', '');
+    const { noteShowAccidentals, parenthesizedAccidentals } =
+      computeNoteAccidentals([first, reminder], 'F', 'major');
+    expect(noteShowAccidentals.get(reminder)).toBe('natural');
+    expect(parenthesizedAccidentals.has(reminder)).toBe(true);
   });
 });

@@ -120,10 +120,14 @@ describe(`${MUSIC_STAFF_GUITAR_TAB} mirroring a notation staff`, () => {
     const relayouts = jest.fn();
     staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, relayouts);
 
-    staff.measureClefChangeBeats = [1 / 2];
+    staff.measureMarkerBeats = [
+      { beat: 1 / 2, kind: 'clef', width: 40, barlineType: null },
+    ];
     expect(relayouts).toHaveBeenCalledTimes(1);
 
-    staff.measureClefChangeBeats = [1 / 2];
+    staff.measureMarkerBeats = [
+      { beat: 1 / 2, kind: 'clef', width: 40, barlineType: null },
+    ];
     expect(relayouts).toHaveBeenCalledTimes(1);
   });
 

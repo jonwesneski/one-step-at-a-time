@@ -49,7 +49,10 @@ export function buildBeamsRenderer(
   // Where mid-stream clef changes take effect, in the same beat-offset space
   // as `elements` (a change applies to entries starting at or after it).
   clefChangeBeatOffsets: readonly number[] = [],
-  tremoloGroups: readonly TremoloGroupPlacement[] = []
+  tremoloGroups: readonly TremoloGroupPlacement[] = [],
+  // Where mid-bar barlines fall, in the same beat-offset space; a beam breaks
+  // at each.
+  barlineBeatOffsets: readonly number[] = []
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -82,7 +85,8 @@ export function buildBeamsRenderer(
       tremoloGroups,
       headExtents,
       externallyBeamedIndices ?? new Set()
-    )
+    ),
+    barlineBeatOffsets
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)

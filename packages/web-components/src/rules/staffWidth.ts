@@ -25,6 +25,8 @@ export type StaffStrutInputs = {
   leftwardWidth: number;
   // Clef-change room plus everything reserved right of entries' boxes.
   rightwardWidth: number;
+  // End-of-measure warnings that reserve width (see EndWarnings).
+  endWarningWidth: number;
   totalSlackWeight: number;
 };
 
@@ -53,7 +55,7 @@ export function computeMinimumEntryAdvance(
  * Strut min width for a classical staff measure (no lyrics).
  *
  * minWidth = describeEndX + leadingGap + leftwardWidth
- *          + noteCount × MIN_NOTE_WIDTH + rightwardWidth
+ *          + noteCount × MIN_NOTE_WIDTH + rightwardWidth + endWarningWidth
  *
  * leadingGap (LEADING_NOTE_GAP_PX, only when there are notes) keeps the first
  * entry off the clef/key/time area.
@@ -71,14 +73,16 @@ export function calculateStaffMinWidth(
   describeEndX: number,
   noteCount: number,
   leftwardWidth = 0,
-  rightwardWidth = 0
+  rightwardWidth = 0,
+  endWarningWidth = 0
 ): number {
   return (
     describeEndX +
     (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) +
     leftwardWidth +
     noteCount * MIN_NOTE_WIDTH +
-    rightwardWidth
+    rightwardWidth +
+    endWarningWidth
   );
 }
 
@@ -89,13 +93,15 @@ export function calculateStaffMinWidth(
  * minWidth = describeEndX + leadingGap + leftwardWidth
  *          + max(noteCount × MIN_NOTE_WIDTH + rightwardWidth,
  *                lyricCharCount × AVG_LYRIC_CHAR_WIDTH_PX)
+ *          + endWarningWidth
  */
 export function calculateStaffVocalMinWidth(
   describeEndX: number,
   noteCount: number,
   lyricCharCount: number,
   leftwardWidth = 0,
-  rightwardWidth = 0
+  rightwardWidth = 0,
+  endWarningWidth = 0
 ): number {
   const noteMinWidth = noteCount * MIN_NOTE_WIDTH + rightwardWidth;
   const lyricMinWidth = lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
@@ -103,7 +109,8 @@ export function calculateStaffVocalMinWidth(
     describeEndX +
     (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) +
     leftwardWidth +
-    Math.max(noteMinWidth, lyricMinWidth)
+    Math.max(noteMinWidth, lyricMinWidth) +
+    endWarningWidth
   );
 }
 
@@ -145,14 +152,15 @@ export function calculateStaffVocalNaturalWidth(
   lyricCharCount: number,
   totalSlackWeight: number,
   leftwardWidth = 0,
-  rightwardWidth = 0
+  rightwardWidth = 0,
+  endWarningWidth = 0
 ): number {
   const base =
     describeEndX + (noteCount > 0 ? LEADING_NOTE_GAP_PX : 0) + leftwardWidth;
   const noteNatural =
     base + noteCount * MIN_NOTE_WIDTH + rightwardWidth + totalSlackWeight;
   const lyricNatural = base + lyricCharCount * AVG_LYRIC_CHAR_WIDTH_PX;
-  return Math.max(noteNatural, lyricNatural);
+  return Math.max(noteNatural, lyricNatural) + endWarningWidth;
 }
 
 /**

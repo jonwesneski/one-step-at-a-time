@@ -19,7 +19,8 @@ import {
 export function createDynamicMarkingSvg(
   marking: DynamicMarking,
   x: number,
-  y: number
+  y: number,
+  { bracketed = false }: { bracketed?: boolean } = {}
 ): SVGTextElement {
   const text = document.createElementNS(SVG_NS, 'text');
   text.setAttribute('x', `${x}`);
@@ -30,7 +31,21 @@ export function createDynamicMarkingSvg(
   text.setAttribute('font-family', 'serif');
   text.setAttribute('fill', 'currentColor');
   text.classList.add('dynamic-marking');
-  text.textContent = marking;
+  if (!bracketed) {
+    text.textContent = marking;
+    return text;
+  }
+  // A reminder: the italic marking between upright brackets, all centred on x.
+  const bracket = (content: string) => {
+    const span = document.createElementNS(SVG_NS, 'tspan');
+    span.setAttribute('font-style', 'normal');
+    span.textContent = content;
+    return span;
+  };
+  const markingSpan = document.createElementNS(SVG_NS, 'tspan');
+  markingSpan.textContent = marking;
+  text.classList.add('dynamic-reminder');
+  text.append(bracket('('), markingSpan, bracket(')'));
   return text;
 }
 

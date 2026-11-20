@@ -1,8 +1,14 @@
 /**
  * @jest-environment jsdom
  */
+import { dynamicTextHalfWidth } from '../../rules/dynamicsRules';
 import type { HairpinKind } from '../../types/theory';
-import { createAngledHairpinSvg, createHairpinSvg } from './dynamics';
+import { DYNAMIC_REMINDER_BRACKET_WIDTH_PX } from '../notationDimensions';
+import {
+  createAngledHairpinSvg,
+  createDynamicMarkingSvg,
+  createHairpinSvg,
+} from './dynamics';
 
 type Point = { x: number; y: number };
 
@@ -99,5 +105,29 @@ describe('createAngledHairpinSvg', () => {
     expect(
       Math.hypot(bottom[0].x - top[0].x, bottom[0].y - top[0].y)
     ).toBeCloseTo(10);
+  });
+});
+
+describe('createDynamicMarkingSvg', () => {
+  it('draws a reminder between upright brackets, still centred', () => {
+    const text = createDynamicMarkingSvg('f', 50, 90, { bracketed: true });
+    expect(text.textContent).toBe('(f)');
+    expect(text.getAttribute('text-anchor')).toBe('middle');
+    const [open, marking, close] = Array.from(text.children);
+    expect(open.getAttribute('font-style')).toBe('normal');
+    expect(marking.getAttribute('font-style')).toBeNull();
+    expect(close.getAttribute('font-style')).toBe('normal');
+  });
+
+  it('draws a plain marking as before', () => {
+    expect(createDynamicMarkingSvg('mf', 50, 90).textContent).toBe('mf');
+  });
+});
+
+describe('dynamicTextHalfWidth', () => {
+  it('widens by both brackets for a reminder', () => {
+    expect(dynamicTextHalfWidth('f', true) - dynamicTextHalfWidth('f')).toBe(
+      DYNAMIC_REMINDER_BRACKET_WIDTH_PX
+    );
   });
 });

@@ -1,7 +1,6 @@
 import type { NoteOrChordElementType } from '../types/elements';
 import type { DynamicMarking, HairpinKind } from '../types/theory';
 import {
-  DYNAMICS_CHAR_WIDTH_PX,
   DYNAMICS_FONT_SIZE,
   DYNAMICS_TEXT_ASCENT_RATIO,
   DYNAMICS_TEXT_DESCENT_RATIO,
@@ -18,7 +17,7 @@ import {
   type ObstacleRect,
   segmentIntersectsRect,
 } from './connectorPlacementRules';
-import type { HairpinEndpoint } from './dynamicsRules';
+import { dynamicTextHalfWidth, type HairpinEndpoint } from './dynamicsRules';
 
 export type HairpinPoint = { x: number; y: number };
 
@@ -110,16 +109,22 @@ export type StaffHairpinDefaults = {
   orphanEnds: HairpinEndpoint[];
 };
 
-export type HairpinEndpointText = { marking: DynamicMarking; centerX: number };
+export type HairpinEndpointText = {
+  marking: DynamicMarking;
+  centerX: number;
+  /** A reminder, drawn in brackets. */
+  bracketed?: boolean;
+};
 
 // A dynamic's text baseline sits on the hairpin's own centre line, matching
 // the staff's own placement where marking and hairpin share one baseline.
 export function estimateDynamicTextBox(
   marking: DynamicMarking,
   centerX: number,
-  baselineY: number
+  baselineY: number,
+  bracketed = false
 ): ObstacleRect {
-  const halfWidth = (marking.length * DYNAMICS_CHAR_WIDTH_PX) / 2;
+  const halfWidth = dynamicTextHalfWidth(marking, bracketed);
   return {
     left: centerX - halfWidth,
     right: centerX + halfWidth,
@@ -136,9 +141,10 @@ export function dynamicTextCenterClearOfStems(
   marking: DynamicMarking,
   stems: readonly ObstacleRect[],
   gap: { topGapEdgeY: number; bottomGapEdgeY: number },
-  awayDirection: -1 | 1
+  awayDirection: -1 | 1,
+  bracketed = false
 ): number {
-  const halfWidth = (marking.length * DYNAMICS_CHAR_WIDTH_PX) / 2;
+  const halfWidth = dynamicTextHalfWidth(marking, bracketed);
   const gapStems = stems
     .filter(
       (stem) => stem.bottom > gap.topGapEdgeY && stem.top < gap.bottomGapEdgeY
@@ -206,11 +212,23 @@ const endpointTextBoxes = (
   const boxes: ObstacleRect[] = [];
   if (startText !== null) {
     boxes.push(
-      estimateDynamicTextBox(startText.marking, startText.centerX, startY)
+      estimateDynamicTextBox(
+        startText.marking,
+        startText.centerX,
+        startY,
+        startText.bracketed
+      )
     );
   }
   if (endText !== null) {
-    boxes.push(estimateDynamicTextBox(endText.marking, endText.centerX, endY));
+    boxes.push(
+      estimateDynamicTextBox(
+        endText.marking,
+        endText.centerX,
+        endY,
+        endText.bracketed
+      )
+    );
   }
   return boxes;
 };
