@@ -226,19 +226,20 @@ These alter the rhythmic length of a note.
 
 ## 12. Repeat & Structure Symbols
 
-|          | Symbol    | Name                | Description                   |
-| -------- | --------- | ------------------- | ----------------------------- |
-| &#x2611; | `: :`     | Repeat barlines     | Repeat the enclosed section   |
-| &#x2610; | `1. / 2.` | First/Second Ending | Different endings for repeats |
-| &#x2610; | `D.C.`    | Da Capo             | Go back to the beginning      |
-| &#x2610; | `D.S.`    | Dal Segno           | Go back to the `ð„‹` sign     |
-| &#x2610; | `Fine`    | Fine                | The end (used with D.C./D.S.) |
-| &#x2610; | `ð„‹`     | Segno               | Marker for D.S.               |
-| &#x2610; | `ð„Œ`     | Coda                | A separated closing section   |
-| &#x2610; | `al Coda` | To the Coda         | Jump to the Coda symbol       |
-| &#x2611; | `8va`     | Ottava alta         | Play one octave higher        |
-| &#x2611; | `8vb`     | Ottava bassa        | Play one octave lower         |
-| &#x2611; | `15ma`    | Two octaves higher  | Play two octaves higher       |
+|          | Symbol    | Name                 | Description                                         |
+| -------- | --------- | -------------------- | --------------------------------------------------- |
+| &#x2611; | `: :`     | Repeat barlines      | Repeat the enclosed section                         |
+| &#x2611; | `♮♮ ♯`    | Key-signature change | Cancellation naturals and courtesy key at a barline |
+| &#x2610; | `1. / 2.` | First/Second Ending  | Different endings for repeats                       |
+| &#x2610; | `D.C.`    | Da Capo              | Go back to the beginning                            |
+| &#x2610; | `D.S.`    | Dal Segno            | Go back to the `ð„‹` sign                           |
+| &#x2610; | `Fine`    | Fine                 | The end (used with D.C./D.S.)                       |
+| &#x2610; | `ð„‹`     | Segno                | Marker for D.S.                                     |
+| &#x2610; | `ð„Œ`     | Coda                 | A separated closing section                         |
+| &#x2610; | `al Coda` | To the Coda          | Jump to the Coda symbol                             |
+| &#x2611; | `8va`     | Ottava alta          | Play one octave higher                              |
+| &#x2611; | `8vb`     | Ottava bassa         | Play one octave lower                               |
+| &#x2611; | `15ma`    | Two octaves higher   | Play two octaves higher                             |
 
 ---
 

@@ -374,6 +374,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
+    // Every staff spaces its notes short of the widest end-of-measure warning
+    // area in the measure, so beat columns stay aligned when only one staff
+    // warns of a clef. Own widths come from the warnings alone, so the
+    // exchange ends on the next pass.
+    #syncEndWarningSpace(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) && 'measureEndWarningSpace' in child
+      ) as unknown as {
+        ownEndWarningSpace: { width: number; reserved: number };
+        measureEndWarningSpace: { width: number; reserved: number };
+      }[];
+      const space = {
+        width: Math.max(0, ...staves.map((s) => s.ownEndWarningSpace.width)),
+        reserved: Math.max(
+          0,
+          ...staves.map((s) => s.ownEndWarningSpace.reserved)
+        ),
+      };
+      staves.forEach((staff) => {
+        staff.measureEndWarningSpace = space;
+      });
+    }
+
     // Every notation staff makes room for every other's mid-bar markers, and
     // so does a tab staff that mirrors one (`tab-for` → `part`), so same-beat
     // entries stay aligned past them. A tab staff that mirrors none still
@@ -512,6 +536,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // beam polygon to avoid crossing it.
       this.#pushBarlinesToStaves();
       this.#syncNotesStartX();
+      this.#syncEndWarningSpace();
       this.#syncMarkerBeats();
       this.#syncBarlineSlots();
       this.#redrawArpeggios();

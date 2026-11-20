@@ -259,7 +259,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const minWidth =
         calculateGuitarTabMinWidth(this.#describeEndX, elements.length) +
         totalMarkerWidth(this.measureMarkerBeats) +
-        this.endBarlineReserve;
+        this.endBarlineReserve +
+        this.endWarningSpace.reserved;
       const { totalWeight } = computeSpacingWeights(elements);
       const naturalWidth = calculateStaffNaturalWidth(minWidth, totalWeight);
       this.dispatchEvent(
@@ -283,7 +284,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.measureNotesStartX
       );
       const remainingWidth =
-        transcribeRect.width - this.#describeEndX - this.endBarlineReserve;
+        transcribeRect.width -
+        this.#describeEndX -
+        this.endBarlineReserve -
+        this.endWarningSpace.width;
 
       // Same fixed measure-capacity-proportional model as the classical
       // staff (see rules/spacingRules.ts) — guitar tab has no tuplets or

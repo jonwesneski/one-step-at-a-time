@@ -5,7 +5,6 @@
 - **Octave-specific tracking** (book: each octave needs its own accidental; implementation tracks by letter only)
 - **Cross-stave accidental tracking** (multi-stave instruments like piano)
 - **Clef-change re-confirmation** (accidental holds only in the clef it was written)
-- **Key-change natural rendering** (naturals that cancel the old key signature before displaying the new one)
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
 - **Down-stem accidental displacement** (move accidental closer to stem than a displaced notehead when room allows)
 - **Ornament accidentals** (confirm/cancel altered pitches for trills, turns, etc.)

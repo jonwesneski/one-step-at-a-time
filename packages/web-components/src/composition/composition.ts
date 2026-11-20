@@ -7,7 +7,6 @@ import {
   resolveRepeatSpans,
   type StartRepeatMode,
 } from '../rules/barlineRules';
-import { getClefRenderData } from '../rules/clefRules';
 import type { ObstacleRect } from '../rules/connectorPlacementRules';
 import {
   type HairpinEndpoint,
@@ -20,6 +19,13 @@ import {
   type HairpinEndpointText,
   resolveSharedHairpinY,
 } from '../rules/hairpinPlacementRules';
+import {
+  type EndWarnings,
+  type KeyChange,
+  keySignatureEquals,
+  type KeySignatureState,
+  mergeEndWarnings,
+} from '../rules/keySignatureChangeRules';
 import {
   isOctaveRaise,
   type OctaveMeasureBoundary,
@@ -47,6 +53,7 @@ import type {
   StaffElementBaseType,
 } from '../types/elements';
 import type {
+  ClefType,
   HairpinKind,
   MeasureNumberDisplay,
   OctaveShiftAmount,
@@ -99,12 +106,9 @@ import {
   NOTE_EVENTS,
   STAFF_EVENTS,
   STAFF_TAGS,
-  SVG_NS,
 } from '../utils/consts';
 import {
   COMPOSITION_MAX_WIDTH_PX,
-  COURTESY_CLEF_MARGIN_RIGHT_PX,
-  COURTESY_CLEF_SCALE,
   DYNAMICS_BASELINE_Y,
   HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
@@ -155,6 +159,15 @@ type BarlineStaff = HTMLElement & {
   showDescribe?: boolean;
   clefChangeAtBoundary?: boolean;
   timeChangeAtBoundary?: boolean;
+  keyChangeAtBoundary?: KeyChange | null;
+};
+
+// The key-signature accessors the key and end-warning passes read and set;
+// absent on guitar tab.
+type KeyStaff = HTMLElement & {
+  effectiveKeySignature?: KeySignatureState;
+  keyChangeAtBoundary?: KeyChange | null;
+  endWarnings?: EndWarnings | null;
 };
 
 // The measure an octave line crossing a barline starts in, which its own
@@ -478,16 +491,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             color: currentColor;
           }
 
-          .courtesy-clef-overlay {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
           .trill-continuation-overlay {
             position: absolute;
             inset: 0;
@@ -513,7 +516,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             <slot></slot>
           </div>
           <svg class="connectors-overlay"></svg>
-          <svg class="courtesy-clef-overlay"></svg>
           <svg class="trill-continuation-overlay"></svg>
           <svg class="octave-continuation-overlay"></svg>
         </div>
@@ -567,8 +569,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawScheduled = false;
         this.#alignRowStaffSpace();
         this.#updateDescribeVisibility();
-        this.#updateClefContinuity();
+        const courtesyClefs = this.#updateClefContinuity();
         this.#updateTimeSignatureContinuity();
+        const courtesyKeys = this.#updateKeySignatureContinuity();
+        this.#assignEndWarnings(courtesyClefs, courtesyKeys);
         this.#updateBarlineJunctions();
         this.#validateRepeats();
         for (const staff of Array.from(
@@ -1649,23 +1653,107 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // Compares every pair of adjacent measures (effectiveStartClef/
     // effectiveEndClef). A differing pair sets clefChangeAtBoundary so the
-    // incoming staff shows its clef; at a row wrap it also draws a courtesy
-    // clef at the end of the outgoing row.
-    #updateClefContinuity() {
-      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
-        '.courtesy-clef-overlay'
-      );
-      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
-        '.composition-wrapper'
-      );
-      if (!overlay || !wrapper) {
-        return;
-      }
+    // incoming staff shows its clef; at a row wrap the outgoing staff warns of
+    // the new clef. Returns those courtesy clefs by outgoing staff.
+    #updateClefContinuity(): Map<HTMLElement, ClefType> {
+      const courtesyClefs = new Map<HTMLElement, ClefType>();
+      // Assigned once at the end: toggling a flag off and on within a pass
+      // re-renders and reschedules a redraw forever.
+      const staffsNeedingClefChangeFlag = new Set<HTMLElement>();
 
-      while (overlay.firstChild) {
-        overlay.removeChild(overlay.firstChild);
-      }
+      // Staves are matched by ordinal position within their measure (1st
+      // staff vs 1st, 2nd vs 2nd) — assumes consistent voice ordering across
+      // measures, which holds for this library's single-line-per-measure
+      // composition model.
+      this.#forEachAdjacentStaffPair((outgoing, incoming, isRowWrap) => {
+        const outgoingClef: ClefType | null =
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (outgoing as any).effectiveEndClef ?? null;
+        const incomingClef: ClefType | null =
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+          (incoming as any).effectiveStartClef ?? null;
+        // null means "not clef-comparable" (a vocal or guitar-tab staff).
+        if (
+          outgoingClef === null ||
+          incomingClef === null ||
+          outgoingClef === incomingClef
+        ) {
+          return;
+        }
+        staffsNeedingClefChangeFlag.add(incoming);
+        if (isRowWrap) {
+          courtesyClefs.set(outgoing, incomingClef);
+        }
+      });
 
+      Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
+        (staff as any).clefChangeAtBoundary = staffsNeedingClefChangeFlag.has(
+          staff as HTMLElement
+        );
+      });
+      return courtesyClefs;
+    }
+
+    // A key change at a barline: the incoming staff draws it (naturals, then
+    // the new key) mid-row; at a row wrap the outgoing staff warns of it and
+    // the new row shows only the new key. Returns those courtesy keys by
+    // outgoing staff.
+    #updateKeySignatureContinuity(): Map<HTMLElement, KeyChange> {
+      const courtesyKeys = new Map<HTMLElement, KeyChange>();
+      const changes = new Map<HTMLElement, KeyChange>();
+      this.#forEachAdjacentStaffPair((outgoing, incoming, isRowWrap) => {
+        const from: KeySignatureState | undefined = (outgoing as KeyStaff)
+          .effectiveKeySignature;
+        const to: KeySignatureState | undefined = (incoming as KeyStaff)
+          .effectiveKeySignature;
+        if (from === undefined || to === undefined) {
+          return;
+        }
+        if (keySignatureEquals(from, to)) {
+          return;
+        }
+        changes.set(incoming, { from, to });
+        if (isRowWrap) {
+          courtesyKeys.set(outgoing, { from, to });
+        }
+      });
+      this.querySelectorAll<KeyStaff>(STAFF_TAGS).forEach((staff) => {
+        if ('keyChangeAtBoundary' in staff) {
+          staff.keyChangeAtBoundary = changes.get(staff) ?? null;
+        }
+      });
+      return courtesyKeys;
+    }
+
+    // Each staff's end-of-measure warnings, assigned once.
+    #assignEndWarnings(
+      courtesyClefs: ReadonlyMap<HTMLElement, ClefType>,
+      courtesyKeys: ReadonlyMap<HTMLElement, KeyChange>
+    ): void {
+      this.querySelectorAll<KeyStaff>(STAFF_TAGS).forEach((staff) => {
+        if (!('endWarnings' in staff)) {
+          return;
+        }
+        const clef = courtesyClefs.get(staff) ?? null;
+        const key = courtesyKeys.get(staff) ?? null;
+        const courtesy: EndWarnings | null =
+          clef === null && key === null
+            ? null
+            : { clef, key, time: null, reservesWidth: false };
+        staff.endWarnings = mergeEndWarnings(courtesy, null);
+      });
+    }
+
+    // Calls `visit` for every pair of same-ordinal staves in adjacent
+    // measures, in measure order.
+    #forEachAdjacentStaffPair(
+      visit: (
+        outgoing: HTMLElement,
+        incoming: HTMLElement,
+        isRowWrap: boolean
+      ) => void
+    ): void {
       const rows = this.#computeMeasureRows();
       const rowIndexByMeasure = new Map<HTMLElement, number>();
       rows.forEach((row, rowIndex) => {
@@ -1674,87 +1762,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       });
       const measures = rows.flat();
-      const rootRect = wrapper.getBoundingClientRect();
-
-      // Assigned once at the end: toggling a flag off and on within a pass
-      // re-renders and reschedules a redraw forever.
-      const staffsNeedingClefChangeFlag = new Set<HTMLElement>();
-
+      const stavesOf = (measure: HTMLElement) =>
+        Array.from(measure.children).filter((el) =>
+          isStaffNodeName(el.nodeName)
+        ) as HTMLElement[];
       for (let i = 1; i < measures.length; i++) {
-        const outgoingMeasure = measures[i - 1];
-        const incomingMeasure = measures[i];
         const isRowWrap =
-          rowIndexByMeasure.get(outgoingMeasure) !==
-          rowIndexByMeasure.get(incomingMeasure);
-
-        const outgoingStaves = Array.from(outgoingMeasure.children).filter(
-          (el) => isStaffNodeName(el.nodeName)
-        ) as HTMLElement[];
-        const incomingStaves = Array.from(incomingMeasure.children).filter(
-          (el) => isStaffNodeName(el.nodeName)
-        ) as HTMLElement[];
-
-        // Staves are matched by ordinal position within their measure (1st
-        // staff vs 1st, 2nd vs 2nd) — assumes consistent voice ordering
-        // across measures, which holds for this library's single-line-per-
-        // measure composition model.
+          rowIndexByMeasure.get(measures[i - 1]) !==
+          rowIndexByMeasure.get(measures[i]);
+        const outgoingStaves = stavesOf(measures[i - 1]);
+        const incomingStaves = stavesOf(measures[i]);
         const pairCount = Math.min(
           outgoingStaves.length,
           incomingStaves.length
         );
         for (let staffIndex = 0; staffIndex < pairCount; staffIndex++) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-          const outgoingStaff = outgoingStaves[staffIndex] as any;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-          const incomingStaff = incomingStaves[staffIndex] as any;
-          const outgoingClef = outgoingStaff.effectiveEndClef ?? null;
-          const incomingClef = incomingStaff.effectiveStartClef ?? null;
-
-          // null means "not clef-comparable" (e.g. a vocal or guitar-tab
-          // staff, which have no ClefType concept) — skip the pair.
-          if (outgoingClef === null || incomingClef === null) {
-            continue;
-          }
-
-          if (outgoingClef !== incomingClef) {
-            staffsNeedingClefChangeFlag.add(incomingStaff);
-
-            if (!isRowWrap) {
-              continue;
-            }
-
-            const outgoingRect = (
-              outgoingStaves[staffIndex] as HTMLElement
-            ).getBoundingClientRect();
-            const glyphWidth = 30 * COURTESY_CLEF_SCALE;
-            const x =
-              outgoingRect.right -
-              rootRect.left -
-              glyphWidth -
-              COURTESY_CLEF_MARGIN_RIGHT_PX;
-            const y = outgoingRect.top - rootRect.top;
-
-            const courtesyGroup = document.createElementNS(SVG_NS, 'g');
-            courtesyGroup.setAttribute(
-              'transform',
-              `translate(${x}, ${y}) scale(${COURTESY_CLEF_SCALE})`
-            );
-            // Courtesy clef previews the UPCOMING clef (next line's), not a
-            // repeat of the current one — that's the entire point of it.
-            courtesyGroup.innerHTML = getClefRenderData(incomingClef).clefSvg;
-            overlay.appendChild(courtesyGroup);
-          }
+          visit(
+            outgoingStaves[staffIndex],
+            incomingStaves[staffIndex],
+            isRowWrap
+          );
         }
       }
-
-      // Single assignment per staff, computed value vs. current — never a
-      // false-then-true round trip in the same pass (see comment above).
-      Array.from(this.querySelectorAll(STAFF_TAGS)).forEach((staff) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck-typed call to avoid cross-module import
-        (staff as any).clefChangeAtBoundary = staffsNeedingClefChangeFlag.has(
-          staff as HTMLElement
-        );
-      });
     }
 
     // A time signature is shown only on the first measure, or on a later
@@ -1858,7 +1887,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             incomingHasStartGlyphs:
               incoming.showDescribe === true ||
               incoming.clefChangeAtBoundary === true ||
-              incoming.timeChangeAtBoundary === true,
+              incoming.timeChangeAtBoundary === true ||
+              (incoming.keyChangeAtBoundary ?? null) !== null,
             sameRow,
             doubleBarBeforeRepeat,
           });

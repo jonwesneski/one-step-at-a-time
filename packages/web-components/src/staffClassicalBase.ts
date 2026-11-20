@@ -21,7 +21,7 @@ import {
   durationContribution,
 } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
-import { getClefRenderData } from './rules/clefRules';
+import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
@@ -42,6 +42,16 @@ import type {
   StaffHairpinDefaults,
   StaffHairpinPlacement,
 } from './rules/hairpinPlacementRules';
+import {
+  type EndWarnings,
+  endWarningsEqual,
+  endWarningWidth,
+  type KeyChange,
+  keyChangeEquals,
+  type KeySignatureState,
+  resolveCancellationNaturals,
+  timeSignatureWidth,
+} from './rules/keySignatureChangeRules';
 import { computeAllowedElementCount } from './rules/measureRules';
 import {
   forcedStemUp,
@@ -136,7 +146,11 @@ import {
   VoiceNoteheadPlacement,
   VoicePartGeometry,
 } from './rules/voiceRules';
-import { type BarlineSlotLeft, StaffElementBase } from './staffBase';
+import {
+  type BarlineSlotLeft,
+  type EndWarningSpace,
+  StaffElementBase,
+} from './staffBase';
 import type {
   ArpeggioGroupPlacement,
   ChordElementType,
@@ -159,6 +173,8 @@ import type {
   AccidentalType,
   ArpeggioType,
   BarlineType,
+  BeatsInMeasure,
+  BeatTypeInMeasure,
   ClefType,
   DurationType,
   DynamicMarking,
@@ -168,6 +184,7 @@ import type {
   NoteLetter,
   Octave,
   OctaveShiftAmount,
+  TimeSignature,
   TremoloLabel,
   TupletPlacement,
   VoiceNumber,
@@ -179,6 +196,7 @@ import {
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
+  createNaturalSvg,
   createOctaveCornerSvg,
   createOctaveExtensionLineSvg,
   createOctaveLocoLabelSvg,
@@ -231,14 +249,20 @@ import {
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
   CLUSTER_BRACKET_RISE_PX,
+  COURTESY_CLEF_SCALE,
+  COURTESY_CLEF_WIDTH_PX,
   CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
+  END_WARNING_GAP_PX,
   GRACE_MAIN_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
+  KEY_SIG_CANCEL_GAP_PX,
   KEY_SIG_FLAT_WIDTH,
   KEY_SIG_FLAT_Y_OFFSET,
+  KEY_SIG_NATURAL_WIDTH,
+  KEY_SIG_NATURAL_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
   MID_BAR_BARLINE_PADDING_PX,
@@ -261,10 +285,12 @@ import {
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
+  STAFF_LINE_START,
   STAFF_TOP_LINE_Y,
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   STAFF_Y_STEP,
+  TIME_SIG_GLYPH_CENTER_X_PX,
   TIME_SIG_Y_TRANSLATE,
   TREMOLO_LABEL_FONT_SIZE_PX,
   TREMOLO_LABEL_GAP_PX,
@@ -626,6 +652,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #showDescribe = true;
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
+  #keyChangeAtBoundary: KeyChange | null = null;
+  #endWarnings: EndWarnings | null = null;
+  #endWarningsContainer: SVGGElement;
   #crossStaffBeamStemOverrides: ReadonlyMap<
     NoteChordOrRestElementType,
     boolean
@@ -849,6 +878,49 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     this.#timeChangeAtBoundary = value;
     this.#refreshDescribe();
+  }
+
+  // Set by composition.ts when this bar's key signature differs from the
+  // previous bar's: mid-row, the describe area draws the cancellation
+  // naturals and the new key.
+  get keyChangeAtBoundary(): KeyChange | null {
+    return this.#keyChangeAtBoundary;
+  }
+
+  set keyChangeAtBoundary(value: KeyChange | null) {
+    if (keyChangeEquals(this.#keyChangeAtBoundary, value)) {
+      return;
+    }
+    this.#keyChangeAtBoundary = value;
+    this.#refreshDescribe();
+  }
+
+  // The clef, key and time this staff warns of before its end barline, set
+  // by composition.ts.
+  get endWarnings(): EndWarnings | null {
+    return this.#endWarnings;
+  }
+
+  set endWarnings(value: EndWarnings | null) {
+    if (endWarningsEqual(this.#endWarnings, value)) {
+      return;
+    }
+    this.#endWarnings = value;
+    if (this.#voices.size > 0) {
+      this.#renderNotes();
+    }
+  }
+
+  override get ownEndWarningSpace(): EndWarningSpace {
+    const width = endWarningWidth(this.#endWarnings);
+    return {
+      width,
+      reserved: this.#endWarnings?.reservesWidth === true ? width : 0,
+    };
+  }
+
+  get effectiveKeySignature(): KeySignatureState {
+    return { keySig: this.#effectiveKeySig, mode: this.#effectiveMode };
   }
 
   // Set by the ancestor <music-measure> for cross-staff double-stemmed beam
@@ -1205,6 +1277,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.#startRepeatContainer.classList.add('start-repeat-container');
     this.#midBarBarlinesContainer = document.createElementNS(SVG_NS, 'g');
     this.#midBarBarlinesContainer.classList.add('mid-bar-barlines-container');
+    this.#endWarningsContainer = document.createElementNS(SVG_NS, 'g');
+    this.#endWarningsContainer.classList.add('end-warnings-container');
   }
 
   get staffLineCount(): number {
@@ -1246,10 +1320,16 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   abstract get octaves(): Octave[];
 
-  public abstract getKeyYCoordinates(): {
-    useSharps: boolean;
-    coordinates: number[];
-  };
+  public getKeyYCoordinates(): { useSharps: boolean; coordinates: number[] } {
+    return this.getKeyYCoordinatesFor(this.effectiveKeySignature);
+  }
+
+  // Where `state`'s accidentals sit on this staff, in its own clef or in
+  // `clef` where the staff can draw that clef.
+  public abstract getKeyYCoordinatesFor(
+    state: KeySignatureState,
+    clef?: ClefType | null
+  ): { useSharps: boolean; coordinates: number[] };
 
   protected abstract get clefSvg(): string;
 
@@ -1267,7 +1347,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       'C'
     ) as Note;
 
-    this.#buildDescribe(this.clefSvg);
+    this.#buildDescribe();
     this.addEventListener(
       NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
       this.#boundDrawConnectors
@@ -1302,21 +1382,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   // Describe is: clef, key signature, time signature, and beams overlay
-  #buildDescribe(clefSvgStr: string) {
+  #buildDescribe() {
     this.#describeContainer.classList.add('describe-container');
-    this.#describeContainer.innerHTML =
-      this.#showDescribe || this.#clefChangeAtBoundary ? clefSvgStr : '';
     this.transcribeContainer.appendChild(this.#describeContainer);
-
-    const xOffsetOfClef = CLEF_X_OFFSET;
-    const xOffsetOfKeySignature = this.#showDescribe
-      ? this.#appendKeySignatureSvg(this.#describeContainer, xOffsetOfClef)
-      : xOffsetOfClef;
-
-    this.#appendTimeSignatureSvgIfNecessary(
-      this.#describeContainer,
-      xOffsetOfKeySignature + 5
-    );
+    this.#drawDescribeGlyphs();
 
     // Voice 1's containers up front; other voices' and the synthetic tracks'
     // are created on first use by #containerFor.
@@ -1331,17 +1400,43 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     );
   }
 
+  // At a row start: clef, key, time. Mid-row: a changed clef, then a key
+  // change's naturals and new key, then a changed time signature.
+  #drawDescribeGlyphs() {
+    const showClef = this.#showDescribe || this.#clefChangeAtBoundary;
+    this.#describeContainer.innerHTML = showClef ? this.clefSvg : '';
+    const keyChange = this.#showDescribe ? null : this.#keyChangeAtBoundary;
+    if (keyChange === null) {
+      const xOffsetOfKeySignature = this.#showDescribe
+        ? this.#appendKeySignatureSvg(this.#describeContainer, CLEF_X_OFFSET)
+        : CLEF_X_OFFSET;
+      this.#appendTimeSignatureSvgIfNecessary(
+        this.#describeContainer,
+        xOffsetOfKeySignature + 5
+      );
+      return;
+    }
+    // The row-start key's first accidental sits at twice CLEF_X_OFFSET (see
+    // #appendKeySignatureSvg); a key change after a clef starts there too.
+    const keyEnd = this.#appendKeyChangeSvg(
+      this.#describeContainer,
+      showClef ? CLEF_X_OFFSET * 2 : END_WARNING_GAP_PX,
+      keyChange,
+      null
+    );
+    if (this.#timeChangeAtBoundary) {
+      this.#describeContainer.appendChild(
+        this.#timeSignatureSvgAt(
+          keyEnd + END_WARNING_GAP_PX,
+          this.effectiveTimeSig
+        )
+      );
+    }
+  }
+
   #refreshDescribe() {
     if (!this.isConnected) return;
-    this.#describeContainer.innerHTML =
-      this.#showDescribe || this.#clefChangeAtBoundary ? this.clefSvg : '';
-    const xOffsetOfKeySignature = this.#showDescribe
-      ? this.#appendKeySignatureSvg(this.#describeContainer, CLEF_X_OFFSET)
-      : CLEF_X_OFFSET;
-    this.#appendTimeSignatureSvgIfNecessary(
-      this.#describeContainer,
-      xOffsetOfKeySignature + 5
-    );
+    this.#drawDescribeGlyphs();
     if (this.#voices.size > 0) {
       this.#renderNotes();
     }
@@ -1384,6 +1479,68 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     svg.appendChild(g);
 
     return xOffset;
+  }
+
+  // A key change from `left`: the naturals cancelling the old key, then the
+  // new key, in `clef` where given. Returns where it ends.
+  #appendKeyChangeSvg(
+    parent: SVGElement,
+    left: number,
+    change: KeyChange,
+    clef: ClefType | null
+  ): number {
+    const group = document.createElementNS(SVG_NS, 'svg');
+    group.setAttribute('class', 'key-change');
+    group.setAttribute('y', '-15');
+    let x = left;
+    const naturals = resolveCancellationNaturals(change.from, change.to);
+    const old = this.getKeyYCoordinatesFor(change.from, clef).coordinates;
+    for (const natural of naturals) {
+      const glyph = createNaturalSvg();
+      glyph.classList.add('cancellation-natural');
+      glyph.setAttribute(
+        'transform',
+        `translate(${x}, ${
+          (old[natural.orderIndex] ?? 0) + KEY_SIG_NATURAL_Y_OFFSET
+        })`
+      );
+      group.appendChild(glyph);
+      x += KEY_SIG_NATURAL_WIDTH;
+    }
+    const { useSharps, coordinates } = this.getKeyYCoordinatesFor(
+      change.to,
+      clef
+    );
+    if (naturals.length > 0 && coordinates.length > 0) {
+      x += KEY_SIG_CANCEL_GAP_PX;
+    }
+    for (const y of coordinates) {
+      const glyph = useSharps ? createSharpSvg() : createFlatSvg();
+      glyph.setAttribute(
+        'transform',
+        `translate(${x}, ${y + (useSharps ? 0 : KEY_SIG_FLAT_Y_OFFSET)})`
+      );
+      group.appendChild(glyph);
+      x += useSharps ? KEY_SIG_SHARP_WIDTH : KEY_SIG_FLAT_WIDTH;
+    }
+    parent.appendChild(group);
+    return x;
+  }
+
+  // A time signature whose numerals start at `left`.
+  #timeSignatureSvgAt(
+    left: number,
+    [beats, beatType]: [BeatsInMeasure, BeatTypeInMeasure]
+  ): SVGSVGElement {
+    const width = timeSignatureWidth(`${beats}/${beatType}` as TimeSignature);
+    const svg = createTimeSignatureSvg(beats, beatType);
+    svg.setAttribute(
+      'transform',
+      `translate(${
+        left - TIME_SIG_GLYPH_CENTER_X_PX + width / 2
+      }, ${TIME_SIG_Y_TRANSLATE})`
+    );
+    return svg;
   }
 
   #appendTimeSignatureSvgIfNecessary(parentSvg: SVGElement, xOffset: number) {
@@ -2375,6 +2532,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         totalMarkerWidth(
           mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats)
         ) + this.endBarlineReserve;
+      const reservedEndWarningWidth = this.endWarningSpace.reserved;
       for (let i = 0; i < state.elements.length; i++) {
         rightwardWidth += this.#rightwardFootprint(voiceKey, i);
         if (i > 0) {
@@ -2386,7 +2544,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         this.describeEndX,
         noteCount,
         leftwardWidth,
-        rightwardWidth
+        rightwardWidth,
+        reservedEndWarningWidth
       );
       const tupletScales = computeTupletScaleByIndex(
         state.elements,
@@ -2408,6 +2567,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteCount,
           leftwardWidth,
           rightwardWidth,
+          endWarningWidth: reservedEndWarningWidth,
           totalSlackWeight: totalWeight,
         };
       }
@@ -2566,6 +2726,55 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         )
       )
     );
+  }
+
+  // Draws the end-of-measure warnings right to left from `rightEdge`: time,
+  // then the key change, then the clef, so they read clef → key → time.
+  #drawEndWarnings(rightEdge: number) {
+    if (this.#endWarningsContainer.parentNode !== this.transcribeContainer) {
+      this.transcribeContainer.appendChild(this.#endWarningsContainer);
+    }
+    this.#endWarningsContainer.replaceChildren();
+    const warnings = this.#endWarnings;
+    if (warnings === null) {
+      return;
+    }
+    let x = rightEdge - END_WARNING_GAP_PX;
+    if (warnings.time !== null) {
+      x -= timeSignatureWidth(warnings.time);
+      this.#endWarningsContainer.appendChild(
+        this.#timeSignatureSvgAt(x, this.convertTotimeInts(warnings.time))
+      );
+      x -= END_WARNING_GAP_PX;
+    }
+    if (warnings.key !== null) {
+      const keyGroup = document.createElementNS(SVG_NS, 'g');
+      const keyEnd = this.#appendKeyChangeSvg(
+        keyGroup,
+        0,
+        warnings.key,
+        warnings.clef ?? this.effectiveEndClef
+      );
+      x -= keyEnd;
+      keyGroup.setAttribute('transform', `translate(${x}, 0)`);
+      this.#endWarningsContainer.appendChild(keyGroup);
+      x -= END_WARNING_GAP_PX;
+    }
+    if (warnings.clef !== null) {
+      x -= COURTESY_CLEF_WIDTH_PX;
+      // Scaled about the line the clef marks, so it still marks it.
+      const pivotY =
+        STAFF_LINE_START +
+        STAFF_LINE_SPACING * CLEF_DEFINITIONS[warnings.clef].referenceLineIndex;
+      const clefGroup = document.createElementNS(SVG_NS, 'g');
+      clefGroup.classList.add('courtesy-clef');
+      clefGroup.setAttribute(
+        'transform',
+        `translate(${x}, ${pivotY}) scale(${COURTESY_CLEF_SCALE}) translate(0, ${-pivotY})`
+      );
+      clefGroup.innerHTML = getClefRenderData(warnings.clef).clefSvg;
+      this.#endWarningsContainer.appendChild(clefGroup);
+    }
   }
 
   // Draws the start repeat after the clef/key/time glyphs (or centred on the
@@ -3471,10 +3680,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       describeEndX = describeRect.right - transcribeRect.left;
     }
     this.#ownDescribeEndX = Math.round(this.#drawStartRepeat(describeEndX));
-    // A drawn end barline is wider than the plain one, so the notes stop
-    // short of it.
+    // A drawn end barline is wider than the plain one, and end-of-measure
+    // warnings sit before it, so the notes stop short of both.
     const remainingWidth =
-      transcribeRect.width - this.describeEndX - this.endBarlineReserve;
+      transcribeRect.width -
+      this.describeEndX -
+      this.endBarlineReserve -
+      this.endWarningSpace.width;
+    this.#drawEndWarnings(transcribeRect.width - this.endBarlineReserve);
 
     // Conservative budgets, before notes are positioned.
     const aboveStaffBudget = this.#estimateAboveStaffBudget();

@@ -313,46 +313,50 @@ describe(`${MUSIC_COMPOSITION} measure numbering`, () => {
   });
 });
 
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+function addMeasure(
+  composition: HTMLElement,
+  attributes: Record<string, string>,
+  content: () => Element[] = () => [whole()],
+  staffAttributes: Record<string, string> = {}
+): any {
+  const measure = document.createElement(MUSIC_MEASURE);
+  for (const [name, value] of Object.entries(attributes)) {
+    measure.setAttribute(name, value);
+  }
+  const staff = document.createElement(MUSIC_STAFF) as any;
+  for (const [name, value] of Object.entries(staffAttributes)) {
+    staff.setAttribute(name, value);
+  }
+  const elements = content();
+  staff.append(...elements);
+  measure.appendChild(staff);
+  composition.appendChild(measure);
+  const slot = staff.shadowRoot.querySelector('slot');
+  slot.assignedElements = () => elements;
+  slot.dispatchEvent(new Event('slotchange'));
+  return staff;
+}
+
+function whole(): Element {
+  const note = document.createElement(MUSIC_NOTE);
+  note.setAttribute('note', 'C');
+  note.setAttribute('octave', '4');
+  note.setAttribute('duration', 'whole');
+  return note;
+}
+
+function half(): Element {
+  const note = document.createElement(MUSIC_NOTE);
+  note.setAttribute('note', 'C');
+  note.setAttribute('octave', '4');
+  note.setAttribute('duration', 'half');
+  return note;
+}
+
 describe(`${MUSIC_COMPOSITION} barline junctions`, () => {
-  const nextFrame = (): Promise<void> =>
-    new Promise((resolve) => requestAnimationFrame(() => resolve()));
-
-  function addMeasure(
-    composition: HTMLElement,
-    attributes: Record<string, string>,
-    content: () => Element[] = () => [whole()]
-  ): any {
-    const measure = document.createElement(MUSIC_MEASURE);
-    for (const [name, value] of Object.entries(attributes)) {
-      measure.setAttribute(name, value);
-    }
-    const staff = document.createElement(MUSIC_STAFF) as any;
-    const elements = content();
-    staff.append(...elements);
-    measure.appendChild(staff);
-    composition.appendChild(measure);
-    const slot = staff.shadowRoot.querySelector('slot');
-    slot.assignedElements = () => elements;
-    slot.dispatchEvent(new Event('slotchange'));
-    return staff;
-  }
-
-  function whole(): Element {
-    const note = document.createElement(MUSIC_NOTE);
-    note.setAttribute('note', 'C');
-    note.setAttribute('octave', '4');
-    note.setAttribute('duration', 'whole');
-    return note;
-  }
-
-  function half(): Element {
-    const note = document.createElement(MUSIC_NOTE);
-    note.setAttribute('note', 'C');
-    note.setAttribute('octave', '4');
-    note.setAttribute('duration', 'half');
-    return note;
-  }
-
   it('joins an end repeat and the next bar’s start repeat on one row', async () => {
     const composition = document.createElement(MUSIC_COMPOSITION);
     document.body.appendChild(composition);
@@ -402,5 +406,89 @@ describe(`${MUSIC_COMPOSITION} barline junctions`, () => {
     );
     expect(pickupWarnings).toHaveLength(1);
     warn.mockRestore();
+  });
+});
+
+describe(`${MUSIC_COMPOSITION} key changes and courtesy warnings`, () => {
+  // jsdom lays nothing out, so each measure reports the row it sits on.
+  function placeOnRows(staves: any[], rows: number[]) {
+    staves.forEach((staff, index) => {
+      staff.parentElement.getBoundingClientRect = () =>
+        ({ top: rows[index] * 100 } as DOMRect);
+    });
+  }
+
+  it('flags a key change only where the key signature differs', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const staves = [
+      addMeasure(composition, { 'key-sig': 'D' }),
+      addMeasure(composition, { 'key-sig': 'D' }),
+      addMeasure(composition, { 'key-sig': 'C' }),
+      addMeasure(composition, { 'key-sig': 'A', mode: 'minor' }),
+    ];
+    await nextFrame();
+
+    expect(staves.map((staff) => staff.keyChangeAtBoundary)).toEqual([
+      null,
+      null,
+      {
+        from: { keySig: 'D', mode: 'major' },
+        to: { keySig: 'C', mode: 'major' },
+      },
+      null,
+    ]);
+  });
+
+  it('warns of the next key and clef at a row end only', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const staves = [
+      addMeasure(composition, { 'key-sig': 'D' }),
+      addMeasure(composition, { 'key-sig': 'C' }, undefined, {
+        clef: 'bass',
+      }),
+      addMeasure(composition, { 'key-sig': 'C' }, undefined, {
+        clef: 'bass',
+      }),
+      addMeasure(composition, { 'key-sig': 'G' }, undefined, {
+        clef: 'treble',
+      }),
+    ];
+    placeOnRows(staves, [0, 0, 0, 1]);
+    composition.dispatchEvent(new Event('staff-notes-positioned'));
+    await nextFrame();
+
+    expect(staves[0].endWarnings).toBeNull();
+    expect(staves[1].endWarnings).toBeNull();
+    expect(staves[2].endWarnings).toEqual({
+      clef: 'treble',
+      key: {
+        from: { keySig: 'C', mode: 'major' },
+        to: { keySig: 'G', mode: 'major' },
+      },
+      time: null,
+      reservesWidth: false,
+    });
+    expect(staves[3].endWarnings).toBeNull();
+
+    placeOnRows(staves, [0, 0, 0, 0]);
+    composition.dispatchEvent(new Event('staff-notes-positioned'));
+    await nextFrame();
+    expect(staves[2].endWarnings).toBeNull();
+  });
+
+  it('puts a start repeat after a key change', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const first = addMeasure(composition, { 'key-sig': 'D' });
+    const second = addMeasure(composition, {
+      'key-sig': 'C',
+      'repeat-start': '',
+    });
+    await nextFrame();
+
+    expect(first.endBarline).toBe('single');
+    expect(second.startRepeat).toBe('full');
   });
 });

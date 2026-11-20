@@ -1952,7 +1952,64 @@
             {
               "kind": "method",
               "name": "#updateClefContinuity",
-              "privacy": "private"
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<HTMLElement, ClefType>"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#updateKeySignatureContinuity",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Map<HTMLElement, KeyChange>"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#assignEndWarnings",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "courtesyClefs",
+                  "type": {
+                    "text": "ReadonlyMap<HTMLElement, ClefType>"
+                  }
+                },
+                {
+                  "name": "courtesyKeys",
+                  "type": {
+                    "text": "ReadonlyMap<HTMLElement, KeyChange>"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#forEachAdjacentStaffPair",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "visit",
+                  "type": {
+                    "text": "(\n        outgoing: HTMLElement,\n        incoming: HTMLElement,\n        isRowWrap: boolean\n      ) => void"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -2284,6 +2341,16 @@
             {
               "kind": "method",
               "name": "#syncNotesStartX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#syncEndWarningSpace",
               "privacy": "private",
               "return": {
                 "type": {
@@ -4630,13 +4697,28 @@
             },
             {
               "kind": "method",
-              "name": "getKeyYCoordinates",
+              "name": "getKeyYCoordinatesFor",
               "privacy": "public",
               "return": {
                 "type": {
                   "text": "{ useSharps: boolean; coordinates: number[] }"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "KeySignatureState"
+                  }
+                },
+                {
+                  "name": "clef",
+                  "optional": true,
+                  "type": {
+                    "text": "ClefType | null"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -4777,6 +4859,44 @@
                 "text": "boolean"
               },
               "default": "false",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#keyChangeAtBoundary",
+              "privacy": "private",
+              "type": {
+                "text": "KeyChange | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#endWarnings",
+              "privacy": "private",
+              "type": {
+                "text": "EndWarnings | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#endWarningsContainer",
+              "privacy": "private",
+              "type": {
+                "text": "SVGGElement"
+              },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5303,6 +5423,52 @@
             },
             {
               "kind": "field",
+              "name": "keyChangeAtBoundary",
+              "type": {
+                "text": "KeyChange | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endWarnings",
+              "type": {
+                "text": "EndWarnings | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "effectiveKeySignature",
+              "type": {
+                "text": "KeySignatureState"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
@@ -5489,6 +5655,20 @@
             },
             {
               "kind": "method",
+              "name": "getKeyYCoordinates",
+              "privacy": "public",
+              "return": {
+                "type": {
+                  "text": "{ useSharps: boolean; coordinates: number[] }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "onConnectedCallback",
               "privacy": "protected",
               "return": {
@@ -5505,14 +5685,15 @@
               "kind": "method",
               "name": "#buildDescribe",
               "privacy": "private",
-              "parameters": [
-                {
-                  "name": "clefSvgStr",
-                  "type": {
-                    "text": "string"
-                  }
-                }
-              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawDescribeGlyphs",
+              "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -5550,6 +5731,74 @@
                   "name": "xOffset",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#appendKeyChangeSvg",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "parent",
+                  "type": {
+                    "text": "SVGElement"
+                  }
+                },
+                {
+                  "name": "left",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "change",
+                  "type": {
+                    "text": "KeyChange"
+                  }
+                },
+                {
+                  "name": "clef",
+                  "type": {
+                    "text": "ClefType | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#timeSignatureSvgAt",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "SVGSVGElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "left",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "[beats, beatType]",
+                  "type": {
+                    "text": "[BeatsInMeasure, BeatTypeInMeasure]"
                   }
                 }
               ],
@@ -6068,6 +6317,23 @@
                   "name": "slots",
                   "type": {
                     "text": "readonly { left: number; type: BarlineType }[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawEndWarnings",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "rightEdge",
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -8419,6 +8685,43 @@
               }
             },
             {
+              "kind": "field",
+              "name": "measureEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "privacy": "protected",
+              "default": "{ width: 0, reserved: 0 }",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "privacy": "protected",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchTabLinkAttributeChange",
               "privacy": "protected",
@@ -9491,6 +9794,55 @@
               }
             },
             {
+              "kind": "field",
+              "name": "ownEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "privacy": "protected",
+              "default": "{ width: 0, reserved: 0 }",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "privacy": "protected",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "dispatchTabLinkAttributeChange",
               "privacy": "protected",
@@ -10038,13 +10390,21 @@
             },
             {
               "kind": "method",
-              "name": "getKeyYCoordinates",
+              "name": "getKeyYCoordinatesFor",
               "privacy": "public",
               "return": {
                 "type": {
-                  "text": "{ useSharps: boolean; coordinates: number[] }"
+                  "text": "{\n      useSharps: boolean;\n      coordinates: number[];\n    }"
                 }
               },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "KeySignatureState"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -10214,6 +10574,44 @@
                 "text": "boolean"
               },
               "default": "false",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#keyChangeAtBoundary",
+              "privacy": "private",
+              "type": {
+                "text": "KeyChange | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#endWarnings",
+              "privacy": "private",
+              "type": {
+                "text": "EndWarnings | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#endWarningsContainer",
+              "privacy": "private",
+              "type": {
+                "text": "SVGGElement"
+              },
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -10740,6 +11138,52 @@
             },
             {
               "kind": "field",
+              "name": "keyChangeAtBoundary",
+              "type": {
+                "text": "KeyChange | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endWarnings",
+              "type": {
+                "text": "EndWarnings | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "effectiveKeySignature",
+              "type": {
+                "text": "KeySignatureState"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "crossStaffBeamStemOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteChordOrRestElementType,\n    boolean\n  > | null"
@@ -10926,6 +11370,20 @@
             },
             {
               "kind": "method",
+              "name": "getKeyYCoordinates",
+              "privacy": "public",
+              "return": {
+                "type": {
+                  "text": "{ useSharps: boolean; coordinates: number[] }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "onConnectedCallback",
               "privacy": "protected",
               "return": {
@@ -10942,14 +11400,15 @@
               "kind": "method",
               "name": "#buildDescribe",
               "privacy": "private",
-              "parameters": [
-                {
-                  "name": "clefSvgStr",
-                  "type": {
-                    "text": "string"
-                  }
-                }
-              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawDescribeGlyphs",
+              "privacy": "private",
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -10987,6 +11446,74 @@
                   "name": "xOffset",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#appendKeyChangeSvg",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "parent",
+                  "type": {
+                    "text": "SVGElement"
+                  }
+                },
+                {
+                  "name": "left",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "change",
+                  "type": {
+                    "text": "KeyChange"
+                  }
+                },
+                {
+                  "name": "clef",
+                  "type": {
+                    "text": "ClefType | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#timeSignatureSvgAt",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "SVGSVGElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "left",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "[beats, beatType]",
+                  "type": {
+                    "text": "[BeatsInMeasure, BeatTypeInMeasure]"
                   }
                 }
               ],
@@ -11505,6 +12032,23 @@
                   "name": "slots",
                   "type": {
                     "text": "readonly { left: number; type: BarlineType }[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawEndWarnings",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "rightEdge",
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -13849,6 +14393,43 @@
               },
               "privacy": "protected",
               "default": "0",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "measureEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedEndWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "privacy": "protected",
+              "default": "{ width: 0, reserved: 0 }",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "endWarningSpace",
+              "type": {
+                "text": "EndWarningSpace"
+              },
+              "privacy": "protected",
+              "readonly": true,
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"

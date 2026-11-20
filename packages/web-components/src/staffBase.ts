@@ -64,6 +64,11 @@ export const _MaybeHTMLElement: any =
 /** A mid-bar barline's slot: its beat and the slot's left edge (wrapper px). */
 export type BarlineSlotLeft = { beat: number; left: number };
 
+/** Px an end-of-measure warning area takes, and how much of it the strut counts. */
+export type EndWarningSpace = { width: number; reserved: number };
+
+const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
+
 // Sub-pixel drift between passes must not count as a change, or the measure
 // and its staves would hand the value back and forth.
 const BARLINE_SLOT_TOLERANCE_PX = 0.5;
@@ -336,6 +341,39 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   protected sharedNotesStartX = 0;
+
+  // Room this staff's own end-of-measure warnings take before the end
+  // barline, read by the ancestor <music-measure> so every staff spaces its
+  // notes short of the widest; `reserved` is the part counted in the strut.
+  get ownEndWarningSpace(): EndWarningSpace {
+    return NO_END_WARNING_SPACE;
+  }
+
+  get measureEndWarningSpace(): EndWarningSpace {
+    return this.sharedEndWarningSpace;
+  }
+
+  set measureEndWarningSpace(value: EndWarningSpace) {
+    if (
+      this.sharedEndWarningSpace.width === value.width &&
+      this.sharedEndWarningSpace.reserved === value.reserved
+    ) {
+      return;
+    }
+    this.sharedEndWarningSpace = { ...value };
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedEndWarningSpace: EndWarningSpace = NO_END_WARNING_SPACE;
+
+  // The end-warning room this staff leaves, its own or the measure's.
+  protected get endWarningSpace(): EndWarningSpace {
+    const own = this.ownEndWarningSpace;
+    return {
+      width: Math.max(own.width, this.sharedEndWarningSpace.width),
+      reserved: Math.max(own.reserved, this.sharedEndWarningSpace.reserved),
+    };
+  }
 
   protected onMeasureLayoutChange(): void {
     // Staves that space notes override this to relayout.

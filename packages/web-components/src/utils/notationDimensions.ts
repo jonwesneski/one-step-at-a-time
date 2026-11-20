@@ -526,6 +526,18 @@ export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -1.8;
  */
 export const TIME_SIG_Y_TRANSLATE = STAFF_LINE_SPACING * 3;
 
+/**
+ * Horizontal centre (px) of the time-signature numerals within their SVG.
+ * = 2 × STAFF_LINE_SPACING
+ */
+export const TIME_SIG_GLYPH_CENTER_X_PX = STAFF_LINE_SPACING * 2;
+
+/**
+ * Width (px) of one time-signature digit (bold, font-size 28).
+ * = 1.7 × STAFF_LINE_SPACING
+ */
+export const TIME_SIG_DIGIT_WIDTH_PX = STAFF_LINE_SPACING * 1.7;
+
 // ─── Measure layout ───────────────────────────────────────────────────────────
 
 /**
@@ -857,10 +869,11 @@ export const MID_STREAM_CLEF_Y_OFFSET = STAFF_LINE_SPACING * 2;
 export const COURTESY_CLEF_SCALE = 0.7;
 
 /**
- * Horizontal gap (px) between a courtesy clef and the right edge of the staff
- * it's drawn on.
+ * Width (px) of a courtesy clef: the clef glyph box at courtesy scale.
+ * = MID_STREAM_CLEF_WIDTH_PX × COURTESY_CLEF_SCALE
  */
-export const COURTESY_CLEF_MARGIN_RIGHT_PX = STAFF_LINE_SPACING * 0.5;
+export const COURTESY_CLEF_WIDTH_PX =
+  MID_STREAM_CLEF_WIDTH_PX * COURTESY_CLEF_SCALE;
 
 // ─── Barlines ──────────────────────────────────────────────────────────────────
 
@@ -906,6 +919,35 @@ export const REPEAT_START_LEAD_PX = STAFF_LINE_SPACING * 0.6;
  * = 0.8 × STAFF_LINE_SPACING
  */
 export const MID_BAR_BARLINE_PADDING_PX = STAFF_LINE_SPACING * 0.8;
+
+// ─── Key-signature changes ─────────────────────────────────────────────────────
+
+/**
+ * Horizontal step (px) of each cancellation natural; a natural is as narrow
+ * as a flat.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const KEY_SIG_NATURAL_WIDTH = STAFF_LINE_SPACING * 0.8;
+
+/**
+ * Vertical offset (px) of a cancellation natural against the key-signature
+ * coordinates: a natural's centre sits 2px higher in its box than a sharp's.
+ * = 0.2 × STAFF_LINE_SPACING
+ */
+export const KEY_SIG_NATURAL_Y_OFFSET = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Gap (px) between the cancellation naturals and the new key signature.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const KEY_SIG_CANCEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between a barline and the clef/key/time group beside it, and
+ * between those groups.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const END_WARNING_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 // ─── Grand staff / part connectors ─────────────────────────────────────────────
 

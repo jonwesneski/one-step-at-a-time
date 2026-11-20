@@ -408,3 +408,41 @@ describe(`${MUSIC_MEASURE} barlines`, () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 });
+
+describe(`${MUSIC_MEASURE} end-of-measure warnings`, () => {
+  function addStaff(measure: HTMLElement, clef: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute('clef', clef);
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', clef === 'bass' ? '3' : '4');
+    note.setAttribute('duration', 'whole');
+    staff.appendChild(note);
+    measure.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  it('gives every staff the widest warning area, so beats stay aligned', () => {
+    const measure = document.createElement(MUSIC_MEASURE);
+    document.body.appendChild(measure);
+    const treble = addStaff(measure, 'treble');
+    const bass = addStaff(measure, 'bass');
+
+    treble.endWarnings = {
+      clef: 'bass',
+      key: null,
+      time: null,
+      reservesWidth: false,
+    };
+    const width = treble.ownEndWarningSpace.width;
+
+    expect(width).toBeGreaterThan(0);
+    expect(bass.measureEndWarningSpace).toEqual({ width, reserved: 0 });
+
+    treble.endWarnings = null;
+    expect(bass.measureEndWarningSpace).toEqual({ width: 0, reserved: 0 });
+  });
+});
