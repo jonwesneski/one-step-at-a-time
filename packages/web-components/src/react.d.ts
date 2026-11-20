@@ -164,6 +164,8 @@ declare module 'react' {
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
+        'dynamic-reminder'?: boolean;
+        'accidental-reminder'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -220,6 +222,8 @@ declare module 'react' {
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
+        'dynamic-reminder'?: boolean;
+        'accidental-reminder'?: boolean;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;

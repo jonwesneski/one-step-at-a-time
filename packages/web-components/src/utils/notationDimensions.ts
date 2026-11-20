@@ -622,6 +622,12 @@ export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
  */
 export const ACCIDENTAL_NOTE_GAP = -7;
 
+/**
+ * Width (px) of each parenthesis around a reminder accidental.
+ * = 0.35 × STAFF_LINE_SPACING
+ */
+export const ACCIDENTAL_REMINDER_PAREN_WIDTH_PX = STAFF_LINE_SPACING * 0.35;
+
 // ─── Dynamics ─────────────────────────────────────────────────────────────────
 
 /**
@@ -662,6 +668,12 @@ export const DYNAMICS_FONT_SIZE = STAFF_LINE_SPACING * 1.4;
  * Mirrors AVG_LYRIC_CHAR_WIDTH_PX's estimate-don't-measure approach.
  */
 export const DYNAMICS_CHAR_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.65;
+
+/**
+ * Estimated width (px) of each upright bracket around a reminder dynamic.
+ * = 0.35 × DYNAMICS_FONT_SIZE
+ */
+export const DYNAMIC_REMINDER_BRACKET_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.35;
 
 /**
  * Minimum horizontal gap (px) between a dynamic marking's estimated edge and
@@ -920,7 +932,7 @@ export const REPEAT_START_LEAD_PX = STAFF_LINE_SPACING * 0.6;
  */
 export const MID_BAR_BARLINE_PADDING_PX = STAFF_LINE_SPACING * 0.8;
 
-// ─── Key-signature changes ─────────────────────────────────────────────────────
+// ─── Key-signature changes & reminders ─────────────────────────────────────────
 
 /**
  * Horizontal step (px) of each cancellation natural; a natural is as narrow
@@ -948,6 +960,32 @@ export const KEY_SIG_CANCEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
  * = 0.5 × STAFF_LINE_SPACING
  */
 export const END_WARNING_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Width (px) of each parenthesis around a bracketed clef/key/time reminder.
+ * = 0.6 × STAFF_LINE_SPACING
+ */
+export const REMINDER_PAREN_WIDTH_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * Gap (px) between a reminder's parenthesis and what it encloses.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const REMINDER_PAREN_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How far (px) a reminder's parentheses reach past the outer stave lines.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const REMINDER_PAREN_OVERHANG_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Extra room (px) a mid-bar barline's slot takes for a warning clef before
+ * it: the courtesy clef and a gap.
+ * = COURTESY_CLEF_WIDTH_PX + END_WARNING_GAP_PX
+ */
+export const MID_BAR_WARNING_CLEF_WIDTH_PX =
+  COURTESY_CLEF_WIDTH_PX + END_WARNING_GAP_PX;
 
 // ─── Endings ───────────────────────────────────────────────────────────────────
 

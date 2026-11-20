@@ -7,6 +7,7 @@ import type {
 import type { DynamicMarking, HairpinKind } from '../types/theory';
 import { HAIRPIN_KINDS, MUSIC_REST_NODE } from '../utils/consts';
 import {
+  DYNAMIC_REMINDER_BRACKET_WIDTH_PX,
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
 } from '../utils/notationDimensions';
@@ -169,6 +170,8 @@ function buildHairpinPair(
     endTextCenterX: (noteXPositions.get(end.index) ?? 0) + NOTE_SVG_WIDTH / 2,
     startMarking: start.element.dynamic,
     endMarking: end.element.dynamic,
+    startBracketed: start.element.dynamicReminder,
+    endBracketed: end.element.dynamicReminder,
   });
   if (span.collided) {
     errors.push(
@@ -231,6 +234,18 @@ export function pairSharedHairpinsAcrossStaves(
   return pairs;
 }
 
+/** Half the estimated width of a dynamic, with its brackets for a reminder. */
+export function dynamicTextHalfWidth(
+  marking: DynamicMarking,
+  bracketed = false
+): number {
+  return (
+    (marking.length * DYNAMICS_CHAR_WIDTH_PX +
+      (bracketed ? DYNAMIC_REMINDER_BRACKET_WIDTH_PX * 2 : 0)) /
+    2
+  );
+}
+
 export type HairpinXSpanInput = {
   rawStartX: number;
   rawEndX: number;
@@ -238,6 +253,8 @@ export type HairpinXSpanInput = {
   endTextCenterX: number;
   startMarking: DynamicMarking | null;
   endMarking: DynamicMarking | null;
+  startBracketed?: boolean;
+  endBracketed?: boolean;
 };
 
 // Pulls each end inward past its endpoint dynamic's estimated text edge, so
@@ -250,6 +267,8 @@ export function computeHairpinXSpan({
   endTextCenterX,
   startMarking,
   endMarking,
+  startBracketed = false,
+  endBracketed = false,
 }: HairpinXSpanInput): { startX: number; endX: number; collided: boolean } {
   let startX = rawStartX;
   let endX = rawEndX;
@@ -257,7 +276,7 @@ export function computeHairpinXSpan({
     startX = Math.max(
       startX,
       startTextCenterX +
-        (startMarking.length * DYNAMICS_CHAR_WIDTH_PX) / 2 +
+        dynamicTextHalfWidth(startMarking, startBracketed) +
         HAIRPIN_DYNAMIC_GAP_PX
     );
   }
@@ -265,7 +284,7 @@ export function computeHairpinXSpan({
     endX = Math.min(
       endX,
       endTextCenterX -
-        (endMarking.length * DYNAMICS_CHAR_WIDTH_PX) / 2 -
+        dynamicTextHalfWidth(endMarking, endBracketed) -
         HAIRPIN_DYNAMIC_GAP_PX
     );
   }
@@ -297,6 +316,8 @@ export function resolveChainSpans(
       endTextCenterX: endText?.centerX ?? 0,
       startMarking: startText?.marking ?? null,
       endMarking: endText?.marking ?? null,
+      startBracketed: startText?.bracketed,
+      endBracketed: endText?.bracketed,
     });
     return { startX: span.startX, endX: span.endX, startText, endText };
   });

@@ -425,3 +425,149 @@ export const StandaloneEnding: Story = {
     </music-measure>
   `,
 };
+
+const wholeIn = (clef: 'treble' | 'bass') =>
+  html`<music-note
+    note="C"
+    octave=${clef === 'bass' ? 3 : 5}
+    duration="whole"
+  ></music-note>`;
+
+const dottedHalfA = html`<music-note
+  note="A"
+  octave="4"
+  duration="dotted-half"
+></music-note>`;
+
+const clefChangeToTreble = html`
+  <music-note note="C" octave="3" duration="half"></music-note>
+  <music-clef clef="treble"></music-clef>
+  <music-note note="G" octave="4" duration="half"></music-note>
+`;
+
+type RowWidthArgs = { maxWidth: number };
+
+// A change during the repeated passage makes the first-time bar reinstate
+// the start's clef, key and time before :‖; the second-time bar, resuming the
+// music as it was before the endings, shows it in brackets.
+export const WarningsBeforeEndRepeat: StoryObj<RowWidthArgs> = {
+  args: { maxWidth: 900 },
+  argTypes: { maxWidth: { control: { type: 'range', min: 500, max: 1200 } } },
+  render: ({ maxWidth }) => html`
+    <music-composition time="4/4" max-width=${maxWidth}>
+      <music-measure>
+        <music-staff clef="bass">${wholeIn('bass')}</music-staff>
+      </music-measure>
+      <music-measure repeat-start>
+        <music-staff clef="bass">${clefChangeToTreble}</music-staff>
+      </music-measure>
+      <music-measure key-sig="D" time="3/4">
+        <music-staff clef="treble">${dottedHalfA}</music-staff>
+      </music-measure>
+      <music-measure key-sig="D" time="3/4" ending="1" barline="repeat-end">
+        <music-staff clef="treble">${dottedHalfA}</music-staff>
+      </music-measure>
+      <music-measure key-sig="D" time="3/4" ending="2">
+        <music-staff clef="treble">${dottedHalfA}</music-staff>
+      </music-measure>
+      <music-measure key-sig="D" time="3/4">
+        <music-staff clef="treble">${dottedHalfA}</music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// The music continues in bass clef after the repeat: the warning before :‖
+// already shows it, so nothing is redrawn after the barline.
+export const ContinuingAfterRepeat: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure repeat-start>
+        <music-staff clef="bass">${clefChangeToTreble}</music-staff>
+      </music-measure>
+      <music-measure barline="repeat-end">
+        <music-staff clef="treble">${wholeIn('treble')}</music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="bass">${wholeIn('bass')}</music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// A change that applies only after the repeat goes after the barline.
+export const ChangeAfterRepeat: Story = {
+  render: () => html`
+    <music-composition time="2/4">
+      <music-measure repeat-start>
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure barline="repeat-end">
+        <music-staff clef="bass">
+          <music-note note="C" octave="3" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure key-sig="D" time="3/4">
+        <music-staff clef="treble">${dottedHalfA}</music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// Reminders in brackets for the performer returning to the start of the
+// repeat: the natural cancelling the B♭ at the end, and the dynamic.
+export const ReminderAccidentalAndDynamic: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="G"
+            octave="4"
+            duration="whole"
+            dynamic="f"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure repeat-start>
+        <music-staff clef="treble">
+          <music-note
+            note="B"
+            octave="4"
+            duration="quarter"
+            accidental-reminder
+            dynamic="f"
+            dynamic-reminder
+          ></music-note>
+          <music-rest duration="quarter"></music-rest>
+          <music-rest duration="half"></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure barline="repeat-end">
+        <music-staff clef="treble">
+          <music-note note="Bb" octave="4" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+// A mid-bar end repeat reinstates the start's clef inside the barline's slot.
+export const MidBarRepeatWarning: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure repeat-start>
+        <music-staff clef="bass">${clefChangeToTreble}</music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note note="G" octave="4" duration="half"></music-note>
+          <music-barline type="repeat-end"></music-barline>
+          <music-note note="G" octave="4" duration="half"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};

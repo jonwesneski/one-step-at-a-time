@@ -257,7 +257,12 @@ type MeasureDynamicsPlan = {
     end: HairpinPoint;
     angled: boolean;
   }[];
-  markings: { marking: DynamicMarking; centerX: number; y: number }[];
+  markings: {
+    marking: DynamicMarking;
+    centerX: number;
+    y: number;
+    bracketed?: boolean;
+  }[];
 };
 
 // Records the margin one gap side of `staff` needs to make up `deficit` px
@@ -1811,7 +1816,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       for (const marking of plan.markings) {
         overlay.appendChild(
-          createDynamicMarkingSvg(marking.marking, marking.centerX, marking.y)
+          createDynamicMarkingSvg(marking.marking, marking.centerX, marking.y, {
+            bracketed: marking.bracketed,
+          })
         );
       }
       const rect = this.getBoundingClientRect();
@@ -1900,6 +1907,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         awayDirection: -1 | 1,
         gap: { topGapEdgeY: number; bottomGapEdgeY: number }
       ) => {
+        const bracketed = element.dynamicReminder;
         const heads = this.#headRects(element);
         const rect = element.getBoundingClientRect();
         const centerX =
@@ -1913,7 +1921,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           marking,
           stems,
           gap,
-          awayDirection
+          awayDirection,
+          bracketed
         );
       };
       const leftX = (element: NoteOrChordElementType) =>
@@ -1926,12 +1935,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const startText = start.dynamic
           ? {
               marking: start.dynamic,
+              bracketed: start.dynamicReminder,
               centerX: textCenterX(start, start.dynamic, -1, gap),
             }
           : null;
         const endText = end.dynamic
           ? {
               marking: end.dynamic,
+              bracketed: end.dynamicReminder,
               centerX: textCenterX(end, end.dynamic, 1, gap),
             }
           : null;
@@ -1942,6 +1953,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           endTextCenterX: endText?.centerX ?? 0,
           startMarking: startText?.marking ?? null,
           endMarking: endText?.marking ?? null,
+          startBracketed: startText?.bracketed,
+          endBracketed: endText?.bracketed,
         });
         return { startX: span.startX, endX: span.endX, startText, endText };
       };
@@ -1968,7 +1981,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const placeText = (text: HairpinEndpointText | null, y: number) => {
         if (text !== null) {
           plan.markings.push({ ...text, y });
-          obstacles.push(estimateDynamicTextBox(text.marking, text.centerX, y));
+          obstacles.push(
+            estimateDynamicTextBox(
+              text.marking,
+              text.centerX,
+              y,
+              text.bracketed
+            )
+          );
         }
       };
 
@@ -2140,6 +2160,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 ? null
                 : {
                     marking: element.dynamic,
+                    bracketed: element.dynamicReminder,
                     centerX: textCenterX(
                       element,
                       element.dynamic,
@@ -2253,7 +2274,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             continue;
           }
           const centerX = textCenterX(element, element.dynamic, -1, gap);
-          const text = { marking: element.dynamic, centerX };
+          const text = {
+            marking: element.dynamic,
+            bracketed: element.dynamicReminder,
+            centerX,
+          };
           const y =
             resolveSharedHairpinY({
               kind: 'crescendo',

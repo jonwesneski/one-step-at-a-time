@@ -19,6 +19,7 @@ import { AccidentalType, Mode, Note } from '../types/theory';
 import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
 import {
   ACCIDENTAL_NOTE_GAP,
+  ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../utils/notationDimensions';
@@ -89,9 +90,18 @@ export function computeNoteAccidentals(
     NoteElementType | ChordElementType,
     (AccidentalType | null)[]
   >;
+  parenthesizedAccidentals: Set<NoteElementType>;
+  chordParenthesizedAccidentals: Map<ChordElementType, boolean[]>;
 } {
   const keySigAccidentals = getKeySignatureAccidentals(keySig, mode);
   const inMeasureState = new Map<string, AccidentalType | null>();
+
+  // A natural written earlier in the bar is recorded as null and still
+  // overrides the key, so the lookup checks presence, not the value.
+  const stateFor = (letter: string): AccidentalType | null =>
+    inMeasureState.has(letter)
+      ? inMeasureState.get(letter) ?? null
+      : keySigAccidentals.get(letter) ?? null;
 
   const noteShowAccidentals = new Map<NoteElementType, AccidentalType | null>();
   const chordNoteAccidentals = new Map<
@@ -106,6 +116,8 @@ export function computeNoteAccidentals(
     NoteElementType | ChordElementType,
     (AccidentalType | null)[]
   >();
+  const parenthesizedAccidentals = new Set<NoteElementType>();
+  const chordParenthesizedAccidentals = new Map<ChordElementType, boolean[]>();
 
   // Shared by both ornament kinds (a leading grace group and a trill's
   // finishing grace note(s)) — same suffix-vs-in-measure-state resolution as
@@ -121,8 +133,7 @@ export function computeNoteAccidentals(
     const resolved = pitches.map((pitch) => {
       const letter = pitch[0].toUpperCase();
       const pitchAccidental = suffixToType(parseAccidentalSuffix(pitch));
-      const effectiveState =
-        inMeasureState.get(letter) ?? keySigAccidentals.get(letter) ?? null;
+      const effectiveState = stateFor(letter);
       const showAccidental = resolveAccidental(pitchAccidental, effectiveState);
       inMeasureState.set(letter, pitchAccidental);
       return showAccidental;
@@ -161,10 +172,16 @@ export function computeNoteAccidentals(
       const letter = noteElement.note[0].toUpperCase();
       const suffix = parseAccidentalSuffix(noteElement.note);
       const noteAccidental = suffixToType(suffix);
-      const effectiveState =
-        inMeasureState.get(letter) ?? keySigAccidentals.get(letter) ?? null;
-      const showAccidental = resolveAccidental(noteAccidental, effectiveState);
-      noteShowAccidentals.set(noteElement, showAccidental);
+      const effectiveState = stateFor(letter);
+      const { accidental, parenthesized } = withReminder(
+        resolveAccidental(noteAccidental, effectiveState),
+        noteAccidental,
+        noteElement.accidentalReminder
+      );
+      noteShowAccidentals.set(noteElement, accidental);
+      if (parenthesized) {
+        parenthesizedAccidentals.add(noteElement);
+      }
       inMeasureState.set(letter, noteAccidental);
       resolveOrnamentAccidentals(
         noteElement.trillFinish,
@@ -191,16 +208,26 @@ export function computeNoteAccidentals(
         continue;
       }
       const accidentals: (AccidentalType | null | undefined)[] = [];
-      for (const chordNote of chordElement.notes) {
+      const parenthesized: boolean[] = [];
+      const reminders = chordElement.toneAccidentalReminders;
+      chordElement.notes.forEach((chordNote, toneIndex) => {
         const letter = chordNote.value[0].toUpperCase();
         const suffix = parseAccidentalSuffix(chordNote.value);
         const noteAccidental = suffixToType(suffix);
-        const effectiveState =
-          inMeasureState.get(letter) ?? keySigAccidentals.get(letter) ?? null;
-        accidentals.push(resolveAccidental(noteAccidental, effectiveState));
+        const effectiveState = stateFor(letter);
+        const shown = withReminder(
+          resolveAccidental(noteAccidental, effectiveState),
+          noteAccidental,
+          reminders[toneIndex] ?? false
+        );
+        accidentals.push(shown.accidental);
+        parenthesized.push(shown.parenthesized);
         inMeasureState.set(letter, noteAccidental);
-      }
+      });
       chordNoteAccidentals.set(chordElement, accidentals);
+      if (parenthesized.some(Boolean)) {
+        chordParenthesizedAccidentals.set(chordElement, parenthesized);
+      }
       resolveOrnamentAccidentals(
         chordElement.trillFinish,
         trillFinishShowAccidentals,
@@ -214,6 +241,8 @@ export function computeNoteAccidentals(
     chordNoteAccidentals,
     graceShowAccidentals,
     trillFinishShowAccidentals,
+    parenthesizedAccidentals,
+    chordParenthesizedAccidentals,
   };
 }
 
@@ -261,6 +290,30 @@ export function suffixToType(suffix: AccidentalSuffix): AccidentalType | null {
 
 // ─── Accidental resolution ─────────────────────────────────────────────────────
 
+/** An accidental's drawn width, with its parentheses when it's a reminder. */
+export function accidentalSymbolWidth(
+  accidental: AccidentalType,
+  parenthesized = false
+): number {
+  return (
+    ACCIDENTAL_SYMBOL_WIDTH[accidental] +
+    (parenthesized ? ACCIDENTAL_REMINDER_PAREN_WIDTH_PX * 2 : 0)
+  );
+}
+
+// A reminder shows the accidental already in force, in parentheses: the
+// note's own, or a natural. One that is required anyway draws plainly.
+function withReminder(
+  shown: AccidentalType | null,
+  noteAccidental: AccidentalType | null,
+  reminder: boolean
+): { accidental: AccidentalType | null; parenthesized: boolean } {
+  if (!reminder || shown !== null) {
+    return { accidental: shown, parenthesized: false };
+  }
+  return { accidental: noteAccidental ?? 'natural', parenthesized: true };
+}
+
 // Given the note's actual accidental and the currently-in-effect state for that
 // letter (from key sig + in-measure tracking), return what symbol to render.
 export function resolveAccidental(
@@ -284,6 +337,8 @@ export type AccidentalPlacementInput = {
   noteIndex: number;
   accidental: AccidentalType;
   yPixel: number;
+  /** A reminder, drawn in parentheses. */
+  parenthesized?: boolean;
 };
 
 export type AccidentalPlacement = AccidentalPlacementInput & {
@@ -361,8 +416,9 @@ export function computeChordAccidentalPlacements(
   // Compute column widths and cumulative x offsets
   const columnWidths = columns.map(
     (col) =>
-      Math.max(...col.map((i) => ACCIDENTAL_SYMBOL_WIDTH[i.accidental])) +
-      COLUMN_GAP
+      Math.max(
+        ...col.map((i) => accidentalSymbolWidth(i.accidental, i.parenthesized))
+      ) + COLUMN_GAP
   );
   const cumulativeX: number[] = [];
   let runningX = 0;
@@ -376,7 +432,10 @@ export function computeChordAccidentalPlacements(
     for (const item of columns[col]) {
       placements[item.noteIndex] = {
         ...placements[item.noteIndex],
-        xOffset: -(cumulativeX[col] + ACCIDENTAL_SYMBOL_WIDTH[item.accidental]),
+        xOffset: -(
+          cumulativeX[col] +
+          accidentalSymbolWidth(item.accidental, item.parenthesized)
+        ),
       };
     }
   }
@@ -386,7 +445,8 @@ export function computeChordAccidentalPlacements(
 
 export function totalChordAccidentalWidth(
   noteAccidentals: (AccidentalType | null | undefined)[],
-  staffYCoordinates: number[]
+  staffYCoordinates: number[],
+  parenthesized: readonly boolean[] = []
 ): number {
   const inputs: AccidentalPlacementInput[] = [];
   for (let i = 0; i < noteAccidentals.length; i++) {
@@ -396,6 +456,7 @@ export function totalChordAccidentalWidth(
         noteIndex: i,
         accidental: acc,
         yPixel: staffYCoordinates[i],
+        parenthesized: parenthesized[i] ?? false,
       });
     }
   }

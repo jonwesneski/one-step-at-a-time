@@ -97,6 +97,8 @@ type ChordProps = Omit<
 > & {
   staffYCoordinates: number[];
   noteAccidentals?: (AccidentalType | null | undefined)[];
+  // Per tone: a reminder accidental, drawn in parentheses.
+  noteAccidentalsParenthesized?: readonly boolean[];
   // Per tone, aligned with staffYCoordinates; missing entries are normal.
   noteheads?: readonly NoteheadType[];
   // Grace notes are placed relative to the chord's reference note (notes[0],
@@ -129,6 +131,7 @@ export const createChordSvg = ({
   stemUp = true,
   stemExtension = 0,
   noteAccidentals,
+  noteAccidentalsParenthesized = [],
   noteheads = [],
   articulation,
   stress,
@@ -341,6 +344,7 @@ export const createChordSvg = ({
         inputs.push({
           noteIndex: i,
           accidental: acc,
+          parenthesized: noteAccidentalsParenthesized[i] ?? false,
           // Centred on the head as drawn.
           yPixel: chordToneHeadCenterY(
             staffYCoordinates[i],
@@ -359,7 +363,10 @@ export const createChordSvg = ({
 
       for (const placement of placements) {
         const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[placement.accidental];
-        const symbolSvg = createAccidentalSvg(placement.accidental);
+        const symbolSvg = createAccidentalSvg(
+          placement.accidental,
+          placement.parenthesized ?? false
+        );
 
         // xOffset is already negative (left of notehead left edge)
         // yPixel is the notehead center in chord SVG space
@@ -380,7 +387,11 @@ export const createChordSvg = ({
     (noteAccidental) => noteAccidental != null
   );
   const accidentalColumnWidth = anyAccidentalShown
-    ? totalChordAccidentalWidth(noteAccidentals ?? [], staffYCoordinates)
+    ? totalChordAccidentalWidth(
+        noteAccidentals ?? [],
+        staffYCoordinates,
+        noteAccidentalsParenthesized
+      )
     : 0;
   const maxLeftHeadDisplacement = Math.max(
     0,

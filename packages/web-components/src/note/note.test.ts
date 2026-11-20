@@ -2723,3 +2723,59 @@ describe('augmentation dots', () => {
     expect(dotCount(note as NoteElementType)).toBe(1);
   });
 });
+
+describe('note reminders', () => {
+  const make = () => {
+    const element = document.createElement(MUSIC_NOTE) as any;
+    element.setAttribute('duration', 'quarter');
+    element.setAttribute('note', 'B');
+    document.body.appendChild(element);
+    return element;
+  };
+
+  it('reflects accidental-reminder and re-lays out the staff on a change', () => {
+    const element = make();
+    const handler = jest.fn();
+    element.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    element.accidentalReminder = true;
+
+    expect(element.hasAttribute('accidental-reminder')).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('reflects dynamic-reminder, redraws dynamics, and warns without a dynamic', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = make();
+    const handler = jest.fn();
+    element.addEventListener(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, handler);
+
+    element.dynamicReminder = true;
+    element.dynamicReminder = false;
+    element.dynamicReminder = true;
+
+    expect(element.hasAttribute('dynamic-reminder')).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('dynamic-reminder')
+      )
+    ).toHaveLength(2);
+
+    element.setAttribute('dynamic', 'f');
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('dynamic-reminder')
+      )
+    ).toHaveLength(2);
+    warn.mockRestore();
+  });
+
+  it('standalone, brackets its own accidental', () => {
+    const element = make();
+    element.accidentalReminder = true;
+    expect(
+      element.shadowRoot.querySelectorAll('.accidental-reminder').length
+    ).toBeGreaterThan(0);
+  });
+});

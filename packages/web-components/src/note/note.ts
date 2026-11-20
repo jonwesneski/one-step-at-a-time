@@ -1,3 +1,4 @@
+import { accidentalSymbolWidth } from '../rules/accidentalRules';
 import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
@@ -65,7 +66,6 @@ import type {
 } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
-  ACCIDENTAL_SYMBOL_WIDTH,
   addLedgerLines,
   createGraceNotesSvg,
   createNoteSvg,
@@ -142,6 +142,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
    * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
    * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
+   * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
+   * @attr {boolean} accidental-reminder - Shows the accidental already in force in parentheses, "(♮)", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.
    * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
    * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
    * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -205,6 +207,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'glissando-hint',
         'dynamic',
         'dynamic-shared',
+        'dynamic-reminder',
+        'accidental-reminder',
         'crescendo',
         'decrescendo',
         'diminuendo',
@@ -268,6 +272,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // undefined = no override, infer accidental from the `note` suffix;
     // null = explicit override, suppress the accidental; value = explicit override, force this symbol
     #showAccidental: AccidentalType | null | undefined = undefined;
+    #accidentalParenthesized = false;
     #staffY: number | null = null;
     #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
     #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
@@ -449,6 +454,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#scheduleRender();
     }
 
+    get accidentalParenthesized(): boolean {
+      return this.#accidentalParenthesized;
+    }
+    set accidentalParenthesized(value: boolean) {
+      this.#accidentalParenthesized = value;
+      this.#scheduleRender();
+    }
+
     get staffY(): number | null {
       return this.#staffY;
     }
@@ -518,6 +531,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.removeAttribute('dynamic-shared');
       }
+    }
+
+    get dynamicReminder(): boolean {
+      return this.hasAttribute('dynamic-reminder');
+    }
+    set dynamicReminder(value: boolean) {
+      this.toggleAttribute('dynamic-reminder', value);
+    }
+
+    get accidentalReminder(): boolean {
+      return this.hasAttribute('accidental-reminder');
+    }
+    set accidentalReminder(value: boolean) {
+      this.toggleAttribute('accidental-reminder', value);
     }
 
     get crescendo(): HairpinRole | null {
@@ -1192,9 +1219,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
     }
 
+    #warnedDynamicReminder = false;
+
+    // A bracketed reminder needs a dynamic to bracket; warns once until one
+    // is set.
+    #warnAboutDynamicReminder(): void {
+      const missing = this.dynamicReminder && this.dynamic === null;
+      if (missing && this.isConnected && !this.#warnedDynamicReminder) {
+        console.warn(
+          `[music-note] dynamic-reminder needs a dynamic to draw in brackets`
+        );
+      }
+      this.#warnedDynamicReminder = missing && this.isConnected;
+    }
+
     connectedCallback(): void {
       upgradeShadowedProperties(this);
       this.#warnAboutTremolo(null, null);
+      this.#warnAboutDynamicReminder();
       this.render();
     }
 
@@ -1281,8 +1323,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'crescendo' ||
         name === 'decrescendo' ||
         name === 'grace-dynamic' ||
-        name === 'dynamic-shared'
+        name === 'dynamic-shared' ||
+        name === 'dynamic-reminder'
       ) {
+        this.#warnAboutDynamicReminder();
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
             bubbles: true,
@@ -1395,6 +1439,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'accidental-reminder' ||
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
         name === 'arpeggio-hairpin' ||
@@ -1523,6 +1568,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const stemUp = this.stemUp;
 
       let accidental: AccidentalType | undefined;
+      let accidentalParenthesized = false;
       if (suppressesAccidental(notehead)) {
         accidental = undefined;
       } else if (this.#showAccidental === undefined) {
@@ -1536,8 +1582,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         } else if (suffix === 'b') {
           accidental = 'flat';
         }
+        // Standalone, a reminder brackets the note's own accidental.
+        if (this.accidentalReminder) {
+          accidental ??= 'natural';
+          accidentalParenthesized = true;
+        }
       } else if (this.#showAccidental !== null) {
         accidental = this.#showAccidental;
+        accidentalParenthesized = this.#accidentalParenthesized;
       }
 
       const [noteSvg, yHeadOffset] = createNoteSvg({
@@ -1548,6 +1600,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         noFlags: this.#noFlags,
         noStem: this.#noStem,
         accidental,
+        accidentalParenthesized,
         articulation: this.articulation,
         stress: this.stress,
         arpeggio: this.#renderArpeggioSign
@@ -1598,7 +1651,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         );
       }
 
-      this.#appendGraceNotes(noteSvg, accidental);
+      this.#appendGraceNotes(noteSvg, accidental, accidentalParenthesized);
       this.#appendTrillFinishNotes(noteSvg);
 
       // Standalone: the `sempre arpeggiando` instruction renders next to this
@@ -1655,7 +1708,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #appendGraceNotes(
       noteSvg: SVGElement,
-      accidental: AccidentalType | undefined
+      accidental: AccidentalType | undefined,
+      accidentalParenthesized: boolean
     ): void {
       const graceNoteLetters = this.grace;
       if (graceNoteLetters === null) {
@@ -1675,7 +1729,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#rebaseOrnamentSteps(graceNotes);
 
       const accidentalFootprint = accidental
-        ? ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP
+        ? accidentalSymbolWidth(accidental, accidentalParenthesized) +
+          ACCIDENTAL_NOTE_GAP
         : 0;
       const arpeggioFootprint =
         computeArpeggioFootprintWidth(

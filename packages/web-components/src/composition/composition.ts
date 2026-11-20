@@ -15,6 +15,7 @@ import {
   resolveHairpinSegments,
 } from '../rules/dynamicsRules';
 import {
+  type EndingGroup,
   type EndingMeasureInput,
   type EndingSegment,
   resolveEndingNumberLabels,
@@ -40,6 +41,12 @@ import {
   resolveOctaveContinuationSegments,
   resolveOctaveSpans,
 } from '../rules/octaveRules';
+import {
+  type BoundaryState,
+  type Component,
+  type DescribeReminder,
+  resolveRepeatWarnings,
+} from '../rules/repeatWarningRules';
 import type { MarkerBeat } from '../rules/streamMarkerRules';
 import {
   resolveTrillContinuationSegments,
@@ -65,6 +72,7 @@ import type {
   HairpinKind,
   MeasureNumberDisplay,
   OctaveShiftAmount,
+  TimeSignature,
   VoiceNumber,
 } from '../types/theory';
 import {
@@ -170,6 +178,18 @@ type BarlineStaff = HTMLElement & {
   clefChangeAtBoundary?: boolean;
   timeChangeAtBoundary?: boolean;
   keyChangeAtBoundary?: KeyChange | null;
+};
+
+// The state accessors and repeat properties the repeat-continuity pass reads
+// and sets on a staff; absent where a staff has no such concept.
+type RepeatStaff = HTMLElement & {
+  time: string;
+  effectiveStartClef?: ClefType | null;
+  effectiveEndClef?: ClefType | null;
+  clefAtBeat?: (beat: number) => ClefType | null;
+  effectiveKeySignature?: KeySignatureState;
+  describeReminder?: DescribeReminder | null;
+  markerWarnings?: ReadonlyMap<number, ClefType>;
 };
 
 // The ending accessors <music-measure> exposes, duck-typed like
@@ -602,10 +622,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.#redrawScheduled = false;
         this.#alignRowStaffSpace();
         this.#updateDescribeVisibility();
-        const courtesyClefs = this.#updateClefContinuity();
-        this.#updateTimeSignatureContinuity();
-        const courtesyKeys = this.#updateKeySignatureContinuity();
-        this.#assignEndWarnings(courtesyClefs, courtesyKeys);
+        const repeats = this.#resolveRepeatContinuity();
+        const courtesyClefs = this.#updateClefContinuity(repeats.held);
+        this.#updateTimeSignatureContinuity(repeats.held);
+        const courtesyKeys = this.#updateKeySignatureContinuity(repeats.held);
+        this.#assignEndWarnings(
+          courtesyClefs,
+          courtesyKeys,
+          repeats.endWarnings
+        );
         this.#updateBarlineJunctions();
         this.#validateRepeats();
         if (this.#updateEndings()) {
@@ -1035,12 +1060,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stems ??= collectStemRects(this, rootRect);
           return {
             marking: element.dynamic,
+            bracketed: element.dynamicReminder,
             centerX: dynamicTextCenterClearOfStems(
               this.#headCenterX(element, rootRect),
               element.dynamic,
               stems,
               gap,
-              awayDirection
+              awayDirection,
+              element.dynamicReminder
             ),
           };
         };
@@ -1090,7 +1117,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             for (const text of [segmentStartText, segmentEndText]) {
               if (text !== null) {
                 overlay.appendChild(
-                  createDynamicMarkingSvg(text.marking, text.centerX, centerY)
+                  createDynamicMarkingSvg(text.marking, text.centerX, centerY, {
+                    bracketed: text.bracketed,
+                  })
                 );
               }
             }
@@ -1691,7 +1720,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // effectiveEndClef). A differing pair sets clefChangeAtBoundary so the
     // incoming staff shows its clef; at a row wrap the outgoing staff warns of
     // the new clef. Returns those courtesy clefs by outgoing staff.
-    #updateClefContinuity(): Map<HTMLElement, ClefType> {
+    #updateClefContinuity(
+      held: ReadonlyMap<HTMLElement, ReadonlySet<Component>>
+    ): Map<HTMLElement, ClefType> {
       const courtesyClefs = new Map<HTMLElement, ClefType>();
       // Assigned once at the end: toggling a flag off and on within a pass
       // re-renders and reschedules a redraw forever.
@@ -1712,7 +1743,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (
           outgoingClef === null ||
           incomingClef === null ||
-          outgoingClef === incomingClef
+          outgoingClef === incomingClef ||
+          held.get(incoming)?.has('clef')
         ) {
           return;
         }
@@ -1735,7 +1767,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // the new key) mid-row; at a row wrap the outgoing staff warns of it and
     // the new row shows only the new key. Returns those courtesy keys by
     // outgoing staff.
-    #updateKeySignatureContinuity(): Map<HTMLElement, KeyChange> {
+    #updateKeySignatureContinuity(
+      held: ReadonlyMap<HTMLElement, ReadonlySet<Component>>
+    ): Map<HTMLElement, KeyChange> {
       const courtesyKeys = new Map<HTMLElement, KeyChange>();
       const changes = new Map<HTMLElement, KeyChange>();
       this.#forEachAdjacentStaffPair((outgoing, incoming, isRowWrap) => {
@@ -1746,7 +1780,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (from === undefined || to === undefined) {
           return;
         }
-        if (keySignatureEquals(from, to)) {
+        if (keySignatureEquals(from, to) || held.get(incoming)?.has('key')) {
           return;
         }
         changes.set(incoming, { from, to });
@@ -1765,7 +1799,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Each staff's end-of-measure warnings, assigned once.
     #assignEndWarnings(
       courtesyClefs: ReadonlyMap<HTMLElement, ClefType>,
-      courtesyKeys: ReadonlyMap<HTMLElement, KeyChange>
+      courtesyKeys: ReadonlyMap<HTMLElement, KeyChange>,
+      repeatWarnings: ReadonlyMap<HTMLElement, EndWarnings>
     ): void {
       this.querySelectorAll<KeyStaff>(STAFF_TAGS).forEach((staff) => {
         if (!('endWarnings' in staff)) {
@@ -1777,7 +1812,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           clef === null && key === null
             ? null
             : { clef, key, time: null, reservesWidth: false };
-        staff.endWarnings = mergeEndWarnings(courtesy, null);
+        staff.endWarnings = mergeEndWarnings(
+          courtesy,
+          repeatWarnings.get(staff) ?? null
+        );
       });
     }
 
@@ -1826,7 +1864,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // measure whose resolved time signature differs from the measure right
     // before it. Guitar tab draws no time signature, so only classical
     // staves are flagged.
-    #updateTimeSignatureContinuity() {
+    #updateTimeSignatureContinuity(
+      held: ReadonlyMap<HTMLElement, ReadonlySet<Component>>
+    ) {
       const measures = this.#computeMeasureRows().flat();
 
       // Computed first, assigned once at the end — see #updateClefContinuity
@@ -1850,7 +1890,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const outgoingStaff = outgoingStaves[staffIndex];
           const incomingStaff = incomingStaves[staffIndex];
 
-          if (outgoingStaff.time !== incomingStaff.time) {
+          if (
+            outgoingStaff.time !== incomingStaff.time &&
+            !held.get(incomingStaff)?.has('time')
+          ) {
             staffsNeedingTimeChangeFlag.add(incomingStaff);
           }
         }
@@ -1968,9 +2011,151 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     // A repeated section must hold whole bars, and every end repeat needs a
     // start to return to. Warns once per distinct message set.
-    #validateRepeats() {
-      const events: RepeatEvent[] = [];
+    // What each staff draws around the end repeats: the section's start state
+    // reinstated before :‖ (it doesn't depend on where rows wrap, so it
+    // reserves width), no change after it where the music continues in that
+    // state, and a bracketed reminder at a later ending's start. Runs before
+    // the adjacency continuity passes, which skip the components held here.
+    // Authoring the warnings by hand was rejected: rows reflow, and a bar
+    // can't know its section's start state locally.
+    #resolveRepeatContinuity(): {
+      endWarnings: Map<HTMLElement, EndWarnings>;
+      held: Map<HTMLElement, Set<Component>>;
+    } {
       const measures = this.#computeMeasureRows().flat();
+      const { events, groups } = this.#repeatEvents(measures);
+      const { spans } = resolveRepeatSpans(events);
+      const stavesOf = (index: number): RepeatStaff[] =>
+        index < 0 || index >= measures.length
+          ? []
+          : (Array.from(measures[index].children).filter((el) =>
+              isStaffNodeName(el.nodeName)
+            ) as RepeatStaff[]);
+      const stateOf = (
+        staff: RepeatStaff,
+        at: 'start' | 'end' | number
+      ): BoundaryState => ({
+        clef:
+          (at === 'start'
+            ? staff.effectiveStartClef
+            : at === 'end'
+            ? staff.effectiveEndClef
+            : staff.clefAtBeat?.(at)) ?? null,
+        key: staff.effectiveKeySignature ?? null,
+        time: staff.time as TimeSignature,
+      });
+
+      const endWarnings = new Map<HTMLElement, EndWarnings>();
+      const held = new Map<HTMLElement, Set<Component>>();
+      const reminders = new Map<HTMLElement, Set<Component>>();
+      const markerWarnings = new Map<HTMLElement, Map<number, ClefType>>();
+      const add = (
+        map: Map<HTMLElement, Set<Component>>,
+        staff: HTMLElement,
+        components: ReadonlySet<Component>
+      ) => {
+        if (components.size > 0) {
+          const set = map.get(staff) ?? new Set<Component>();
+          components.forEach((component) => set.add(component));
+          map.set(staff, set);
+        }
+      };
+
+      for (const { start, end } of spans) {
+        const endIndex = end.measureIndex;
+        const atBarEnd = end.beatInBar >= end.barCapacity - 1e-9;
+        const startIndex = start?.measureIndex ?? 0;
+        const startAt =
+          start === null || start.beatInBar <= 1e-9 ? 'start' : start.beatInBar;
+        const group = groups.find(
+          (candidate) => candidate.id === end.endingGroup
+        );
+        const endingIndex =
+          group?.endings.findIndex(
+            (ending) => ending.lastMeasure === endIndex
+          ) ?? -1;
+        const nextIsLaterEnding =
+          atBarEnd &&
+          group !== undefined &&
+          endingIndex !== -1 &&
+          group.endings[endingIndex + 1]?.firstMeasure === endIndex + 1;
+        const beforeIndex = (group?.endings[0].firstMeasure ?? 0) - 1;
+        stavesOf(endIndex).forEach((endStaff, k) => {
+          const startStaff = stavesOf(startIndex)[k];
+          if (startStaff === undefined) {
+            return;
+          }
+          const nextStaff = atBarEnd ? stavesOf(endIndex + 1)[k] : undefined;
+          const beforeStaff = stavesOf(beforeIndex)[k];
+          const endState = stateOf(endStaff, atBarEnd ? 'end' : end.beatInBar);
+          const display = resolveRepeatWarnings({
+            start: stateOf(startStaff, startAt),
+            end: endState,
+            next: nextStaff === undefined ? null : stateOf(nextStaff, 'start'),
+            nextIsLaterEnding,
+            beforeEndings: !nextIsLaterEnding
+              ? null
+              : beforeStaff === undefined
+              ? stateOf(stavesOf(beforeIndex + 1)[k] ?? endStaff, 'start')
+              : stateOf(beforeStaff, 'end'),
+          });
+          const { warnings } = display;
+          if (!atBarEnd) {
+            if (warnings.clef) {
+              const map = markerWarnings.get(endStaff) ?? new Map();
+              map.set(end.beatInBar, warnings.clef);
+              markerWarnings.set(endStaff, map);
+            }
+            return;
+          }
+          const key =
+            warnings.key && endState.key !== null
+              ? { from: endState.key, to: warnings.key }
+              : null;
+          if (warnings.clef || key !== null || warnings.time) {
+            endWarnings.set(endStaff, {
+              clef: warnings.clef ?? null,
+              key,
+              time: warnings.time ?? null,
+              reservesWidth: true,
+            });
+          }
+          if (nextStaff !== undefined) {
+            add(held, nextStaff, display.suppressAfter);
+            add(held, nextStaff, display.reminderAfter);
+            add(reminders, nextStaff, display.reminderAfter);
+          }
+        });
+      }
+
+      // Assigned once per pass, like the continuity flags.
+      this.querySelectorAll<RepeatStaff>(STAFF_TAGS).forEach((staff) => {
+        if ('describeReminder' in staff) {
+          const reminder = reminders.get(staff);
+          staff.describeReminder =
+            reminder === undefined
+              ? null
+              : {
+                  clef: reminder.has('clef'),
+                  key: reminder.has('key'),
+                  time: reminder.has('time'),
+                };
+        }
+        if ('markerWarnings' in staff) {
+          staff.markerWarnings = markerWarnings.get(staff) ?? new Map();
+        }
+      });
+      return { endWarnings, held };
+    }
+
+    // Every start and end repeat in the piece, from measure attributes and
+    // mid-bar barlines, with the ending group each end closes an ending of.
+    #repeatEvents(measures: readonly HTMLElement[]): {
+      events: RepeatEvent[];
+      groups: EndingGroup[];
+      endingWarnings: string[];
+    } {
+      const events: RepeatEvent[] = [];
       const endings = resolveEndings(this.#endingInputs(measures));
       const groupByMeasure = new Map<number, number>();
       for (const group of endings.groups) {
@@ -1980,11 +2165,6 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
         }
       }
-      const numberingWarnings = resolveEndingNumberLabels(
-        measures.length,
-        endings.groups,
-        this.#endingNumbering()
-      ).warnings;
       measures.forEach((measure, measureIndex) => {
         const staves = Array.from(measure.children).filter((el) =>
           isStaffNodeName(el.nodeName)
@@ -2023,11 +2203,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           events.push({ ...base, kind: 'end', beatInBar: barCapacity });
         }
       });
+      return {
+        events,
+        groups: endings.groups,
+        endingWarnings: endings.warnings,
+      };
+    }
+
+    #validateRepeats() {
+      const measures = this.#computeMeasureRows().flat();
+      const { events, groups, endingWarnings } = this.#repeatEvents(measures);
+      const numberingWarnings = resolveEndingNumberLabels(
+        measures.length,
+        groups,
+        this.#endingNumbering()
+      ).warnings;
       const { spans, warnings } = resolveRepeatSpans(events);
       const current = new Set(
         [
           ...warnings,
-          ...endings.warnings,
+          ...endingWarnings,
           ...numberingWarnings,
           ...spans
             .map(repeatPickupWarning)

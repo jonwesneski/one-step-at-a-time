@@ -6,6 +6,7 @@ import type { StaffElementType } from '../types/elements';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_BARLINE,
+  MUSIC_CLEF,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
@@ -568,5 +569,126 @@ describe(`${MUSIC_COMPOSITION} endings`, () => {
       measures[1].shadowRoot.querySelector('.endings-overlay .ending-label')
         ?.textContent
     ).toBe('1.');
+  });
+});
+
+describe(`${MUSIC_COMPOSITION} repeat warnings`, () => {
+  const note = (name: string, octave: number, duration: string) => () => {
+    const element = document.createElement(MUSIC_NOTE);
+    element.setAttribute('note', name);
+    element.setAttribute('octave', `${octave}`);
+    element.setAttribute('duration', duration);
+    return element;
+  };
+  const clef = (value: string) => () => {
+    const element = document.createElement(MUSIC_CLEF);
+    element.setAttribute('clef', value);
+    return element;
+  };
+  const barline = (type: string) => () => {
+    const element = document.createElement(MUSIC_BARLINE);
+    element.setAttribute('type', type);
+    return element;
+  };
+  const bars =
+    (...parts: (() => Element)[]) =>
+    () =>
+      parts.map((part) => part());
+
+  it('reinstates the section start before :‖ and draws no clef after it', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    addMeasure(
+      composition,
+      { 'repeat-start': '' },
+      bars(note('C', 3, 'half'), clef('treble'), note('G', 4, 'half')),
+      { clef: 'bass' }
+    );
+    const end = addMeasure(
+      composition,
+      { barline: 'repeat-end' },
+      bars(note('G', 4, 'whole')),
+      { clef: 'treble' }
+    );
+    const after = addMeasure(composition, {}, bars(note('C', 3, 'whole')), {
+      clef: 'bass',
+    });
+    await nextFrame();
+
+    expect(end.endWarnings).toEqual({
+      clef: 'bass',
+      key: null,
+      time: null,
+      reservesWidth: true,
+    });
+    expect(after.clefChangeAtBoundary).toBe(false);
+  });
+
+  it('brackets the state a later ending resumes in', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    composition.setAttribute('time', '4/4');
+    document.body.appendChild(composition);
+    addMeasure(
+      composition,
+      { 'repeat-start': '' },
+      bars(note('C', 3, 'whole')),
+      {
+        clef: 'bass',
+      }
+    );
+    const dotted = bars(note('A', 4, 'dotted-half'));
+    addMeasure(composition, { 'key-sig': 'D', time: '3/4' }, dotted, {
+      clef: 'treble',
+    });
+    const first = addMeasure(
+      composition,
+      { 'key-sig': 'D', time: '3/4', ending: '1', barline: 'repeat-end' },
+      dotted,
+      { clef: 'treble' }
+    );
+    const second = addMeasure(
+      composition,
+      { 'key-sig': 'D', time: '3/4', ending: '2' },
+      dotted,
+      { clef: 'treble' }
+    );
+    await nextFrame();
+
+    expect(first.endWarnings).toEqual({
+      clef: 'bass',
+      key: {
+        from: { keySig: 'D', mode: 'major' },
+        to: { keySig: 'C', mode: 'major' },
+      },
+      time: '4/4',
+      reservesWidth: true,
+    });
+    expect(second.describeReminder).toEqual({
+      clef: true,
+      key: true,
+      time: true,
+    });
+  });
+
+  it('warns of a clef before a mid-bar end repeat', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    addMeasure(
+      composition,
+      { 'repeat-start': '' },
+      bars(note('C', 3, 'whole')),
+      {
+        clef: 'bass',
+      }
+    );
+    const midBar = addMeasure(
+      composition,
+      {},
+      bars(note('G', 4, 'half'), barline('repeat-end'), note('G', 4, 'half')),
+      { clef: 'treble' }
+    );
+    await nextFrame();
+
+    expect([...midBar.markerWarnings]).toEqual([[1 / 2, 'bass']]);
   });
 });

@@ -350,6 +350,15 @@
             },
             {
               "kind": "field",
+              "name": "#noteAccidentalsParenthesized",
+              "privacy": "private",
+              "type": {
+                "text": "boolean[]"
+              },
+              "default": "[]"
+            },
+            {
+              "kind": "field",
               "name": "#resolvedGraceAccidentals",
               "privacy": "private",
               "type": {
@@ -489,6 +498,21 @@
             },
             {
               "kind": "field",
+              "name": "noteAccidentalsParenthesized",
+              "type": {
+                "text": "boolean[]"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "toneAccidentalReminders",
+              "type": {
+                "text": "boolean[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "tie",
               "type": {
                 "text": "TieValue | null"
@@ -532,6 +556,20 @@
             {
               "kind": "field",
               "name": "dynamicShared",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicReminder",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "accidentalReminder",
               "type": {
                 "text": "boolean"
               }
@@ -970,6 +1008,25 @@
             },
             {
               "kind": "field",
+              "name": "#warnedDynamicReminder",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutDynamicReminder",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "#lastDotMismatchWarning",
               "privacy": "private",
               "type": {
@@ -1159,6 +1216,20 @@
                 "text": "boolean"
               },
               "description": "Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement."
+            },
+            {
+              "name": "dynamic-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws `dynamic` in brackets, \"(f)\", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`."
+            },
+            {
+              "name": "accidental-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone."
             },
             {
               "name": "crescendo",
@@ -1962,7 +2033,15 @@
                 "type": {
                   "text": "Map<HTMLElement, ClefType>"
                 }
-              }
+              },
+              "parameters": [
+                {
+                  "name": "held",
+                  "type": {
+                    "text": "ReadonlyMap<HTMLElement, ReadonlySet<Component>>"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1972,7 +2051,15 @@
                 "type": {
                   "text": "Map<HTMLElement, KeyChange>"
                 }
-              }
+              },
+              "parameters": [
+                {
+                  "name": "held",
+                  "type": {
+                    "text": "ReadonlyMap<HTMLElement, ReadonlySet<Component>>"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -1994,6 +2081,12 @@
                   "name": "courtesyKeys",
                   "type": {
                     "text": "ReadonlyMap<HTMLElement, KeyChange>"
+                  }
+                },
+                {
+                  "name": "repeatWarnings",
+                  "type": {
+                    "text": "ReadonlyMap<HTMLElement, EndWarnings>"
                   }
                 }
               ]
@@ -2019,7 +2112,15 @@
             {
               "kind": "method",
               "name": "#updateTimeSignatureContinuity",
-              "privacy": "private"
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "held",
+                  "type": {
+                    "text": "ReadonlyMap<HTMLElement, ReadonlySet<Component>>"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -2041,6 +2142,34 @@
               "name": "#lastRepeatWarnings",
               "privacy": "private",
               "default": "new Set<string>()"
+            },
+            {
+              "kind": "method",
+              "name": "#resolveRepeatContinuity",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      endWarnings: Map<HTMLElement, EndWarnings>;\n      held: Map<HTMLElement, Set<Component>>;\n    }"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatEvents",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      events: RepeatEvent[];\n      groups: EndingGroup[];\n      endingWarnings: string[];\n    }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measures",
+                  "type": {
+                    "text": "readonly HTMLElement[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -3626,6 +3755,15 @@
             },
             {
               "kind": "field",
+              "name": "#accidentalParenthesized",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "field",
               "name": "#staffY",
               "privacy": "private",
               "type": {
@@ -3785,6 +3923,13 @@
             },
             {
               "kind": "field",
+              "name": "accidentalParenthesized",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
               "name": "staffY",
               "type": {
                 "text": "number | null"
@@ -3828,6 +3973,20 @@
             {
               "kind": "field",
               "name": "dynamicShared",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicReminder",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "accidentalReminder",
               "type": {
                 "text": "boolean"
               }
@@ -4257,6 +4416,25 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#warnedDynamicReminder",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutDynamicReminder",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutTremolo",
               "privacy": "private",
@@ -4310,6 +4488,12 @@
                   "name": "accidental",
                   "type": {
                     "text": "AccidentalType | undefined"
+                  }
+                },
+                {
+                  "name": "accidentalParenthesized",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ]
@@ -4428,6 +4612,20 @@
                 "text": "boolean"
               },
               "description": "Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement."
+            },
+            {
+              "name": "dynamic-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws `dynamic` in brackets, \"(f)\", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`."
+            },
+            {
+              "name": "accidental-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Shows the accidental already in force in parentheses, \"(♮)\", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly."
             },
             {
               "name": "crescendo",
@@ -5097,6 +5295,32 @@
             },
             {
               "kind": "field",
+              "name": "#describeReminder",
+              "privacy": "private",
+              "type": {
+                "text": "DescribeReminder | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#markerWarnings",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<number, ClefType>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#endWarnings",
               "privacy": "private",
               "type": {
@@ -5652,6 +5876,71 @@
             },
             {
               "kind": "field",
+              "name": "describeReminder",
+              "type": {
+                "text": "DescribeReminder | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "markerWarnings",
+              "type": {
+                "text": "ReadonlyMap<number, ClefType>"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markerWarningAt",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ClefType | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "beat",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "clefAtBeat",
+              "return": {
+                "type": {
+                  "text": "ClefType | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "beat",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "endWarnings",
               "type": {
                 "text": "EndWarnings | null"
@@ -5912,6 +6201,29 @@
               "kind": "method",
               "name": "#drawDescribeGlyphs",
               "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#appendDescribeSequence",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "left",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "items",
+                  "type": {
+                    "text": "readonly DescribeItem[]"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -6534,7 +6846,35 @@
                 {
                   "name": "slots",
                   "type": {
-                    "text": "readonly { left: number; type: BarlineType }[]"
+                    "text": "readonly {\n      left: number;\n      width: number;\n      type: BarlineType;\n      warning: ClefType | null;\n    }[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#courtesyClefSvg",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "SVGGElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clef",
+                  "type": {
+                    "text": "ClefType"
+                  }
+                },
+                {
+                  "name": "x",
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -10894,6 +11234,32 @@
             },
             {
               "kind": "field",
+              "name": "#describeReminder",
+              "privacy": "private",
+              "type": {
+                "text": "DescribeReminder | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#markerWarnings",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<number, ClefType>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#endWarnings",
               "privacy": "private",
               "type": {
@@ -11449,6 +11815,71 @@
             },
             {
               "kind": "field",
+              "name": "describeReminder",
+              "type": {
+                "text": "DescribeReminder | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "markerWarnings",
+              "type": {
+                "text": "ReadonlyMap<number, ClefType>"
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markerWarningAt",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ClefType | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "beat",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "clefAtBeat",
+              "return": {
+                "type": {
+                  "text": "ClefType | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "beat",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "endWarnings",
               "type": {
                 "text": "EndWarnings | null"
@@ -11709,6 +12140,29 @@
               "kind": "method",
               "name": "#drawDescribeGlyphs",
               "privacy": "private",
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#appendDescribeSequence",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "left",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "items",
+                  "type": {
+                    "text": "readonly DescribeItem[]"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
@@ -12331,7 +12785,35 @@
                 {
                   "name": "slots",
                   "type": {
-                    "text": "readonly { left: number; type: BarlineType }[]"
+                    "text": "readonly {\n      left: number;\n      width: number;\n      type: BarlineType;\n      warning: ClefType | null;\n    }[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#courtesyClefSvg",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "SVGGElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clef",
+                  "type": {
+                    "text": "ClefType"
+                  }
+                },
+                {
+                  "name": "x",
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],

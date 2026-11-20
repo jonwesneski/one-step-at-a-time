@@ -1,4 +1,5 @@
 import {
+  accidentalSymbolWidth,
   computeInterNoteSpacing,
   computeNoteAccidentals,
   parseAccidentalSuffix,
@@ -68,6 +69,11 @@ import {
   resolveOctaveSpans,
   splitOctaveSpanIntoRuns,
 } from './rules/octaveRules';
+import {
+  type Component,
+  type DescribeReminder,
+  describeReminderEquals,
+} from './rules/repeatWarningRules';
 import { restToYCoordinate } from './rules/restRules';
 import {
   computeMeasureProportionalOffsets,
@@ -202,6 +208,7 @@ import {
   createOctaveLocoLabelSvg,
   createOctaveSignSvg,
   createOrnamentConnectorSlur,
+  createParenthesisSvg,
   createSempreArpeggiandoText,
   createSharpSvg,
   createStartRepeatSvg,
@@ -266,6 +273,7 @@ import {
   KEY_SIG_SHARP_WIDTH,
   LEADING_NOTE_GAP_PX,
   MID_BAR_BARLINE_PADDING_PX,
+  MID_BAR_WARNING_CLEF_WIDTH_PX,
   MID_STREAM_CLEF_SVG_HEIGHT_PX,
   MID_STREAM_CLEF_WIDTH_PX,
   MID_STREAM_CLEF_Y_OFFSET,
@@ -280,6 +288,9 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  REMINDER_PAREN_GAP_PX,
+  REMINDER_PAREN_OVERHANG_PX,
+  REMINDER_PAREN_WIDTH_PX,
   REPEAT_START_LEAD_PX,
   REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
@@ -320,7 +331,6 @@ import {
 } from './utils/svgCreator/chord';
 import {
   ACCIDENTAL_NOTE_GAP,
-  ACCIDENTAL_SYMBOL_WIDTH,
   flagStemExtensionPx,
   NOTE_SCALE,
   NOTE_SVG_WIDTH,
@@ -618,6 +628,8 @@ function reindexArpeggioGroups(
 }
 
 type ClefMarker = Extract<StreamMarkerPlacement, { kind: 'clef' }>;
+// One part of a mid-row describe area: a change, or a bracketed reminder.
+type DescribeItem = { component: Component; bracketed: boolean };
 type MarkerSlot = {
   marker: MarkerBeat;
   /** Index into the measure-wide marker list. */
@@ -653,6 +665,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   #clefChangeAtBoundary = false;
   #timeChangeAtBoundary = false;
   #keyChangeAtBoundary: KeyChange | null = null;
+  #describeReminder: DescribeReminder | null = null;
+  // Beat of each mid-bar end repeat → the clef to reinstate before it.
+  #markerWarnings: ReadonlyMap<number, ClefType> = new Map();
   #endWarnings: EndWarnings | null = null;
   #endWarningsContainer: SVGGElement;
   #crossStaffBeamStemOverrides: ReadonlyMap<
@@ -893,6 +908,63 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     this.#keyChangeAtBoundary = value;
     this.#refreshDescribe();
+  }
+
+  // Set by composition.ts on a later ending's first bar: the clef/key/time
+  // the music resumes in, drawn in brackets as a reminder.
+  get describeReminder(): DescribeReminder | null {
+    return this.#describeReminder;
+  }
+
+  set describeReminder(value: DescribeReminder | null) {
+    const next =
+      value !== null && (value.clef || value.key || value.time)
+        ? { ...value }
+        : null;
+    if (describeReminderEquals(this.#describeReminder, next)) {
+      return;
+    }
+    this.#describeReminder = next;
+    this.#refreshDescribe();
+  }
+
+  // Set by composition.ts: the clef reinstated before each mid-bar end
+  // repeat, by the barline's beat.
+  get markerWarnings(): ReadonlyMap<number, ClefType> {
+    return this.#markerWarnings;
+  }
+
+  set markerWarnings(value: ReadonlyMap<number, ClefType>) {
+    const current = this.#markerWarnings;
+    const unchanged =
+      current.size === value.size &&
+      [...value].every(([beat, clef]) =>
+        [...current].some(
+          ([other, otherClef]) =>
+            Math.abs(other - beat) <= MARKER_BEAT_EPSILON && otherClef === clef
+        )
+      );
+    if (unchanged) {
+      return;
+    }
+    this.#markerWarnings = new Map(value);
+    if (this.#voices.size > 0) {
+      this.#renderNotes();
+    }
+  }
+
+  #markerWarningAt(beat: number): ClefType | null {
+    for (const [other, clef] of this.#markerWarnings) {
+      if (Math.abs(other - beat) <= MARKER_BEAT_EPSILON) {
+        return clef;
+      }
+    }
+    return null;
+  }
+
+  // The clef in force at `beat` of this bar (a whole-note fraction).
+  clefAtBeat(beat: number): ClefType | null {
+    return this.#activeClefAt(beat) ?? this.ownClef;
   }
 
   // The clef, key and time this staff warns of before its end barline, set
@@ -1403,16 +1475,49 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   // At a row start: clef, key, time. Mid-row: a changed clef, then a key
   // change's naturals and new key, then a changed time signature.
   #drawDescribeGlyphs() {
-    const showClef = this.#showDescribe || this.#clefChangeAtBoundary;
+    const reminder = this.#describeReminder;
+    if (this.#showDescribe) {
+      this.#describeContainer.innerHTML = this.clefSvg;
+      const keyEnd = this.#appendKeySignatureSvg(
+        this.#describeContainer,
+        CLEF_X_OFFSET
+      );
+      if (reminder?.time) {
+        // The key's glyphs end CLEF_X_OFFSET past the offset it returns (see
+        // #appendKeySignatureSvg); a row start shows the clef and key anyway.
+        this.#appendDescribeSequence(keyEnd + CLEF_X_OFFSET, [
+          { component: 'time', bracketed: true },
+        ]);
+      } else {
+        this.#appendTimeSignatureSvgIfNecessary(
+          this.#describeContainer,
+          keyEnd + 5
+        );
+      }
+      return;
+    }
+    if (reminder !== null) {
+      this.#describeContainer.innerHTML = '';
+      const items: DescribeItem[] = [];
+      if (reminder.clef || this.#clefChangeAtBoundary) {
+        items.push({ component: 'clef', bracketed: reminder.clef });
+      }
+      if (reminder.key || this.#keyChangeAtBoundary !== null) {
+        items.push({ component: 'key', bracketed: reminder.key });
+      }
+      if (reminder.time || this.#timeChangeAtBoundary) {
+        items.push({ component: 'time', bracketed: reminder.time });
+      }
+      this.#appendDescribeSequence(END_WARNING_GAP_PX, items);
+      return;
+    }
+    const showClef = this.#clefChangeAtBoundary;
     this.#describeContainer.innerHTML = showClef ? this.clefSvg : '';
-    const keyChange = this.#showDescribe ? null : this.#keyChangeAtBoundary;
+    const keyChange = this.#keyChangeAtBoundary;
     if (keyChange === null) {
-      const xOffsetOfKeySignature = this.#showDescribe
-        ? this.#appendKeySignatureSvg(this.#describeContainer, CLEF_X_OFFSET)
-        : CLEF_X_OFFSET;
       this.#appendTimeSignatureSvgIfNecessary(
         this.#describeContainer,
-        xOffsetOfKeySignature + 5
+        CLEF_X_OFFSET + 5
       );
       return;
     }
@@ -1432,6 +1537,69 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         )
       );
     }
+  }
+
+  // Clef, key and time from `left`, the bracketed ones inside one pair of
+  // parentheses. A bracketed key is a reminder, so it has no naturals.
+  #appendDescribeSequence(left: number, items: readonly DescribeItem[]) {
+    const container = this.#describeContainer;
+    const firstBracketed = items.findIndex((item) => item.bracketed);
+    const lastBracketed = items.map((item) => item.bracketed).lastIndexOf(true);
+    const parenTop = STAFF_LINE_START - REMINDER_PAREN_OVERHANG_PX;
+    const parenHeight =
+      (this.staffLineCount - 1) * STAFF_LINE_SPACING +
+      REMINDER_PAREN_OVERHANG_PX * 2;
+    let x = left;
+    items.forEach((item, i) => {
+      if (i === firstBracketed) {
+        container.appendChild(
+          createParenthesisSvg(
+            'open',
+            x,
+            parenTop,
+            REMINDER_PAREN_WIDTH_PX,
+            parenHeight
+          )
+        );
+        x += REMINDER_PAREN_WIDTH_PX + REMINDER_PAREN_GAP_PX;
+      }
+      if (item.component === 'clef') {
+        const clef = document.createElementNS(SVG_NS, 'g');
+        clef.setAttribute('transform', `translate(${x}, 0)`);
+        clef.innerHTML = this.clefSvg;
+        container.appendChild(clef);
+        x += CLEF_X_OFFSET * 2;
+      } else if (item.component === 'key') {
+        const state = this.effectiveKeySignature;
+        const change =
+          item.bracketed || this.#keyChangeAtBoundary === null
+            ? { from: state, to: state }
+            : this.#keyChangeAtBoundary;
+        x = this.#appendKeyChangeSvg(container, x, change, null);
+      } else {
+        const [beats, beatType] = this.effectiveTimeSig;
+        container.appendChild(
+          this.#timeSignatureSvgAt(x, this.effectiveTimeSig)
+        );
+        x += timeSignatureWidth(`${beats}/${beatType}` as TimeSignature);
+      }
+      if (i === lastBracketed) {
+        x += REMINDER_PAREN_GAP_PX;
+        container.appendChild(
+          createParenthesisSvg(
+            'close',
+            x,
+            parenTop,
+            REMINDER_PAREN_WIDTH_PX,
+            parenHeight
+          )
+        );
+        x += REMINDER_PAREN_WIDTH_PX;
+      }
+      if (item.component !== 'clef' && i < items.length - 1) {
+        x += END_WARNING_GAP_PX;
+      }
+    });
   }
 
   #refreshDescribe() {
@@ -2112,6 +2280,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           noteElement.noFlags = isBeamed;
           noteElement.showAccidental =
             accidentals.noteShowAccidentals.get(noteElement);
+          noteElement.accidentalParenthesized =
+            accidentals.parenthesizedAccidentals.has(noteElement);
           noteElement.staffY = staffY;
           noteElement.nominalStaffY = triangle
             ? this.#noteToYCoordinateAtBeatOffset(
@@ -2150,6 +2320,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           chordElement.noFlags = isBeamed;
           chordElement.staffYCoordinates = staffYCoordinates;
           chordElement.noteAccidentals = chordAccidentals;
+          chordElement.noteAccidentalsParenthesized =
+            accidentals.chordParenthesizedAccidentals.get(chordElement) ?? [];
           chordElement.resolvedGraceAccidentals =
             accidentals.graceShowAccidentals.get(chordElement) ?? null;
           chordElement.resolvedTrillFinishAccidentals =
@@ -2646,22 +2818,48 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   // Each marker's voice-1 `afterElementIndex` as a beat-offset, in stream
   // order, with the room it takes.
+  // Its own markers, and any other staff's barline it warns of a clef
+  // before, so every staff makes room for the warning.
   override get ownMarkerBeats(): readonly MarkerBeat[] {
-    return this.#streamMarkers.map((marker) =>
-      marker.kind === 'clef'
+    const warningWidth = (beat: number) =>
+      this.#markerWarningAt(beat) === null ? 0 : MID_BAR_WARNING_CLEF_WIDTH_PX;
+    const own: MarkerBeat[] = this.#streamMarkers.map((marker) => {
+      const beat = this.#markerBeatOffset(marker);
+      return marker.kind === 'clef'
         ? {
-            beat: this.#markerBeatOffset(marker),
+            beat,
             kind: 'clef',
             width: CLEF_CHANGE_RESERVED_WIDTH_PX,
             barlineType: null,
           }
         : {
-            beat: this.#markerBeatOffset(marker),
+            beat,
             kind: 'barline',
-            width: midBarBarlineSlotWidth(marker.element.type),
+            width:
+              midBarBarlineSlotWidth(marker.element.type) + warningWidth(beat),
             barlineType: marker.element.type,
-          }
-    );
+          };
+    });
+    for (const marker of this.measureMarkerBeats) {
+      if (
+        marker.kind === 'barline' &&
+        marker.barlineType !== null &&
+        warningWidth(marker.beat) > 0 &&
+        !own.some(
+          (mine) =>
+            mine.kind === 'barline' &&
+            Math.abs(mine.beat - marker.beat) <= MARKER_BEAT_EPSILON
+        )
+      ) {
+        own.push({
+          ...marker,
+          width:
+            midBarBarlineSlotWidth(marker.barlineType) +
+            MID_BAR_WARNING_CLEF_WIDTH_PX,
+        });
+      }
+    }
+    return own;
   }
 
   override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
@@ -2712,20 +2910,53 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return slots;
   }
 
-  // Each mid-bar barline glyph, centred in its slot.
-  #drawMidBarBarlines(slots: readonly { left: number; type: BarlineType }[]) {
+  // Each mid-bar barline glyph at the right of its slot, so it lines up
+  // across staves whichever of them warn of a clef before it, and any
+  // warning clef at the slot's left.
+  #drawMidBarBarlines(
+    slots: readonly {
+      left: number;
+      width: number;
+      type: BarlineType;
+      warning: ClefType | null;
+    }[]
+  ) {
     if (this.#midBarBarlinesContainer.parentNode !== this.transcribeContainer) {
       this.transcribeContainer.appendChild(this.#midBarBarlinesContainer);
     }
     this.#midBarBarlinesContainer.replaceChildren(
-      ...slots.map(({ left, type }) =>
-        createBarlineSvg(
-          type,
-          this.staffLineCount,
-          left + MID_BAR_BARLINE_PADDING_PX
-        )
-      )
+      ...slots.flatMap(({ left, width, type, warning }) => {
+        const glyphs: SVGElement[] = [
+          createBarlineSvg(
+            type,
+            this.staffLineCount,
+            left + width - MID_BAR_BARLINE_PADDING_PX - barlineGlyphWidth(type)
+          ),
+        ];
+        if (warning !== null) {
+          glyphs.push(
+            this.#courtesyClefSvg(warning, left + MID_BAR_BARLINE_PADDING_PX)
+          );
+        }
+        return glyphs;
+      })
     );
+  }
+
+  // A clef at COURTESY_CLEF_SCALE from `x`, scaled about the line it marks
+  // so it still marks it.
+  #courtesyClefSvg(clef: ClefType, x: number): SVGGElement {
+    const pivotY =
+      STAFF_LINE_START +
+      STAFF_LINE_SPACING * CLEF_DEFINITIONS[clef].referenceLineIndex;
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.classList.add('courtesy-clef');
+    group.setAttribute(
+      'transform',
+      `translate(${x}, ${pivotY}) scale(${COURTESY_CLEF_SCALE}) translate(0, ${-pivotY})`
+    );
+    group.innerHTML = getClefRenderData(clef).clefSvg;
+    return group;
   }
 
   // Draws the end-of-measure warnings right to left from `rightEdge`: time,
@@ -2762,18 +2993,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     if (warnings.clef !== null) {
       x -= COURTESY_CLEF_WIDTH_PX;
-      // Scaled about the line the clef marks, so it still marks it.
-      const pivotY =
-        STAFF_LINE_START +
-        STAFF_LINE_SPACING * CLEF_DEFINITIONS[warnings.clef].referenceLineIndex;
-      const clefGroup = document.createElementNS(SVG_NS, 'g');
-      clefGroup.classList.add('courtesy-clef');
-      clefGroup.setAttribute(
-        'transform',
-        `translate(${x}, ${pivotY}) scale(${COURTESY_CLEF_SCALE}) translate(0, ${-pivotY})`
+      this.#endWarningsContainer.appendChild(
+        this.#courtesyClefSvg(warnings.clef, x)
       );
-      clefGroup.innerHTML = getClefRenderData(warnings.clef).clefSvg;
-      this.#endWarningsContainer.appendChild(clefGroup);
     }
   }
 
@@ -3340,9 +3562,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (includeAccidental) {
       if (el.nodeName === MUSIC_NOTE_NODE) {
-        const accidental = (el as NoteElementType).showAccidental;
+        const note = el as NoteElementType;
+        const accidental = note.showAccidental;
         if (accidental) {
-          extent += ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP;
+          extent +=
+            accidentalSymbolWidth(accidental, note.accidentalParenthesized) +
+            ACCIDENTAL_NOTE_GAP;
         }
       } else {
         const chord = el as ChordElementType;
@@ -3352,7 +3577,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         ) {
           extent += totalChordAccidentalWidth(
             chord.noteAccidentals,
-            chord.staffYCoordinates
+            chord.staffYCoordinates,
+            chord.noteAccidentalsParenthesized
           );
         }
       }
@@ -3756,7 +3982,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         )
     );
     const clefObstacles: BeamObstacle[] = [];
-    const barlineSlots: { left: number; type: BarlineType }[] = [];
+    const barlineSlots: {
+      left: number;
+      width: number;
+      type: BarlineType;
+      warning: ClefType | null;
+    }[] = [];
     slots.forEach((slot, k) => {
       if (slot.clef !== null) {
         const element = slot.clef.element;
@@ -3769,7 +4000,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (slot.marker.kind === 'barline' && slot.marker.barlineType !== null) {
         barlineSlots.push({
           left: slotLefts[k],
+          width: slot.marker.width,
           type: slot.marker.barlineType,
+          warning: this.#markerWarningAt(slot.marker.beat),
         });
       }
     });
@@ -4422,7 +4655,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           createDynamicMarkingSvg(
             noteOrChord.dynamic,
             centerX,
-            baselineFor(markingSide)
+            baselineFor(markingSide),
+            { bracketed: noteOrChord.dynamicReminder }
           )
         );
       }

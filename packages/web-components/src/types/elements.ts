@@ -140,6 +140,10 @@ export interface INoteElement {
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
+  /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
+  dynamicReminder: boolean;
+  /** Shows the accidental in force in parentheses, as a reminder. */
+  accidentalReminder: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -265,6 +269,8 @@ export interface INoteElement {
   // AccidentalType = show this symbol (set by staff)
   // null = suppress (key sig or in-measure state covers it)
   showAccidental: AccidentalType | null | undefined;
+  /** Set by the staff: the shown accidental is a reminder, in parentheses. */
+  accidentalParenthesized: boolean;
   // Set by the staff to enable ledger line rendering. null in standalone mode.
   staffY: number | null;
   // Where the nominal pitch would sit when the head is drawn elsewhere (an
@@ -320,6 +326,10 @@ export interface IChordElement {
   augmentationDotRows: number[] | null;
   staffYCoordinates: number[] | null;
   noteAccidentals: (AccidentalType | null | undefined)[];
+  /** Set by the staff: per tone, the shown accidental is a reminder. */
+  noteAccidentalsParenthesized: boolean[];
+  /** Per tone: the chord's `accidental-reminder`, or the tone's own. */
+  readonly toneAccidentalReminders: boolean[];
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -335,6 +345,10 @@ export interface IChordElement {
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
+  /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
+  dynamicReminder: boolean;
+  /** Shows the accidental in force in parentheses, as a reminder. */
+  accidentalReminder: boolean;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.

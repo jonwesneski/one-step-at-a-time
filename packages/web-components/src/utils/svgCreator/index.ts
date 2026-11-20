@@ -120,3 +120,5 @@ export {
 } from './trill';
 export { createTupletBracketSvg, createTupletNumeralText } from './tuplet';
 export { createUnisonBracketSvg } from './unison';
+
+export { createParenthesisSvg } from './parenthesis';

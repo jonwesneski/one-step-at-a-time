@@ -98,6 +98,14 @@ describe('mergeMarkerBeats', () => {
     ).toEqual(['barline', 'clef']);
   });
 
+  it('makes room for the widest slot on a beat', () => {
+    const [merged] = mergeMarkerBeats(
+      [barline(1 / 2, 'repeat-end', 20)],
+      [barline(1 / 2, 'repeat-end', 45)]
+    );
+    expect(merged.width).toBe(45);
+  });
+
   it("keeps the first list's barline design", () => {
     const [merged] = mergeMarkerBeats(
       [barline(1 / 2, 'repeat-end')],

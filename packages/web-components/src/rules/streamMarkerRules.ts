@@ -82,8 +82,12 @@ export function mergeMarkerBeats(
 ): MarkerBeat[] {
   const merged: MarkerBeat[] = [];
   for (const marker of lists.flat()) {
-    if (!merged.some((existing) => sameSlot(existing, marker))) {
+    const index = merged.findIndex((existing) => sameSlot(existing, marker));
+    if (index === -1) {
       merged.push(marker);
+    } else if (marker.width > merged[index].width) {
+      // One staff's slot may hold a warning clef too; every staff makes room.
+      merged[index] = { ...merged[index], width: marker.width };
     }
   }
   // Array#sort is stable, so same-beat markers keep their insertion order.
