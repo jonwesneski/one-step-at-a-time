@@ -53,6 +53,8 @@ function buildStructure(): CompositionStructure {
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }
@@ -138,6 +140,8 @@ describe('tupletCandidate', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     expect(tupletCandidate(sel(['e2', 'e3']), structure)).toBeNull();
@@ -230,6 +234,8 @@ describe('cross-staff tuplets', () => {
       connectorOrder: [],
       tupletsById: {},
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
     };
   }
   const both: Selection = {

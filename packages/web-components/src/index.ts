@@ -15,6 +15,18 @@ import './guitarNote';
 import './note';
 import './rest';
 
+export { repeatPickupWarning, resolveRepeatSpans } from './rules/barlineRules';
+export type { RepeatEvent, RepeatSpan } from './rules/barlineRules';
+export {
+  endingNumeralLabel,
+  resolveEndingNumberLabels,
+  resolveEndings,
+} from './rules/endingRules';
+export type {
+  Ending,
+  EndingGroup,
+  EndingMeasureInput,
+} from './rules/endingRules';
 export {
   durationToBase,
   durationToDotCount,
@@ -38,6 +50,8 @@ export * from './types/theory';
  * build pickers/controls without importing from deep paths.
  */
 export {
+  ACCIDENTAL_TYPES,
+  ARPEGGIO_UNMATCHED_MODES,
   ARPEGGIOS,
   ARTICULATIONS,
   BARLINE_TYPES,
@@ -46,10 +60,12 @@ export {
   DURATIONS,
   DYNAMICS,
   ENDING_NUMBERINGS,
+  GLISSANDO_HINTS,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
   MEASURE_END_BARLINES,
+  MEASURE_NUMBER_DISPLAYS,
   MODES,
   NOTEHEADS,
   NOTES,
@@ -63,12 +79,16 @@ export {
   STEM_DIRECTIONS,
   STRESSES,
   TIE_STYLES,
+  TIE_VALUES,
   TIMES,
   TREMOLO_BEAM_ATTACHES,
   TREMOLO_BEAM_POSITIONS,
   TREMOLO_LABELS,
   TREMOLO_STROKE_COUNTS,
   TREMOLO_VALUES,
+  TRILL_CONTINUATION_MODES,
+  TRILL_FINISH_SLURS,
+  TRILL_LINE_MODES,
   TUPLET_PLACEMENTS,
   TUPLET_RATIOS,
   VOICES,

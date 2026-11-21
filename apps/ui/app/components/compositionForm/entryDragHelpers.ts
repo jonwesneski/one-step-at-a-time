@@ -1,8 +1,5 @@
-import type {
-  ClefType,
-  Note,
-  Octave,
-} from '@one-step-at-a-time/web-components';
+import type { Note, Octave } from '@one-step-at-a-time/web-components';
+import type { StaffRangeKey } from './clefsHelpers';
 import { CLEF_RANGES, step, stepToPitch } from './clefsHelpers';
 
 // Geometry for dragging notes in the composition editor. Pure and colocated with
@@ -40,7 +37,7 @@ export function isNoteheadPath(path: EventTarget[]): boolean {
 export function pitchAfterVerticalDrag(params: {
   value: Note;
   octave: Octave;
-  clef: ClefType;
+  clef: StaffRangeKey;
   deltaY: number;
   occupiedSteps?: number[];
 }): { value: Note; octave: Octave } {

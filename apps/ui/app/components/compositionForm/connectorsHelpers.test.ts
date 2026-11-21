@@ -3,10 +3,13 @@ import {
   canTie,
   connectorBetween,
   isConnectableSelection,
+  isTieEndpoint,
   pruneBrokenTies,
   pruneConnectorsForEntries,
+  pruneLaissezVibrerOnTies,
   removeConnector,
   resolveConnectorAttributes,
+  setConnectorOptions,
   upsertConnector,
 } from './connectorsHelpers';
 import { flattenEntryOrder } from './entryLocationHelpers';
@@ -41,6 +44,8 @@ function buildStructure(): CompositionStructure {
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }
@@ -118,6 +123,8 @@ describe('isConnectableSelection', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     expect(
@@ -230,6 +237,8 @@ describe('canTie', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     // e1 is voice 1's last note; e4 is voice 2's first note in the next
@@ -512,5 +521,74 @@ describe('pruneConnectorsForEntries', () => {
   it('is a no-op for an empty set', () => {
     const structure = upsertConnector(buildStructure(), 'e1', 'e2', 'slur');
     expect(pruneConnectorsForEntries(structure, new Set())).toBe(structure);
+  });
+});
+
+describe('glissando', () => {
+  it('sits alongside a slur on the same pair instead of replacing it', () => {
+    let s = upsertConnector(buildStructure(), 'e1', 'e4', 'slur');
+    s = upsertConnector(s, 'e1', 'e4', 'glissando');
+    expect(connectorBetween(s, 'e1', 'e4', ['slur'])).not.toBeNull();
+    expect(connectorBetween(s, 'e1', 'e4', ['glissando'])).not.toBeNull();
+  });
+
+  it('writes its roles and hint on the endpoints', () => {
+    let s = upsertConnector(buildStructure(), 'e3', 'e4', 'glissando');
+    const glissando = connectorBetween(s, 'e3', 'e4', ['glissando'])!;
+    s = setConnectorOptions(s, glissando.id, { hint: 'white-key' });
+    const attrs = resolveConnectorAttributes(s);
+    expect(attrs.get('e3')).toMatchObject({
+      glissando: 'start',
+      'glissando-hint': 'white-key',
+    });
+    expect(attrs.get('e4')).toMatchObject({ glissando: 'end' });
+  });
+});
+
+describe('tie style', () => {
+  it('writes tie-style on the tie start', () => {
+    let s = upsertConnector(buildStructure(), 'e1', 'e2', 'tie');
+    const tie = connectorBetween(s, 'e1', 'e2', ['tie'])!;
+    s = setConnectorOptions(s, tie.id, { style: 'dotted' });
+    expect(resolveConnectorAttributes(s).get('e1')).toMatchObject({
+      tie: 'start',
+      'tie-style': 'dotted',
+    });
+  });
+
+  it('returns the same structure when the option is unchanged', () => {
+    const s = upsertConnector(buildStructure(), 'e1', 'e2', 'tie');
+    const tie = connectorBetween(s, 'e1', 'e2', ['tie'])!;
+    expect(setConnectorOptions(s, tie.id, { style: null })).toBe(s);
+  });
+});
+
+describe('laissez-vibrer', () => {
+  const withRing = (id: string): CompositionStructure => {
+    const s = buildStructure();
+    s.entriesById[id] = {
+      ...(s.entriesById[id] as {
+        type: 'note';
+      } & (typeof s.entriesById)[string]),
+      laissezVibrer: {},
+    } as CompositionStructure['entriesById'][string];
+    return s;
+  };
+
+  it('blocks a tie into or out of a ringing note', () => {
+    expect(
+      canTie(withRing('e2'), { startEntryId: 'e1', endEntryId: 'e2' })
+    ).toBe(false);
+    expect(
+      canTie(withRing('e1'), { startEntryId: 'e1', endEntryId: 'e2' })
+    ).toBe(false);
+  });
+
+  it('is dropped from an entry that becomes a tie endpoint', () => {
+    const s = upsertConnector(withRing('e1'), 'e1', 'e2', 'tie');
+    expect(isTieEndpoint(s, 'e1')).toBe(true);
+    expect(pruneLaissezVibrerOnTies(s).entriesById.e1).toMatchObject({
+      laissezVibrer: null,
+    });
   });
 });

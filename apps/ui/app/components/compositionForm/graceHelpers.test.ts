@@ -44,4 +44,12 @@ describe('serializeGrace', () => {
     expect(attrs['grace-slur']).toBe('none');
     expect(attrs['grace-dynamic']).toBeUndefined();
   });
+
+  it('aligns noteheads by index', () => {
+    const attrs = serializeGrace({
+      notes: ['C', 'D', 'E'],
+      noteheads: [null, 'x', null],
+    });
+    expect(attrs['grace-notehead']).toBe(',x');
+  });
 });

@@ -1,15 +1,22 @@
 import '@one-step-at-a-time/web-components';
 import { useFormContext } from 'react-hook-form';
+import { ArpeggioInput } from './ArpeggioInput';
+import { ArpeggioRunInput } from './ArpeggioRunInput';
+import { arpeggioCandidate } from './arpeggiosHelpers';
+import { BarlineEntryInput } from './BarlineEntryInput';
 import { beamGroupCandidate } from './beamGroupHelpers';
 import { ClefEntryInput } from './ClefEntryInput';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
 import { ConnectorInput } from './ConnectorInput';
-import { isConnectableSelection } from './connectorsHelpers';
+import { isConnectableSelection, isTieEndpoint } from './connectorsHelpers';
+import { crossStaffArpeggioCandidate } from './crossStaffArpeggioHelpers';
+import { CrossStaffArpeggioInput } from './CrossStaffArpeggioInput';
 import { CrossStaffBeamInput } from './CrossStaffBeamInput';
 import { canShareDynamic, sharedStemCandidate } from './crossStaffHelpers';
 import { DockedTabPanel } from './DockedTabPanel';
 import { EntryEditInput } from './EntryEditInput';
 import { GraceInput } from './GraceInput';
+import { GuitarNoteEditInput } from './GuitarNoteInput';
 import { MeasureBasicInput } from './MeasureBasicInput';
 import {
   availableForDuration,
@@ -17,6 +24,7 @@ import {
   remainingDuration,
   staffOfEntryId,
 } from './measureCapacityHelpers';
+import { NoteheadInput } from './NoteheadInput';
 import { isOctaveSpanMember, octaveSpanCandidate } from './octaveHelpers';
 import { OctaveInput } from './OctaveInput';
 import {
@@ -25,9 +33,17 @@ import {
   selectedPhraseSlurId,
 } from './phraseSlurHelpers';
 import { PhraseSlurInput } from './PhraseSlurInput';
+import { RepeatInput } from './RepeatInput';
 import { SharedStemInput } from './SharedStemInput';
 import { StaffGroupInput } from './StaffGroupInput';
 import { StaffInput } from './StaffInput';
+import { CrossStaffTremoloInput, TremoloGroupInput } from './TremoloGroupInput';
+import { TremoloInput } from './TremoloInput';
+import {
+  crossStaffTremoloCandidate,
+  tremoloCandidate,
+} from './tremolosHelpers';
+import { TrillInput } from './TrillInput';
 import { TupletInput } from './TupletInput';
 import { crossStaffTupletCandidate, tupletCandidate } from './tupletsHelpers';
 import type { CompositionFormValues } from './types';
@@ -63,7 +79,7 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
             (id) => structure.entriesById[id]
           ),
           timeSignature,
-          structure.tupletsById
+          structure
         ) < -1e-9
     );
   });
@@ -122,6 +138,12 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
     session.selection,
     structure
   );
+  const tremoloTarget = tremoloCandidate(session.selection, structure);
+  const crossStaffTremoloTarget = crossStaffTremoloCandidate(
+    session.selection,
+    structure
+  );
+  const arpeggioTarget = arpeggioCandidate(session.selection, structure);
   const showTuplet =
     (tupletTarget !== null &&
       measure.staffIds.includes(tupletTarget.staffId)) ||
@@ -166,6 +188,13 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
   const sharedStemPair = sharedStemCandidate(session.selection, structure);
   const showSharedStem = sharedStemPair?.measureId === measureId;
 
+  const crossStaffArpeggioPair = crossStaffArpeggioCandidate(
+    session.selection,
+    structure
+  );
+  const showCrossStaffArpeggio =
+    crossStaffArpeggioPair?.measureId === measureId;
+
   const tabs = [];
   if (isMeasureSelected) {
     tabs.push({
@@ -176,6 +205,16 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           measure={measure}
           timeSignature={timeSignature}
           isFirstMeasure={structure.measureOrder[0] === measureId}
+        />
+      ),
+    });
+    tabs.push({
+      label: 'Repeats',
+      content: (
+        <RepeatInput
+          measureId={measureId}
+          measure={measure}
+          structure={structure}
         />
       ),
     });
@@ -210,6 +249,17 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
       ),
     });
   }
+  if (showCrossStaffArpeggio && crossStaffArpeggioPair) {
+    tabs.push({
+      label: 'Cross-staff Arpeggio',
+      content: (
+        <CrossStaffArpeggioInput
+          pair={crossStaffArpeggioPair}
+          structure={structure}
+        />
+      ),
+    });
+  }
   if (showSharedStem && sharedStemPair) {
     tabs.push({
       label: 'Shared Stem',
@@ -234,6 +284,24 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
       label: 'Clef',
       content: <ClefEntryInput entry={editableEntry} />,
     });
+  } else if (editableEntry?.type === 'guitar-note') {
+    tabs.push({
+      label: 'Edit',
+      content: (
+        <GuitarNoteEditInput
+          entry={editableEntry}
+          durationOptions={fittingDurations(
+            availableForDuration(structure, timeSignature, editableEntry.id),
+            editableEntry.duration
+          )}
+        />
+      ),
+    });
+  } else if (editableEntry?.type === 'barline') {
+    tabs.push({
+      label: 'Barline',
+      content: <BarlineEntryInput entry={editableEntry} />,
+    });
   } else if (editableEntry) {
     tabs.push({
       label: 'Edit',
@@ -249,20 +317,66 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
           currentVoiceId={editableEntryVoiceContext?.voiceId ?? null}
           canShareDynamic={canShareDynamic(structure, editableEntry.id)}
           canTakeLoco={!isOctaveSpanMember(structure, editableEntry.id)}
+          isTieEndpoint={isTieEndpoint(structure, editableEntry.id)}
         />
       ),
     });
     if (editableEntry.type !== 'rest') {
-      tabs.push({
-        label: 'Grace',
-        content: <GraceInput entry={editableEntry} />,
-      });
+      tabs.push(
+        {
+          label: 'Grace',
+          content: <GraceInput entry={editableEntry} />,
+        },
+        {
+          label: 'Notehead',
+          content: <NoteheadInput entry={editableEntry} />,
+        },
+        {
+          label: 'Tremolo',
+          content: <TremoloInput entry={editableEntry} />,
+        },
+        {
+          label: 'Trill',
+          content: <TrillInput entry={editableEntry} />,
+        },
+        {
+          label: 'Arpeggio',
+          content: <ArpeggioInput entry={editableEntry} />,
+        }
+      );
     }
   }
   if (showOctave && octaveRange) {
     tabs.push({
       label: 'Octave',
       content: <OctaveInput range={octaveRange} structure={structure} />,
+    });
+  }
+  if (tremoloTarget && measure.staffIds.includes(tremoloTarget.staffId)) {
+    tabs.push({
+      label: 'Tremolo Group',
+      content: (
+        <TremoloGroupInput candidate={tremoloTarget} structure={structure} />
+      ),
+    });
+  }
+  if (crossStaffTremoloTarget?.measureId === measureId) {
+    tabs.push({
+      label: 'Cross-staff Tremolo',
+      content: (
+        <CrossStaffTremoloInput
+          candidate={crossStaffTremoloTarget}
+          structure={structure}
+        />
+      ),
+    });
+  }
+  if (arpeggioTarget && measure.staffIds.includes(arpeggioTarget.staffId)) {
+    tabs.push({
+      label: 'Written-out Arpeggio',
+      content: (
+        <ArpeggioRunInput candidate={arpeggioTarget} structure={structure} />
+      ),
     });
   }
   if (showTuplet) {
@@ -275,6 +389,10 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
   return (
     <music-measure
       ref={(el: HTMLElement | null) => registerMeasureRef(measureId, el)}
+      repeat-start={measure.repeatStart || undefined}
+      barline={measure.barline ?? undefined}
+      ending={measure.ending?.join(',')}
+      ending-label={measure.endingLabel ?? undefined}
       className={`cursor-pointer rounded transition-shadow ${
         isMeasureSelected ? 'rainbow-selected' : ''
       } ${isOverfull ? 'outline-2 outline-red-500' : ''}`}

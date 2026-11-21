@@ -37,7 +37,7 @@ const note = (
   ...(tupletId ? { tupletId } : {}),
 });
 
-const noTuplets: Record<string, NormalizedTuplet> = {};
+const noTuplets = { tupletsById: {}, entriesById: {} };
 
 function buildStructure(
   entriesById: Record<string, MusicEntry>,
@@ -54,6 +54,8 @@ function buildStructure(
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById,
   };
 }
@@ -82,7 +84,9 @@ describe('usedDuration', () => {
       note('c', 'eighth', 't1'),
     ];
     const tuplets = { t1: { id: 't1', ratio: '3:2' as const } };
-    expect(usedDuration(entries, tuplets)).toBeCloseTo(0.25);
+    expect(
+      usedDuration(entries, { tupletsById: tuplets, entriesById: {} })
+    ).toBeCloseTo(0.25);
   });
 
   it('scales bare-numeral tuplet ratios via the library default normal count', () => {
@@ -92,13 +96,32 @@ describe('usedDuration', () => {
       note('c', 'eighth', 't1'),
     ];
     const tuplets = { t1: { id: 't1', ratio: '3' as const } };
-    expect(usedDuration(entries, tuplets)).toBeCloseTo(0.25);
+    expect(
+      usedDuration(entries, { tupletsById: tuplets, entriesById: {} })
+    ).toBeCloseTo(0.25);
   });
 
   it('scales a partial tuplet run by the ratio', () => {
     const entries = [note('a', 'eighth', 't1'), note('b', 'eighth', 't1')];
     const tuplets = { t1: { id: 't1', ratio: '3' as const } };
-    expect(usedDuration(entries, tuplets)).toBeCloseTo(1 / 6);
+    expect(
+      usedDuration(entries, { tupletsById: tuplets, entriesById: {} })
+    ).toBeCloseTo(1 / 6);
+  });
+});
+
+describe('tremolo and arpeggio members', () => {
+  it('scales each of a tremolo’s N members to 1/N of its written value', () => {
+    const a = { ...note('a', 'half'), tremoloId: 'tr' };
+    const b = { ...note('b', 'half'), tremoloId: 'tr' };
+    const source = { tupletsById: {}, entriesById: { a, b } };
+    expect(usedDuration([a, b], source)).toBeCloseTo(0.5);
+  });
+
+  it('gives a written-out arpeggio’s run notes no beat time', () => {
+    const run = { ...note('r', 'thirtysecond'), arpeggioId: 'arp' };
+    const target = note('t', 'quarter');
+    expect(usedDuration([run, target], noTuplets)).toBeCloseTo(0.25);
   });
 });
 
@@ -161,6 +184,8 @@ describe('availableForDuration', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     // Freeing e2 (0.25) in its own voice leaves 1 - 0 = 1 available to it —

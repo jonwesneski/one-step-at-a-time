@@ -33,6 +33,8 @@ import {
   moveEntryToVoice as moveEntryToVoiceInStructure,
 } from './reorderHelpers';
 import { findGroupMembers } from './staffGroupsHelpers';
+import type { NewStaff } from './staffSettingsHelpers';
+import { staffSettingsOf } from './staffSettingsHelpers';
 import { TimeSignatureChangeDialog } from './TimeSignatureChangeDialog';
 import { setTuplet as setTupletInStructure } from './tupletsHelpers';
 import type {
@@ -41,7 +43,7 @@ import type {
   ConnectorKind,
   DraftMusicEntry,
   MusicEntry,
-  StaffType,
+  NormalizedStaff,
 } from './types';
 import { isSelectionEmpty } from './types';
 import {
@@ -51,6 +53,9 @@ import {
 } from './voiceHelpers';
 
 const firstMeasureId = crypto.randomUUID();
+
+const REBAR_VOICE_COUNT_REASON =
+  'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.';
 
 function isEditableTarget(target: EventTarget | null): boolean {
   return (
@@ -77,6 +82,13 @@ function CompositionFormBody({
   const keySig = useWatch({ control, name: 'keySig' });
   const timeSig = useWatch({ control, name: 'timeSig' });
   const mode = useWatch({ control, name: 'mode' });
+  const measureNumbers = useWatch({ control, name: 'measureNumbers' });
+  const maxWidth = useWatch({ control, name: 'maxWidth' });
+  const doubleBarBeforeRepeat = useWatch({
+    control,
+    name: 'doubleBarBeforeRepeat',
+  });
+  const endingNumbering = useWatch({ control, name: 'endingNumbering' });
   const measureOrder = useWatch({ control, name: 'measureOrder' });
   const measuresById = useWatch({ control, name: 'measuresById' });
   const lastMeasureStaffCount =
@@ -139,7 +151,15 @@ function CompositionFormBody({
       </div>
 
       <DragSelectOverlay>
-        <music-composition key-sig={keySig} mode={mode} time={timeSig}>
+        <music-composition
+          key-sig={keySig}
+          mode={mode}
+          time={timeSig}
+          measure-numbers={measureNumbers}
+          max-width={maxWidth ?? undefined}
+          double-bar-before-repeat={doubleBarBeforeRepeat || undefined}
+          ending-numbering={endingNumbering}
+        >
           {measureOrder.map((measureId) => (
             <MeasureInput key={measureId} measureId={measureId} />
           ))}
@@ -164,6 +184,10 @@ export function CompositionInput() {
       title: '',
       keySig: 'C',
       mode: 'major',
+      measureNumbers: 'none',
+      maxWidth: null,
+      doubleBarBeforeRepeat: false,
+      endingNumbering: 'consecutive',
       timeSig: '4/4',
       measureOrder: [firstMeasureId],
       measuresById: { [firstMeasureId]: { id: firstMeasureId, staffIds: [] } },
@@ -173,6 +197,8 @@ export function CompositionInput() {
       connectorOrder: [],
       tupletsById: {},
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
     },
   });
 
@@ -187,6 +213,8 @@ export function CompositionInput() {
       connectorOrder: methods.getValues('connectorOrder'),
       tupletsById: methods.getValues('tupletsById'),
       octaveSpansById: methods.getValues('octaveSpansById'),
+      tremolosById: methods.getValues('tremolosById'),
+      arpeggiosById: methods.getValues('arpeggiosById'),
     }),
     [methods]
   );
@@ -202,6 +230,8 @@ export function CompositionInput() {
       methods.setValue('connectorOrder', s.connectorOrder);
       methods.setValue('tupletsById', s.tupletsById);
       methods.setValue('octaveSpansById', s.octaveSpansById);
+      methods.setValue('tremolosById', s.tremolosById);
+      methods.setValue('arpeggiosById', s.arpeggiosById);
     },
     [methods]
   );
@@ -236,7 +266,7 @@ export function CompositionInput() {
       return {
         newSid,
         staff: {
-          ...srcStaff,
+          ...staffSettingsOf(srcStaff),
           id: newSid,
           voiceOrder: emptyVoices.map((v) => v.id),
           voicesById: Object.fromEntries(emptyVoices.map((v) => [v.id, v])),
@@ -257,7 +287,7 @@ export function CompositionInput() {
     });
   }
 
-  function addStaff(measureId: string, staffType: StaffType) {
+  function addStaff(measureId: string, newStaff: NewStaff) {
     const s = getStructure();
     const newSid = crypto.randomUUID();
     const voice = createDefaultVoice();
@@ -273,13 +303,13 @@ export function CompositionInput() {
       stavesById: {
         ...s.stavesById,
         [newSid]: {
+          ...newStaff,
           id: newSid,
-          type: staffType,
           voiceOrder: [voice.id],
           voicesById: { [voice.id]: voice },
           group: null,
           groupId: null,
-        },
+        } satisfies NormalizedStaff,
       },
     });
   }
@@ -365,11 +395,11 @@ export function CompositionInput() {
   ) {
     const s = getStructure();
     const staff = s.stavesById[staffId];
-    // A clef change is staff-wide but only ever authored in voice 1 (the
+    // A clef change or mid-bar barline is staff-wide but only ever authored in voice 1 (the
     // canonical timeline every other voice's position is judged against) —
     // enforced here regardless of which voice was passed in.
     const targetVoiceId =
-      entry.type === 'clef'
+      entry.type === 'clef' || entry.type === 'barline'
         ? staff.voiceOrder[0]
         : voiceId ?? staff.voiceOrder[0];
     const targetVoice = staff.voicesById[targetVoiceId];
@@ -459,11 +489,9 @@ export function CompositionInput() {
       record(withTimeSignature);
       return;
     }
-    const { structure, rebarred } = rebar(withTimeSignature, 0);
+    const { structure, rebarred, reason } = rebar(withTimeSignature, 0);
     if (!rebarred) {
-      window.alert(
-        'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.'
-      );
+      window.alert(reason ?? REBAR_VOICE_COUNT_REASON);
       return;
     }
     record(structure);
@@ -491,11 +519,12 @@ export function CompositionInput() {
       return;
     }
     const measureIndex = s.measureOrder.indexOf(measureId);
-    const { structure, rebarred } = rebar(withTimeSignature, measureIndex);
+    const { structure, rebarred, reason } = rebar(
+      withTimeSignature,
+      measureIndex
+    );
     if (!rebarred) {
-      window.alert(
-        'Could not rewrite the music for this time signature — a staff has a different number of voices across the affected measures. No change was made.'
-      );
+      window.alert(reason ?? REBAR_VOICE_COUNT_REASON);
       return;
     }
     record(structure);

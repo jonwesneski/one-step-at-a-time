@@ -25,6 +25,8 @@ function structure(
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
     ...extra,
   };
@@ -211,6 +213,8 @@ describe('moveEntryInVoice', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     const next = moveEntryInVoice(s, 's1', 's1-v1', 'a', 2);
@@ -238,6 +242,8 @@ describe('moveEntryToVoice', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
       ...extra,
     };

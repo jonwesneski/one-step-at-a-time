@@ -1,3 +1,7 @@
+import type {
+  GlissandoHint,
+  TieStyle,
+} from '@one-step-at-a-time/web-components';
 import { effectiveClefOfEntry, resolveEntryOctaves } from './clefsHelpers';
 import { flattenEntryOrder, staffOfEntry } from './entryLocationHelpers';
 import { soundingOctaveShift } from './octaveHelpers';
@@ -9,8 +13,9 @@ import type {
   NormalizedConnector,
   Selection,
 } from './types';
+import { isMarkerEntry } from './types';
 
-// Tie/slur resolution for the composition form. Mirrors the pairing rules of
+// Tie/slur/glissando resolution for the composition form. Mirrors the pairing rules of
 // packages/web-components' connectorsBuilder (pairConnectors): connectors are
 // matched in document order, a note carries a single `tie`/`slur` attribute, and
 // interleaving same-kind spans are disambiguated with `id` on the start element
@@ -24,6 +29,12 @@ export type ConnectorEntryAttributes = {
   slur?: ConnectorRole;
   crescendo?: ConnectorRole;
   decrescendo?: ConnectorRole;
+  glissando?: ConnectorRole;
+  'hammer-on'?: ConnectorRole;
+  'pull-off'?: ConnectorRole;
+  slide?: ConnectorRole;
+  'tie-style'?: TieStyle;
+  'glissando-hint'?: GlissandoHint;
   id?: string;
   for?: string;
 };
@@ -33,6 +44,37 @@ export type ConnectorEntryAttributes = {
 const HAIRPIN_KINDS: ConnectorKind[] = ['crescendo', 'decrescendo'];
 export function isHairpinKind(kind: ConnectorKind): boolean {
   return HAIRPIN_KINDS.includes(kind);
+}
+
+// Kinds that replace each other on one pair of endpoints: tie/slur, the two
+// hairpins, and glissando on its own.
+export const TECHNIQUE_KINDS: ConnectorKind[] = [
+  'hammer-on',
+  'pull-off',
+  'slide',
+];
+
+function connectorFamily(
+  kind: ConnectorKind
+): 'tie-slur' | 'hairpin' | 'glissando' | 'technique' {
+  if (isHairpinKind(kind)) {
+    return 'hairpin';
+  }
+  if (TECHNIQUE_KINDS.includes(kind)) {
+    return 'technique';
+  }
+  return kind === 'glissando' ? 'glissando' : 'tie-slur';
+}
+
+export function isTieEndpoint(
+  structure: CompositionStructure,
+  entryId: string
+): boolean {
+  return Object.values(structure.connectorsById).some(
+    (connector) =>
+      connector.kind === 'tie' &&
+      (connector.startEntryId === entryId || connector.endEntryId === entryId)
+  );
 }
 
 // Interprets a selection as a tie/slur candidate. Returns the ordered outer
@@ -54,7 +96,7 @@ export function isConnectableSelection(
   const entries = selection.entryIds.map((id) => structure.entriesById[id]);
   if (
     entries.some(
-      (entry) => !entry || entry.type === 'rest' || entry.type === 'clef'
+      (entry) => !entry || entry.type === 'rest' || isMarkerEntry(entry)
     )
   ) {
     return null;
@@ -127,10 +169,17 @@ export function canTie(
   if (!start || !end) {
     return false;
   }
-  if (start.type === 'rest' || start.type === 'clef') {
+  if (start.type === 'rest' || isMarkerEntry(start)) {
     return false;
   }
   if (start.type !== end.type) {
+    return false;
+  }
+  if (
+    (start.type === 'note' || start.type === 'chord') &&
+    (start.laissezVibrer ||
+      ((end.type === 'note' || end.type === 'chord') && end.laissezVibrer))
+  ) {
     return false;
   }
   const soundingOctaves = (notes: ChordNote[], entryId: string) => {
@@ -140,6 +189,11 @@ export function canTie(
       notes
     ).map((octave) => octave + shift);
   };
+  if (start.type === 'guitar-note' && end.type === 'guitar-note') {
+    if (start.fret !== end.fret || start.string !== end.string) {
+      return false;
+    }
+  }
   if (start.type === 'note' && end.type === 'note') {
     if (
       start.value !== end.value ||
@@ -201,7 +255,9 @@ export function canTie(
   );
 }
 
-// Per-entry tie/slur/id/for attributes for the whole composition.
+// Per-entry connector role, style and id/for attributes for the whole
+// composition. One `for` serves every kind an element ends; the library falls
+// back to the most recent open start of a kind whose `for` doesn't match.
 export function resolveConnectorAttributes(
   structure: CompositionStructure
 ): Map<string, ConnectorEntryAttributes> {
@@ -250,6 +306,12 @@ export function resolveConnectorAttributes(
 
     patch(connector.startEntryId, role('start'));
     patch(connector.endEntryId, role('end'));
+    if (connector.kind === 'tie' && connector.style) {
+      patch(connector.startEntryId, { 'tie-style': connector.style });
+    }
+    if (connector.kind === 'glissando' && connector.hint) {
+      patch(connector.startEntryId, { 'glissando-hint': connector.hint });
+    }
 
     // Hairpins take only the role attribute: tie/slur get the id/for LIFO-stack
     // disambiguation, hairpins rely on the library's nearest-end rule. That rule
@@ -284,7 +346,7 @@ export function upsertConnector(
   kind: ConnectorKind
 ): CompositionStructure {
   const sameFamily = (other: ConnectorKind) =>
-    isHairpinKind(other) === isHairpinKind(kind);
+    connectorFamily(other) === connectorFamily(kind);
 
   const flat = flattenEntryOrder(structure);
   const indexOf = new Map(flat.map((id, index) => [id, index]));
@@ -433,4 +495,46 @@ export function removeConnector(
     connectorsById,
     connectorOrder: structure.connectorOrder.filter((id) => id !== connectorId),
   };
+}
+
+// Sets a tie's style or a glissando's hint; unchanged when it already has it.
+export function setConnectorOptions(
+  structure: CompositionStructure,
+  connectorId: string,
+  options: Pick<NormalizedConnector, 'style' | 'hint'>
+): CompositionStructure {
+  const connector = structure.connectorsById[connectorId];
+  if (!connector) {
+    return structure;
+  }
+  const next = { ...connector, ...options };
+  if (
+    (next.style ?? null) === (connector.style ?? null) &&
+    (next.hint ?? null) === (connector.hint ?? null)
+  ) {
+    return structure;
+  }
+  return {
+    ...structure,
+    connectorsById: { ...structure.connectorsById, [connectorId]: next },
+  };
+}
+
+// An entry that ends up a tie endpoint (a rebar split, say) drops its
+// laissez-vibrer: both would need the element's one `tie` attribute.
+export function pruneLaissezVibrerOnTies(
+  structure: CompositionStructure
+): CompositionStructure {
+  let entriesById: CompositionStructure['entriesById'] | null = null;
+  for (const entry of Object.values(structure.entriesById)) {
+    if (
+      (entry.type === 'note' || entry.type === 'chord') &&
+      entry.laissezVibrer &&
+      isTieEndpoint(structure, entry.id)
+    ) {
+      entriesById ??= { ...structure.entriesById };
+      entriesById[entry.id] = { ...entry, laissezVibrer: null };
+    }
+  }
+  return entriesById ? { ...structure, entriesById } : structure;
 }

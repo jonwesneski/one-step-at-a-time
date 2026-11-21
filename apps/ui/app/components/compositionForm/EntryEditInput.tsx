@@ -9,6 +9,7 @@ import { useCompositionFormSession } from './CompositionFormSessionContext';
 import {
   ChordNoteRows,
   DurationSelect,
+  LaissezVibrerFields,
   MarkingsFields,
   OctaveSelect,
   OptionalSelect,
@@ -28,6 +29,7 @@ interface EntryEditInputProps {
   currentVoiceId: string | null;
   canShareDynamic: boolean;
   canTakeLoco: boolean;
+  isTieEndpoint: boolean;
 }
 
 const labelClass = 'text-xs font-medium text-zinc-500';
@@ -40,6 +42,7 @@ export function EntryEditInput({
   currentVoiceId,
   canShareDynamic,
   canTakeLoco,
+  isTieEndpoint,
 }: EntryEditInputProps) {
   const { updateEntry, moveEntryToVoice } = useCompositionFormSession();
 
@@ -98,12 +101,25 @@ export function EntryEditInput({
         )}
 
       {entry.type !== 'rest' && (
+        <LaissezVibrerFields
+          value={entry.laissezVibrer ?? null}
+          disabledReason={
+            isTieEndpoint
+              ? 'Already tied to a neighbour — remove that tie first.'
+              : null
+          }
+          onChange={(laissezVibrer) => updateEntry({ ...entry, laissezVibrer })}
+        />
+      )}
+
+      {entry.type !== 'rest' && (
         <MarkingsFields
           markings={entry}
           onChange={(patch) => updateEntry({ ...entry, ...patch })}
           canShareDynamic={canShareDynamic}
           canTakeLoco={canTakeLoco}
           showStemDirection={!entry.beamGroupId}
+          isChord={entry.type === 'chord'}
         />
       )}
 

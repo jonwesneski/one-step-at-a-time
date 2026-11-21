@@ -90,12 +90,22 @@ The composition lives in a **react-hook-form store** (`useForm` in
 nodes, every id a `crypto.randomUUID()`.
 
 ```
-timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef)
-measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin, by entry id)
-measuresById: Record<id, { staffIds, time? }>   connectorOrder: string[]
-stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tupletsById: Record<id, { ratio, placement, crossStaffGroupId }>
+timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef | barline | guitar-note)
+measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin | glissando | hammer-on | pull-off | slide, by entry id)
+measuresById: Record<id, { staffIds, time?, repeatStart?, barline?, ending?, endingLabel? }>   connectorOrder: string[]
+stavesById:   Record<id, NormalizedStaff>  tupletsById: Record<id, { ratio, placement, crossStaffGroupId }>
+              (type: treble | bass | vocal | guitar-tab; label, part; vocal: voiceType, lyrics; tab: tabFor)
                                            octaveSpansById: Record<id, NormalizedOctaveSpan> (8va/15ma… lines, by entry id)
+                                           tremolosById:   Record<id, NormalizedTremolo>  (two-note tremolos; members carry tremoloId)
+                                           arpeggiosById:  Record<id, NormalizedArpeggio> (written-out arpeggios; run notes carry arpeggioId)
 ```
+
+`NormalizedStaff` is a union discriminated by `type`. Staff **settings** (type,
+group, label, part, voice type, tab link) are copied onto new measures by
+`staffSettingsHelpers.ts#staffSettingsOf`; a vocal staff's `lyrics` are one
+measure's text and stay with it. `label` and `part` are set track-wide (the
+same staff index in every measure, `staffTrackIds`), since the library only
+draws a label at each row start and matches `tab-for` per measure.
 
 **Cross-entry notation links** mirror the library's own attribute shapes rather
 than inventing collections: N:M shared keys live on the entries
@@ -294,10 +304,17 @@ test.
   concatenates the region's entry stream and re-slices it to the new capacity,
   splitting barline-crossing notes into the fewest durations (`durationHelpers.ts`
   `decomposeToDurations` — a single dotted value where one fits, else a **tie
-  chain**), moving tuplet runs
-  whole, minting/dropping measures, and re-anchoring ties. The region's final
+  chain**), moving tuplet runs, tremolos and written-out arpeggios
+  whole (`entryWrappersHelpers.ts#resolveAtomicRuns`), minting/dropping
+  measures, and re-anchoring ties. The region's final
   measure may be left under-full (no rest padding). Because it mints new
   measure/staff ids, the mutator clears the selection afterward.
+- **Rebar and repeats/lyrics.** Rebar keeps the region's first-bar
+  `repeatStart` and last-bar `barline`. Repeat or ending marks anywhere else in
+  the region would be lost, so `rebar` refuses (`REBAR_REPEATS_REASON`) and the
+  dialog disables Rewrite. A vocal staff's lyrics can't be re-sliced by beat:
+  rewritten bars' verses are joined onto the region's first bar (the dialog
+  says so).
 
 **10. Note drag — pitch + reorder — is the app's, not the library's.** The
 web-components library renders notation and reports pointer/click events; it has
@@ -343,6 +360,50 @@ selection-cleanup wrapper.
   scratch; a selector ships the capability now without it. Revisit only if
   real usage shows the selector too slow for dense multi-voice editing.
 
+**12. Notation beyond the basics — what's where.**
+
+- **Entry markings** (`markingsHelpers.ts`): noteheads (note, chord, per chord
+  tone, per grace note), single-note tremolo (+ numeral, label, articulation
+  repeat), trills (line, end notch, trilling note/accidental, closing notes),
+  the arpeggio sign (+ hairpin, `sempre arpeggiando`), dynamic/accidental
+  reminders and laissez-vibrer ties are flat fields on `EntryMarkings`,
+  serialised by `serializeMarkings` / `serializeLaissezVibrer` /
+  `serializeChordTone`. `sanitizeMarkings` clears whatever another edit made
+  meaningless (e.g. strokes a shorter value can't carry, a triangle head in a
+  chord); `sanitizeEntryMarkings` runs in `pruneInvalidNotationLinks`. Panels:
+  the Notehead, Tremolo, Trill and Arpeggio tabs on a single selected entry.
+- **Links**: cross-staff arpeggio `arpeggioWithEntryId` → `arpeggio-for`
+  (`crossStaffArpeggioHelpers.ts`, modelled on shared stems).
+- **Connectors**: glissando is its own connector family (`connectorFamily`),
+  so it sits alongside a slur. A tie's `style` and a glissando's `hint` live
+  on the connector and are written on the start entry. Laissez-vibrer uses
+  the element's single `tie` attribute, so it is never on a tie endpoint
+  (`pruneLaissezVibrerOnTies`; a note rebar splits loses it).
+- **Repeats** (`repeatsHelpers.ts`, Repeats tab on a measure, root
+  `doubleBarBeforeRepeat` / `endingNumbering`): measure fields map to
+  `repeat-start` / `barline` / `ending` / `ending-label`. The tab shows the
+  library's own warnings by running its exported `resolveEndings`,
+  `resolveRepeatSpans` and `repeatPickupWarning` over the same events
+  `<music-composition>` builds. A mid-bar `<music-barline>` is a `BarlineEntry`
+  — like a `ClefEntry`: zero duration, voice 1 only (`isMarkerEntry`).
+- **Wrappers** (`tremolosHelpers.ts`, `arpeggiosHelpers.ts`,
+  `entryWrappersHelpers.ts`): members carry `tremoloId` / `arpeggioId`
+  (an arpeggio's target is `NormalizedArpeggio.targetEntryId`); `StaffInput`
+  nests `<music-tremolo>` / `<music-arpeggio>` inside tuplet runs.
+  `measureCapacityHelpers.ts#entryFactor` takes the structure: a tremolo
+  member counts 1/N, an arpeggio run note 0, mirroring the library's
+  `durationContribution`. Both have prune passes in
+  `pruneInvalidNotationLinks`.
+- **Vocal staff** (`lyricsHelpers.ts`, `LyricsInput.tsx`): the clef range
+  follows the voice type (`clefsHelpers.ts#staffRangeKey`, incl. mezzo, alto
+  and tenor on treble-8vb); no clef changes.
+- **Guitar tab** (`GuitarNoteInput.tsx`): `GuitarNoteEntry` lives only on a
+  `guitar-tab` staff, which renders its notes directly (no voices, rests,
+  tuplets or markers). `isTimedEntry` covers anything with a duration
+  (`PitchedEntry` stays notation-only). Techniques are connectors;
+  `tab-for` links are validated by `staffSettingsHelpers.ts#tabLinkProblem`.
+  The library marks tab as incomplete, so this is provisional.
+
 ### Component tree
 
 ```
@@ -352,9 +413,9 @@ CompositionInput                       owns useForm + useUndoRedo + all mutators
       └─ CompositionFormBody            watches root values; Undo/Redo/Delete bar; MeterChangeDialog; renders:
          └─ DragSelectOverlay           marquee selection
             └─ <music-composition>
-               ├─ MeasureInput ×N  → <music-measure time=meter>   (+ Measure / Group Staves / Connections / Edit / Grace / Octave / Tuplet / Cross-staff Beam / Shared Stem / Phrase Slur panels)
-               │   └─ StaffInput ×M → <music-staff>     (+ Staff Entries panel)
-               │       └─ <music-note> / <music-chord> / <music-rest>   (id = entry id; tie/slur/for from useConnectorAttributes; octave-* from useOctaveAttributes; beam-group / shared-stem-for / slur-group / stem-direction / … straight off the entry)
+               ├─ MeasureInput ×N  → <music-measure time=meter repeat-start barline ending ending-label>   (+ Measure / Repeats / Group Staves / Connections / Edit / Grace / Notehead / Tremolo / Trill / Arpeggio / Octave / Tuplet / Tremolo Group / Written-out Arpeggio / Cross-staff Beam / Cross-staff Tremolo / Cross-staff Arpeggio / Shared Stem / Phrase Slur panels)
+               │   └─ StaffInput ×M → <music-staff> | <music-staff-vocal> (+ <music-lyrics>) | <music-staff-guitar-tab>   (+ Staff Entries panel: Note / Chord / Rest / Clef Change or Lyrics / Barline / Voices / Staff; tab: Tab Note / Staff)
+               │       └─ <music-voice> → [<music-tuplet>] → [<music-tremolo> | <music-arpeggio>] → <music-note> / <music-chord> / <music-rest> / <music-clef> / <music-barline>   (tab: <music-guitar-note> directly; id = entry id; connector attrs from useConnectorAttributes; octave-* from useOctaveAttributes; markings from markingsHelpers)
                └─ "Add Measure" button
 ```
 

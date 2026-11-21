@@ -41,6 +41,8 @@ function buildStructure(): CompositionStructure {
     },
     connectorOrder: ['c1', 'c2'],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }
@@ -159,6 +161,8 @@ describe('removeSelectionFromStructure', () => {
         e6: tupleted('e6', 't1'),
       },
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: { t1: { id: 't1', ratio: '3' } },
     };
 
@@ -184,6 +188,8 @@ describe('removeSelectionFromStructure', () => {
         e6: tupleted('e6', 't1'),
       },
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: { t1: { id: 't1', ratio: '3' } },
     };
 
@@ -243,6 +249,8 @@ describe('removeSelectionFromStructure', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
 

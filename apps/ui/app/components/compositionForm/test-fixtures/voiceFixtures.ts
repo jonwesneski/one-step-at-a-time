@@ -1,4 +1,4 @@
-import type { NormalizedStaff, NormalizedVoice } from '../types';
+import type { ClassicalStaff, NormalizedVoice } from '../types';
 
 // Shared fixture builders for a NormalizedStaff's voiceOrder/voicesById shape
 // — every colocated .test.ts file that builds its own CompositionStructure
@@ -12,8 +12,8 @@ export function buildVoice(id: string, entryIds: string[]): NormalizedVoice {
 export function buildSingleVoiceStaff(
   id: string,
   entryIds: string[],
-  overrides?: Partial<Pick<NormalizedStaff, 'type' | 'group' | 'groupId'>>
-): NormalizedStaff {
+  overrides?: Partial<Pick<ClassicalStaff, 'type' | 'group' | 'groupId'>>
+): ClassicalStaff {
   const voiceId = `${id}-v1`;
   return {
     id,
@@ -31,8 +31,8 @@ export function buildSingleVoiceStaff(
 export function buildMultiVoiceStaff(
   id: string,
   voiceEntryIds: string[][],
-  overrides?: Partial<Pick<NormalizedStaff, 'type' | 'group' | 'groupId'>>
-): NormalizedStaff {
+  overrides?: Partial<Pick<ClassicalStaff, 'type' | 'group' | 'groupId'>>
+): ClassicalStaff {
   const voices = voiceEntryIds.map((entryIds, i) =>
     buildVoice(`${id}-v${i + 1}`, entryIds)
   );

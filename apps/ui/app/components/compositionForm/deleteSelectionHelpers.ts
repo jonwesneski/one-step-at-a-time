@@ -152,5 +152,9 @@ export function removeSelectionFromStructure(
     connectorOrder,
     tupletsById,
     octaveSpansById: octaveSpansWithoutEntries(structure, entryIdsToDelete),
+    // A group left with too few members, or an arpeggio whose target went,
+    // is dissolved by the prune pass below.
+    tremolosById: structure.tremolosById,
+    arpeggiosById: structure.arpeggiosById,
   });
 }

@@ -20,6 +20,8 @@ export function useCompositionStructure(): CompositionStructure {
   const connectorOrder = useWatch({ control, name: 'connectorOrder' });
   const tupletsById = useWatch({ control, name: 'tupletsById' });
   const octaveSpansById = useWatch({ control, name: 'octaveSpansById' });
+  const tremolosById = useWatch({ control, name: 'tremolosById' });
+  const arpeggiosById = useWatch({ control, name: 'arpeggiosById' });
 
   return useMemo(
     () => ({
@@ -32,6 +34,8 @@ export function useCompositionStructure(): CompositionStructure {
       connectorOrder,
       tupletsById,
       octaveSpansById,
+      tremolosById,
+      arpeggiosById,
     }),
     [
       timeSig,
@@ -43,6 +47,8 @@ export function useCompositionStructure(): CompositionStructure {
       connectorOrder,
       tupletsById,
       octaveSpansById,
+      tremolosById,
+      arpeggiosById,
     ]
   );
 }

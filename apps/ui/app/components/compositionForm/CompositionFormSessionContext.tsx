@@ -12,13 +12,13 @@ import {
 } from 'react';
 import { removeSelectionFromStructure } from './deleteSelectionHelpers';
 import { computeBoxSelection } from './selectionHelpers';
+import type { NewStaff } from './staffSettingsHelpers';
 import type {
   CompositionStructure,
   ConnectorKind,
   DraftMusicEntry,
   MusicEntry,
   Selection,
-  StaffType,
 } from './types';
 import { EMPTY_SELECTION, isSelectionEmpty } from './types';
 
@@ -66,7 +66,7 @@ type CompositionFormSessionContextValue = {
   ) => void;
   deleteSelected: () => void;
   addMeasure: () => void;
-  addStaff: (measureId: string, staffType: StaffType) => void;
+  addStaff: (measureId: string, newStaff: NewStaff) => void;
   setStaffGroup: (
     measureId: string,
     staffIds: string[],
@@ -119,7 +119,7 @@ type CompositionFormSessionProviderProps = {
   getStructure: () => CompositionStructure;
   recordStructure: (structure: CompositionStructure) => void;
   onAddMeasure: () => void;
-  onAddStaff: (measureId: string, staffType: StaffType) => void;
+  onAddStaff: (measureId: string, newStaff: NewStaff) => void;
   onSetStaffGroup: (
     measureId: string,
     staffIds: string[],

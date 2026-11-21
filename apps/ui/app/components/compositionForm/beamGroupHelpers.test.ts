@@ -15,6 +15,7 @@ import type {
   NoteEntry,
   Selection,
 } from './types';
+import { isPitchedEntry } from './types';
 
 const eighth = (id: string): NoteEntry => ({
   id,
@@ -51,6 +52,8 @@ function buildStructure(): CompositionStructure {
     connectorOrder: [],
     tupletsById: {},
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
   };
 }
 
@@ -63,7 +66,7 @@ const selection = (patch: Partial<Selection>): Selection => ({
 
 const groupOf = (structure: CompositionStructure, id: string) => {
   const entry = structure.entriesById[id];
-  return entry.type === 'clef' ? undefined : entry.beamGroupId;
+  return isPitchedEntry(entry) ? entry.beamGroupId : undefined;
 };
 
 describe('beamGroupCandidate', () => {
@@ -83,6 +86,17 @@ describe('beamGroupCandidate', () => {
         buildStructure()
       )?.entryIds
     ).toEqual(['t1', 't2', 'tr', 'b1', 'b2']);
+  });
+
+  it('rejects a triangle-head member, which always stands alone', () => {
+    const structure = buildStructure();
+    structure.entriesById.t1 = {
+      ...(structure.entriesById.t1 as NoteEntry),
+      notehead: 'triangle-up',
+    };
+    expect(
+      beamGroupCandidate(selection({ entryIds: ['t1', 'b1'] }), structure)
+    ).toBeNull();
   });
 
   it('rejects one staff, non-adjacent staves, and across measures', () => {

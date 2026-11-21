@@ -24,6 +24,8 @@ function buildStructure(timeSig: TimeSignature = '4/4'): CompositionStructure {
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }

@@ -1,9 +1,6 @@
-import type {
-  ClefType,
-  Note,
-  Octave,
-} from '@one-step-at-a-time/web-components';
+import type { Note, Octave } from '@one-step-at-a-time/web-components';
 import { useCallback, useEffect, useRef } from 'react';
+import type { StaffRangeKey } from './clefsHelpers';
 import { resolveEntryOctaves, resolveNoteOctave, step } from './clefsHelpers';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
 import {
@@ -13,6 +10,7 @@ import {
   reorderTargetIndex,
 } from './entryDragHelpers';
 import type { ChordNote, MusicEntry } from './types';
+import { isTimedEntry } from './types';
 
 // Touch needs a deliberate hold before a note press becomes a drag, so a plain
 // finger-swipe over a note still scrolls the page — mirrors DragSelectOverlay.
@@ -25,7 +23,7 @@ export type EntryDragContext = {
   entry: MusicEntry;
   staffId: string;
   voiceId: string;
-  clef: ClefType;
+  clef: StaffRangeKey;
   // The entry's own voice's entry ids in document order, for mapping a drop
   // position back to a structural index.
   entryIds: string[];
@@ -383,7 +381,7 @@ export function useEntryDrag() {
         if (entry.type === 'chord') {
           chordNoteIndex = chordNoteIndexFromPath(element, path);
         }
-      } else if (entry.type !== 'clef' && ctx.entryIds.length > 1) {
+      } else if (isTimedEntry(entry) && ctx.entryIds.length > 1) {
         mode = 'reorder';
       } else {
         return;

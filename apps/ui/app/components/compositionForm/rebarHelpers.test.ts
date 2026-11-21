@@ -69,6 +69,8 @@ function build(
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }
@@ -84,7 +86,9 @@ function durationsPerMeasure(
     const voice = staff.voicesById[staff.voiceOrder[voiceIndex]];
     return voice.entryIds.map((eid) => {
       const entry = structure.entriesById[eid];
-      return entry.type === 'clef' ? ('clef' as DurationType) : entry.duration;
+      return entry.type === 'clef' || entry.type === 'barline'
+        ? (entry.type as DurationType)
+        : entry.duration;
     });
   });
 }
@@ -118,6 +122,78 @@ describe('rebar', () => {
       ['quarter'],
     ]);
     expect(tieCount(out)).toBe(1);
+  });
+
+  it('drops a laissez-vibrer tie from a note it splits', () => {
+    // Every piece of the chain is a tie endpoint, and the library has one
+    // `tie` attribute per element, so no piece can also ring.
+    const ringing = {
+      ...(note('half', 'ring') as MusicEntry & { type: 'note' }),
+      laissezVibrer: { label: true },
+    };
+    const s = build('4/4', [{ staves: [[note('half'), ringing]] }]);
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
+    expect(tieCount(out)).toBe(1);
+    expect(
+      Object.values(out.entriesById).some(
+        (entry) => entry.type === 'note' && entry.laissezVibrer
+      )
+    ).toBe(false);
+  });
+
+  it('moves a tremolo whole instead of splitting it across a barline', () => {
+    const a = { ...note('half', 'ta'), tremoloId: 'tr' } as MusicEntry;
+    const b = { ...note('half', 'tb'), tremoloId: 'tr' } as MusicEntry;
+    const s = build('4/4', [{ staves: [[note('half'), a, b]] }]);
+    s.tremolosById = { tr: { id: 'tr', strokes: 3 } };
+    const { structure: out } = rebar({ ...s, timeSig: '3/4' }, 0);
+    const firstBar = out.measuresById[out.measureOrder[0]];
+    const secondBar = out.measuresById[out.measureOrder[1]];
+    const idsIn = (measure: typeof firstBar) =>
+      out.stavesById[measure.staffIds[0]].voicesById[
+        out.stavesById[measure.staffIds[0]].voiceOrder[0]
+      ].entryIds;
+    // A half plus a half-note tremolo overfills 3/4, so the tremolo moves on.
+    expect(idsIn(firstBar)).not.toContain('ta');
+    expect(idsIn(secondBar)).toEqual(['ta', 'tb']);
+    expect(out.tremolosById.tr).toBeDefined();
+  });
+
+  it('gathers a rewritten passage’s lyrics onto its first bar', () => {
+    const s = build('4/4', [
+      { staves: [[note('half'), note('half')]] },
+      { staves: [[note('whole')]] },
+    ]);
+    for (const [staffId, text] of [
+      ['m0s0', 'Hap-py'],
+      ['m1s0', 'day'],
+    ] as const) {
+      s.stavesById[staffId] = {
+        ...s.stavesById[staffId],
+        type: 'vocal',
+        voiceType: 'soprano',
+        lyrics: [{ verse: 1, text }],
+      } as NormalizedStaff;
+    }
+    const { structure: out } = rebar({ ...s, timeSig: '2/4' }, 0);
+    const staves = out.measureOrder.map(
+      (id) => out.stavesById[out.measuresById[id].staffIds[0]]
+    );
+    expect(staves[0]).toMatchObject({
+      lyrics: [{ verse: 1, text: 'Hap-py day' }],
+    });
+    expect(staves.slice(1).every((staff) => !('lyrics' in staff))).toBe(true);
+  });
+
+  it('carries staff settings such as the label onto new measures', () => {
+    const s = build('4/4', [{ staves: [[note('whole')]] }]);
+    s.stavesById.m0s0 = { ...s.stavesById.m0s0, label: 'Flute' };
+    const { structure: out } = rebar({ ...s, timeSig: '2/4' }, 0);
+    expect(
+      out.measureOrder.map(
+        (id) => out.stavesById[out.measuresById[id].staffIds[0]].label
+      )
+    ).toEqual(['Flute', 'Flute']);
   });
 
   it('grows the measure count when capacity shrinks, tying each split', () => {

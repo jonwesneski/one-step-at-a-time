@@ -15,6 +15,8 @@ type GroupChoice = 'none' | StaffGroupType;
 const STAFF_TYPE_LABEL: Record<StaffType, string> = {
   treble: 'Treble',
   bass: 'Bass',
+  vocal: 'Vocal',
+  'guitar-tab': 'Guitar tab',
 };
 
 export function StaffGroupInput({ measureId, staffIds }: StaffGroupInputProps) {

@@ -7,7 +7,7 @@ import {
 import { pruneInvalidNotationLinks } from './notationLinksHelpers';
 import { timeSignatureOfEntry } from './timeSignaturesHelpers';
 import type { CompositionStructure, MusicEntry } from './types';
-import { isPitchedEntry } from './types';
+import { isTimedEntry } from './types';
 
 // Replaces one entry in place, keyed by id; unchanged when the entry is gone.
 // A duration that would overfill the measure is clamped to the largest that
@@ -36,8 +36,8 @@ function clampDuration(
 ): MusicEntry {
   const current = structure.entriesById[entry.id];
   if (
-    !isPitchedEntry(entry) ||
-    !isPitchedEntry(current) ||
+    !isTimedEntry(entry) ||
+    !isTimedEntry(current) ||
     entry.duration === current.duration
   ) {
     return entry;

@@ -13,7 +13,6 @@ import type {
   CompositionStructure,
   MusicEntry,
   NormalizedStaff,
-  NormalizedTuplet,
 } from './types';
 import { isPitchedEntry } from './types';
 
@@ -40,40 +39,78 @@ export function measureDuration(timeSig: TimeSignature): number {
   return beats / beatType;
 }
 
-// One entry's share of the measure budget: its duration factor, scaled by the
-// tuplet ratio when it belongs to one. Zero for clef markers.
-export function entryFactor(
+// What an entry's beat share depends on beyond itself.
+export type FactorSource = Pick<
+  CompositionStructure,
+  'tupletsById' | 'entriesById'
+>;
+
+// Members per tremolo group, cached per entriesById snapshot (structures are
+// immutable, so a new edit means a new object).
+const tremoloSizeCache = new WeakMap<object, Map<string, number>>();
+
+function tremoloSize(source: FactorSource, tremoloId: string): number {
+  let sizes = tremoloSizeCache.get(source.entriesById);
+  if (!sizes) {
+    sizes = new Map();
+    for (const entry of Object.values(source.entriesById)) {
+      if (isPitchedEntry(entry) && entry.tremoloId) {
+        sizes.set(entry.tremoloId, (sizes.get(entry.tremoloId) ?? 0) + 1);
+      }
+    }
+    tremoloSizeCache.set(source.entriesById, sizes);
+  }
+  return sizes.get(tremoloId) ?? 1;
+}
+
+// An entry's share before any tuplet scaling: its duration factor, 1/N of it
+// for each of a tremolo's N members, and nothing for a written-out arpeggio's
+// run note. Mirrors the library's rules/beatRules.ts#durationContribution.
+export function entryFactorBeforeTuplet(
   entry: MusicEntry,
-  tupletsById: Record<string, NormalizedTuplet>
+  source: FactorSource
 ): number {
+  if (entry.type === 'guitar-note') {
+    return durationToFactor[entry.duration];
+  }
   if (!isPitchedEntry(entry)) {
     return 0;
   }
+  if (entry.type === 'note' && entry.arpeggioId) {
+    return 0;
+  }
   const base = durationToFactor[entry.duration];
-  const tuplet = entry.tupletId ? tupletsById[entry.tupletId] : undefined;
+  return entry.tremoloId ? base / tremoloSize(source, entry.tremoloId) : base;
+}
+
+// One entry's share of the measure budget, scaled by its tuplet's ratio when
+// it belongs to one. Zero for clef and barline markers.
+export function entryFactor(entry: MusicEntry, source: FactorSource): number {
+  const share = entryFactorBeforeTuplet(entry, source);
+  if (!isPitchedEntry(entry) || !entry.tupletId) {
+    return share;
+  }
+  const tuplet = source.tupletsById[entry.tupletId];
   if (!tuplet) {
-    return base;
+    return share;
   }
   const { actual, normal } = parseTupletRatio(tuplet.ratio);
-  return base * (normal / actual);
+  return share * (normal / actual);
 }
 
 export function usedDuration(
   entries: MusicEntry[],
-  tupletsById: Record<string, NormalizedTuplet>
+  source: FactorSource
 ): number {
-  return entries.reduce(
-    (sum, entry) => sum + entryFactor(entry, tupletsById),
-    0
-  );
+  return entries.reduce((sum, entry) => sum + entryFactor(entry, source), 0);
 }
 
 export function remainingDuration(
   entries: MusicEntry[],
   timeSig: TimeSignature,
-  tupletsById: Record<string, NormalizedTuplet>
+  source: FactorSource
 ): number {
-  return measureDuration(timeSig) - usedDuration(entries, tupletsById);
+  return measureDuration(timeSig) - usedDuration(entries, source);
 }
 
 export type StaffVoiceContext = { staff: NormalizedStaff; voiceId: string };
@@ -109,9 +146,9 @@ export function availableForDuration(
   const entries = context.staff.voicesById[context.voiceId].entryIds.map(
     (id) => structure.entriesById[id]
   );
-  const used = usedDuration(entries, structure.tupletsById);
+  const used = usedDuration(entries, structure);
   const self = structure.entriesById[entryId];
-  const freed = self ? entryFactor(self, structure.tupletsById) : 0;
+  const freed = self ? entryFactor(self, structure) : 0;
   return total - (used - freed);
 }
 
@@ -133,19 +170,19 @@ export function tupletRatioFits(
   const entries = context.staff.voicesById[context.voiceId].entryIds.map(
     (id) => structure.entriesById[id]
   );
-  const used = usedDuration(entries, structure.tupletsById);
+  const used = usedDuration(entries, structure);
   const currentRun = entryIds.reduce(
-    (sum, id) =>
-      sum + entryFactor(structure.entriesById[id], structure.tupletsById),
+    (sum, id) => sum + entryFactor(structure.entriesById[id], structure),
     0
   );
   const { actual, normal } = parseTupletRatio(ratio);
-  const nextRun = entryIds.reduce((sum, id) => {
-    const entry = structure.entriesById[id];
-    return isPitchedEntry(entry)
-      ? sum + durationToFactor[entry.duration] * (normal / actual)
-      : sum;
-  }, 0);
+  const nextRun = entryIds.reduce(
+    (sum, id) =>
+      sum +
+      entryFactorBeforeTuplet(structure.entriesById[id], structure) *
+        (normal / actual),
+    0
+  );
   return used - currentRun + nextRun <= total + CAPACITY_EPSILON;
 }
 
