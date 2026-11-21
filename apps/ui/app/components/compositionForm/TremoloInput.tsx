@@ -9,7 +9,7 @@ import { OptionalSelect } from './entryControls';
 import { allowedTremoloValues, hasRepeatableLength } from './markingsHelpers';
 import type { ChordEntry, NoteEntry } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const NONE = 'none';
 
 function tremoloLabel(value: TremoloValue): string {

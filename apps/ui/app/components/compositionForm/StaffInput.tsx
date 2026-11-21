@@ -88,7 +88,7 @@ export function StaffInput({
   // Hidden entirely for the common single-voice case — no added friction.
   const voiceSelector =
     staff.voiceOrder.length > 1 ? (
-      <label className="flex items-center gap-2 px-3 pt-2 text-xs font-medium text-zinc-500">
+      <label className="flex items-center gap-2 px-3 pt-2 text-xs font-medium text-fg-muted">
         Voice
         <Select
           value={effectiveTargetVoiceId}

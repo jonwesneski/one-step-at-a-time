@@ -26,12 +26,12 @@ export function CrossStaffArpeggioInput({
       className="flex flex-col gap-2 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         {joined
           ? 'One arpeggio line runs through both chords.'
           : 'Draw one unbroken arpeggio line through both chords.'}
       </div>
-      {problem && <div className="text-xs text-zinc-400">{problem}</div>}
+      {problem && <div className="text-xs text-fg-subtle">{problem}</div>}
       <Button
         type="button"
         variant={joined ? 'secondary' : undefined}

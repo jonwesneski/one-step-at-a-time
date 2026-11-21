@@ -1,5 +1,6 @@
 import { NavBar } from '@/components/NavBar';
 import appCss from '@/globals.css?url';
+import { THEME_INIT_SCRIPT } from '@/hooks/useTheme';
 import {
   HeadContent,
   Outlet,
@@ -18,6 +19,7 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'One Step at a Time' },
     ],
+    scripts: [{ children: THEME_INIT_SCRIPT }],
   }),
   component: Root,
   notFoundComponent: NotFound,
@@ -29,18 +31,18 @@ function NotFound() {
 
 function Root() {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
-      <body className="min-h-screen flex flex-col bg-zinc-50 font-sans">
-        <header className="flex items-center gap-4 border-b border-zinc-200 bg-white px-6 py-4 z-10">
+      <body className="min-h-screen flex flex-col font-sans">
+        <header className="flex items-center gap-4 border-b border-line bg-surface px-6 py-4 z-10">
           <NavBar />
           <input
             type="text"
             placeholder="Search..."
             disabled
-            className="border border-zinc-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="border border-line bg-surface rounded-md px-3 py-2 text-sm placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-line-strong"
           />
         </header>
         <main className="flex flex-1 flex-col p-6">

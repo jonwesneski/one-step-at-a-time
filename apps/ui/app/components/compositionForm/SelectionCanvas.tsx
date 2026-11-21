@@ -28,7 +28,7 @@ export function SelectionCanvas({
 
   return (
     <div
-      className={`relative flex-1 select-none rounded border border-zinc-200 bg-white p-6 shadow-sm ${
+      className={`relative flex-1 select-none rounded border border-line bg-surface p-6 shadow-sm ${
         className ?? ''
       }`}
       {...handlers}
@@ -37,7 +37,7 @@ export function SelectionCanvas({
       {children}
       {marqueeRect && (
         <div
-          className="fixed pointer-events-none z-50 border-2 border-blue-500 bg-blue-500/10"
+          className="fixed pointer-events-none z-50 border-2 border-accent bg-accent/10"
           style={{
             left: marqueeRect.left,
             top: marqueeRect.top,

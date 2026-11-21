@@ -5,7 +5,7 @@ import { useCompositionFormSession } from './CompositionFormSessionContext';
 import { isTriangle } from './markingsHelpers';
 import type { ChordEntry, NoteEntry } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const DEFAULT = '';
 
 function NoteheadSelect({
@@ -63,7 +63,7 @@ export function NoteheadInput({ entry }: { entry: NoteEntry | ChordEntry }) {
         />
       </label>
       {entry.type === 'note' && entry.beamGroupId && (
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-fg-subtle">
           A triangle head always stands alone, so it can&apos;t join a
           cross-staff beam.
         </div>
@@ -74,7 +74,7 @@ export function NoteheadInput({ entry }: { entry: NoteEntry | ChordEntry }) {
           <span className={labelClass}>Per tone</span>
           {entry.notes.map((tone, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-12 text-sm text-zinc-700">
+              <span className="w-12 text-sm text-fg">
                 {tone.value}
                 {tone.octave ?? ''}
               </span>
@@ -101,7 +101,7 @@ export function NoteheadInput({ entry }: { entry: NoteEntry | ChordEntry }) {
           <span className={labelClass}>Grace notes</span>
           {grace.notes.map((note, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-12 text-sm text-zinc-700">{note}</span>
+              <span className="w-12 text-sm text-fg">{note}</span>
               <NoteheadSelect
                 value={grace.noteheads?.[i]}
                 allowTriangles={false}

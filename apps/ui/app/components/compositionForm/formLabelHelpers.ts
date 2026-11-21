@@ -1,1 +1,1 @@
-export const fieldLabelClass = 'text-xs font-medium text-zinc-500';
+export const fieldLabelClass = 'text-xs font-medium text-fg-muted';

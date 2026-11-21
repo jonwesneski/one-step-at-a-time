@@ -48,7 +48,7 @@ export function TupletInput({ structure }: TupletInputProps) {
 
   if (!candidate) {
     return (
-      <div className="p-3 text-sm text-zinc-400">
+      <div className="p-3 text-sm text-fg-subtle">
         Select two or more adjacent notes in one staff to make a tuplet.
       </div>
     );
@@ -66,11 +66,11 @@ export function TupletInput({ structure }: TupletInputProps) {
       className="flex flex-col gap-2 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         {candidate.entryIds.length} entries
       </div>
       <label className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-zinc-500">Ratio</span>
+        <span className="text-xs font-medium text-fg-muted">Ratio</span>
         <Select
           value={value}
           onChange={(e) =>
@@ -142,9 +142,9 @@ function CrossStaffTupletFields({
       className="flex flex-col gap-2 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm text-zinc-500">One tuplet across both hands</div>
+      <div className="text-sm text-fg-muted">One tuplet across both hands</div>
       <label className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-zinc-500">Ratio</span>
+        <span className="text-xs font-medium text-fg-muted">Ratio</span>
         <Select
           value={value}
           onChange={(e) =>

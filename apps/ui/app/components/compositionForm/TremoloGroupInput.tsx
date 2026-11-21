@@ -24,7 +24,7 @@ import {
 } from './tremolosHelpers';
 import type { CompositionStructure, NormalizedTremolo } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 
 function StrokesSelect({
   value,
@@ -126,12 +126,12 @@ export function TremoloGroupInput({
         </>
       ) : (
         <>
-          <div className="text-sm text-zinc-500">
+          <div className="text-sm text-fg-muted">
             Alternate between these notes for one written value. Write each at
             the tremolo’s full length.
           </div>
           {candidate.problem && (
-            <div className="text-xs text-zinc-400">{candidate.problem}</div>
+            <div className="text-xs text-fg-subtle">{candidate.problem}</div>
           )}
           <Button
             type="button"
@@ -188,12 +188,12 @@ export function CrossStaffTremoloInput({
         </>
       ) : (
         <>
-          <div className="text-sm text-zinc-500">
+          <div className="text-sm text-fg-muted">
             Join both hands into one tremolo. Rests in the selection are hidden
             as spacers for the other hand.
           </div>
           {candidate.problem && (
-            <div className="text-xs text-zinc-400">{candidate.problem}</div>
+            <div className="text-xs text-fg-subtle">{candidate.problem}</div>
           )}
           <Button
             type="button"

@@ -131,7 +131,7 @@ function CompositionFormBody({
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
+      <div className="p-3 bg-surface rounded border border-line shadow-sm">
         <BasicInfoInput />
       </div>
 

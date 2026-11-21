@@ -16,7 +16,7 @@ interface StaffSettingsInputProps {
   staffId: string;
 }
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 
 export function StaffSettingsInput({ staffId }: StaffSettingsInputProps) {
   const { control } = useFormContext<CompositionFormValues>();
@@ -80,12 +80,12 @@ export function StaffSettingsInput({ staffId }: StaffSettingsInputProps) {
             )}
           </Select>
           {parts.length === 0 && (
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-fg-subtle">
               Name a part on a notation staff in this bar to follow it.
             </span>
           )}
           {linkProblem && (
-            <span className="text-xs text-amber-700">{linkProblem}</span>
+            <span className="text-xs text-warning">{linkProblem}</span>
           )}
         </label>
       ) : (

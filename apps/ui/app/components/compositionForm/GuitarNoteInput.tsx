@@ -9,7 +9,7 @@ import { DurationSelect } from './entryControls';
 import { durationFits, fittingDurations } from './measureCapacityHelpers';
 import type { DraftMusicEntry, GuitarNoteEntry } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const FRETS: GuitarFret[] = ['x', ...Array.from({ length: 25 }, (_, i) => i)];
 const STRINGS = [1, 2, 3, 4, 5, 6];
 

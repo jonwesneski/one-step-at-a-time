@@ -23,12 +23,12 @@ export function SharedStemInput({ pair, structure }: SharedStemInputProps) {
       className="flex flex-col gap-2 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         {joined
           ? 'Both hands share one stem here.'
           : 'Join these two notes with one stem across the staves.'}
       </div>
-      {problem && <div className="text-xs text-zinc-400">{problem}</div>}
+      {problem && <div className="text-xs text-fg-subtle">{problem}</div>}
       <Button
         type="button"
         variant={joined ? 'secondary' : undefined}

@@ -12,7 +12,7 @@ import type {
 } from './types';
 import { MEASURE_END_BARLINE_OPTIONS } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const PASSES = [1, 2, 3, 4];
 
 interface RepeatInputProps {
@@ -98,7 +98,7 @@ export function RepeatInput({
       )}
 
       {warnings.length > 0 && (
-        <ul className="flex flex-col gap-1 text-xs text-amber-700">
+        <ul className="flex flex-col gap-1 text-xs text-warning">
           {warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}

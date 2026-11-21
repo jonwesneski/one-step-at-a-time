@@ -143,12 +143,12 @@ export function ConnectorInput({
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         Connect {entryLabel(startEntry)} → {entryLabel(endEntry)}
       </div>
 
       <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-xs font-medium text-zinc-500 mb-1">
+        <legend className="text-xs font-medium text-fg-muted mb-1">
           Tie / Slur
         </legend>
         <Radio
@@ -170,7 +170,7 @@ export function ConnectorInput({
           checked={tieSlurChoice === 'slur'}
           onChange={() => setTieSlur('slur')}
         />
-        {tieReason && <div className="text-sm text-zinc-400">{tieReason}</div>}
+        {tieReason && <div className="text-sm text-fg-subtle">{tieReason}</div>}
         {tieSlur?.kind === 'tie' && (
           <OptionalSelect<TieStyle>
             label="Tie style"
@@ -189,7 +189,7 @@ export function ConnectorInput({
       {isTab ? (
         <>
           <fieldset className="flex flex-col gap-1.5">
-            <legend className="text-xs font-medium text-zinc-500 mb-1">
+            <legend className="text-xs font-medium text-fg-muted mb-1">
               Technique
             </legend>
             <Radio
@@ -221,7 +221,7 @@ export function ConnectorInput({
       ) : (
         <>
           <fieldset className="flex flex-col gap-1.5">
-            <legend className="text-xs font-medium text-zinc-500 mb-1">
+            <legend className="text-xs font-medium text-fg-muted mb-1">
               Glissando
             </legend>
             <Radio
@@ -242,7 +242,7 @@ export function ConnectorInput({
               }
             />
             {selectionEntryCount !== 2 && !glissando && (
-              <div className="text-sm text-zinc-400">
+              <div className="text-sm text-fg-subtle">
                 Select exactly two notes for a glissando.
               </div>
             )}
@@ -262,7 +262,7 @@ export function ConnectorInput({
           </fieldset>
 
           <fieldset className="flex flex-col gap-1.5">
-            <legend className="text-xs font-medium text-zinc-500 mb-1">
+            <legend className="text-xs font-medium text-fg-muted mb-1">
               Hairpin
             </legend>
             <Radio

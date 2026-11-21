@@ -18,7 +18,7 @@ import { useCompositionFormSession } from './CompositionFormSessionContext';
 import { OctaveSelect, OptionalSelect, PitchSelect } from './entryControls';
 import type { ChordEntry, NoteEntry, TrillMarking } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const DEFAULT = '';
 
 type TrillFinish = NonNullable<TrillMarking['finish']>;

@@ -24,7 +24,7 @@ export function AddBarlineInput({
       onClick={(e) => e.stopPropagation()}
     >
       <label className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-zinc-500">Barline</span>
+        <span className="text-xs font-medium text-fg-muted">Barline</span>
         <Select
           value={barlineType}
           onChange={(e) => setBarlineType(e.target.value as BarlineType)}
@@ -37,7 +37,7 @@ export function AddBarlineInput({
         </Select>
       </label>
       {blockedReason && (
-        <div className="text-xs text-zinc-400">{blockedReason}</div>
+        <div className="text-xs text-fg-subtle">{blockedReason}</div>
       )}
       <Button
         type="button"

@@ -38,17 +38,17 @@ export function TimeSignatureChangeDialog() {
       onClick={cancelTimeSignatureChange}
     >
       <div
-        className="flex w-full max-w-sm flex-col gap-3 rounded-lg bg-white p-5 shadow-xl"
+        className="flex w-full max-w-sm flex-col gap-3 rounded-lg bg-surface p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-medium text-zinc-800">Change to {target}?</h2>
-        <p className="text-sm text-zinc-600">
+        <h2 className="font-medium text-fg">Change to {target}?</h2>
+        <p className="text-sm text-fg-muted">
           Rewrite the music to fit — notes that cross a new barline are split
           and tied, and measures are added or removed as needed — or just change
           the signature and leave the notes where they are.
         </p>
         {overflow > 0 && (
-          <p className="text-sm text-red-600">
+          <p className="text-sm text-danger">
             “Change signature only” will leave {overflow}{' '}
             {overflow === 1 ? 'measure' : 'measures'} with more notes than fit.
           </p>
@@ -62,10 +62,10 @@ export function TimeSignatureChangeDialog() {
             Rewrite the music
           </Button>
           {rewriteBlocked && (
-            <p className="text-xs text-zinc-500">{REBAR_REPEATS_REASON}</p>
+            <p className="text-xs text-fg-muted">{REBAR_REPEATS_REASON}</p>
           )}
           {!rewriteBlocked && movesLyrics && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               Rewriting gathers this passage’s lyrics onto its first bar; move
               them back afterwards.
             </p>

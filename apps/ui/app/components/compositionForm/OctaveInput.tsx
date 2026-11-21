@@ -21,7 +21,7 @@ interface OctaveInputProps {
   structure: CompositionStructure;
 }
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const NONE = '';
 
 const END_LABEL: Record<OctaveSpanSettings['end'], string> = {
@@ -99,13 +99,13 @@ export function OctaveInput({ range, structure }: OctaveInputProps) {
         </Select>
       </label>
       {cannotRemove && (
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-fg-subtle">
           Removing this line would put a note outside the octaves the staff can
           show.
         </div>
       )}
       {amountOptions.length === 0 && !existing && (
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-fg-subtle">
           No octave line fits — the notes would move outside the octaves the
           staff can show.
         </div>

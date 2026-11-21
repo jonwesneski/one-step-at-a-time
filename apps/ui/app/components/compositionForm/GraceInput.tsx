@@ -20,7 +20,7 @@ import type { ChordEntry, GraceGroup, NoteEntry } from './types';
 
 type GraceHost = NoteEntry | ChordEntry;
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const NONE = 'none';
 
 function alignedGet<T>(

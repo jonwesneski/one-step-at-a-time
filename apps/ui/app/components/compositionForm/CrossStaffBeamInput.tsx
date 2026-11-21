@@ -25,7 +25,7 @@ export function CrossStaffBeamInput({
       className="flex flex-col gap-2 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         {existingGroupId
           ? 'These entries share one beam across both staves.'
           : `Beam ${candidate.entryIds.length} entries together across both staves.`}

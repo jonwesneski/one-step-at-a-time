@@ -14,7 +14,7 @@ import {
   type CompositionFormValues,
 } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500 mb-0.5';
+const labelClass = 'text-xs font-medium text-fg-muted mb-0.5';
 
 const MEASURE_NUMBER_LABELS: Record<MeasureNumberDisplay, string> = {
   none: 'None',

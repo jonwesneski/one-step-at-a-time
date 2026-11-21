@@ -395,16 +395,16 @@ export function MeasureInput({ measureId }: MeasureInputProps) {
       ending-label={measure.endingLabel ?? undefined}
       className={`cursor-pointer rounded transition-shadow ${
         isMeasureSelected ? 'rainbow-selected' : ''
-      } ${isOverfull ? 'outline-2 outline-red-500' : ''}`}
+      } ${isOverfull ? 'outline-2 outline-danger' : ''}`}
       onClick={() => selectMeasure(measureId)}
     >
       {isOverfull && (
-        <div className="text-red-600 text-xs px-2 pt-1 select-none">
+        <div className="text-danger text-xs px-2 pt-1 select-none">
           More notes than fit this time signature — trailing notes are hidden.
         </div>
       )}
       {measure.staffIds.length === 0 && (
-        <div className="text-zinc-400 text-sm px-3 py-4 select-none">
+        <div className="text-fg-subtle text-sm px-3 py-4 select-none">
           Tap or click here and use the dropdown to add a staff
         </div>
       )}

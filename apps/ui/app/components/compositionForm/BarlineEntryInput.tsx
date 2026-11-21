@@ -15,7 +15,7 @@ export function BarlineEntryInput({ entry }: { entry: BarlineEntry }) {
       onClick={(e) => e.stopPropagation()}
     >
       <label className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-zinc-500">Barline</span>
+        <span className="text-xs font-medium text-fg-muted">Barline</span>
         <Select
           value={entry.barlineType}
           onChange={(e) =>

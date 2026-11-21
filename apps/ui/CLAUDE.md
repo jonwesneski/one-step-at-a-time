@@ -243,7 +243,9 @@ never as an inline panel elsewhere. The exceptions are the root form fields
 modal, not a tab — see piece 9) — none are selection-contextual. It's docked
 full-width to the bottom of the window on every screen size (a fixed 25vh on
 mobile; up to 40vh on desktop, sized to its content), with a sideways-scrolling
-tab row and a vertically scrolling body. Its tabs are just an array of
+tab row and a vertically scrolling body (both `ScrollArea`s). It's portaled to
+`<body>` so no selected ancestor's stacking context can draw score content over
+it. Its tabs are just an array of
 `{ label, content }`; callers build the array conditionally and pass it, and the
 active tab is remembered by label in `session.entryPanelTab`.
 
@@ -477,8 +479,29 @@ not a separate package. Use these instead of raw `<button>`/`<select>` in form U
 (The README's "design system" phrasing predates this; the notation renderer is
 `@one-step-at-a-time/web-components`, a separate concern.)
 
+`ScrollArea` (`axis="x" | "y"`) is a scroll container that fades out its end edge
+while there's more to scroll; `DockedTabPanel` uses it for its tab strip and its
+controls.
+
 `.rainbow-selected` (`globals.css`) is the animated selection outline — add the
 class to a selected element.
+
+### Theming (light / dark)
+
+Colors are **semantic tokens** defined in `globals.css` (`:root` for light,
+`:root[data-theme='dark']` for dark, exposed via `@theme inline`): `canvas`,
+`surface`, `surface-hover`, `fg`, `fg-muted`, `fg-subtle`, `line`,
+`line-strong`, `accent`, `accent-hover`, `on-accent`, `danger`, `warning`. Use
+them (`bg-surface`, `text-fg-muted`, `border-line`, `ring-accent`, …) — **never
+raw palette colors** like `bg-white` / `text-zinc-500`. Add a token pair rather
+than a one-off; `dark:` is wired to `data-theme` for the rare exception (the
+logo's `dark:invert`). Translucent overlays (`bg-black/30` scrim) are fine as-is.
+
+- `hooks/useTheme.ts` owns the preference (`system | light | dark`, in
+  `localStorage`) and sets `data-theme` on `<html>`; `THEME_INIT_SCRIPT` runs in
+  `<head>` so there's no flash. The picker lives in the `NavBar` dropdown.
+- The score needs nothing: web-components draw with `currentColor`, and `body`
+  sets `color: fg`.
 
 ## Conventions
 

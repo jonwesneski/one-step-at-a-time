@@ -7,7 +7,7 @@ const CARET_URL = `url("data:image/svg+xml,${encodeURIComponent(
 )}")`;
 
 const baseClass =
-  'text-sm border border-zinc-300 rounded bg-white pl-2 pr-7 py-1.5 cursor-pointer appearance-none bg-no-repeat bg-[length:12px_12px] bg-[position:right_0.5rem_center] focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'text-sm border border-line-strong rounded bg-surface pl-2 pr-7 py-1.5 cursor-pointer appearance-none bg-no-repeat bg-[length:12px_12px] bg-[position:right_0.5rem_center] focus:outline-none focus:ring-1 focus:ring-accent';
 
 export function Select({ className, style, ...props }: SelectProps) {
   return (

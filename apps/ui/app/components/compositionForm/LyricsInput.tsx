@@ -8,9 +8,9 @@ import {
 } from './lyricsHelpers';
 import type { CompositionStructure, LyricVerse, VocalStaff } from './types';
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 const textareaClass =
-  'w-full text-sm border border-zinc-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'w-full text-sm border border-line-strong rounded px-2 py-1.5 bg-surface focus:outline-none focus:ring-1 focus:ring-accent';
 
 const withAtLeastOneVerse = (verses: LyricVerse[]): LyricVerse[] =>
   verses.length > 0 ? verses : [{ verse: 1, text: '' }];
@@ -41,7 +41,7 @@ export function LyricsInput({ staff, structure }: LyricsInputProps) {
       className="flex flex-col gap-2 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-xs text-zinc-400">
+      <div className="text-xs text-fg-subtle">
         Split syllables with “-”; end a syllable with “_” to hold it over
         several notes.
       </div>
@@ -66,7 +66,7 @@ export function LyricsInput({ staff, structure }: LyricsInputProps) {
               onBlur={() => commit(drafts)}
             />
             {syllables > notes && (
-              <span className="text-xs text-amber-700">
+              <span className="text-xs text-warning">
                 More syllables than notes; the extra ones aren’t shown.
               </span>
             )}

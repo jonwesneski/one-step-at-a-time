@@ -27,12 +27,12 @@ export function ArpeggioRunInput({
         className="flex flex-col gap-2 p-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-sm text-zinc-500">
+        <div className="text-sm text-fg-muted">
           Tie the run of notes into the last selected chord. The run takes no
           beat time.
         </div>
         {candidate.problem && (
-          <div className="text-xs text-zinc-400">{candidate.problem}</div>
+          <div className="text-xs text-fg-subtle">{candidate.problem}</div>
         )}
         <Button
           type="button"

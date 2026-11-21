@@ -115,7 +115,7 @@ export function OptionalSelect<T extends string>({
 }) {
   return (
     <label className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium text-zinc-500">{label}</span>
+      <span className="text-xs font-medium text-fg-muted">{label}</span>
       <Select
         value={value ?? NONE}
         onChange={(e) =>
@@ -291,7 +291,7 @@ export function LaissezVibrerFields({
         onChange={(e) => onChange(e.target.checked ? {} : null)}
       />
       {value === null && disabledReason && (
-        <div className="text-xs text-zinc-400">{disabledReason}</div>
+        <div className="text-xs text-fg-subtle">{disabledReason}</div>
       )}
       {value !== null && (
         <div className="flex flex-col gap-1 pl-5">

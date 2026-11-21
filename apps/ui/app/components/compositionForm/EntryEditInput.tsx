@@ -32,7 +32,7 @@ interface EntryEditInputProps {
   isTieEndpoint: boolean;
 }
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 
 export function EntryEditInput({
   entry,
@@ -95,7 +95,7 @@ export function EntryEditInput({
       {entry.type !== 'rest' &&
         entry.beamGroupId &&
         isBeamableDuration(entry.duration) && (
-          <div className="text-xs text-zinc-400">
+          <div className="text-xs text-fg-subtle">
             Part of a cross-staff beam — a quarter or longer leaves it.
           </div>
         )}

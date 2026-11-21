@@ -5,9 +5,9 @@ type CheckboxProps = Omit<
   label: React.ReactNode;
 };
 
-const baseClass = 'cursor-pointer accent-blue-600';
+const baseClass = 'cursor-pointer accent-accent';
 const labelClass =
-  'flex items-center gap-1.5 text-sm text-zinc-500 has-checked:text-blue-600 has-checked:font-medium cursor-pointer';
+  'flex items-center gap-1.5 text-sm text-fg-muted has-checked:text-accent has-checked:font-medium cursor-pointer';
 
 export function Checkbox({ label, className, ...props }: CheckboxProps) {
   return (
