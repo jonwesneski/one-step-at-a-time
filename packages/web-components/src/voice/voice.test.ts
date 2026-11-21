@@ -62,3 +62,18 @@ describe(MUSIC_VOICE, () => {
     });
   });
 });
+
+describe('barline inside a voice', () => {
+  it('is accepted without a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML = `
+      <music-voice>
+        <music-note note="C" octave="5" duration="quarter"></music-note>
+        <music-barline></music-barline>
+      </music-voice>`;
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('is not allowed inside <music-voice>')
+    );
+    warn.mockRestore();
+  });
+});

@@ -16,6 +16,7 @@ import {
   MUSIC_TUPLET_NODE,
   NOTE_EVENTS,
 } from '../utils/consts';
+import { parseDuration } from '../utils/parsers';
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
@@ -51,13 +52,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #childObserver: MutationObserver | null = null;
-    // Run notes whose `duration` the wrapper wrote (vs. author-set) — re-applied
-    // when `run-duration` changes.
-    #ownedDurations = new WeakSet<Element>();
+    // The `duration` the wrapper last wrote on each run note. A note still
+    // carrying it is the wrapper's to update; any other value is the author's.
+    #writtenDurations = new WeakMap<Element, string>();
 
     get runDuration(): DurationType {
       return (
-        (this.getAttribute('run-duration') as DurationType | null) ??
+        parseDuration(this.getAttribute('run-duration')) ??
         ARPEGGIO_RUN_DEFAULT_DURATION
       );
     }
@@ -122,11 +123,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     attributeChangedCallback(
-      _name: string,
+      name: string,
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue || !this.isConnected) {
+      if (oldValue === newValue) {
+        return;
+      }
+      if (
+        name === 'run-duration' &&
+        newValue !== null &&
+        parseDuration(newValue) === null
+      ) {
+        console.warn(
+          `[${MUSIC_ARPEGGIO}] run-duration="${newValue}" is not a valid duration; using ${ARPEGGIO_RUN_DEFAULT_DURATION}`
+        );
+      }
+      if (!this.isConnected) {
         return;
       }
       this.#applyDefaults();
@@ -164,12 +177,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       for (const child of elementChildren.slice(0, -1)) {
         if (child.nodeName === MUSIC_NOTE_NODE) {
+          const current = child.getAttribute('duration');
           if (
-            !child.hasAttribute('duration') ||
-            this.#ownedDurations.has(child)
+            current === null ||
+            current === this.#writtenDurations.get(child)
           ) {
             child.setAttribute('duration', this.runDuration);
-            this.#ownedDurations.add(child);
+            this.#writtenDurations.set(child, this.runDuration);
           }
         } else if (
           child.nodeName === MUSIC_ARPEGGIO_NODE ||

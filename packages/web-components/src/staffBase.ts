@@ -50,7 +50,7 @@ import {
   STAFF_WRAPPER_MIN_HEIGHT,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from './utils/notationDimensions';
-import { parseStaffGroup } from './utils/parsers';
+import { parseStaffGroup, parseTimeSignature } from './utils/parsers';
 import { createBarlineSvg } from './utils/svgCreator/barlines';
 import { upgradeShadowedProperties } from './utils/upgradeShadowedProperties';
 import {
@@ -152,9 +152,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       this.#respaceIfWidthChanged(entries[0].contentRect.width);
     });
 
-    this.effectiveTimeSig = this.convertTotimeInts(
-      this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-    );
+    this.effectiveTimeSig = this.resolveTimeSignature();
   }
 
   protected abstract onStaffResize(): void;
@@ -445,8 +443,38 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     );
   }
 
+  // The first valid `time` on this staff, its measure, then its composition;
+  // an invalid value is skipped with a warning rather than read as NaN.
+  protected resolveTimeSignature(): [BeatsInMeasure, BeatTypeInMeasure] {
+    const sources = [
+      this,
+      this.closest(MUSIC_MEASURE),
+      this.closest(MUSIC_COMPOSITION),
+    ];
+    for (const source of sources) {
+      const raw: string | null =
+        source?.getAttribute(COMMON_ATTRIBUTES.TIME) ?? null;
+      if (raw === null) {
+        continue;
+      }
+      const parsed = parseTimeSignature(raw);
+      if (parsed !== null) {
+        return this.convertTotimeInts(parsed);
+      }
+      if (raw !== this.#warnedInvalidTime) {
+        console.warn(
+          `[${this.localName}] time="${raw}" is not a supported time signature; ignoring it`
+        );
+        this.#warnedInvalidTime = raw;
+      }
+    }
+    return this.convertTotimeInts('4/4');
+  }
+
+  #warnedInvalidTime: string | null = null;
+
   protected convertTotimeInts(
-    time: string
+    time: TimeSignature
   ): [BeatsInMeasure, BeatTypeInMeasure] {
     const [beats, beatType] = time.split('/').map((n) => parseInt(n, 10));
     return [beats as BeatsInMeasure, beatType as BeatTypeInMeasure];
@@ -578,6 +606,11 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   #buildStaffLines(): void {
     this.staffContainer.classList.add('staff-container');
+    for (const line of Array.from(
+      this.staffContainer.querySelectorAll(':scope > .staff-line')
+    )) {
+      line.remove();
+    }
 
     let yOffset = STAFF_LINE_SPACING;
     Array.from({ length: this.staffLineCount - 1 }).forEach(() => {

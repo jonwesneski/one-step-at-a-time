@@ -100,11 +100,11 @@ pitch editing.
 
 All events bubble and cross shadow-DOM boundaries (`composed: true`).
 
-| Event                                                   | Fired by      | `detail`                                                             | When                                   |
-| ------------------------------------------------------- | ------------- | -------------------------------------------------------------------- | -------------------------------------- |
-| `note-click`                                            | `music-note`  | `{ value: Note, duration: DurationType, originalEvent: MouseEvent }` | Notehead/glyph clicked                 |
-| `note-pointerdown` / `note-pointerup`                   | `music-note`  | `{ value, duration, originalEvent: PointerEvent }`                   | Pointer pressed / released on the note |
-| `chord-click` / `chord-pointerdown` / `chord-pointerup` | `music-chord` | `{ originalEvent }`                                                  | Same, for a chord                      |
+| Event                                                   | Fired by      | `detail`                                                                        | When                                   |
+| ------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------- | -------------------------------------- |
+| `note-click`                                            | `music-note`  | `{ value: Note, duration: DurationType, originalEvent: MouseEvent }`            | Notehead/glyph clicked                 |
+| `note-pointerdown` / `note-pointerup`                   | `music-note`  | `{ value, duration, originalEvent: PointerEvent }`                              | Pointer pressed / released on the note |
+| `chord-click` / `chord-pointerdown` / `chord-pointerup` | `music-chord` | `{ notes: { value: Note, octave: Octave \| null }[], duration, originalEvent }` | Same, for a chord                      |
 
 `<music-rest>` reuses the `note-click` / `note-pointerdown` / `note-pointerup`
 event names, with `detail` `{ duration: DurationType, originalEvent }`.

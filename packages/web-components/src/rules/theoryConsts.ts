@@ -93,60 +93,89 @@ noteSemitoneMap.set('Ab', 11);
 noteSemitoneMap.set('B#', 3);
 noteSemitoneMap.set('Cb', 2);
 
-// Each entry: [double-flat, flat, natural, sharp, double-sharp]
-// Indices 0→4 run from flattest to sharpest enharmonic spelling.
-export const semitoneNoteMap: Map<number, Note[]> = new Map();
-semitoneNoteMap.set(0, ['Bbb', 'A', 'A', 'A', 'G##']);
-semitoneNoteMap.set(1, ['Bb', 'Bb', 'A#', 'A#', 'A#']);
-semitoneNoteMap.set(2, ['Cb', 'Cb', 'B', 'B', 'A##']);
-semitoneNoteMap.set(3, ['Dbb', 'C', 'C', 'B#', 'B#']);
-semitoneNoteMap.set(4, ['Db', 'Db', 'C#', 'C#', 'B##']);
-semitoneNoteMap.set(5, ['Ebb', 'D', 'D', 'D', 'C##']);
-semitoneNoteMap.set(6, ['Eb', 'Eb', 'D#', 'D#', 'D#']);
-semitoneNoteMap.set(7, ['Fb', 'Fb', 'E', 'E', 'D##']);
-semitoneNoteMap.set(8, ['Gbb', 'F', 'F', 'E#', 'E#']);
-semitoneNoteMap.set(9, ['Gb', 'Gb', 'F#', 'F#', 'E##']);
-semitoneNoteMap.set(10, ['Abb', 'G', 'G', 'G', 'F##']);
-semitoneNoteMap.set(11, ['Ab', 'Ab', 'G#', 'G#', 'G#']);
+/** A chord tone's interval above the root, named by quality and number. */
+export type ChordInterval =
+  | 'M2'
+  | 'm3'
+  | 'M3'
+  | 'P4'
+  | 'd5'
+  | 'P5'
+  | 'A5'
+  | 'M6'
+  | 'd7'
+  | 'm7'
+  | 'M7'
+  | 'M9'
+  | 'A9'
+  | 'P11'
+  | 'A11'
+  | 'M13';
 
-// 1 b2 2 b3 3 4 b5 5 b6 6 b7 7
-// Semitones from root
-export const ChordSemitoneMap: Record<ChordType, number[]> = {
-  '5': [7],
-  sus2: [2, 7],
-  sus4: [5, 7],
-  '': [4, 7], // alias for maj
-  maj: [4, 7],
-  '6': [4, 7, 9],
-  maj7: [4, 7, 11],
-  add9: [4, 7, 14],
-  maj9: [4, 7, 11, 14],
-  'maj7#11': [4, 7, 11, 18],
-  min: [3, 7],
-  'min(add9)': [3, 7, 14],
-  min6: [3, 7, 9],
-  min7: [3, 7, 10],
-  min7b5: [3, 6, 10],
-  'min(maj7)': [3, 7, 11],
-  min9: [3, 7, 10, 14],
-  min11: [3, 7, 10, 17],
-  '7': [4, 7, 10], // Dominants
-  '7sus4': [5, 7, 10],
-  '7b5': [4, 6, 10],
-  '9': [4, 7, 10, 14],
-  '7#9': [4, 7, 10, 15],
-  '11': [4, 7, 10, 14, 17],
-  '13': [4, 7, 10, 14, 21], // End Dominants
-  aug: [4, 8],
-  '+': [4, 8], // alias for aug
-  '7#5': [4, 8, 10],
-  dim: [3, 6],
-  dim7: [3, 6, 8],
+/**
+ * Semitones above the root, and letter steps above the root's letter. The
+ * letter step fixes the spelling: a minor third is always two letters up, so
+ * C's is Eb, never D#.
+ */
+export const CHORD_INTERVALS: Record<
+  ChordInterval,
+  { semitones: number; letterSteps: number }
+> = {
+  M2: { semitones: 2, letterSteps: 1 },
+  m3: { semitones: 3, letterSteps: 2 },
+  M3: { semitones: 4, letterSteps: 2 },
+  P4: { semitones: 5, letterSteps: 3 },
+  d5: { semitones: 6, letterSteps: 4 },
+  P5: { semitones: 7, letterSteps: 4 },
+  A5: { semitones: 8, letterSteps: 4 },
+  M6: { semitones: 9, letterSteps: 5 },
+  d7: { semitones: 9, letterSteps: 6 },
+  m7: { semitones: 10, letterSteps: 6 },
+  M7: { semitones: 11, letterSteps: 6 },
+  M9: { semitones: 14, letterSteps: 8 },
+  A9: { semitones: 15, letterSteps: 8 },
+  P11: { semitones: 17, letterSteps: 10 },
+  A11: { semitones: 18, letterSteps: 10 },
+  M13: { semitones: 21, letterSteps: 12 },
 };
 
-export const ChordSemitoneMapAliases: Record<
+/** Each chord quality's tones above the root, lowest first. */
+export const ChordIntervalMap: Record<ChordType, ChordInterval[]> = {
+  '5': ['P5'],
+  sus2: ['M2', 'P5'],
+  sus4: ['P4', 'P5'],
+  '': ['M3', 'P5'], // alias for maj
+  maj: ['M3', 'P5'],
+  '6': ['M3', 'P5', 'M6'],
+  maj7: ['M3', 'P5', 'M7'],
+  add9: ['M3', 'P5', 'M9'],
+  maj9: ['M3', 'P5', 'M7', 'M9'],
+  'maj7#11': ['M3', 'P5', 'M7', 'A11'],
+  min: ['m3', 'P5'],
+  'min(add9)': ['m3', 'P5', 'M9'],
+  min6: ['m3', 'P5', 'M6'],
+  min7: ['m3', 'P5', 'm7'],
+  min7b5: ['m3', 'd5', 'm7'],
+  'min(maj7)': ['m3', 'P5', 'M7'],
+  min9: ['m3', 'P5', 'm7', 'M9'],
+  min11: ['m3', 'P5', 'm7', 'P11'],
+  '7': ['M3', 'P5', 'm7'], // Dominants
+  '7sus4': ['P4', 'P5', 'm7'],
+  '7b5': ['M3', 'd5', 'm7'],
+  '9': ['M3', 'P5', 'm7', 'M9'],
+  '7#9': ['M3', 'P5', 'm7', 'A9'],
+  '11': ['M3', 'P5', 'm7', 'M9', 'P11'],
+  '13': ['M3', 'P5', 'm7', 'M9', 'M13'], // End Dominants
+  aug: ['M3', 'A5'],
+  '+': ['M3', 'A5'], // alias for aug
+  '7#5': ['M3', 'A5', 'm7'],
+  dim: ['m3', 'd5'],
+  dim7: ['m3', 'd5', 'd7'],
+};
+
+export const ChordIntervalMapAliases: Record<
   string,
-  keyof typeof ChordSemitoneMap
+  keyof typeof ChordIntervalMap
 > = {
   '': 'maj',
   sus: 'sus4',

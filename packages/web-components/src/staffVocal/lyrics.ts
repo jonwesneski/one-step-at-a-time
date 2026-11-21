@@ -6,6 +6,7 @@
 
 import { ILyricsElement, LyricSyllablePosition } from '../types/elements';
 import { SVG_NS } from '../utils';
+import { LYRICS_EVENTS, MUSIC_LYRICS } from '../utils/consts';
 
 const SSRSafeHTMLElement: typeof HTMLElement =
   typeof HTMLElement !== 'undefined'
@@ -32,8 +33,13 @@ export class MusicLyricsElement
   extends SSRSafeHTMLElement
   implements ILyricsElement
 {
+  static get observedAttributes(): string[] {
+    return ['verse'];
+  }
+
   #syllablePositions: LyricSyllablePosition[] = [];
   #lyricContainer: SVGSVGElement | null = null;
+  #textObserver: MutationObserver | null = null;
 
   constructor() {
     super();
@@ -85,14 +91,40 @@ export class MusicLyricsElement
     this.#lyricContainer = this.shadowRoot.querySelector(
       'svg'
     ) as SVGSVGElement;
+
+    this.#textObserver = new MutationObserver(() => this.#notify());
+    this.#textObserver.observe(this, {
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    this.#notify();
+  }
+
+  disconnectedCallback() {
+    this.#textObserver?.disconnect();
+    this.#textObserver = null;
+  }
+
+  attributeChangedCallback(
+    _name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ) {
+    if (oldValue !== newValue && this.isConnected) {
+      this.#notify();
+    }
+  }
+
+  // The vocal staff lays out every verse, so it re-positions on this.
+  #notify() {
+    this.dispatchEvent(
+      new CustomEvent(LYRICS_EVENTS.CHANGE, { bubbles: true, composed: true })
+    );
   }
 
   updatePositions(positions: LyricSyllablePosition[]) {
     this.#syllablePositions = positions;
-    if (positions.length === 0) {
-      return;
-    }
-
     this.#render();
   }
 
@@ -147,7 +179,7 @@ export class MusicLyricsElement
 }
 
 if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  if (!customElements.get('music-lyrics')) {
-    customElements.define('music-lyrics', MusicLyricsElement);
+  if (!customElements.get(MUSIC_LYRICS)) {
+    customElements.define(MUSIC_LYRICS, MusicLyricsElement);
   }
 }

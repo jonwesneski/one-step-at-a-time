@@ -113,6 +113,7 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
+import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
 import { chordAugmentationDotLayout } from '../utils/svgCreator/chord';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
@@ -194,7 +195,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   class ChordElement extends HTMLElement implements IChordElement {
     static get observedAttributes(): string[] {
       return [
+        'chord',
         'duration',
+        'for',
         'tie',
         'lv-label',
         'slur',
@@ -279,7 +282,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get duration(): DurationType {
-      return (this.getAttribute('duration') as DurationType) ?? 'quarter';
+      return parseDuration(this.getAttribute('duration')) ?? 'quarter';
     }
 
     set duration(value: DurationType) {
@@ -304,15 +307,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const notes: ChordNote[] = [];
       if (noteElements.length) {
         noteElements.forEach((node) => {
+          // From parsed markup the chord connects before its notes upgrade.
+          customElements.upgrade(node);
           notes.push({ value: node.note, octave: node.octave });
         });
       } else if (this.chord) {
         const chordNotes = getChordNotes(this.chord);
-        chordNotes.forEach((value) => {
+        this.#warnAboutUnsupportedChord(chordNotes === null);
+        chordNotes?.forEach((value) => {
           notes.push({ value, octave: null });
         });
       }
       return notes;
+    }
+
+    #warnedUnsupportedChord: string | null = null;
+
+    // `notes` is read many times per pass, so warn once per bad value.
+    #warnAboutUnsupportedChord(unsupported: boolean): void {
+      const chord = unsupported ? this.chord : null;
+      if (chord !== null && chord !== this.#warnedUnsupportedChord) {
+        console.warn(`[music-chord] unsupported chord symbol "${chord}"`);
+      }
+      this.#warnedUnsupportedChord = chord;
     }
 
     get stemUp(): boolean {
@@ -1243,6 +1260,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'duration') {
+        warnIfInvalidDuration(this.localName, newValue);
+      }
+
       // `diminuendo` is rewritten to `decrescendo`, even before connecting.
       // The removeAttribute below re-enters with null, which must be a no-op.
       if (name === 'diminuendo') {
@@ -1279,7 +1300,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'glissando' ||
         name === 'glissando-hint' ||
         name === 'slur-group' ||
-        name === 'tie-style'
+        name === 'tie-style' ||
+        name === 'for'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
@@ -1424,6 +1446,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       if (
+        name === 'chord' ||
         name === 'accidental-reminder' ||
         name === 'arpeggio' ||
         name === 'arpeggio-for' ||
@@ -1621,45 +1644,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
         this.shadowRoot!.appendChild(svg);
 
-        svg.addEventListener('click', (e) => {
-          this.dispatchEvent(
-            new CustomEvent(CHORD_EVENTS.CLICK, {
-              bubbles: true,
-              composed: true,
-              detail: {
-                notes: this.notes,
-                duration: this.duration,
-                originalEvent: e,
-              },
-            })
-          );
-        });
-        svg.addEventListener('pointerdown', (e) => {
-          this.dispatchEvent(
-            new CustomEvent(CHORD_EVENTS.POINTERDOWN, {
-              bubbles: true,
-              composed: true,
-              detail: {
-                notes: this.notes,
-                duration: this.duration,
-                originalEvent: e,
-              },
-            })
-          );
-        });
-        svg.addEventListener('pointerup', (e) => {
-          this.dispatchEvent(
-            new CustomEvent(CHORD_EVENTS.POINTERUP, {
-              bubbles: true,
-              composed: true,
-              detail: {
-                notes: this.notes,
-                duration: this.duration,
-                originalEvent: e,
-              },
-            })
-          );
-        });
+        this.#wireInteractionEvents(svg);
       } else {
         // Standalone mode: use built-in coordinate system to render a proper chord SVG.
         const notes = this.notes;
@@ -1740,6 +1725,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor creates it
         this.shadowRoot!.appendChild(svg);
+        this.#wireInteractionEvents(svg);
+      }
+    }
+
+    #wireInteractionEvents(svg: SVGSVGElement): void {
+      const events: [string, string][] = [
+        ['click', CHORD_EVENTS.CLICK],
+        ['pointerdown', CHORD_EVENTS.POINTERDOWN],
+        ['pointerup', CHORD_EVENTS.POINTERUP],
+      ];
+      for (const [nativeType, chordType] of events) {
+        svg.addEventListener(nativeType, (e) => {
+          this.dispatchEvent(
+            new CustomEvent(chordType, {
+              bubbles: true,
+              composed: true,
+              detail: {
+                notes: this.notes,
+                duration: this.duration,
+                originalEvent: e,
+              },
+            })
+          );
+        });
       }
     }
 

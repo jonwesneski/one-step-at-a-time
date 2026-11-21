@@ -105,7 +105,6 @@ import type {
   TupletElementType,
 } from '../types/elements';
 import type {
-  DurationType,
   DynamicMarking,
   HairpinKind,
   MeasureEndBarline,
@@ -196,6 +195,7 @@ import {
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
+  parseDuration,
   parseEnding,
   parseMeasureEndBarline,
   parseMeasureNumberDisplay,
@@ -627,13 +627,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     get number(): number | null {
       const value = this.getAttribute('number');
-      if (value === null) return null;
-      return parseInt(value);
+      if (value === null) {
+        return null;
+      }
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? null : parsed;
     }
 
     set number(value: number | null) {
-      if (value === null) this.removeAttribute('number');
-      else this.setAttribute('number', value.toString());
+      if (value === null) {
+        this.removeAttribute('number');
+      } else {
+        this.setAttribute('number', value.toString());
+      }
     }
 
     get barline(): MeasureEndBarline | null {
@@ -762,226 +768,97 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.setAttribute(COMMON_ATTRIBUTES.TIME, value);
     }
 
+    // Registration order is dispatch order for a shared event: beams redraw
+    // before connectors and dynamics, which read the drawn beams. One list
+    // serves both add and remove, so the two can't drift apart.
+    #listeners(): [string, EventListener][] {
+      return [
+        [STAFF_EVENTS.STAFF_MIN_WIDTH, this.#onStaffMinWidth],
+        // A staff's resize re-runs #spaceElements() without STAFF_MIN_WIDTH,
+        // resetting a cross-staff rest's style.left, so its stem-avoidance
+        // nudge needs this event too.
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawDoubleStemmedBeams],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawCrossStaffTremolos],
+        [TREMOLO_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedrawCrossStaffTremolos],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawCrossStaffTuplets],
+        [TUPLET_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedrawCrossStaffTuplets],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawMeasureDynamics],
+        [TUPLET_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedrawMeasureDynamics],
+        [
+          STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
+          this.#boundLayoutSystemDecorations,
+        ],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundSyncBarlineSlots],
+        // Registered after the beams listener above: a slur reads the drawn
+        // beam polygon to avoid crossing it, so connectors redraw after beams.
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawConnectors],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawSharedStems],
+        [
+          STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
+          this.#boundUpdateConnectorVisibility,
+        ],
+        [STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE, this.#boundSyncMarkerBeats],
+        [
+          STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
+          this.#boundUpdateConnectorVisibility,
+        ],
+        [NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, this.#boundRedrawArpeggios],
+        [NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, this.#boundRedrawConnectors],
+        [
+          NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
+          this.#boundRedrawMeasureDynamics,
+        ],
+        [
+          NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+          this.#boundRedrawDoubleStemmedBeams,
+        ],
+        [
+          NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
+          this.#boundRedrawMeasureDynamics,
+        ],
+        // Registered after the beams listener above, for the same reason as
+        // the NOTES_POSITIONED pair — a beam-group membership change can
+        // change which beam (if any) a slur needs to avoid, or whether its
+        // two endpoints now share a resolved group at all.
+        [NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, this.#boundRedrawConnectors],
+        [
+          NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+          this.#boundRedrawDoubleStemmedBeams,
+        ],
+        // The staff redraws its octave signs first (it sits nearer the note
+        // the event bubbles from); the beam and gap decorations then step
+        // around the new ones.
+        [NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, this.#boundRedrawGapPasses],
+        [
+          NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
+          this.#boundRedrawMeasureDynamics,
+        ],
+        [
+          NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
+          this.#boundRedrawSharedStems,
+        ],
+      ];
+    }
+
     connectedCallback(): void {
       this.render();
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- a measure is always slotted into a parent
-      this.#staffConnectorObserver.observe(this.parentElement!);
-      this.addEventListener(
-        STAFF_EVENTS.STAFF_MIN_WIDTH,
-        this.#onStaffMinWidth
-      );
-      // A staff's resize re-runs #spaceElements() without STAFF_MIN_WIDTH,
-      // resetting a cross-staff rest's style.left, so its stem-avoidance
-      // nudge needs this event too.
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawDoubleStemmedBeams
-      );
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawCrossStaffTremolos
-      );
-      this.addEventListener(
-        TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedrawCrossStaffTremolos
-      );
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawCrossStaffTuplets
-      );
-      this.addEventListener(
-        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedrawCrossStaffTuplets
-      );
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.addEventListener(
-        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.addEventListener(
-        STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
-        this.#boundLayoutSystemDecorations
-      );
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundSyncBarlineSlots
-      );
-      // Registered after the beams listener above: a slur reads the drawn
-      // beam polygon to avoid crossing it, so connectors redraw after beams.
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawConnectors
-      );
-      this.addEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawSharedStems
-      );
-      this.addEventListener(
-        STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
-        this.#boundUpdateConnectorVisibility
-      );
-      this.addEventListener(
-        STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
-        this.#boundSyncMarkerBeats
-      );
-      this.addEventListener(
-        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
-        this.#boundUpdateConnectorVisibility
-      );
-      this.addEventListener(
-        NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE,
-        this.#boundRedrawArpeggios
-      );
-      this.addEventListener(
-        NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
-        this.#boundRedrawConnectors
-      );
-      this.addEventListener(
-        NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.addEventListener(
-        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedrawDoubleStemmedBeams
-      );
-      this.addEventListener(
-        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      // Registered after the beams listener above, for the same reason as
-      // the NOTES_POSITIONED pair — a beam-group membership change can
-      // change which beam (if any) a slur needs to avoid, or whether its
-      // two endpoints now share a resolved group at all.
-      this.addEventListener(
-        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedrawConnectors
-      );
-      this.addEventListener(
-        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
-        this.#boundRedrawDoubleStemmedBeams
-      );
-      // The staff redraws its octave signs first (it sits nearer the note
-      // the event bubbles from); the beam and gap decorations then step
-      // around the new ones.
-      this.addEventListener(
-        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
-        this.#boundRedrawGapPasses
-      );
-      this.addEventListener(
-        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.addEventListener(
-        NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
-        this.#boundRedrawSharedStems
-      );
+      // A measure placed directly in a shadow root has no parentElement.
+      const parent =
+        this.parentElement ??
+        (this.parentNode instanceof ShadowRoot ? this.parentNode.host : null);
+      if (parent !== null) {
+        this.#staffConnectorObserver.observe(parent);
+      }
+      for (const [type, listener] of this.#listeners()) {
+        this.addEventListener(type, listener);
+      }
     }
 
     disconnectedCallback(): void {
       this.#staffConnectorObserver.disconnect();
-      this.removeEventListener(
-        STAFF_EVENTS.STAFF_MIN_WIDTH,
-        this.#onStaffMinWidth
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawDoubleStemmedBeams
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawCrossStaffTremolos
-      );
-      this.removeEventListener(
-        TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedrawCrossStaffTremolos
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundSyncBarlineSlots
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawConnectors
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawSharedStems
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
-        this.#boundUpdateConnectorVisibility
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.TAB_LINK_ATTRIBUTE_CHANGE,
-        this.#boundSyncMarkerBeats
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
-        this.#boundUpdateConnectorVisibility
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE,
-        this.#boundRedrawArpeggios
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
-        this.#boundRedrawConnectors
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.removeEventListener(
-        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
-        this.#boundRedrawMeasureDynamics
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedrawDoubleStemmedBeams
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedrawConnectors
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.REST_STAFF_SIDE_ATTRIBUTE_CHANGE,
-        this.#boundRedrawDoubleStemmedBeams
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
-        this.#boundRedrawGapPasses
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.NOTES_POSITIONED,
-        this.#boundRedrawCrossStaffTuplets
-      );
-      this.removeEventListener(
-        TUPLET_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedrawCrossStaffTuplets
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.VERTICAL_SPACE_CHANGE,
-        this.#boundLayoutSystemDecorations
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE,
-        this.#boundRedrawSharedStems
-      );
+      for (const [type, listener] of this.#listeners()) {
+        this.removeEventListener(type, listener);
+      }
       this.#staffWidths.clear();
     }
 
@@ -2464,8 +2341,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 ? beatOffsetOf.call(staff, first)
                 : null,
             members: flatElements.map((element) => {
-              const duration = (element.getAttribute('duration') ??
-                'quarter') as DurationType;
+              const duration =
+                parseDuration(element.getAttribute('duration')) ?? 'quarter';
               return {
                 element,
                 isRest: element.nodeName === MUSIC_REST_NODE,

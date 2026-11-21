@@ -627,3 +627,77 @@ describe(`${MUSIC_STAFF_VOCAL} width with lyrics`, () => {
     expect(vocalWidths.naturalWidth).toBeCloseTo(baseWidths.naturalWidth, 5);
   });
 });
+
+describe('lyric alignment', () => {
+  const placedSyllables = (lyrics: Element) =>
+    Array.from(lyrics.shadowRoot!.querySelectorAll('text:not(.hyphen)')).map(
+      (text) => text.textContent
+    );
+
+  it('gives a chord one syllable, not one per tone', () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML = `
+      <music-staff-vocal voice="soprano">
+        <music-chord duration="quarter">
+          <music-note note="C" octave="5"></music-note>
+          <music-note note="E" octave="5"></music-note>
+          <music-note note="G" octave="5"></music-note>
+        </music-chord>
+        <music-note note="D" octave="5" duration="quarter"></music-note>
+        <${MUSIC_LYRICS}>one two three</${MUSIC_LYRICS}>
+      </music-staff-vocal>`;
+    const lyrics = document.querySelector(MUSIC_LYRICS)!;
+    expect(placedSyllables(lyrics)).toEqual(['one', 'two']);
+  });
+
+  it('carries a syllable over a tie continuation', () => {
+    document.body.innerHTML = `
+      <music-staff-vocal voice="soprano">
+        <music-note note="C" octave="5" duration="quarter" tie="start"></music-note>
+        <music-note note="C" octave="5" duration="quarter" tie="end"></music-note>
+        <music-note note="D" octave="5" duration="quarter"></music-note>
+        <${MUSIC_LYRICS}>la la</${MUSIC_LYRICS}>
+      </music-staff-vocal>`;
+    const lyrics = document.querySelector(MUSIC_LYRICS)!;
+    expect(placedSyllables(lyrics)).toEqual(['la', 'la']);
+  });
+
+  it('re-positions when the lyric text changes', async () => {
+    document.body.innerHTML = `
+      <music-staff-vocal voice="soprano">
+        <music-note note="C" octave="5" duration="quarter"></music-note>
+        <music-note note="D" octave="5" duration="quarter"></music-note>
+        <${MUSIC_LYRICS}>a b</${MUSIC_LYRICS}>
+      </music-staff-vocal>`;
+    const lyrics = document.querySelector(MUSIC_LYRICS)!;
+    lyrics.textContent = 'x y';
+    await Promise.resolve();
+    expect(placedSyllables(lyrics)).toEqual(['x', 'y']);
+  });
+
+  it('stacks verses by their verse number', () => {
+    document.body.innerHTML = `
+      <music-staff-vocal voice="soprano">
+        <music-note note="C" octave="5" duration="quarter"></music-note>
+        <${MUSIC_LYRICS} verse="2">second</${MUSIC_LYRICS}>
+        <${MUSIC_LYRICS} verse="1">first</${MUSIC_LYRICS}>
+      </music-staff-vocal>`;
+    const [second, first] = Array.from(document.querySelectorAll(MUSIC_LYRICS));
+    const y = (lyrics: Element) =>
+      Number(lyrics.shadowRoot!.querySelector('text')!.getAttribute('y'));
+    expect(y(first)).toBeLessThan(y(second));
+  });
+
+  it('clears syllables once every note is removed', () => {
+    document.body.innerHTML = `
+      <music-staff-vocal voice="soprano">
+        <music-note note="C" octave="5" duration="quarter"></music-note>
+        <${MUSIC_LYRICS}>gone</${MUSIC_LYRICS}>
+      </music-staff-vocal>`;
+    const lyrics = document.querySelector(MUSIC_LYRICS)!;
+    document.querySelector(MUSIC_NOTE)!.remove();
+    lyrics.setAttribute('verse', '1');
+    lyrics.setAttribute('verse', '2');
+    expect(placedSyllables(lyrics)).toEqual([]);
+  });
+});

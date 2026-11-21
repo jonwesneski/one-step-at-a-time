@@ -5,6 +5,7 @@ import type {
   ArticulationType,
   BarlineType,
   ClefType,
+  DurationType,
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
@@ -26,6 +27,7 @@ import type {
   StemDirection,
   StressType,
   TieStyle,
+  TimeSignature,
   TremoloBeamAttach,
   TremoloBeamPosition,
   TremoloLabel,
@@ -41,6 +43,7 @@ import {
   ARTICULATIONS,
   BARLINE_TYPES,
   CLEFS,
+  DURATIONS,
   DYNAMICS,
   ENDING_NUMBERINGS,
   GLISSANDO_HINTS,
@@ -59,6 +62,7 @@ import {
   STEM_DIRECTIONS,
   STRESSES,
   TIE_STYLES,
+  TIMES,
   TREMOLO_BEAM_ATTACHES,
   TREMOLO_BEAM_POSITIONS,
   TREMOLO_LABELS,
@@ -70,6 +74,8 @@ import {
 } from './consts';
 
 const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
+const VALID_DURATIONS = new Set<string>(DURATIONS);
+const VALID_TIMES = new Set<string>(TIMES);
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
 const VALID_ARTICULATIONS = new Set<string>(ARTICULATIONS);
 const VALID_STRESSES = new Set<string>(STRESSES);
@@ -108,6 +114,25 @@ const VALID_MEASURE_END_BARLINES = new Set<string>(MEASURE_END_BARLINES);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
 const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
+
+export const parseDuration = (value: string | null): DurationType | null =>
+  value !== null && VALID_DURATIONS.has(value) ? (value as DurationType) : null;
+
+export const warnIfInvalidDuration = (
+  tagName: string,
+  value: string | null
+): void => {
+  if (value !== null && parseDuration(value) === null) {
+    console.warn(
+      `[${tagName}] duration="${value}" is not a valid duration; drawing a quarter`
+    );
+  }
+};
+
+export const parseTimeSignature = (
+  value: string | null
+): TimeSignature | null =>
+  value !== null && VALID_TIMES.has(value) ? (value as TimeSignature) : null;
 
 export const parseConnectorRole = (
   value: string | null

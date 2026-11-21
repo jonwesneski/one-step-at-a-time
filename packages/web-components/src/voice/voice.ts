@@ -1,5 +1,6 @@
 import {
   MUSIC_ARPEGGIO_NODE,
+  MUSIC_BARLINE_NODE,
   MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
   MUSIC_NOTE_NODE,
@@ -10,10 +11,10 @@ import {
   MUSIC_VOICE_NODE,
   NOTE_EVENTS,
 } from '../utils/consts';
-// A <music-clef> is a valid <music-voice> child (see #applyDefaults below) —
-// only meaningfully honored inside the *first* <music-voice> sibling
-// (voice 1), since a clef change is staff-wide and voice 1 is the canonical
-// timeline every other voice's beat-offsets are compared against. This
+// A <music-clef> or <music-barline> is a valid <music-voice> child (see
+// #validateChildren below) — only meaningfully honored inside the *first*
+// <music-voice> sibling (voice 1), since each is staff-wide and voice 1 is the
+// canonical timeline every other voice's beat-offsets are compared against. This
 // element can't know its own sibling position, so it can't enforce that
 // restriction itself — flattenStaffSlotElements() does, at the staff level.
 
@@ -48,7 +49,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #childObserver: MutationObserver | null = null;
 
     connectedCallback(): void {
-      this.#applyDefaults();
+      this.#validateChildren();
       this.#childObserver = new MutationObserver(() => this.#onChildChange());
       this.#childObserver.observe(this, { childList: true });
       this.#notify();
@@ -66,16 +67,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #onChildChange(): void {
-      this.#applyDefaults();
+      this.#validateChildren();
       this.#notify();
     }
 
-    // Validate the structure: voices don't nest. <music-clef> is allowed
-    // structurally (a clef change is staff-wide, but voice 1 is its
-    // canonical anchor point — see the class-level comment above); only the
+    // Validate the structure: voices don't nest. <music-clef> and
+    // <music-barline> are allowed structurally (each is staff-wide, but voice 1
+    // is its canonical anchor point — see the class-level comment above); only the
     // staff itself (flattenStaffSlotElements) can tell whether this
     // <music-voice> is actually voice 1, so it enforces that part.
-    #applyDefaults(): void {
+    #validateChildren(): void {
       for (const child of this.#elementChildren()) {
         if (child.nodeName === MUSIC_VOICE_NODE) {
           console.warn(
@@ -88,7 +89,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           child.nodeName !== MUSIC_TUPLET_NODE &&
           child.nodeName !== MUSIC_TREMOLO_NODE &&
           child.nodeName !== MUSIC_ARPEGGIO_NODE &&
-          child.nodeName !== MUSIC_CLEF_NODE
+          child.nodeName !== MUSIC_CLEF_NODE &&
+          child.nodeName !== MUSIC_BARLINE_NODE
         ) {
           console.warn(
             `[music-voice] <${child.nodeName.toLowerCase()}> is not allowed inside <music-voice>`

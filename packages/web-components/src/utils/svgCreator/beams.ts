@@ -60,7 +60,7 @@ import {
   STAFF_Y_PADDING,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
-import { parseNotehead, parseTremolo } from '../parsers';
+import { parseDuration, parseNotehead, parseTremolo } from '../parsers';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
@@ -681,7 +681,9 @@ class BeamRenderer {
   stemExtension(noteIndex: number): number {
     for (const renderer of this.#groupRenderers) {
       const ext = renderer.stemExtension(noteIndex);
-      if (ext !== null) return ext;
+      if (ext !== null) {
+        return ext;
+      }
     }
     return 0;
   }
@@ -780,9 +782,13 @@ export class BeamsBuilder {
     beatType: BeatTypeInMeasure
   ): number {
     // Compound time (6/8, 9/8, 12/8, …): group per dotted quarter (3 eighths).
-    if (beatType === 8 && beats % 3 === 0) return 3 / 8;
+    if (beatType === 8 && beats % 3 === 0) {
+      return 3 / 8;
+    }
     // 4/4: group by half-measure — (beats 1–2) and (beats 3–4).
-    if (beats === 4 && beatType === 4) return 2 / 4;
+    if (beats === 4 && beatType === 4) {
+      return 2 / 4;
+    }
     // All other simple time: one group per beat.
     return 1 / beatType;
   }
@@ -836,8 +842,9 @@ export class BeamsBuilder {
         if (
           elOffset < beatWindowStart - 1e-9 ||
           elOffset >= beatWindowEnd - 1e-9
-        )
+        ) {
           continue;
+        }
 
         if (externallyBeamedIndices.has(i)) {
           // Already joined to a cross-staff beam group — breaks a same-staff
@@ -850,8 +857,10 @@ export class BeamsBuilder {
           continue;
         }
 
-        const dur = (elements[i].dataset.duration ??
-          elements[i].getAttribute('duration')) as DurationType;
+        const dur =
+          parseDuration(
+            elements[i].dataset.duration ?? elements[i].getAttribute('duration')
+          ) ?? 'quarter';
         // A triangle (undefined extreme pitch) always stands alone with its
         // own flag. A chord can't be one: its triangle value falls back to
         // normal heads.
@@ -923,7 +932,9 @@ export class BeamsBuilder {
    */
   beamGroupFor(noteIndex: number): readonly number[] | null {
     for (const group of this.#groups) {
-      if (group.containsNote(noteIndex)) return group.globalIndices;
+      if (group.containsNote(noteIndex)) {
+        return group.globalIndices;
+      }
     }
     const tremolo = this.#tremoloSpecByMember.get(noteIndex);
     if (tremolo !== undefined && !tremolo.between) {
