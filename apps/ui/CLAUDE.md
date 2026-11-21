@@ -207,21 +207,33 @@ future save in `CompositionStructure`.
   node (`selectMeasure` / `selectStaff` / `selectEntry`).
 - **Shift / Cmd / Ctrl + click an entry** → toggles it in `selection.entryIds`
   (added for tie/slur, which need 2+ entries).
-- **Drag-marquee** (`DragSelectOverlay` wraps `<music-composition>`) →
-  `computeBoxSelection` (`selectionHelpers.ts`, pure + unit-tested) turns a
-  `DOMRect` into a `Selection`, promoting to measure/staff level when the box
-  covers ≥ `COVERAGE_THRESHOLD` of the element. Mouse defers pointer-capture until
-  it crosses `DRAG_THRESHOLD_PX` so plain clicks still bubble; touch needs a
-  `LONG_PRESS_MS` hold so swipes still scroll. Marquee results come out in
-  **document order**; shift-click results in click order — sort by document
-  position when order matters.
+- **Drag-marquee** (`SelectionCanvas` wraps `<music-composition>` in a padded
+  canvas that fills the rest of the viewport, so a drag can start outside any
+  measure) → `computeBoxSelection` (`selectionHelpers.ts`, pure + unit-tested)
+  turns a `DOMRect` into a `Selection`, promoting to measure/staff level when the
+  box covers ≥ `COVERAGE_THRESHOLD` of the element. The gesture lives in
+  `useMarqueeSelection`, with its pure math in `marqueeHelpers.ts`:
+  - Mouse defers pointer-capture until it crosses `DRAG_THRESHOLD_PX` so plain
+    clicks still bubble; touch needs a `LONG_PRESS_MS` hold so swipes still scroll.
+  - The anchor is stored in **page** coordinates and the page auto-scrolls near
+    the viewport's top/bottom edge, so a box can span more than one screen.
+  - **Shift / Cmd / Ctrl + drag** merges into the current selection
+    (`mergeSelections`); a plain drag replaces it.
+  - A pointerdown on a form control or inside `[data-marquee-ignore]` (the
+    `DockedTabPanel`) never arms a marquee.
+- Marquee results come out in **document order** (a modifier-drag appends its new
+  ids in document order after the existing ones); shift-click results in click
+  order — sort by document position when order matters.
+- **Click on empty canvas** (the canvas itself, or a gap inside
+  `<music-composition>`, which shadow-DOM retargeting reports as the host) →
+  `clearSelection`.
 - What a selection _enables_ is up to each component: `MeasureInput` shows an "Add
   Staff" / "Group Staves" / "Ties & Slurs" tab for measure / multi-staff / entry
   selections; `Backspace`/`Delete` deletes any non-empty selection.
 - **Note drag coexists with the marquee** (piece 10): a pointerdown that lands on a
   note/chord/rest is claimed by `useEntryDrag` (`e.stopPropagation()` before
-  `DragSelectOverlay`'s bubble-phase handler sees it), so the marquee only ever
-  starts from empty staff/measure whitespace. Same deferred-capture + threshold +
+  `SelectionCanvas`'s bubble-phase handler sees it), so the marquee only ever
+  starts from whitespace. Same deferred-capture + threshold +
   post-drag click-swallow as the marquee, so a plain click still selects.
 
 **5. `DockedTabPanel` — every entry/structure editor lives here.** Any control
@@ -260,8 +272,9 @@ contract is declared in `packages/web-components/src/react.d.ts` (published as t
 - `MeasureInput` / `StaffInput` register each element in the session ref maps via
   callback ref for hit-testing.
 
-**7. Pure logic + colocated tests.** Non-trivial transforms live in a plain
-`.ts` next to a `.test.ts` (vitest, no React): `deleteSelectionHelpers.ts`,
+**7. Pure logic, optionally with a light colocated test.** Non-trivial transforms live in a plain
+`.ts` that can sit next to a `.test.ts` (vitest, no React; see the light-testing rule
+under Build & test): `deleteSelectionHelpers.ts`,
 `selectionHelpers.ts`, `staffGroupsHelpers.ts`, `connectorsHelpers.ts`. Keep them
 `this`-free and structure-in/structure-out so they're trivially testable — the
 components stay thin. When such a helper mirrors a rule that also lives in
@@ -275,8 +288,7 @@ app only has to handle well-formed data since it's the sole writer.
 without them **and** repairs anything left dangling — a group that dropped below 2
 staves, a connector whose endpoint is gone — finishing with
 `pruneInvalidNotationLinks`. Any new collection that references node ids needs its
-own filter here (or a `pruneInvalid*` pass in `notationLinksHelpers.ts`), plus a
-test.
+own filter here (or a `pruneInvalid*` pass in `notationLinksHelpers.ts`).
 
 **9. Time signature is positional; measure capacity is enforced.**
 
@@ -329,8 +341,8 @@ machine, wired onto every note/chord/rest via `onPointerDown` in `StaffInput`.
   Δy by `STAFF_Y_STEP` (5px, mirrored from the library's `notationDimensions.ts`;
   the staff lays vertical positions out in raw CSS px), clamps to the clef range
   from `clefsHelpers.ts`, and skips a chord's other notes. Live preview writes the
-  `note`/`octave` attribute straight onto the light-DOM element — the library
-  re-renders in place via its `note-y-change` event. Commit reuses `updateEntry`.
+  `note`/`octave` attribute straight onto the light-DOM element, and the library
+  re-renders it in place. Commit reuses `updateEntry`.
 - **Reorder** computes a drop index by geometry over the entry's own voice's
   `entryElements` rects (`reorderTargetIndex`), then `reorderEntry` →
   `moveEntryInVoice` (`reorderHelpers.ts`), which splices that voice's
@@ -411,7 +423,7 @@ CompositionInput                       owns useForm + useUndoRedo + all mutators
 └─ CompositionFormSessionProvider       selection, panel state, ref maps, mutator forwarding
    └─ FormProvider (react-hook-form)
       └─ CompositionFormBody            watches root values; Undo/Redo/Delete bar; MeterChangeDialog; renders:
-         └─ DragSelectOverlay           marquee selection
+         └─ SelectionCanvas             score canvas: marquee selection (useMarqueeSelection), click-empty-to-clear
             └─ <music-composition>
                ├─ MeasureInput ×N  → <music-measure time=meter repeat-start barline ending ending-label>   (+ Measure / Repeats / Group Staves / Connections / Edit / Grace / Notehead / Tremolo / Trill / Arpeggio / Octave / Tuplet / Tremolo Group / Written-out Arpeggio / Cross-staff Beam / Cross-staff Tremolo / Cross-staff Arpeggio / Shared Stem / Phrase Slur panels)
                │   └─ StaffInput ×M → <music-staff> | <music-staff-vocal> (+ <music-lyrics>) | <music-staff-guitar-tab>   (+ Staff Entries panel: Note / Chord / Rest / Clef Change or Lyrics / Barline / Voices / Staff; tab: Tab Note / Staff)
@@ -442,7 +454,8 @@ Use as a menu, not a mandatory sequence.
    (a collection owned by a parent node is ordered by the parent's id array
    instead, like `entryIds`); wire the four spots in `CompositionInput.tsx`
    (type, `defaultValues`, `getStructure`, `setStructure`).
-3. **Pure logic** → `<feature>.ts` + `<feature>.test.ts` (mirror `staffGroupsHelpers.ts`).
+3. **Pure logic** → `<feature>.ts` (mirror `staffGroupsHelpers.ts`), plus at most
+   a happy-path test or two in `<feature>.test.ts`.
 4. **Mutator** → a function in `CompositionInput.tsx` that builds the next
    structure and calls `record(next)`; thread it through the provider `on*` prop
    and the context value.
@@ -453,7 +466,7 @@ Use as a menu, not a mandatory sequence.
    or `computeBoxSelection` only if you need a new selection behaviour.
 7. **Render** → pass new attributes/children to the `<music-*>` elements; add a
    derive hook if the props depend on the whole structure.
-8. **Cleanup** → filter in `removeSelectionFromStructure` + a test.
+8. **Cleanup** → filter in `removeSelectionFromStructure`.
 9. `npx nx format:write && npx nx test ui && npx nx typecheck ui && npx nx lint ui`.
 
 ## Design system (`app/design-system/`)
@@ -471,7 +484,7 @@ class to a selected element.
 
 - Curly braces on every `if`/`else` branch — see the root `CLAUDE.md`.
 - Comments: default to none; see the root `CLAUDE.md` comment rules. Design-decision
-  rationale is welcome (e.g. `DragSelectOverlay`'s pointer-capture-deferral note).
+  rationale is welcome (e.g. `useMarqueeSelection`'s pointer-capture-deferral note).
 - Form sub-components are named `<Thing>Input.tsx`.
 - react-hook-form is the model store. Components subscribe with `useWatch({
 control, name })` or `useFormContext().watch(name)` — both are in use; pick
@@ -491,6 +504,13 @@ Run from the monorepo root via nx (never the underlying tool directly):
 | Typecheck  | `npx nx typecheck ui` | `tsc --noEmit`; builds web-components first   |
 | Lint       | `npx nx lint ui`      |                                               |
 | Format     | `npx nx format:write` | run after every batch of edits                |
+
+**Keep unit tests very light.** The UI's look and behaviour are still being worked
+out, so code here gets reshaped or deleted often, and every test is one more thing
+to update. Write at most one or two happy-path tests per helper. Write zero (or at
+most one happy-path test) for component and hook files. Don't add edge-case
+matrices or exhaustive coverage. When a change makes an existing test obsolete,
+delete the test rather than preserving it.
 
 **Testing today is pure-function unit tests only** — vitest + jsdom, local fixture
 builders returning `CompositionStructure` (or a `Pick<>` of it), asserting on the

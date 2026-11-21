@@ -4,13 +4,14 @@ import {
   computeBoxSelection,
   coverageRatio,
   intersects,
+  mergeSelections,
   type ElementRefMaps,
 } from './selectionHelpers';
 import {
   buildMultiVoiceStaff,
   buildSingleVoiceStaff,
 } from './test-fixtures/voiceFixtures';
-import type { CompositionStructure } from './types';
+import type { CompositionStructure, Selection } from './types';
 
 function rect(
   left: number,
@@ -207,5 +208,48 @@ describe('computeBoxSelection', () => {
     const result = computeBoxSelection(rect(500, 500, 10, 10), structure, refs);
 
     expect(result).toEqual({ measureIds: [], staffIds: [], entryIds: [] });
+  });
+});
+
+describe('mergeSelections', () => {
+  const base: Selection = {
+    measureIds: ['m1'],
+    staffIds: ['s1'],
+    entryIds: ['e2', 'e1'],
+  };
+
+  it('appends new ids after the existing ones, in their own order', () => {
+    expect(
+      mergeSelections(base, {
+        measureIds: ['m2'],
+        staffIds: [],
+        entryIds: ['e3', 'e1', 'e4'],
+      })
+    ).toEqual({
+      measureIds: ['m1', 'm2'],
+      staffIds: ['s1'],
+      entryIds: ['e2', 'e1', 'e3', 'e4'],
+    });
+  });
+
+  it('returns the base selection itself when nothing is new', () => {
+    expect(
+      mergeSelections(base, {
+        measureIds: ['m1'],
+        staffIds: [],
+        entryIds: ['e1'],
+      })
+    ).toBe(base);
+  });
+
+  it('merges into an empty selection', () => {
+    const added: Selection = {
+      measureIds: [],
+      staffIds: ['s2'],
+      entryIds: [],
+    };
+    expect(
+      mergeSelections({ measureIds: [], staffIds: [], entryIds: [] }, added)
+    ).toEqual(added);
   });
 });

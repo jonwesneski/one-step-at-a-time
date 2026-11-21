@@ -1,4 +1,5 @@
 import { useCompositionFormSession } from './CompositionFormSessionContext';
+import { MARQUEE_IGNORE_ATTRIBUTE } from './marqueeHelpers';
 
 interface DockedTabPanelTab {
   label: string;
@@ -21,6 +22,7 @@ export function DockedTabPanel({ tabs }: DockedTabPanelProps) {
     <div
       className="fixed bottom-0 left-0 w-full h-[25vh] md:h-auto md:max-h-[40vh] z-20 bg-white shadow-lg border-t border-zinc-200 flex flex-col"
       onClick={(e) => e.stopPropagation()}
+      {...{ [MARQUEE_IGNORE_ATTRIBUTE]: '' }}
     >
       <div className="flex shrink-0 overflow-x-auto border-b border-zinc-200">
         {tabs.map((t) => (

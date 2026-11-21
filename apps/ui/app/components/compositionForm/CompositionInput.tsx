@@ -23,7 +23,6 @@ import {
   removeConnector,
   upsertConnector,
 } from './connectorsHelpers';
-import { DragSelectOverlay } from './DragSelectOverlay';
 import { applyEntryUpdate } from './entryEditsHelpers';
 import { MeasureInput } from './MeasureInput';
 import { pruneInvalidNotationLinks } from './notationLinksHelpers';
@@ -32,6 +31,7 @@ import {
   moveEntryInVoice,
   moveEntryToVoice as moveEntryToVoiceInStructure,
 } from './reorderHelpers';
+import { SelectionCanvas } from './SelectionCanvas';
 import { findGroupMembers } from './staffGroupsHelpers';
 import type { NewStaff } from './staffSettingsHelpers';
 import { staffSettingsOf } from './staffSettingsHelpers';
@@ -130,7 +130,7 @@ function CompositionFormBody({
     : 'pb-[25vh] md:pb-[40vh]';
 
   return (
-    <div className={`flex flex-col gap-4 ${dockPadding}`}>
+    <div className="flex flex-1 flex-col gap-4">
       <div className="p-3 bg-white rounded border border-zinc-200 shadow-sm">
         <BasicInfoInput />
       </div>
@@ -150,7 +150,7 @@ function CompositionFormBody({
         </Button>
       </div>
 
-      <DragSelectOverlay>
+      <SelectionCanvas className={dockPadding}>
         <music-composition
           key-sig={keySig}
           mode={mode}
@@ -171,7 +171,7 @@ function CompositionFormBody({
             Add Measure
           </Button>
         </music-composition>
-      </DragSelectOverlay>
+      </SelectionCanvas>
 
       <TimeSignatureChangeDialog />
     </div>

@@ -13,8 +13,8 @@ import { CLEF_RANGES, step, stepToPitch } from './clefsHelpers';
 export const STAFF_Y_STEP = 5;
 
 // Pointer travel (either axis) before a press on a note becomes a drag rather
-// than a click. Matches DragSelectOverlay's DRAG_THRESHOLD_PX so both gestures
-// agree on what counts as a plain click.
+// than a click. The marquee (useMarqueeSelection) uses the same threshold so
+// both gestures agree on what counts as a plain click.
 export const DRAG_THRESHOLD_PX = 4;
 
 // True when a `composedPath()` passes through a notehead (`.head` /

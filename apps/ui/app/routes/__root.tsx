@@ -43,7 +43,7 @@ function Root() {
             className="border border-zinc-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
           />
         </header>
-        <main className="p-6">
+        <main className="flex flex-1 flex-col p-6">
           <Outlet />
         </main>
         <Scripts />
