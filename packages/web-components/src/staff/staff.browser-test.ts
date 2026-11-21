@@ -250,7 +250,9 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
       let worst = 0;
       for (const note of Array.from(staff.querySelectorAll('music-note'))) {
         const stem = note.shadowRoot?.querySelector('.stem') as SVGLineElement;
-        if (!stem) continue;
+        if (!stem) {
+          continue;
+        }
         const r = stem.getBoundingClientRect();
         const tipX = r.left + r.width / 2;
         const stemUp = note.shadowRoot!.querySelector('svg')!.dataset.stemUp;

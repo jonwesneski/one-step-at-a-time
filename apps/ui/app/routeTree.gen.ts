@@ -9,13 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StandaloneRouteImport } from './routes/standalone'
-import { Route as SampleRouteImport } from './routes/sample'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SampleRouteImport } from './routes/sample'
+import { Route as StandaloneRouteImport } from './routes/standalone'
 
-const StandaloneRoute = StandaloneRouteImport.update({
-  id: '/standalone',
-  path: '/standalone',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SampleRoute = SampleRouteImport.update({
@@ -23,9 +23,9 @@ const SampleRoute = SampleRouteImport.update({
   path: '/sample',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const StandaloneRoute = StandaloneRouteImport.update({
+  id: '/standalone',
+  path: '/standalone',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -61,11 +61,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/standalone': {
-      id: '/standalone'
-      path: '/standalone'
-      fullPath: '/standalone'
-      preLoaderRoute: typeof StandaloneRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sample': {
@@ -75,11 +75,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SampleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/standalone': {
+      id: '/standalone'
+      path: '/standalone'
+      fullPath: '/standalone'
+      preLoaderRoute: typeof StandaloneRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

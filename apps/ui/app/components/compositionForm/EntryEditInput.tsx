@@ -9,6 +9,7 @@ import { useCompositionFormSession } from './CompositionFormSessionContext';
 import {
   ChordNoteRows,
   DurationSelect,
+  LaissezVibrerFields,
   MarkingsFields,
   OctaveSelect,
   OptionalSelect,
@@ -28,9 +29,10 @@ interface EntryEditInputProps {
   currentVoiceId: string | null;
   canShareDynamic: boolean;
   canTakeLoco: boolean;
+  isTieEndpoint: boolean;
 }
 
-const labelClass = 'text-xs font-medium text-zinc-500';
+const labelClass = 'text-xs font-medium text-fg-muted';
 
 export function EntryEditInput({
   entry,
@@ -40,6 +42,7 @@ export function EntryEditInput({
   currentVoiceId,
   canShareDynamic,
   canTakeLoco,
+  isTieEndpoint,
 }: EntryEditInputProps) {
   const { updateEntry, moveEntryToVoice } = useCompositionFormSession();
 
@@ -92,10 +95,22 @@ export function EntryEditInput({
       {entry.type !== 'rest' &&
         entry.beamGroupId &&
         isBeamableDuration(entry.duration) && (
-          <div className="text-xs text-zinc-400">
+          <div className="text-xs text-fg-subtle">
             Part of a cross-staff beam — a quarter or longer leaves it.
           </div>
         )}
+
+      {entry.type !== 'rest' && (
+        <LaissezVibrerFields
+          value={entry.laissezVibrer ?? null}
+          disabledReason={
+            isTieEndpoint
+              ? 'Already tied to a neighbour — remove that tie first.'
+              : null
+          }
+          onChange={(laissezVibrer) => updateEntry({ ...entry, laissezVibrer })}
+        />
+      )}
 
       {entry.type !== 'rest' && (
         <MarkingsFields
@@ -104,6 +119,7 @@ export function EntryEditInput({
           canShareDynamic={canShareDynamic}
           canTakeLoco={canTakeLoco}
           showStemDirection={!entry.beamGroupId}
+          isChord={entry.type === 'chord'}
         />
       )}
 

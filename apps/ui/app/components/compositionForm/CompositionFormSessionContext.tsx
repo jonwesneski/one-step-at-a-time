@@ -11,14 +11,14 @@ import {
   useState,
 } from 'react';
 import { removeSelectionFromStructure } from './deleteSelectionHelpers';
-import { computeBoxSelection } from './selectionHelpers';
+import { computeBoxSelection, mergeSelections } from './selectionHelpers';
+import type { NewStaff } from './staffSettingsHelpers';
 import type {
   CompositionStructure,
   ConnectorKind,
   DraftMusicEntry,
   MusicEntry,
   Selection,
-  StaffType,
 } from './types';
 import { EMPTY_SELECTION, isSelectionEmpty } from './types';
 
@@ -57,16 +57,16 @@ type CompositionFormSessionContextValue = {
     entryId: string,
     e: React.MouseEvent
   ) => void;
+  // `dragRect` is in client (viewport) coordinates. `additive` merges the
+  // box's result into the current selection instead of replacing it.
   applyDragSelection: (
     dragRect: DOMRect,
-    structure: Pick<
-      CompositionStructure,
-      'measureOrder' | 'measuresById' | 'stavesById'
-    >
+    options: { additive: boolean }
   ) => void;
+  clearSelection: () => void;
   deleteSelected: () => void;
   addMeasure: () => void;
-  addStaff: (measureId: string, staffType: StaffType) => void;
+  addStaff: (measureId: string, newStaff: NewStaff) => void;
   setStaffGroup: (
     measureId: string,
     staffIds: string[],
@@ -119,7 +119,7 @@ type CompositionFormSessionProviderProps = {
   getStructure: () => CompositionStructure;
   recordStructure: (structure: CompositionStructure) => void;
   onAddMeasure: () => void;
-  onAddStaff: (measureId: string, staffType: StaffType) => void;
+  onAddStaff: (measureId: string, newStaff: NewStaff) => void;
   onSetStaffGroup: (
     measureId: string,
     staffIds: string[],
@@ -267,22 +267,29 @@ export function CompositionFormSessionProvider({
   );
 
   const applyDragSelection = useCallback(
-    (
-      dragRect: DOMRect,
-      structure: Pick<
-        CompositionStructure,
-        'measureOrder' | 'measuresById' | 'stavesById'
-      >
-    ) => {
-      const selection = computeBoxSelection(dragRect, structure, {
+    (dragRect: DOMRect, { additive }: { additive: boolean }) => {
+      const boxed = computeBoxSelection(dragRect, getStructure(), {
         measures: measureRefs.current,
         staves: staffRefs.current,
         entries: entryRefs.current,
       });
-      setSession({ selection });
+      setSessionState((prev) => {
+        const selection = additive
+          ? mergeSelections(prev.selection, boxed)
+          : boxed;
+        return selection === prev.selection ? prev : { ...prev, selection };
+      });
     },
-    [setSession]
+    [getStructure]
   );
+
+  const clearSelection = useCallback(() => {
+    setSessionState((prev) =>
+      isSelectionEmpty(prev.selection)
+        ? prev
+        : { ...prev, selection: EMPTY_SELECTION }
+    );
+  }, []);
 
   const editStructure = useCallback(
     (transform: (structure: CompositionStructure) => CompositionStructure) => {
@@ -371,6 +378,7 @@ export function CompositionFormSessionProvider({
         selectStaff,
         selectEntry,
         applyDragSelection,
+        clearSelection,
         deleteSelected,
         addMeasure: onAddMeasure,
         addStaff: onAddStaff,

@@ -76,15 +76,31 @@ export function defaultNormalCount(actual: number): number {
   return map[actual] ?? Math.ceil((actual * 2) / 3);
 }
 
+const TUPLET_RATIO_PATTERN = /^([1-9]\d*)(?::([1-9]\d*))?$/;
+
+/**
+ * Validates a tuplet ratio written as an attribute string: a positive count
+ * (`3`) or `actual:normal` with both positive (`3:2`).
+ */
+export function isTupletRatio(value: string | null): value is TupletRatio {
+  return value !== null && TUPLET_RATIO_PATTERN.test(value);
+}
+
+/**
+ * Splits a tuplet ratio into its actual and normal counts. A malformed ratio
+ * reads as a triplet, so one bad value can't turn a measure's beat offsets
+ * into NaN.
+ */
 export function parseTupletRatio(ratioString: TupletRatio): ParsedTupletRatio {
-  if (ratioString.includes(':')) {
-    const [left, right] = ratioString.split(':');
-    const actual = parseInt(left, 10);
-    const normal = parseInt(right, 10);
-    return { actual, normal, displayString: ratioString };
+  const match = TUPLET_RATIO_PATTERN.exec(ratioString);
+  if (match === null) {
+    return { actual: 3, normal: 2, displayString: '3' };
   }
-  const actual = parseInt(ratioString, 10);
-  const normal = defaultNormalCount(actual);
+  const actual = parseInt(match[1], 10);
+  const normal =
+    match[2] === undefined
+      ? defaultNormalCount(actual)
+      : parseInt(match[2], 10);
   return { actual, normal, displayString: ratioString };
 }
 

@@ -15,6 +15,8 @@ type GroupChoice = 'none' | StaffGroupType;
 const STAFF_TYPE_LABEL: Record<StaffType, string> = {
   treble: 'Treble',
   bass: 'Bass',
+  vocal: 'Vocal',
+  'guitar-tab': 'Guitar tab',
 };
 
 export function StaffGroupInput({ measureId, staffIds }: StaffGroupInputProps) {
@@ -56,13 +58,13 @@ export function StaffGroupInput({ measureId, staffIds }: StaffGroupInputProps) {
 
   return (
     <div className="flex flex-col gap-2 p-3">
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         {orderedStaffIds
           .map((id) => STAFF_TYPE_LABEL[stavesById[id].type])
           .join(', ')}
       </div>
       {!isContiguous && (
-        <div className="text-sm text-red-600">
+        <div className="text-sm text-danger">
           Selected staves must be adjacent to form a group.
         </div>
       )}

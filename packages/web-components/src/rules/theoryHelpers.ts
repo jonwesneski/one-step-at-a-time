@@ -6,11 +6,12 @@ import {
 import { Chord, ChordType, Note } from '../types/theory';
 import { STAFF_LINE_SPACING } from '../utils/notationDimensions';
 import {
-  ChordSemitoneMap,
-  ChordSemitoneMapAliases,
+  CHORD_INTERVALS,
+  type ChordInterval,
+  ChordIntervalMap,
+  ChordIntervalMapAliases,
   MINOR_TO_RELATIVE_MAJOR,
   noteSemitoneMap,
-  semitoneNoteMap,
 } from './theoryConsts';
 
 const Y_COORDINATE_INCREMENT = STAFF_LINE_SPACING / 2;
@@ -18,64 +19,69 @@ const Y_COORDINATE_INCREMENT = STAFF_LINE_SPACING / 2;
 // Shared by generateYCoordinates and extrapolateYCoordinate.
 const NOTE_LETTER_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
-export const getChordNotes = (chord: Chord) => {
-  const isSlash = chord[1] === '/';
-  let root = isSlash ? chord[2] : chord[0];
-  let startIndex = isSlash ? 3 : 1;
-  if (chord[startIndex] === '#' || chord[startIndex] === 'b') {
-    root += chord[startIndex];
-    startIndex += 1;
+const NATURAL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
+const ROOT_PATTERN = /^([A-G])(#|b)?/;
+
+/**
+ * The notes of a chord symbol, root first; null when the root or quality
+ * isn't recognised. A slash chord's bass note is ignored.
+ */
+export const getChordNotes = (chord: Chord): Note[] | null => {
+  const slashIndex = chord.indexOf('/');
+  const body = slashIndex === -1 ? chord : chord.slice(slashIndex + 1);
+  const match = body.match(ROOT_PATTERN);
+  if (match === null) {
+    return null;
   }
-  const chordSignature = chord.slice(startIndex, chord.length) as ChordType;
-  const semitones =
-    ChordSemitoneMap[chordSignature] ??
-    ChordSemitoneMap[ChordSemitoneMapAliases[chordSignature]];
-  return getNotes(root as Note, semitones);
+  const root = match[0] as Note;
+  const quality = body.slice(match[0].length);
+  const intervals =
+    ChordIntervalMap[quality as ChordType] ??
+    ChordIntervalMap[ChordIntervalMapAliases[quality]];
+  if (intervals === undefined) {
+    return null;
+  }
+  return getNotes(root, intervals);
 };
 
-// Indices 0→4 mirror semitoneNoteMap: double-flat, flat, natural, sharp, double-sharp.
-const enharmonicIndex: Partial<Record<Note, 0 | 1 | 2 | 3 | 4>> = {
-  Cb: 0,
-  Fb: 0,
-  Bb: 1,
-  Eb: 1,
-  Ab: 1,
-  Db: 1,
-  Gb: 1,
-  C: 2,
-  D: 2,
-  E: 2,
-  F: 2,
-  G: 2,
-  A: 2,
-  B: 2,
-  'F#': 3,
-  'C#': 3,
-  'G#': 3,
-  'D#': 4,
-  'A#': 4,
-};
 // Exported only for direct unit testing — call getChordNotes() otherwise.
-export const getNotes = (root: Note, semitones: number[]) => {
-  const notes: Note[] = [root];
-  const choiceIndex = enharmonicIndex[root] ?? 2;
-  const rootPosition = noteSemitoneMap.get(root);
-  if (rootPosition !== undefined) {
-    for (const s of semitones) {
-      const position = (rootPosition + s) % 12;
-      const possibleNotes = semitoneNoteMap.get(position);
-      if (possibleNotes) {
-        notes.push(
-          possibleNotes[choiceIndex] ?? possibleNotes[2] ?? possibleNotes[0]
-        );
-      } else {
-        throw new Error('possible note not found');
-      }
-    }
-  } else {
-    throw new Error('no root found');
+export const getNotes = (root: Note, intervals: ChordInterval[]): Note[] => {
+  const rootPitch = noteSemitoneMap.get(root);
+  if (rootPitch === undefined) {
+    throw new Error(`no root found: ${root}`);
   }
-  return notes;
+  const rootLetterIndex = NATURAL_LETTERS.indexOf(
+    root[0] as (typeof NATURAL_LETTERS)[number]
+  );
+  return [
+    root,
+    ...intervals.map((interval) => {
+      const { semitones, letterSteps } = CHORD_INTERVALS[interval];
+      const letter = NATURAL_LETTERS[(rootLetterIndex + letterSteps) % 7];
+      const pitch = (rootPitch + semitones) % 12;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- every natural letter is in noteSemitoneMap
+      const naturalPitch = noteSemitoneMap.get(letter)!;
+      // Signed semitone gap in -6..5: positive sharpens, negative flattens.
+      const alteration = ((pitch - naturalPitch + 18) % 12) - 6;
+      if (Math.abs(alteration) > 2) {
+        return enharmonicSpelling(pitch);
+      }
+      const accidental =
+        alteration > 0 ? '#'.repeat(alteration) : 'b'.repeat(-alteration);
+      return `${letter}${accidental}` as Note;
+    }),
+  ];
+};
+
+// Past a double sharp/flat (e.g. B#aug's fifth, F###), fall back to the
+// first spelling noteSemitoneMap lists for the pitch, natural or single sharp.
+const enharmonicSpelling = (pitch: number): Note => {
+  for (const [note, notePitch] of noteSemitoneMap) {
+    if (notePitch === pitch) {
+      return note;
+    }
+  }
+  throw new Error(`no spelling for pitch ${pitch}`);
 };
 
 // Walks natural notes only (C, B, A, G, F, E, D) from highestNote down to
@@ -90,7 +96,9 @@ export const generateYCoordinates = (
     note: NoteLetterOctave
   ): { letter: string; octave: number } => {
     const match = note.match(/^([A-G])#?b?(\d)$/);
-    if (!match) throw new Error(`Invalid note format: ${note}`);
+    if (!match) {
+      throw new Error(`Invalid note format: ${note}`);
+    }
     return { letter: match[1], octave: parseInt(match[2]) };
   };
 

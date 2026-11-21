@@ -1,3 +1,4 @@
+import type { Chord } from '../types/theory';
 import {
   extrapolateYCoordinate,
   generateYCoordinates,
@@ -8,15 +9,15 @@ import {
 describe('Theory Helpers', () => {
   describe('getNotes', () => {
     it('same octave', () => {
-      expect(getNotes('A', [4, 7])).toEqual(['A', 'C#', 'E']);
+      expect(getNotes('A', ['M3', 'P5'])).toEqual(['A', 'C#', 'E']);
     });
 
     it('single pass 11th position', () => {
-      expect(getNotes('F#', [4, 7])).toEqual(['F#', 'A#', 'C#']);
+      expect(getNotes('F#', ['M3', 'P5'])).toEqual(['F#', 'A#', 'C#']);
     });
 
     it('multi pass 11th position', () => {
-      expect(getNotes('F#', [4, 7, 10, 14, 21])).toEqual([
+      expect(getNotes('F#', ['M3', 'P5', 'm7', 'M9', 'M13'])).toEqual([
         'F#',
         'A#',
         'C#',
@@ -86,6 +87,37 @@ describe('Theory Helpers', () => {
 
     it('Cb minor', () => {
       expect(getChordNotes('Cbmin')).toEqual(['Cb', 'Ebb', 'Gb']);
+    });
+
+    it.each([
+      ['Cmin', ['C', 'Eb', 'G']],
+      ['Gmin', ['G', 'Bb', 'D']],
+      ['Fmin', ['F', 'Ab', 'C']],
+      ['Dmin7', ['D', 'F', 'A', 'C']],
+      ['Bbmin', ['Bb', 'Db', 'F']],
+      ['Cdim', ['C', 'Eb', 'Gb']],
+      ['Cdim7', ['C', 'Eb', 'Gb', 'Bbb']],
+      ['Cmin7b5', ['C', 'Eb', 'Gb', 'Bb']],
+      ['Cm', ['C', 'Eb', 'G']],
+      ['C13', ['C', 'E', 'G', 'Bb', 'D', 'A']],
+    ])('spells %s by interval', (chord, expected) => {
+      expect(getChordNotes(chord as Chord)).toEqual(expected);
+    });
+
+    it('reads the chord after the slash, ignoring the bass note', () => {
+      expect(getChordNotes('F#/Dmin' as Chord)).toEqual(['D', 'F', 'A']);
+    });
+
+    it('falls back to an enharmonic past a double sharp', () => {
+      expect(getChordNotes('B#aug' as Chord)).toEqual(['B#', 'D##', 'G#']);
+    });
+
+    it('returns null for an unknown quality', () => {
+      expect(getChordNotes('Cxyz' as Chord)).toBeNull();
+    });
+
+    it('returns null for an unknown root', () => {
+      expect(getChordNotes('Hmaj' as Chord)).toBeNull();
     });
   });
 

@@ -1,8 +1,5 @@
-import type {
-  ClefType,
-  Note,
-  Octave,
-} from '@one-step-at-a-time/web-components';
+import type { Note, Octave } from '@one-step-at-a-time/web-components';
+import type { StaffRangeKey } from './clefsHelpers';
 import { CLEF_RANGES, step, stepToPitch } from './clefsHelpers';
 
 // Geometry for dragging notes in the composition editor. Pure and colocated with
@@ -16,8 +13,8 @@ import { CLEF_RANGES, step, stepToPitch } from './clefsHelpers';
 export const STAFF_Y_STEP = 5;
 
 // Pointer travel (either axis) before a press on a note becomes a drag rather
-// than a click. Matches DragSelectOverlay's DRAG_THRESHOLD_PX so both gestures
-// agree on what counts as a plain click.
+// than a click. The marquee (useMarqueeSelection) uses the same threshold so
+// both gestures agree on what counts as a plain click.
 export const DRAG_THRESHOLD_PX = 4;
 
 // True when a `composedPath()` passes through a notehead (`.head` /
@@ -40,7 +37,7 @@ export function isNoteheadPath(path: EventTarget[]): boolean {
 export function pitchAfterVerticalDrag(params: {
   value: Note;
   octave: Octave;
-  clef: ClefType;
+  clef: StaffRangeKey;
   deltaY: number;
   occupiedSteps?: number[];
 }): { value: Note; octave: Octave } {

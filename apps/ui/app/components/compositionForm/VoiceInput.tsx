@@ -41,7 +41,7 @@ export function VoiceInput({ staffId }: VoiceInputProps) {
             key={voiceId}
             className="flex items-center justify-between gap-2"
           >
-            <span className="text-sm text-zinc-700">Voice {index + 1}</span>
+            <span className="text-sm text-fg">Voice {index + 1}</span>
             <Button
               type="button"
               variant="secondary"

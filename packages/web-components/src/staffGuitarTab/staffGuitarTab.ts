@@ -141,9 +141,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ];
     }
 
-    // No time-signature glyph to render (tab notation doesn't show one), so
-    // unlike StaffClassicalElementBase's equivalent branch, this only
-    // re-resolves the stored value — no re-render needed.
+    // Tab draws no time-signature glyph, but the bar's capacity still spaces
+    // the notes, so a `time` change relays them out.
     override attributeChangedCallback(
       name: string,
       oldValue: string | null,
@@ -153,9 +152,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
       if (name === COMMON_ATTRIBUTES.TIME) {
-        this.effectiveTimeSig = this.convertTotimeInts(
-          this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-        );
+        this.effectiveTimeSig = this.resolveTimeSignature();
+        this.#relayout();
       } else if (name === 'group' || name === 'group-id') {
         this.dispatchGroupAttributeChange();
       } else if (name === 'label') {
@@ -188,9 +186,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Mirrors StaffClassicalElementBase.refreshInheritedAttrs, scoped to
     // `time` only — guitar tab has no keySig/mode concept.
     refreshInheritedAttrs() {
-      this.effectiveTimeSig = this.convertTotimeInts(
-        this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-      );
+      this.effectiveTimeSig = this.resolveTimeSignature();
       this.#relayout();
     }
 
@@ -205,9 +201,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     protected onConnectedCallback() {
       this.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#relayout);
       // Re-resolve now that ancestors are reachable via closest()
-      this.effectiveTimeSig = this.convertTotimeInts(
-        this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-      );
+      this.effectiveTimeSig = this.resolveTimeSignature();
 
       this.#describeContainer.setAttribute('class', 'describe-container');
       this.#describeContainer.innerHTML = this.#showDescribe

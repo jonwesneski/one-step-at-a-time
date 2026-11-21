@@ -19,7 +19,7 @@ export function ClefEntryInput({ entry }: ClefEntryInputProps) {
       onClick={(e) => e.stopPropagation()}
     >
       <label className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-zinc-500">Clef</span>
+        <span className="text-xs font-medium text-fg-muted">Clef</span>
         <Select
           value={entry.clef}
           onChange={(e) =>

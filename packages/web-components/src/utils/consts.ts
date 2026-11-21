@@ -130,6 +130,10 @@ export const TREMOLO_EVENTS = {
   ATTRIBUTE_CHANGE: 'tremolo-attribute-change',
 } as const;
 
+export const LYRICS_EVENTS = {
+  CHANGE: 'lyrics-change',
+} as const;
+
 export const STAFF_EVENTS = {
   NOTES_POSITIONED: 'staff-notes-positioned',
   STAFF_MIN_WIDTH: 'staff-min-width',

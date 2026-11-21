@@ -27,7 +27,7 @@ export function entryOnset(
     if (id === entryId) {
       return onset;
     }
-    onset += entryFactor(structure.entriesById[id], structure.tupletsById);
+    onset += entryFactor(structure.entriesById[id], structure);
   }
   return null;
 }

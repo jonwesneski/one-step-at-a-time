@@ -2779,3 +2779,32 @@ describe('note reminders', () => {
     ).toBeGreaterThan(0);
   });
 });
+
+describe('invalid duration', () => {
+  it('reads as a quarter and warns', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML =
+      '<music-note note="C" octave="4" duration="quater"></music-note>';
+    const note = document.querySelector(MUSIC_NOTE) as NoteElementType;
+    expect(note.duration).toBe('quarter');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('duration="quater"')
+    );
+    warn.mockRestore();
+  });
+});
+
+describe('`for` changes', () => {
+  it('redraws connectors', () => {
+    document.body.innerHTML =
+      '<music-note note="C" octave="4" tie="end"></music-note>';
+    const note = document.querySelector(MUSIC_NOTE) as NoteElementType;
+    const onConnectorChange = jest.fn();
+    note.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      onConnectorChange
+    );
+    note.setAttribute('for', 'start-note');
+    expect(onConnectorChange).toHaveBeenCalledTimes(1);
+  });
+});

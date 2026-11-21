@@ -115,7 +115,7 @@ export function OptionalSelect<T extends string>({
 }) {
   return (
     <label className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium text-zinc-500">{label}</span>
+      <span className="text-xs font-medium text-fg-muted">{label}</span>
       <Select
         value={value ?? NONE}
         onChange={(e) =>
@@ -143,12 +143,14 @@ export function MarkingsFields({
   canShareDynamic = false,
   showStemDirection = true,
   canTakeLoco = false,
+  isChord = false,
 }: {
   markings: EntryMarkings;
   onChange: (patch: EntryMarkings) => void;
   canShareDynamic?: boolean;
   showStemDirection?: boolean;
   canTakeLoco?: boolean;
+  isChord?: boolean;
 }) {
   return (
     <>
@@ -163,6 +165,13 @@ export function MarkingsFields({
           label="Shared between hands"
           checked={markings.dynamicShared ?? false}
           onChange={(e) => onChange({ dynamicShared: e.target.checked })}
+        />
+      )}
+      {markings.dynamic && (
+        <Checkbox
+          label="Bracketed reminder, e.g. (f)"
+          checked={markings.dynamicReminder ?? false}
+          onChange={(e) => onChange({ dynamicReminder: e.target.checked })}
         />
       )}
       <OptionalSelect
@@ -186,6 +195,15 @@ export function MarkingsFields({
           noneLabel="auto"
         />
       )}
+      <Checkbox
+        label={
+          isChord
+            ? 'Accidental reminders on every tone, e.g. (♮)'
+            : 'Accidental reminder, e.g. (♮)'
+        }
+        checked={markings.accidentalReminder ?? false}
+        onChange={(e) => onChange({ accidentalReminder: e.target.checked })}
+      />
       {canTakeLoco && (
         <Checkbox
           label="(loco) reminder"
@@ -221,6 +239,14 @@ export function ChordNoteRows({
             value={note.octave}
             onChange={(octave) => setNote(i, { octave })}
           />
+          <Checkbox
+            label="(♮)"
+            title="Accidental reminder on this tone"
+            checked={note.accidentalReminder ?? false}
+            onChange={(e) =>
+              setNote(i, { accidentalReminder: e.target.checked })
+            }
+          />
           {notes.length > 1 && (
             <Button
               type="button"
@@ -239,6 +265,53 @@ export function ChordNoteRows({
       >
         + Add Note
       </Button>
+    </div>
+  );
+}
+
+type LaissezVibrer = NonNullable<EntryMarkings['laissezVibrer']>;
+
+// An open "let ring" tie. It shares the element's tie slot, so the caller
+// disables it while the entry is a tie endpoint.
+export function LaissezVibrerFields({
+  value,
+  onChange,
+  disabledReason,
+}: {
+  value: LaissezVibrer | null;
+  onChange: (value: LaissezVibrer | null) => void;
+  disabledReason: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Checkbox
+        label="Let ring (l.v. tie)"
+        checked={value !== null}
+        disabled={value === null && disabledReason !== null}
+        onChange={(e) => onChange(e.target.checked ? {} : null)}
+      />
+      {value === null && disabledReason && (
+        <div className="text-xs text-fg-subtle">{disabledReason}</div>
+      )}
+      {value !== null && (
+        <div className="flex flex-col gap-1 pl-5">
+          <Checkbox
+            label="Show “l.v.”"
+            checked={value.label ?? false}
+            onChange={(e) => onChange({ ...value, label: e.target.checked })}
+          />
+          <Checkbox
+            label="Dotted"
+            checked={value.style === 'dotted'}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                style: e.target.checked ? 'dotted' : null,
+              })
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }

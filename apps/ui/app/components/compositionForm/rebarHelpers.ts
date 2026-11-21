@@ -1,17 +1,20 @@
 import type { DurationType } from '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { decomposeToDurations } from './durationHelpers';
+import { resolveAtomicRuns } from './entryWrappersHelpers';
+import { joinLyrics } from './lyricsHelpers';
 import {
   CAPACITY_EPSILON,
   entryFactor,
   measureDuration,
 } from './measureCapacityHelpers';
 import { pruneInvalidNotationLinks } from './notationLinksHelpers';
+import { rebarWouldDropRepeats } from './repeatsHelpers';
+import { type StaffSettings, staffSettingsOf } from './staffSettingsHelpers';
 import {
   effectiveTimeSignatures,
   timeSignatureRegionAt,
 } from './timeSignaturesHelpers';
-import { resolveTupletRuns } from './tupletsHelpers';
 import type {
   CompositionStructure,
   MusicEntry,
@@ -19,9 +22,9 @@ import type {
   NormalizedMeasure,
   NormalizedStaff,
   NormalizedVoice,
-  PitchedEntry,
+  TimedEntry,
 } from './types';
-import { isPitchedEntry } from './types';
+import { isTimedEntry } from './types';
 
 // Whether `rebar` actually reflowed the region (`rebarred: true`) or bailed
 // out and returned the input structure unchanged (`rebarred: false`) — the
@@ -33,7 +36,12 @@ import { isPitchedEntry } from './types';
 export type RebarResult = {
   structure: CompositionStructure;
   rebarred: boolean;
+  // Why it bailed out, when it did.
+  reason?: string;
 };
+
+export const REBAR_REPEATS_REASON =
+  'This passage has repeats or endings inside it, which rewriting would lose. Change the signature only, or remove them first.';
 
 // Re-flows one time signature region into measures of its (already-updated) time
 // signature: the note stream of each staff index is concatenated and re-sliced,
@@ -62,6 +70,13 @@ export function rebar(
   const regionMeasures = regionMeasureIds.map(
     (id) => structure.measuresById[id]
   );
+  if (rebarWouldDropRepeats(structure, startIndex, endIndex)) {
+    return { structure, rebarred: false, reason: REBAR_REPEATS_REASON };
+  }
+  // Rebar keeps the region's outer repeat marks: the first bar's start repeat
+  // and the last bar's end barline.
+  const firstRegionMeasure = regionMeasures[0];
+  const lastRegionMeasure = regionMeasures[regionMeasures.length - 1];
 
   const staffCount = Math.max(
     0,
@@ -76,12 +91,7 @@ export function rebar(
   // count across measures is not supported" constraint. Warn and no-op
   // (rather than silently guessing which measure's voice count is "right")
   // when it differs, same as the staffCount===0 no-op above.
-  const staffTemplate: {
-    type: NormalizedStaff['type'];
-    group: NormalizedStaff['group'];
-    groupId: NormalizedStaff['groupId'];
-    voiceCount: number;
-  }[] = [];
+  const staffTemplate: { settings: StaffSettings; voiceCount: number }[] = [];
   for (let si = 0; si < staffCount; si++) {
     const staffCandidates = regionMeasures
       .map((m) => structure.stavesById[m.staffIds[si]])
@@ -97,9 +107,9 @@ export function rebar(
     }
     const src = staffCandidates[0];
     staffTemplate.push({
-      type: src?.type ?? 'treble',
-      group: src?.group ?? null,
-      groupId: src?.groupId ?? null,
+      settings: src
+        ? staffSettingsOf(src)
+        : { type: 'treble', group: null, groupId: null },
       voiceCount: src?.voiceOrder.length ?? 1,
     });
   }
@@ -149,11 +159,21 @@ export function rebar(
           entryIds: perStaffVoiceMeasures[si][vi][mi] ?? [],
         };
       }
+      const regionLyrics =
+        mi === 0 && tpl.settings.type === 'vocal'
+          ? joinLyrics(
+              regionMeasures.map((m) => {
+                const old = structure.stavesById[m.staffIds[si]];
+                return old?.type === 'vocal' ? old.lyrics : undefined;
+              })
+            )
+          : null;
       newStavesById[staffId] = {
+        ...tpl.settings,
+        ...(regionLyrics && regionLyrics.length > 0
+          ? { lyrics: regionLyrics }
+          : {}),
         id: staffId,
-        type: tpl.type,
-        group: tpl.group,
-        groupId: tpl.groupId,
         voiceOrder,
         voicesById,
       };
@@ -163,6 +183,9 @@ export function rebar(
       id: measureId,
       staffIds,
       time: mi === 0 && startIndex > 0 ? timeSignature : null,
+      repeatStart: mi === 0 ? firstRegionMeasure?.repeatStart : undefined,
+      barline:
+        mi === newMeasureCount - 1 ? lastRegionMeasure?.barline ?? null : null,
     };
   }
 
@@ -264,10 +287,10 @@ function reflowStaff(
     offset = 0;
   };
 
-  for (const run of resolveTupletRuns(stream, structure.entriesById)) {
-    if (run.tupletId !== null) {
+  for (const run of resolveAtomicRuns(stream, structure)) {
+    if (run.atomic) {
       const runFactor = run.entries.reduce(
-        (sum, entry) => sum + entryFactor(entry, structure.tupletsById),
+        (sum, entry) => sum + entryFactor(entry, structure),
         0
       );
       if (
@@ -287,7 +310,7 @@ function reflowStaff(
     }
 
     const entry = run.entries[0];
-    if (!isPitchedEntry(entry)) {
+    if (!isTimedEntry(entry)) {
       current().push(entry.id);
       continue;
     }
@@ -310,7 +333,9 @@ function reflowStaff(
         const id = segmentIds.length === 0 ? entry.id : crypto.randomUUID();
         entriesById[id] =
           id === entry.id
-            ? { ...entry, duration, tupletId: null }
+            ? entry.type === 'guitar-note'
+              ? { ...entry, duration }
+              : { ...entry, duration, tupletId: null }
             : bareSegment(entry, duration, id);
         segmentIds.push(id);
         current().push(id);
@@ -344,7 +369,7 @@ function reflowStaff(
 }
 
 function bareSegment(
-  entry: PitchedEntry,
+  entry: TimedEntry,
   duration: DurationType,
   id: string
 ): MusicEntry {
@@ -364,6 +389,9 @@ function bareSegment(
       notes: entry.notes.map((note) => ({ ...note })),
       duration,
     };
+  }
+  if (entry.type === 'guitar-note') {
+    return { ...entry, id, duration };
   }
   return { id, type: 'rest', duration };
 }

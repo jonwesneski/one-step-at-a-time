@@ -35,6 +35,8 @@ function structure(
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }

@@ -521,3 +521,15 @@ describe(`${MUSIC_MEASURE} endings`, () => {
     expect(text()).toBeNull();
   });
 });
+
+describe('measure in a shadow root', () => {
+  it('observes the shadow host when it has no parent element', () => {
+    const observe = jest.spyOn(ResizeObserver.prototype, 'observe');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<music-measure></music-measure>';
+    expect(observe).toHaveBeenCalledWith(host);
+    observe.mockRestore();
+  });
+});

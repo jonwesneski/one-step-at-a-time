@@ -69,6 +69,8 @@ function buildStructure(): CompositionStructure {
     },
     connectorOrder: ['c1'],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: { t1: { id: 't1', ratio: '3' } },
   };
 }
@@ -139,6 +141,8 @@ describe('shared stems', () => {
       connectorOrder: [],
       tupletsById: {},
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
     };
   }
   const select = (entryIds: string[]) => ({

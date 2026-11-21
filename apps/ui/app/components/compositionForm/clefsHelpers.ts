@@ -2,9 +2,10 @@ import type {
   ClefType,
   Note,
   Octave,
+  VocalType,
 } from '@one-step-at-a-time/web-components';
 import { CAPACITY_EPSILON, entryFactor } from './measureCapacityHelpers';
-import type { ChordNote, CompositionStructure } from './types';
+import type { ChordNote, CompositionStructure, NormalizedStaff } from './types';
 
 // Effective clef and clef-derived octave for a note/chord entry, mirroring the
 // library's resolution (staffClassicalBase.ts#activeClefAt and
@@ -35,10 +36,38 @@ export type ClefRange = {
   highStep: number;
 };
 
-export const CLEF_RANGES: Record<ClefType, ClefRange> = {
+// A clef, or one of the vocal staff's own ranges (staffVocal.ts: mezzo and
+// alto on treble positions with a lower reach, tenor on treble-8vb).
+export type StaffRangeKey = ClefType | 'mezzo' | 'alto' | 'tenor';
+
+export const CLEF_RANGES: Record<StaffRangeKey, ClefRange> = {
   treble: { octaves: [4, 5, 6], lowStep: step('C', 4), highStep: step('C', 6) },
   bass: { octaves: [2, 3, 4], lowStep: step('E', 2), highStep: step('E', 4) },
+  mezzo: {
+    octaves: [3, 4, 5, 6],
+    lowStep: step('A', 3),
+    highStep: step('C', 6),
+  },
+  alto: { octaves: [3, 4, 5], lowStep: step('F', 3), highStep: step('A', 5) },
+  tenor: { octaves: [3, 4, 5], lowStep: step('C', 3), highStep: step('C', 5) },
 };
+
+const VOCAL_RANGES: Record<VocalType, StaffRangeKey> = {
+  soprano: 'treble',
+  mezzo: 'mezzo',
+  alto: 'alto',
+  tenor: 'tenor',
+  baritone: 'bass',
+  bass: 'bass',
+};
+
+// The range a staff starts in: its clef, or its voice type's range.
+export function staffRangeKey(staff: NormalizedStaff): StaffRangeKey {
+  if (staff.type === 'vocal') {
+    return VOCAL_RANGES[staff.voiceType];
+  }
+  return staff.type === 'bass' ? 'bass' : 'treble';
+}
 
 // The beat offset of `targetId` within `entryIds` — the cumulative duration
 // of every entry before it (a clef marker's own `entryFactor` is 0, so it
@@ -56,17 +85,17 @@ function beatOffsetOf(
       return cumulative;
     }
     const entry = structure.entriesById[id];
-    cumulative += entry ? entryFactor(entry, structure.tupletsById) : 0;
+    cumulative += entry ? entryFactor(entry, structure) : 0;
   }
   return cumulative;
 }
 
-// The clef in effect at `entryId`: the staff's clef, overridden by any earlier
-// `ClefEntry`. Clefs live in voice 1, so markers are compared by beat offset.
+// The clef (or vocal range) in effect at `entryId`: the staff's own,
+// overridden by any earlier `ClefEntry`. Clefs live in voice 1, so markers are compared by beat offset.
 export function effectiveClefOfEntry(
   structure: CompositionStructure,
   entryId: string
-): ClefType {
+): StaffRangeKey {
   const staff = Object.values(structure.stavesById).find((s) =>
     s.voiceOrder.some((voiceId) =>
       s.voicesById[voiceId].entryIds.includes(entryId)
@@ -83,7 +112,7 @@ export function effectiveClefOfEntry(
     : 0;
 
   const firstVoice = staff.voicesById[staff.voiceOrder[0]];
-  let clef: ClefType = staff.type;
+  let clef: StaffRangeKey = staffRangeKey(staff);
   let cumulative = 0;
   for (const id of firstVoice.entryIds) {
     if (cumulative > entryBeatOffset + CAPACITY_EPSILON) {
@@ -93,7 +122,7 @@ export function effectiveClefOfEntry(
     if (entry?.type === 'clef') {
       clef = entry.clef;
     }
-    cumulative += entry ? entryFactor(entry, structure.tupletsById) : 0;
+    cumulative += entry ? entryFactor(entry, structure) : 0;
   }
   return clef;
 }
@@ -102,7 +131,7 @@ export function effectiveClefOfEntry(
 // given; an absent one resolves to the lowest in-range octave that keeps the
 // chord ascending (for a lone note, simply the lowest in-range octave).
 export function resolveEntryOctaves(
-  clef: ClefType,
+  clef: StaffRangeKey,
   notes: ChordNote[]
 ): Octave[] {
   const { octaves, lowStep, highStep } = CLEF_RANGES[clef];
@@ -131,7 +160,7 @@ export function resolveEntryOctaves(
 
 // The rendered octave of a single note entry under `clef`.
 export function resolveNoteOctave(
-  clef: ClefType,
+  clef: StaffRangeKey,
   value: Note,
   octave: Octave | null | undefined
 ): Octave {

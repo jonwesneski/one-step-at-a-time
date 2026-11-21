@@ -16,7 +16,14 @@ import type {
   YCoordinates,
 } from '../types/elements';
 import type { Octave, VocalType } from '../types/theory';
-import { STAFF_EVENTS } from '../utils/consts';
+import {
+  LYRICS_EVENTS,
+  MUSIC_CHORD,
+  MUSIC_LYRICS,
+  MUSIC_NOTE,
+  MUSIC_STAFF_VOCAL,
+  STAFF_EVENTS,
+} from '../utils/consts';
 import {
   createBassClefSvg,
   createTreble8ClefSvg,
@@ -175,18 +182,69 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#positionLyricsIfPresent();
     }
 
-    #positionLyricsIfPresent(): void {
-      const lyricsElements = this.querySelectorAll(
-        'music-lyrics'
+    #boundPositionLyrics = () => this.#positionLyricsIfPresent();
+
+    protected override onConnectedCallback(): void {
+      super.onConnectedCallback();
+      this.addEventListener(LYRICS_EVENTS.CHANGE, this.#boundPositionLyrics);
+    }
+
+    protected override onDisconnectedCallback(): void {
+      super.onDisconnectedCallback();
+      this.removeEventListener(LYRICS_EVENTS.CHANGE, this.#boundPositionLyrics);
+    }
+
+    // Each verse's syllables-vs-notes mismatch, so a resize doesn't repeat it.
+    #lastLyricWarnings = new Set<string>();
+
+    // A syllable sits under each sung entry: chord tones share their chord's
+    // syllable, and a tie continuation carries the previous one on.
+    #sungEntries(): HTMLElement[] {
+      return Array.from(
+        (this as unknown as ParentNode).querySelectorAll<HTMLElement>(
+          `${MUSIC_NOTE}, ${MUSIC_CHORD}`
+        )
+      ).filter(
+        (entry) =>
+          entry.parentElement?.closest(MUSIC_CHORD) === null &&
+          entry.getAttribute('tie') !== 'end'
+      );
+    }
+
+    // Verses stack by their `verse` number; equal or invalid numbers keep
+    // document order.
+    #lyricsInVerseOrder(): MusicLyricsElement[] {
+      const lyrics = Array.from(
+        this.querySelectorAll(MUSIC_LYRICS)
       ) as MusicLyricsElement[];
+      // A verse's own change event can arrive before later verses upgrade.
+      for (const lyric of lyrics) {
+        customElements.upgrade(lyric);
+      }
+      const verseNumber = (lyric: MusicLyricsElement) => {
+        const parsed = parseInt(lyric.verse, 10);
+        return Number.isNaN(parsed) ? Infinity : parsed;
+      };
+      return lyrics
+        .map((lyric, index) => ({ lyric, index }))
+        .sort(
+          (a, b) =>
+            verseNumber(a.lyric) - verseNumber(b.lyric) || a.index - b.index
+        )
+        .map(({ lyric }) => lyric);
+    }
+
+    #positionLyricsIfPresent(): void {
+      const lyricsElements = this.#lyricsInVerseOrder();
       if (lyricsElements.length === 0) {
         return;
       }
 
-      const noteElements = Array.from(
-        this.querySelectorAll('music-note, music-chord')
-      ) as HTMLElement[];
+      const noteElements = this.#sungEntries();
       if (noteElements.length === 0) {
+        for (const lyricEl of lyricsElements) {
+          (lyricEl as LyricsElementType).updatePositions([]);
+        }
         return;
       }
 
@@ -201,42 +259,41 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const transcribeRect = transcribeContainer.getBoundingClientRect();
       const baselineY = transcribeRect.bottom - staffRect.top;
 
-      // Render each lyrics verse
+      const warnings = new Set<string>();
       let verseIndex = 1;
       for (const lyricEl of lyricsElements) {
-        const syllablesText = lyricEl.textContent ?? '';
-        const syllables = this.#parseLyricsText(syllablesText);
-        const positions: LyricSyllablePosition[] = [];
-
-        // Position each syllable below its corresponding note
-        syllables.forEach((syllable, sylIndex) => {
-          if (sylIndex >= noteElements.length) {
-            console.warn(
-              `Lyric verse has more syllables (${syllables.length}) than notes (${noteElements.length})`
-            );
-            return;
-          }
-
-          const noteElement = noteElements[sylIndex];
-          const noteRect = noteElement.getBoundingClientRect();
-          const noteX = noteRect.left - staffRect.left + noteRect.width / 2;
-          const lyricY =
-            baselineY +
-            LYRICS_BASELINE_OFFSET +
-            verseIndex * LYRICS_VERSE_SPACING;
-
-          positions[sylIndex] = {
-            text: syllable.text,
-            x: noteX,
-            y: lyricY,
-            isMelisma: syllable.isMelisma,
-            isHyphenated: syllable.isHyphenated,
-          };
-        });
+        const syllables = this.#parseLyricsText(lyricEl.textContent ?? '');
+        if (syllables.length > noteElements.length) {
+          warnings.add(
+            `[${MUSIC_STAFF_VOCAL}] verse ${lyricEl.verse} has more syllables (${syllables.length}) than notes (${noteElements.length})`
+          );
+        }
+        const lyricY =
+          baselineY +
+          LYRICS_BASELINE_OFFSET +
+          verseIndex * LYRICS_VERSE_SPACING;
+        const positions: LyricSyllablePosition[] = syllables
+          .slice(0, noteElements.length)
+          .map((syllable, sylIndex) => {
+            const noteRect = noteElements[sylIndex].getBoundingClientRect();
+            return {
+              text: syllable.text,
+              x: noteRect.left - staffRect.left + noteRect.width / 2,
+              y: lyricY,
+              isMelisma: syllable.isMelisma,
+              isHyphenated: syllable.isHyphenated,
+            };
+          });
 
         (lyricEl as LyricsElementType).updatePositions(positions);
         verseIndex++;
       }
+      for (const warning of warnings) {
+        if (!this.#lastLyricWarnings.has(warning)) {
+          console.warn(warning);
+        }
+      }
+      this.#lastLyricWarnings = warnings;
 
       // Re-score with lyrics included — overwrites the lyrics-unaware score from super.
       // Use the widest single verse (max), not the sum of all verses, because verses
@@ -299,12 +356,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const words = text.split(/\s+/);
 
       for (const word of words) {
-        if (!word) continue;
+        if (!word) {
+          continue;
+        }
         const parts = word.split('-');
 
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i];
-          if (!part) continue;
+          if (!part) {
+            continue;
+          }
 
           const isMelisma = part.endsWith('_');
           const sylText = isMelisma ? part.slice(0, -1) : part;
@@ -324,8 +385,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
   }
 
-  if (!customElements.get('music-staff-vocal')) {
+  if (!customElements.get(MUSIC_STAFF_VOCAL)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Base-Element has runtime typing
-    customElements.define('music-staff-vocal', StaffVocalElement as any);
+    customElements.define(MUSIC_STAFF_VOCAL, StaffVocalElement as any);
   }
 }

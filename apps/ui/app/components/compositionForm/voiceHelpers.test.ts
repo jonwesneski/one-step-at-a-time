@@ -60,6 +60,8 @@ describe('addVoiceToStaff', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
   }
@@ -109,6 +111,8 @@ describe('removeVoiceFromStaff', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
   }
@@ -186,6 +190,8 @@ describe('removeVoiceFromStaff', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     const next = removeVoiceFromStaff(s, 's1', 's1-v1');

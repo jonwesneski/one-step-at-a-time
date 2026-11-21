@@ -2189,3 +2189,86 @@ describe('chord reminders', () => {
     ).toBeGreaterThan(0);
   });
 });
+
+describe('chord symbol changes', () => {
+  it('re-renders a standalone chord when `chord` changes', () => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    const before = chord.shadowRoot!.innerHTML;
+    chord.setAttribute('chord', 'Gmaj');
+    expect(chord.notes.map((note) => note.value)).toEqual(['G', 'B', 'D']);
+    expect(chord.shadowRoot!.innerHTML).not.toBe(before);
+  });
+
+  it('tells the staff to re-lay out when `chord` changes', () => {
+    document.body.innerHTML =
+      '<music-staff><music-chord chord="Cmaj" duration="quarter"></music-chord></music-staff>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    const onYChange = jest.fn();
+    chord.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, onYChange);
+    chord.setAttribute('chord', 'Dmin');
+    expect(onYChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns once for an unsupported symbol and has no notes', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML =
+      '<music-chord chord="Cxyz" duration="quarter"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    expect(chord.notes).toEqual([]);
+    expect(chord.notes).toEqual([]);
+    const chordWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('unsupported chord symbol "Cxyz"')
+    );
+    expect(chordWarnings).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('redraws connectors when `for` changes', () => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter" tie="end"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    const onConnectorChange = jest.fn();
+    chord.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      onConnectorChange
+    );
+    chord.setAttribute('for', 'start-chord');
+    expect(onConnectorChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('standalone interaction events', () => {
+  it.each([
+    ['click', 'chord-click'],
+    ['pointerdown', 'chord-pointerdown'],
+    ['pointerup', 'chord-pointerup'],
+  ])('dispatches %s as %s', (nativeType, chordType) => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    const handler = jest.fn();
+    chord.addEventListener(chordType, handler);
+    chord
+      .shadowRoot!.querySelector('svg')!
+      .dispatchEvent(new Event(nativeType));
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail.notes).toHaveLength(3);
+  });
+});
+
+describe('parsed with child notes', () => {
+  it('reads its tones before they have upgraded', () => {
+    document.body.innerHTML = `
+      <music-chord duration="quarter">
+        <music-note note="C" octave="5"></music-note>
+        <music-note note="E" octave="5"></music-note>
+      </music-chord>`;
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    expect(chord.notes).toEqual([
+      { value: 'C', octave: 5 },
+      { value: 'E', octave: 5 },
+    ]);
+  });
+});

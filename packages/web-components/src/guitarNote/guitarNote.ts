@@ -4,8 +4,12 @@ import {
   IGuitarNoteElement,
 } from '../types/elements';
 import { DurationType } from '../types/theory';
-import { parseConnectorRole } from '../utils';
 import { MUSIC_GUITAR_NOTE, NOTE_EVENTS, SVG_NS } from '../utils/consts';
+import {
+  parseConnectorRole,
+  parseDuration,
+  warnIfInvalidDuration,
+} from '../utils/parsers';
 
 const CONNECTOR_ATTRS = [
   'tie',
@@ -84,7 +88,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get duration(): DurationType {
-      return (this.getAttribute('duration') as DurationType) ?? 'quarter';
+      return parseDuration(this.getAttribute('duration')) ?? 'quarter';
     }
     set duration(value: DurationType) {
       this.setAttribute('duration', value);
@@ -165,7 +169,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue || !this.isConnected) {
+      if (oldValue === newValue) {
+        return;
+      }
+      if (name === 'duration') {
+        warnIfInvalidDuration(this.localName, newValue);
+      }
+      if (!this.isConnected) {
         return;
       }
 

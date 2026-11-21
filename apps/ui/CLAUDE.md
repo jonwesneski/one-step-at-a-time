@@ -90,12 +90,22 @@ The composition lives in a **react-hook-form store** (`useForm` in
 nodes, every id a `crypto.randomUUID()`.
 
 ```
-timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef)
-measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin, by entry id)
-measuresById: Record<id, { staffIds, time? }>   connectorOrder: string[]
-stavesById:   Record<id, { type, voiceOrder, voicesById, group, groupId }>   tupletsById: Record<id, { ratio, placement, crossStaffGroupId }>
+timeSig: TimeSignature                     entriesById:    Record<id, MusicEntry>       (note | chord | rest | clef | barline | guitar-note)
+measureOrder: string[]                     connectorsById: Record<id, NormalizedConnector> (tie | slur | hairpin | glissando | hammer-on | pull-off | slide, by entry id)
+measuresById: Record<id, { staffIds, time?, repeatStart?, barline?, ending?, endingLabel? }>   connectorOrder: string[]
+stavesById:   Record<id, NormalizedStaff>  tupletsById: Record<id, { ratio, placement, crossStaffGroupId }>
+              (type: treble | bass | vocal | guitar-tab; label, part; vocal: voiceType, lyrics; tab: tabFor)
                                            octaveSpansById: Record<id, NormalizedOctaveSpan> (8va/15ma… lines, by entry id)
+                                           tremolosById:   Record<id, NormalizedTremolo>  (two-note tremolos; members carry tremoloId)
+                                           arpeggiosById:  Record<id, NormalizedArpeggio> (written-out arpeggios; run notes carry arpeggioId)
 ```
+
+`NormalizedStaff` is a union discriminated by `type`. Staff **settings** (type,
+group, label, part, voice type, tab link) are copied onto new measures by
+`staffSettingsHelpers.ts#staffSettingsOf`; a vocal staff's `lyrics` are one
+measure's text and stay with it. `label` and `part` are set track-wide (the
+same staff index in every measure, `staffTrackIds`), since the library only
+draws a label at each row start and matches `tab-for` per measure.
 
 **Cross-entry notation links** mirror the library's own attribute shapes rather
 than inventing collections: N:M shared keys live on the entries
@@ -197,21 +207,33 @@ future save in `CompositionStructure`.
   node (`selectMeasure` / `selectStaff` / `selectEntry`).
 - **Shift / Cmd / Ctrl + click an entry** → toggles it in `selection.entryIds`
   (added for tie/slur, which need 2+ entries).
-- **Drag-marquee** (`DragSelectOverlay` wraps `<music-composition>`) →
-  `computeBoxSelection` (`selectionHelpers.ts`, pure + unit-tested) turns a
-  `DOMRect` into a `Selection`, promoting to measure/staff level when the box
-  covers ≥ `COVERAGE_THRESHOLD` of the element. Mouse defers pointer-capture until
-  it crosses `DRAG_THRESHOLD_PX` so plain clicks still bubble; touch needs a
-  `LONG_PRESS_MS` hold so swipes still scroll. Marquee results come out in
-  **document order**; shift-click results in click order — sort by document
-  position when order matters.
+- **Drag-marquee** (`SelectionCanvas` wraps `<music-composition>` in a padded
+  canvas that fills the rest of the viewport, so a drag can start outside any
+  measure) → `computeBoxSelection` (`selectionHelpers.ts`, pure + unit-tested)
+  turns a `DOMRect` into a `Selection`, promoting to measure/staff level when the
+  box covers ≥ `COVERAGE_THRESHOLD` of the element. The gesture lives in
+  `useMarqueeSelection`, with its pure math in `marqueeHelpers.ts`:
+  - Mouse defers pointer-capture until it crosses `DRAG_THRESHOLD_PX` so plain
+    clicks still bubble; touch needs a `LONG_PRESS_MS` hold so swipes still scroll.
+  - The anchor is stored in **page** coordinates and the page auto-scrolls near
+    the viewport's top/bottom edge, so a box can span more than one screen.
+  - **Shift / Cmd / Ctrl + drag** merges into the current selection
+    (`mergeSelections`); a plain drag replaces it.
+  - A pointerdown on a form control or inside `[data-marquee-ignore]` (the
+    `DockedTabPanel`) never arms a marquee.
+- Marquee results come out in **document order** (a modifier-drag appends its new
+  ids in document order after the existing ones); shift-click results in click
+  order — sort by document position when order matters.
+- **Click on empty canvas** (the canvas itself, or a gap inside
+  `<music-composition>`, which shadow-DOM retargeting reports as the host) →
+  `clearSelection`.
 - What a selection _enables_ is up to each component: `MeasureInput` shows an "Add
   Staff" / "Group Staves" / "Ties & Slurs" tab for measure / multi-staff / entry
   selections; `Backspace`/`Delete` deletes any non-empty selection.
 - **Note drag coexists with the marquee** (piece 10): a pointerdown that lands on a
   note/chord/rest is claimed by `useEntryDrag` (`e.stopPropagation()` before
-  `DragSelectOverlay`'s bubble-phase handler sees it), so the marquee only ever
-  starts from empty staff/measure whitespace. Same deferred-capture + threshold +
+  `SelectionCanvas`'s bubble-phase handler sees it), so the marquee only ever
+  starts from whitespace. Same deferred-capture + threshold +
   post-drag click-swallow as the marquee, so a plain click still selects.
 
 **5. `DockedTabPanel` — every entry/structure editor lives here.** Any control
@@ -221,7 +243,9 @@ never as an inline panel elsewhere. The exceptions are the root form fields
 modal, not a tab — see piece 9) — none are selection-contextual. It's docked
 full-width to the bottom of the window on every screen size (a fixed 25vh on
 mobile; up to 40vh on desktop, sized to its content), with a sideways-scrolling
-tab row and a vertically scrolling body. Its tabs are just an array of
+tab row and a vertically scrolling body (both `ScrollArea`s). It's portaled to
+`<body>` so no selected ancestor's stacking context can draw score content over
+it. Its tabs are just an array of
 `{ label, content }`; callers build the array conditionally and pass it, and the
 active tab is remembered by label in `session.entryPanelTab`.
 
@@ -250,8 +274,9 @@ contract is declared in `packages/web-components/src/react.d.ts` (published as t
 - `MeasureInput` / `StaffInput` register each element in the session ref maps via
   callback ref for hit-testing.
 
-**7. Pure logic + colocated tests.** Non-trivial transforms live in a plain
-`.ts` next to a `.test.ts` (vitest, no React): `deleteSelectionHelpers.ts`,
+**7. Pure logic, optionally with a light colocated test.** Non-trivial transforms live in a plain
+`.ts` that can sit next to a `.test.ts` (vitest, no React; see the light-testing rule
+under Build & test): `deleteSelectionHelpers.ts`,
 `selectionHelpers.ts`, `staffGroupsHelpers.ts`, `connectorsHelpers.ts`. Keep them
 `this`-free and structure-in/structure-out so they're trivially testable — the
 components stay thin. When such a helper mirrors a rule that also lives in
@@ -265,8 +290,7 @@ app only has to handle well-formed data since it's the sole writer.
 without them **and** repairs anything left dangling — a group that dropped below 2
 staves, a connector whose endpoint is gone — finishing with
 `pruneInvalidNotationLinks`. Any new collection that references node ids needs its
-own filter here (or a `pruneInvalid*` pass in `notationLinksHelpers.ts`), plus a
-test.
+own filter here (or a `pruneInvalid*` pass in `notationLinksHelpers.ts`).
 
 **9. Time signature is positional; measure capacity is enforced.**
 
@@ -294,10 +318,17 @@ test.
   concatenates the region's entry stream and re-slices it to the new capacity,
   splitting barline-crossing notes into the fewest durations (`durationHelpers.ts`
   `decomposeToDurations` — a single dotted value where one fits, else a **tie
-  chain**), moving tuplet runs
-  whole, minting/dropping measures, and re-anchoring ties. The region's final
+  chain**), moving tuplet runs, tremolos and written-out arpeggios
+  whole (`entryWrappersHelpers.ts#resolveAtomicRuns`), minting/dropping
+  measures, and re-anchoring ties. The region's final
   measure may be left under-full (no rest padding). Because it mints new
   measure/staff ids, the mutator clears the selection afterward.
+- **Rebar and repeats/lyrics.** Rebar keeps the region's first-bar
+  `repeatStart` and last-bar `barline`. Repeat or ending marks anywhere else in
+  the region would be lost, so `rebar` refuses (`REBAR_REPEATS_REASON`) and the
+  dialog disables Rewrite. A vocal staff's lyrics can't be re-sliced by beat:
+  rewritten bars' verses are joined onto the region's first bar (the dialog
+  says so).
 
 **10. Note drag — pitch + reorder — is the app's, not the library's.** The
 web-components library renders notation and reports pointer/click events; it has
@@ -312,8 +343,8 @@ machine, wired onto every note/chord/rest via `onPointerDown` in `StaffInput`.
   Δy by `STAFF_Y_STEP` (5px, mirrored from the library's `notationDimensions.ts`;
   the staff lays vertical positions out in raw CSS px), clamps to the clef range
   from `clefsHelpers.ts`, and skips a chord's other notes. Live preview writes the
-  `note`/`octave` attribute straight onto the light-DOM element — the library
-  re-renders in place via its `note-y-change` event. Commit reuses `updateEntry`.
+  `note`/`octave` attribute straight onto the light-DOM element, and the library
+  re-renders it in place. Commit reuses `updateEntry`.
 - **Reorder** computes a drop index by geometry over the entry's own voice's
   `entryElements` rects (`reorderTargetIndex`), then `reorderEntry` →
   `moveEntryInVoice` (`reorderHelpers.ts`), which splices that voice's
@@ -343,6 +374,50 @@ selection-cleanup wrapper.
   scratch; a selector ships the capability now without it. Revisit only if
   real usage shows the selector too slow for dense multi-voice editing.
 
+**12. Notation beyond the basics — what's where.**
+
+- **Entry markings** (`markingsHelpers.ts`): noteheads (note, chord, per chord
+  tone, per grace note), single-note tremolo (+ numeral, label, articulation
+  repeat), trills (line, end notch, trilling note/accidental, closing notes),
+  the arpeggio sign (+ hairpin, `sempre arpeggiando`), dynamic/accidental
+  reminders and laissez-vibrer ties are flat fields on `EntryMarkings`,
+  serialised by `serializeMarkings` / `serializeLaissezVibrer` /
+  `serializeChordTone`. `sanitizeMarkings` clears whatever another edit made
+  meaningless (e.g. strokes a shorter value can't carry, a triangle head in a
+  chord); `sanitizeEntryMarkings` runs in `pruneInvalidNotationLinks`. Panels:
+  the Notehead, Tremolo, Trill and Arpeggio tabs on a single selected entry.
+- **Links**: cross-staff arpeggio `arpeggioWithEntryId` → `arpeggio-for`
+  (`crossStaffArpeggioHelpers.ts`, modelled on shared stems).
+- **Connectors**: glissando is its own connector family (`connectorFamily`),
+  so it sits alongside a slur. A tie's `style` and a glissando's `hint` live
+  on the connector and are written on the start entry. Laissez-vibrer uses
+  the element's single `tie` attribute, so it is never on a tie endpoint
+  (`pruneLaissezVibrerOnTies`; a note rebar splits loses it).
+- **Repeats** (`repeatsHelpers.ts`, Repeats tab on a measure, root
+  `doubleBarBeforeRepeat` / `endingNumbering`): measure fields map to
+  `repeat-start` / `barline` / `ending` / `ending-label`. The tab shows the
+  library's own warnings by running its exported `resolveEndings`,
+  `resolveRepeatSpans` and `repeatPickupWarning` over the same events
+  `<music-composition>` builds. A mid-bar `<music-barline>` is a `BarlineEntry`
+  — like a `ClefEntry`: zero duration, voice 1 only (`isMarkerEntry`).
+- **Wrappers** (`tremolosHelpers.ts`, `arpeggiosHelpers.ts`,
+  `entryWrappersHelpers.ts`): members carry `tremoloId` / `arpeggioId`
+  (an arpeggio's target is `NormalizedArpeggio.targetEntryId`); `StaffInput`
+  nests `<music-tremolo>` / `<music-arpeggio>` inside tuplet runs.
+  `measureCapacityHelpers.ts#entryFactor` takes the structure: a tremolo
+  member counts 1/N, an arpeggio run note 0, mirroring the library's
+  `durationContribution`. Both have prune passes in
+  `pruneInvalidNotationLinks`.
+- **Vocal staff** (`lyricsHelpers.ts`, `LyricsInput.tsx`): the clef range
+  follows the voice type (`clefsHelpers.ts#staffRangeKey`, incl. mezzo, alto
+  and tenor on treble-8vb); no clef changes.
+- **Guitar tab** (`GuitarNoteInput.tsx`): `GuitarNoteEntry` lives only on a
+  `guitar-tab` staff, which renders its notes directly (no voices, rests,
+  tuplets or markers). `isTimedEntry` covers anything with a duration
+  (`PitchedEntry` stays notation-only). Techniques are connectors;
+  `tab-for` links are validated by `staffSettingsHelpers.ts#tabLinkProblem`.
+  The library marks tab as incomplete, so this is provisional.
+
 ### Component tree
 
 ```
@@ -350,11 +425,11 @@ CompositionInput                       owns useForm + useUndoRedo + all mutators
 └─ CompositionFormSessionProvider       selection, panel state, ref maps, mutator forwarding
    └─ FormProvider (react-hook-form)
       └─ CompositionFormBody            watches root values; Undo/Redo/Delete bar; MeterChangeDialog; renders:
-         └─ DragSelectOverlay           marquee selection
+         └─ SelectionCanvas             score canvas: marquee selection (useMarqueeSelection), click-empty-to-clear
             └─ <music-composition>
-               ├─ MeasureInput ×N  → <music-measure time=meter>   (+ Measure / Group Staves / Connections / Edit / Grace / Octave / Tuplet / Cross-staff Beam / Shared Stem / Phrase Slur panels)
-               │   └─ StaffInput ×M → <music-staff>     (+ Staff Entries panel)
-               │       └─ <music-note> / <music-chord> / <music-rest>   (id = entry id; tie/slur/for from useConnectorAttributes; octave-* from useOctaveAttributes; beam-group / shared-stem-for / slur-group / stem-direction / … straight off the entry)
+               ├─ MeasureInput ×N  → <music-measure time=meter repeat-start barline ending ending-label>   (+ Measure / Repeats / Group Staves / Connections / Edit / Grace / Notehead / Tremolo / Trill / Arpeggio / Octave / Tuplet / Tremolo Group / Written-out Arpeggio / Cross-staff Beam / Cross-staff Tremolo / Cross-staff Arpeggio / Shared Stem / Phrase Slur panels)
+               │   └─ StaffInput ×M → <music-staff> | <music-staff-vocal> (+ <music-lyrics>) | <music-staff-guitar-tab>   (+ Staff Entries panel: Note / Chord / Rest / Clef Change or Lyrics / Barline / Voices / Staff; tab: Tab Note / Staff)
+               │       └─ <music-voice> → [<music-tuplet>] → [<music-tremolo> | <music-arpeggio>] → <music-note> / <music-chord> / <music-rest> / <music-clef> / <music-barline>   (tab: <music-guitar-note> directly; id = entry id; connector attrs from useConnectorAttributes; octave-* from useOctaveAttributes; markings from markingsHelpers)
                └─ "Add Measure" button
 ```
 
@@ -381,7 +456,8 @@ Use as a menu, not a mandatory sequence.
    (a collection owned by a parent node is ordered by the parent's id array
    instead, like `entryIds`); wire the four spots in `CompositionInput.tsx`
    (type, `defaultValues`, `getStructure`, `setStructure`).
-3. **Pure logic** → `<feature>.ts` + `<feature>.test.ts` (mirror `staffGroupsHelpers.ts`).
+3. **Pure logic** → `<feature>.ts` (mirror `staffGroupsHelpers.ts`), plus at most
+   a happy-path test or two in `<feature>.test.ts`.
 4. **Mutator** → a function in `CompositionInput.tsx` that builds the next
    structure and calls `record(next)`; thread it through the provider `on*` prop
    and the context value.
@@ -392,7 +468,7 @@ Use as a menu, not a mandatory sequence.
    or `computeBoxSelection` only if you need a new selection behaviour.
 7. **Render** → pass new attributes/children to the `<music-*>` elements; add a
    derive hook if the props depend on the whole structure.
-8. **Cleanup** → filter in `removeSelectionFromStructure` + a test.
+8. **Cleanup** → filter in `removeSelectionFromStructure`.
 9. `npx nx format:write && npx nx test ui && npx nx typecheck ui && npx nx lint ui`.
 
 ## Design system (`app/design-system/`)
@@ -403,14 +479,35 @@ not a separate package. Use these instead of raw `<button>`/`<select>` in form U
 (The README's "design system" phrasing predates this; the notation renderer is
 `@one-step-at-a-time/web-components`, a separate concern.)
 
+`ScrollArea` (`axis="x" | "y"`) is a scroll container that fades out its end edge
+while there's more to scroll; `DockedTabPanel` uses it for its tab strip and its
+controls.
+
 `.rainbow-selected` (`globals.css`) is the animated selection outline — add the
 class to a selected element.
+
+### Theming (light / dark)
+
+Colors are **semantic tokens** defined in `globals.css` (`:root` for light,
+`:root[data-theme='dark']` for dark, exposed via `@theme inline`): `canvas`,
+`surface`, `surface-hover`, `fg`, `fg-muted`, `fg-subtle`, `line`,
+`line-strong`, `accent`, `accent-hover`, `on-accent`, `danger`, `warning`. Use
+them (`bg-surface`, `text-fg-muted`, `border-line`, `ring-accent`, …) — **never
+raw palette colors** like `bg-white` / `text-zinc-500`. Add a token pair rather
+than a one-off; `dark:` is wired to `data-theme` for the rare exception (the
+logo's `dark:invert`). Translucent overlays (`bg-black/30` scrim) are fine as-is.
+
+- `hooks/useTheme.ts` owns the preference (`system | light | dark`, in
+  `localStorage`) and sets `data-theme` on `<html>`; `THEME_INIT_SCRIPT` runs in
+  `<head>` so there's no flash. The picker lives in the `NavBar` dropdown.
+- The score needs nothing: web-components draw with `currentColor`, and `body`
+  sets `color: fg`.
 
 ## Conventions
 
 - Curly braces on every `if`/`else` branch — see the root `CLAUDE.md`.
 - Comments: default to none; see the root `CLAUDE.md` comment rules. Design-decision
-  rationale is welcome (e.g. `DragSelectOverlay`'s pointer-capture-deferral note).
+  rationale is welcome (e.g. `useMarqueeSelection`'s pointer-capture-deferral note).
 - Form sub-components are named `<Thing>Input.tsx`.
 - react-hook-form is the model store. Components subscribe with `useWatch({
 control, name })` or `useFormContext().watch(name)` — both are in use; pick
@@ -430,6 +527,13 @@ Run from the monorepo root via nx (never the underlying tool directly):
 | Typecheck  | `npx nx typecheck ui` | `tsc --noEmit`; builds web-components first   |
 | Lint       | `npx nx lint ui`      |                                               |
 | Format     | `npx nx format:write` | run after every batch of edits                |
+
+**Keep unit tests very light.** The UI's look and behaviour are still being worked
+out, so code here gets reshaped or deleted often, and every test is one more thing
+to update. Write at most one or two happy-path tests per helper. Write zero (or at
+most one happy-path test) for component and hook files. Don't add edge-case
+matrices or exhaustive coverage. When a change makes an existing test obsolete,
+delete the test rather than preserving it.
 
 **Testing today is pure-function unit tests only** — vitest + jsdom, local fixture
 builders returning `CompositionStructure` (or a `Pick<>` of it), asserting on the

@@ -1,5 +1,6 @@
+import { isTupletRatio } from '../rules/tupletRules';
 import { ITupletElement, NoteChordOrRestElementType } from '../types/elements';
-import { TupletPlacement, TupletRatio } from '../types/theory';
+import type { TupletPlacement, TupletRatio } from '../types/theory';
 import {
   MUSIC_TUPLET,
   TUPLET_EVENTS,
@@ -36,7 +37,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // <slot> to render its children.
 
     get ratio(): TupletRatio {
-      return (this.getAttribute('ratio') ?? '3') as TupletRatio;
+      const value = this.getAttribute('ratio');
+      return isTupletRatio(value) ? value : '3';
     }
 
     set ratio(value: TupletRatio) {
@@ -75,11 +77,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     attributeChangedCallback(
-      _name: string,
+      name: string,
       oldValue: string | null,
       newValue: string | null
     ): void {
-      if (oldValue === newValue || !this.isConnected) {
+      if (oldValue === newValue) {
+        return;
+      }
+      if (name === 'ratio' && newValue !== null && !isTupletRatio(newValue)) {
+        console.warn(
+          `[${MUSIC_TUPLET}] ratio="${newValue}" isn't a count like "3" or "actual:normal" like "3:2"; drawing a triplet`
+        );
+      }
+      if (!this.isConnected) {
         return;
       }
       // The wrapper renders nothing itself: the staff redraws its bracket

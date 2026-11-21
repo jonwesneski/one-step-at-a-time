@@ -43,13 +43,17 @@ afterEach(() => {
 
 const makeNote = (attrs: Record<string, string>): NoteLikeElementType => {
   const el = document.createElement(MUSIC_NOTE);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
   return el as NoteLikeElementType;
 };
 
 const makeGuitarNote = (attrs: Record<string, string>): NoteLikeElementType => {
   const el = document.createElement(MUSIC_GUITAR_NOTE);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
   return el as NoteLikeElementType;
 };
 

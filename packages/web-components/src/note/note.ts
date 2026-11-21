@@ -117,6 +117,7 @@ import {
   OCTAVES,
   STAFF_TAGS,
 } from '../utils/consts';
+import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
 import {
   NOTE_SVG_WIDTH,
   noteAugmentationDotLayout,
@@ -200,6 +201,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'duration',
         'note',
         'octave',
+        'for',
         'tie',
         'lv-label',
         'slur',
@@ -286,7 +288,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get duration(): DurationType {
-      return (this.getAttribute('duration') as DurationType) ?? 'quarter';
+      return parseDuration(this.getAttribute('duration')) ?? 'quarter';
     }
 
     set duration(value: DurationType) {
@@ -1249,6 +1251,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
+      if (name === 'duration') {
+        warnIfInvalidDuration(this.localName, newValue);
+      }
+
       // `diminuendo` is rewritten to `decrescendo`, even before connecting.
       // The removeAttribute below re-enters with null, which must be a no-op.
       if (name === 'diminuendo') {
@@ -1297,7 +1303,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         name === 'glissando' ||
         name === 'glissando-hint' ||
         name === 'slur-group' ||
-        name === 'tie-style'
+        name === 'tie-style' ||
+        name === 'for'
       ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {

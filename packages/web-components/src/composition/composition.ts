@@ -428,33 +428,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#observer = null;
       this.#resizeObserver?.disconnect();
       this.#resizeObserver = null;
-      this.removeEventListener('staff-notes-positioned', this.#boundRedraw);
-      this.removeEventListener('connector-attribute-change', this.#boundRedraw);
-      this.removeEventListener('dynamic-attribute-change', this.#boundRedraw);
-      this.removeEventListener(
-        NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.removeEventListener(
-        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.removeEventListener(
-        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.removeEventListener(
-        MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
-        this.#boundRepeatAttributeChange
-      );
-      this.removeEventListener(
-        BARLINE_EVENTS.ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
+      for (const [type, listener] of this.#listeners()) {
+        this.removeEventListener(type, listener);
+      }
     }
 
     attributeChangedCallback(
@@ -575,6 +551,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       `;
     }
 
+    // One list serves both add and remove, so the two can't drift apart.
+    #listeners(): [string, EventListener][] {
+      return [
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedraw],
+        [NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [
+          MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
+          this.#boundRepeatAttributeChange,
+        ],
+        [BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw],
+      ];
+    }
+
     #observeForRedraws() {
       this.#resizeObserver = new ResizeObserver(this.#boundRedraw);
       this.#resizeObserver.observe(this);
@@ -582,30 +576,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const slot = this.shadowRoot?.querySelector('slot');
       slot?.addEventListener('slotchange', this.#boundRedraw);
 
-      this.addEventListener('staff-notes-positioned', this.#boundRedraw);
-      this.addEventListener('connector-attribute-change', this.#boundRedraw);
-      this.addEventListener('dynamic-attribute-change', this.#boundRedraw);
-      this.addEventListener(
-        NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.addEventListener(
-        NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.addEventListener(
-        STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.addEventListener(
-        STAFF_EVENTS.LABEL_ATTRIBUTE_CHANGE,
-        this.#boundRedraw
-      );
-      this.addEventListener(
-        MEASURE_EVENTS.REPEAT_ATTRIBUTE_CHANGE,
-        this.#boundRepeatAttributeChange
-      );
-      this.addEventListener(BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw);
+      for (const [type, listener] of this.#listeners()) {
+        this.addEventListener(type, listener);
+      }
     }
 
     #scheduleRedraw() {
@@ -620,6 +593,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // ResizeObserver callback.
       requestAnimationFrame(() => {
         this.#redrawScheduled = false;
+        if (!this.isConnected) {
+          return;
+        }
         this.#alignRowStaffSpace();
         this.#updateDescribeVisibility();
         const repeats = this.#resolveRepeatContinuity();
@@ -811,7 +787,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         innerVoiceElements: innerVoiceStemAnchorElements,
         entryObstacles: collectEntryObstacles(this, rootRect, measureElements),
       });
-      for (const svg of svgs) overlay.appendChild(svg);
+      for (const svg of svgs) {
+        overlay.appendChild(svg);
+      }
     }
 
     // Only a composition sees a tie cross a barline. Marking its end note

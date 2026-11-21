@@ -78,6 +78,8 @@ function buildStructure(): CompositionStructure {
     connectorOrder: [],
     tupletsById: {},
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
   };
 }
 

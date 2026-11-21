@@ -97,3 +97,25 @@ export function computeBoxSelection(
   }
   return { measureIds, staffIds, entryIds };
 }
+
+function appendNew(base: string[], added: string[]): string[] {
+  const seen = new Set(base);
+  const fresh = added.filter((id) => !seen.has(id));
+  return fresh.length === 0 ? base : [...base, ...fresh];
+}
+
+// Keeps `base` order and appends `added`'s new ids in their own order; returns
+// `base` itself when nothing is new so a no-op merge doesn't re-render.
+export function mergeSelections(base: Selection, added: Selection): Selection {
+  const measureIds = appendNew(base.measureIds, added.measureIds);
+  const staffIds = appendNew(base.staffIds, added.staffIds);
+  const entryIds = appendNew(base.entryIds, added.entryIds);
+  if (
+    measureIds === base.measureIds &&
+    staffIds === base.staffIds &&
+    entryIds === base.entryIds
+  ) {
+    return base;
+  }
+  return { measureIds, staffIds, entryIds };
+}

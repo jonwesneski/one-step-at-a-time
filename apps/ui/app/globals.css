@@ -1,5 +1,68 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Semantic color tokens. `useTheme` sets `data-theme` on <html>; components use
+   these (`bg-surface`, `text-fg-muted`, `border-line`, …) rather than raw
+   palette colors so both themes stay in sync. The score inherits `fg` because
+   web-components draw with `currentColor`. */
+:root {
+  color-scheme: light;
+  --canvas: var(--color-zinc-50);
+  --surface: var(--color-white);
+  --surface-hover: var(--color-zinc-100);
+  --fg: var(--color-zinc-900);
+  --fg-muted: var(--color-zinc-500);
+  --fg-subtle: var(--color-zinc-400);
+  --line: var(--color-zinc-200);
+  --line-strong: var(--color-zinc-300);
+  --accent: var(--color-blue-600);
+  --accent-hover: var(--color-blue-700);
+  --on-accent: var(--color-white);
+  --danger: var(--color-red-600);
+  --warning: var(--color-amber-700);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: var(--color-zinc-950);
+  --surface: var(--color-zinc-900);
+  --surface-hover: var(--color-zinc-800);
+  --fg: var(--color-zinc-100);
+  --fg-muted: var(--color-zinc-400);
+  --fg-subtle: var(--color-zinc-500);
+  --line: var(--color-zinc-800);
+  --line-strong: var(--color-zinc-700);
+  --accent: var(--color-blue-400);
+  --accent-hover: var(--color-blue-300);
+  --on-accent: var(--color-zinc-950);
+  --danger: var(--color-red-400);
+  --warning: var(--color-amber-400);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+  }
+}
+
 @property --rainbow-angle {
   syntax: '<angle>';
   inherits: false;

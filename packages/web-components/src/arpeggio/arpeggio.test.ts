@@ -85,6 +85,32 @@ describe('music-arpeggio', () => {
     expect(wrapper.runElements[1].getAttribute('duration')).toBe('sixtyfourth');
   });
 
+  it('keeps a duration the author sets on a run note after connect', () => {
+    const wrapper = makeArpeggio(['C', 'E', 'G']);
+    wrapper.runElements[1].setAttribute(
+      'duration',
+      'sixteenth' satisfies DurationType
+    );
+
+    wrapper.setAttribute('run-duration', 'sixtyfourth' satisfies DurationType);
+    expect(wrapper.runElements[0].getAttribute('duration')).toBe('sixtyfourth');
+    expect(wrapper.runElements[1].getAttribute('duration')).toBe('sixteenth');
+  });
+
+  it('ignores an invalid run-duration, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const wrapper = makeArpeggio(['C', 'E', 'G']);
+    wrapper.setAttribute('run-duration', '32nd');
+    expect(wrapper.runDuration).toBe('thirtysecond');
+    expect(wrapper.runElements[0].getAttribute('duration')).toBe(
+      'thirtysecond'
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('run-duration="32nd"')
+    );
+    warn.mockRestore();
+  });
+
   it('dispatches connector-attribute-change when children change', () => {
     const wrapper = makeArpeggio(['C', 'E', 'G']);
     let fired = 0;

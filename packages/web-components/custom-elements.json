@@ -22,9 +22,9 @@
             },
             {
               "kind": "field",
-              "name": "#ownedDurations",
+              "name": "#writtenDurations",
               "privacy": "private",
-              "default": "new WeakSet<Element>()"
+              "default": "new WeakMap<Element, string>()"
             },
             {
               "kind": "field",
@@ -432,6 +432,33 @@
                 "text": "ChordNote[]"
               },
               "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "#warnedUnsupportedChord",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutUnsupportedChord",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "unsupported",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ]
             },
             {
               "kind": "field",
@@ -1080,6 +1107,24 @@
             },
             {
               "kind": "method",
+              "name": "#wireInteractionEvents",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "svg",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#widestHeadExtent",
               "privacy": "private",
               "return": {
@@ -1158,15 +1203,35 @@
               "type": {
                 "text": "CustomEvent"
               }
+            },
+            {
+              "name": "chordType",
+              "type": {
+                "text": "CustomEvent"
+              }
             }
           ],
           "attributes": [
+            {
+              "name": "chord",
+              "type": {
+                "text": "Chord"
+              },
+              "description": "Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`."
+            },
             {
               "name": "duration",
               "type": {
                 "text": "DurationType"
               },
               "description": "Note value for the chord, optionally dotted (`dotted-half`); every notehead takes the chord's dots. Defaults to `quarter`."
+            },
+            {
+              "name": "for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi."
             },
             {
               "name": "tie",
@@ -1531,20 +1596,6 @@
                 "text": "TieStyle"
               },
               "description": "`dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`."
-            },
-            {
-              "type": {
-                "text": "Chord"
-              },
-              "description": "Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`.",
-              "name": "chord"
-            },
-            {
-              "type": {
-                "text": "string"
-              },
-              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.",
-              "name": "for"
             }
           ],
           "superclass": {
@@ -1740,6 +1791,16 @@
               "return": {
                 "type": {
                   "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#listeners",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "[string, EventListener][]"
                 }
               }
             },
@@ -2745,6 +2806,16 @@
               "name": "time",
               "type": {
                 "text": "string | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#listeners",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "[string, EventListener][]"
+                }
               }
             },
             {
@@ -4565,6 +4636,13 @@
               "description": "Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset."
             },
             {
+              "name": "for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi."
+            },
+            {
               "name": "tie",
               "type": {
                 "text": "'start' | 'end' | 'laissez-vibrer'"
@@ -4927,13 +5005,6 @@
                 "text": "TieStyle"
               },
               "description": "`dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`."
-            },
-            {
-              "type": {
-                "text": "string"
-              },
-              "description": "`id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.",
-              "name": "for"
             }
           ],
           "superclass": {
@@ -6176,6 +6247,20 @@
             },
             {
               "kind": "method",
+              "name": "#listeners",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "[string, EventListener][]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "onConnectedCallback",
               "privacy": "protected",
               "return": {
@@ -9351,6 +9436,33 @@
             },
             {
               "kind": "method",
+              "name": "resolveTimeSignature",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "[BeatsInMeasure, BeatTypeInMeasure]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedInvalidTime",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "convertTotimeInts",
               "privacy": "protected",
               "return": {
@@ -9362,7 +9474,7 @@
                 {
                   "name": "time",
                   "type": {
-                    "text": "string"
+                    "text": "TimeSignature"
                   }
                 }
               ],
@@ -10513,6 +10625,33 @@
             },
             {
               "kind": "method",
+              "name": "resolveTimeSignature",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "[BeatsInMeasure, BeatTypeInMeasure]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedInvalidTime",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "convertTotimeInts",
               "privacy": "protected",
               "return": {
@@ -10524,7 +10663,7 @@
                 {
                   "name": "time",
                   "type": {
-                    "text": "string"
+                    "text": "TimeSignature"
                   }
                 }
               ],
@@ -10877,10 +11016,24 @@
             },
             {
               "kind": "field",
+              "name": "#textObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "verse",
               "type": {
                 "text": "string"
               }
+            },
+            {
+              "kind": "method",
+              "name": "#notify",
+              "privacy": "private"
             },
             {
               "kind": "method",
@@ -10900,13 +11053,20 @@
               "privacy": "private"
             }
           ],
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
           "attributes": [
             {
+              "name": "verse",
               "type": {
                 "text": "string"
               },
-              "description": "Verse number, used to stack multiple verses. Defaults to `1`.",
-              "name": "verse"
+              "description": "Verse number, used to stack multiple verses. Defaults to `1`."
             }
           ],
           "superclass": {
@@ -10928,7 +11088,7 @@
         },
         {
           "kind": "custom-element-definition",
-          "name": "music-lyrics",
+          "name": "MUSIC_LYRICS",
           "declaration": {
             "name": "MusicLyricsElement",
             "module": "src/staffVocal/lyrics.ts"
@@ -11062,6 +11222,65 @@
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#boundPositionLyrics",
+              "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "onConnectedCallback",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onDisconnectedCallback",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#lastLyricWarnings",
+              "privacy": "private",
+              "default": "new Set<string>()"
+            },
+            {
+              "kind": "method",
+              "name": "#sungEntries",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#lyricsInVerseOrder",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "MusicLyricsElement[]"
+                }
               }
             },
             {
@@ -12115,16 +12334,16 @@
             },
             {
               "kind": "method",
-              "name": "onConnectedCallback",
-              "privacy": "protected",
+              "name": "#listeners",
+              "privacy": "private",
               "return": {
                 "type": {
-                  "text": "void"
+                  "text": "[string, EventListener][]"
                 }
               },
               "inheritedFrom": {
-                "name": "StaffElementBase",
-                "module": "src/staffBase.ts"
+                "name": "StaffClassicalElementBase",
+                "module": "src/staffClassicalBase.ts"
               }
             },
             {
@@ -12297,20 +12516,6 @@
               "inheritedFrom": {
                 "name": "StaffClassicalElementBase",
                 "module": "src/staffClassicalBase.ts"
-              }
-            },
-            {
-              "kind": "method",
-              "name": "onDisconnectedCallback",
-              "privacy": "protected",
-              "return": {
-                "type": {
-                  "text": "void"
-                }
-              },
-              "inheritedFrom": {
-                "name": "StaffElementBase",
-                "module": "src/staffBase.ts"
               }
             },
             {
@@ -15289,6 +15494,33 @@
             },
             {
               "kind": "method",
+              "name": "resolveTimeSignature",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "[BeatsInMeasure, BeatTypeInMeasure]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedInvalidTime",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "convertTotimeInts",
               "privacy": "protected",
               "return": {
@@ -15300,7 +15532,7 @@
                 {
                   "name": "time",
                   "type": {
-                    "text": "string"
+                    "text": "TimeSignature"
                   }
                 }
               ],
@@ -15646,7 +15878,7 @@
         },
         {
           "kind": "custom-element-definition",
-          "name": "music-staff-vocal",
+          "name": "MUSIC_STAFF_VOCAL",
           "declaration": {
             "name": "anonymous_0",
             "module": "src/staffVocal/staffVocal.ts"
@@ -15901,7 +16133,7 @@
             },
             {
               "kind": "method",
-              "name": "#applyDefaults",
+              "name": "#validateChildren",
               "privacy": "private",
               "return": {
                 "type": {

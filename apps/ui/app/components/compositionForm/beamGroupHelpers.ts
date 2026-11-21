@@ -2,15 +2,17 @@ import type { DurationType } from '@one-step-at-a-time/web-components';
 import { durationToFactor } from '@one-step-at-a-time/web-components';
 import { adjacentStaffPair } from './crossStaffHelpers';
 import { staffOfEntry } from './entryLocationHelpers';
+import { isTriangle } from './markingsHelpers';
 import type { CompositionStructure, MusicEntry, Selection } from './types';
+import { isPitchedEntry } from './types';
 
 // Double-stemmed (cross-staff) beam groups for the composition form. Mirrors
 // the library's rules/doubleStemmedBeamRules.ts#resolveDoubleStemmedBeamGroups
 // — one measure, exactly two immediately adjacent staves, at least two
 // non-rest members — plus two constraints the library leaves to the author:
-// every note/chord member is a flagged (beamable) value, and no member sits
-// in a cross-staff tuplet (rules/crossStaffTupletRules.ts drops the tuplet
-// otherwise). A rest carries the key only to be positioned against the beam.
+// every note/chord member is a flagged (beamable) value, no member sits in a
+// cross-staff tuplet (rules/crossStaffTupletRules.ts drops the tuplet
+// otherwise), and no member has a triangle head (it always stands alone). A rest carries the key only to be positioned against the beam.
 
 export function isBeamableDuration(duration: DurationType): boolean {
   return durationToFactor[duration] < durationToFactor.quarter;
@@ -20,7 +22,7 @@ function inCrossStaffTuplet(
   structure: CompositionStructure,
   entry: MusicEntry
 ): boolean {
-  if (entry.type === 'clef' || !entry.tupletId) {
+  if (!isPitchedEntry(entry) || !entry.tupletId) {
     return false;
   }
   return Boolean(structure.tupletsById[entry.tupletId]?.crossStaffGroupId);
@@ -49,8 +51,9 @@ function validBeamGroupMembers(
     const entry = structure.entriesById[id];
     if (
       !entry ||
-      entry.type === 'clef' ||
-      inCrossStaffTuplet(structure, entry)
+      !isPitchedEntry(entry) ||
+      inCrossStaffTuplet(structure, entry) ||
+      (entry.type === 'note' && isTriangle(entry.notehead))
     ) {
       return null;
     }
@@ -87,7 +90,10 @@ export function beamGroupCandidate(
       return staff
         ? staff.voiceOrder
             .flatMap((voiceId) => staff.voicesById[voiceId].entryIds)
-            .filter((id) => structure.entriesById[id]?.type !== 'clef')
+            .filter((id) => {
+              const entry = structure.entriesById[id];
+              return entry !== undefined && isPitchedEntry(entry);
+            })
         : [];
     });
   }
@@ -96,7 +102,7 @@ export function beamGroupCandidate(
 }
 
 function beamGroupIdOf(entry: MusicEntry | undefined): string | null {
-  return entry && entry.type !== 'clef' ? entry.beamGroupId ?? null : null;
+  return entry && isPitchedEntry(entry) ? entry.beamGroupId ?? null : null;
 }
 
 // The group every one of `entryIds` already belongs to, if they share one.
@@ -118,7 +124,7 @@ function withBeamGroup(
   entry: MusicEntry,
   beamGroupId: string | null
 ): MusicEntry {
-  if (entry.type === 'clef') {
+  if (!isPitchedEntry(entry)) {
     return entry;
   }
   if (entry.type === 'rest') {

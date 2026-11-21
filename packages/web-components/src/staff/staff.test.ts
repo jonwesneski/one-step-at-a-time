@@ -662,3 +662,36 @@ describe(`${MUSIC_STAFF} barlines`, () => {
     expect(staff.ownBarlineSlotLefts).toHaveLength(1);
   });
 });
+
+describe('reconnecting', () => {
+  it('keeps a single set of staff lines when the staff moves', () => {
+    document.body.innerHTML =
+      '<div id="from"><music-staff clef="treble"></music-staff></div><div id="to"></div>';
+    const staff = document.querySelector(MUSIC_STAFF) as StaffElementType;
+    document.getElementById('to')?.appendChild(staff);
+    document.getElementById('from')?.appendChild(staff);
+    expect(staff.shadowRoot!.querySelectorAll('.staff-line')).toHaveLength(4);
+  });
+});
+
+describe('invalid time', () => {
+  it('skips an unsupported time and inherits the next valid one, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML =
+      '<music-measure time="3/4"><music-staff time="three/4"></music-staff></music-measure>';
+    const staff = document.querySelector(MUSIC_STAFF) as StaffElementType;
+    expect(staff.time).toBe('3/4');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('time="three/4"')
+    );
+    warn.mockRestore();
+  });
+
+  it('falls back to 4/4 when nothing valid is inherited', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML = '<music-staff time="4-4"></music-staff>';
+    const staff = document.querySelector(MUSIC_STAFF) as StaffElementType;
+    expect(staff.time).toBe('4/4');
+    warn.mockRestore();
+  });
+});

@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
 import { ClientOnly } from '@/components/ClientOnly';
 import MusicScore from '@/components/MusicScore';
+import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/sample')({
   component: Home,
@@ -8,7 +8,7 @@ export const Route = createFileRoute('/sample')({
 
 function Home() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans">
+    <main className="flex min-h-screen items-center justify-center bg-canvas font-sans">
       <ClientOnly>
         <MusicScore />
       </ClientOnly>

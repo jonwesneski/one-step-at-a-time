@@ -10,7 +10,7 @@ import type {
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
-import { DurationType } from '../types/theory';
+import { DurationType, TupletRatio } from '../types/theory';
 import { MUSIC_TUPLET } from '../utils/consts';
 import {
   BEAM_THICKNESS_PX,
@@ -38,6 +38,7 @@ import {
   computeTupletBracketGeometry,
   computeTupletScaleByIndex,
   defaultNormalCount,
+  isTupletRatio,
   parseTupletRatio,
   resolveInnermostTuplet,
   resolveTupletBracketAbove,
@@ -1807,5 +1808,30 @@ describe('stemTipYFromStaffY', () => {
     expect(stemTipYFromStaffY(50, true, -5)).toBe(
       stemTipYFromStaffY(50, true) + 5
     );
+  });
+});
+
+describe('malformed tuplet ratios', () => {
+  it.each(['0', 'abc', '3/2', '3:0', ''])(
+    'reads %p as a triplet rather than NaN',
+    (ratio) => {
+      expect(parseTupletRatio(ratio as TupletRatio)).toEqual({
+        actual: 3,
+        normal: 2,
+        displayString: '3',
+      });
+    }
+  );
+
+  it.each([
+    ['3', true],
+    ['3:2', true],
+    ['12:8', true],
+    ['3/2', false],
+    ['0', false],
+    ['3:0', false],
+    [null, false],
+  ])('isTupletRatio(%p) is %p', (ratio, expected) => {
+    expect(isTupletRatio(ratio)).toBe(expected);
   });
 });

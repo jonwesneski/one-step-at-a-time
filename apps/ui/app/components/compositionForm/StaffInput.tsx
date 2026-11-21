@@ -3,6 +3,7 @@ import '@one-step-at-a-time/web-components';
 import type { TimeSignature } from '@one-step-at-a-time/web-components';
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
+import { AddBarlineInput } from './AddBarlineInput';
 import { AddChordInput } from './AddChordInput';
 import { AddClefInput } from './AddClefInput';
 import { AddNoteInput } from './AddNoteInput';
@@ -10,14 +11,24 @@ import { AddRestInput } from './AddRestInput';
 import { effectiveClefOfEntry } from './clefsHelpers';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
 import { DockedTabPanel } from './DockedTabPanel';
+import type { WrapperRun } from './entryWrappersHelpers';
+import { resolveVoiceRuns, resolveWrapperRuns } from './entryWrappersHelpers';
 import { serializeGrace } from './graceHelpers';
+import { AddGuitarNoteInput } from './GuitarNoteInput';
+import { LyricsInput } from './LyricsInput';
+import {
+  serializeChordTone,
+  serializeLaissezVibrer,
+  serializeMarkings,
+} from './markingsHelpers';
 import { remainingDuration } from './measureCapacityHelpers';
-import { resolveTupletRuns } from './tupletsHelpers';
+import { StaffSettingsInput } from './StaffSettingsInput';
 import type {
   CompositionFormValues,
   DraftMusicEntry,
   MusicEntry,
 } from './types';
+import { isTimedEntry } from './types';
 import {
   useCompositionStructure,
   useConnectorAttributes,
@@ -70,18 +81,14 @@ export function StaffInput({
     (eid) => entriesById[eid]
   );
 
-  const remainingBeats = remainingDuration(
-    entries,
-    timeSignature,
-    structure.tupletsById
-  );
+  const remainingBeats = remainingDuration(entries, timeSignature, structure);
   const add = (entry: DraftMusicEntry) =>
     addEntry(measureId, staffId, entry, effectiveTargetVoiceId);
 
   // Hidden entirely for the common single-voice case — no added friction.
   const voiceSelector =
     staff.voiceOrder.length > 1 ? (
-      <label className="flex items-center gap-2 px-3 pt-2 text-xs font-medium text-zinc-500">
+      <label className="flex items-center gap-2 px-3 pt-2 text-xs font-medium text-fg-muted">
         Voice
         <Select
           value={effectiveTargetVoiceId}
@@ -96,13 +103,25 @@ export function StaffInput({
       </label>
     ) : null;
 
+  // The library honours one barline per gap between notes, and a barline at
+  // a bar's start or end is the measure's own (its Repeats tab).
+  const voice1EntryIds = staff.voicesById[staff.voiceOrder[0]].entryIds;
+  const lastVoice1Entry =
+    entriesById[voice1EntryIds[voice1EntryIds.length - 1]];
+  const barlineBlockedReason =
+    lastVoice1Entry === undefined
+      ? 'Add a note first — a barline at the start of a bar is set on the measure (Repeats tab).'
+      : lastVoice1Entry.type === 'barline'
+      ? 'Voice 1 already ends with a barline.'
+      : null;
+
   const staffClass = `cursor-pointer rounded transition-shadow ${
     isSelected ? 'rainbow-selected' : ''
   }`;
 
   const renderEntry = (voiceId: string, entry: MusicEntry) => {
     const isEntrySelected = session.selection.entryIds.includes(entry.id);
-    const isDraggable = entry.type !== 'clef';
+    const isDraggable = isTimedEntry(entry);
     const entryClass = `${isEntrySelected ? 'rainbow-selected' : ''} ${
       isDraggable ? 'cursor-grab' : ''
     }`.trim();
@@ -122,9 +141,14 @@ export function StaffInput({
     };
 
     if (entry.type === 'note' || entry.type === 'chord') {
+      const letRing = serializeLaissezVibrer(entry);
       const marks = {
-        tie: connector?.tie,
+        tie: connector?.tie ?? letRing.tie,
+        'lv-label': letRing['lv-label'],
+        'tie-style': connector?.['tie-style'] ?? letRing['tie-style'],
         slur: connector?.slur,
+        glissando: connector?.glissando,
+        'glissando-hint': connector?.['glissando-hint'],
         crescendo: connector?.crescendo,
         decrescendo: connector?.decrescendo,
         for: connector?.for,
@@ -138,6 +162,7 @@ export function StaffInput({
         articulation: entry.articulation ?? undefined,
         stress: entry.stress ?? undefined,
         ...serializeGrace(entry.grace),
+        ...serializeMarkings(entry),
         className: entryClass,
         onClick: handleEntryClick,
         onPointerDown: handleEntryPointerDown,
@@ -166,7 +191,12 @@ export function StaffInput({
           {...marks}
         >
           {entry.notes.map((n, j) => (
-            <music-note key={j} note={n.value} octave={n.octave ?? undefined} />
+            <music-note
+              key={j}
+              note={n.value}
+              octave={n.octave ?? undefined}
+              {...serializeChordTone(n)}
+            />
           ))}
         </music-chord>
       );
@@ -176,6 +206,35 @@ export function StaffInput({
           key={entry.id}
           ref={(el: HTMLElement | null) => registerEntryRef(entry.id, el)}
           clef={entry.clef}
+          className={entryClass}
+          onClick={handleEntryClick}
+        />
+      );
+    } else if (entry.type === 'guitar-note') {
+      return (
+        <music-guitar-note
+          key={entry.id}
+          id={entry.id}
+          ref={(el: HTMLElement | null) => registerEntryRef(entry.id, el)}
+          fret={entry.fret}
+          string={entry.string}
+          duration={entry.duration}
+          tie={connector?.tie}
+          slur={connector?.slur}
+          hammer-on={connector?.['hammer-on']}
+          pull-off={connector?.['pull-off']}
+          slide={connector?.slide}
+          className={entryClass}
+          onClick={handleEntryClick}
+          onPointerDown={handleEntryPointerDown}
+        />
+      );
+    } else if (entry.type === 'barline') {
+      return (
+        <music-barline
+          key={entry.id}
+          ref={(el: HTMLElement | null) => registerEntryRef(entry.id, el)}
+          type={entry.barlineType}
           className={entryClass}
           onClick={handleEntryClick}
         />
@@ -198,15 +257,55 @@ export function StaffInput({
     }
   };
 
+  // A tremolo or written-out arpeggio renders as its wrapper element around
+  // its members; anything else renders its entries inline.
+  const renderWrapper = (wrapper: WrapperRun, children: React.ReactNode[]) => {
+    if (wrapper.kind === 'tremolo' && wrapper.id) {
+      const tremolo = structure.tremolosById[wrapper.id];
+      return (
+        <music-tremolo
+          key={wrapper.id}
+          strokes={tremolo?.strokes}
+          beam-attach={tremolo?.beamAttach ?? undefined}
+          beam-position={tremolo?.beamPosition ?? undefined}
+          tremolo-group={tremolo?.crossStaffGroupId ?? undefined}
+        >
+          {children}
+        </music-tremolo>
+      );
+    }
+    if (wrapper.kind === 'arpeggio' && wrapper.id) {
+      const arpeggio = structure.arpeggiosById[wrapper.id];
+      return (
+        <music-arpeggio
+          key={wrapper.id}
+          unmatched={arpeggio?.unmatched ?? undefined}
+          lv-label={arpeggio?.lvLabel || undefined}
+        >
+          {children}
+        </music-arpeggio>
+      );
+    }
+    return children;
+  };
+
   // A tuplet run renders as a <music-tuplet> wrapper (a direct child of
   // <music-voice>, as the library's slot walker requires); loose runs render
   // their entries inline. Each voice renders as its own <music-voice>; a
   // single wrapped voice renders the same as no wrapper.
   const voiceNodes = staff.voiceOrder.map((voiceId) => {
     const voice = staff.voicesById[voiceId];
-    const runs = resolveTupletRuns(voice.entryIds, entriesById);
+    const runs = resolveVoiceRuns(voice.entryIds, entriesById);
     const nodes = runs.map((run) => {
-      const runNodes = run.entries.map((entry) => renderEntry(voiceId, entry));
+      const runNodes = resolveWrapperRuns(
+        run.entries,
+        structure.arpeggiosById
+      ).map((wrapper) =>
+        renderWrapper(
+          wrapper,
+          wrapper.entries.map((entry) => renderEntry(voiceId, entry))
+        )
+      );
       if (run.tupletId === null) {
         return runNodes;
       }
@@ -225,22 +324,81 @@ export function StaffInput({
     return <music-voice key={voiceId}>{nodes}</music-voice>;
   });
 
+  const sharedStaffAttributes = {
+    group: staff.group ?? undefined,
+    'group-id': staff.groupId ?? undefined,
+    label: staff.label ?? undefined,
+    part: staff.part ?? undefined,
+    className: staffClass,
+    'key-sig': keySig,
+    mode,
+    time: timeSignature,
+    onClick: (e: React.MouseEvent) => selectStaff(measureId, staffId, e),
+  };
+
   return (
     <>
-      <music-staff
-        ref={(el: HTMLElement | null) => registerStaffRef(staffId, el)}
-        clef={staff.type === 'treble' ? 'treble' : 'bass'}
-        group={staff.group ?? undefined}
-        group-id={staff.groupId ?? undefined}
-        className={staffClass}
-        key-sig={keySig}
-        mode={mode}
-        time={timeSignature}
-        onClick={(e) => selectStaff(measureId, staffId, e)}
-      >
-        {voiceNodes}
-      </music-staff>
-      {isSelected && (
+      {staff.type === 'guitar-tab' ? (
+        // Tab reads its notes directly: no voice wrappers.
+        <music-staff-guitar-tab
+          ref={(el: HTMLElement | null) => registerStaffRef(staffId, el)}
+          tab-for={staff.tabFor ?? undefined}
+          group={sharedStaffAttributes.group}
+          group-id={sharedStaffAttributes['group-id']}
+          label={sharedStaffAttributes.label}
+          part={sharedStaffAttributes.part}
+          className={staffClass}
+          time={timeSignature}
+          onClick={sharedStaffAttributes.onClick}
+        >
+          {staff.voicesById[staff.voiceOrder[0]].entryIds.map((id) =>
+            entriesById[id]
+              ? renderEntry(staff.voiceOrder[0], entriesById[id])
+              : null
+          )}
+        </music-staff-guitar-tab>
+      ) : staff.type === 'vocal' ? (
+        <music-staff-vocal
+          ref={(el: HTMLElement | null) => registerStaffRef(staffId, el)}
+          voice={staff.voiceType}
+          {...sharedStaffAttributes}
+        >
+          {voiceNodes}
+          {(staff.lyrics ?? []).map((verse) => (
+            <music-lyrics key={verse.verse} verse={String(verse.verse)}>
+              {verse.text}
+            </music-lyrics>
+          ))}
+        </music-staff-vocal>
+      ) : (
+        <music-staff
+          ref={(el: HTMLElement | null) => registerStaffRef(staffId, el)}
+          clef={staff.type === 'bass' ? 'bass' : 'treble'}
+          {...sharedStaffAttributes}
+        >
+          {voiceNodes}
+        </music-staff>
+      )}
+      {isSelected && staff.type === 'guitar-tab' && (
+        <DockedTabPanel
+          tabs={[
+            {
+              label: 'Tab Note',
+              content: (
+                <AddGuitarNoteInput
+                  onAdd={add}
+                  remainingBeats={remainingBeats}
+                />
+              ),
+            },
+            {
+              label: 'Staff',
+              content: <StaffSettingsInput staffId={staffId} />,
+            },
+          ]}
+        />
+      )}
+      {isSelected && staff.type !== 'guitar-tab' && (
         <DockedTabPanel
           tabs={[
             {
@@ -270,16 +428,44 @@ export function StaffInput({
                 </>
               ),
             },
+            // A vocal staff's clef follows its voice type, so it takes no
+            // clef changes.
+            ...(staff.type === 'vocal'
+              ? [
+                  {
+                    label: 'Lyrics',
+                    content: (
+                      <LyricsInput staff={staff} structure={structure} />
+                    ),
+                  },
+                ]
+              : [
+                  {
+                    // No voice selector here — a clef change always targets
+                    // voice 1 regardless (addEntry enforces this; a clef
+                    // change is staff-wide, not voice-scoped), so a selector
+                    // would mislead.
+                    label: 'Clef Change',
+                    content: <AddClefInput onAdd={add} />,
+                  },
+                ]),
             {
-              // No voice selector here — a clef change always targets voice
-              // 1 regardless (addEntry enforces this; a clef change is
-              // staff-wide, not voice-scoped), so a selector would mislead.
-              label: 'Clef Change',
-              content: <AddClefInput onAdd={add} />,
+              // Like a clef change: staff-wide, always in voice 1.
+              label: 'Barline',
+              content: (
+                <AddBarlineInput
+                  onAdd={add}
+                  blockedReason={barlineBlockedReason}
+                />
+              ),
             },
             {
               label: 'Voices',
               content: <VoiceInput staffId={staffId} />,
+            },
+            {
+              label: 'Staff',
+              content: <StaffSettingsInput staffId={staffId} />,
             },
           ]}
         />

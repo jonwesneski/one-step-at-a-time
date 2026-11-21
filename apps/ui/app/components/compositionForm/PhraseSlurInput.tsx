@@ -31,13 +31,13 @@ export function PhraseSlurInput({
       className="flex flex-col gap-3 p-3"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm text-zinc-500">
+      <div className="text-sm text-fg-muted">
         {candidate
           ? `A phrase passed between the hands in ${candidate.legCount} legs.`
           : 'Part of a phrase slur across the staves.'}
       </div>
       <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-xs font-medium text-zinc-500 mb-1">
+        <legend className="text-xs font-medium text-fg-muted mb-1">
           Phrase slur across staves
         </legend>
         <Radio

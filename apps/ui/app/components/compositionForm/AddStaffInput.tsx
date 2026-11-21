@@ -1,9 +1,26 @@
 import { Select } from '@/design-system';
+import type { VocalType } from '@one-step-at-a-time/web-components';
+import { VOICES } from '@one-step-at-a-time/web-components';
 import { useCompositionFormSession } from './CompositionFormSessionContext';
-import type { StaffType } from './types';
+import type { NewStaff } from './staffSettingsHelpers';
 
 interface AddStaffInputProps {
   measureId: string;
+}
+
+const VOCAL_PREFIX = 'vocal:';
+
+function parseNewStaff(value: string): NewStaff | null {
+  if (value === 'treble' || value === 'bass' || value === 'guitar-tab') {
+    return { type: value };
+  }
+  if (value.startsWith(VOCAL_PREFIX)) {
+    return {
+      type: 'vocal',
+      voiceType: value.slice(VOCAL_PREFIX.length) as VocalType,
+    };
+  }
+  return null;
 }
 
 export function AddStaffInput({ measureId }: AddStaffInputProps) {
@@ -13,8 +30,10 @@ export function AddStaffInput({ measureId }: AddStaffInputProps) {
     <Select
       value=""
       onChange={(e) => {
-        const value = e.target.value as StaffType;
-        if (value) addStaff(measureId, value);
+        const newStaff = parseNewStaff(e.target.value);
+        if (newStaff) {
+          addStaff(measureId, newStaff);
+        }
       }}
     >
       <option value="" disabled>
@@ -22,6 +41,14 @@ export function AddStaffInput({ measureId }: AddStaffInputProps) {
       </option>
       <option value="treble">Treble</option>
       <option value="bass">Bass</option>
+      <optgroup label="Vocal">
+        {VOICES.map((voice) => (
+          <option key={voice} value={`${VOCAL_PREFIX}${voice}`}>
+            {voice.charAt(0).toUpperCase() + voice.slice(1)}
+          </option>
+        ))}
+      </optgroup>
+      <option value="guitar-tab">Guitar tab</option>
     </Select>
   );
 }

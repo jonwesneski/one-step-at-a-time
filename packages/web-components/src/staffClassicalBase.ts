@@ -1405,11 +1405,25 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   protected abstract get clefSvg(): string;
 
+  // One list serves both add and remove, so the two can't drift apart.
+  #listeners(): [string, EventListener][] {
+    return [
+      [NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, this.#boundDrawConnectors],
+      [NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange],
+      [NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, this.#boundRenderDynamics],
+      [NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, this.#boundRenderOctaveSigns],
+      // A trill change can move the written notehead's rightward footprint,
+      // which only #renderNotes() recomputes.
+      [NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE, this.#boundNoteYChange],
+      [CLEF_EVENTS.ATTRIBUTE_CHANGE, this.#boundClefMarkerChange],
+      [TUPLET_EVENTS.ATTRIBUTE_CHANGE, this.#boundNoteYChange],
+      [TREMOLO_EVENTS.ATTRIBUTE_CHANGE, this.#boundTremoloChange],
+    ];
+  }
+
   protected onConnectedCallback() {
     // Re-resolve inherited attrs now that ancestors are reachable via closest()
-    this.effectiveTimeSig = this.convertTotimeInts(
-      this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-    );
+    this.effectiveTimeSig = this.resolveTimeSignature();
     this.#effectiveMode = this.resolveInheritedValue(
       COMMON_ATTRIBUTES.MODE,
       'major'
@@ -1420,37 +1434,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     ) as Note;
 
     this.#buildDescribe();
-    this.addEventListener(
-      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
-      this.#boundDrawConnectors
-    );
-    this.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
-    this.addEventListener(
-      NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
-      this.#boundRenderDynamics
-    );
-    this.addEventListener(
-      NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE,
-      this.#boundRenderOctaveSigns
-    );
-    // A trill change can move the written notehead's rightward footprint,
-    // which only #renderNotes() recomputes.
-    this.addEventListener(
-      NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
-      this.#boundNoteYChange
-    );
-    this.addEventListener(
-      CLEF_EVENTS.ATTRIBUTE_CHANGE,
-      this.#boundClefMarkerChange
-    );
-    this.addEventListener(
-      TUPLET_EVENTS.ATTRIBUTE_CHANGE,
-      this.#boundNoteYChange
-    );
-    this.addEventListener(
-      TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
-      this.#boundTremoloChange
-    );
+    for (const [type, listener] of this.#listeners()) {
+      this.addEventListener(type, listener);
+    }
   }
 
   // Describe is: clef, key signature, time signature, and beams overlay
@@ -1603,7 +1589,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   #refreshDescribe() {
-    if (!this.isConnected) return;
+    if (!this.isConnected) {
+      return;
+    }
     this.#drawDescribeGlyphs();
     if (this.#voices.size > 0) {
       this.#renderNotes();
@@ -1611,9 +1599,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   }
 
   refreshInheritedAttrs() {
-    this.effectiveTimeSig = this.convertTotimeInts(
-      this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-    );
+    this.effectiveTimeSig = this.resolveTimeSignature();
     this.#effectiveMode = this.resolveInheritedValue(
       COMMON_ATTRIBUTES.MODE,
       'major'
@@ -1738,31 +1724,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       resetCrossVoiceState(element);
     }
     this.#crossVoiceElements.clear();
-    this.removeEventListener(
-      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
-      this.#boundDrawConnectors
-    );
-    this.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, this.#boundNoteYChange);
-    this.removeEventListener(
-      NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE,
-      this.#boundRenderDynamics
-    );
-    this.removeEventListener(
-      NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE,
-      this.#boundNoteYChange
-    );
-    this.removeEventListener(
-      CLEF_EVENTS.ATTRIBUTE_CHANGE,
-      this.#boundClefMarkerChange
-    );
-    this.removeEventListener(
-      TUPLET_EVENTS.ATTRIBUTE_CHANGE,
-      this.#boundNoteYChange
-    );
-    this.removeEventListener(
-      TREMOLO_EVENTS.ATTRIBUTE_CHANGE,
-      this.#boundTremoloChange
-    );
+    for (const [type, listener] of this.#listeners()) {
+      this.removeEventListener(type, listener);
+    }
   }
 
   override attributeChangedCallback(
@@ -1790,9 +1754,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
 
     if (name === COMMON_ATTRIBUTES.TIME) {
-      this.effectiveTimeSig = this.convertTotimeInts(
-        this.resolveInheritedValue(COMMON_ATTRIBUTES.TIME, '4/4')
-      );
+      this.effectiveTimeSig = this.resolveTimeSignature();
     } else if (name === COMMON_ATTRIBUTES.MODE) {
       this.#effectiveMode = this.resolveInheritedValue(
         COMMON_ATTRIBUTES.MODE,

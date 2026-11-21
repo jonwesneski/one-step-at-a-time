@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveClefOfEntry, resolveEntryOctaves } from './clefsHelpers';
+import {
+  effectiveClefOfEntry,
+  resolveEntryOctaves,
+  staffRangeKey,
+} from './clefsHelpers';
 import {
   buildMultiVoiceStaff,
   buildSingleVoiceStaff,
@@ -22,6 +26,8 @@ function structureWith(entryIds: string[]): CompositionStructure {
     connectorsById: {},
     connectorOrder: [],
     octaveSpansById: {},
+    tremolosById: {},
+    arpeggiosById: {},
     tupletsById: {},
   };
 }
@@ -77,6 +83,8 @@ describe('effectiveClefOfEntry', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     expect(effectiveClefOfEntry(structure, 'n3')).toBe('treble');
@@ -112,6 +120,8 @@ describe('effectiveClefOfEntry', () => {
       connectorsById: {},
       connectorOrder: [],
       octaveSpansById: {},
+      tremolosById: {},
+      arpeggiosById: {},
       tupletsById: {},
     };
     expect(effectiveClefOfEntry(structure, 'n4')).toBe('bass');
@@ -142,5 +152,32 @@ describe('resolveEntryOctaves', () => {
     expect(
       resolveEntryOctaves('treble', [{ value: 'C' }, { value: 'E' }])
     ).toEqual([4, 4]);
+  });
+});
+
+describe('vocal ranges', () => {
+  const vocal = (voiceType: 'soprano' | 'tenor' | 'bass' | 'alto') => ({
+    id: 'v',
+    type: 'vocal' as const,
+    voiceType,
+    voiceOrder: [],
+    voicesById: {},
+    group: null,
+    groupId: null,
+  });
+
+  it('maps each voice type to its range', () => {
+    expect(staffRangeKey(vocal('soprano'))).toBe('treble');
+    expect(staffRangeKey(vocal('tenor'))).toBe('tenor');
+    expect(staffRangeKey(vocal('bass'))).toBe('bass');
+  });
+
+  it('places an octave-less tenor note an octave below treble', () => {
+    expect(resolveEntryOctaves('tenor', [{ value: 'C' }])).toEqual([3]);
+    expect(resolveEntryOctaves('treble', [{ value: 'C' }])).toEqual([4]);
+  });
+
+  it('reaches down to F3 on an alto staff', () => {
+    expect(resolveEntryOctaves('alto', [{ value: 'F' }])).toEqual([3]);
   });
 });
