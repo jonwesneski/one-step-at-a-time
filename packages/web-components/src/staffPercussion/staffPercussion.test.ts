@@ -110,4 +110,43 @@ describe(MUSIC_STAFF_PERCUSSION, () => {
       expect.stringContaining('<music-clef> is ignored')
     );
   });
+
+  describe('trills', () => {
+    const resolvedTrillPitch = (staffTag: string, content: string) =>
+      (
+        renderInMeasure(staffTag, content, 'C').children[0] as
+          | NoteElementType
+          | ChordElementType
+      ).resolvedTrillPitch;
+
+    it('hides a trill-accidental override', () => {
+      const note = `<${MUSIC_NOTE} instrument="snare" duration="quarter" trill trill-accidental="sharp"></${MUSIC_NOTE}>`;
+      expect(resolvedTrillPitch(MUSIC_STAFF, note)?.accidental).toBe('sharp');
+      expect(
+        resolvedTrillPitch(MUSIC_STAFF_PERCUSSION, note)?.accidental
+      ).toBeNull();
+    });
+
+    it('keeps a written trill-note but hides its accidental', () => {
+      const note = `<${MUSIC_NOTE} instrument="snare" duration="quarter" trill trill-note="F#"></${MUSIC_NOTE}>`;
+      expect(resolvedTrillPitch(MUSIC_STAFF, note)?.accidental).toBe('sharp');
+      expect(resolvedTrillPitch(MUSIC_STAFF_PERCUSSION, note)).toMatchObject({
+        letter: 'F',
+        written: true,
+        accidental: null,
+      });
+    });
+
+    it("hides a chord's trill-accidental override", () => {
+      const chord =
+        `<${MUSIC_CHORD} duration="quarter" trill trill-accidental="flat">` +
+        `<${MUSIC_NOTE} instrument="snare"></${MUSIC_NOTE}>` +
+        `<${MUSIC_NOTE} instrument="kick"></${MUSIC_NOTE}>` +
+        `</${MUSIC_CHORD}>`;
+      expect(resolvedTrillPitch(MUSIC_STAFF, chord)?.accidental).toBe('flat');
+      expect(
+        resolvedTrillPitch(MUSIC_STAFF_PERCUSSION, chord)?.accidental
+      ).toBeNull();
+    });
+  });
 });

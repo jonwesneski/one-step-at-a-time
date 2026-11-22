@@ -1366,6 +1366,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             composed: true,
           })
         );
+        // Is standalone mode; if not, staff will
+        // trigger a call to render() via batchUpdate()
+        if (!this.closest(STAFF_TAGS)) {
+          this.render();
+        }
         return;
       }
 

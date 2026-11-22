@@ -115,9 +115,11 @@ import {
   unbeamedTremoloStemExtensionPx,
 } from './rules/tremoloRules';
 import {
+  type ResolvedTrillPitch,
   resolveTrillPitch,
   resolveTrillSpans,
   type TrillLineSpan,
+  withoutTrillAccidental,
 } from './rules/trillRules';
 import {
   buildTupletGroups,
@@ -2261,13 +2263,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           noteElement.resolvedTrillFinishAccidentals =
             accidentals.trillFinishShowAccidentals.get(noteElement) ?? null;
           noteElement.resolvedTrillPitch = noteElement.trill
-            ? resolveTrillPitch(
-                noteElement.note,
-                noteElement.octave ?? 4,
-                this.#effectiveKeySig,
-                this.#effectiveMode,
-                noteElement.trillAccidental,
-                noteElement.trillNote
+            ? this.#trillPitchForStaff(
+                resolveTrillPitch(
+                  noteElement.note,
+                  noteElement.octave ?? 4,
+                  this.#effectiveKeySig,
+                  this.#effectiveMode,
+                  noteElement.trillAccidental,
+                  noteElement.trillNote
+                )
               )
             : null;
         });
@@ -2293,7 +2297,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           chordElement.resolvedTrillFinishAccidentals =
             accidentals.trillFinishShowAccidentals.get(chordElement) ?? null;
           chordElement.resolvedTrillPitch = chordElement.trill
-            ? this.#resolveChordTrillPitch(chordElement, staffYCoordinates)
+            ? this.#trillPitchForStaff(
+                this.#resolveChordTrillPitch(chordElement, staffYCoordinates)
+              )
             : null;
         });
       }
@@ -4961,6 +4967,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         )
       );
     }
+  }
+
+  #trillPitchForStaff(
+    pitch: ResolvedTrillPitch | null
+  ): ResolvedTrillPitch | null {
+    return this.isPitched ? pitch : withoutTrillAccidental(pitch);
   }
 
   // The chord's own reference pitch for trill-pitch resolution: its topmost

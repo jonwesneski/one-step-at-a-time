@@ -280,6 +280,14 @@ const octaveAbove = (
  * replaces only the accidental; `noteOverride` (`trill-note`) replaces the
  * whole pitch and wins over it.
  */
+// The trilling pitch with no accidental, for an unpitched staff. The letter
+// and octave stay, so a written trilling note keeps its staff position.
+export function withoutTrillAccidental(
+  pitch: ResolvedTrillPitch | null
+): ResolvedTrillPitch | null {
+  return pitch === null ? null : { ...pitch, accidental: null };
+}
+
 export function resolveTrillPitch(
   note: Note,
   octave: Octave,

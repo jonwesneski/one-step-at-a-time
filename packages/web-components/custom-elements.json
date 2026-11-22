@@ -8137,6 +8137,28 @@
             },
             {
               "kind": "method",
+              "name": "#trillPitchForStaff",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ResolvedTrillPitch | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "pitch",
+                  "type": {
+                    "text": "ResolvedTrillPitch | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#resolveChordTrillPitch",
               "privacy": "private",
               "parameters": [
@@ -14263,6 +14285,28 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#trillPitchForStaff",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ResolvedTrillPitch | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "pitch",
+                  "type": {
+                    "text": "ResolvedTrillPitch | null"
                   }
                 }
               ],

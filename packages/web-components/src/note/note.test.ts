@@ -2847,6 +2847,23 @@ describe('instrument', () => {
     expect(note.ownNotehead).toBeNull();
   });
 
+  it('redraws a standalone note when its instrument changes', () => {
+    const note = makeNote({ instrument: 'snare' });
+    const headTag = () => note.shadowRoot!.querySelector('.head')?.tagName;
+    expect(headTag()).toBe('ellipse');
+    note.instrument = 'crash';
+    expect(headTag()).toBe('path');
+    note.instrument = null;
+    expect(headTag()).toBe('ellipse');
+  });
+
+  it('redraws a standalone note when its spelling changes', () => {
+    const note = makeNote({ note: 'F', octave: '4' });
+    const before = note.shadowRoot!.innerHTML;
+    note.note = 'F#';
+    expect(note.shadowRoot!.innerHTML).not.toBe(before);
+  });
+
   it('dispatches NOTE_Y_CHANGE when the instrument changes', () => {
     const note = makeNote({ instrument: 'snare' });
     const handler = jest.fn();

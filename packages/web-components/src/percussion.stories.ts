@@ -92,19 +92,3 @@ export const IgnoresKeySignature: Story = {
     </music-measure>
   `,
 };
-
-export const Planned: Story = {
-  render: () => html`
-    <p>
-      Not implemented yet: a single-voice stem default for drums, slash and
-      rhythmic notation, one- and two-bar repeat signs, "Play time / Fill /
-      Solo" instructions, open/closed hi-hat marks, ghost notes, and the
-      techniques in <code>TODO.md</code> §7 &ldquo;Percussion &amp; Keyboard
-      Techniques&rdquo; (closed roll, rim shot, cross stick, dead stroke).
-      Keyboard pedal marks from that section are tracked under
-      <a href="/?path=/story/instruments-keyboard--planned"
-        >Instruments/Keyboard</a
-      >.
-    </p>
-  `,
-};
