@@ -35,6 +35,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  PercussionInstrument,
   RestStaffSide,
   StaffGroupType,
   StemDirection,
@@ -115,6 +116,13 @@ declare module 'react' {
         voice?: VocalType;
         'key-sig'?: Note;
         mode?: Mode;
+        time?: TimeSignature;
+        group?: StaffGroupType;
+        'group-id'?: string;
+        label?: string;
+        part?: string;
+      };
+      'music-staff-percussion': WebComponentProps & {
         time?: TimeSignature;
         group?: StaffGroupType;
         'group-id'?: string;
@@ -214,6 +222,7 @@ declare module 'react' {
         note?: Note;
         duration?: DurationType;
         octave?: Octave;
+        instrument?: PercussionInstrument;
         tie?: TieValue;
         'lv-label'?: boolean;
         slur?: ConnectorRole;

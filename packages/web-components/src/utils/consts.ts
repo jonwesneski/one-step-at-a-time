@@ -22,6 +22,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  PercussionInstrument,
   RestStaffSide,
   StaffGroupType,
   StemDirection,
@@ -59,12 +60,21 @@ export const MUSIC_CLEF = 'music-clef';
 export const MUSIC_BARLINE = 'music-barline';
 export const MUSIC_STAFF_GUITAR_TAB = 'music-staff-guitar-tab';
 export const MUSIC_STAFF_VOCAL = 'music-staff-vocal';
+export const MUSIC_STAFF_PERCUSSION = 'music-staff-percussion';
 export const MUSIC_LYRICS = 'music-lyrics';
 
 export const STAFF_TAGS = [
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
+  MUSIC_STAFF_PERCUSSION,
+].join(', ');
+
+/** The five-line notation staves, i.e. every staff tag except guitar tab. */
+export const NOTATION_STAFF_TAGS = [
+  MUSIC_STAFF,
+  MUSIC_STAFF_VOCAL,
+  MUSIC_STAFF_PERCUSSION,
 ].join(', ');
 
 export const isStaffNodeName = (nodeName: string): boolean =>
@@ -87,6 +97,7 @@ export const MUSIC_CLEF_NODE = MUSIC_CLEF.toUpperCase();
 export const MUSIC_BARLINE_NODE = MUSIC_BARLINE.toUpperCase();
 export const MUSIC_STAFF_GUITAR_TAB_NODE = MUSIC_STAFF_GUITAR_TAB.toUpperCase();
 export const MUSIC_STAFF_VOCAL_NODE = MUSIC_STAFF_VOCAL.toUpperCase();
+export const MUSIC_STAFF_PERCUSSION_NODE = MUSIC_STAFF_PERCUSSION.toUpperCase();
 export const MUSIC_LYRICS_NODE = MUSIC_LYRICS.toUpperCase();
 
 export const NOTE_EVENTS = {
@@ -294,6 +305,18 @@ export const NOTEHEADS: NoteheadType[] = [
   'diamond-white',
   'triangle-up',
   'triangle-down',
+];
+
+export const PERCUSSION_INSTRUMENTS: PercussionInstrument[] = [
+  'kick',
+  'floor-tom',
+  'snare',
+  'mid-tom',
+  'high-tom',
+  'ride',
+  'hi-hat',
+  'crash',
+  'hi-hat-pedal',
 ];
 
 /** Hairpin directions — used by the `arpeggio-hairpin` attribute (a dynamic

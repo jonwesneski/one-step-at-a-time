@@ -19,6 +19,10 @@ import {
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
 import {
+  parsePercussionInstrument,
+  PERCUSSION_INSTRUMENT_MAP,
+} from '../rules/percussionRules';
+import {
   articulationRepeatCount,
   drawnTremoloTuplet,
   resolveStrokeCount,
@@ -55,6 +59,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  PercussionInstrument,
   StemDirection,
   StressType,
   TieStyle,
@@ -134,6 +139,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @customElement music-note
    * @attr {Note} note - Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.
    * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
+   * @attr {PercussionInstrument} instrument - Drumset instrument this note stands for (`kick`, `snare`, `hi-hat`, `ride`, `crash`, `floor-tom`, `mid-tom`, `high-tom`, `hi-hat-pedal`), for `<music-staff-percussion>`. Supplies `note`, `octave` and `notehead` from the drum key; any of those set explicitly overrides it.
    * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`.
    * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
    * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
@@ -201,6 +207,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         'duration',
         'note',
         'octave',
+        'instrument',
         'for',
         'tie',
         'lv-label',
@@ -296,7 +303,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get note(): Note {
-      return (this.getAttribute('note') as Note) ?? 'C';
+      return (
+        (this.getAttribute('note') as Note | null) ??
+        this.#instrumentPosition?.note ??
+        'C'
+      );
     }
 
     set note(value: Note | null | undefined) {
@@ -310,7 +321,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     get octave(): Octave | null {
       const attribute = this.getAttribute('octave');
       if (attribute === null) {
-        return null;
+        return this.#instrumentPosition?.octave ?? null;
       }
       const parsed = Number(attribute) as Octave;
       return OCTAVES.includes(parsed) ? parsed : null;
@@ -322,6 +333,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('octave', String(val));
       }
+    }
+
+    get instrument(): PercussionInstrument | null {
+      return parsePercussionInstrument(this.getAttribute('instrument'));
+    }
+
+    set instrument(value: PercussionInstrument | null | undefined) {
+      if (value === null || value === undefined) {
+        this.removeAttribute('instrument');
+      } else {
+        this.setAttribute('instrument', value);
+      }
+    }
+
+    get #instrumentPosition() {
+      const instrument = this.instrument;
+      return instrument === null ? null : PERCUSSION_INSTRUMENT_MAP[instrument];
     }
 
     get stemUp(): boolean {
@@ -659,14 +687,25 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     get notehead(): NoteheadType {
-      return parseNotehead(this.getAttribute('notehead')) ?? 'normal';
+      return this.ownNotehead ?? 'normal';
     }
+
     set notehead(value: NoteheadType | null) {
       if (value === null) {
         this.removeAttribute('notehead');
       } else {
         this.setAttribute('notehead', value);
       }
+    }
+
+    // The authored notehead, else the instrument's; null leaves a chord tone
+    // to the chord's own notehead.
+    get ownNotehead(): NoteheadType | null {
+      return (
+        parseNotehead(this.getAttribute('notehead')) ??
+        this.#instrumentPosition?.notehead ??
+        null
+      );
     }
 
     // See noteHeadLeftOverhangPx.
@@ -1315,7 +1354,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      if (name === 'note' || name === 'octave' || name === 'stem-direction') {
+      if (
+        name === 'note' ||
+        name === 'octave' ||
+        name === 'instrument' ||
+        name === 'stem-direction'
+      ) {
         this.dispatchEvent(
           new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
             bubbles: true,
@@ -1663,7 +1707,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       // Standalone: the `sempre arpeggiando` instruction renders next to this
       // element. Inside a staff the staff draws it once at the passage start
-      // and propagates implied signs (see StaffClassicalElementBase).
+      // and propagates implied signs (see StaffNotationElementBase).
       if (this.arpeggiate === 'start' && !this.closest(STAFF_TAGS)) {
         noteSvg.setAttribute('overflow', 'visible');
         noteSvg.appendChild(createSempreArpeggiandoText(0, -2));
@@ -1797,7 +1841,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Renders the finishing grace note(s) and, when requested, the
     // self-contained "to-main" slur. A 'to-next'/'both' slur reaches a
     // sibling element this note doesn't know about, so the ancestor staff
-    // draws that half itself (see staffClassicalBase.ts).
+    // draws that half itself (see staffNotationBase.ts).
     #appendTrillFinishNotes(noteSvg: SVGElement): void {
       const trillFinishLetters = this.trillFinish;
       if (trillFinishLetters === null) {

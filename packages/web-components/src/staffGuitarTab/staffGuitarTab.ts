@@ -183,7 +183,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#renderNotes(this.#currentElements);
     }
 
-    // Mirrors StaffClassicalElementBase.refreshInheritedAttrs, scoped to
+    // Mirrors StaffNotationElementBase.refreshInheritedAttrs, scoped to
     // `time` only — guitar tab has no keySig/mode concept.
     refreshInheritedAttrs() {
       this.effectiveTimeSig = this.resolveTimeSignature();

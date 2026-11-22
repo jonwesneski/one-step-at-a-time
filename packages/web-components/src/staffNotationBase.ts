@@ -2,9 +2,11 @@ import {
   accidentalSymbolWidth,
   computeInterNoteSpacing,
   computeNoteAccidentals,
+  type NoteAccidentals,
   parseAccidentalSuffix,
   suffixToType,
   totalChordAccidentalWidth,
+  withoutAccidentals,
 } from './rules/accidentalRules';
 import {
   computeArpeggioFootprintWidth,
@@ -520,7 +522,7 @@ type VoiceStaffYCoords = {
 };
 
 // One octave line crossing a barline, as it touches this staff — see
-// StaffClassicalElementBase#octaveContinuations.
+// StaffNotationElementBase#octaveContinuations.
 type OctaveContinuationRow = {
   rowY: number;
   raisesPitch: boolean;
@@ -637,7 +639,7 @@ type MarkerSlot = {
   clef: ClefMarker | null;
 };
 
-export abstract class StaffClassicalElementBase extends StaffElementBase {
+export abstract class StaffNotationElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
     // in it's life-cycle
@@ -652,8 +654,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     ];
   }
 
-  #effectiveMode: Mode;
-  #effectiveKeySig: Note;
+  #effectiveMode: Mode = 'major';
+  #effectiveKeySig: Note = 'C';
   #describeContainer: SVGGElement;
   // Kept apart from #describeContainer so the describe area's own extent
   // decides where a start repeat goes.
@@ -989,6 +991,29 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       width,
       reserved: this.#endWarnings?.reservesWidth === true ? width : 0,
     };
+  }
+
+  // False on a staff whose positions stand for instruments rather than
+  // pitches: it ignores any inherited key, hides accidentals and ignores
+  // mid-bar <music-clef> changes.
+  protected get isPitched(): boolean {
+    return true;
+  }
+
+  #resolveKeySignature(): void {
+    if (!this.isPitched) {
+      this.#effectiveMode = 'major';
+      this.#effectiveKeySig = 'C';
+      return;
+    }
+    this.#effectiveMode = this.resolveInheritedValue(
+      COMMON_ATTRIBUTES.MODE,
+      'major'
+    ) as Mode;
+    this.#effectiveKeySig = this.resolveInheritedValue(
+      COMMON_ATTRIBUTES.KEY_SIG,
+      'C'
+    ) as Note;
   }
 
   get effectiveKeySignature(): KeySignatureState {
@@ -1335,14 +1360,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   constructor() {
     super();
 
-    this.#effectiveMode = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.MODE,
-      'major'
-    ) as Mode;
-    this.#effectiveKeySig = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.KEY_SIG,
-      'C'
-    ) as Note;
+    this.#resolveKeySignature();
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#startRepeatContainer = document.createElementNS(SVG_NS, 'g');
@@ -1424,14 +1442,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected onConnectedCallback() {
     // Re-resolve inherited attrs now that ancestors are reachable via closest()
     this.effectiveTimeSig = this.resolveTimeSignature();
-    this.#effectiveMode = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.MODE,
-      'major'
-    ) as Mode;
-    this.#effectiveKeySig = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.KEY_SIG,
-      'C'
-    ) as Note;
+    this.#resolveKeySignature();
 
     this.#buildDescribe();
     for (const [type, listener] of this.#listeners()) {
@@ -1600,14 +1611,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   refreshInheritedAttrs() {
     this.effectiveTimeSig = this.resolveTimeSignature();
-    this.#effectiveMode = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.MODE,
-      'major'
-    ) as Mode;
-    this.#effectiveKeySig = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.KEY_SIG,
-      'C'
-    ) as Note;
+    this.#resolveKeySignature();
     this.#refreshDescribe();
   }
 
@@ -1755,16 +1759,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (name === COMMON_ATTRIBUTES.TIME) {
       this.effectiveTimeSig = this.resolveTimeSignature();
-    } else if (name === COMMON_ATTRIBUTES.MODE) {
-      this.#effectiveMode = this.resolveInheritedValue(
-        COMMON_ATTRIBUTES.MODE,
-        'major'
-      ) as Mode;
-    } else if (name === COMMON_ATTRIBUTES.KEY_SIG) {
-      this.#effectiveKeySig = this.resolveInheritedValue(
-        COMMON_ATTRIBUTES.KEY_SIG,
-        'C'
-      ) as Note;
+    } else if (
+      name === COMMON_ATTRIBUTES.MODE ||
+      name === COMMON_ATTRIBUTES.KEY_SIG
+    ) {
+      this.#resolveKeySignature();
     }
     this.#refreshDescribe();
   }
@@ -1801,7 +1800,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const { voices, streamMarkers } = flattenStaffSlotElements(assigned);
     this.#voices = voices;
-    this.#setStreamMarkers(streamMarkers);
+    this.#setStreamMarkers(
+      this.isPitched ? streamMarkers : this.#withoutClefMarkers(streamMarkers)
+    );
     this.#renderNotes();
   }
 
@@ -2007,7 +2008,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     tremoloGroups: TremoloGroupPlacement[],
     direction: VoiceDirection,
     pitchDriven: boolean,
-    accidentals: ReturnType<typeof computeNoteAccidentals>,
+    accidentals: NoteAccidentals,
     precomputedYCoords?: VoiceStaffYCoords
   ): VoiceRenderState {
     const { noteStaffYCoords, chordStaffYCoords } =
@@ -2550,11 +2551,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
     }
     mergedForAccidentals.sort((a, b) => a.beatOffset - b.beatOffset);
-    const accidentals = computeNoteAccidentals(
+    const computedAccidentals = computeNoteAccidentals(
       mergedForAccidentals.map((m) => m.element),
       this.#effectiveKeySig,
       this.#effectiveMode
     );
+    const accidentals = this.isPitched
+      ? computedAccidentals
+      : withoutAccidentals(computedAccidentals);
 
     const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>();
     for (const [voiceNumber, p] of pass1ByVoice) {
@@ -2829,6 +2833,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
     return this.#ownBarlineSlotLefts;
+  }
+
+  #withoutClefMarkers(
+    markers: StreamMarkerPlacement[]
+  ): StreamMarkerPlacement[] {
+    const clefs = markers.filter((marker) => marker.kind === 'clef');
+    if (clefs.length === 0) {
+      return markers;
+    }
+    console.warn(
+      `[${this.localName}] <music-clef> is ignored: this staff has no clef changes`
+    );
+    for (const marker of clefs) {
+      marker.element.style.display = 'none';
+    }
+    return markers.filter((marker) => marker.kind !== 'clef');
   }
 
   #setStreamMarkers(markers: StreamMarkerPlacement[]): void {

@@ -6,6 +6,7 @@ import './composition';
 import './measure';
 import './staff'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
 import './staffGuitarTab';
+import './staffPercussion';
 import './staffVocal';
 import './tremolo';
 import './tuplet';
@@ -73,6 +74,7 @@ export {
   OCTAVE_DISPLAY_MODES,
   OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
+  PERCUSSION_INSTRUMENTS,
   PITCH_NOTES,
   REST_STAFF_SIDES,
   STAFF_GROUPS,

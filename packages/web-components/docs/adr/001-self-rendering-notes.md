@@ -64,6 +64,6 @@ Refactor so that each `<music-note>` and `<music-chord>` renders its own SVG in 
 | `src/note/note.ts`             | Self-rendering with staff-controlled JS properties, custom events    |
 | `src/chord/chord.ts`           | Self-rendering with `staffYCoordinates` property, custom events      |
 | `src/staffBase.ts`             | Add `::slotted` positioning styles                                   |
-| `src/staffClassicalBase.ts`    | Core refactor: JS properties + inline styles instead of SVG creation |
+| `src/staffNotationBase.ts`     | Core refactor: JS properties + inline styles instead of SVG creation |
 | `src/types/elements.ts`        | Updated interfaces with staff-internal properties                    |
 | `src/types.d.ts`               | React JSX declarations with event handler types                      |

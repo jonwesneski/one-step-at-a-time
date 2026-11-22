@@ -1439,7 +1439,7 @@ describe('trill', () => {
 
   // Trills are staff-only, deliberately: the wavy line needs sibling elements
   // in the same staff to span into, so a sign with no possible line is not
-  // drawn either — see staffClassicalBase.test.ts for in-staff sign
+  // drawn either — see staffNotationBase.test.ts for in-staff sign
   // rendering coverage.
   it('renders no sign on a standalone note, even when trill is set', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
@@ -2806,5 +2806,52 @@ describe('`for` changes', () => {
     );
     note.setAttribute('for', 'start-note');
     expect(onConnectorChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('instrument', () => {
+  const makeNote = (attributes: Record<string, string>): NoteElementType => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    for (const [name, value] of Object.entries(attributes)) {
+      note.setAttribute(name, value);
+    }
+    document.body.appendChild(note);
+    return note;
+  };
+
+  it("supplies note, octave and notehead from the instrument's drum-key entry", () => {
+    const note = makeNote({ instrument: 'ride' });
+    expect(note.instrument).toBe('ride');
+    expect(note.note).toBe('F');
+    expect(note.octave).toBe(5);
+    expect(note.notehead).toBe('x');
+  });
+
+  it('lets explicit note, octave and notehead override the instrument', () => {
+    const note = makeNote({
+      instrument: 'ride',
+      note: 'G',
+      octave: '4',
+      notehead: 'diamond',
+    });
+    expect(note.note).toBe('G');
+    expect(note.octave).toBe(4);
+    expect(note.notehead).toBe('diamond');
+  });
+
+  it('ignores an unknown instrument', () => {
+    const note = makeNote({ instrument: 'cowbell' });
+    expect(note.instrument).toBeNull();
+    expect(note.note).toBe('C');
+    expect(note.octave).toBeNull();
+    expect(note.ownNotehead).toBeNull();
+  });
+
+  it('dispatches NOTE_Y_CHANGE when the instrument changes', () => {
+    const note = makeNote({ instrument: 'snare' });
+    const handler = jest.fn();
+    note.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    note.instrument = 'kick';
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });

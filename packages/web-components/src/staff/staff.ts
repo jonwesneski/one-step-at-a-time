@@ -1,6 +1,6 @@
 import { getClefRenderData } from '../rules/clefRules';
 import type { KeySignatureState } from '../rules/keySignatureChangeRules';
-import { StaffClassicalElementBase } from '../staffClassicalBase';
+import { StaffNotationElementBase } from '../staffNotationBase';
 import type { YCoordinates } from '../types/elements';
 import { ClefType, Octave } from '../types/theory';
 import { MUSIC_STAFF } from '../utils/consts';
@@ -29,7 +29,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *   <music-note note="B" octave="4" duration="quarter"></music-note>
    * </music-staff>
    */
-  class StaffElement extends StaffClassicalElementBase {
+  class StaffElement extends StaffNotationElementBase {
     static override get observedAttributes(): string[] {
       return [...super.observedAttributes, 'clef'];
     }

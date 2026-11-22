@@ -49,7 +49,7 @@ function makeElements(
   return specs.map((attrs) => makeNote(attrs));
 }
 
-// Evenly spaced X positions (100px apart), matching how staffClassicalBase
+// Evenly spaced X positions (100px apart), matching how staffNotationBase
 // positions notes in order — enough room for hairpins to avoid endpoint collisions.
 function makeXPositions(count: number): Map<number, number> {
   const positions = new Map<number, number>();

@@ -23,6 +23,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  PercussionInstrument,
   RestStaffSide,
   StaffGroupType,
   StemDirection,
@@ -96,6 +97,12 @@ export interface INoteElement {
   // null removes the attribute (normal).
   get notehead(): NoteheadType;
   set notehead(value: NoteheadType | null);
+  // The authored or instrument notehead; null when neither is set.
+  readonly ownNotehead: NoteheadType | null;
+  // Drumset instrument; supplies note, octave and notehead when those are
+  // unset.
+  get instrument(): PercussionInstrument | null;
+  set instrument(value: PercussionInstrument | null | undefined);
   // How far a glyph head reaches left of the ellipse head's edge (px).
   readonly headLeftOverhangPx: number;
   // Right ink edge (element px) of the duration dots, or null when undotted.

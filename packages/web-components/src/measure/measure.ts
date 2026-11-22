@@ -285,7 +285,7 @@ function addGapNeed(
 
 // A beam-group member inside a <music-tuplet> keeps its own staff's numeral,
 // which the staff hangs off the shared beam on its stem side
-// (staffClassicalBase.ts#tupletExtremeY's numeral offset) — so it moves with
+// (staffNotationBase.ts#tupletExtremeY's numeral offset) — so it moves with
 // the beam and has to clear what the beam clears.
 function hangingTupletNumeralShapes(
   memberGeometries: readonly {

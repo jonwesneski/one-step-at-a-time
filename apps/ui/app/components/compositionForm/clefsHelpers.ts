@@ -8,7 +8,7 @@ import { CAPACITY_EPSILON, entryFactor } from './measureCapacityHelpers';
 import type { ChordNote, CompositionStructure, NormalizedStaff } from './types';
 
 // Effective clef and clef-derived octave for a note/chord entry, mirroring the
-// library's resolution (staffClassicalBase.ts#activeClefAt and
+// library's resolution (staffNotationBase.ts#activeClefAt and
 // noteToYCoordinate; chords stack into an ascending close voicing). Only
 // well-formed input is handled, since this app is the sole writer.
 

@@ -683,12 +683,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Per tone, in `notes` order: a slotted <music-note>'s own notehead, else
     // this chord's.
     get toneNoteheads(): NoteheadType[] {
-      const noteElements = Array.from(this.querySelectorAll(MUSIC_NOTE));
+      const noteElements: NoteElementType[] = Array.from(
+        this.querySelectorAll(MUSIC_NOTE)
+      );
       const toneNoteheads =
         noteElements.length > 0
-          ? noteElements.map((node) =>
-              parseNotehead(node.getAttribute('notehead'))
-            )
+          ? noteElements.map((node) => {
+              customElements.upgrade(node);
+              return node.ownNotehead;
+            })
           : this.notes.map(() => null);
       return resolveChordToneNoteheads(
         parseNotehead(this.getAttribute('notehead')),
@@ -1242,7 +1245,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['notehead', 'accidental-reminder'],
+        attributeFilter: ['notehead', 'instrument', 'accidental-reminder'],
       });
     }
 

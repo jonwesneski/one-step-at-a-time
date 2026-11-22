@@ -322,8 +322,8 @@ const validateTiePitch = (
   ) {
     return undefined;
   }
-  const startValue = start.getAttribute('note');
-  const endValue = end.getAttribute('note');
+  const startValue = (start as NoteElementType).note;
+  const endValue = (end as NoteElementType).note;
   if (startValue && endValue && startValue !== endValue) {
     return `tie: start note "${startValue}" and end note "${endValue}" have different pitches`;
   }

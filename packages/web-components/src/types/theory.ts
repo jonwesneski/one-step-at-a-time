@@ -155,6 +155,21 @@ export type VocalType =
   | 'bass';
 
 /**
+ * Drumset instrument a `<music-note instrument="…">` stands for. Each maps to
+ * a fixed staff position and notehead on `<music-staff-percussion>`.
+ */
+export type PercussionInstrument =
+  | 'kick'
+  | 'floor-tom'
+  | 'snare'
+  | 'mid-tom'
+  | 'high-tom'
+  | 'ride'
+  | 'hi-hat'
+  | 'crash'
+  | 'hi-hat-pedal';
+
+/**
  * Contrapuntal voice on a staff (not the vocal-range `VocalType`), from the
  * `<music-voice>`'s position: 1 stems up, 2 down, 3 (only with 1 and 2)
  * by context.

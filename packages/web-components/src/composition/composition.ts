@@ -116,9 +116,7 @@ import {
   MUSIC_NOTE,
   MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
-  MUSIC_STAFF,
-  MUSIC_STAFF_GUITAR_TAB,
-  MUSIC_STAFF_VOCAL,
+  NOTATION_STAFF_TAGS,
   NOTE_EVENTS,
   STAFF_EVENTS,
   STAFF_TAGS,
@@ -158,7 +156,7 @@ import { measureVerticalExtents } from '../utils/verticalSpace';
 const MEASURE_ORDINAL_STRIDE = 1_000_000;
 
 // The trill line's Y offset from its staff's top, matching
-// staffClassicalBase.ts#redrawTrillLines so continuations line up.
+// staffNotationBase.ts#redrawTrillLines so continuations line up.
 const TRILL_LINE_ROOT_Y_OFFSET =
   STAFF_Y_PADDING +
   STAFF_TOP_LINE_Y -
@@ -819,9 +817,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {
-      const firstStaff = this.querySelector(
-        `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}, ${MUSIC_STAFF_GUITAR_TAB}`
-      ) as HTMLElement | null;
+      const firstStaff = this.querySelector(STAFF_TAGS) as HTMLElement | null;
       if (!firstStaff?.shadowRoot) {
         return 0;
       }
@@ -848,9 +844,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
-      const staff = element.closest(
-        `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`
-      ) as HTMLElement | null;
+      const staff = element.closest(NOTATION_STAFF_TAGS) as HTMLElement | null;
       if (!staff) {
         return 0;
       }
@@ -957,7 +951,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const rootRect = wrapper.getBoundingClientRect();
       let entryObstacles: EntryObstacles | null = null;
       let stems: ObstacleRect[] | null = null;
-      const staffSelector = `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`;
+      const staffSelector = NOTATION_STAFF_TAGS;
 
       for (const pair of pairs) {
         const { startElement, endElement } = pair;

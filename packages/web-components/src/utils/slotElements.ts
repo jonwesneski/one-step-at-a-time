@@ -372,7 +372,7 @@ export function flattenStaffSlotElements(
       // A marker is staff-wide, but voice 1 is its canonical anchor —
       // flattenSlotElements() already collected these with a real,
       // index-based `afterElementIndex` relative to voice 1's own array,
-      // exactly like the single-voice case. staffClassicalBase.ts converts
+      // exactly like the single-voice case. staffNotationBase.ts converts
       // that index into a beat-offset to apply it to every voice.
       streamMarkers = voiceMarkers;
     } else if (voiceMarkers.length > 0) {

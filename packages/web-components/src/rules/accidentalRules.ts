@@ -73,11 +73,7 @@ export function computeInterNoteSpacing(
 
 // ─── Per-measure orchestration ─────────────────────────────────────────────────
 
-export function computeNoteAccidentals(
-  elements: NoteChordOrRestElementType[],
-  keySig: Note,
-  mode: Mode
-): {
+export type NoteAccidentals = {
   noteShowAccidentals: Map<NoteElementType, AccidentalType | null>;
   chordNoteAccidentals: Map<
     ChordElementType,
@@ -93,7 +89,13 @@ export function computeNoteAccidentals(
   >;
   parenthesizedAccidentals: Set<NoteElementType>;
   chordParenthesizedAccidentals: Map<ChordElementType, boolean[]>;
-} {
+};
+
+export function computeNoteAccidentals(
+  elements: NoteChordOrRestElementType[],
+  keySig: Note,
+  mode: Mode
+): NoteAccidentals {
   const keySigAccidentals = getKeySignatureAccidentals(keySig, mode);
   const inMeasureState = new Map<string, AccidentalType | null>();
 
@@ -244,6 +246,30 @@ export function computeNoteAccidentals(
     trillFinishShowAccidentals,
     parenthesizedAccidentals,
     chordParenthesizedAccidentals,
+  };
+}
+
+// Every accidental hidden, for an unpitched staff: positions stand for
+// instruments, so a sharp or flat spelling has no meaning there.
+export function withoutAccidentals(
+  accidentals: NoteAccidentals
+): NoteAccidentals {
+  const hideAll = <K, V>(map: Map<K, V[]>): Map<K, null[]> =>
+    new Map(Array.from(map, ([key, values]) => [key, values.map(() => null)]));
+  return {
+    noteShowAccidentals: new Map(
+      Array.from(accidentals.noteShowAccidentals.keys(), (note) => [note, null])
+    ),
+    chordNoteAccidentals: hideAll(accidentals.chordNoteAccidentals),
+    graceShowAccidentals: hideAll(accidentals.graceShowAccidentals),
+    trillFinishShowAccidentals: hideAll(accidentals.trillFinishShowAccidentals),
+    parenthesizedAccidentals: new Set(),
+    chordParenthesizedAccidentals: new Map(
+      Array.from(
+        accidentals.chordParenthesizedAccidentals,
+        ([chord, flags]) => [chord, flags.map(() => false)]
+      )
+    ),
   };
 }
 

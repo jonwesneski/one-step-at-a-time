@@ -9,7 +9,7 @@ import {
   generateMinorKeySignatureYCoordinates,
   generateYCoordinates,
 } from '../rules/theoryHelpers';
-import { StaffClassicalElementBase } from '../staffClassicalBase';
+import { StaffNotationElementBase } from '../staffNotationBase';
 import type {
   LyricSyllablePosition,
   LyricsElementType,
@@ -66,7 +66,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *   <music-lyrics verse="1">A-men</music-lyrics>
    * </music-staff-vocal>
    */
-  class StaffVocalElement extends StaffClassicalElementBase {
+  class StaffVocalElement extends StaffNotationElementBase {
     static #treble = getClefRenderData('treble');
     static #bass = getClefRenderData('bass');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');

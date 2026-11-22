@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add a single configurable `<music-staff-vocal>` custom element that supports all six standard voice types via a `voice` attribute. The component extends `StaffClassicalElementBase` and adds lyrics rendering support unique to vocal notation.
+Add a single configurable `<music-staff-vocal>` custom element that supports all six standard voice types via a `voice` attribute. The component extends `StaffNotationElementBase` and adds lyrics rendering support unique to vocal notation.
 
 ```html
 <music-staff-vocal voice="tenor" keySig="G" mode="major" time="4/4">
@@ -134,7 +134,7 @@ Key signature accidental positions follow the same transposition pattern as the 
 #### `StaffVocalElement` class
 
 ```
-class StaffVocalElement extends StaffClassicalElementBase
+class StaffVocalElement extends StaffNotationElementBase
 ```
 
 **Attributes:**
@@ -323,7 +323,7 @@ These are not in scope for the initial implementation but are documented here fo
 
 ```
 StaffElementBase                    (staffBase.ts)
-├── StaffClassicalElementBase       (staffClassicalBase.ts)
+├── StaffNotationElementBase       (staffNotationBase.ts)
 │   ├── StaffElement                (staff/staff.ts)                  — clef="treble"|"bass"
 │   └── StaffVocalElement           (staffVocal/staffVocal.ts)        — NEW
 │       ├── voice="soprano"         → treble clef, C4–C6
