@@ -34,15 +34,20 @@ import type {
 } from '../types/elements';
 import { GlissandoHint, VoiceNumber } from '../types/theory';
 import {
+  CHORD_TAGS,
+  chordSelector,
+  chordToneSelector,
+  isChordNodeName,
+  isNoteNodeName,
   isStaffNodeName,
+  loneNoteSelector,
   MUSIC_ARPEGGIO,
-  MUSIC_CHORD,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
-  MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_VOICE,
   MUSIC_VOICE_NODE,
+  NOTE_TAGS,
   STAFF_TAGS,
 } from './consts';
 import {
@@ -146,16 +151,16 @@ export const collectNoteLikeElements = (
   root: ParentNode
 ): NoteLikeElementType[] => {
   const chordChildSelectors = Object.values(CONNECTOR_ATTRS)
-    .map((attr) => `${MUSIC_CHORD} ${MUSIC_NOTE}[${attr}]`)
+    .map((attr) => chordToneSelector(`[${attr}]`))
     .join(', ');
-  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_GUITAR_NOTE}, ${MUSIC_CHORD}, ${chordChildSelectors}`;
+  const selector = `${loneNoteSelector()}, ${MUSIC_GUITAR_NOTE}, ${CHORD_TAGS}, ${chordChildSelectors}`;
   // A staff hides the entries it doesn't draw (those past the end of the
   // bar), so a connector on one has nothing to anchor to.
   return Array.from(
     root.querySelectorAll<NoteLikeElementType>(selector)
   ).filter(
     (element) =>
-      ((element.closest(MUSIC_CHORD) as HTMLElement | null) ?? element).style
+      ((element.closest(CHORD_TAGS) as HTMLElement | null) ?? element).style
         .display !== 'none'
   );
 };
@@ -249,7 +254,9 @@ export const collectArpeggioTiePairs = (root: ParentNode): ConnectorPair[] => {
 // then rendered x (x restarts each system). A slur-group lets one note be both
 // an end and a start, which `slur`'s single value can't.
 export const collectPhraseSlurPairs = (root: ParentNode): ConnectorPair[] => {
-  const selector = `${MUSIC_NOTE}[slur-group]:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}[slur-group]`;
+  const selector = `${loneNoteSelector('[slur-group]')}, ${chordSelector(
+    '[slur-group]'
+  )}`;
   const elements = Array.from(
     root.querySelectorAll(selector)
   ) as NoteLikeElementType[];
@@ -316,10 +323,7 @@ const validateTiePitch = (
 ): string | undefined => {
   // Only apply to classical music-note elements; guitar notes tie by string/fret
   // match rather than pitch, which we skip here (warning only helps classical).
-  if (
-    start.tagName.toLowerCase() !== MUSIC_NOTE ||
-    end.tagName.toLowerCase() !== MUSIC_NOTE
-  ) {
+  if (!isNoteNodeName(start.tagName) || !isNoteNodeName(end.tagName)) {
     return undefined;
   }
   const startValue = (start as NoteElementType).note;
@@ -353,7 +357,7 @@ export const pairConnectors = (
           const label = (note as { lvLabel?: boolean }).lvLabel
             ? 'l.v.'
             : undefined;
-          const isChord = note.tagName.toLowerCase() === MUSIC_CHORD;
+          const isChord = isChordNodeName(note.tagName);
           const toneCount = isChord
             ? Math.max(
                 1,
@@ -522,12 +526,12 @@ const computeAnchor = (
 ): Anchor => {
   // Notes inside a chord have no layout box — anchor via parent chord geometry.
   if (
-    note.tagName.toLowerCase() === MUSIC_NOTE &&
-    note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
+    isNoteNodeName(note.tagName) &&
+    isChordNodeName(note.parentElement?.tagName ?? '')
   ) {
     const chord = note.parentElement as unknown as ChordElementType;
     const chordRect = chord.getBoundingClientRect();
-    const chordNotes = Array.from(chord.querySelectorAll(MUSIC_NOTE));
+    const chordNotes = Array.from(chord.querySelectorAll(NOTE_TAGS));
     const noteIndex = chordNotes.indexOf(note as unknown as Element);
     const yCoords = chord.staffYCoordinates;
 
@@ -557,7 +561,7 @@ const computeAnchor = (
   }
 
   let y: number;
-  if (note.tagName.toLowerCase() === MUSIC_CHORD) {
+  if (isChordNodeName(note.tagName)) {
     const chordElement = note as ChordElementType;
     const yCoords = chordElement.staffYCoordinates;
     if (yCoords && yCoords.length > 0) {
@@ -745,8 +749,7 @@ const chordOtherToneCenters = (
 // be measured from here. A written notehead deferred to the second tied note
 // still nudges the first (a small overshoot).
 const tieStartNudgePx = (note: NoteLikeElementType): number => {
-  const tag = note.tagName.toLowerCase();
-  if (tag !== MUSIC_NOTE && tag !== MUSIC_CHORD) {
+  if (!isNoteNodeName(note.tagName) && !isChordNodeName(note.tagName)) {
     return 0;
   }
   const trillCapableNote = note as NoteElementType | ChordElementType;
@@ -788,8 +791,8 @@ const tieStartNudgePx = (note: NoteLikeElementType): number => {
 
 // For notes inside a chord, stemUp is set on the chord element, not the note.
 const stemSourceOf = (note: NoteLikeElementType): NoteLikeElementType =>
-  note.tagName.toLowerCase() === MUSIC_NOTE &&
-  note.parentElement?.tagName.toLowerCase() === MUSIC_CHORD
+  isNoteNodeName(note.tagName) &&
+  isChordNodeName(note.parentElement?.tagName ?? '')
     ? (note.parentElement as unknown as NoteLikeElementType)
     : note;
 
@@ -846,7 +849,9 @@ export function resolveDoubleStemmedBeamConnectorContext(
   >();
   const innerVoiceStemAnchorElements = new Set<NoteLikeElementType>();
 
-  const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined, ${MUSIC_REST}:defined`;
+  const elementSelector = `${loneNoteSelector(':defined')}, ${chordSelector(
+    ':defined'
+  )}, ${MUSIC_REST}:defined`;
 
   for (const measureElement of measureElements) {
     const staves = Array.from(measureElement.children).filter((el) =>
@@ -1050,7 +1055,7 @@ export const collectEntryObstacles = (
   measureElements: readonly Element[],
   { excludeGlyphSelector = null }: { excludeGlyphSelector?: string | null } = {}
 ): EntryObstacles => {
-  const selector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden])`;
+  const selector = `${loneNoteSelector()}, ${CHORD_TAGS}, ${MUSIC_REST}:not([hidden])`;
   const entries: EntryGeometry[] = Array.from(
     root.querySelectorAll(selector)
   ).map((element) => {
@@ -1097,9 +1102,7 @@ export const collectStemRects = (
   rootRect: DOMRect
 ): ObstacleRect[] =>
   Array.from(
-    root.querySelectorAll(
-      `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}), ${MUSIC_CHORD}`
-    )
+    root.querySelectorAll(`${loneNoteSelector()}, ${CHORD_TAGS}`)
   ).flatMap((element) =>
     Array.from(element.shadowRoot?.querySelectorAll('.stem') ?? []).map(
       (stem) => toRootSpace(stem.getBoundingClientRect(), rootRect)
@@ -1334,7 +1337,7 @@ export const buildConnectorSvgs = (
 
     // Laissez-vibrer: an open-ended tie curving forward off the notehead.
     if (pair.laissezVibrer) {
-      const isChord = pair.start.tagName.toLowerCase() === MUSIC_CHORD;
+      const isChord = isChordNodeName(pair.start.tagName);
       const coords =
         (pair.start as unknown as ChordElementType).staffYCoordinates ?? [];
       const lvBulge =
@@ -1452,8 +1455,8 @@ export const buildConnectorSvgs = (
 
     const isChordTie =
       pair.kind === 'tie' &&
-      pair.start.tagName.toLowerCase() === MUSIC_CHORD &&
-      pair.end.tagName.toLowerCase() === MUSIC_CHORD;
+      isChordNodeName(pair.start.tagName) &&
+      isChordNodeName(pair.end.tagName);
 
     if (isChordTie) {
       const startCoords =

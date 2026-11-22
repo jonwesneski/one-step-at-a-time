@@ -11,14 +11,14 @@ export default meta;
 
 type Story = StoryObj;
 
-const hiHat = html`<music-note
+const hiHat = html`<music-drum-note
   instrument="hi-hat"
   duration="eighth"
-></music-note>`;
-const hiHatWithSnare = html`<music-chord duration="eighth">
-  <music-note instrument="hi-hat"></music-note>
-  <music-note instrument="snare"></music-note>
-</music-chord>`;
+></music-drum-note>`;
+const hiHatWithSnare = html`<music-drum-chord duration="eighth">
+  <music-drum-note instrument="hi-hat"></music-drum-note>
+  <music-drum-note instrument="snare"></music-drum-note>
+</music-drum-chord>`;
 
 const rockGroove = html`
   <music-voice>
@@ -26,9 +26,9 @@ const rockGroove = html`
     ${hiHatWithSnare} ${hiHat}
   </music-voice>
   <music-voice>
-    <music-note instrument="kick" duration="quarter"></music-note>
+    <music-drum-note instrument="kick" duration="quarter"></music-drum-note>
     <music-rest duration="quarter" hidden></music-rest>
-    <music-note instrument="kick" duration="quarter"></music-note>
+    <music-drum-note instrument="kick" duration="quarter"></music-drum-note>
     <music-rest duration="quarter" hidden></music-rest>
   </music-voice>
 `;
@@ -54,23 +54,50 @@ export const DrumKey: Story = {
     <music-composition time="3/4">
       <music-measure>
         <music-staff-percussion>
-          <music-note instrument="hi-hat-pedal" duration="quarter"></music-note>
-          <music-note instrument="kick" duration="quarter"></music-note>
-          <music-note instrument="floor-tom" duration="quarter"></music-note>
+          <music-drum-note
+            instrument="hi-hat-pedal"
+            duration="quarter"
+          ></music-drum-note>
+          <music-drum-note
+            instrument="kick"
+            duration="quarter"
+          ></music-drum-note>
+          <music-drum-note
+            instrument="floor-tom"
+            duration="quarter"
+          ></music-drum-note>
         </music-staff-percussion>
       </music-measure>
       <music-measure>
         <music-staff-percussion>
-          <music-note instrument="snare" duration="quarter"></music-note>
-          <music-note instrument="mid-tom" duration="quarter"></music-note>
-          <music-note instrument="high-tom" duration="quarter"></music-note>
+          <music-drum-note
+            instrument="snare"
+            duration="quarter"
+          ></music-drum-note>
+          <music-drum-note
+            instrument="mid-tom"
+            duration="quarter"
+          ></music-drum-note>
+          <music-drum-note
+            instrument="high-tom"
+            duration="quarter"
+          ></music-drum-note>
         </music-staff-percussion>
       </music-measure>
       <music-measure>
         <music-staff-percussion>
-          <music-note instrument="ride" duration="quarter"></music-note>
-          <music-note instrument="hi-hat" duration="quarter"></music-note>
-          <music-note instrument="crash" duration="quarter"></music-note>
+          <music-drum-note
+            instrument="ride"
+            duration="quarter"
+          ></music-drum-note>
+          <music-drum-note
+            instrument="hi-hat"
+            duration="quarter"
+          ></music-drum-note>
+          <music-drum-note
+            instrument="crash"
+            duration="quarter"
+          ></music-drum-note>
         </music-staff-percussion>
       </music-measure>
     </music-composition>

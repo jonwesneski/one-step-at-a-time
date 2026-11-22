@@ -9,7 +9,7 @@ import type {
   Note,
   Octave,
 } from '../types/theory';
-import { MUSIC_CHORD } from '../utils/consts';
+import { isChordNodeName } from '../utils/consts';
 import {
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_FOOTPRINT_WITH_ACCIDENTAL_PX,
@@ -214,7 +214,7 @@ const pitchClassOf = (note: string | null): number | null => {
 };
 
 const targetTones = (target: NoteOrChordElementType): Tone[] => {
-  if (target.tagName.toLowerCase() === MUSIC_CHORD) {
+  if (isChordNodeName(target.tagName)) {
     return (target as { notes: { value: Note; octave: Octave | null }[] }).notes
       .map((tone, index) => ({
         pitchClass: pitchClassOf(tone.value),
@@ -224,7 +224,7 @@ const targetTones = (target: NoteOrChordElementType): Tone[] => {
       .filter((tone): tone is Tone => tone.pitchClass !== null);
   }
   const note = target as NoteElementType;
-  const pitchClass = pitchClassOf(note.getAttribute('note'));
+  const pitchClass = pitchClassOf(note.note);
   return pitchClass === null
     ? []
     : [{ pitchClass, octave: note.octave, index: 0 }];
@@ -256,7 +256,7 @@ export function resolveArpeggioTiePairings(
       );
       continue;
     }
-    const runPitchClass = pitchClassOf(runNote.getAttribute('note'));
+    const runPitchClass = pitchClassOf(runNote.note);
     const runOctave = runNote.octave;
 
     const candidates = tones.filter(

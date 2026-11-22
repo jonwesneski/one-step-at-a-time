@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { waitForStaffNotesPositioned } from '../../test-fixtures/helpers';
-import { MUSIC_NOTE, MUSIC_STAFF_PERCUSSION } from '../utils/consts';
+import { MUSIC_DRUM_NOTE, MUSIC_STAFF_PERCUSSION } from '../utils/consts';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
@@ -19,7 +19,7 @@ test('changing a note instrument moves it and swaps its notehead', async ({
         <${noteTag} instrument="kick" duration="half"></${noteTag}>
       </${staffTag}>`;
     },
-    { staffTag: MUSIC_STAFF_PERCUSSION, noteTag: MUSIC_NOTE }
+    { staffTag: MUSIC_STAFF_PERCUSSION, noteTag: MUSIC_DRUM_NOTE }
   );
   await positioned;
 
@@ -39,7 +39,7 @@ test('changing a note instrument moves it and swaps its notehead', async ({
           headTag: note.shadowRoot?.querySelector('.head')?.tagName ?? null,
         };
       },
-      { staffTag: MUSIC_STAFF_PERCUSSION, noteTag: MUSIC_NOTE }
+      { staffTag: MUSIC_STAFF_PERCUSSION, noteTag: MUSIC_DRUM_NOTE }
     );
 
   const before = await readFirstNote();
@@ -48,7 +48,7 @@ test('changing a note instrument moves it and swaps its notehead', async ({
 
   await page.evaluate((noteTag) => {
     document.querySelector(noteTag)!.setAttribute('instrument', 'crash');
-  }, MUSIC_NOTE);
+  }, MUSIC_DRUM_NOTE);
 
   await expect
     .poll(async () => (await readFirstNote()).staffY)

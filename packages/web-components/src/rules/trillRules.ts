@@ -11,7 +11,7 @@ import type {
   NoteLetter,
   Octave,
 } from '../types/theory';
-import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
+import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 import {
   getKeySignatureAccidentals,
   parseAccidentalSuffix,
@@ -25,7 +25,7 @@ type TrillCapableElement = NoteElementType | ChordElementType;
 const isTrillCapable = (
   element: NoteChordOrRestElementType
 ): element is TrillCapableElement =>
-  element.nodeName === MUSIC_NOTE_NODE || element.nodeName === MUSIC_CHORD_NODE;
+  isNoteNodeName(element.nodeName) || isChordNodeName(element.nodeName);
 
 export type TrillLineSpan = {
   /** Index of the trill-marked element that starts this span. */
@@ -280,14 +280,6 @@ const octaveAbove = (
  * replaces only the accidental; `noteOverride` (`trill-note`) replaces the
  * whole pitch and wins over it.
  */
-// The trilling pitch with no accidental, for an unpitched staff. The letter
-// and octave stay, so a written trilling note keeps its staff position.
-export function withoutTrillAccidental(
-  pitch: ResolvedTrillPitch | null
-): ResolvedTrillPitch | null {
-  return pitch === null ? null : { ...pitch, accidental: null };
-}
-
 export function resolveTrillPitch(
   note: Note,
   octave: Octave,

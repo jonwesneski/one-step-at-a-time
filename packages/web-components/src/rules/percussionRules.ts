@@ -1,15 +1,5 @@
-import type {
-  NoteheadType,
-  NoteLetter,
-  Octave,
-  PercussionInstrument,
-} from '../types/theory';
-
-export type PercussionInstrumentPosition = {
-  note: NoteLetter;
-  octave: Octave;
-  notehead: NoteheadType;
-};
+import type { StaffPosition } from '../types/elements';
+import type { PercussionInstrument } from '../types/theory';
 
 /**
  * Staff position and notehead per drumset instrument, read as treble-clef
@@ -19,7 +9,7 @@ export type PercussionInstrumentPosition = {
  */
 export const PERCUSSION_INSTRUMENT_MAP: Record<
   PercussionInstrument,
-  PercussionInstrumentPosition
+  StaffPosition
 > = {
   'hi-hat-pedal': { note: 'D', octave: 4, notehead: 'x' },
   kick: { note: 'F', octave: 4, notehead: 'normal' },
@@ -38,4 +28,91 @@ export function parsePercussionInstrument(
   return value !== null && Object.hasOwn(PERCUSSION_INSTRUMENT_MAP, value)
     ? (value as PercussionInstrument)
     : null;
+}
+
+// Notation that doesn't depend on pitch, shared by drum notes and chords.
+const DRUM_SHARED_ATTRIBUTES = [
+  'duration',
+  'notehead',
+  'for',
+  'tie',
+  'lv-label',
+  'tie-style',
+  'slur',
+  'slur-group',
+  'dynamic',
+  'dynamic-shared',
+  'dynamic-reminder',
+  'crescendo',
+  'decrescendo',
+  'diminuendo',
+  'articulation',
+  'articulation-repeat',
+  'stress',
+  'stem-direction',
+  'beam-group',
+  'shared-stem-for',
+  'tremolo',
+  'tremolo-tuplet',
+  'tremolo-label',
+];
+
+// Attributes <music-note>/<music-chord> have and the drum elements withhold:
+// pitch-dependent ones, plus grace notes, which drums don't support yet.
+const PITCH_ONLY_SHARED_ATTRIBUTES = [
+  'glissando',
+  'glissando-hint',
+  'accidental-reminder',
+  'arpeggio',
+  'arpeggio-for',
+  'arpeggio-hairpin',
+  'arpeggio-hairpin-from',
+  'arpeggio-hairpin-to',
+  'arpeggiate',
+  'grace',
+  'grace-octave',
+  'grace-articulation',
+  'grace-type',
+  'grace-duration',
+  'grace-slur',
+  'grace-dynamic',
+  'grace-notehead',
+  'trill',
+  'trill-line',
+  'trill-stop',
+  'trill-accidental',
+  'trill-note',
+  'trill-continuation',
+  'trill-finish',
+  'trill-finish-octave',
+  'trill-finish-slur',
+  'octave-shift',
+  'octave-mode',
+  'octave-stop',
+  'loco',
+  'octave-continuation',
+];
+
+export const DRUM_NOTE_ATTRIBUTES: readonly string[] = [
+  'instrument',
+  ...DRUM_SHARED_ATTRIBUTES,
+];
+export const DRUM_CHORD_ATTRIBUTES: readonly string[] = DRUM_SHARED_ATTRIBUTES;
+
+export const PITCH_ONLY_NOTE_ATTRIBUTES: readonly string[] = [
+  'note',
+  'octave',
+  ...PITCH_ONLY_SHARED_ATTRIBUTES,
+];
+export const PITCH_ONLY_CHORD_ATTRIBUTES: readonly string[] = [
+  'chord',
+  ...PITCH_ONLY_SHARED_ATTRIBUTES,
+];
+
+// The authored attributes a drum element ignores, for its warning.
+export function unsupportedDrumAttributes(
+  authored: readonly string[],
+  pitchOnly: readonly string[]
+): string[] {
+  return authored.filter((name) => pitchOnly.includes(name));
 }

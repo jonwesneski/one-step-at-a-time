@@ -8,7 +8,7 @@
 
 Elements are designed to be used **in isolation or composed together**. You do not need the full hierarchy to use any given element. **"Standalone" means an element is used without its usual parent element** — e.g. a staff without a `<music-composition>`, or a note without a staff:
 
-- `<music-note>` and `<music-chord>` can be used standalone, outside any staff, measure, or composition
+- `<music-note>`, `<music-chord>`, `<music-drum-note>` and `<music-drum-chord>` can be used standalone, outside any staff, measure, or composition
 - `<music-staff>`, `<music-staff-guitar-tab>`, `<music-staff-vocal>`, and `<music-staff-percussion>` can be used without a `<music-measure>` or `<music-composition>`
 - `<music-clef>` can be used standalone (renders just its glyph) or inside a `<music-staff>`'s note stream to mark a mid-piece clef change
 - `<music-measure>` can be used without a `<music-composition>`
@@ -31,7 +31,10 @@ Some features may be unavailable or degraded when elements are used outside thei
       │   ├─ <music-arpeggio>    — arpeggio/arpeggio.ts (written-out arpeggio: a run of notes tied into a final chord; run consumes no beat time. NOT the `arpeggio` wavy-line attribute)
       │   └─ <music-clef>        — clef/clef.ts (mid-stream clef change; zero beat-duration)
       ├─ <music-staff-guitar-tab>  — staffGuitarTab/staffGuitarTab.ts
-      ├─ <music-staff-percussion>  — staffPercussion/staffPercussion.ts (same children as <music-staff>; notes use `instrument`)
+      ├─ <music-staff-percussion>  — staffPercussion/staffPercussion.ts (same wrappers as <music-staff>: voice, tuplet, tremolo, barline)
+      │   ├─ <music-drum-note>   — drumNote/drumNote.ts (positioned by `instrument`)
+      │   └─ <music-drum-chord>  — drumChord/drumChord.ts
+      │       └─ <music-drum-note>  (children)
       └─ <music-staff-vocal>  — staffVocal/staffVocal.ts
           └─ <music-lyrics>    — staffVocal/lyrics.ts
 ```
@@ -45,7 +48,7 @@ one-step-at-a-time/
 ├── packages/
 │   └── web-components/
 │       └── src/               # All source code
-│           ├── index.ts       # Entry point (import order matters)
+│           ├── index.ts       # Entry point: registers every element (order-independent)
 │           ├── react.d.ts     # React JSX declarations — published as the `/react` subpath
 │           ├── staffBase.ts          # Minimal abstract base (shadow DOM + lifecycle)
 │           ├── staffNotationBase.ts # Thin orchestrator — wires rules + SVG + spacing
@@ -54,13 +57,15 @@ one-step-at-a-time/
 │           ├── note/
 │           ├── chord/
 │           ├── guitarNote/
+│           ├── drumNote/         # <music-drum-note>: NoteElement subclass, drum attributes only
+│           ├── drumChord/        # <music-drum-chord>: ChordElement subclass, drum-note children only
 │           ├── staff/            # Clef-driven staff (`clef` attribute: treble/bass) — merged former staffTreble/staffBass
 │           ├── clef/             # <music-clef> — mid-stream clef change marker (standalone or in a staff)
 │           ├── barline/          # <music-barline> — mid-bar barline marker (standalone or in a staff)
 │           ├── tremolo/          # <music-tremolo> — two-note/multi-note tremolo wrapper
 │           ├── staffGuitarTab/   # Incomplete — see Known Incomplete Areas
 │           ├── staffVocal/
-│           ├── staffPercussion/  # Drumset staff: neutral clef, `instrument` positions, no key/accidentals
+│           ├── staffPercussion/  # Drumset staff: neutral clef, drum elements only, no key/accidentals
 │           ├── rules/            # Music theory / domain computation (pure functions)
 │           │   ├── accidentalRules.ts
 │           │   ├── beamRules.ts
@@ -237,7 +242,12 @@ Features land in one of two shapes; steps are tagged accordingly:
 19. `[A][B]` **Format & test** — run `npx nx format:write`, then `npx nx test web-components`.
 
 **Common trap:** a plain new note/chord attribute does **not** touch `src/index.ts` or the
-staff base classes (`staffBase.ts`) — don't go looking for wiring there.
+staff base classes (`staffBase.ts`) — don't go looking for wiring there. It **does** need a
+drum decision: add it to `DRUM_*_ATTRIBUTES` or `PITCH_ONLY_*_ATTRIBUTES` in
+`rules/percussionRules.ts` (the drum element tests fail until every attribute is in exactly
+one), read it through `readAttribute`/`readsAttribute`, never `getAttribute`, and match
+note/chord elements with `isNoteNodeName`/`isChordNodeName` or `NOTE_TAGS`/`CHORD_TAGS`,
+never one tag (see Drum elements).
 
 ## Key Architecture Concepts
 
@@ -421,7 +431,9 @@ StaffElementBase              (staffBase.ts)         — shadow DOM, staff lines
 - `getKeyYCoordinates(): { useSharps, coordinates }` — Y positions for key sig accidentals
 - `get clefSvg(): string` — raw SVG string for the clef symbol
 
-One optional hook: `protected get isPitched(): boolean` (default `true`). `StaffPercussionElement` returns `false`, which makes the base resolve its key to C major whatever a parent sets (so no key glyph, key change or courtesy key is ever produced for it), hide every accidental (`rules/accidentalRules.ts#withoutAccidentals`, and the trilling pitch's through `rules/trillRules.ts#withoutTrillAccidental`, applied before the written-trill footprint is measured) and drop slotted `<music-clef>` markers with a warning. Its notes are placed by `instrument` (`rules/percussionRules.ts#PERCUSSION_INSTRUMENT_MAP`, read on treble positions): `<music-note>`'s `note`/`octave`/`notehead` getters fall back to the map when their own attribute is unset, so every downstream rule works unchanged. The map's positions are provisional until a drum-key reference is settled.
+One optional hook: `protected get isPitched(): boolean` (default `true`). `StaffPercussionElement` returns `false`, which makes the base: resolve its key to C major whatever a parent sets (so no key glyph, key change or courtesy key is ever produced for it); drop slotted `<music-clef>` markers with a warning; take only drum notes and chords (`flattenStaffSlotElements`'s `noteFamily`: an element of the other family, at any depth, is hidden with one warning per pass, and pitched staves do the same to drum elements); and never auto-combine voices, since a drum part keeps hands stemmed up and feet stemmed down whatever their rhythm.
+
+**Drum elements.** `<music-drum-note>` / `<music-drum-chord>` are subclasses of the exported `NoteElement` / `ChordElement` (module-level classes on `utils/maybeHTMLElement.ts`, so they can be extended from their own folders), not separate engines; every rule, beam and connector lays them out unchanged. Two seams make that work. (1) Every read of a note/chord's own attributes goes through `protected readAttribute`/`readsAttribute`; the drum subclasses return null/false for anything outside `DRUM_NOTE_ATTRIBUTES` / `DRUM_CHORD_ATTRIBUTES` (`rules/percussionRules.ts`), so pitch-dependent getters (trill, arpeggio, glissando, octave signs, accidental reminders, grace notes, `note`/`octave`, `chord`) read as unset, and each element warns once on connect about authored ones. (2) `NoteElement`'s `note`/`octave`/`ownNotehead` fall back to `protected get staffPosition()` (null on `<music-note>`), which a drum note fills from `instrument` via `PERCUSSION_INSTRUMENT_MAP` on treble positions; a drum chord stacks only `childNoteTag` (`<music-drum-note>`) children. The engine never compares a single note/chord tag: `utils/consts.ts`'s `isNoteNodeName`/`isChordNodeName`/`isDrumNodeName`, `NOTE_TAGS`/`CHORD_TAGS` and the `noteSelector`/`chordSelector`/`loneNoteSelector`/`chordToneSelector` builders cover both families; `MUSIC_NOTE`/`MUSIC_CHORD` themselves appear only where an element is created or registered. Grace notes (flams, drags) are not supported on drum elements yet. The map's positions are provisional until a drum-key reference is settled.
 
 Rendering flow (classical staves):
 
@@ -649,7 +661,7 @@ accidentals) stays in that element's file.
 | `Instruments/Guitar`                      | `src/staffGuitarTab/staffGuitarTab.stories.ts`                                                                                                                                                                                                                                |
 | `Instruments/Keyboard`                    | `src/keyboard.stories.ts` — cross-staff slurs, glissando, shared/per-voice dynamics, hand-distribution labels, double-stemmed beams (see Keyboard / Cross-Staff Notation above); a `Planned` story notes pedal marks and note clusters as not yet implemented                 |
 | `Instruments/Strings`                     | `src/strings.stories.ts` — `BowedTremolo`, plus a `Planned` story for what is still to come                                                                                                                                                                                   |
-| `Instruments/Percussion`                  | `src/percussion.stories.ts` — `<music-staff-percussion>`: a two-voice groove, the drum key, a key signature it ignores, and a `Planned` story                                                                                                                                 |
+| `Instruments/Percussion`                  | `src/percussion.stories.ts` — `<music-staff-percussion>` with `<music-drum-note>`/`<music-drum-chord>`: a two-voice groove, the drum key, a key signature it ignores, and a `Planned` story                                                                                   |
 | `Instruments/Winds & Brass`               | `src/windsBrass.stories.ts` — placeholder (`tags: ['!autodocs']`, one `Planned` story) until the notations land                                                                                                                                                               |
 
 **Standard imports:**

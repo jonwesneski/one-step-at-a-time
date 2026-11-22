@@ -57,6 +57,34 @@ import type {
 } from '@one-step-at-a-time/web-components';
 import 'react';
 
+// Notation shared by <music-drum-note> and <music-drum-chord>: only what
+// doesn't depend on pitch.
+type DrumNotationProps = {
+  duration?: DurationType;
+  notehead?: NoteheadType;
+  tie?: TieValue;
+  'lv-label'?: boolean;
+  'tie-style'?: TieStyle;
+  slur?: ConnectorRole;
+  'slur-group'?: string;
+  for?: string;
+  dynamic?: DynamicMarking;
+  'dynamic-shared'?: boolean;
+  'dynamic-reminder'?: boolean;
+  crescendo?: HairpinRole;
+  decrescendo?: HairpinRole;
+  diminuendo?: HairpinRole;
+  articulation?: ArticulationType;
+  'articulation-repeat'?: boolean;
+  stress?: StressType;
+  'stem-direction'?: StemDirection;
+  'beam-group'?: string;
+  'shared-stem-for'?: string;
+  tremolo?: TremoloValue;
+  'tremolo-tuplet'?: number;
+  'tremolo-label'?: TremoloLabel;
+};
+
 type WebComponentNoChildrenProps = {
   key?: React.Key;
   ref?: React.Ref<HTMLElement>;
@@ -218,11 +246,15 @@ declare module 'react' {
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
       };
+      'music-drum-note': WebComponentNoChildrenProps &
+        DrumNotationProps & {
+          instrument?: PercussionInstrument;
+        };
+      'music-drum-chord': WebComponentProps & DrumNotationProps;
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
         duration?: DurationType;
         octave?: Octave;
-        instrument?: PercussionInstrument;
         tie?: TieValue;
         'lv-label'?: boolean;
         slur?: ConnectorRole;

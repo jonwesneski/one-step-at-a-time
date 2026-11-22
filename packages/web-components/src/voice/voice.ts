@@ -1,9 +1,9 @@
 import {
+  isChordNodeName,
+  isNoteNodeName,
   MUSIC_ARPEGGIO_NODE,
   MUSIC_BARLINE_NODE,
-  MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
-  MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
   MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
@@ -83,8 +83,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             '[music-voice] <music-voice> cannot nest inside another <music-voice>'
           );
         } else if (
-          child.nodeName !== MUSIC_NOTE_NODE &&
-          child.nodeName !== MUSIC_CHORD_NODE &&
+          !isNoteNodeName(child.nodeName) &&
+          !isChordNodeName(child.nodeName) &&
           child.nodeName !== MUSIC_REST_NODE &&
           child.nodeName !== MUSIC_TUPLET_NODE &&
           child.nodeName !== MUSIC_TREMOLO_NODE &&

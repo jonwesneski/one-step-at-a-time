@@ -16,7 +16,6 @@ import {
   resolveTrillPitch,
   resolveTrillSpans,
   type TrillMeasureBoundary,
-  withoutTrillAccidental,
 } from './trillRules';
 
 const note = (over: Partial<NoteElementType> = {}): NoteElementType => {
@@ -411,22 +410,5 @@ describe('resolveTrillPitch', () => {
         octave: 4,
       });
     });
-  });
-});
-
-describe('withoutTrillAccidental', () => {
-  it('clears the accidental and keeps the letter, octave and written flag', () => {
-    expect(
-      withoutTrillAccidental({
-        letter: 'F',
-        accidental: 'sharp',
-        written: true,
-        octave: 5,
-      })
-    ).toEqual({ letter: 'F', accidental: null, written: true, octave: 5 });
-  });
-
-  it('passes null through', () => {
-    expect(withoutTrillAccidental(null)).toBeNull();
   });
 });

@@ -412,6 +412,51 @@
               "default": "null"
             },
             {
+              "kind": "method",
+              "name": "readAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "string | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "readsAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "field",
+              "name": "childNoteTag",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "protected",
+              "readonly": true
+            },
+            {
               "kind": "field",
               "name": "duration",
               "type": {
@@ -1129,7 +1174,7 @@
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{\n      cxPx: number;\n      halfWidthPx: number;\n    }"
+                  "text": "{\n    cxPx: number;\n    halfWidthPx: number;\n  }"
                 }
               },
               "parameters": [
@@ -1599,13 +1644,22 @@
             }
           ],
           "superclass": {
-            "name": "HTMLElement"
+            "name": "MaybeHTMLElement",
+            "module": "/src/utils/maybeHTMLElement"
           },
           "tagName": "music-chord",
           "customElement": true
         }
       ],
       "exports": [
+        {
+          "kind": "js",
+          "name": "ChordElement",
+          "declaration": {
+            "name": "ChordElement",
+            "module": "src/chord/chord.ts"
+          }
+        },
         {
           "kind": "custom-element-definition",
           "name": "MUSIC_CHORD",
@@ -2345,6 +2399,4294 @@
           "declaration": {
             "name": "CompositionElement",
             "module": "src/composition/composition.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/drumChord/drumChord.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Drums struck together on one stem, e.g. hi-hat and snare. Stacks its\n`<music-drum-note>` children; any other child is ignored with a warning.\nLike `<music-drum-note>`, it takes only notation that doesn't depend on\npitch.",
+          "name": "DrumChordElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#lastUnsupportedWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "childNoteTag",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "protected",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "readAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "string | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "readsAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#standaloneYCoordinates",
+              "privacy": "private",
+              "static": true,
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#standaloneOctaves",
+              "privacy": "private",
+              "type": {
+                "text": "Octave[]"
+              },
+              "static": true,
+              "readonly": true,
+              "default": "[4, 5, 6]",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#stemUp",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#stemExtension",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#dottedTieAcrossBarline",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#trillSignExtraLift",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#articulationStemAnchorBeamLevels",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#augmentationDotRows",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#noFlags",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#noStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#renderArpeggioSign",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#impliedArpeggio",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#staffYCoordinates",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#noteAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null | undefined)[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#noteAccidentalsParenthesized",
+              "privacy": "private",
+              "type": {
+                "text": "boolean[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedGraceAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillFinishAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillPitch",
+              "privacy": "private",
+              "type": {
+                "text": "ResolvedTrillPitch | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#batchDepth",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#renderPending",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#childObserver",
+              "privacy": "private",
+              "type": {
+                "text": "MutationObserver | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "duration",
+              "type": {
+                "text": "DurationType"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "chord",
+              "type": {
+                "text": "Chord | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "notes",
+              "type": {
+                "text": "ChordNote[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedUnsupportedChord",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutUnsupportedChord",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "unsupported",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemUp",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemExtension",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillSignExtraLift",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationStemAnchorBeamLevels",
+              "type": {
+                "text": "number | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noFlags",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noStem",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "staffYCoordinates",
+              "type": {
+                "text": "number[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noteAccidentals",
+              "type": {
+                "text": "(AccidentalType | null | undefined)[]"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noteAccidentalsParenthesized",
+              "type": {
+                "text": "boolean[]"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "toneAccidentalReminders",
+              "type": {
+                "text": "boolean[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tie",
+              "type": {
+                "text": "TieValue | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slur",
+              "type": {
+                "text": "ConnectorRole | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissando",
+              "type": {
+                "text": "ConnectorRole | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoHint",
+              "type": {
+                "text": "GlissandoHint | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamic",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicShared",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicReminder",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "accidentalReminder",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crescendo",
+              "type": {
+                "text": "HairpinRole | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "decrescendo",
+              "type": {
+                "text": "HairpinRole | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "diminuendo",
+              "type": {
+                "text": "HairpinRole | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulation",
+              "type": {
+                "text": "ArticulationType | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stress",
+              "type": {
+                "text": "StressType | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slurGroup",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "headLeftOverhangPx",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "toneNoteheads",
+              "type": {
+                "text": "NoteheadType[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemDirection",
+              "type": {
+                "text": "StemDirection | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloTuplet",
+              "type": {
+                "text": "number | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloLabel",
+              "type": {
+                "text": "TremoloLabel | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationRepeat",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tieStyle",
+              "type": {
+                "text": "TieStyle"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dottedTieAcrossBarline",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#tremoloStrokeCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedStemFor",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpin",
+              "type": {
+                "text": "HairpinKind | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinFrom",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinTo",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#effectiveArpeggioHairpin",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinKind | null"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "renderArpeggioSign",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggiate",
+              "type": {
+                "text": "ConnectorRole | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "impliedArpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillLine",
+              "type": {
+                "text": "TrillLineMode"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillStop",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillAccidental",
+              "type": {
+                "text": "AccidentalType | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillNote",
+              "type": {
+                "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillContinuation",
+              "type": {
+                "text": "TrillContinuationMode"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillPitch",
+              "type": {
+                "text": "ResolvedTrillPitch | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "grace",
+              "type": {
+                "text": "Note[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceOctave",
+              "type": {
+                "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceArticulation",
+              "type": {
+                "text": "(ArticulationType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceNotehead",
+              "type": {
+                "text": "(NoteheadType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceHeadLeftOverhangsPx",
+              "type": {
+                "text": "number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceType",
+              "type": {
+                "text": "GraceType"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceDuration",
+              "type": {
+                "text": "GraceDuration | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceSlur",
+              "type": {
+                "text": "GraceSlur"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedGraceAccidentals",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceDynamic",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinish",
+              "type": {
+                "text": "Note[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishOctave",
+              "type": {
+                "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishSlur",
+              "type": {
+                "text": "TrillFinishSlur"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillFinishAccidentals",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveShift",
+              "type": {
+                "text": "OctaveShiftAmount | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveMode",
+              "type": {
+                "text": "OctaveDisplayMode | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveStop",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuation",
+              "type": {
+                "text": "OctaveContinuationMode"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "batchUpdate",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "fn",
+                  "type": {
+                    "text": "() => void"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#scheduleRender",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedDynamicReminder",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutDynamicReminder",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#lastDotMismatchWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnChildDotMismatch",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "render",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#wireInteractionEvents",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "svg",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#widestHeadExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    cxPx: number;\n    halfWidthPx: number;\n  }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "toneNoteheads",
+                  "type": {
+                    "text": "NoteheadType[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#buildGraceDescriptors",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "GraceNoteDescriptor[] | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "notes",
+                  "type": {
+                    "text": "ChordNote[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#buildTrillFinishDescriptors",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "GraceNoteDescriptor[] | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "notes",
+                  "type": {
+                    "text": "ChordNote[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveStandaloneYCoordinates",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveStandaloneNoteAccidentals",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(AccidentalType | null | undefined)[]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "duration",
+              "type": {
+                "text": "DurationType"
+              },
+              "description": "Note value for every stroke, optionally dotted. Defaults to `quarter`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              },
+              "description": "Notehead for every stroke that doesn't take one from its instrument or set its own.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "tie",
+              "type": {
+                "text": "'start' | 'end' | 'laissez-vibrer'"
+              },
+              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a \"let ring\" tie.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Adds an \"l.v.\" label to a `laissez-vibrer` tie.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "tie-style",
+              "type": {
+                "text": "TieStyle"
+              },
+              "description": "`dotted` draws the tie this chord starts as a dotted line. Defaults to `solid`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "slur",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Start or end of a slur.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "slur-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "Joins this chord to the other members of one slur phrase that crosses staves.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the matching start element, to disambiguate interleaved ties/slurs.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "dynamic",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic marking under the chord.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "dynamic-shared",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Marks `dynamic`, and any hairpin this chord starts, as applying to both staves of a pair.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "dynamic-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws `dynamic` in brackets as a reminder.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "crescendo",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Start or end of a crescendo hairpin.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "decrescendo",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Start or end of a decrescendo hairpin.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "diminuendo",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Alias of `decrescendo`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "articulation",
+              "type": {
+                "text": "ArticulationType"
+              },
+              "description": "Articulation or accent, e.g. `accent`, `marcato`, `staccato`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "articulation-repeat",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Repeats the articulation's length mark once per measured-tremolo repetition.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "stress",
+              "type": {
+                "text": "'stressed' | 'unstressed'"
+              },
+              "description": "Stress mark.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "stem-direction",
+              "type": {
+                "text": "StemDirection"
+              },
+              "description": "Forces this chord's stem direction (`up`/`down`).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "Joins this chord to a double-stemmed beam shared with an adjacent staff.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "shared-stem-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of an element on an adjacent staff this chord shares one stem with.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue"
+              },
+              "description": "Single-chord tremolo (a roll): `1`–`4` strokes through the stem, or `unmeasured`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "tremolo-tuplet",
+              "type": {
+                "text": "number"
+              },
+              "description": "Tuplet numeral for a measured tremolo.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "tremolo-label",
+              "type": {
+                "text": "TremoloLabel"
+              },
+              "description": "`trem` / `non-trem` label above the stave.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "chord",
+              "type": {
+                "text": "Chord"
+              },
+              "description": "Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "glissando",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks this chord as the start or end of a glissando (a straight line indicating a continuous slide between pitches).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "glissando-hint",
+              "type": {
+                "text": "'white-key' | 'black-key'"
+              },
+              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "accidental-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType"
+              },
+              "description": "Arpeggio sign left of the chord, spanning its notehead range: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "arpeggio-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the upper-staff element this chord continues an unbroken cross-staff arpeggio from.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "arpeggio-hairpin",
+              "type": {
+                "text": "'crescendo' | 'diminuendo'"
+              },
+              "description": "A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "arpeggio-hairpin-from",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "arpeggio-hairpin-to",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "arpeggiate",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated grace-note pitches preceding the chord, e.g. `\"F#,G\"`. The property also accepts a `Note[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-octave",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-articulation",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated per-grace articulation aligned by index with `grace`. The property also accepts an `(ArticulationType | null)[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-type",
+              "type": {
+                "text": "'acciaccatura' | 'appoggiatura' | 'trill'"
+              },
+              "description": "Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-duration",
+              "type": {
+                "text": "GraceDuration"
+              },
+              "description": "Note value drawn for the grace notes.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-slur",
+              "type": {
+                "text": "'auto' | 'none'"
+              },
+              "description": "Whether to draw the slur from the grace group to the chord. Defaults to `auto`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-dynamic",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "A single dynamic for the whole grace group.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Marks a trill start: draws the \"tr\" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-line",
+              "type": {
+                "text": "'auto' | 'none'"
+              },
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws a vertical end-notch here instead of letting the line run to the next notehead.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-accidental",
+              "type": {
+                "text": "AccidentalType"
+              },
+              "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-note",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the trill.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-finish",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated grace-note pitch(es) placed *after* this chord (a trill's finishing/closing figure), e.g. `\"F#,G\"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-finish-octave",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-finish-slur",
+              "type": {
+                "text": "'none' | 'to-main' | 'to-next' | 'both'"
+              },
+              "description": "Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "octave-shift",
+              "type": {
+                "text": "OctaveShiftAmount"
+              },
+              "description": "Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this chord: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone chord).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "octave-mode",
+              "type": {
+                "text": "OctaveDisplayMode"
+              },
+              "description": "Set on the chord that starts an octave-transposition span: `col` renders the span's label as prose (\"col 8va\"/\"col 8va bassa\" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "octave-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this chord (inclusive).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this chord, adding a \"loco\" label alongside the closing corner. With no open span, renders a standalone \"(loco)\" reminder instead.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "octave-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the span.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-notehead",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            }
+          ],
+          "superclass": {
+            "name": "ChordElement",
+            "module": "/src/chord/chord"
+          },
+          "tagName": "music-drum-chord",
+          "customElement": true,
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "chordType",
+              "type": {
+                "text": "CustomEvent"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            }
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "DrumChordElement",
+          "declaration": {
+            "name": "DrumChordElement",
+            "module": "src/drumChord/drumChord.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_DRUM_CHORD",
+          "declaration": {
+            "name": "DrumChordElement",
+            "module": "src/drumChord/drumChord.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/drumNote/drumNote.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "A drumset note for `<music-staff-percussion>`. Its staff position and\nnotehead come from `instrument`. It takes only notation that doesn't depend\non pitch, so it has no `note`, `octave`, accidentals, trills, arpeggios,\nglissandi, octave signs or grace notes; those attributes are ignored with a\nwarning.",
+          "name": "DrumNoteElement",
+          "members": [
+            {
+              "kind": "field",
+              "name": "#lastUnsupportedWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "instrument",
+              "type": {
+                "text": "PercussionInstrument | null"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "readAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "string | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "readsAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "staffPosition",
+              "type": {
+                "text": "StaffPosition | null"
+              },
+              "privacy": "protected",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#stemUp",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#stemExtension",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#dottedTieAcrossBarline",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#trillSignExtraLift",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#articulationStemAnchorBeamLevels",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#augmentationDotRows",
+              "privacy": "private",
+              "type": {
+                "text": "number[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#unisonPart",
+              "privacy": "private",
+              "type": {
+                "text": "UnisonPart | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#augmentationDotShiftPx",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#noFlags",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#nominalStaffY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#lastNoteheadWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#noStem",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#renderArpeggioSign",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "true",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#impliedArpeggio",
+              "privacy": "private",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#showAccidental",
+              "privacy": "private",
+              "type": {
+                "text": "AccidentalType | null | undefined"
+              },
+              "default": "undefined",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#accidentalParenthesized",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#staffY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedGraceAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillFinishAccidentals",
+              "privacy": "private",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#resolvedTrillPitch",
+              "privacy": "private",
+              "type": {
+                "text": "ResolvedTrillPitch | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#batchDepth",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#renderPending",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "duration",
+              "type": {
+                "text": "DurationType"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "note",
+              "type": {
+                "text": "Note"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octave",
+              "type": {
+                "text": "Octave | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemUp",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemExtension",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillSignExtraLift",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationStemAnchorBeamLevels",
+              "type": {
+                "text": "number | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotRows",
+              "type": {
+                "text": "number[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotShiftPx",
+              "type": {
+                "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unisonPart",
+              "type": {
+                "text": "UnisonPart | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noFlags",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "noStem",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tie",
+              "type": {
+                "text": "TieValue | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lvLabel",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "showAccidental",
+              "type": {
+                "text": "AccidentalType | null | undefined"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "accidentalParenthesized",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "staffY",
+              "type": {
+                "text": "number | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "nominalStaffY",
+              "type": {
+                "text": "number | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slur",
+              "type": {
+                "text": "ConnectorRole | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissando",
+              "type": {
+                "text": "ConnectorRole | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoHint",
+              "type": {
+                "text": "GlissandoHint | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamic",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicShared",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicReminder",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "accidentalReminder",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "crescendo",
+              "type": {
+                "text": "HairpinRole | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "decrescendo",
+              "type": {
+                "text": "HairpinRole | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "diminuendo",
+              "type": {
+                "text": "HairpinRole | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulation",
+              "type": {
+                "text": "ArticulationType | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stress",
+              "type": {
+                "text": "StressType | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioFor",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "beamGroup",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "slurGroup",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownNotehead",
+              "type": {
+                "text": "NoteheadType | null"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "headLeftOverhangPx",
+              "type": {
+                "text": "number"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "augmentationDotsRightEdgePx",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemDirection",
+              "type": {
+                "text": "StemDirection | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloTuplet",
+              "type": {
+                "text": "number | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tremoloLabel",
+              "type": {
+                "text": "TremoloLabel | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "articulationRepeat",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "tieStyle",
+              "type": {
+                "text": "TieStyle"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dottedTieAcrossBarline",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#repeatCount",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#drawnStemExtension",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedStemFor",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpin",
+              "type": {
+                "text": "HairpinKind | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinFrom",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggioHairpinTo",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#effectiveArpeggioHairpin",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinKind | null"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "renderArpeggioSign",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "arpeggiate",
+              "type": {
+                "text": "ConnectorRole | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "impliedArpeggio",
+              "type": {
+                "text": "ArpeggioType | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillLine",
+              "type": {
+                "text": "TrillLineMode"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillStop",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillAccidental",
+              "type": {
+                "text": "AccidentalType | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillNote",
+              "type": {
+                "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillContinuation",
+              "type": {
+                "text": "TrillContinuationMode"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillPitch",
+              "type": {
+                "text": "ResolvedTrillPitch | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "grace",
+              "type": {
+                "text": "Note[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceOctave",
+              "type": {
+                "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceArticulation",
+              "type": {
+                "text": "(ArticulationType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceNotehead",
+              "type": {
+                "text": "(NoteheadType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceHeadLeftOverhangsPx",
+              "type": {
+                "text": "number[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceType",
+              "type": {
+                "text": "GraceType"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceDuration",
+              "type": {
+                "text": "GraceDuration | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceSlur",
+              "type": {
+                "text": "GraceSlur"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedGraceAccidentals",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceDynamic",
+              "type": {
+                "text": "DynamicMarking | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinish",
+              "type": {
+                "text": "Note[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishOctave",
+              "type": {
+                "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishSlur",
+              "type": {
+                "text": "TrillFinishSlur"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "resolvedTrillFinishAccidentals",
+              "type": {
+                "text": "(AccidentalType | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveShift",
+              "type": {
+                "text": "OctaveShiftAmount | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveMode",
+              "type": {
+                "text": "OctaveDisplayMode | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveStop",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "octaveContinuation",
+              "type": {
+                "text": "OctaveContinuationMode"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "batchUpdate",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "fn",
+                  "type": {
+                    "text": "() => void"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#scheduleRender",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedDynamicReminder",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutDynamicReminder",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "render",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#appendGraceNotes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "noteSvg",
+                  "type": {
+                    "text": "SVGElement"
+                  }
+                },
+                {
+                  "name": "accidental",
+                  "type": {
+                    "text": "AccidentalType | undefined"
+                  }
+                },
+                {
+                  "name": "accidentalParenthesized",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rebaseOrnamentSteps",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "ornaments",
+                  "type": {
+                    "text": "GraceNoteDescriptor[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#appendTrillFinishNotes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "noteSvg",
+                  "type": {
+                    "text": "SVGElement"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "type": {
+                "text": "PercussionInstrument"
+              },
+              "description": "Drumset instrument: `kick`, `snare`, `hi-hat`, `ride`, `crash`, `floor-tom`, `mid-tom`, `high-tom` or `hi-hat-pedal`. Sets the staff position and notehead (x for cymbals).",
+              "name": "instrument"
+            },
+            {
+              "name": "duration",
+              "type": {
+                "text": "DurationType"
+              },
+              "description": "Note value, optionally dotted (`dotted-quarter`). Defaults to `quarter`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "notehead",
+              "type": {
+                "text": "NoteheadType"
+              },
+              "description": "Overrides the instrument's notehead, e.g. `x` on the snare for a cross-stick.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "tie",
+              "type": {
+                "text": "'start' | 'end' | 'laissez-vibrer'"
+              },
+              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a \"let ring\" tie, as on a crash.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "lv-label",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Adds an \"l.v.\" label to a `laissez-vibrer` tie.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "tie-style",
+              "type": {
+                "text": "TieStyle"
+              },
+              "description": "`dotted` draws the tie this note starts as a dotted line. Defaults to `solid`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "slur",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Start or end of a slur.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "slur-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "Joins this note to the other members of one slur phrase that crosses staves.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the matching start element, to disambiguate interleaved ties/slurs.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "dynamic",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "dynamic-shared",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Marks `dynamic`, and any hairpin this note starts, as applying to both staves of a pair.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "dynamic-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws `dynamic` in brackets as a reminder.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "crescendo",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Start or end of a crescendo hairpin.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "decrescendo",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Start or end of a decrescendo hairpin.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "diminuendo",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Alias of `decrescendo`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "articulation",
+              "type": {
+                "text": "ArticulationType"
+              },
+              "description": "Articulation or accent, e.g. `accent`, `marcato`, `staccato`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "articulation-repeat",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Repeats the articulation's length mark once per measured-tremolo repetition.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "stress",
+              "type": {
+                "text": "'stressed' | 'unstressed'"
+              },
+              "description": "Stress mark.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "stem-direction",
+              "type": {
+                "text": "StemDirection"
+              },
+              "description": "Forces this note's stem direction (`up`/`down`).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "beam-group",
+              "type": {
+                "text": "string"
+              },
+              "description": "Joins this note to a double-stemmed beam shared with an adjacent staff.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "shared-stem-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of an element on an adjacent staff this note shares one stem with.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "tremolo",
+              "type": {
+                "text": "TremoloValue"
+              },
+              "description": "Single-note tremolo, the usual way to write a roll: `1`–`4` strokes through the stem, or `unmeasured`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "tremolo-tuplet",
+              "type": {
+                "text": "number"
+              },
+              "description": "Tuplet numeral for a measured tremolo.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "tremolo-label",
+              "type": {
+                "text": "TremoloLabel"
+              },
+              "description": "`trem` / `non-trem` label above the stave.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "note",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "octave",
+              "type": {
+                "text": "Octave"
+              },
+              "description": "Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "glissando",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "glissando-hint",
+              "type": {
+                "text": "'white-key' | 'black-key'"
+              },
+              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "accidental-reminder",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Shows the accidental already in force in parentheses, \"(♮)\", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "arpeggio",
+              "type": {
+                "text": "ArpeggioType"
+              },
+              "description": "Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "arpeggio-for",
+              "type": {
+                "text": "string"
+              },
+              "description": "`id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "arpeggio-hairpin",
+              "type": {
+                "text": "'crescendo' | 'diminuendo'"
+              },
+              "description": "A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "arpeggio-hairpin-from",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "arpeggio-hairpin-to",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "arpeggiate",
+              "type": {
+                "text": "'start' | 'end'"
+              },
+              "description": "Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated grace-note pitches preceding this note, e.g. `\"F#,G\"`. The property also accepts a `Note[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-octave",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-articulation",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-type",
+              "type": {
+                "text": "'acciaccatura' | 'appoggiatura' | 'trill'"
+              },
+              "description": "Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-duration",
+              "type": {
+                "text": "GraceDuration"
+              },
+              "description": "Note value drawn for the grace notes.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-slur",
+              "type": {
+                "text": "'auto' | 'none'"
+              },
+              "description": "Whether to draw the slur from the grace group to the main note. Defaults to `auto`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-dynamic",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "A single dynamic for the whole grace group, independent of `dynamic`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Marks a trill start: draws the \"tr\" sign above the stave. Requires a staff (absent on a standalone note). The wavy line spans forward through this note's own `tie` chain — set `trill` once, not on every tied note.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-line",
+              "type": {
+                "text": "'auto' | 'none'"
+              },
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Draws a vertical end-notch here instead of letting the line run to the next notehead.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-accidental",
+              "type": {
+                "text": "AccidentalType"
+              },
+              "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-note",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the trill.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-finish",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated grace-note pitch(es) placed *after* this note (a trill's finishing/closing figure), e.g. `\"F#,G\"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-finish-octave",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-finish-slur",
+              "type": {
+                "text": "'none' | 'to-main' | 'to-next' | 'both'"
+              },
+              "description": "Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "octave-shift",
+              "type": {
+                "text": "OctaveShiftAmount"
+              },
+              "description": "Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "octave-mode",
+              "type": {
+                "text": "OctaveDisplayMode"
+              },
+              "description": "Set on the note that starts an octave-transposition span: `col` renders the span's label as prose (\"col 8va\"/\"col 8va bassa\" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "octave-stop",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this note (inclusive).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "loco",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Closes the currently open octave-transposition span at this note, adding a \"loco\" label alongside the closing corner. With no open span, renders a standalone \"(loco)\" reminder instead.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "octave-continuation",
+              "type": {
+                "text": "'bracketed' | 'line-only'"
+              },
+              "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-notehead",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            }
+          ],
+          "superclass": {
+            "name": "NoteElement",
+            "module": "/src/note/note"
+          },
+          "tagName": "music-drum-note",
+          "customElement": true,
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            }
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "DrumNoteElement",
+          "declaration": {
+            "name": "DrumNoteElement",
+            "module": "src/drumNote/drumNote.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "MUSIC_DRUM_NOTE",
+          "declaration": {
+            "name": "DrumNoteElement",
+            "module": "src/drumNote/drumNote.ts"
           }
         }
       ]
@@ -3888,6 +8230,42 @@
               "default": "false"
             },
             {
+              "kind": "method",
+              "name": "readAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "string | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "readsAttribute",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ]
+            },
+            {
               "kind": "field",
               "name": "duration",
               "type": {
@@ -3910,15 +8288,11 @@
             },
             {
               "kind": "field",
-              "name": "instrument",
+              "name": "staffPosition",
               "type": {
-                "text": "PercussionInstrument | null"
-              }
-            },
-            {
-              "kind": "field",
-              "name": "#instrumentPosition",
-              "privacy": "private",
+                "text": "StaffPosition | null"
+              },
+              "privacy": "protected",
               "readonly": true
             },
             {
@@ -4657,13 +9031,6 @@
               "description": "Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset."
             },
             {
-              "name": "instrument",
-              "type": {
-                "text": "PercussionInstrument"
-              },
-              "description": "Drumset instrument this note stands for (`kick`, `snare`, `hi-hat`, `ride`, `crash`, `floor-tom`, `mid-tom`, `high-tom`, `hi-hat-pedal`), for `<music-staff-percussion>`. Supplies `note`, `octave` and `notehead` from the drum key; any of those set explicitly overrides it."
-            },
-            {
               "name": "for",
               "type": {
                 "text": "string"
@@ -5036,13 +9403,22 @@
             }
           ],
           "superclass": {
-            "name": "HTMLElement"
+            "name": "MaybeHTMLElement",
+            "module": "/src/utils/maybeHTMLElement"
           },
           "tagName": "music-note",
           "customElement": true
         }
       ],
       "exports": [
+        {
+          "kind": "js",
+          "name": "NoteElement",
+          "declaration": {
+            "name": "NoteElement",
+            "module": "src/note/note.ts"
+          }
+        },
         {
           "kind": "custom-element-definition",
           "name": "MUSIC_NOTE",
@@ -8127,28 +12503,6 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
-                  }
-                }
-              ],
-              "inheritedFrom": {
-                "name": "StaffNotationElementBase",
-                "module": "src/staffNotationBase.ts"
-              }
-            },
-            {
-              "kind": "method",
-              "name": "#trillPitchForStaff",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "ResolvedTrillPitch | null"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "pitch",
-                  "type": {
-                    "text": "ResolvedTrillPitch | null"
                   }
                 }
               ],
@@ -14285,28 +18639,6 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
-                  }
-                }
-              ],
-              "inheritedFrom": {
-                "name": "StaffNotationElementBase",
-                "module": "src/staffNotationBase.ts"
-              }
-            },
-            {
-              "kind": "method",
-              "name": "#trillPitchForStaff",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "ResolvedTrillPitch | null"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "pitch",
-                  "type": {
-                    "text": "ResolvedTrillPitch | null"
                   }
                 }
               ],

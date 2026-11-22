@@ -45,8 +45,10 @@ import type {
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const MUSIC_NOTE = 'music-note';
+export const MUSIC_DRUM_NOTE = 'music-drum-note';
 export const MUSIC_REST = 'music-rest';
 export const MUSIC_CHORD = 'music-chord';
+export const MUSIC_DRUM_CHORD = 'music-drum-chord';
 export const MUSIC_TUPLET = 'music-tuplet';
 export const MUSIC_ARPEGGIO = 'music-arpeggio';
 export const MUSIC_TREMOLO = 'music-tremolo';
@@ -82,8 +84,52 @@ export const isStaffNodeName = (nodeName: string): boolean =>
 
 // Uppercase variants for nodeName comparisons (DOM nodeName is always uppercase)
 export const MUSIC_NOTE_NODE = MUSIC_NOTE.toUpperCase();
+export const MUSIC_DRUM_NOTE_NODE = MUSIC_DRUM_NOTE.toUpperCase();
 export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
 export const MUSIC_CHORD_NODE = MUSIC_CHORD.toUpperCase();
+export const MUSIC_DRUM_CHORD_NODE = MUSIC_DRUM_CHORD.toUpperCase();
+
+/**
+ * The note and chord elements the engine lays out: the pitched ones and their
+ * drum subclasses. Match on these, never on one tag.
+ */
+const NOTE_TAG_LIST = [MUSIC_NOTE, MUSIC_DRUM_NOTE];
+const CHORD_TAG_LIST = [MUSIC_CHORD, MUSIC_DRUM_CHORD];
+
+export const NOTE_TAGS = NOTE_TAG_LIST.join(', ');
+export const CHORD_TAGS = CHORD_TAG_LIST.join(', ');
+
+// Selector lists over every note/chord tag; `suffix` is appended to each
+// compound (e.g. `[slur-group]`, `:defined`).
+export const noteSelector = (suffix = ''): string =>
+  NOTE_TAG_LIST.map((tag) => `${tag}${suffix}`).join(', ');
+
+export const chordSelector = (suffix = ''): string =>
+  CHORD_TAG_LIST.map((tag) => `${tag}${suffix}`).join(', ');
+
+/** Notes that aren't a chord's tones. */
+export const loneNoteSelector = (suffix = ''): string =>
+  NOTE_TAG_LIST.map(
+    (note) =>
+      `${note}${CHORD_TAG_LIST.map((chord) => `:not(${chord} ${note})`).join(
+        ''
+      )}${suffix}`
+  ).join(', ');
+
+/** Notes that are a chord's tones. */
+export const chordToneSelector = (suffix = ''): string =>
+  CHORD_TAG_LIST.flatMap((chord) =>
+    NOTE_TAG_LIST.map((note) => `${chord} ${note}${suffix}`)
+  ).join(', ');
+
+export const isNoteNodeName = (nodeName: string): boolean =>
+  nodeName === MUSIC_NOTE_NODE || nodeName === MUSIC_DRUM_NOTE_NODE;
+
+export const isChordNodeName = (nodeName: string): boolean =>
+  nodeName === MUSIC_CHORD_NODE || nodeName === MUSIC_DRUM_CHORD_NODE;
+
+export const isDrumNodeName = (nodeName: string): boolean =>
+  nodeName === MUSIC_DRUM_NOTE_NODE || nodeName === MUSIC_DRUM_CHORD_NODE;
 export const MUSIC_TUPLET_NODE = MUSIC_TUPLET.toUpperCase();
 export const MUSIC_ARPEGGIO_NODE = MUSIC_ARPEGGIO.toUpperCase();
 export const MUSIC_TREMOLO_NODE = MUSIC_TREMOLO.toUpperCase();

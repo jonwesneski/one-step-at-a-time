@@ -2,14 +2,21 @@
  * @jest-environment jsdom
  */
 import '../index';
-import type { ChordElementType, NoteElementType } from '../types/elements';
+import type {
+  ChordElementType,
+  DrumNoteElementType,
+  NoteElementType,
+} from '../types/elements';
 import {
   MUSIC_CHORD,
   MUSIC_CLEF,
+  MUSIC_DRUM_CHORD,
+  MUSIC_DRUM_NOTE,
   MUSIC_MEASURE,
   MUSIC_NOTE,
   MUSIC_STAFF,
   MUSIC_STAFF_PERCUSSION,
+  MUSIC_VOICE,
 } from '../utils/consts';
 
 afterEach(() => {
@@ -39,6 +46,9 @@ function renderInMeasure(
   return { staff, children };
 }
 
+const drumNote = (instrument: string, duration = 'quarter'): string =>
+  `<${MUSIC_DRUM_NOTE} instrument="${instrument}" duration="${duration}"></${MUSIC_DRUM_NOTE}>`;
+
 const keySignatureGlyphCount = (staff: StaffLike): number =>
   staff.shadowRoot!.querySelectorAll('.key-signature svg').length;
 
@@ -57,42 +67,78 @@ describe(MUSIC_STAFF_PERCUSSION, () => {
     expect(keySignatureGlyphCount(staff)).toBe(0);
   });
 
-  it('shows no accidental for a sharp or flat spelling', () => {
-    const note = `<${MUSIC_NOTE} note="F#" octave="5" duration="quarter"></${MUSIC_NOTE}>`;
-    const pitched = renderInMeasure(MUSIC_STAFF, note, 'C')
-      .children[0] as NoteElementType;
-    expect(pitched.showAccidental).toBe('sharp');
-
-    const [unpitched] = renderInMeasure(MUSIC_STAFF_PERCUSSION, note, 'C')
-      .children as NoteElementType[];
-    expect(unpitched.showAccidental).toBeNull();
-  });
-
-  it('places an instrument note at its drum-key position', () => {
+  it('places a drum note at its drum-key position', () => {
     const {
       staff,
       children: [snare, hiHat],
     } = renderInMeasure(
       MUSIC_STAFF_PERCUSSION,
-      `<${MUSIC_NOTE} instrument="snare" duration="quarter"></${MUSIC_NOTE}>` +
-        `<${MUSIC_NOTE} instrument="hi-hat" duration="quarter"></${MUSIC_NOTE}>`
-    ) as unknown as { staff: StaffLike; children: NoteElementType[] };
-    expect(snare.staffY).toBe(staff.noteToYCoordinate('C', 5));
-    expect(hiHat.staffY).toBe(staff.noteToYCoordinate('G', 5));
-    expect(hiHat.notehead).toBe('x');
+      drumNote('snare') + drumNote('hi-hat')
+    );
+    expect((snare as DrumNoteElementType).staffY).toBe(
+      staff.noteToYCoordinate('C', 5)
+    );
+    expect((hiHat as DrumNoteElementType).staffY).toBe(
+      staff.noteToYCoordinate('G', 5)
+    );
   });
 
-  it("gives a chord tone its instrument's notehead", () => {
+  it("gives a drum chord's tones their instruments' noteheads", () => {
     const {
       children: [chord],
     } = renderInMeasure(
       MUSIC_STAFF_PERCUSSION,
-      `<${MUSIC_CHORD} duration="quarter">` +
-        `<${MUSIC_NOTE} instrument="hi-hat"></${MUSIC_NOTE}>` +
-        `<${MUSIC_NOTE} instrument="kick"></${MUSIC_NOTE}>` +
-        `</${MUSIC_CHORD}>`
+      `<${MUSIC_DRUM_CHORD} duration="quarter">` +
+        `<${MUSIC_DRUM_NOTE} instrument="hi-hat"></${MUSIC_DRUM_NOTE}>` +
+        `<${MUSIC_DRUM_NOTE} instrument="kick"></${MUSIC_DRUM_NOTE}>` +
+        `</${MUSIC_DRUM_CHORD}>`
     );
     expect((chord as ChordElementType).toneNoteheads).toEqual(['x', 'normal']);
+  });
+
+  it('hides <music-note> and <music-chord>, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const {
+      children: [drum, note, chord],
+    } = renderInMeasure(
+      MUSIC_STAFF_PERCUSSION,
+      drumNote('snare') +
+        `<${MUSIC_NOTE} note="F" octave="4" duration="quarter"></${MUSIC_NOTE}>` +
+        `<${MUSIC_CHORD} chord="C" duration="half"></${MUSIC_CHORD}>`
+    );
+    expect((drum as HTMLElement).style.display).not.toBe('none');
+    expect((note as HTMLElement).style.display).toBe('none');
+    expect((chord as HTMLElement).style.display).toBe('none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('ignoring 2 element(s)')
+    );
+  });
+
+  it('keeps hands and feet on separate stems when their rhythms match', () => {
+    const twoVoices = (hands: string, feet: string): string =>
+      `<${MUSIC_VOICE}>${hands.repeat(4)}</${MUSIC_VOICE}>` +
+      `<${MUSIC_VOICE}>${feet.repeat(4)}</${MUSIC_VOICE}>`;
+
+    const pitched = renderInMeasure(
+      MUSIC_STAFF,
+      twoVoices(
+        `<${MUSIC_NOTE} note="C" octave="5" duration="quarter"></${MUSIC_NOTE}>`,
+        `<${MUSIC_NOTE} note="F" octave="4" duration="quarter"></${MUSIC_NOTE}>`
+      ),
+      'C'
+    ).staff;
+    expect(pitched.shadowRoot!.querySelector(MUSIC_CHORD)).not.toBeNull();
+
+    const { staff, children } = renderInMeasure(
+      MUSIC_STAFF_PERCUSSION,
+      twoVoices(drumNote('snare'), drumNote('kick'))
+    );
+    expect(staff.shadowRoot!.querySelector(MUSIC_CHORD)).toBeNull();
+    const [hands, feet] = children.map(
+      (voice) => voice.firstElementChild as NoteElementType
+    );
+    expect(hands.stemUp).toBe(true);
+    expect(feet.stemUp).toBe(false);
   });
 
   it('ignores and hides a <music-clef> change', () => {
@@ -101,52 +147,34 @@ describe(MUSIC_STAFF_PERCUSSION, () => {
       children: [, clef],
     } = renderInMeasure(
       MUSIC_STAFF_PERCUSSION,
-      `<${MUSIC_NOTE} instrument="snare" duration="half"></${MUSIC_NOTE}>` +
+      drumNote('snare', 'half') +
         `<${MUSIC_CLEF} clef="bass"></${MUSIC_CLEF}>` +
-        `<${MUSIC_NOTE} instrument="snare" duration="half"></${MUSIC_NOTE}>`
+        drumNote('snare', 'half')
     );
     expect((clef as HTMLElement).style.display).toBe('none');
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('<music-clef> is ignored')
     );
   });
+});
 
-  describe('trills', () => {
-    const resolvedTrillPitch = (staffTag: string, content: string) =>
-      (
-        renderInMeasure(staffTag, content, 'C').children[0] as
-          | NoteElementType
-          | ChordElementType
-      ).resolvedTrillPitch;
-
-    it('hides a trill-accidental override', () => {
-      const note = `<${MUSIC_NOTE} instrument="snare" duration="quarter" trill trill-accidental="sharp"></${MUSIC_NOTE}>`;
-      expect(resolvedTrillPitch(MUSIC_STAFF, note)?.accidental).toBe('sharp');
-      expect(
-        resolvedTrillPitch(MUSIC_STAFF_PERCUSSION, note)?.accidental
-      ).toBeNull();
-    });
-
-    it('keeps a written trill-note but hides its accidental', () => {
-      const note = `<${MUSIC_NOTE} instrument="snare" duration="quarter" trill trill-note="F#"></${MUSIC_NOTE}>`;
-      expect(resolvedTrillPitch(MUSIC_STAFF, note)?.accidental).toBe('sharp');
-      expect(resolvedTrillPitch(MUSIC_STAFF_PERCUSSION, note)).toMatchObject({
-        letter: 'F',
-        written: true,
-        accidental: null,
-      });
-    });
-
-    it("hides a chord's trill-accidental override", () => {
-      const chord =
-        `<${MUSIC_CHORD} duration="quarter" trill trill-accidental="flat">` +
-        `<${MUSIC_NOTE} instrument="snare"></${MUSIC_NOTE}>` +
-        `<${MUSIC_NOTE} instrument="kick"></${MUSIC_NOTE}>` +
-        `</${MUSIC_CHORD}>`;
-      expect(resolvedTrillPitch(MUSIC_STAFF, chord)?.accidental).toBe('flat');
-      expect(
-        resolvedTrillPitch(MUSIC_STAFF_PERCUSSION, chord)?.accidental
-      ).toBeNull();
-    });
+describe(`${MUSIC_STAFF} with drum elements`, () => {
+  it('hides <music-drum-note> and <music-drum-chord>, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const {
+      children: [note, drum, drumChord],
+    } = renderInMeasure(
+      MUSIC_STAFF,
+      `<${MUSIC_NOTE} note="F" octave="4" duration="quarter"></${MUSIC_NOTE}>` +
+        drumNote('snare') +
+        `<${MUSIC_DRUM_CHORD} duration="half"><${MUSIC_DRUM_NOTE} instrument="kick"></${MUSIC_DRUM_NOTE}></${MUSIC_DRUM_CHORD}>`,
+      'C'
+    );
+    expect((note as HTMLElement).style.display).not.toBe('none');
+    expect((drum as HTMLElement).style.display).toBe('none');
+    expect((drumChord as HTMLElement).style.display).toBe('none');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('a pitched staff takes no <music-drum-note>')
+    );
   });
 });

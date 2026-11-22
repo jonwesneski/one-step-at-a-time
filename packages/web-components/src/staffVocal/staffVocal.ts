@@ -17,11 +17,11 @@ import type {
 } from '../types/elements';
 import type { Octave, VocalType } from '../types/theory';
 import {
+  CHORD_TAGS,
   LYRICS_EVENTS,
-  MUSIC_CHORD,
   MUSIC_LYRICS,
-  MUSIC_NOTE,
   MUSIC_STAFF_VOCAL,
+  NOTE_TAGS,
   STAFF_EVENTS,
 } from '../utils/consts';
 import {
@@ -202,11 +202,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #sungEntries(): HTMLElement[] {
       return Array.from(
         (this as unknown as ParentNode).querySelectorAll<HTMLElement>(
-          `${MUSIC_NOTE}, ${MUSIC_CHORD}`
+          `${NOTE_TAGS}, ${CHORD_TAGS}`
         )
       ).filter(
         (entry) =>
-          entry.parentElement?.closest(MUSIC_CHORD) === null &&
+          entry.parentElement?.closest(CHORD_TAGS) === null &&
           entry.getAttribute('tie') !== 'end'
       );
     }

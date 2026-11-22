@@ -16,7 +16,7 @@ import {
   NoteElementType,
 } from '../types/elements';
 import { AccidentalType, Mode, Note } from '../types/theory';
-import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
+import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
@@ -145,7 +145,7 @@ export function computeNoteAccidentals(
   };
 
   for (const element of elements) {
-    if (element.nodeName === MUSIC_NOTE_NODE) {
+    if (isNoteNodeName(element.nodeName)) {
       const noteElement = element as NoteElementType;
       // A leading grace group sounds before the host note, a trill's
       // finishing grace note(s) sound after it — both fold into
@@ -191,7 +191,7 @@ export function computeNoteAccidentals(
         trillFinishShowAccidentals,
         noteElement
       );
-    } else if (element.nodeName === MUSIC_CHORD_NODE) {
+    } else if (isChordNodeName(element.nodeName)) {
       const chordElement = element as ChordElementType;
       resolveOrnamentAccidentals(
         chordElement.grace,
@@ -246,30 +246,6 @@ export function computeNoteAccidentals(
     trillFinishShowAccidentals,
     parenthesizedAccidentals,
     chordParenthesizedAccidentals,
-  };
-}
-
-// Every accidental hidden, for an unpitched staff: positions stand for
-// instruments, so a sharp or flat spelling has no meaning there.
-export function withoutAccidentals(
-  accidentals: NoteAccidentals
-): NoteAccidentals {
-  const hideAll = <K, V>(map: Map<K, V[]>): Map<K, null[]> =>
-    new Map(Array.from(map, ([key, values]) => [key, values.map(() => null)]));
-  return {
-    noteShowAccidentals: new Map(
-      Array.from(accidentals.noteShowAccidentals.keys(), (note) => [note, null])
-    ),
-    chordNoteAccidentals: hideAll(accidentals.chordNoteAccidentals),
-    graceShowAccidentals: hideAll(accidentals.graceShowAccidentals),
-    trillFinishShowAccidentals: hideAll(accidentals.trillFinishShowAccidentals),
-    parenthesizedAccidentals: new Set(),
-    chordParenthesizedAccidentals: new Map(
-      Array.from(
-        accidentals.chordParenthesizedAccidentals,
-        ([chord, flags]) => [chord, flags.map(() => false)]
-      )
-    ),
   };
 }
 

@@ -105,19 +105,19 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   BARLINE_EVENTS,
+  chordSelector,
   COMMON_ATTRIBUTES,
+  isChordNodeName,
+  isNoteNodeName,
   isStaffNodeName,
   MEASURE_EVENTS,
-  MUSIC_CHORD,
-  MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_MEASURE_NODE,
-  MUSIC_NOTE,
-  MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
   NOTATION_STAFF_TAGS,
   NOTE_EVENTS,
+  noteSelector,
   STAFF_EVENTS,
   STAFF_TAGS,
 } from '../utils/consts';
@@ -869,7 +869,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      const selector = `${MUSIC_NOTE}[crescendo], ${MUSIC_NOTE}[decrescendo], ${MUSIC_CHORD}[crescendo], ${MUSIC_CHORD}[decrescendo]`;
+      const selector = `${noteSelector('[crescendo]')}, ${noteSelector(
+        '[decrescendo]'
+      )}, ${chordSelector('[crescendo]')}, ${chordSelector('[decrescendo]')}`;
       const tracks = this.#buildStaffTracks();
       const measureOrder = new Map<Element, number>();
       tracks.flat().forEach(({ staff }) => {
@@ -1344,8 +1346,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
           const hasOctaveShiftElement = globalElements.some(
             (element) =>
-              (element.nodeName === MUSIC_NOTE_NODE ||
-                element.nodeName === MUSIC_CHORD_NODE) &&
+              (isNoteNodeName(element.nodeName) ||
+                isChordNodeName(element.nodeName)) &&
               (element as NoteElementType | ChordElementType).octaveShift !==
                 null
           );

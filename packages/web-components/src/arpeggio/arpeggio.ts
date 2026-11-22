@@ -7,11 +7,11 @@ import { DurationType } from '../types/theory';
 import {
   ARPEGGIO_RUN_DEFAULT_DURATION,
   ARPEGGIO_UNMATCHED_MODES,
+  isChordNodeName,
+  isNoteNodeName,
   MUSIC_ARPEGGIO,
   MUSIC_ARPEGGIO_NODE,
-  MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
-  MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
   MUSIC_TUPLET_NODE,
   NOTE_EVENTS,
@@ -91,9 +91,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const elementChildren = this.#elementChildren();
       return elementChildren
         .slice(0, -1)
-        .filter(
-          (child): child is NoteElementType =>
-            child.nodeName === MUSIC_NOTE_NODE
+        .filter((child): child is NoteElementType =>
+          isNoteNodeName(child.nodeName)
         );
     }
 
@@ -102,8 +101,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const last = elementChildren[elementChildren.length - 1];
       if (
         last &&
-        (last.nodeName === MUSIC_NOTE_NODE ||
-          last.nodeName === MUSIC_CHORD_NODE)
+        (isNoteNodeName(last.nodeName) || isChordNodeName(last.nodeName))
       ) {
         return last as NoteOrChordElementType;
       }
@@ -168,15 +166,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       const target = elementChildren[elementChildren.length - 1];
       if (
-        target.nodeName !== MUSIC_NOTE_NODE &&
-        target.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(target.nodeName) &&
+        !isChordNodeName(target.nodeName)
       ) {
         console.warn(
           '[music-arpeggio] the last child must be a <music-chord> or <music-note>'
         );
       }
       for (const child of elementChildren.slice(0, -1)) {
-        if (child.nodeName === MUSIC_NOTE_NODE) {
+        if (isNoteNodeName(child.nodeName)) {
           const current = child.getAttribute('duration');
           if (
             current === null ||

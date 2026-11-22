@@ -19,10 +19,6 @@ import {
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
 import {
-  parsePercussionInstrument,
-  PERCUSSION_INSTRUMENT_MAP,
-} from '../rules/percussionRules';
-import {
   articulationRepeatCount,
   drawnTremoloTuplet,
   resolveStrokeCount,
@@ -37,6 +33,7 @@ import type {
   GraceNotesType,
   GraceOctavesType,
   INoteElement,
+  StaffPosition,
   TieValue,
   UnisonPart,
 } from '../types/elements';
@@ -59,7 +56,6 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
-  PercussionInstrument,
   StemDirection,
   StressType,
   TieStyle,
@@ -115,13 +111,14 @@ import {
   stemUpTipYPx,
 } from '../utils';
 import {
-  MUSIC_CHORD,
+  CHORD_TAGS,
   MUSIC_NOTE,
   MUSIC_TREMOLO_NODE,
   NOTE_EVENTS,
   OCTAVES,
   STAFF_TAGS,
 } from '../utils/consts';
+import { MaybeHTMLElement } from '../utils/maybeHTMLElement';
 import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
 import {
   NOTE_SVG_WIDTH,
@@ -129,684 +126,1431 @@ import {
 } from '../utils/svgCreator/note';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
-if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  /**
-   * A single note: notehead, stem, flag, ledger lines, plus optional
-   * articulations, dynamics, hairpins, ties/slurs and grace notes. Renders
-   * standalone or, inside a `<music-staff>`, is positioned and beamed by the
-   * staff.
-   *
-   * @customElement music-note
-   * @attr {Note} note - Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.
-   * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
-   * @attr {PercussionInstrument} instrument - Drumset instrument this note stands for (`kick`, `snare`, `hi-hat`, `ride`, `crash`, `floor-tom`, `mid-tom`, `high-tom`, `hi-hat-pedal`), for `<music-staff-percussion>`. Supplies `note`, `octave` and `notehead` from the drum key; any of those set explicitly overrides it.
-   * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`.
-   * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
-   * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
-   * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
-   * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches).
-   * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
-   * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
-   * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
-   * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
-   * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
-   * @attr {boolean} accidental-reminder - Shows the accidental already in force in parentheses, "(♮)", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.
-   * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
-   * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
-   * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
-   * @attr {ArticulationType} articulation - Articulation/accent mark, e.g. `staccato`, `accent`, `marcato-tenuto`, `fermata`.
-   * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
-   * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
-   * @attr {string} arpeggio-for - `id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from.
-   * @attr {'crescendo' | 'diminuendo'} arpeggio-hairpin - A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`).
-   * @attr {DynamicMarking} arpeggio-hairpin-from - Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff.
-   * @attr {DynamicMarking} arpeggio-hairpin-to - Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff.
-   * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
-   * @attr {string} grace - Comma-separated grace-note pitches preceding this note, e.g. `"F#,G"`. The property also accepts a `Note[]`.
-   * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
-   * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.
-   * @attr {'acciaccatura' | 'appoggiatura' | 'trill'} grace-type - Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.
-   * @attr {GraceDuration} grace-duration - Note value drawn for the grace notes.
-   * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the main note. Defaults to `auto`.
-   * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group, independent of `dynamic`.
-   * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone note). The wavy line spans forward through this note's own `tie` chain — set `trill` once, not on every tied note.
-   * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
-   * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
-   * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
-   * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
-   * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the trill.
-   * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this note (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
-   * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
-   * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
-   * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note).
-   * @attr {OctaveDisplayMode} octave-mode - Set on the note that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
-   * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this note (inclusive).
-   * @attr {boolean} loco - Closes the currently open octave-transposition span at this note, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
-   * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.
-   * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note). Ignored, with a warning, on a `triangle-up`/`triangle-down` note.
-   * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
-   * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
-   * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
-   * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
-   * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
-   * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
-   * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
-   * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
-   * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
-   * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
-   *
-   * @example
-   * <music-staff clef="treble" time="4/4">
-   *   <music-note note="C" octave="5" duration="quarter" articulation="staccato"></music-note>
-   *   <music-note note="E" octave="5" duration="eighth"></music-note>
-   * </music-staff>
-   */
-  class NoteElement extends HTMLElement implements INoteElement {
-    static get observedAttributes(): string[] {
-      return [
-        'duration',
-        'note',
-        'octave',
-        'instrument',
-        'for',
-        'tie',
-        'lv-label',
-        'slur',
-        'glissando',
-        'glissando-hint',
-        'dynamic',
-        'dynamic-shared',
-        'dynamic-reminder',
-        'accidental-reminder',
-        'crescendo',
-        'decrescendo',
-        'diminuendo',
-        'articulation',
-        'stress',
-        'arpeggio',
-        'arpeggio-for',
-        'arpeggio-hairpin',
-        'arpeggio-hairpin-from',
-        'arpeggio-hairpin-to',
-        'arpeggiate',
-        'grace',
-        'grace-octave',
-        'grace-articulation',
-        'grace-type',
-        'grace-duration',
-        'grace-slur',
-        'grace-dynamic',
-        'trill',
-        'trill-line',
-        'trill-stop',
-        'trill-accidental',
-        'trill-note',
-        'trill-continuation',
-        'trill-finish',
-        'trill-finish-octave',
-        'trill-finish-slur',
-        'octave-shift',
-        'octave-mode',
-        'octave-stop',
-        'loco',
-        'octave-continuation',
-        'beam-group',
-        'shared-stem-for',
-        'slur-group',
-        'stem-direction',
-        'notehead',
-        'grace-notehead',
-        'tremolo',
-        'tremolo-tuplet',
-        'tremolo-label',
-        'articulation-repeat',
-        'tie-style',
-      ];
-    }
+/**
+ * A single note: notehead, stem, flag, ledger lines, plus optional
+ * articulations, dynamics, hairpins, ties/slurs and grace notes. Renders
+ * standalone or, inside a `<music-staff>`, is positioned and beamed by the
+ * staff.
+ *
+ * @customElement music-note
+ * @attr {Note} note - Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.
+ * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
+ * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`.
+ * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+ * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
+ * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
+ * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches).
+ * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
+ * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
+ * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
+ * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
+ * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
+ * @attr {boolean} accidental-reminder - Shows the accidental already in force in parentheses, "(♮)", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.
+ * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
+ * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
+ * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
+ * @attr {ArticulationType} articulation - Articulation/accent mark, e.g. `staccato`, `accent`, `marcato-tenuto`, `fermata`.
+ * @attr {'stressed' | 'unstressed'} stress - Schoenberg stress mark.
+ * @attr {ArpeggioType} arpeggio - Arpeggio sign left of the note: `up`, `up-arrow`, `down`, or `non-arpeggiate` (square bracket).
+ * @attr {string} arpeggio-for - `id` of the upper-staff element this note continues an unbroken cross-staff arpeggio from.
+ * @attr {'crescendo' | 'diminuendo'} arpeggio-hairpin - A dynamic change during the roll: a vertical hairpin drawn left of the arpeggio sign. Honoured only with a rolled `arpeggio` (`up` / `up-arrow` / `down`).
+ * @attr {DynamicMarking} arpeggio-hairpin-from - Dynamic letter at the start of the roll (bottom end for an upward roll), placed outside the staff.
+ * @attr {DynamicMarking} arpeggio-hairpin-to - Dynamic letter at the end of the roll (top end for an upward roll), placed outside the staff.
+ * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
+ * @attr {string} grace - Comma-separated grace-note pitches preceding this note, e.g. `"F#,G"`. The property also accepts a `Note[]`.
+ * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.
+ * @attr {'acciaccatura' | 'appoggiatura' | 'trill'} grace-type - Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.
+ * @attr {GraceDuration} grace-duration - Note value drawn for the grace notes.
+ * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the main note. Defaults to `auto`.
+ * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group, independent of `dynamic`.
+ * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone note). The wavy line spans forward through this note's own `tie` chain — set `trill` once, not on every tied note.
+ * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
+ * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
+ * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
+ * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
+ * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the trill.
+ * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this note (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
+ * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
+ * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
+ * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note).
+ * @attr {OctaveDisplayMode} octave-mode - Set on the note that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
+ * @attr {boolean} octave-stop - Closes the currently open octave-transposition span at this note (inclusive).
+ * @attr {boolean} loco - Closes the currently open octave-transposition span at this note, adding a "loco" label alongside the closing corner. With no open span, renders a standalone "(loco)" reminder instead.
+ * @attr {'bracketed' | 'line-only'} octave-continuation - Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.
+ * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note). Ignored, with a warning, on a `triangle-up`/`triangle-down` note.
+ * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
+ * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
+ * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
+ * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
+ * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
+ * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
+ * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+ * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
+ * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
+ * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
+ *
+ * @example
+ * <music-staff clef="treble" time="4/4">
+ *   <music-note note="C" octave="5" duration="quarter" articulation="staccato"></music-note>
+ *   <music-note note="E" octave="5" duration="eighth"></music-note>
+ * </music-staff>
+ */
+export class NoteElement extends MaybeHTMLElement implements INoteElement {
+  static get observedAttributes(): string[] {
+    return [
+      'duration',
+      'note',
+      'octave',
+      'for',
+      'tie',
+      'lv-label',
+      'slur',
+      'glissando',
+      'glissando-hint',
+      'dynamic',
+      'dynamic-shared',
+      'dynamic-reminder',
+      'accidental-reminder',
+      'crescendo',
+      'decrescendo',
+      'diminuendo',
+      'articulation',
+      'stress',
+      'arpeggio',
+      'arpeggio-for',
+      'arpeggio-hairpin',
+      'arpeggio-hairpin-from',
+      'arpeggio-hairpin-to',
+      'arpeggiate',
+      'grace',
+      'grace-octave',
+      'grace-articulation',
+      'grace-type',
+      'grace-duration',
+      'grace-slur',
+      'grace-dynamic',
+      'trill',
+      'trill-line',
+      'trill-stop',
+      'trill-accidental',
+      'trill-note',
+      'trill-continuation',
+      'trill-finish',
+      'trill-finish-octave',
+      'trill-finish-slur',
+      'octave-shift',
+      'octave-mode',
+      'octave-stop',
+      'loco',
+      'octave-continuation',
+      'beam-group',
+      'shared-stem-for',
+      'slur-group',
+      'stem-direction',
+      'notehead',
+      'grace-notehead',
+      'tremolo',
+      'tremolo-tuplet',
+      'tremolo-label',
+      'articulation-repeat',
+      'tie-style',
+    ];
+  }
 
-    #stemUp = true;
-    #stemExtension = 0;
-    #dottedTieAcrossBarline = false;
-    #trillSignExtraLift = 0;
-    #articulationStemAnchorBeamLevels: number | null = null;
-    #augmentationDotRows: number[] | null = null;
-    #unisonPart: UnisonPart | null = null;
-    #augmentationDotShiftPx = 0;
-    #noFlags = false;
-    #nominalStaffY: number | null = null;
-    #lastNoteheadWarning: string | null = null;
-    #noStem = false;
-    #renderArpeggioSign = true;
-    #impliedArpeggio: ArpeggioType | null = null;
-    // undefined = no override, infer accidental from the `note` suffix;
-    // null = explicit override, suppress the accidental; value = explicit override, force this symbol
-    #showAccidental: AccidentalType | null | undefined = undefined;
-    #accidentalParenthesized = false;
-    #staffY: number | null = null;
-    #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
-    #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
-    #resolvedTrillPitch: ResolvedTrillPitch | null = null;
-    #batchDepth = 0;
-    #renderPending = false;
+  #stemUp = true;
+  #stemExtension = 0;
+  #dottedTieAcrossBarline = false;
+  #trillSignExtraLift = 0;
+  #articulationStemAnchorBeamLevels: number | null = null;
+  #augmentationDotRows: number[] | null = null;
+  #unisonPart: UnisonPart | null = null;
+  #augmentationDotShiftPx = 0;
+  #noFlags = false;
+  #nominalStaffY: number | null = null;
+  #lastNoteheadWarning: string | null = null;
+  #noStem = false;
+  #renderArpeggioSign = true;
+  #impliedArpeggio: ArpeggioType | null = null;
+  // undefined = no override, infer accidental from the `note` suffix;
+  // null = explicit override, suppress the accidental; value = explicit override, force this symbol
+  #showAccidental: AccidentalType | null | undefined = undefined;
+  #accidentalParenthesized = false;
+  #staffY: number | null = null;
+  #resolvedGraceAccidentals: (AccidentalType | null)[] | null = null;
+  #resolvedTrillFinishAccidentals: (AccidentalType | null)[] | null = null;
+  #resolvedTrillPitch: ResolvedTrillPitch | null = null;
+  #batchDepth = 0;
+  #renderPending = false;
 
-    constructor() {
-      super();
-      this.attachShadow({ mode: 'open' });
-    }
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
 
-    get duration(): DurationType {
-      return parseDuration(this.getAttribute('duration')) ?? 'quarter';
-    }
+  // Every read of this element's own attributes goes through these, so a
+  // subclass can withhold attributes it doesn't support.
+  protected readAttribute(name: string): string | null {
+    return this.getAttribute(name);
+  }
 
-    set duration(value: DurationType) {
-      this.setAttribute('duration', value);
-    }
+  protected readsAttribute(name: string): boolean {
+    return this.hasAttribute(name);
+  }
 
-    get note(): Note {
-      return (
-        (this.getAttribute('note') as Note | null) ??
-        this.#instrumentPosition?.note ??
-        'C'
-      );
-    }
+  get duration(): DurationType {
+    return parseDuration(this.readAttribute('duration')) ?? 'quarter';
+  }
 
-    set note(value: Note | null | undefined) {
-      if (value === null || value === undefined) {
-        this.removeAttribute('note');
-      } else {
-        this.setAttribute('note', value);
-      }
-    }
+  set duration(value: DurationType) {
+    this.setAttribute('duration', value);
+  }
 
-    get octave(): Octave | null {
-      const attribute = this.getAttribute('octave');
-      if (attribute === null) {
-        return this.#instrumentPosition?.octave ?? null;
-      }
-      const parsed = Number(attribute) as Octave;
-      return OCTAVES.includes(parsed) ? parsed : null;
-    }
+  get note(): Note {
+    return (
+      (this.readAttribute('note') as Note | null) ??
+      this.staffPosition?.note ??
+      'C'
+    );
+  }
 
-    set octave(val: Octave | null | undefined) {
-      if (val === null || val === undefined) {
-        this.removeAttribute('octave');
-      } else {
-        this.setAttribute('octave', String(val));
-      }
+  set note(value: Note | null | undefined) {
+    if (value === null || value === undefined) {
+      this.removeAttribute('note');
+    } else {
+      this.setAttribute('note', value);
     }
+  }
 
-    get instrument(): PercussionInstrument | null {
-      return parsePercussionInstrument(this.getAttribute('instrument'));
+  get octave(): Octave | null {
+    const attribute = this.readAttribute('octave');
+    if (attribute === null) {
+      return this.staffPosition?.octave ?? null;
     }
+    const parsed = Number(attribute) as Octave;
+    return OCTAVES.includes(parsed) ? parsed : null;
+  }
 
-    set instrument(value: PercussionInstrument | null | undefined) {
-      if (value === null || value === undefined) {
-        this.removeAttribute('instrument');
-      } else {
-        this.setAttribute('instrument', value);
-      }
+  set octave(val: Octave | null | undefined) {
+    if (val === null || val === undefined) {
+      this.removeAttribute('octave');
+    } else {
+      this.setAttribute('octave', String(val));
     }
+  }
 
-    get #instrumentPosition() {
-      const instrument = this.instrument;
-      return instrument === null ? null : PERCUSSION_INSTRUMENT_MAP[instrument];
-    }
+  // A fixed position used where `note`/`octave`/`notehead` aren't authored;
+  // a drum note supplies its instrument's.
+  protected get staffPosition(): StaffPosition | null {
+    return null;
+  }
 
-    get stemUp(): boolean {
-      return forcedStemUp(this.notehead) ?? this.#stemUp;
-    }
-    set stemUp(v: boolean) {
-      this.#stemUp = v;
-      this.#scheduleRender();
-    }
+  get stemUp(): boolean {
+    return forcedStemUp(this.notehead) ?? this.#stemUp;
+  }
+  set stemUp(v: boolean) {
+    this.#stemUp = v;
+    this.#scheduleRender();
+  }
 
-    get stemExtension(): number {
+  get stemExtension(): number {
+    return this.#stemExtension;
+  }
+  set stemExtension(v: number) {
+    if (v === this.#stemExtension) {
+      return;
+    }
+    this.#stemExtension = v;
+    this.#scheduleRender();
+  }
+
+  get trillSignExtraLift(): number {
+    return this.#trillSignExtraLift;
+  }
+  set trillSignExtraLift(v: number) {
+    if (v === this.#trillSignExtraLift) {
+      return;
+    }
+    this.#trillSignExtraLift = v;
+    this.#scheduleRender();
+  }
+
+  get articulationStemAnchorBeamLevels(): number | null {
+    return this.#articulationStemAnchorBeamLevels;
+  }
+  set articulationStemAnchorBeamLevels(v: number | null) {
+    if (v === this.#articulationStemAnchorBeamLevels) {
+      return;
+    }
+    this.#articulationStemAnchorBeamLevels = v;
+    this.#scheduleRender();
+  }
+
+  get augmentationDotRows(): number[] | null {
+    return this.#augmentationDotRows;
+  }
+  set augmentationDotRows(v: number[] | null) {
+    const current = this.#augmentationDotRows;
+    if (
+      v === current ||
+      (v !== null &&
+        current !== null &&
+        v.length === current.length &&
+        v.every((row, i) => row === current[i]))
+    ) {
+      return;
+    }
+    this.#augmentationDotRows = v;
+    this.#scheduleRender();
+  }
+
+  get augmentationDotShiftPx(): number {
+    return this.#augmentationDotShiftPx;
+  }
+  set augmentationDotShiftPx(v: number) {
+    if (v === this.#augmentationDotShiftPx) {
+      return;
+    }
+    this.#augmentationDotShiftPx = v;
+    this.#scheduleRender();
+  }
+
+  get unisonPart(): UnisonPart | null {
+    return this.#unisonPart;
+  }
+  set unisonPart(v: UnisonPart | null) {
+    const current = this.#unisonPart;
+    if (
+      v === current ||
+      (v !== null && current !== null && v.omitsHead === current.omitsHead)
+    ) {
+      return;
+    }
+    this.#unisonPart = v;
+    this.#scheduleRender();
+  }
+
+  get noFlags(): boolean {
+    return this.#noFlags;
+  }
+  set noFlags(v: boolean) {
+    this.#noFlags = v;
+    this.#scheduleRender();
+  }
+
+  get noStem(): boolean {
+    return this.#noStem;
+  }
+  set noStem(v: boolean) {
+    this.#noStem = v;
+    this.#scheduleRender();
+  }
+
+  get tie(): TieValue | null {
+    return parseTieValue(this.readAttribute('tie'));
+  }
+  set tie(value: TieValue | null) {
+    if (value === null) {
+      this.removeAttribute('tie');
+    } else {
+      this.setAttribute('tie', value);
+    }
+  }
+
+  get lvLabel(): boolean {
+    return this.readsAttribute('lv-label');
+  }
+  set lvLabel(value: boolean) {
+    if (value) {
+      this.setAttribute('lv-label', '');
+    } else {
+      this.removeAttribute('lv-label');
+    }
+  }
+
+  // see #showAccidental declaration for explanation of the three possible types.
+  get showAccidental(): AccidentalType | null | undefined {
+    return this.#showAccidental;
+  }
+  set showAccidental(value: AccidentalType | null | undefined) {
+    this.#showAccidental = value;
+    this.#scheduleRender();
+  }
+
+  get accidentalParenthesized(): boolean {
+    return this.#accidentalParenthesized;
+  }
+  set accidentalParenthesized(value: boolean) {
+    this.#accidentalParenthesized = value;
+    this.#scheduleRender();
+  }
+
+  get staffY(): number | null {
+    return this.#staffY;
+  }
+  set staffY(value: number | null) {
+    this.#staffY = value;
+    this.#scheduleRender();
+  }
+
+  get nominalStaffY(): number | null {
+    return this.#nominalStaffY;
+  }
+  set nominalStaffY(value: number | null) {
+    this.#nominalStaffY = value;
+    this.#scheduleRender();
+  }
+
+  get slur(): ConnectorRole | null {
+    return parseConnectorRole(this.readAttribute('slur'));
+  }
+  set slur(value: ConnectorRole | null) {
+    if (value === null) {
+      this.removeAttribute('slur');
+    } else {
+      this.setAttribute('slur', value);
+    }
+  }
+
+  get glissando(): ConnectorRole | null {
+    return parseConnectorRole(this.readAttribute('glissando'));
+  }
+  set glissando(value: ConnectorRole | null) {
+    if (value === null) {
+      this.removeAttribute('glissando');
+    } else {
+      this.setAttribute('glissando', value);
+    }
+  }
+
+  get glissandoHint(): GlissandoHint | null {
+    return parseGlissandoHint(this.readAttribute('glissando-hint'));
+  }
+  set glissandoHint(value: GlissandoHint | null) {
+    if (value === null) {
+      this.removeAttribute('glissando-hint');
+    } else {
+      this.setAttribute('glissando-hint', value);
+    }
+  }
+
+  get dynamic(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('dynamic'));
+  }
+  set dynamic(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic');
+    } else {
+      this.setAttribute('dynamic', value);
+    }
+  }
+
+  get dynamicShared(): boolean {
+    return this.readsAttribute('dynamic-shared');
+  }
+  set dynamicShared(value: boolean) {
+    if (value) {
+      this.setAttribute('dynamic-shared', '');
+    } else {
+      this.removeAttribute('dynamic-shared');
+    }
+  }
+
+  get dynamicReminder(): boolean {
+    return this.readsAttribute('dynamic-reminder');
+  }
+  set dynamicReminder(value: boolean) {
+    this.toggleAttribute('dynamic-reminder', value);
+  }
+
+  get accidentalReminder(): boolean {
+    return this.readsAttribute('accidental-reminder');
+  }
+  set accidentalReminder(value: boolean) {
+    this.toggleAttribute('accidental-reminder', value);
+  }
+
+  get crescendo(): HairpinRole | null {
+    return parseConnectorRole(this.readAttribute('crescendo'));
+  }
+  set crescendo(value: HairpinRole | null) {
+    if (value === null) {
+      this.removeAttribute('crescendo');
+    } else {
+      this.setAttribute('crescendo', value);
+    }
+  }
+
+  get decrescendo(): HairpinRole | null {
+    return parseConnectorRole(this.readAttribute('decrescendo'));
+  }
+  set decrescendo(value: HairpinRole | null) {
+    if (value === null) {
+      this.removeAttribute('decrescendo');
+    } else {
+      this.setAttribute('decrescendo', value);
+    }
+  }
+
+  // Alias for decrescendo — always mirrors it, never holds separate state.
+  get diminuendo(): HairpinRole | null {
+    return this.decrescendo;
+  }
+  set diminuendo(value: HairpinRole | null) {
+    this.decrescendo = value;
+  }
+
+  get articulation(): ArticulationType | null {
+    return parseArticulation(this.readAttribute('articulation'));
+  }
+  set articulation(value: ArticulationType | null) {
+    if (value === null) {
+      this.removeAttribute('articulation');
+    } else {
+      this.setAttribute('articulation', value);
+    }
+  }
+
+  get stress(): StressType | null {
+    return parseStress(this.readAttribute('stress'));
+  }
+  set stress(value: StressType | null) {
+    if (value === null) {
+      this.removeAttribute('stress');
+    } else {
+      this.setAttribute('stress', value);
+    }
+  }
+
+  get arpeggio(): ArpeggioType | null {
+    return parseArpeggio(this.readAttribute('arpeggio'));
+  }
+  set arpeggio(value: ArpeggioType | null) {
+    if (value === null) {
+      this.removeAttribute('arpeggio');
+    } else {
+      this.setAttribute('arpeggio', value);
+    }
+  }
+
+  // `id` of the upper-staff element this element continues an unbroken
+  // cross-staff arpeggio from. Resolved by the ancestor <music-measure>.
+  get arpeggioFor(): string | null {
+    return this.readAttribute('arpeggio-for');
+  }
+  set arpeggioFor(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('arpeggio-for');
+    } else {
+      this.setAttribute('arpeggio-for', value);
+    }
+  }
+
+  // `id` shared by every element across a measure's two adjacent grand-staff
+  // staves that joins one cross-staff double-stemmed beam group. Resolved
+  // by the ancestor <music-measure>.
+  // Ignored on a triangle, which stands alone, and on a <music-tremolo>
+  // member, which its own tremolo beams.
+  get beamGroup(): string | null {
+    return isTriangle(this.notehead) ||
+      this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+      ? null
+      : this.readAttribute('beam-group');
+  }
+  set beamGroup(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('beam-group');
+    } else {
+      this.setAttribute('beam-group', value);
+    }
+  }
+
+  // `id` shared by every breakpoint note of one continuous multi-leg
+  // cross-staff phrase slur. Resolved by the ancestor <music-measure> /
+  // <music-composition>.
+  get slurGroup(): string | null {
+    return this.readAttribute('slur-group');
+  }
+  set slurGroup(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('slur-group');
+    } else {
+      this.setAttribute('slur-group', value);
+    }
+  }
+
+  get notehead(): NoteheadType {
+    return this.ownNotehead ?? 'normal';
+  }
+
+  set notehead(value: NoteheadType | null) {
+    if (value === null) {
+      this.removeAttribute('notehead');
+    } else {
+      this.setAttribute('notehead', value);
+    }
+  }
+
+  // The authored notehead, else the fixed position's; null leaves a chord
+  // tone to the chord's own notehead.
+  get ownNotehead(): NoteheadType | null {
+    return (
+      parseNotehead(this.readAttribute('notehead')) ??
+      this.staffPosition?.notehead ??
+      null
+    );
+  }
+
+  // See noteHeadLeftOverhangPx.
+  get headLeftOverhangPx(): number {
+    return noteHeadLeftOverhangPx(this.stemUp, this.duration, this.notehead);
+  }
+
+  get augmentationDotsRightEdgePx(): number | null {
+    return (
+      noteAugmentationDotLayout({
+        duration: this.duration,
+        stemUp: this.stemUp,
+        noFlags: this.#noFlags,
+        noStem: this.#noStem,
+        notehead: this.notehead,
+        stemExtension: this.#drawnStemExtension(),
+        staffY: this.#staffY,
+        rowStaffYs: this.#augmentationDotRows,
+        columnShiftPx: this.#augmentationDotShiftPx,
+      })?.rightEdgeX ?? null
+    );
+  }
+
+  // Author override for stemUp; null leaves the pitch, voice or beam-group
+  // default.
+  get stemDirection(): StemDirection | null {
+    return parseStemDirection(this.readAttribute('stem-direction'));
+  }
+  set stemDirection(value: StemDirection | null) {
+    if (value === null) {
+      this.removeAttribute('stem-direction');
+    } else {
+      this.setAttribute('stem-direction', value);
+    }
+  }
+
+  // A <music-tremolo>'s own beams stand for the repetition, so a member's
+  // strokes are ignored.
+  get tremolo(): TremoloValue | null {
+    if (this.parentElement?.nodeName === MUSIC_TREMOLO_NODE) {
+      return null;
+    }
+    return parseTremolo(this.readAttribute('tremolo'));
+  }
+  set tremolo(value: TremoloValue | null) {
+    if (value === null) {
+      this.removeAttribute('tremolo');
+    } else {
+      this.setAttribute('tremolo', String(value));
+    }
+  }
+
+  get tremoloTuplet(): number | null {
+    return parseTremoloTuplet(this.readAttribute('tremolo-tuplet'));
+  }
+  set tremoloTuplet(value: number | null) {
+    if (value === null) {
+      this.removeAttribute('tremolo-tuplet');
+    } else {
+      this.setAttribute('tremolo-tuplet', String(value));
+    }
+  }
+
+  get tremoloLabel(): TremoloLabel | null {
+    return parseTremoloLabel(this.readAttribute('tremolo-label'));
+  }
+  set tremoloLabel(value: TremoloLabel | null) {
+    if (value === null) {
+      this.removeAttribute('tremolo-label');
+    } else {
+      this.setAttribute('tremolo-label', value);
+    }
+  }
+
+  get articulationRepeat(): boolean {
+    return this.readsAttribute('articulation-repeat');
+  }
+  set articulationRepeat(value: boolean) {
+    this.toggleAttribute('articulation-repeat', value);
+  }
+
+  get tieStyle(): TieStyle {
+    return parseTieStyle(this.readAttribute('tie-style'));
+  }
+  set tieStyle(value: TieStyle) {
+    if (value === 'solid') {
+      this.removeAttribute('tie-style');
+    } else {
+      this.setAttribute('tie-style', value);
+    }
+  }
+
+  get dottedTieAcrossBarline(): boolean {
+    return this.#dottedTieAcrossBarline;
+  }
+  set dottedTieAcrossBarline(value: boolean) {
+    if (value === this.#dottedTieAcrossBarline) {
+      return;
+    }
+    this.#dottedTieAcrossBarline = value;
+    // The staff re-resolves accidentals on a full re-layout.
+    this.dispatchEvent(
+      new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  #repeatCount(): number {
+    return articulationRepeatCount({
+      articulationRepeat: this.articulationRepeat,
+      articulation: this.articulation,
+      tremolo: this.tremolo,
+      tuplet: this.tremoloTuplet,
+      duration: this.duration,
+    });
+  }
+
+  // Standalone, nothing else lengthens the stem for its tremolo strokes.
+  #drawnStemExtension(): number {
+    if (this.closest(STAFF_TAGS)) {
       return this.#stemExtension;
     }
-    set stemExtension(v: number) {
-      if (v === this.#stemExtension) {
-        return;
+    return unbeamedTremoloStemExtensionPx({
+      tremolo: this.tremolo,
+      duration: this.duration,
+      headYs: [0],
+      stemUp: this.stemUp,
+      staff: null,
+      stemExtensionPx: this.#stemExtension,
+    });
+  }
+
+  // `id` of the other-staff element this note shares a single stem with.
+  // Resolved by the ancestor <music-measure>.
+  // Ignored on a <music-tremolo> member, whose stem its tremolo sets.
+  get sharedStemFor(): string | null {
+    return this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+      ? null
+      : this.readAttribute('shared-stem-for');
+  }
+  set sharedStemFor(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('shared-stem-for');
+    } else {
+      this.setAttribute('shared-stem-for', value);
+    }
+  }
+
+  // Dynamic change during the roll — a vertical hairpin left of the arpeggio
+  // sign. Accepts `crescendo` / `decrescendo` (`diminuendo` normalizes to
+  // `decrescendo`). Honoured only alongside a wave-variant `arpeggio`.
+  get arpeggioHairpin(): HairpinKind | null {
+    return parseHairpinKind(this.readAttribute('arpeggio-hairpin'));
+  }
+  set arpeggioHairpin(value: HairpinKind | null) {
+    if (value === null) {
+      this.removeAttribute('arpeggio-hairpin');
+    } else {
+      this.setAttribute('arpeggio-hairpin', value);
+    }
+  }
+
+  get arpeggioHairpinFrom(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('arpeggio-hairpin-from'));
+  }
+  set arpeggioHairpinFrom(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('arpeggio-hairpin-from');
+    } else {
+      this.setAttribute('arpeggio-hairpin-from', value);
+    }
+  }
+
+  get arpeggioHairpinTo(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('arpeggio-hairpin-to'));
+  }
+  set arpeggioHairpinTo(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('arpeggio-hairpin-to');
+    } else {
+      this.setAttribute('arpeggio-hairpin-to', value);
+    }
+  }
+
+  // The hairpin kind actually drawn — `arpeggioHairpin` when the effective
+  // arpeggio (own, implied, or the `arpeggio-for` continuation) is a rolled
+  // wave; null otherwise.
+  #effectiveArpeggioHairpin(): HairpinKind | null {
+    const hairpin = this.arpeggioHairpin;
+    if (hairpin === null) {
+      return null;
+    }
+    const arpeggio =
+      this.arpeggio ??
+      this.#impliedArpeggio ??
+      (this.arpeggioFor !== null ? 'up' : null);
+    return arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down'
+      ? hairpin
+      : null;
+  }
+
+  get renderArpeggioSign(): boolean {
+    return this.#renderArpeggioSign;
+  }
+  set renderArpeggioSign(value: boolean) {
+    if (this.#renderArpeggioSign === value) {
+      return;
+    }
+    this.#renderArpeggioSign = value;
+    this.#scheduleRender();
+  }
+
+  get arpeggiate(): ConnectorRole | null {
+    return parseConnectorRole(
+      this.readAttribute('arpeggiate')
+    ) as ConnectorRole | null;
+  }
+  set arpeggiate(value: ConnectorRole | null) {
+    if (value === null) {
+      this.removeAttribute('arpeggiate');
+    } else {
+      this.setAttribute('arpeggiate', value);
+    }
+  }
+
+  get impliedArpeggio(): ArpeggioType | null {
+    return this.#impliedArpeggio;
+  }
+  set impliedArpeggio(value: ArpeggioType | null) {
+    if (this.#impliedArpeggio === value) {
+      return;
+    }
+    this.#impliedArpeggio = value;
+    this.#scheduleRender();
+  }
+
+  // Marks a trill start. The line spans forward through this note's own
+  // `tie` chain — see NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE in
+  // attributeChangedCallback.
+  get trill(): boolean {
+    return this.readsAttribute('trill');
+  }
+  set trill(value: boolean) {
+    if (value) {
+      this.setAttribute('trill', '');
+    } else {
+      this.removeAttribute('trill');
+    }
+  }
+
+  get trillLine(): TrillLineMode {
+    return parseTrillLineMode(this.readAttribute('trill-line'));
+  }
+  set trillLine(value: TrillLineMode) {
+    this.setAttribute('trill-line', value);
+  }
+
+  get trillStop(): boolean {
+    return this.readsAttribute('trill-stop');
+  }
+  set trillStop(value: boolean) {
+    if (value) {
+      this.setAttribute('trill-stop', '');
+    } else {
+      this.removeAttribute('trill-stop');
+    }
+  }
+
+  // Overrides only the accidental of the trilling (auxiliary) pitch —
+  // normally the diatonic upper neighbor as modified by the key signature.
+  // Ignored (with a warning) when trill-note is also set.
+  get trillAccidental(): AccidentalType | null {
+    return parseAccidentalType(this.readAttribute('trill-accidental'));
+  }
+  set trillAccidental(value: AccidentalType | null) {
+    if (value === null) {
+      this.removeAttribute('trill-accidental');
+    } else {
+      this.setAttribute('trill-accidental', value);
+    }
+  }
+
+  // Full override of the trilling pitch — letter and accidental — rendered
+  // as a small written notehead in parentheses after the main notehead.
+  // Wins over trill-accidental when both are set.
+  get trillNote(): Note | null {
+    return (this.readAttribute('trill-note') as Note) ?? null;
+  }
+  set trillNote(value: Note | null) {
+    if (value === null) {
+      this.removeAttribute('trill-note');
+    } else {
+      this.setAttribute('trill-note', value);
+    }
+  }
+
+  // Meaningful only on the trill-starting element — controls the
+  // system-break restatement, resolved by the ancestor composition.
+  get trillContinuation(): TrillContinuationMode {
+    return parseTrillContinuationMode(this.readAttribute('trill-continuation'));
+  }
+  set trillContinuation(value: TrillContinuationMode) {
+    this.setAttribute('trill-continuation', value);
+  }
+
+  // Set by the staff to the resolved trilling pitch. null when not
+  // trilling, or in standalone mode.
+  get resolvedTrillPitch(): ResolvedTrillPitch | null {
+    return this.#resolvedTrillPitch;
+  }
+  set resolvedTrillPitch(value: ResolvedTrillPitch | null) {
+    this.#resolvedTrillPitch = value;
+    this.#scheduleRender();
+  }
+
+  get grace(): Note[] | null {
+    return parseGraceNotes(this.readAttribute('grace'));
+  }
+  // Accepts the rich array or the comma-separated attribute string (React and
+  // Storybook set the JSX prop as a property, not an attribute).
+  set grace(value: GraceNotesType) {
+    const attr = graceListToAttr(value, parseGraceNotes);
+    if (attr === null) {
+      this.removeAttribute('grace');
+    } else {
+      this.setAttribute('grace', attr);
+    }
+  }
+
+  get graceOctave(): (Octave | null)[] | null {
+    return parseGraceOctaves(this.readAttribute('grace-octave'));
+  }
+  set graceOctave(value: GraceOctavesType) {
+    const attr = graceListToAttr(value, parseGraceOctaves);
+    if (attr === null) {
+      this.removeAttribute('grace-octave');
+    } else {
+      this.setAttribute('grace-octave', attr);
+    }
+  }
+
+  get graceArticulation(): (ArticulationType | null)[] | null {
+    return parseGraceArticulations(this.readAttribute('grace-articulation'));
+  }
+  set graceArticulation(value: GraceArticulationsType) {
+    const attr = graceListToAttr(value, parseGraceArticulations);
+    if (attr === null) {
+      this.removeAttribute('grace-articulation');
+    } else {
+      this.setAttribute('grace-articulation', attr);
+    }
+  }
+
+  get graceNotehead(): (NoteheadType | null)[] | null {
+    return parseGraceNoteheads(this.readAttribute('grace-notehead'));
+  }
+  set graceNotehead(value: GraceNoteheadsType) {
+    const attr = graceListToAttr(value, parseGraceNoteheads);
+    if (attr === null) {
+      this.removeAttribute('grace-notehead');
+    } else {
+      this.setAttribute('grace-notehead', attr);
+    }
+  }
+
+  get graceHeadLeftOverhangsPx(): number[] {
+    return graceHeadLeftOverhangsPx(
+      this.graceNotehead,
+      this.grace?.length ?? 0,
+      this.graceDuration
+    );
+  }
+
+  get graceType(): GraceType {
+    return parseGraceType(this.readAttribute('grace-type')) ?? 'acciaccatura';
+  }
+  set graceType(value: GraceType | null) {
+    if (value === null) {
+      this.removeAttribute('grace-type');
+    } else {
+      this.setAttribute('grace-type', value);
+    }
+  }
+
+  get graceDuration(): GraceDuration | null {
+    return parseGraceDuration(this.readAttribute('grace-duration'));
+  }
+  set graceDuration(value: GraceDuration | null) {
+    if (value === null) {
+      this.removeAttribute('grace-duration');
+    } else {
+      this.setAttribute('grace-duration', value);
+    }
+  }
+
+  get graceSlur(): GraceSlur {
+    return parseGraceSlur(this.readAttribute('grace-slur')) ?? 'auto';
+  }
+  set graceSlur(value: GraceSlur | null) {
+    if (value === null) {
+      this.removeAttribute('grace-slur');
+    } else {
+      this.setAttribute('grace-slur', value);
+    }
+  }
+
+  get resolvedGraceAccidentals(): (AccidentalType | null)[] | null {
+    return this.#resolvedGraceAccidentals;
+  }
+  set resolvedGraceAccidentals(value: (AccidentalType | null)[] | null) {
+    this.#resolvedGraceAccidentals = value;
+    this.#scheduleRender();
+  }
+
+  get graceDynamic(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('grace-dynamic'));
+  }
+  set graceDynamic(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('grace-dynamic');
+    } else {
+      this.setAttribute('grace-dynamic', value);
+    }
+  }
+
+  // Grace note(s) placed after this note (a trill's finishing figure) —
+  // same shape and fallback rules as `grace`/`graceOctave`.
+  get trillFinish(): Note[] | null {
+    return parseGraceNotes(this.readAttribute('trill-finish'));
+  }
+  set trillFinish(value: GraceNotesType) {
+    const attr = graceListToAttr(value, parseGraceNotes);
+    if (attr === null) {
+      this.removeAttribute('trill-finish');
+    } else {
+      this.setAttribute('trill-finish', attr);
+    }
+  }
+
+  get trillFinishOctave(): (Octave | null)[] | null {
+    return parseGraceOctaves(this.readAttribute('trill-finish-octave'));
+  }
+  set trillFinishOctave(value: GraceOctavesType) {
+    const attr = graceListToAttr(value, parseGraceOctaves);
+    if (attr === null) {
+      this.removeAttribute('trill-finish-octave');
+    } else {
+      this.setAttribute('trill-finish-octave', attr);
+    }
+  }
+
+  get trillFinishSlur(): TrillFinishSlur {
+    return parseTrillFinishSlur(this.readAttribute('trill-finish-slur'));
+  }
+  set trillFinishSlur(value: TrillFinishSlur) {
+    this.setAttribute('trill-finish-slur', value);
+  }
+
+  get resolvedTrillFinishAccidentals(): (AccidentalType | null)[] | null {
+    return this.#resolvedTrillFinishAccidentals;
+  }
+  set resolvedTrillFinishAccidentals(value: (AccidentalType | null)[] | null) {
+    this.#resolvedTrillFinishAccidentals = value;
+    this.#scheduleRender();
+  }
+
+  // Starts an octave-transposition span at this note. The ancestor staff
+  // resolves the span over its own element stream — see
+  // NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE in attributeChangedCallback.
+  get octaveShift(): OctaveShiftAmount | null {
+    return parseOctaveShiftAmount(this.readAttribute('octave-shift'));
+  }
+  set octaveShift(value: OctaveShiftAmount | null) {
+    if (value === null) {
+      this.removeAttribute('octave-shift');
+    } else {
+      this.setAttribute('octave-shift', value);
+    }
+  }
+
+  // Display mode for the span this note starts. Resolved to 'sign' at
+  // span-open time by rules/octaveRules.ts, not here — see
+  // parseOctaveDisplayMode.
+  get octaveMode(): OctaveDisplayMode | null {
+    return parseOctaveDisplayMode(this.readAttribute('octave-mode'));
+  }
+  set octaveMode(value: OctaveDisplayMode | null) {
+    if (value === null) {
+      this.removeAttribute('octave-mode');
+    } else {
+      this.setAttribute('octave-mode', value);
+    }
+  }
+
+  get octaveStop(): boolean {
+    return this.readsAttribute('octave-stop');
+  }
+  set octaveStop(value: boolean) {
+    if (value) {
+      this.setAttribute('octave-stop', '');
+    } else {
+      this.removeAttribute('octave-stop');
+    }
+  }
+
+  get loco(): boolean {
+    return this.readsAttribute('loco');
+  }
+  set loco(value: boolean) {
+    if (value) {
+      this.setAttribute('loco', '');
+    } else {
+      this.removeAttribute('loco');
+    }
+  }
+
+  // Meaningful only on the octave-span-starting element — controls the
+  // system-break restatement, resolved by the ancestor composition.
+  get octaveContinuation(): OctaveContinuationMode {
+    return parseOctaveContinuationMode(
+      this.readAttribute('octave-continuation')
+    );
+  }
+  set octaveContinuation(value: OctaveContinuationMode) {
+    this.setAttribute('octave-continuation', value);
+  }
+
+  batchUpdate(fn: () => void): void {
+    this.#batchDepth++;
+    try {
+      fn();
+    } finally {
+      this.#batchDepth--;
+      if (this.#batchDepth === 0 && this.#renderPending) {
+        this.#renderPending = false;
+        this.render();
       }
-      this.#stemExtension = v;
-      this.#scheduleRender();
+    }
+  }
+
+  #scheduleRender(): void {
+    if (this.#batchDepth > 0) {
+      this.#renderPending = true;
+    } else if (this.shadowRoot) {
+      this.render();
+    }
+  }
+
+  #warnedDynamicReminder = false;
+
+  // A bracketed reminder needs a dynamic to bracket; warns once until one
+  // is set.
+  #warnAboutDynamicReminder(): void {
+    const missing = this.dynamicReminder && this.dynamic === null;
+    if (missing && this.isConnected && !this.#warnedDynamicReminder) {
+      console.warn(
+        `[music-note] dynamic-reminder needs a dynamic to draw in brackets`
+      );
+    }
+    this.#warnedDynamicReminder = missing && this.isConnected;
+  }
+
+  connectedCallback(): void {
+    upgradeShadowedProperties(this);
+    this.#warnAboutTremolo(null, null);
+    this.#warnAboutDynamicReminder();
+    this.render();
+  }
+
+  attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ): void {
+    if (oldValue === newValue) {
+      return;
     }
 
-    get trillSignExtraLift(): number {
-      return this.#trillSignExtraLift;
+    if (name === 'duration') {
+      warnIfInvalidDuration(this.localName, newValue);
     }
-    set trillSignExtraLift(v: number) {
-      if (v === this.#trillSignExtraLift) {
-        return;
+
+    // `diminuendo` is rewritten to `decrescendo`, even before connecting.
+    // The removeAttribute below re-enters with null, which must be a no-op.
+    if (name === 'diminuendo') {
+      if (newValue !== null) {
+        this.setAttribute('decrescendo', newValue);
+        this.removeAttribute('diminuendo');
       }
-      this.#trillSignExtraLift = v;
-      this.#scheduleRender();
+      return;
     }
 
-    get articulationStemAnchorBeamLevels(): number | null {
-      return this.#articulationStemAnchorBeamLevels;
-    }
-    set articulationStemAnchorBeamLevels(v: number | null) {
-      if (v === this.#articulationStemAnchorBeamLevels) {
-        return;
-      }
-      this.#articulationStemAnchorBeamLevels = v;
-      this.#scheduleRender();
-    }
-
-    get augmentationDotRows(): number[] | null {
-      return this.#augmentationDotRows;
-    }
-    set augmentationDotRows(v: number[] | null) {
-      const current = this.#augmentationDotRows;
-      if (
-        v === current ||
-        (v !== null &&
-          current !== null &&
-          v.length === current.length &&
-          v.every((row, i) => row === current[i]))
-      ) {
-        return;
-      }
-      this.#augmentationDotRows = v;
-      this.#scheduleRender();
-    }
-
-    get augmentationDotShiftPx(): number {
-      return this.#augmentationDotShiftPx;
-    }
-    set augmentationDotShiftPx(v: number) {
-      if (v === this.#augmentationDotShiftPx) {
-        return;
-      }
-      this.#augmentationDotShiftPx = v;
-      this.#scheduleRender();
-    }
-
-    get unisonPart(): UnisonPart | null {
-      return this.#unisonPart;
-    }
-    set unisonPart(v: UnisonPart | null) {
-      const current = this.#unisonPart;
-      if (
-        v === current ||
-        (v !== null && current !== null && v.omitsHead === current.omitsHead)
-      ) {
-        return;
-      }
-      this.#unisonPart = v;
-      this.#scheduleRender();
-    }
-
-    get noFlags(): boolean {
-      return this.#noFlags;
-    }
-    set noFlags(v: boolean) {
-      this.#noFlags = v;
-      this.#scheduleRender();
-    }
-
-    get noStem(): boolean {
-      return this.#noStem;
-    }
-    set noStem(v: boolean) {
-      this.#noStem = v;
-      this.#scheduleRender();
-    }
-
-    get tie(): TieValue | null {
-      return parseTieValue(this.getAttribute('tie'));
-    }
-    set tie(value: TieValue | null) {
-      if (value === null) {
-        this.removeAttribute('tie');
-      } else {
-        this.setAttribute('tie', value);
-      }
-    }
-
-    get lvLabel(): boolean {
-      return this.hasAttribute('lv-label');
-    }
-    set lvLabel(value: boolean) {
-      if (value) {
-        this.setAttribute('lv-label', '');
-      } else {
-        this.removeAttribute('lv-label');
-      }
-    }
-
-    // see #showAccidental declaration for explanation of the three possible types.
-    get showAccidental(): AccidentalType | null | undefined {
-      return this.#showAccidental;
-    }
-    set showAccidental(value: AccidentalType | null | undefined) {
-      this.#showAccidental = value;
-      this.#scheduleRender();
-    }
-
-    get accidentalParenthesized(): boolean {
-      return this.#accidentalParenthesized;
-    }
-    set accidentalParenthesized(value: boolean) {
-      this.#accidentalParenthesized = value;
-      this.#scheduleRender();
-    }
-
-    get staffY(): number | null {
-      return this.#staffY;
-    }
-    set staffY(value: number | null) {
-      this.#staffY = value;
-      this.#scheduleRender();
-    }
-
-    get nominalStaffY(): number | null {
-      return this.#nominalStaffY;
-    }
-    set nominalStaffY(value: number | null) {
-      this.#nominalStaffY = value;
-      this.#scheduleRender();
-    }
-
-    get slur(): ConnectorRole | null {
-      return parseConnectorRole(this.getAttribute('slur'));
-    }
-    set slur(value: ConnectorRole | null) {
-      if (value === null) {
-        this.removeAttribute('slur');
-      } else {
-        this.setAttribute('slur', value);
-      }
-    }
-
-    get glissando(): ConnectorRole | null {
-      return parseConnectorRole(this.getAttribute('glissando'));
-    }
-    set glissando(value: ConnectorRole | null) {
-      if (value === null) {
-        this.removeAttribute('glissando');
-      } else {
-        this.setAttribute('glissando', value);
-      }
-    }
-
-    get glissandoHint(): GlissandoHint | null {
-      return parseGlissandoHint(this.getAttribute('glissando-hint'));
-    }
-    set glissandoHint(value: GlissandoHint | null) {
-      if (value === null) {
-        this.removeAttribute('glissando-hint');
-      } else {
-        this.setAttribute('glissando-hint', value);
-      }
-    }
-
-    get dynamic(): DynamicMarking | null {
-      return parseDynamicMarking(this.getAttribute('dynamic'));
-    }
-    set dynamic(value: DynamicMarking | null) {
-      if (value === null) {
-        this.removeAttribute('dynamic');
-      } else {
-        this.setAttribute('dynamic', value);
-      }
-    }
-
-    get dynamicShared(): boolean {
-      return this.hasAttribute('dynamic-shared');
-    }
-    set dynamicShared(value: boolean) {
-      if (value) {
-        this.setAttribute('dynamic-shared', '');
-      } else {
-        this.removeAttribute('dynamic-shared');
-      }
-    }
-
-    get dynamicReminder(): boolean {
-      return this.hasAttribute('dynamic-reminder');
-    }
-    set dynamicReminder(value: boolean) {
-      this.toggleAttribute('dynamic-reminder', value);
-    }
-
-    get accidentalReminder(): boolean {
-      return this.hasAttribute('accidental-reminder');
-    }
-    set accidentalReminder(value: boolean) {
-      this.toggleAttribute('accidental-reminder', value);
-    }
-
-    get crescendo(): HairpinRole | null {
-      return parseConnectorRole(this.getAttribute('crescendo'));
-    }
-    set crescendo(value: HairpinRole | null) {
-      if (value === null) {
-        this.removeAttribute('crescendo');
-      } else {
-        this.setAttribute('crescendo', value);
-      }
-    }
-
-    get decrescendo(): HairpinRole | null {
-      return parseConnectorRole(this.getAttribute('decrescendo'));
-    }
-    set decrescendo(value: HairpinRole | null) {
-      if (value === null) {
-        this.removeAttribute('decrescendo');
-      } else {
-        this.setAttribute('decrescendo', value);
-      }
-    }
-
-    // Alias for decrescendo — always mirrors it, never holds separate state.
-    get diminuendo(): HairpinRole | null {
-      return this.decrescendo;
-    }
-    set diminuendo(value: HairpinRole | null) {
-      this.decrescendo = value;
-    }
-
-    get articulation(): ArticulationType | null {
-      return parseArticulation(this.getAttribute('articulation'));
-    }
-    set articulation(value: ArticulationType | null) {
-      if (value === null) {
-        this.removeAttribute('articulation');
-      } else {
-        this.setAttribute('articulation', value);
-      }
-    }
-
-    get stress(): StressType | null {
-      return parseStress(this.getAttribute('stress'));
-    }
-    set stress(value: StressType | null) {
-      if (value === null) {
-        this.removeAttribute('stress');
-      } else {
-        this.setAttribute('stress', value);
-      }
-    }
-
-    get arpeggio(): ArpeggioType | null {
-      return parseArpeggio(this.getAttribute('arpeggio'));
-    }
-    set arpeggio(value: ArpeggioType | null) {
-      if (value === null) {
-        this.removeAttribute('arpeggio');
-      } else {
-        this.setAttribute('arpeggio', value);
-      }
-    }
-
-    // `id` of the upper-staff element this element continues an unbroken
-    // cross-staff arpeggio from. Resolved by the ancestor <music-measure>.
-    get arpeggioFor(): string | null {
-      return this.getAttribute('arpeggio-for');
-    }
-    set arpeggioFor(value: string | null) {
-      if (value === null) {
-        this.removeAttribute('arpeggio-for');
-      } else {
-        this.setAttribute('arpeggio-for', value);
-      }
-    }
-
-    // `id` shared by every element across a measure's two adjacent grand-staff
-    // staves that joins one cross-staff double-stemmed beam group. Resolved
-    // by the ancestor <music-measure>.
-    // Ignored on a triangle, which stands alone, and on a <music-tremolo>
-    // member, which its own tremolo beams.
-    get beamGroup(): string | null {
-      return isTriangle(this.notehead) ||
-        this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
-        ? null
-        : this.getAttribute('beam-group');
-    }
-    set beamGroup(value: string | null) {
-      if (value === null) {
-        this.removeAttribute('beam-group');
-      } else {
-        this.setAttribute('beam-group', value);
-      }
-    }
-
-    // `id` shared by every breakpoint note of one continuous multi-leg
-    // cross-staff phrase slur. Resolved by the ancestor <music-measure> /
-    // <music-composition>.
-    get slurGroup(): string | null {
-      return this.getAttribute('slur-group');
-    }
-    set slurGroup(value: string | null) {
-      if (value === null) {
-        this.removeAttribute('slur-group');
-      } else {
-        this.setAttribute('slur-group', value);
-      }
-    }
-
-    get notehead(): NoteheadType {
-      return this.ownNotehead ?? 'normal';
-    }
-
-    set notehead(value: NoteheadType | null) {
-      if (value === null) {
-        this.removeAttribute('notehead');
-      } else {
-        this.setAttribute('notehead', value);
-      }
-    }
-
-    // The authored notehead, else the instrument's; null leaves a chord tone
-    // to the chord's own notehead.
-    get ownNotehead(): NoteheadType | null {
-      return (
-        parseNotehead(this.getAttribute('notehead')) ??
-        this.#instrumentPosition?.notehead ??
-        null
+    if (
+      (name === 'notehead' || name === 'beam-group') &&
+      isTriangle(this.notehead) &&
+      this.readsAttribute('beam-group')
+    ) {
+      console.warn(
+        `[music-note] beam-group is ignored on notehead="${this.notehead}": a triangle always stands alone.`
       );
     }
 
-    // See noteHeadLeftOverhangPx.
-    get headLeftOverhangPx(): number {
-      return noteHeadLeftOverhangPx(this.stemUp, this.duration, this.notehead);
+    if (name === 'notehead' || name === 'grace-notehead') {
+      const warning =
+        name === 'notehead'
+          ? this.parentElement?.closest(CHORD_TAGS)
+            ? triangleUnsupportedWarning([this.notehead], 'a chord tone')
+            : null
+          : triangleUnsupportedWarning(
+              this.graceNotehead ?? [],
+              'a grace note'
+            );
+      if (warning) {
+        console.warn(`[music-note] ${warning}`);
+      }
     }
 
-    get augmentationDotsRightEdgePx(): number | null {
-      return (
-        noteAugmentationDotLayout({
-          duration: this.duration,
-          stemUp: this.stemUp,
-          noFlags: this.#noFlags,
-          noStem: this.#noStem,
-          notehead: this.notehead,
-          stemExtension: this.#drawnStemExtension(),
-          staffY: this.#staffY,
-          rowStaffYs: this.#augmentationDotRows,
-          columnShiftPx: this.#augmentationDotShiftPx,
-        })?.rightEdgeX ?? null
+    this.#warnAboutTremolo(name, newValue);
+
+    if (!this.isConnected) {
+      return;
+    }
+
+    if (
+      name === 'tie' ||
+      name === 'slur' ||
+      name === 'lv-label' ||
+      name === 'glissando' ||
+      name === 'glissando-hint' ||
+      name === 'slur-group' ||
+      name === 'tie-style' ||
+      name === 'for'
+    ) {
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
       );
+      return;
     }
 
-    // Author override for stemUp; null leaves the pitch, voice or beam-group
-    // default.
-    get stemDirection(): StemDirection | null {
-      return parseStemDirection(this.getAttribute('stem-direction'));
+    if (
+      name === 'note' ||
+      name === 'octave' ||
+      name === 'instrument' ||
+      name === 'stem-direction'
+    ) {
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      // Is standalone mode; if not, staff will
+      // trigger a call to render() via batchUpdate()
+      if (!this.closest(STAFF_TAGS)) {
+        this.render();
+      }
+      return;
     }
-    set stemDirection(value: StemDirection | null) {
-      if (value === null) {
-        this.removeAttribute('stem-direction');
-      } else {
-        this.setAttribute('stem-direction', value);
+
+    if (
+      name === 'dynamic' ||
+      name === 'crescendo' ||
+      name === 'decrescendo' ||
+      name === 'grace-dynamic' ||
+      name === 'dynamic-shared' ||
+      name === 'dynamic-reminder'
+    ) {
+      this.#warnAboutDynamicReminder();
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      name === 'arpeggio' ||
+      name === 'arpeggio-for' ||
+      name === 'arpeggio-hairpin' ||
+      name === 'arpeggio-hairpin-from' ||
+      name === 'arpeggio-hairpin-to' ||
+      name === 'arpeggiate'
+    ) {
+      // The ancestor measure re-resolves cross-staff arpeggio spans (and the
+      // continuous hairpin); the staff re-resolves `sempre arpeggiando`
+      // passages.
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      if (
+        name === 'arpeggio-hairpin' &&
+        newValue !== null &&
+        this.#effectiveArpeggioHairpin() === null
+      ) {
+        console.warn(
+          `[music-note] arpeggio-hairpin is set without a rolled arpeggio (up / up-arrow / down); it will not render`
+        );
       }
     }
 
-    // A <music-tremolo>'s own beams stand for the repetition, so a member's
-    // strokes are ignored.
-    get tremolo(): TremoloValue | null {
-      if (this.parentElement?.nodeName === MUSIC_TREMOLO_NODE) {
-        return null;
+    if (
+      name === 'trill' ||
+      name === 'trill-line' ||
+      name === 'trill-stop' ||
+      name === 'trill-accidental' ||
+      name === 'trill-continuation'
+    ) {
+      // The staff re-resolves the trill synchronously, so render() below
+      // sees the fresh resolvedTrillPitch.
+      if (
+        name === 'trill-accidental' &&
+        newValue !== null &&
+        this.trillNote !== null
+      ) {
+        console.warn(
+          `[music-note] trill-accidental is ignored when trill-note is also set`
+        );
       }
-      return parseTremolo(this.getAttribute('tremolo'));
-    }
-    set tremolo(value: TremoloValue | null) {
-      if (value === null) {
-        this.removeAttribute('tremolo');
-      } else {
-        this.setAttribute('tremolo', String(value));
-      }
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      this.render();
+      return;
     }
 
-    get tremoloTuplet(): number | null {
-      return parseTremoloTuplet(this.getAttribute('tremolo-tuplet'));
-    }
-    set tremoloTuplet(value: number | null) {
-      if (value === null) {
-        this.removeAttribute('tremolo-tuplet');
-      } else {
-        this.setAttribute('tremolo-tuplet', String(value));
-      }
-    }
-
-    get tremoloLabel(): TremoloLabel | null {
-      return parseTremoloLabel(this.getAttribute('tremolo-label'));
-    }
-    set tremoloLabel(value: TremoloLabel | null) {
-      if (value === null) {
-        this.removeAttribute('tremolo-label');
-      } else {
-        this.setAttribute('tremolo-label', value);
-      }
+    if (
+      name === 'octave-shift' ||
+      name === 'octave-mode' ||
+      name === 'octave-stop' ||
+      name === 'loco' ||
+      name === 'octave-continuation'
+    ) {
+      // The ancestor staff resolves octave-transposition spans over its
+      // own element stream and redraws the sign/line/corner in its own
+      // overlay — nothing renders locally in this note's own shadow DOM.
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
     }
 
-    get articulationRepeat(): boolean {
-      return this.hasAttribute('articulation-repeat');
-    }
-    set articulationRepeat(value: boolean) {
-      this.toggleAttribute('articulation-repeat', value);
-    }
-
-    get tieStyle(): TieStyle {
-      return parseTieStyle(this.getAttribute('tie-style'));
-    }
-    set tieStyle(value: TieStyle) {
-      if (value === 'solid') {
-        this.removeAttribute('tie-style');
-      } else {
-        this.setAttribute('tie-style', value);
-      }
+    if (name === 'beam-group') {
+      // The ancestor measure resolves cross-staff double-stemmed beam
+      // groups over both staves' element streams; nothing renders locally
+      // in this note's own shadow DOM.
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
     }
 
-    get dottedTieAcrossBarline(): boolean {
-      return this.#dottedTieAcrossBarline;
+    if (name === 'shared-stem-for') {
+      // The ancestor measure resolves shared-stem pairs across both
+      // staves, suppresses each end's own local stem (noStem — that
+      // property's own setter re-renders this note), and draws the real
+      // connecting stem itself; nothing else to do locally here.
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
     }
-    set dottedTieAcrossBarline(value: boolean) {
-      if (value === this.#dottedTieAcrossBarline) {
-        return;
+
+    if (
+      name === 'accidental-reminder' ||
+      name === 'arpeggio' ||
+      name === 'arpeggio-for' ||
+      name === 'arpeggio-hairpin' ||
+      name === 'arpeggio-hairpin-from' ||
+      name === 'arpeggio-hairpin-to' ||
+      name === 'arpeggiate' ||
+      name === 'grace' ||
+      name === 'grace-octave' ||
+      name === 'grace-articulation' ||
+      name === 'grace-notehead' ||
+      name === 'notehead' ||
+      name === 'grace-type' ||
+      name === 'grace-duration' ||
+      name === 'grace-slur' ||
+      name === 'trill-note' ||
+      name === 'trill-finish' ||
+      name === 'trill-finish-octave' ||
+      name === 'trill-finish-slur' ||
+      name === 'duration' ||
+      name === 'tremolo' ||
+      name === 'tremolo-tuplet' ||
+      name === 'tremolo-label' ||
+      name === 'articulation-repeat'
+    ) {
+      // Each of these changes layout (beat time, a leftward or rightward
+      // footprint, stem length, what the staff clears above) or the
+      // voice-combine key, so the staff re-lays out.
+      if (name === 'notehead' && this.readsAttribute('beam-group')) {
+        // A triangle leaves or rejoins its cross-staff beam group.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
       }
-      this.#dottedTieAcrossBarline = value;
-      // The staff re-resolves accidentals on a full re-layout.
+      if (
+        name === 'trill-note' &&
+        newValue !== null &&
+        this.trillAccidental !== null
+      ) {
+        console.warn(
+          `[music-note] trill-accidental is ignored when trill-note is also set`
+        );
+      }
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      // Is standalone mode; if not, staff will
+      // trigger a call to render() via batchUpdate()
+      if (!this.closest(STAFF_TAGS)) {
+        this.render();
+      }
+      return;
+    }
+
+    this.render();
+    if (
+      (name === 'articulation' || name === 'stress') &&
+      this.closest(STAFF_TAGS)
+    ) {
+      // What sits beyond this element's marks (a tremolo label, an ending
+      // bracket) is laid out by the staff and its ancestors.
       this.dispatchEvent(
         new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
           bubbles: true,
@@ -814,1078 +1558,322 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         })
       );
     }
+  }
 
-    #repeatCount(): number {
-      return articulationRepeatCount({
-        articulationRepeat: this.articulationRepeat,
-        articulation: this.articulation,
-        tremolo: this.tremolo,
-        tuplet: this.tremoloTuplet,
-        duration: this.duration,
-      });
-    }
-
-    // Standalone, nothing else lengthens the stem for its tremolo strokes.
-    #drawnStemExtension(): number {
-      if (this.closest(STAFF_TAGS)) {
-        return this.#stemExtension;
-      }
-      return unbeamedTremoloStemExtensionPx({
-        tremolo: this.tremolo,
-        duration: this.duration,
-        headYs: [0],
-        stemUp: this.stemUp,
-        staff: null,
-        stemExtensionPx: this.#stemExtension,
-      });
-    }
-
-    // `id` of the other-staff element this note shares a single stem with.
-    // Resolved by the ancestor <music-measure>.
-    // Ignored on a <music-tremolo> member, whose stem its tremolo sets.
-    get sharedStemFor(): string | null {
-      return this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+  // A value that doesn't parse warns as soon as it's set. Attributes that
+  // don't fit together warn once connected, so markup built one attribute
+  // at a time doesn't warn about a state it passes through.
+  #warnAboutTremolo(changed: string | null, newValue: string | null): void {
+    const invalid =
+      newValue === null
         ? null
-        : this.getAttribute('shared-stem-for');
-    }
-    set sharedStemFor(value: string | null) {
-      if (value === null) {
-        this.removeAttribute('shared-stem-for');
-      } else {
-        this.setAttribute('shared-stem-for', value);
-      }
-    }
-
-    // Dynamic change during the roll — a vertical hairpin left of the arpeggio
-    // sign. Accepts `crescendo` / `decrescendo` (`diminuendo` normalizes to
-    // `decrescendo`). Honoured only alongside a wave-variant `arpeggio`.
-    get arpeggioHairpin(): HairpinKind | null {
-      return parseHairpinKind(this.getAttribute('arpeggio-hairpin'));
-    }
-    set arpeggioHairpin(value: HairpinKind | null) {
-      if (value === null) {
-        this.removeAttribute('arpeggio-hairpin');
-      } else {
-        this.setAttribute('arpeggio-hairpin', value);
-      }
-    }
-
-    get arpeggioHairpinFrom(): DynamicMarking | null {
-      return parseDynamicMarking(this.getAttribute('arpeggio-hairpin-from'));
-    }
-    set arpeggioHairpinFrom(value: DynamicMarking | null) {
-      if (value === null) {
-        this.removeAttribute('arpeggio-hairpin-from');
-      } else {
-        this.setAttribute('arpeggio-hairpin-from', value);
-      }
-    }
-
-    get arpeggioHairpinTo(): DynamicMarking | null {
-      return parseDynamicMarking(this.getAttribute('arpeggio-hairpin-to'));
-    }
-    set arpeggioHairpinTo(value: DynamicMarking | null) {
-      if (value === null) {
-        this.removeAttribute('arpeggio-hairpin-to');
-      } else {
-        this.setAttribute('arpeggio-hairpin-to', value);
-      }
-    }
-
-    // The hairpin kind actually drawn — `arpeggioHairpin` when the effective
-    // arpeggio (own, implied, or the `arpeggio-for` continuation) is a rolled
-    // wave; null otherwise.
-    #effectiveArpeggioHairpin(): HairpinKind | null {
-      const hairpin = this.arpeggioHairpin;
-      if (hairpin === null) {
-        return null;
-      }
-      const arpeggio =
-        this.arpeggio ??
-        this.#impliedArpeggio ??
-        (this.arpeggioFor !== null ? 'up' : null);
-      return arpeggio === 'up' || arpeggio === 'up-arrow' || arpeggio === 'down'
-        ? hairpin
+        : changed === 'tremolo' && parseTremolo(newValue) === null
+        ? 'is not a stroke count (1–4) or "unmeasured"'
+        : changed === 'tremolo-tuplet' && parseTremoloTuplet(newValue) === null
+        ? 'is not a whole number of at least 2'
+        : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
+        ? 'is not "trem" or "non-trem"'
         : null;
-    }
-
-    get renderArpeggioSign(): boolean {
-      return this.#renderArpeggioSign;
-    }
-    set renderArpeggioSign(value: boolean) {
-      if (this.#renderArpeggioSign === value) {
-        return;
-      }
-      this.#renderArpeggioSign = value;
-      this.#scheduleRender();
-    }
-
-    get arpeggiate(): ConnectorRole | null {
-      return parseConnectorRole(
-        this.getAttribute('arpeggiate')
-      ) as ConnectorRole | null;
-    }
-    set arpeggiate(value: ConnectorRole | null) {
-      if (value === null) {
-        this.removeAttribute('arpeggiate');
-      } else {
-        this.setAttribute('arpeggiate', value);
-      }
-    }
-
-    get impliedArpeggio(): ArpeggioType | null {
-      return this.#impliedArpeggio;
-    }
-    set impliedArpeggio(value: ArpeggioType | null) {
-      if (this.#impliedArpeggio === value) {
-        return;
-      }
-      this.#impliedArpeggio = value;
-      this.#scheduleRender();
-    }
-
-    // Marks a trill start. The line spans forward through this note's own
-    // `tie` chain — see NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE in
-    // attributeChangedCallback.
-    get trill(): boolean {
-      return this.hasAttribute('trill');
-    }
-    set trill(value: boolean) {
-      if (value) {
-        this.setAttribute('trill', '');
-      } else {
-        this.removeAttribute('trill');
-      }
-    }
-
-    get trillLine(): TrillLineMode {
-      return parseTrillLineMode(this.getAttribute('trill-line'));
-    }
-    set trillLine(value: TrillLineMode) {
-      this.setAttribute('trill-line', value);
-    }
-
-    get trillStop(): boolean {
-      return this.hasAttribute('trill-stop');
-    }
-    set trillStop(value: boolean) {
-      if (value) {
-        this.setAttribute('trill-stop', '');
-      } else {
-        this.removeAttribute('trill-stop');
-      }
-    }
-
-    // Overrides only the accidental of the trilling (auxiliary) pitch —
-    // normally the diatonic upper neighbor as modified by the key signature.
-    // Ignored (with a warning) when trill-note is also set.
-    get trillAccidental(): AccidentalType | null {
-      return parseAccidentalType(this.getAttribute('trill-accidental'));
-    }
-    set trillAccidental(value: AccidentalType | null) {
-      if (value === null) {
-        this.removeAttribute('trill-accidental');
-      } else {
-        this.setAttribute('trill-accidental', value);
-      }
-    }
-
-    // Full override of the trilling pitch — letter and accidental — rendered
-    // as a small written notehead in parentheses after the main notehead.
-    // Wins over trill-accidental when both are set.
-    get trillNote(): Note | null {
-      return (this.getAttribute('trill-note') as Note) ?? null;
-    }
-    set trillNote(value: Note | null) {
-      if (value === null) {
-        this.removeAttribute('trill-note');
-      } else {
-        this.setAttribute('trill-note', value);
-      }
-    }
-
-    // Meaningful only on the trill-starting element — controls the
-    // system-break restatement, resolved by the ancestor composition.
-    get trillContinuation(): TrillContinuationMode {
-      return parseTrillContinuationMode(
-        this.getAttribute('trill-continuation')
+    if (invalid !== null) {
+      console.warn(
+        `[music-note] ${changed}="${newValue}" ${invalid}; ignoring it`
       );
+      return;
     }
-    set trillContinuation(value: TrillContinuationMode) {
-      this.setAttribute('trill-continuation', value);
+    if (!this.isConnected) {
+      return;
     }
-
-    // Set by the staff to the resolved trilling pitch. null when not
-    // trilling, or in standalone mode.
-    get resolvedTrillPitch(): ResolvedTrillPitch | null {
-      return this.#resolvedTrillPitch;
-    }
-    set resolvedTrillPitch(value: ResolvedTrillPitch | null) {
-      this.#resolvedTrillPitch = value;
-      this.#scheduleRender();
-    }
-
-    get grace(): Note[] | null {
-      return parseGraceNotes(this.getAttribute('grace'));
-    }
-    // Accepts the rich array or the comma-separated attribute string (React and
-    // Storybook set the JSX prop as a property, not an attribute).
-    set grace(value: GraceNotesType) {
-      const attr = graceListToAttr(value, parseGraceNotes);
-      if (attr === null) {
-        this.removeAttribute('grace');
-      } else {
-        this.setAttribute('grace', attr);
-      }
-    }
-
-    get graceOctave(): (Octave | null)[] | null {
-      return parseGraceOctaves(this.getAttribute('grace-octave'));
-    }
-    set graceOctave(value: GraceOctavesType) {
-      const attr = graceListToAttr(value, parseGraceOctaves);
-      if (attr === null) {
-        this.removeAttribute('grace-octave');
-      } else {
-        this.setAttribute('grace-octave', attr);
-      }
-    }
-
-    get graceArticulation(): (ArticulationType | null)[] | null {
-      return parseGraceArticulations(this.getAttribute('grace-articulation'));
-    }
-    set graceArticulation(value: GraceArticulationsType) {
-      const attr = graceListToAttr(value, parseGraceArticulations);
-      if (attr === null) {
-        this.removeAttribute('grace-articulation');
-      } else {
-        this.setAttribute('grace-articulation', attr);
-      }
-    }
-
-    get graceNotehead(): (NoteheadType | null)[] | null {
-      return parseGraceNoteheads(this.getAttribute('grace-notehead'));
-    }
-    set graceNotehead(value: GraceNoteheadsType) {
-      const attr = graceListToAttr(value, parseGraceNoteheads);
-      if (attr === null) {
-        this.removeAttribute('grace-notehead');
-      } else {
-        this.setAttribute('grace-notehead', attr);
-      }
-    }
-
-    get graceHeadLeftOverhangsPx(): number[] {
-      return graceHeadLeftOverhangsPx(
-        this.graceNotehead,
-        this.grace?.length ?? 0,
-        this.graceDuration
-      );
-    }
-
-    get graceType(): GraceType {
-      return parseGraceType(this.getAttribute('grace-type')) ?? 'acciaccatura';
-    }
-    set graceType(value: GraceType | null) {
-      if (value === null) {
-        this.removeAttribute('grace-type');
-      } else {
-        this.setAttribute('grace-type', value);
-      }
-    }
-
-    get graceDuration(): GraceDuration | null {
-      return parseGraceDuration(this.getAttribute('grace-duration'));
-    }
-    set graceDuration(value: GraceDuration | null) {
-      if (value === null) {
-        this.removeAttribute('grace-duration');
-      } else {
-        this.setAttribute('grace-duration', value);
-      }
-    }
-
-    get graceSlur(): GraceSlur {
-      return parseGraceSlur(this.getAttribute('grace-slur')) ?? 'auto';
-    }
-    set graceSlur(value: GraceSlur | null) {
-      if (value === null) {
-        this.removeAttribute('grace-slur');
-      } else {
-        this.setAttribute('grace-slur', value);
-      }
-    }
-
-    get resolvedGraceAccidentals(): (AccidentalType | null)[] | null {
-      return this.#resolvedGraceAccidentals;
-    }
-    set resolvedGraceAccidentals(value: (AccidentalType | null)[] | null) {
-      this.#resolvedGraceAccidentals = value;
-      this.#scheduleRender();
-    }
-
-    get graceDynamic(): DynamicMarking | null {
-      return parseDynamicMarking(this.getAttribute('grace-dynamic'));
-    }
-    set graceDynamic(value: DynamicMarking | null) {
-      if (value === null) {
-        this.removeAttribute('grace-dynamic');
-      } else {
-        this.setAttribute('grace-dynamic', value);
-      }
-    }
-
-    // Grace note(s) placed after this note (a trill's finishing figure) —
-    // same shape and fallback rules as `grace`/`graceOctave`.
-    get trillFinish(): Note[] | null {
-      return parseGraceNotes(this.getAttribute('trill-finish'));
-    }
-    set trillFinish(value: GraceNotesType) {
-      const attr = graceListToAttr(value, parseGraceNotes);
-      if (attr === null) {
-        this.removeAttribute('trill-finish');
-      } else {
-        this.setAttribute('trill-finish', attr);
-      }
-    }
-
-    get trillFinishOctave(): (Octave | null)[] | null {
-      return parseGraceOctaves(this.getAttribute('trill-finish-octave'));
-    }
-    set trillFinishOctave(value: GraceOctavesType) {
-      const attr = graceListToAttr(value, parseGraceOctaves);
-      if (attr === null) {
-        this.removeAttribute('trill-finish-octave');
-      } else {
-        this.setAttribute('trill-finish-octave', attr);
-      }
-    }
-
-    get trillFinishSlur(): TrillFinishSlur {
-      return parseTrillFinishSlur(this.getAttribute('trill-finish-slur'));
-    }
-    set trillFinishSlur(value: TrillFinishSlur) {
-      this.setAttribute('trill-finish-slur', value);
-    }
-
-    get resolvedTrillFinishAccidentals(): (AccidentalType | null)[] | null {
-      return this.#resolvedTrillFinishAccidentals;
-    }
-    set resolvedTrillFinishAccidentals(
-      value: (AccidentalType | null)[] | null
-    ) {
-      this.#resolvedTrillFinishAccidentals = value;
-      this.#scheduleRender();
-    }
-
-    // Starts an octave-transposition span at this note. The ancestor staff
-    // resolves the span over its own element stream — see
-    // NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE in attributeChangedCallback.
-    get octaveShift(): OctaveShiftAmount | null {
-      return parseOctaveShiftAmount(this.getAttribute('octave-shift'));
-    }
-    set octaveShift(value: OctaveShiftAmount | null) {
-      if (value === null) {
-        this.removeAttribute('octave-shift');
-      } else {
-        this.setAttribute('octave-shift', value);
-      }
-    }
-
-    // Display mode for the span this note starts. Resolved to 'sign' at
-    // span-open time by rules/octaveRules.ts, not here — see
-    // parseOctaveDisplayMode.
-    get octaveMode(): OctaveDisplayMode | null {
-      return parseOctaveDisplayMode(this.getAttribute('octave-mode'));
-    }
-    set octaveMode(value: OctaveDisplayMode | null) {
-      if (value === null) {
-        this.removeAttribute('octave-mode');
-      } else {
-        this.setAttribute('octave-mode', value);
-      }
-    }
-
-    get octaveStop(): boolean {
-      return this.hasAttribute('octave-stop');
-    }
-    set octaveStop(value: boolean) {
-      if (value) {
-        this.setAttribute('octave-stop', '');
-      } else {
-        this.removeAttribute('octave-stop');
-      }
-    }
-
-    get loco(): boolean {
-      return this.hasAttribute('loco');
-    }
-    set loco(value: boolean) {
-      if (value) {
-        this.setAttribute('loco', '');
-      } else {
-        this.removeAttribute('loco');
-      }
-    }
-
-    // Meaningful only on the octave-span-starting element — controls the
-    // system-break restatement, resolved by the ancestor composition.
-    get octaveContinuation(): OctaveContinuationMode {
-      return parseOctaveContinuationMode(
-        this.getAttribute('octave-continuation')
-      );
-    }
-    set octaveContinuation(value: OctaveContinuationMode) {
-      this.setAttribute('octave-continuation', value);
-    }
-
-    batchUpdate(fn: () => void): void {
-      this.#batchDepth++;
-      try {
-        fn();
-      } finally {
-        this.#batchDepth--;
-        if (this.#batchDepth === 0 && this.#renderPending) {
-          this.#renderPending = false;
-          this.render();
-        }
-      }
-    }
-
-    #scheduleRender(): void {
-      if (this.#batchDepth > 0) {
-        this.#renderPending = true;
-      } else if (this.shadowRoot) {
-        this.render();
-      }
-    }
-
-    #warnedDynamicReminder = false;
-
-    // A bracketed reminder needs a dynamic to bracket; warns once until one
-    // is set.
-    #warnAboutDynamicReminder(): void {
-      const missing = this.dynamicReminder && this.dynamic === null;
-      if (missing && this.isConnected && !this.#warnedDynamicReminder) {
-        console.warn(
-          `[music-note] dynamic-reminder needs a dynamic to draw in brackets`
-        );
-      }
-      this.#warnedDynamicReminder = missing && this.isConnected;
-    }
-
-    connectedCallback(): void {
-      upgradeShadowedProperties(this);
-      this.#warnAboutTremolo(null, null);
-      this.#warnAboutDynamicReminder();
-      this.render();
-    }
-
-    attributeChangedCallback(
-      name: string,
-      oldValue: string | null,
-      newValue: string | null
-    ): void {
-      if (oldValue === newValue) {
-        return;
-      }
-
-      if (name === 'duration') {
-        warnIfInvalidDuration(this.localName, newValue);
-      }
-
-      // `diminuendo` is rewritten to `decrescendo`, even before connecting.
-      // The removeAttribute below re-enters with null, which must be a no-op.
-      if (name === 'diminuendo') {
-        if (newValue !== null) {
-          this.setAttribute('decrescendo', newValue);
-          this.removeAttribute('diminuendo');
-        }
-        return;
-      }
-
-      if (
-        (name === 'notehead' || name === 'beam-group') &&
-        isTriangle(this.notehead) &&
-        this.hasAttribute('beam-group')
-      ) {
-        console.warn(
-          `[music-note] beam-group is ignored on notehead="${this.notehead}": a triangle always stands alone.`
-        );
-      }
-
-      if (name === 'notehead' || name === 'grace-notehead') {
-        const warning =
-          name === 'notehead'
-            ? this.parentElement?.closest(MUSIC_CHORD)
-              ? triangleUnsupportedWarning([this.notehead], 'a chord tone')
-              : null
-            : triangleUnsupportedWarning(
-                this.graceNotehead ?? [],
-                'a grace note'
-              );
-        if (warning) {
-          console.warn(`[music-note] ${warning}`);
-        }
-      }
-
-      this.#warnAboutTremolo(name, newValue);
-
-      if (!this.isConnected) {
-        return;
-      }
-
-      if (
-        name === 'tie' ||
-        name === 'slur' ||
-        name === 'lv-label' ||
-        name === 'glissando' ||
-        name === 'glissando-hint' ||
-        name === 'slur-group' ||
-        name === 'tie-style' ||
-        name === 'for'
-      ) {
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        return;
-      }
-
-      if (
-        name === 'note' ||
-        name === 'octave' ||
-        name === 'instrument' ||
-        name === 'stem-direction'
-      ) {
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        // Is standalone mode; if not, staff will
-        // trigger a call to render() via batchUpdate()
-        if (!this.closest(STAFF_TAGS)) {
-          this.render();
-        }
-        return;
-      }
-
-      if (
-        name === 'dynamic' ||
-        name === 'crescendo' ||
-        name === 'decrescendo' ||
-        name === 'grace-dynamic' ||
-        name === 'dynamic-shared' ||
-        name === 'dynamic-reminder'
-      ) {
-        this.#warnAboutDynamicReminder();
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.DYNAMIC_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        return;
-      }
-
-      if (
-        name === 'arpeggio' ||
-        name === 'arpeggio-for' ||
-        name === 'arpeggio-hairpin' ||
-        name === 'arpeggio-hairpin-from' ||
-        name === 'arpeggio-hairpin-to' ||
-        name === 'arpeggiate'
-      ) {
-        // The ancestor measure re-resolves cross-staff arpeggio spans (and the
-        // continuous hairpin); the staff re-resolves `sempre arpeggiando`
-        // passages.
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.ARPEGGIO_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        if (
-          name === 'arpeggio-hairpin' &&
-          newValue !== null &&
-          this.#effectiveArpeggioHairpin() === null
-        ) {
-          console.warn(
-            `[music-note] arpeggio-hairpin is set without a rolled arpeggio (up / up-arrow / down); it will not render`
-          );
-        }
-      }
-
-      if (
-        name === 'trill' ||
-        name === 'trill-line' ||
-        name === 'trill-stop' ||
-        name === 'trill-accidental' ||
-        name === 'trill-continuation'
-      ) {
-        // The staff re-resolves the trill synchronously, so render() below
-        // sees the fresh resolvedTrillPitch.
-        if (
-          name === 'trill-accidental' &&
-          newValue !== null &&
-          this.trillNote !== null
-        ) {
-          console.warn(
-            `[music-note] trill-accidental is ignored when trill-note is also set`
-          );
-        }
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        this.render();
-        return;
-      }
-
-      if (
-        name === 'octave-shift' ||
-        name === 'octave-mode' ||
-        name === 'octave-stop' ||
-        name === 'loco' ||
-        name === 'octave-continuation'
-      ) {
-        // The ancestor staff resolves octave-transposition spans over its
-        // own element stream and redraws the sign/line/corner in its own
-        // overlay — nothing renders locally in this note's own shadow DOM.
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        return;
-      }
-
-      if (name === 'beam-group') {
-        // The ancestor measure resolves cross-staff double-stemmed beam
-        // groups over both staves' element streams; nothing renders locally
-        // in this note's own shadow DOM.
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        return;
-      }
-
-      if (name === 'shared-stem-for') {
-        // The ancestor measure resolves shared-stem pairs across both
-        // staves, suppresses each end's own local stem (noStem — that
-        // property's own setter re-renders this note), and draws the real
-        // connecting stem itself; nothing else to do locally here.
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.SHARED_STEM_ATTRIBUTE_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        return;
-      }
-
-      if (
-        name === 'accidental-reminder' ||
-        name === 'arpeggio' ||
-        name === 'arpeggio-for' ||
-        name === 'arpeggio-hairpin' ||
-        name === 'arpeggio-hairpin-from' ||
-        name === 'arpeggio-hairpin-to' ||
-        name === 'arpeggiate' ||
-        name === 'grace' ||
-        name === 'grace-octave' ||
-        name === 'grace-articulation' ||
-        name === 'grace-notehead' ||
-        name === 'notehead' ||
-        name === 'grace-type' ||
-        name === 'grace-duration' ||
-        name === 'grace-slur' ||
-        name === 'trill-note' ||
-        name === 'trill-finish' ||
-        name === 'trill-finish-octave' ||
-        name === 'trill-finish-slur' ||
-        name === 'duration' ||
-        name === 'tremolo' ||
-        name === 'tremolo-tuplet' ||
-        name === 'tremolo-label' ||
-        name === 'articulation-repeat'
-      ) {
-        // Each of these changes layout (beat time, a leftward or rightward
-        // footprint, stem length, what the staff clears above) or the
-        // voice-combine key, so the staff re-lays out.
-        if (name === 'notehead' && this.hasAttribute('beam-group')) {
-          // A triangle leaves or rejoins its cross-staff beam group.
-          this.dispatchEvent(
-            new CustomEvent(NOTE_EVENTS.BEAM_GROUP_ATTRIBUTE_CHANGE, {
-              bubbles: true,
-              composed: true,
-            })
-          );
-        }
-        if (
-          name === 'trill-note' &&
-          newValue !== null &&
-          this.trillAccidental !== null
-        ) {
-          console.warn(
-            `[music-note] trill-accidental is ignored when trill-note is also set`
-          );
-        }
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-        // Is standalone mode; if not, staff will
-        // trigger a call to render() via batchUpdate()
-        if (!this.closest(STAFF_TAGS)) {
-          this.render();
-        }
-        return;
-      }
-
-      this.render();
-      if (
-        (name === 'articulation' || name === 'stress') &&
-        this.closest(STAFF_TAGS)
-      ) {
-        // What sits beyond this element's marks (a tremolo label, an ending
-        // bracket) is laid out by the staff and its ancestors.
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
-            bubbles: true,
-            composed: true,
-          })
-        );
-      }
-    }
-
-    // A value that doesn't parse warns as soon as it's set. Attributes that
-    // don't fit together warn once connected, so markup built one attribute
-    // at a time doesn't warn about a state it passes through.
-    #warnAboutTremolo(changed: string | null, newValue: string | null): void {
-      const invalid =
-        newValue === null
-          ? null
-          : changed === 'tremolo' && parseTremolo(newValue) === null
-          ? 'is not a stroke count (1–4) or "unmeasured"'
-          : changed === 'tremolo-tuplet' &&
-            parseTremoloTuplet(newValue) === null
-          ? 'is not a whole number of at least 2'
-          : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
-          ? 'is not "trem" or "non-trem"'
-          : null;
-      if (invalid !== null) {
-        console.warn(
-          `[music-note] ${changed}="${newValue}" ${invalid}; ignoring it`
-        );
-        return;
-      }
-      if (!this.isConnected) {
-        return;
-      }
-      for (const warning of tremoloConsistencyWarnings({
-        changed,
-        tremolo: this.tremolo,
-        tuplet: this.tremoloTuplet,
-        articulationRepeat: this.articulationRepeat,
-        articulation: this.articulation,
-        duration: this.duration,
-      })) {
-        console.warn(`[music-note] ${warning}`);
-      }
-    }
-
-    private render(): void {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
-      this.shadowRoot!.innerHTML = `
-        <style>
-          :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
-        </style>
-      `;
-
-      const notehead = this.notehead;
-      const durationWarning = triangleDurationWarning(notehead, this.duration);
-      if (durationWarning && durationWarning !== this.#lastNoteheadWarning) {
-        console.warn(`[music-note] ${durationWarning}`);
-      }
-      this.#lastNoteheadWarning = durationWarning;
-      const stemUp = this.stemUp;
-
-      let accidental: AccidentalType | undefined;
-      let accidentalParenthesized = false;
-      if (suppressesAccidental(notehead)) {
-        accidental = undefined;
-      } else if (this.#showAccidental === undefined) {
-        const suffix = this.note.slice(1);
-        if (suffix === '##') {
-          accidental = 'double-sharp';
-        } else if (suffix === 'bb') {
-          accidental = 'double-flat';
-        } else if (suffix === '#') {
-          accidental = 'sharp';
-        } else if (suffix === 'b') {
-          accidental = 'flat';
-        }
-        // Standalone, a reminder brackets the note's own accidental.
-        if (this.accidentalReminder) {
-          accidental ??= 'natural';
-          accidentalParenthesized = true;
-        }
-      } else if (this.#showAccidental !== null) {
-        accidental = this.#showAccidental;
-        accidentalParenthesized = this.#accidentalParenthesized;
-      }
-
-      const [noteSvg, yHeadOffset] = createNoteSvg({
-        duration: this.duration,
-        stemUp,
-        notehead,
-        stemExtension: this.#drawnStemExtension(),
-        noFlags: this.#noFlags,
-        noStem: this.#noStem,
-        accidental,
-        accidentalParenthesized,
-        articulation: this.articulation,
-        stress: this.stress,
-        arpeggio: this.#renderArpeggioSign
-          ? this.arpeggio ?? this.#impliedArpeggio
-          : null,
-        arpeggioHairpin: this.#renderArpeggioSign
-          ? this.#effectiveArpeggioHairpin()
-          : null,
-        arpeggioHairpinFrom: this.arpeggioHairpinFrom,
-        arpeggioHairpinTo: this.arpeggioHairpinTo,
-        trill: this.trill,
-        // A written trilling note (small notehead after the main note,
-        // drawn by the staff overlay) carries its own accidental — the sign
-        // itself shows one only for the accidental-only override form.
-        trillAccidental:
-          this.#resolvedTrillPitch?.written === false
-            ? this.#resolvedTrillPitch.accidental
-            : null,
-        staffY: this.#staffY,
-        trillSignExtraLift: this.#trillSignExtraLift,
-        articulationStemAnchorBeamLevels:
-          this.#articulationStemAnchorBeamLevels,
-        augmentationDotRows: this.#augmentationDotRows,
-        augmentationDotShiftPx: this.#augmentationDotShiftPx,
-        omitsHead: this.#unisonPart?.omitsHead ?? false,
-        tremoloStrokeCount:
-          this.tremolo === null
-            ? 0
-            : resolveStrokeCount(this.tremolo, this.duration),
-        tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
-        articulationRepeatCount: this.#repeatCount(),
-        tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
-      });
-
-      if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
-        const { cx, halfWidth } = noteHeadGeometry(
-          stemUp,
-          this.duration,
-          this.#noFlags,
-          notehead
-        );
-        addLedgerLines(
-          noteSvg,
-          [this.#staffY],
-          stemUp,
-          yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY,
-          { cxPx: cx * NOTE_SCALE, halfWidthPx: halfWidth * NOTE_SCALE }
-        );
-      }
-
-      this.#appendGraceNotes(noteSvg, accidental, accidentalParenthesized);
-      this.#appendTrillFinishNotes(noteSvg);
-
-      // Standalone: the `sempre arpeggiando` instruction renders next to this
-      // element. Inside a staff the staff draws it once at the passage start
-      // and propagates implied signs (see StaffNotationElementBase).
-      if (this.arpeggiate === 'start' && !this.closest(STAFF_TAGS)) {
-        noteSvg.setAttribute('overflow', 'visible');
-        noteSvg.appendChild(createSempreArpeggiandoText(0, -2));
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
-      this.shadowRoot!.appendChild(noteSvg);
-
-      noteSvg.addEventListener('click', (e) => {
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.CLICK, {
-            bubbles: true,
-            composed: true,
-            detail: {
-              value: this.note,
-              duration: this.duration,
-              originalEvent: e,
-            },
-          })
-        );
-      });
-      noteSvg.addEventListener('pointerdown', (e) => {
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.POINTERDOWN, {
-            bubbles: true,
-            composed: true,
-            detail: {
-              value: this.note,
-              duration: this.duration,
-              originalEvent: e,
-            },
-          })
-        );
-      });
-      noteSvg.addEventListener('pointerup', (e) => {
-        this.dispatchEvent(
-          new CustomEvent(NOTE_EVENTS.POINTERUP, {
-            bubbles: true,
-            composed: true,
-            detail: {
-              value: this.note,
-              duration: this.duration,
-              originalEvent: e,
-            },
-          })
-        );
-      });
-    }
-
-    #appendGraceNotes(
-      noteSvg: SVGElement,
-      accidental: AccidentalType | undefined,
-      accidentalParenthesized: boolean
-    ): void {
-      const graceNoteLetters = this.grace;
-      if (graceNoteLetters === null) {
-        return;
-      }
-
-      const graceNotes = buildGraceNoteDescriptors(
-        graceNoteLetters,
-        this.graceOctave ?? [],
-        this.note[0] as NoteLetter,
-        this.octave ?? 4,
-        this.graceArticulation ?? [],
-        this.graceNotehead
-      );
-      applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
-      applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
-      this.#rebaseOrnamentSteps(graceNotes);
-
-      const accidentalFootprint = accidental
-        ? accidentalSymbolWidth(accidental, accidentalParenthesized) +
-          ACCIDENTAL_NOTE_GAP
-        : 0;
-      const arpeggioFootprint =
-        computeArpeggioFootprintWidth(
-          this.arpeggio ?? this.#impliedArpeggio,
-          accidental !== undefined
-        ) +
-        computeArpeggioHairpinFootprintWidth(
-          this.#effectiveArpeggioHairpin(),
-          this.arpeggioHairpinFrom,
-          this.arpeggioHairpinTo
-        );
-      const { cx, cy } = noteHeadCenter(
-        this.stemUp,
-        this.duration,
-        this.#noFlags,
-        this.notehead
-      );
-      // Only used for a descending grace group's stem-tip slur anchoring
-      // (see buildGraceSlur) — the real stem tip when this note is
-      // stem-up, or the notehead itself when stem-down (no stem to
-      // project to). Unused (and harmless to compute) otherwise.
-      const mainSlurTargetXPx = cx * NOTE_SCALE;
-      const mainSlurTargetYPx = this.stemUp
-        ? stemUpTipYPx(this.#drawnStemExtension())
-        : cy * NOTE_SCALE;
-      const graceGroup = createGraceNotesSvg({
-        graceNotes,
-        graceType: this.graceType,
-        graceDuration: this.graceDuration,
-        graceSlur: this.graceSlur,
-        mainHeadCenterXPx: cx * NOTE_SCALE,
-        mainHeadCenterYPx: cy * NOTE_SCALE,
-        // A single note has no top/bottom distinction — same point either way.
-        mainTopNoteXPx: cx * NOTE_SCALE,
-        mainTopNoteYPx: cy * NOTE_SCALE,
-        mainSlurTargetXPx,
-        mainSlurTargetYPx,
-        anchorRightXPx:
-          -accidentalFootprint -
-          arpeggioFootprint -
-          this.headLeftOverhangPx -
-          GRACE_MAIN_GAP_PX,
-        mainAccidentalShown: accidental !== undefined,
-        mainStemUp: this.stemUp,
-        mainStaffY: this.#staffY,
-      });
-      noteSvg.setAttribute('overflow', 'visible');
-      noteSvg.appendChild(graceGroup);
-    }
-
-    #rebaseOrnamentSteps(ornaments: GraceNoteDescriptor[]): void {
-      if (this.#staffY !== null && this.#nominalStaffY !== null) {
-        rebaseGraceSteps(ornaments, this.#staffY, this.#nominalStaffY);
-      }
-    }
-
-    // Renders the finishing grace note(s) and, when requested, the
-    // self-contained "to-main" slur. A 'to-next'/'both' slur reaches a
-    // sibling element this note doesn't know about, so the ancestor staff
-    // draws that half itself (see staffNotationBase.ts).
-    #appendTrillFinishNotes(noteSvg: SVGElement): void {
-      const trillFinishLetters = this.trillFinish;
-      if (trillFinishLetters === null) {
-        return;
-      }
-
-      const trillFinishNotes = buildGraceNoteDescriptors(
-        trillFinishLetters,
-        this.trillFinishOctave ?? [],
-        this.note[0] as NoteLetter,
-        this.octave ?? 4
-      );
-      applyResolvedGraceAccidentals(
-        trillFinishNotes,
-        this.#resolvedTrillFinishAccidentals
-      );
-      this.#rebaseOrnamentSteps(trillFinishNotes);
-
-      const { cx, cy } = noteHeadCenter(
-        this.stemUp,
-        this.duration,
-        this.#noFlags,
-        this.notehead
-      );
-      const { element } = createTrillFinishNotesSvg({
-        trillFinishNotes,
-        trillFinishSlur: this.trillFinishSlur,
-        mainHeadCenterXPx: cx * NOTE_SCALE,
-        mainHeadCenterYPx: cy * NOTE_SCALE,
-        anchorLeftXPx:
-          Math.max(NOTE_SVG_WIDTH, this.augmentationDotsRightEdgePx ?? 0) +
-          GRACE_MAIN_GAP_PX,
-        mainStaffY: this.#staffY,
-      });
-      noteSvg.setAttribute('overflow', 'visible');
-      noteSvg.appendChild(element);
+    for (const warning of tremoloConsistencyWarnings({
+      changed,
+      tremolo: this.tremolo,
+      tuplet: this.tremoloTuplet,
+      articulationRepeat: this.articulationRepeat,
+      articulation: this.articulation,
+      duration: this.duration,
+    })) {
+      console.warn(`[music-note] ${warning}`);
     }
   }
 
+  private render(): void {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
+    this.shadowRoot!.innerHTML = `
+      <style>
+        :host { display: inline-block; width: 32px; height: 60px; overflow: visible; }
+      </style>
+    `;
+
+    const notehead = this.notehead;
+    const durationWarning = triangleDurationWarning(notehead, this.duration);
+    if (durationWarning && durationWarning !== this.#lastNoteheadWarning) {
+      console.warn(`[music-note] ${durationWarning}`);
+    }
+    this.#lastNoteheadWarning = durationWarning;
+    const stemUp = this.stemUp;
+
+    let accidental: AccidentalType | undefined;
+    let accidentalParenthesized = false;
+    if (suppressesAccidental(notehead)) {
+      accidental = undefined;
+    } else if (this.#showAccidental === undefined) {
+      const suffix = this.note.slice(1);
+      if (suffix === '##') {
+        accidental = 'double-sharp';
+      } else if (suffix === 'bb') {
+        accidental = 'double-flat';
+      } else if (suffix === '#') {
+        accidental = 'sharp';
+      } else if (suffix === 'b') {
+        accidental = 'flat';
+      }
+      // Standalone, a reminder brackets the note's own accidental.
+      if (this.accidentalReminder) {
+        accidental ??= 'natural';
+        accidentalParenthesized = true;
+      }
+    } else if (this.#showAccidental !== null) {
+      accidental = this.#showAccidental;
+      accidentalParenthesized = this.#accidentalParenthesized;
+    }
+
+    const [noteSvg, yHeadOffset] = createNoteSvg({
+      duration: this.duration,
+      stemUp,
+      notehead,
+      stemExtension: this.#drawnStemExtension(),
+      noFlags: this.#noFlags,
+      noStem: this.#noStem,
+      accidental,
+      accidentalParenthesized,
+      articulation: this.articulation,
+      stress: this.stress,
+      arpeggio: this.#renderArpeggioSign
+        ? this.arpeggio ?? this.#impliedArpeggio
+        : null,
+      arpeggioHairpin: this.#renderArpeggioSign
+        ? this.#effectiveArpeggioHairpin()
+        : null,
+      arpeggioHairpinFrom: this.arpeggioHairpinFrom,
+      arpeggioHairpinTo: this.arpeggioHairpinTo,
+      trill: this.trill,
+      // A written trilling note (small notehead after the main note,
+      // drawn by the staff overlay) carries its own accidental — the sign
+      // itself shows one only for the accidental-only override form.
+      trillAccidental:
+        this.#resolvedTrillPitch?.written === false
+          ? this.#resolvedTrillPitch.accidental
+          : null,
+      staffY: this.#staffY,
+      trillSignExtraLift: this.#trillSignExtraLift,
+      articulationStemAnchorBeamLevels: this.#articulationStemAnchorBeamLevels,
+      augmentationDotRows: this.#augmentationDotRows,
+      augmentationDotShiftPx: this.#augmentationDotShiftPx,
+      omitsHead: this.#unisonPart?.omitsHead ?? false,
+      tremoloStrokeCount:
+        this.tremolo === null
+          ? 0
+          : resolveStrokeCount(this.tremolo, this.duration),
+      tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
+      articulationRepeatCount: this.#repeatCount(),
+      tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+    });
+
+    if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
+      const { cx, halfWidth } = noteHeadGeometry(
+        stemUp,
+        this.duration,
+        this.#noFlags,
+        notehead
+      );
+      addLedgerLines(
+        noteSvg,
+        [this.#staffY],
+        stemUp,
+        yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY,
+        { cxPx: cx * NOTE_SCALE, halfWidthPx: halfWidth * NOTE_SCALE }
+      );
+    }
+
+    this.#appendGraceNotes(noteSvg, accidental, accidentalParenthesized);
+    this.#appendTrillFinishNotes(noteSvg);
+
+    // Standalone: the `sempre arpeggiando` instruction renders next to this
+    // element. Inside a staff the staff draws it once at the passage start
+    // and propagates implied signs (see StaffNotationElementBase).
+    if (this.arpeggiate === 'start' && !this.closest(STAFF_TAGS)) {
+      noteSvg.setAttribute('overflow', 'visible');
+      noteSvg.appendChild(createSempreArpeggiandoText(0, -2));
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
+    this.shadowRoot!.appendChild(noteSvg);
+
+    noteSvg.addEventListener('click', (e) => {
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.CLICK, {
+          bubbles: true,
+          composed: true,
+          detail: {
+            value: this.note,
+            duration: this.duration,
+            originalEvent: e,
+          },
+        })
+      );
+    });
+    noteSvg.addEventListener('pointerdown', (e) => {
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.POINTERDOWN, {
+          bubbles: true,
+          composed: true,
+          detail: {
+            value: this.note,
+            duration: this.duration,
+            originalEvent: e,
+          },
+        })
+      );
+    });
+    noteSvg.addEventListener('pointerup', (e) => {
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.POINTERUP, {
+          bubbles: true,
+          composed: true,
+          detail: {
+            value: this.note,
+            duration: this.duration,
+            originalEvent: e,
+          },
+        })
+      );
+    });
+  }
+
+  #appendGraceNotes(
+    noteSvg: SVGElement,
+    accidental: AccidentalType | undefined,
+    accidentalParenthesized: boolean
+  ): void {
+    const graceNoteLetters = this.grace;
+    if (graceNoteLetters === null) {
+      return;
+    }
+
+    const graceNotes = buildGraceNoteDescriptors(
+      graceNoteLetters,
+      this.graceOctave ?? [],
+      this.note[0] as NoteLetter,
+      this.octave ?? 4,
+      this.graceArticulation ?? [],
+      this.graceNotehead
+    );
+    applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
+    applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
+    this.#rebaseOrnamentSteps(graceNotes);
+
+    const accidentalFootprint = accidental
+      ? accidentalSymbolWidth(accidental, accidentalParenthesized) +
+        ACCIDENTAL_NOTE_GAP
+      : 0;
+    const arpeggioFootprint =
+      computeArpeggioFootprintWidth(
+        this.arpeggio ?? this.#impliedArpeggio,
+        accidental !== undefined
+      ) +
+      computeArpeggioHairpinFootprintWidth(
+        this.#effectiveArpeggioHairpin(),
+        this.arpeggioHairpinFrom,
+        this.arpeggioHairpinTo
+      );
+    const { cx, cy } = noteHeadCenter(
+      this.stemUp,
+      this.duration,
+      this.#noFlags,
+      this.notehead
+    );
+    // Only used for a descending grace group's stem-tip slur anchoring
+    // (see buildGraceSlur) — the real stem tip when this note is
+    // stem-up, or the notehead itself when stem-down (no stem to
+    // project to). Unused (and harmless to compute) otherwise.
+    const mainSlurTargetXPx = cx * NOTE_SCALE;
+    const mainSlurTargetYPx = this.stemUp
+      ? stemUpTipYPx(this.#drawnStemExtension())
+      : cy * NOTE_SCALE;
+    const graceGroup = createGraceNotesSvg({
+      graceNotes,
+      graceType: this.graceType,
+      graceDuration: this.graceDuration,
+      graceSlur: this.graceSlur,
+      mainHeadCenterXPx: cx * NOTE_SCALE,
+      mainHeadCenterYPx: cy * NOTE_SCALE,
+      // A single note has no top/bottom distinction — same point either way.
+      mainTopNoteXPx: cx * NOTE_SCALE,
+      mainTopNoteYPx: cy * NOTE_SCALE,
+      mainSlurTargetXPx,
+      mainSlurTargetYPx,
+      anchorRightXPx:
+        -accidentalFootprint -
+        arpeggioFootprint -
+        this.headLeftOverhangPx -
+        GRACE_MAIN_GAP_PX,
+      mainAccidentalShown: accidental !== undefined,
+      mainStemUp: this.stemUp,
+      mainStaffY: this.#staffY,
+    });
+    noteSvg.setAttribute('overflow', 'visible');
+    noteSvg.appendChild(graceGroup);
+  }
+
+  #rebaseOrnamentSteps(ornaments: GraceNoteDescriptor[]): void {
+    if (this.#staffY !== null && this.#nominalStaffY !== null) {
+      rebaseGraceSteps(ornaments, this.#staffY, this.#nominalStaffY);
+    }
+  }
+
+  // Renders the finishing grace note(s) and, when requested, the
+  // self-contained "to-main" slur. A 'to-next'/'both' slur reaches a
+  // sibling element this note doesn't know about, so the ancestor staff
+  // draws that half itself (see staffNotationBase.ts).
+  #appendTrillFinishNotes(noteSvg: SVGElement): void {
+    const trillFinishLetters = this.trillFinish;
+    if (trillFinishLetters === null) {
+      return;
+    }
+
+    const trillFinishNotes = buildGraceNoteDescriptors(
+      trillFinishLetters,
+      this.trillFinishOctave ?? [],
+      this.note[0] as NoteLetter,
+      this.octave ?? 4
+    );
+    applyResolvedGraceAccidentals(
+      trillFinishNotes,
+      this.#resolvedTrillFinishAccidentals
+    );
+    this.#rebaseOrnamentSteps(trillFinishNotes);
+
+    const { cx, cy } = noteHeadCenter(
+      this.stemUp,
+      this.duration,
+      this.#noFlags,
+      this.notehead
+    );
+    const { element } = createTrillFinishNotesSvg({
+      trillFinishNotes,
+      trillFinishSlur: this.trillFinishSlur,
+      mainHeadCenterXPx: cx * NOTE_SCALE,
+      mainHeadCenterYPx: cy * NOTE_SCALE,
+      anchorLeftXPx:
+        Math.max(NOTE_SVG_WIDTH, this.augmentationDotsRightEdgePx ?? 0) +
+        GRACE_MAIN_GAP_PX,
+      mainStaffY: this.#staffY,
+    });
+    noteSvg.setAttribute('overflow', 'visible');
+    noteSvg.appendChild(element);
+  }
+}
+
+if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   if (!customElements.get(MUSIC_NOTE)) {
     customElements.define(MUSIC_NOTE, NoteElement);
   }

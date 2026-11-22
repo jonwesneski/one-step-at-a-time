@@ -2809,66 +2809,14 @@ describe('`for` changes', () => {
   });
 });
 
-describe('instrument', () => {
-  const makeNote = (attributes: Record<string, string>): NoteElementType => {
-    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
-    for (const [name, value] of Object.entries(attributes)) {
-      note.setAttribute(name, value);
-    }
-    document.body.appendChild(note);
-    return note;
-  };
-
-  it("supplies note, octave and notehead from the instrument's drum-key entry", () => {
-    const note = makeNote({ instrument: 'ride' });
-    expect(note.instrument).toBe('ride');
-    expect(note.note).toBe('F');
-    expect(note.octave).toBe(5);
-    expect(note.notehead).toBe('x');
-  });
-
-  it('lets explicit note, octave and notehead override the instrument', () => {
-    const note = makeNote({
-      instrument: 'ride',
-      note: 'G',
-      octave: '4',
-      notehead: 'diamond',
-    });
-    expect(note.note).toBe('G');
-    expect(note.octave).toBe(4);
-    expect(note.notehead).toBe('diamond');
-  });
-
-  it('ignores an unknown instrument', () => {
-    const note = makeNote({ instrument: 'cowbell' });
-    expect(note.instrument).toBeNull();
-    expect(note.note).toBe('C');
-    expect(note.octave).toBeNull();
-    expect(note.ownNotehead).toBeNull();
-  });
-
-  it('redraws a standalone note when its instrument changes', () => {
-    const note = makeNote({ instrument: 'snare' });
-    const headTag = () => note.shadowRoot!.querySelector('.head')?.tagName;
-    expect(headTag()).toBe('ellipse');
-    note.instrument = 'crash';
-    expect(headTag()).toBe('path');
-    note.instrument = null;
-    expect(headTag()).toBe('ellipse');
-  });
-
+describe('standalone redraw', () => {
   it('redraws a standalone note when its spelling changes', () => {
-    const note = makeNote({ note: 'F', octave: '4' });
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('note', 'F');
+    note.setAttribute('octave', '4');
+    document.body.appendChild(note);
     const before = note.shadowRoot!.innerHTML;
     note.note = 'F#';
     expect(note.shadowRoot!.innerHTML).not.toBe(before);
-  });
-
-  it('dispatches NOTE_Y_CHANGE when the instrument changes', () => {
-    const note = makeNote({ instrument: 'snare' });
-    const handler = jest.fn();
-    note.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
-    note.instrument = 'kick';
-    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
