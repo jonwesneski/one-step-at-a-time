@@ -29,7 +29,7 @@ export type VoiceDirection = 'up' | 'down';
 // One voice's element at a given beat-offset (whole-note fraction, shared
 // coordinate space across every voice), with its resolved staff-Y tones —
 // the minimal shape resolveMiddleVoiceDirection needs to compare voices
-// without depending on staffClassicalBase.ts's own element/render types.
+// without depending on staffNotationBase.ts's own element/render types.
 export type VoiceDirectionInput = {
   staffYs: readonly number[];
   beatOffset: number;

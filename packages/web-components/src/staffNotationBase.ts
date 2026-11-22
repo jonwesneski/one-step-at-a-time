@@ -2,6 +2,7 @@ import {
   accidentalSymbolWidth,
   computeInterNoteSpacing,
   computeNoteAccidentals,
+  type NoteAccidentals,
   parseAccidentalSuffix,
   suffixToType,
   totalChordAccidentalWidth,
@@ -222,16 +223,16 @@ import {
 import {
   CLEF_EVENTS,
   COMMON_ATTRIBUTES,
+  isChordNodeName,
+  isNoteNodeName,
   isStaffNodeName,
   MUSIC_ARPEGGIO_NODE,
   MUSIC_BARLINE_NODE,
   MUSIC_CHORD,
-  MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
-  MUSIC_NOTE_NODE,
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_TREMOLO_NODE,
@@ -378,7 +379,7 @@ function resetCrossVoiceState(
   element: NoteElementType | ChordElementType
 ): void {
   element.augmentationDotRows = null;
-  if (element.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(element.nodeName)) {
     (element as NoteElementType).unisonPart = null;
     (element as NoteElementType).augmentationDotShiftPx = 0;
   }
@@ -430,13 +431,14 @@ function crossStaffArpeggioPartner(
   } else if (element.id !== '') {
     candidate =
       Array.from(measure.querySelectorAll('[arpeggio-for]')).find(
-        (other) => other.getAttribute('arpeggio-for') === element.id
+        (other) =>
+          (other as Partial<NoteOrChordElementType>).arpeggioFor === element.id
       ) ?? null;
   }
   if (
     candidate === null ||
-    (candidate.nodeName !== MUSIC_NOTE_NODE &&
-      candidate.nodeName !== MUSIC_CHORD_NODE) ||
+    (!isNoteNodeName(candidate.nodeName) &&
+      !isChordNodeName(candidate.nodeName)) ||
     candidate.closest(STAFF_TAGS) === element.closest(STAFF_TAGS)
   ) {
     return null;
@@ -497,7 +499,7 @@ function chordLeftHeadDisplacementPx(chord: ChordElementType): number {
 function elementHasShownAccidental(
   element: NoteElementType | ChordElementType
 ): boolean {
-  if (element.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(element.nodeName)) {
     return (element as NoteElementType).showAccidental != null;
   }
   const chord = element as ChordElementType;
@@ -520,7 +522,7 @@ type VoiceStaffYCoords = {
 };
 
 // One octave line crossing a barline, as it touches this staff — see
-// StaffClassicalElementBase#octaveContinuations.
+// StaffNotationElementBase#octaveContinuations.
 type OctaveContinuationRow = {
   rowY: number;
   raisesPitch: boolean;
@@ -637,7 +639,7 @@ type MarkerSlot = {
   clef: ClefMarker | null;
 };
 
-export abstract class StaffClassicalElementBase extends StaffElementBase {
+export abstract class StaffNotationElementBase extends StaffElementBase {
   static get observedAttributes(): string[] {
     // All attributes need to be all lower case because jsdom lowers then
     // in it's life-cycle
@@ -652,8 +654,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     ];
   }
 
-  #effectiveMode: Mode;
-  #effectiveKeySig: Note;
+  #effectiveMode: Mode = 'major';
+  #effectiveKeySig: Note = 'C';
   #describeContainer: SVGGElement;
   // Kept apart from #describeContainer so the describe area's own extent
   // decides where a start repeat goes.
@@ -989,6 +991,30 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       width,
       reserved: this.#endWarnings?.reservesWidth === true ? width : 0,
     };
+  }
+
+  // False on a staff whose positions stand for instruments rather than
+  // pitches: it takes only drum notes and chords, ignores any inherited key
+  // and mid-bar <music-clef> changes, and never merges voices onto one stem
+  // (hands and feet keep their own stem directions).
+  protected get isPitched(): boolean {
+    return true;
+  }
+
+  #resolveKeySignature(): void {
+    if (!this.isPitched) {
+      this.#effectiveMode = 'major';
+      this.#effectiveKeySig = 'C';
+      return;
+    }
+    this.#effectiveMode = this.resolveInheritedValue(
+      COMMON_ATTRIBUTES.MODE,
+      'major'
+    ) as Mode;
+    this.#effectiveKeySig = this.resolveInheritedValue(
+      COMMON_ATTRIBUTES.KEY_SIG,
+      'C'
+    ) as Note;
   }
 
   get effectiveKeySignature(): KeySignatureState {
@@ -1335,14 +1361,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   constructor() {
     super();
 
-    this.#effectiveMode = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.MODE,
-      'major'
-    ) as Mode;
-    this.#effectiveKeySig = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.KEY_SIG,
-      'C'
-    ) as Note;
+    this.#resolveKeySignature();
 
     this.#describeContainer = document.createElementNS(SVG_NS, 'g');
     this.#startRepeatContainer = document.createElementNS(SVG_NS, 'g');
@@ -1424,14 +1443,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
   protected onConnectedCallback() {
     // Re-resolve inherited attrs now that ancestors are reachable via closest()
     this.effectiveTimeSig = this.resolveTimeSignature();
-    this.#effectiveMode = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.MODE,
-      'major'
-    ) as Mode;
-    this.#effectiveKeySig = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.KEY_SIG,
-      'C'
-    ) as Note;
+    this.#resolveKeySignature();
 
     this.#buildDescribe();
     for (const [type, listener] of this.#listeners()) {
@@ -1600,14 +1612,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   refreshInheritedAttrs() {
     this.effectiveTimeSig = this.resolveTimeSignature();
-    this.#effectiveMode = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.MODE,
-      'major'
-    ) as Mode;
-    this.#effectiveKeySig = this.resolveInheritedValue(
-      COMMON_ATTRIBUTES.KEY_SIG,
-      'C'
-    ) as Note;
+    this.#resolveKeySignature();
     this.#refreshDescribe();
   }
 
@@ -1755,16 +1760,11 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     if (name === COMMON_ATTRIBUTES.TIME) {
       this.effectiveTimeSig = this.resolveTimeSignature();
-    } else if (name === COMMON_ATTRIBUTES.MODE) {
-      this.#effectiveMode = this.resolveInheritedValue(
-        COMMON_ATTRIBUTES.MODE,
-        'major'
-      ) as Mode;
-    } else if (name === COMMON_ATTRIBUTES.KEY_SIG) {
-      this.#effectiveKeySig = this.resolveInheritedValue(
-        COMMON_ATTRIBUTES.KEY_SIG,
-        'C'
-      ) as Note;
+    } else if (
+      name === COMMON_ATTRIBUTES.MODE ||
+      name === COMMON_ATTRIBUTES.KEY_SIG
+    ) {
+      this.#resolveKeySignature();
     }
     this.#refreshDescribe();
   }
@@ -1788,8 +1788,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     this.upgradeAssignedElements(assignedElements);
     const assigned = assignedElements.filter(
       (e) =>
-        e.nodeName === MUSIC_NOTE_NODE ||
-        e.nodeName === MUSIC_CHORD_NODE ||
+        isNoteNodeName(e.nodeName) ||
+        isChordNodeName(e.nodeName) ||
         e.nodeName === MUSIC_REST_NODE ||
         e.nodeName === MUSIC_TUPLET_NODE ||
         e.nodeName === MUSIC_ARPEGGIO_NODE ||
@@ -1799,9 +1799,14 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         e.nodeName === MUSIC_VOICE_NODE
     );
 
-    const { voices, streamMarkers } = flattenStaffSlotElements(assigned);
+    const { voices, streamMarkers } = flattenStaffSlotElements(
+      assigned,
+      this.isPitched ? 'pitched' : 'drum'
+    );
     this.#voices = voices;
-    this.#setStreamMarkers(streamMarkers);
+    this.#setStreamMarkers(
+      this.isPitched ? streamMarkers : this.#withoutClefMarkers(streamMarkers)
+    );
     this.#renderNotes();
   }
 
@@ -1884,7 +1889,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
       const beatOffset = beatOffsets[i];
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (isNoteNodeName(element.nodeName)) {
         const noteElement = element as NoteElementType;
         noteStaffYCoords.set(
           noteElement,
@@ -1894,7 +1899,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             beatOffset
           )
         );
-      } else if (element.nodeName === MUSIC_CHORD_NODE) {
+      } else if (isChordNodeName(element.nodeName)) {
         const chordElement = element as ChordElementType;
         chordStaffYCoords.set(
           chordElement,
@@ -1926,7 +1931,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     if (
       !elements.some(
         (element) =>
-          element.nodeName === MUSIC_NOTE_NODE &&
+          isNoteNodeName(element.nodeName) &&
           isTriangle((element as NoteElementType).notehead)
       )
     ) {
@@ -1936,7 +1941,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (element.nodeName === MUSIC_REST_NODE) {
         return { kind: 'break' };
       }
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (isNoteNodeName(element.nodeName)) {
         const notehead = (element as NoteElementType).notehead;
         if (notehead === 'triangle-up' || notehead === 'triangle-down') {
           const previous = elements[i - 1];
@@ -1944,7 +1949,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
             kind: 'triangle',
             notehead,
             tiedFromPrevious:
-              previous?.nodeName === MUSIC_NOTE_NODE &&
+              isNoteNodeName(previous?.nodeName ?? '') &&
               (previous as NoteElementType).tie === 'start',
           };
         }
@@ -2007,7 +2012,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     tremoloGroups: TremoloGroupPlacement[],
     direction: VoiceDirection,
     pitchDriven: boolean,
-    accidentals: ReturnType<typeof computeNoteAccidentals>,
+    accidentals: NoteAccidentals,
     precomputedYCoords?: VoiceStaffYCoords
   ): VoiceRenderState {
     const { noteStaffYCoords, chordStaffYCoords } =
@@ -2061,10 +2066,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       }
       const stemDirection = (element as NoteElementType | ChordElementType)
         .stemDirection;
-      const triangleStemUp =
-        element.nodeName === MUSIC_NOTE_NODE
-          ? forcedStemUp((element as NoteElementType).notehead)
-          : null;
+      const triangleStemUp = isNoteNodeName(element.nodeName)
+        ? forcedStemUp((element as NoteElementType).notehead)
+        : null;
       if (triangleStemUp !== null) {
         if (
           stemDirection !== null &&
@@ -2168,7 +2172,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           stemDirections[i],
           durationToFlagCountMap.get(element.duration) ?? 0,
           !(
-            element.nodeName === MUSIC_NOTE_NODE &&
+            isNoteNodeName(element.nodeName) &&
             isTriangle((element as NoteElementType).notehead)
           )
         ),
@@ -2231,7 +2235,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (element.nodeName === MUSIC_REST_NODE) {
         // no stem/beam/accidental properties — position is set in
         // #spaceElements() via restToYCoordinate(duration, voiceRestContext)
-      } else if (element.nodeName === MUSIC_NOTE_NODE) {
+      } else if (isNoteNodeName(element.nodeName)) {
         const noteElement = element as NoteElementType;
         const staffY = noteStaffYCoords.get(noteElement) ?? null;
         const triangle = isTriangle(noteElement.notehead);
@@ -2482,9 +2486,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           },
         });
       }
-      const combinedGroups = isMultiVoice
-        ? detectCombinableGroups(combineInputs)
-        : [];
+      const combinedGroups =
+        isMultiVoice && this.isPitched
+          ? detectCombinableGroups(combineInputs)
+          : [];
 
       const removedIndicesByVoice = new Map<VoiceNumber, Set<number>>();
       for (const group of combinedGroups) {
@@ -2831,6 +2836,22 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     return this.#ownBarlineSlotLefts;
   }
 
+  #withoutClefMarkers(
+    markers: StreamMarkerPlacement[]
+  ): StreamMarkerPlacement[] {
+    const clefs = markers.filter((marker) => marker.kind === 'clef');
+    if (clefs.length === 0) {
+      return markers;
+    }
+    console.warn(
+      `[${this.localName}] <music-clef> is ignored: this staff has no clef changes`
+    );
+    for (const marker of clefs) {
+      marker.element.style.display = 'none';
+    }
+    return markers.filter((marker) => marker.kind !== 'clef');
+  }
+
   #setStreamMarkers(markers: StreamMarkerPlacement[]): void {
     this.#streamMarkers = markers;
     this.#clefMarkers = markers.filter(
@@ -3083,8 +3104,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const span of resolveTrillSpans(state.elements)) {
       const startElement = state.elements[span.startIndex];
       if (
-        startElement.nodeName !== MUSIC_NOTE_NODE &&
-        startElement.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(startElement.nodeName) &&
+        !isChordNodeName(startElement.nodeName)
       ) {
         continue;
       }
@@ -3110,8 +3131,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (let i = 0; i < state.elements.length; i++) {
       const element = state.elements[i];
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue;
       }
@@ -3378,7 +3399,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     duration: DurationType,
     staffYs: readonly number[]
   ): UnisonPartDescriptor {
-    if (element.nodeName === MUSIC_NOTE_NODE) {
+    if (isNoteNodeName(element.nodeName)) {
       const note = element as NoteElementType;
       const pitchAccidental = suffixToType(parseAccidentalSuffix(note.note));
       return {
@@ -3436,7 +3457,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const { stemUp, noFlags, duration } = element;
     let headLeftX: number;
     let headRightX: number;
-    if (element.nodeName === MUSIC_NOTE_NODE) {
+    if (isNoteNodeName(element.nodeName)) {
       const head = noteHeadGeometry(
         stemUp,
         duration,
@@ -3517,8 +3538,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     includeAccidental = true
   ): number {
     if (
-      element.nodeName !== MUSIC_NOTE_NODE &&
-      element.nodeName !== MUSIC_CHORD_NODE
+      !isNoteNodeName(element.nodeName) &&
+      !isChordNodeName(element.nodeName)
     ) {
       return 0;
     }
@@ -3526,7 +3547,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     let extent = 0;
 
     if (includeAccidental) {
-      if (el.nodeName === MUSIC_NOTE_NODE) {
+      if (isNoteNodeName(el.nodeName)) {
         const note = el as NoteElementType;
         const accidental = note.showAccidental;
         if (accidental) {
@@ -3580,7 +3601,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       extent += el.headLeftOverhangPx;
     }
 
-    if (el.nodeName === MUSIC_CHORD_NODE && footprintArpeggio(el) !== null) {
+    if (isChordNodeName(el.nodeName) && footprintArpeggio(el) !== null) {
       // A cluster chord's leftward-displaced second head only clears the entry's
       // SVG left edge once the arpeggio sign — positioned off that displaced
       // head — is present; without a sign the displaced head stays inside the
@@ -3783,7 +3804,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         return null;
       }
       const x = state.noteXPositions.get(localIndex) ?? 0;
-      if (element?.nodeName === MUSIC_NOTE_NODE) {
+      if (isNoteNodeName(element?.nodeName ?? '')) {
         const note = element as NoteElementType;
         const top = parseFloat(note.style.top || '0');
         const head = noteHeadGeometry(
@@ -3799,7 +3820,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
           halfHeight: head.halfHeight * NOTE_SCALE,
         };
       }
-      if (element?.nodeName === MUSIC_CHORD_NODE) {
+      if (isChordNodeName(element?.nodeName ?? '')) {
         const chord = element as ChordElementType;
         const staffYs = state.chordStaffYCoords.get(chord) ?? [];
         const toneIndex = staffYs.indexOf(staffY);
@@ -4058,7 +4079,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
                 : { direction: state.direction }
             )}px`;
           }
-        } else if (element.nodeName === MUSIC_NOTE_NODE) {
+        } else if (isNoteNodeName(element.nodeName)) {
           const noteElement = element as NoteElementType;
           const yHeadOffset = computeYHeadOffset(
             noteElement.stemUp,
@@ -4116,12 +4137,12 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const state of this.#voiceRenderStates.values()) {
       for (const element of state.elements) {
         if (
-          element.nodeName === MUSIC_NOTE_NODE ||
-          element.nodeName === MUSIC_CHORD_NODE
+          isNoteNodeName(element.nodeName) ||
+          isChordNodeName(element.nodeName)
         ) {
           (element as NoteElementType | ChordElementType).augmentationDotRows =
             dotRowsByElement.get(element) ?? null;
-          if (element.nodeName === MUSIC_NOTE_NODE) {
+          if (isNoteNodeName(element.nodeName)) {
             (element as NoteElementType).augmentationDotShiftPx =
               dotShiftByElement.get(element) ?? 0;
           }
@@ -4176,13 +4197,13 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     const crossVoiceElements = new Set<NoteElementType | ChordElementType>();
     for (const state of this.#voiceRenderStates.values()) {
       for (const element of state.elements) {
-        if (element.nodeName === MUSIC_NOTE_NODE) {
+        if (isNoteNodeName(element.nodeName)) {
           (element as NoteElementType).unisonPart =
             unisonPartByElement.get(element) ?? null;
         }
         if (
-          element.nodeName === MUSIC_NOTE_NODE ||
-          element.nodeName === MUSIC_CHORD_NODE
+          isNoteNodeName(element.nodeName) ||
+          isChordNodeName(element.nodeName)
         ) {
           crossVoiceElements.add(element as NoteElementType | ChordElementType);
         }
@@ -4210,9 +4231,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
         const element = state.elements[i];
         const extension = state.beamRenderer.stemExtension(i);
-        if (element.nodeName === MUSIC_NOTE_NODE) {
+        if (isNoteNodeName(element.nodeName)) {
           (element as NoteElementType).stemExtension = extension;
-        } else if (element.nodeName === MUSIC_CHORD_NODE) {
+        } else if (isChordNodeName(element.nodeName)) {
           (element as ChordElementType).stemExtension = extension;
         }
       }
@@ -4877,8 +4898,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (const element of previousElements) {
       if (
         next.has(element) ||
-        (element.nodeName !== MUSIC_NOTE_NODE &&
-          element.nodeName !== MUSIC_CHORD_NODE)
+        (!isNoteNodeName(element.nodeName) &&
+          !isChordNodeName(element.nodeName))
       ) {
         continue;
       }
@@ -4892,8 +4913,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     let inPassage = false;
     for (const element of elements) {
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue;
       }
@@ -4923,8 +4944,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (let i = 0; i < state.elements.length; i++) {
       const element = state.elements[i];
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue;
       }
@@ -4970,10 +4991,10 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
   #hasTrillMarkedElement(): boolean {
     return this.#allElements.some((element) => {
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (isNoteNodeName(element.nodeName)) {
         return (element as NoteElementType).trill;
       }
-      if (element.nodeName === MUSIC_CHORD_NODE) {
+      if (isChordNodeName(element.nodeName)) {
         return (element as ChordElementType).trill;
       }
       return false;
@@ -5119,7 +5140,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     }
     const noteX = state.noteXPositions.get(index) ?? 0;
     const xCenter = noteX + NOTE_SVG_WIDTH / 2;
-    if (element.nodeName === MUSIC_NOTE_NODE) {
+    if (isNoteNodeName(element.nodeName)) {
       const noteElement = element as NoteElementType;
       const rawY = this.noteToYCoordinate(
         noteElement.note,
@@ -5152,8 +5173,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     for (let i = 0; i < state.elements.length; i++) {
       const element = state.elements[i];
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue;
       }
@@ -5179,7 +5200,7 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
       let referenceLetter: NoteLetter;
       let referenceOctave: Octave;
-      if (element.nodeName === MUSIC_NOTE_NODE) {
+      if (isNoteNodeName(element.nodeName)) {
         const noteElement = element as NoteElementType;
         referenceLetter = noteElement.note[0] as NoteLetter;
         referenceOctave = noteElement.octave ?? 4;
@@ -5293,8 +5314,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const hasArpeggiandoText = state.elements.some(
       (element) =>
-        (element.nodeName === MUSIC_NOTE_NODE ||
-          element.nodeName === MUSIC_CHORD_NODE) &&
+        (isNoteNodeName(element.nodeName) ||
+          isChordNodeName(element.nodeName)) &&
         (element as NoteElementType | ChordElementType).arpeggiate === 'start'
     );
     if (hasArpeggiandoText) {
@@ -5311,8 +5332,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // top notehead — reserve room when it would otherwise poke past the SVG.
     for (const element of state.elements) {
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue;
       }
@@ -5331,10 +5352,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (topMark === null) {
         continue;
       }
-      const staffYs =
-        element.nodeName === MUSIC_NOTE_NODE
-          ? [state.noteStaffYCoords.get(el as NoteElementType) ?? 0]
-          : state.chordStaffYCoords.get(el as ChordElementType) ?? [0];
+      const staffYs = isNoteNodeName(element.nodeName)
+        ? [state.noteStaffYCoords.get(el as NoteElementType) ?? 0]
+        : state.chordStaffYCoords.get(el as ChordElementType) ?? [0];
       const topHeadY =
         STAFF_Y_PADDING + Math.min(...staffYs) - NOTE_HEAD_Y_OFFSET_CORRECTION;
       const textTopY =
@@ -5351,8 +5371,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
     // the notehead instead).
     const hasTrillAccidental = state.elements.some((element) => {
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         return false;
       }
@@ -5652,8 +5672,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const hasArpeggiandoText = state.elements.some(
       (element) =>
-        (element.nodeName === MUSIC_NOTE_NODE ||
-          element.nodeName === MUSIC_CHORD_NODE) &&
+        (isNoteNodeName(element.nodeName) ||
+          isChordNodeName(element.nodeName)) &&
         (element as NoteElementType | ChordElementType).arpeggiate === 'start'
     );
     if (hasArpeggiandoText) {
@@ -5666,8 +5686,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     for (const element of state.elements) {
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue;
       }
@@ -5684,10 +5704,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
       if (topMark === null) {
         continue;
       }
-      const staffYs =
-        element.nodeName === MUSIC_NOTE_NODE
-          ? [state.noteStaffYCoords.get(el as NoteElementType) ?? 0]
-          : state.chordStaffYCoords.get(el as ChordElementType) ?? [0];
+      const staffYs = isNoteNodeName(element.nodeName)
+        ? [state.noteStaffYCoords.get(el as NoteElementType) ?? 0]
+        : state.chordStaffYCoords.get(el as ChordElementType) ?? [0];
       const topHeadY =
         STAFF_Y_PADDING + Math.min(...staffYs) - NOTE_HEAD_Y_OFFSET_CORRECTION;
       consider(
@@ -5700,8 +5719,8 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
 
     const hasTrillAccidental = state.elements.some((element) => {
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         return false;
       }
@@ -5988,10 +6007,9 @@ export abstract class StaffClassicalElementBase extends StaffElementBase {
         }
         return;
       }
-      const headYs =
-        element.nodeName === MUSIC_NOTE_NODE
-          ? [state.noteStaffYCoords.get(element as NoteElementType)]
-          : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
+      const headYs = isNoteNodeName(element.nodeName)
+        ? [state.noteStaffYCoords.get(element as NoteElementType)]
+        : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
       for (const headY of headYs) {
         if (headY === undefined) {
           continue;

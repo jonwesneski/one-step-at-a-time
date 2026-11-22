@@ -370,7 +370,7 @@ describe(MUSIC_CHORD, () => {
 
     // Trills are staff-only, deliberately: the wavy line needs sibling
     // elements in the same staff to span into, so a sign with no possible
-    // line is not drawn either — see staffClassicalBase.test.ts for in-staff
+    // line is not drawn either — see staffNotationBase.test.ts for in-staff
     // sign rendering coverage.
     it('renders no sign on a standalone chord, even when trill is set', () => {
       const chordElement = makeChord();

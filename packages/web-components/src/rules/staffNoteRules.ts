@@ -3,7 +3,7 @@ import {
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
-import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
+import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_TOP_LINE_Y,
@@ -120,11 +120,11 @@ export const getStaffYs = (
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
 ): number[] => {
-  if (element.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(element.nodeName)) {
     const noteElement = element as NoteElementType;
     return [noteStaffYCoords.get(noteElement) ?? 0];
   }
-  if (element.nodeName === MUSIC_CHORD_NODE) {
+  if (isChordNodeName(element.nodeName)) {
     const chordElement = element as ChordElementType;
     return chordStaffYCoords.get(chordElement) ?? [];
   }

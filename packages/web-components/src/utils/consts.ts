@@ -22,6 +22,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  PercussionInstrument,
   RestStaffSide,
   StaffGroupType,
   StemDirection,
@@ -44,8 +45,10 @@ import type {
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export const MUSIC_NOTE = 'music-note';
+export const MUSIC_DRUM_NOTE = 'music-drum-note';
 export const MUSIC_REST = 'music-rest';
 export const MUSIC_CHORD = 'music-chord';
+export const MUSIC_DRUM_CHORD = 'music-drum-chord';
 export const MUSIC_TUPLET = 'music-tuplet';
 export const MUSIC_ARPEGGIO = 'music-arpeggio';
 export const MUSIC_TREMOLO = 'music-tremolo';
@@ -59,12 +62,21 @@ export const MUSIC_CLEF = 'music-clef';
 export const MUSIC_BARLINE = 'music-barline';
 export const MUSIC_STAFF_GUITAR_TAB = 'music-staff-guitar-tab';
 export const MUSIC_STAFF_VOCAL = 'music-staff-vocal';
+export const MUSIC_STAFF_PERCUSSION = 'music-staff-percussion';
 export const MUSIC_LYRICS = 'music-lyrics';
 
 export const STAFF_TAGS = [
   MUSIC_STAFF,
   MUSIC_STAFF_GUITAR_TAB,
   MUSIC_STAFF_VOCAL,
+  MUSIC_STAFF_PERCUSSION,
+].join(', ');
+
+/** The five-line notation staves, i.e. every staff tag except guitar tab. */
+export const NOTATION_STAFF_TAGS = [
+  MUSIC_STAFF,
+  MUSIC_STAFF_VOCAL,
+  MUSIC_STAFF_PERCUSSION,
 ].join(', ');
 
 export const isStaffNodeName = (nodeName: string): boolean =>
@@ -72,8 +84,52 @@ export const isStaffNodeName = (nodeName: string): boolean =>
 
 // Uppercase variants for nodeName comparisons (DOM nodeName is always uppercase)
 export const MUSIC_NOTE_NODE = MUSIC_NOTE.toUpperCase();
+export const MUSIC_DRUM_NOTE_NODE = MUSIC_DRUM_NOTE.toUpperCase();
 export const MUSIC_REST_NODE = MUSIC_REST.toUpperCase();
 export const MUSIC_CHORD_NODE = MUSIC_CHORD.toUpperCase();
+export const MUSIC_DRUM_CHORD_NODE = MUSIC_DRUM_CHORD.toUpperCase();
+
+/**
+ * The note and chord elements the engine lays out: the pitched ones and their
+ * drum subclasses. Match on these, never on one tag.
+ */
+const NOTE_TAG_LIST = [MUSIC_NOTE, MUSIC_DRUM_NOTE];
+const CHORD_TAG_LIST = [MUSIC_CHORD, MUSIC_DRUM_CHORD];
+
+export const NOTE_TAGS = NOTE_TAG_LIST.join(', ');
+export const CHORD_TAGS = CHORD_TAG_LIST.join(', ');
+
+// Selector lists over every note/chord tag; `suffix` is appended to each
+// compound (e.g. `[slur-group]`, `:defined`).
+export const noteSelector = (suffix = ''): string =>
+  NOTE_TAG_LIST.map((tag) => `${tag}${suffix}`).join(', ');
+
+export const chordSelector = (suffix = ''): string =>
+  CHORD_TAG_LIST.map((tag) => `${tag}${suffix}`).join(', ');
+
+/** Notes that aren't a chord's tones. */
+export const loneNoteSelector = (suffix = ''): string =>
+  NOTE_TAG_LIST.map(
+    (note) =>
+      `${note}${CHORD_TAG_LIST.map((chord) => `:not(${chord} ${note})`).join(
+        ''
+      )}${suffix}`
+  ).join(', ');
+
+/** Notes that are a chord's tones. */
+export const chordToneSelector = (suffix = ''): string =>
+  CHORD_TAG_LIST.flatMap((chord) =>
+    NOTE_TAG_LIST.map((note) => `${chord} ${note}${suffix}`)
+  ).join(', ');
+
+export const isNoteNodeName = (nodeName: string): boolean =>
+  nodeName === MUSIC_NOTE_NODE || nodeName === MUSIC_DRUM_NOTE_NODE;
+
+export const isChordNodeName = (nodeName: string): boolean =>
+  nodeName === MUSIC_CHORD_NODE || nodeName === MUSIC_DRUM_CHORD_NODE;
+
+export const isDrumNodeName = (nodeName: string): boolean =>
+  nodeName === MUSIC_DRUM_NOTE_NODE || nodeName === MUSIC_DRUM_CHORD_NODE;
 export const MUSIC_TUPLET_NODE = MUSIC_TUPLET.toUpperCase();
 export const MUSIC_ARPEGGIO_NODE = MUSIC_ARPEGGIO.toUpperCase();
 export const MUSIC_TREMOLO_NODE = MUSIC_TREMOLO.toUpperCase();
@@ -87,6 +143,7 @@ export const MUSIC_CLEF_NODE = MUSIC_CLEF.toUpperCase();
 export const MUSIC_BARLINE_NODE = MUSIC_BARLINE.toUpperCase();
 export const MUSIC_STAFF_GUITAR_TAB_NODE = MUSIC_STAFF_GUITAR_TAB.toUpperCase();
 export const MUSIC_STAFF_VOCAL_NODE = MUSIC_STAFF_VOCAL.toUpperCase();
+export const MUSIC_STAFF_PERCUSSION_NODE = MUSIC_STAFF_PERCUSSION.toUpperCase();
 export const MUSIC_LYRICS_NODE = MUSIC_LYRICS.toUpperCase();
 
 export const NOTE_EVENTS = {
@@ -294,6 +351,18 @@ export const NOTEHEADS: NoteheadType[] = [
   'diamond-white',
   'triangle-up',
   'triangle-down',
+];
+
+export const PERCUSSION_INSTRUMENTS: PercussionInstrument[] = [
+  'kick',
+  'floor-tom',
+  'snare',
+  'mid-tom',
+  'high-tom',
+  'ride',
+  'hi-hat',
+  'crash',
+  'hi-hat-pedal',
 ];
 
 /** Hairpin directions — used by the `arpeggio-hairpin` attribute (a dynamic

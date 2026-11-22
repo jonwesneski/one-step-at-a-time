@@ -23,6 +23,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  PercussionInstrument,
   RestStaffSide,
   StaffGroupType,
   StemDirection,
@@ -96,6 +97,8 @@ export interface INoteElement {
   // null removes the attribute (normal).
   get notehead(): NoteheadType;
   set notehead(value: NoteheadType | null);
+  // The authored notehead, else a fixed position's; null when neither is set.
+  readonly ownNotehead: NoteheadType | null;
   // How far a glyph head reaches left of the ellipse head's edge (px).
   readonly headLeftOverhangPx: number;
   // Right ink edge (element px) of the duration dots, or null when undotted.
@@ -579,6 +582,20 @@ export interface IStaffElement extends IStaffElementBase {
 }
 
 export type NoteElementType = HTMLElement & INoteElement;
+
+/** A fixed staff position and notehead, e.g. a drum instrument's. */
+export type StaffPosition = {
+  note: NoteLetter;
+  octave: Octave;
+  notehead: NoteheadType;
+};
+
+export interface IDrumNoteElement extends INoteElement {
+  // Drumset instrument; sets this note's staff position and notehead.
+  get instrument(): PercussionInstrument | null;
+  set instrument(value: PercussionInstrument | null | undefined);
+}
+export type DrumNoteElementType = HTMLElement & IDrumNoteElement;
 export type ChordElementType = HTMLElement & IChordElement;
 export type RestElementType = HTMLElement & IRestElement;
 export type GuitarNoteElementType = HTMLElement & IGuitarNoteElement;

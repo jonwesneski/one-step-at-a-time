@@ -111,6 +111,7 @@ import type {
 } from '../types/theory';
 import {
   appendArpeggioHairpin,
+  chordSelector,
   COMMON_ATTRIBUTES,
   createAngledHairpinSvg,
   createArpeggioSvg,
@@ -124,12 +125,11 @@ import {
   createTremoloBeamPolygon,
   createTupletBracketSvg,
   isStaffNodeName,
+  loneNoteSelector,
   MEASURE_EVENTS,
   MUSIC_ARPEGGIO,
-  MUSIC_CHORD,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
-  MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_STAFF_GUITAR_TAB_NODE,
@@ -285,7 +285,7 @@ function addGapNeed(
 
 // A beam-group member inside a <music-tuplet> keeps its own staff's numeral,
 // which the staff hangs off the shared beam on its stem side
-// (staffClassicalBase.ts#tupletExtremeY's numeral offset) — so it moves with
+// (staffNotationBase.ts#tupletExtremeY's numeral offset) — so it moves with
 // the beam and has to clear what the beam clears.
 function hangingTupletNumeralShapes(
   memberGeometries: readonly {
@@ -1341,7 +1341,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       ) as StaffElementBaseType[];
       // `:defined` skips not-yet-upgraded custom elements — writing our internal
       // properties on those would create shadowing own data properties.
-      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
+      const elementSelector = `${loneNoteSelector(':defined')}, ${chordSelector(
+        ':defined'
+      )}`;
       const perStaffElements = staves.map(
         (staff) =>
           Array.from(
@@ -2139,7 +2141,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const gap = gapBetween(staffIndex, partnerOf(staffIndex));
         const elements = Array.from(
           staff.querySelectorAll(
-            `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`
+            `${loneNoteSelector(':defined')}, ${chordSelector(':defined')}`
           )
         ) as NoteOrChordElementType[];
         for (const element of elements) {
@@ -2845,7 +2847,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         isStaffNodeName(el.nodeName)
       ) as StaffElementBaseType[];
 
-      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined, ${MUSIC_REST}:defined`;
+      const elementSelector = `${loneNoteSelector(':defined')}, ${chordSelector(
+        ':defined'
+      )}, ${MUSIC_REST}:defined`;
       const perStaffElements: NoteChordOrRestElementType[][] = staves.map(
         (staff) =>
           Array.from(
@@ -3484,7 +3488,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         isStaffNodeName(el.nodeName)
       ) as StaffElementBaseType[];
 
-      const elementSelector = `${MUSIC_NOTE}:not(${MUSIC_CHORD} ${MUSIC_NOTE}):defined, ${MUSIC_CHORD}:defined`;
+      const elementSelector = `${loneNoteSelector(':defined')}, ${chordSelector(
+        ':defined'
+      )}`;
       const perStaffElements: NoteOrChordElementType[][] = staves.map(
         (staff) =>
           Array.from(

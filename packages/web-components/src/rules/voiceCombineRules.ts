@@ -7,7 +7,7 @@ import {
   TupletElementType,
 } from '../types/elements';
 import { DurationType, VoiceNumber } from '../types/theory';
-import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
+import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 
 // Matches the epsilon BeamsBuilder#scan already uses for beat-offset window
 // comparisons — floating-point drift (e.g. from a 1/3 triplet fraction) means
@@ -48,7 +48,7 @@ type Candidate = {
 };
 
 function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
-  if (element.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(element.nodeName)) {
     return (element as NoteElementType).notehead === 'normal';
   }
   return (element as ChordElementType).toneNoteheads.every(
@@ -60,7 +60,7 @@ function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
 function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
   return (
     element.accidentalReminder ||
-    (element.nodeName === MUSIC_CHORD_NODE &&
+    (isChordNodeName(element.nodeName) &&
       (element as ChordElementType).toneAccidentalReminders.some(Boolean))
   );
 }
@@ -123,7 +123,7 @@ function combineKey(element: NoteOrChordElementType): string {
 }
 
 function tonesOf(element: NoteOrChordElementType): ChordNote[] {
-  if (element.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(element.nodeName)) {
     const note = element as NoteElementType;
     return [{ value: note.note, octave: note.octave }];
   }
@@ -185,8 +185,8 @@ export function detectCombinableGroups(
     for (let index = 0; index < voice.elements.length; index++) {
       const element = voice.elements[index];
       if (
-        element.nodeName !== MUSIC_NOTE_NODE &&
-        element.nodeName !== MUSIC_CHORD_NODE
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
       ) {
         continue; // rests never combine
       }

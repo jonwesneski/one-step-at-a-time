@@ -16,7 +16,7 @@ import {
   type NoteYPosition,
   type TremoloBeamGroupSpec,
 } from '../utils';
-import { MUSIC_NOTE_NODE, MUSIC_REST_NODE } from '../utils/consts';
+import { isNoteNodeName, MUSIC_REST_NODE } from '../utils/consts';
 import {
   BEAM_ESTIMATE_NOTE_SPACING_PX,
   KNEED_BEAM_TRIGGER_STEM_PX,
@@ -169,10 +169,9 @@ function headStaffYExtent(
   noteStaffYCoords: ReadonlyMap<NoteElementType, number>,
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
 ): { highest: number; lowest: number } {
-  const staffYs =
-    element.nodeName === MUSIC_NOTE_NODE
-      ? [noteStaffYCoords.get(element as NoteElementType) ?? 0]
-      : chordStaffYCoords.get(element as ChordElementType) ?? [];
+  const staffYs = isNoteNodeName(element.nodeName)
+    ? [noteStaffYCoords.get(element as NoteElementType) ?? 0]
+    : chordStaffYCoords.get(element as ChordElementType) ?? [];
   if (staffYs.length === 0) {
     return { highest: 0, lowest: 0 };
   }

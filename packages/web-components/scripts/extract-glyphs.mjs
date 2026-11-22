@@ -65,6 +65,7 @@ const CODEPOINTS = {
   flag8thUp: 0xe240,
   flag8thDown: 0xe241,
   augmentationDot: 0xe1e7,
+  unpitchedPercussionClef1: 0xe069,
 };
 
 const args = process.argv.slice(2);

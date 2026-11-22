@@ -281,7 +281,7 @@ under Build & test): `deleteSelectionHelpers.ts`,
 `this`-free and structure-in/structure-out so they're trivially testable — the
 components stay thin. When such a helper mirrors a rule that also lives in
 `packages/web-components` (e.g. `staffGroupsHelpers.ts` ↔ the library's brace/bracket
-pairing, `connectorsHelpers.ts` ↔ `pairConnectors`, `clefsHelpers.ts` ↔ `staffClassicalBase.ts`
+pairing, `connectorsHelpers.ts` ↔ `pairConnectors`, `clefsHelpers.ts` ↔ `staffNotationBase.ts`
 clef-segment + octave resolution), say so in a header comment and note that this
 app only has to handle well-formed data since it's the sole writer.
 

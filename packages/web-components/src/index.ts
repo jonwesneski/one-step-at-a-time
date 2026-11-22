@@ -3,17 +3,19 @@ import './barline';
 import './chord';
 import './clef';
 import './composition';
+import './drumChord';
+import './drumNote';
+import './guitarNote';
 import './measure';
-import './staff'; // order of import matters for some reason, otherwise <note> can't find gYCoordinate()
+import './note';
+import './rest';
+import './staff';
 import './staffGuitarTab';
+import './staffPercussion';
 import './staffVocal';
 import './tremolo';
 import './tuplet';
 import './voice';
-
-import './guitarNote';
-import './note';
-import './rest';
 
 export { repeatPickupWarning, resolveRepeatSpans } from './rules/barlineRules';
 export type { RepeatEvent, RepeatSpan } from './rules/barlineRules';
@@ -73,6 +75,7 @@ export {
   OCTAVE_DISPLAY_MODES,
   OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
+  PERCUSSION_INSTRUMENTS,
   PITCH_NOTES,
   REST_STAFF_SIDES,
   STAFF_GROUPS,

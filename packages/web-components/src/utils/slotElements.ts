@@ -11,19 +11,29 @@ import {
 } from '../types/elements';
 import { VoiceNumber } from '../types/theory';
 import {
+  isChordNodeName,
+  isDrumNodeName,
+  isNoteNodeName,
   MAX_VOICES,
   MUSIC_ARPEGGIO_NODE,
   MUSIC_BARLINE_NODE,
-  MUSIC_CHORD_NODE,
   MUSIC_CLEF_NODE,
-  MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
   MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
 } from './consts';
 
-export function flattenSlotElements(assigned: Element[]): {
+/**
+ * Which note and chord elements a staff takes: `'pitched'` (`<music-note>`,
+ * `<music-chord>`) or `'drum'` (`<music-drum-note>`, `<music-drum-chord>`).
+ */
+export type NoteFamily = 'pitched' | 'drum';
+
+export function flattenSlotElements(
+  assigned: Element[],
+  noteFamily: NoteFamily | null = null
+): {
   flatElements: NoteChordOrRestElementType[];
   tupletsByIndex: Map<number, TupletElementType[]>;
   streamMarkers: StreamMarkerPlacement[];
@@ -35,15 +45,34 @@ export function flattenSlotElements(assigned: Element[]): {
   const streamMarkers: StreamMarkerPlacement[] = [];
   const arpeggioGroups: ArpeggioGroupPlacement[] = [];
   const tremoloGroups: TremoloGroupPlacement[] = [];
+  const rejected = new Set<Element>();
+
+  // A note or chord of the other family is hidden and left out.
+  function rejectsFamily(element: Element): boolean {
+    const tag = element.nodeName;
+    if (
+      noteFamily === null ||
+      !(isNoteNodeName(tag) || isChordNodeName(tag)) ||
+      isDrumNodeName(tag) === (noteFamily === 'drum')
+    ) {
+      return false;
+    }
+    (element as HTMLElement).style.display = 'none';
+    rejected.add(element);
+    return true;
+  }
 
   function flatten(
     element: Element,
     tupletAncestors: TupletElementType[]
   ): void {
     const tag = element.nodeName;
+    if (rejectsFamily(element)) {
+      return;
+    }
     if (
-      tag === MUSIC_NOTE_NODE ||
-      tag === MUSIC_CHORD_NODE ||
+      isNoteNodeName(tag) ||
+      isChordNodeName(tag) ||
       tag === MUSIC_REST_NODE
     ) {
       if (tupletAncestors.length > 0) {
@@ -121,8 +150,8 @@ export function flattenSlotElements(assigned: Element[]): {
     );
     const acceptable = elementChildren.filter(
       (child) =>
-        child.nodeName === MUSIC_NOTE_NODE ||
-        child.nodeName === MUSIC_CHORD_NODE
+        !rejectsFamily(child) &&
+        (isNoteNodeName(child.nodeName) || isChordNodeName(child.nodeName))
     );
     if (acceptable.length < 2) {
       console.warn(
@@ -157,8 +186,8 @@ export function flattenSlotElements(assigned: Element[]): {
     const children = Array.from(element.children);
     const grouped = element.hasAttribute('tremolo-group');
     const isMember = (child: Element): boolean =>
-      child.nodeName === MUSIC_NOTE_NODE ||
-      child.nodeName === MUSIC_CHORD_NODE ||
+      ((isNoteNodeName(child.nodeName) || isChordNodeName(child.nodeName)) &&
+        !rejectsFamily(child)) ||
       (grouped &&
         child.nodeName === MUSIC_REST_NODE &&
         child.hasAttribute('hidden'));
@@ -219,6 +248,14 @@ export function flattenSlotElements(assigned: Element[]): {
       (element as HTMLElement).style.display = '';
     }
     flatten(element, []);
+  }
+
+  if (rejected.size > 0) {
+    console.warn(
+      noteFamily === 'drum'
+        ? `[flattenSlotElements] a percussion staff takes only <music-drum-note> and <music-drum-chord>; ignoring ${rejected.size} element(s)`
+        : `[flattenSlotElements] a pitched staff takes no <music-drum-note> or <music-drum-chord>; ignoring ${rejected.size} element(s)`
+    );
   }
 
   return {
@@ -295,7 +332,8 @@ export type StaffFlattenResult = {
 // Bare entries beside <music-voice> siblings are discarded. A <music-clef>
 // belongs inside the first <music-voice>.
 export function flattenStaffSlotElements(
-  assigned: Element[]
+  assigned: Element[],
+  noteFamily: NoteFamily | null = null
 ): StaffFlattenResult {
   const voiceElements = assigned.filter(
     (element) => element.nodeName === MUSIC_VOICE_NODE
@@ -308,7 +346,7 @@ export function flattenStaffSlotElements(
       streamMarkers,
       arpeggioGroups,
       tremoloGroups,
-    } = flattenSlotElements(assigned);
+    } = flattenSlotElements(assigned, noteFamily);
     return {
       voices: new Map([
         [1, { flatElements, tupletsByIndex, arpeggioGroups, tremoloGroups }],
@@ -361,7 +399,7 @@ export function flattenStaffSlotElements(
       streamMarkers: voiceMarkers,
       arpeggioGroups,
       tremoloGroups,
-    } = flattenSlotElements(Array.from(voiceElement.children));
+    } = flattenSlotElements(Array.from(voiceElement.children), noteFamily);
     voices.set((i + 1) as VoiceNumber, {
       flatElements,
       tupletsByIndex,
@@ -372,7 +410,7 @@ export function flattenStaffSlotElements(
       // A marker is staff-wide, but voice 1 is its canonical anchor —
       // flattenSlotElements() already collected these with a real,
       // index-based `afterElementIndex` relative to voice 1's own array,
-      // exactly like the single-voice case. staffClassicalBase.ts converts
+      // exactly like the single-voice case. staffNotationBase.ts converts
       // that index into a beat-offset to apply it to every voice.
       streamMarkers = voiceMarkers;
     } else if (voiceMarkers.length > 0) {

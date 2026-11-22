@@ -45,14 +45,17 @@ import {
   tremoloBeamCounts,
   type TremoloBeamSegment,
 } from '../../rules/tremoloRules';
-import type { NoteChordOrRestElementType } from '../../types/elements';
+import type {
+  NoteChordOrRestElementType,
+  NoteElementType,
+} from '../../types/elements';
 import type {
   BeatsInMeasure,
   BeatTypeInMeasure,
   DurationType,
   TremoloBeamAttach,
 } from '../../types/theory';
-import { MUSIC_NOTE_NODE, MUSIC_REST_NODE, SVG_NS } from '../consts';
+import { isNoteNodeName, MUSIC_REST_NODE, SVG_NS } from '../consts';
 import {
   BASE_STEM_LENGTH_PX,
   BEAM_ESTIMATE_NOTE_SPACING_PX,
@@ -60,7 +63,7 @@ import {
   STAFF_Y_PADDING,
   STEM_OVERLAP_PX,
 } from '../notationDimensions';
-import { parseDuration, parseNotehead, parseTremolo } from '../parsers';
+import { parseDuration, parseTremolo } from '../parsers';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
@@ -866,8 +869,8 @@ export class BeamsBuilder {
         // normal heads.
         const flagCount =
           elements[i].nodeName === MUSIC_REST_NODE ||
-          (elements[i].nodeName === MUSIC_NOTE_NODE &&
-            isTriangle(parseNotehead(elements[i].getAttribute('notehead'))))
+          (isNoteNodeName(elements[i].nodeName) &&
+            isTriangle((elements[i] as NoteElementType).notehead))
             ? undefined
             : durationToFlagCountMap.get(dur);
 

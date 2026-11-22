@@ -105,21 +105,19 @@ import {
 } from '../utils/connectorsBuilder';
 import {
   BARLINE_EVENTS,
+  chordSelector,
   COMMON_ATTRIBUTES,
+  isChordNodeName,
+  isNoteNodeName,
   isStaffNodeName,
   MEASURE_EVENTS,
-  MUSIC_CHORD,
-  MUSIC_CHORD_NODE,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_MEASURE_NODE,
-  MUSIC_NOTE,
-  MUSIC_NOTE_NODE,
   MUSIC_REST_NODE,
-  MUSIC_STAFF,
-  MUSIC_STAFF_GUITAR_TAB,
-  MUSIC_STAFF_VOCAL,
+  NOTATION_STAFF_TAGS,
   NOTE_EVENTS,
+  noteSelector,
   STAFF_EVENTS,
   STAFF_TAGS,
 } from '../utils/consts';
@@ -158,7 +156,7 @@ import { measureVerticalExtents } from '../utils/verticalSpace';
 const MEASURE_ORDINAL_STRIDE = 1_000_000;
 
 // The trill line's Y offset from its staff's top, matching
-// staffClassicalBase.ts#redrawTrillLines so continuations line up.
+// staffNotationBase.ts#redrawTrillLines so continuations line up.
 const TRILL_LINE_ROOT_Y_OFFSET =
   STAFF_Y_PADDING +
   STAFF_TOP_LINE_Y -
@@ -819,9 +817,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #computeNotesAreaLeft(rootRect: DOMRect): number {
-      const firstStaff = this.querySelector(
-        `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}, ${MUSIC_STAFF_GUITAR_TAB}`
-      ) as HTMLElement | null;
+      const firstStaff = this.querySelector(STAFF_TAGS) as HTMLElement | null;
       if (!firstStaff?.shadowRoot) {
         return 0;
       }
@@ -848,9 +844,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
-      const staff = element.closest(
-        `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`
-      ) as HTMLElement | null;
+      const staff = element.closest(NOTATION_STAFF_TAGS) as HTMLElement | null;
       if (!staff) {
         return 0;
       }
@@ -875,7 +869,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return;
       }
 
-      const selector = `${MUSIC_NOTE}[crescendo], ${MUSIC_NOTE}[decrescendo], ${MUSIC_CHORD}[crescendo], ${MUSIC_CHORD}[decrescendo]`;
+      const selector = `${noteSelector('[crescendo]')}, ${noteSelector(
+        '[decrescendo]'
+      )}, ${chordSelector('[crescendo]')}, ${chordSelector('[decrescendo]')}`;
       const tracks = this.#buildStaffTracks();
       const measureOrder = new Map<Element, number>();
       tracks.flat().forEach(({ staff }) => {
@@ -957,7 +953,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const rootRect = wrapper.getBoundingClientRect();
       let entryObstacles: EntryObstacles | null = null;
       let stems: ObstacleRect[] | null = null;
-      const staffSelector = `${MUSIC_STAFF}, ${MUSIC_STAFF_VOCAL}`;
+      const staffSelector = NOTATION_STAFF_TAGS;
 
       for (const pair of pairs) {
         const { startElement, endElement } = pair;
@@ -1350,8 +1346,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
           const hasOctaveShiftElement = globalElements.some(
             (element) =>
-              (element.nodeName === MUSIC_NOTE_NODE ||
-                element.nodeName === MUSIC_CHORD_NODE) &&
+              (isNoteNodeName(element.nodeName) ||
+                isChordNodeName(element.nodeName)) &&
               (element as NoteElementType | ChordElementType).octaveShift !==
                 null
           );

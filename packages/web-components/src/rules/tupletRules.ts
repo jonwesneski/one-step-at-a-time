@@ -6,7 +6,7 @@ import {
 } from '../types/elements';
 import { TupletPlacement, TupletRatio } from '../types/theory';
 import {
-  MUSIC_NOTE_NODE,
+  isNoteNodeName,
   MUSIC_REST_NODE,
   MUSIC_TUPLET_NODE,
 } from '../utils/consts';
@@ -184,7 +184,7 @@ export function getStaffYForIndex(
   chordStaffYCoords: ReadonlyMap<ChordElementType, number[]>
 ): number | null {
   const el = elements[index];
-  if (el.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(el.nodeName)) {
     return noteStaffYCoords.get(el as NoteElementType) ?? null;
   }
   if (el.nodeName !== MUSIC_REST_NODE) {
@@ -273,7 +273,7 @@ export function noteheadEdgeY(
 ): number | null {
   const element = elements[index];
   let staffY: number | undefined;
-  if (element.nodeName === MUSIC_NOTE_NODE) {
+  if (isNoteNodeName(element.nodeName)) {
     staffY = noteStaffYCoords.get(element as NoteElementType);
   } else if (element.nodeName !== MUSIC_REST_NODE) {
     const ys = chordStaffYCoords.get(element as ChordElementType);

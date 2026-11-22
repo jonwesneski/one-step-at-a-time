@@ -203,7 +203,7 @@ export type NoteProps = {
   staffY?: number | null;
   // Staff-written px to raise the trill sign further above its own nominal
   // Y — set when another voice's own content occupies that territory in a
-  // multi-voice staff (see StaffClassicalElementBase#trillLineYClearingOtherVoices,
+  // multi-voice staff (see StaffNotationElementBase#trillLineYClearingOtherVoices,
   // which computes the same value the sibling trill line/notch use, so the
   // sign and line move together as one visual unit).
   trillSignExtraLift?: number;

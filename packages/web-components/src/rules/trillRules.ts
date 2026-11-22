@@ -11,7 +11,7 @@ import type {
   NoteLetter,
   Octave,
 } from '../types/theory';
-import { MUSIC_CHORD_NODE, MUSIC_NOTE_NODE } from '../utils/consts';
+import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 import {
   getKeySignatureAccidentals,
   parseAccidentalSuffix,
@@ -25,7 +25,7 @@ type TrillCapableElement = NoteElementType | ChordElementType;
 const isTrillCapable = (
   element: NoteChordOrRestElementType
 ): element is TrillCapableElement =>
-  element.nodeName === MUSIC_NOTE_NODE || element.nodeName === MUSIC_CHORD_NODE;
+  isNoteNodeName(element.nodeName) || isChordNodeName(element.nodeName);
 
 export type TrillLineSpan = {
   /** Index of the trill-marked element that starts this span. */

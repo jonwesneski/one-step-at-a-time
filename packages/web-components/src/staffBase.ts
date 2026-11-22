@@ -27,18 +27,18 @@ import {
   partitionByVoice,
 } from './utils/connectorsBuilder';
 import {
+  CHORD_TAGS,
   COMMON_ATTRIBUTES,
   MUSIC_ARPEGGIO_NODE,
-  MUSIC_CHORD,
   MUSIC_CLEF,
   MUSIC_COMPOSITION,
   MUSIC_GUITAR_NOTE,
   MUSIC_MEASURE,
-  MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
   MUSIC_VOICE_NODE,
+  NOTE_TAGS,
   STAFF_EVENTS,
 } from './utils/consts';
 import {
@@ -79,7 +79,7 @@ const INK_SELECTOR =
   'path, ellipse:not(.head-hit-zone), line, rect, polygon, polyline, circle, text';
 const NON_ENTRY_INK =
   '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container';
-const ENTRY_SELECTOR = `${MUSIC_NOTE}, ${MUSIC_CHORD}, ${MUSIC_REST}:not([hidden]), ${MUSIC_CLEF}, ${MUSIC_GUITAR_NOTE}`;
+const ENTRY_SELECTOR = `${NOTE_TAGS}, ${CHORD_TAGS}, ${MUSIC_REST}:not([hidden]), ${MUSIC_CLEF}, ${MUSIC_GUITAR_NOTE}`;
 
 // Sub-pixel drift between passes must not count as a change, or the measure
 // and its staves would hand the value back and forth.

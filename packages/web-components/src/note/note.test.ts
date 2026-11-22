@@ -1439,7 +1439,7 @@ describe('trill', () => {
 
   // Trills are staff-only, deliberately: the wavy line needs sibling elements
   // in the same staff to span into, so a sign with no possible line is not
-  // drawn either — see staffClassicalBase.test.ts for in-staff sign
+  // drawn either — see staffNotationBase.test.ts for in-staff sign
   // rendering coverage.
   it('renders no sign on a standalone note, even when trill is set', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
@@ -2806,5 +2806,17 @@ describe('`for` changes', () => {
     );
     note.setAttribute('for', 'start-note');
     expect(onConnectorChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('standalone redraw', () => {
+  it('redraws a standalone note when its spelling changes', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('note', 'F');
+    note.setAttribute('octave', '4');
+    document.body.appendChild(note);
+    const before = note.shadowRoot!.innerHTML;
+    note.note = 'F#';
+    expect(note.shadowRoot!.innerHTML).not.toBe(before);
   });
 });

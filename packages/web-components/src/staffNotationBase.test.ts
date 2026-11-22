@@ -48,8 +48,8 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// <music-staff> (default clef="treble") stands in for StaffClassicalElementBase.
-describe('staffClassicalBase', () => {
+// <music-staff> (default clef="treble") stands in for StaffNotationElementBase.
+describe('staffNotationBase', () => {
   it('logs a warning when adding another note on a filled measure', () => {
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -1224,7 +1224,7 @@ describe('staffClassicalBase', () => {
   });
 });
 
-describe('staffClassicalBase triangle noteheads', () => {
+describe('staffNotationBase triangle noteheads', () => {
   beforeEach(() => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
@@ -1533,7 +1533,7 @@ describe('staffClassicalBase triangle noteheads', () => {
   });
 });
 
-describe('staffClassicalBase strut min width', () => {
+describe('staffNotationBase strut min width', () => {
   const ACCIDENTAL_NOTES = ['F#', 'G#', 'A#', 'C#'];
 
   it.each<[string, (index: number) => Record<string, string>]>([
@@ -1578,7 +1578,7 @@ describe('staffClassicalBase strut min width', () => {
   });
 });
 
-describe('staffClassicalBase strut min width with tuplets', () => {
+describe('staffNotationBase strut min width with tuplets', () => {
   const makeNote = (duration: DurationType) => {
     const note = document.createElement(MUSIC_NOTE) as any;
     note.setAttribute('note', 'G');
@@ -1653,7 +1653,7 @@ describe('staffClassicalBase strut min width with tuplets', () => {
   });
 });
 
-describe('staffClassicalBase stems', () => {
+describe('staffNotationBase stems', () => {
   const renderStaff = (entries: Record<string, string>[], time = '4/4') => {
     const staff = document.createElement(MUSIC_STAFF) as any;
     staff.setAttribute(COMMON_ATTRIBUTES.TIME, time);

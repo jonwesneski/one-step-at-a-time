@@ -9,7 +9,7 @@ import {
   generateMinorKeySignatureYCoordinates,
   generateYCoordinates,
 } from '../rules/theoryHelpers';
-import { StaffClassicalElementBase } from '../staffClassicalBase';
+import { StaffNotationElementBase } from '../staffNotationBase';
 import type {
   LyricSyllablePosition,
   LyricsElementType,
@@ -17,11 +17,11 @@ import type {
 } from '../types/elements';
 import type { Octave, VocalType } from '../types/theory';
 import {
+  CHORD_TAGS,
   LYRICS_EVENTS,
-  MUSIC_CHORD,
   MUSIC_LYRICS,
-  MUSIC_NOTE,
   MUSIC_STAFF_VOCAL,
+  NOTE_TAGS,
   STAFF_EVENTS,
 } from '../utils/consts';
 import {
@@ -66,7 +66,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *   <music-lyrics verse="1">A-men</music-lyrics>
    * </music-staff-vocal>
    */
-  class StaffVocalElement extends StaffClassicalElementBase {
+  class StaffVocalElement extends StaffNotationElementBase {
     static #treble = getClefRenderData('treble');
     static #bass = getClefRenderData('bass');
     static #mezzoYCoordinates = generateYCoordinates('C6', 'A3');
@@ -202,11 +202,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #sungEntries(): HTMLElement[] {
       return Array.from(
         (this as unknown as ParentNode).querySelectorAll<HTMLElement>(
-          `${MUSIC_NOTE}, ${MUSIC_CHORD}`
+          `${NOTE_TAGS}, ${CHORD_TAGS}`
         )
       ).filter(
         (entry) =>
-          entry.parentElement?.closest(MUSIC_CHORD) === null &&
+          entry.parentElement?.closest(CHORD_TAGS) === null &&
           entry.getAttribute('tie') !== 'end'
       );
     }
