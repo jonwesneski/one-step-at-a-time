@@ -123,7 +123,7 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 | &#x2610; | Tongue           | `t` or `Tu`           | Articulate note with tongue                  |
 | &#x2610; | Double Tongue    | `T-K`                 | Rapid double articulation                    |
 | &#x2610; | Triple Tongue    | `T-K-T`               | Rapid triple articulation                    |
-| &#x2610; | Flutter Tongue   | `flz.` or `flutter`   | Roll the tongue while playing                |
+| &#x2611; | Flutter Tongue   | `flz.` or `flutter`   | Roll the tongue while playing                |
 | &#x2610; | Growl            | `growl`               | Sing into instrument while playing           |
 | &#x2610; | Multiphonics     | Special notation      | Produce multiple pitches simultaneously      |
 | &#x2610; | Half-valve       | `(+)` or special mark | Depress valve halfway for microtone/effect   |
@@ -377,7 +377,7 @@ Instructions for how to physically produce the sound. These are specific to the 
 | &#x2610; | `con sord.`              | Strings/Brass  | With mute                          |
 | &#x2610; | `senza sord.`            | Strings/Brass  | Without mute                       |
 | &#x2610; | `ord.` / `ordinario`     | Any            | Return to normal technique         |
-| &#x2610; | `flutter` / `flz.`       | Wind           | Flutter tongue                     |
+| &#x2611; | `flutter` / `flz.`       | Wind           | Flutter tongue                     |
 | &#x2610; | `palm mute` / `P.M.----` | Guitar         | Mute strings with palm near bridge |
 | &#x2610; | `let ring` / `L.R.----`  | Guitar         | Allow strings to sustain           |
 | &#x2610; | `tap` / `T`              | Guitar         | Right-hand tapping                 |

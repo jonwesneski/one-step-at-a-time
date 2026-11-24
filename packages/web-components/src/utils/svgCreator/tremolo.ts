@@ -61,14 +61,20 @@ export function createTremoloNumeral(
 const TREMOLO_LABEL_TEXT: Record<TremoloLabel, string> = {
   trem: 'trem.',
   'non-trem': 'non trem.',
+  flz: 'flz.',
+  flt: 'flt.',
+  frull: 'frull.',
+  ord: 'ord.',
+  nat: 'nat.',
+  norm: 'norm.',
 };
 
-/** Estimated drawn width (px) of a `trem.` / `non trem.` label. */
+/** Estimated drawn width (px) of a technique label. */
 export function tremoloLabelWidthPx(label: TremoloLabel): number {
   return TREMOLO_LABEL_TEXT[label].length * TREMOLO_LABEL_CHAR_WIDTH_PX;
 }
 
-/** A `trem.` / `non trem.` label starting at leftX on baselineY. */
+/** A technique label starting at leftX on baselineY. */
 export function createTremoloLabel(
   leftX: number,
   baselineY: number,

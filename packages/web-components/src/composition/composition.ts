@@ -23,6 +23,11 @@ import {
   resolveEndingSegments,
 } from '../rules/endingRules';
 import {
+  flutterEntryOf,
+  missingFlutterCancelWarning,
+  resolveFlutterPassages,
+} from '../rules/flutterTongueRules';
+import {
   dynamicTextCenterClearOfStems,
   type HairpinEndpointText,
   resolveSharedHairpinY,
@@ -252,6 +257,12 @@ type OctaveRowSource = HTMLElement & {
   > | null;
 };
 
+// A notation staff's flutter-tongue carry-in, duck-typed like the octave
+// hooks above.
+type FlutterCarryInTarget = HTMLElement & {
+  flutterCarryIn?: ReadonlySet<VoiceNumber>;
+};
+
 // <music-measure>'s continuation hand-off and a staff's octave breaks,
 // duck-typed like reserveMeasureSpace below.
 type OctaveContinuationReceiver = HTMLElement & {
@@ -330,6 +341,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #rowSpaceMeasures = new Set<HTMLElement>();
     #rowAlignedStaves = new Set<StaffElementBaseType>();
     #redrawScheduled: boolean;
+    #warnedFlutterCancels = new WeakSet<NoteChordOrRestElementType>();
     #boundRedraw: () => void;
     // An ending or barline change can renumber bars, which only the
     // composition sees whole.
@@ -608,6 +620,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (this.#updateEndings()) {
           this.#alignRowStaffSpace();
         }
+        this.#updateFlutterPassages();
         for (const staff of Array.from(
           this.querySelectorAll<StaffElementBaseType>(STAFF_TAGS)
         )) {
@@ -1198,6 +1211,69 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         tracks.push(track);
       }
       return tracks;
+    }
+
+    // Flutter-tongue passages run on across barlines, one track per voice:
+    // each staff learns which of its voices enter with a passage open, and a
+    // flutter-tongued note tied into an ordinary one without `ord.` warns.
+    #updateFlutterPassages() {
+      for (const track of this.#buildStaffTracks()) {
+        const staves = track.map(({ staff }) => staff as FlutterCarryInTarget);
+        if (!staves.some((staff) => 'flutterCarryIn' in staff)) {
+          continue;
+        }
+        const flattened = staves.map((staff) =>
+          flattenStaffSlotElements(Array.from(staff.children))
+        );
+        const carryIn = staves.map(() => new Set<VoiceNumber>());
+        for (const voiceNumber of [1, 2, 3] as VoiceNumber[]) {
+          const elements: NoteChordOrRestElementType[] = [];
+          const measureIndexOf: number[] = [];
+          const openAtStart: boolean[] = [];
+          let open = false;
+          flattened.forEach((flatten, measureIndex) => {
+            const voiceElements =
+              flatten.voices.get(voiceNumber)?.flatElements ?? [];
+            openAtStart.push(open);
+            open = resolveFlutterPassages(
+              voiceElements.map(flutterEntryOf),
+              open
+            ).openAtEnd;
+            elements.push(...voiceElements);
+            measureIndexOf.push(...voiceElements.map(() => measureIndex));
+          });
+          openAtStart.forEach((isOpen, measureIndex) => {
+            if (isOpen) {
+              carryIn[measureIndex].add(voiceNumber);
+            }
+          });
+          const { missingCancels } = resolveFlutterPassages(
+            elements.map(flutterEntryOf),
+            false
+          );
+          for (const i of missingCancels) {
+            const element = elements[i];
+            if (this.#warnedFlutterCancels.has(element)) {
+              continue;
+            }
+            this.#warnedFlutterCancels.add(element);
+            const staff = staves[measureIndexOf[i]];
+            const number =
+              staff.closest(MUSIC_MEASURE)?.getAttribute('number') ??
+              `${measureIndexOf[i] + 1}`;
+            console.warn(
+              `[music-composition] ${missingFlutterCancelWarning(
+                `measure ${number}`
+              )}`
+            );
+          }
+        }
+        staves.forEach((staff, measureIndex) => {
+          if ('flutterCarryIn' in staff) {
+            staff.flutterCarryIn = carryIn[measureIndex];
+          }
+        });
+      }
     }
 
     // Continues a trill line whose tie chain runs past its measure: the

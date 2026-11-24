@@ -313,3 +313,74 @@ test('breaking a tremolo-group falls back to each staff on its own and restores 
   expect(apart.measureBeams).toBe(0);
   expect(apart.topExtension).toBe(0);
 });
+
+test.describe('flutter-tonguing', () => {
+  const phrase = `
+    <music-composition time="3/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note id="flz1" note="F" octave="4" duration="half" tremolo="unmeasured" tremolo-label="flz" tie="start"></music-note>
+          <music-note note="F" octave="4" duration="eighth" tremolo="unmeasured" tie="end"></music-note>
+          <music-note note="A" octave="4" duration="eighth"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-rest duration="quarter"></music-rest>
+          <music-note note="E" octave="4" duration="half" tremolo="unmeasured" tremolo-label="flz" tie="start"></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note id="ord" note="E" octave="4" duration="eighth" tie="end" tremolo-label="ord"></music-note>
+          <music-note note="D" octave="4" duration="eighth"></music-note>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>`;
+
+  test('removing ord. from a flutter tie across a barline warns', async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') {
+        warnings.push(message.text());
+      }
+    });
+    await render(page, phrase);
+    expect(warnings.filter((text) => text.includes('flutter-tongued'))).toEqual(
+      []
+    );
+
+    await page.evaluate(() =>
+      document.getElementById('ord')?.removeAttribute('tremolo-label')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect(warnings.filter((text) => text.includes('flutter-tongued'))).toEqual(
+      [expect.stringContaining('measure 3')]
+    );
+  });
+
+  test('removing the flz. label splits the flutter-tongued eighth from the plain one', async ({
+    page,
+  }) => {
+    await render(page, phrase);
+    const firstStaffBeams = () =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector('music-staff')
+            ?.shadowRoot?.querySelectorAll('.beam-group').length ?? -1
+      );
+    expect(await firstStaffBeams()).toBe(1);
+
+    await page.evaluate(() =>
+      document.getElementById('flz1')?.removeAttribute('tremolo-label')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect(await firstStaffBeams()).toBe(0);
+  });
+});

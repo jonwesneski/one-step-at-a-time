@@ -1680,7 +1680,7 @@
               "type": {
                 "text": "TremoloLabel"
               },
-              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one."
+              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` (\"ord.\") or another label, which goes on the ordinary note a flutter-tongued tie runs into."
             },
             {
               "name": "articulation-repeat",
@@ -1853,6 +1853,12 @@
                 "text": "boolean"
               },
               "default": "false"
+            },
+            {
+              "kind": "field",
+              "name": "#warnedFlutterCancels",
+              "privacy": "private",
+              "default": "new WeakSet<NoteChordOrRestElementType>()"
             },
             {
               "kind": "field",
@@ -2130,6 +2136,11 @@
                   "text": "{ staff: HTMLElement; rowIndex: number }[][]"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#updateFlutterPassages",
+              "privacy": "private"
             },
             {
               "kind": "method",
@@ -4337,7 +4348,7 @@
               "type": {
                 "text": "TremoloLabel"
               },
-              "description": "`trem` / `non-trem` label above the stave.",
+              "description": "`trem` / `non-trem`, flutter-tongue `flz` / `flt` / `frull`, or `ord` / `nat` / `norm` label above the stave.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -6548,7 +6559,7 @@
               "type": {
                 "text": "TremoloLabel"
               },
-              "description": "`trem` / `non-trem` label above the stave.",
+              "description": "`trem` / `non-trem`, flutter-tongue `flz` / `flt` / `frull`, or `ord` / `nat` / `norm` label above the stave.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -9706,7 +9717,7 @@
               "type": {
                 "text": "TremoloLabel"
               },
-              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one."
+              "description": "Technique label above the stave: `trem` (\"trem.\") marks the start of an unmeasured tremolo passage, `non-trem` (\"non trem.\") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` (\"ord.\") or another label, which goes on the ordinary note a flutter-tongued tie runs into."
             },
             {
               "name": "articulation-repeat",
@@ -10515,6 +10526,39 @@
             },
             {
               "kind": "field",
+              "name": "#flutterCarryIn",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlySet<VoiceNumber>"
+              },
+              "default": "new Set()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#flutterTongued",
+              "privacy": "private",
+              "default": "new Set<NoteChordOrRestElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedFlutterCancels",
+              "privacy": "private",
+              "default": "new WeakSet<NoteChordOrRestElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -10903,6 +10947,17 @@
               "name": "crossStaffDynamicsOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "flutterCarryIn",
+              "type": {
+                "text": "ReadonlySet<VoiceNumber>"
               },
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
@@ -17010,6 +17065,39 @@
             },
             {
               "kind": "field",
+              "name": "#flutterCarryIn",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlySet<VoiceNumber>"
+              },
+              "default": "new Set()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#flutterTongued",
+              "privacy": "private",
+              "default": "new Set<NoteChordOrRestElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedFlutterCancels",
+              "privacy": "private",
+              "default": "new WeakSet<NoteChordOrRestElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundDrawConnectors",
               "privacy": "private",
               "inheritedFrom": {
@@ -17398,6 +17486,17 @@
               "name": "crossStaffDynamicsOverrides",
               "type": {
                 "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "flutterCarryIn",
+              "type": {
+                "text": "ReadonlySet<VoiceNumber>"
               },
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",

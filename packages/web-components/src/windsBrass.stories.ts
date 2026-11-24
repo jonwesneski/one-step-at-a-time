@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
-import { html } from 'lit';
+import { html, nothing } from 'lit';
 import './index';
 
 const meta: Meta = {
@@ -227,4 +227,106 @@ export const TwoVoices: Story = {
       </music-voice>
     </music-staff>
   `,
+};
+
+const flutterPhrase = (cancel: boolean) => html`
+  <music-composition time="3/4">
+    <music-measure>
+      <music-staff clef="treble">
+        <music-note
+          note="F"
+          octave="4"
+          duration="half"
+          tremolo="unmeasured"
+          tremolo-label="flz"
+          tie="start"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="4"
+          duration="eighth"
+          tremolo="unmeasured"
+          tie="end"
+        ></music-note>
+        <music-note note="A" octave="4" duration="eighth"></music-note>
+      </music-staff>
+    </music-measure>
+    <music-measure>
+      <music-staff clef="treble">
+        <music-rest duration="quarter"></music-rest>
+        <music-note
+          note="E"
+          octave="4"
+          duration="half"
+          tremolo="unmeasured"
+          tremolo-label="flz"
+          tie="start"
+        ></music-note>
+      </music-staff>
+    </music-measure>
+    <music-measure>
+      <music-staff clef="treble">
+        <music-note
+          note="E"
+          octave="4"
+          duration="eighth"
+          tie="end"
+          tremolo-label=${cancel ? 'ord' : nothing}
+          slur="start"
+        ></music-note>
+        <music-note note="D" octave="4" duration="eighth"></music-note>
+        <music-note
+          note="A"
+          octave="4"
+          duration="quarter"
+          slur="end"
+        ></music-note>
+      </music-staff>
+    </music-measure>
+  </music-composition>
+`;
+
+/**
+ * Flutter-tonguing is a tremolo with `flz.` above it. The flutter-tongued
+ * eighth beams with the plain one beside it. `ord.` is needed only where a
+ * flutter-tongued tie runs into an ordinary note, as in the last bar.
+ */
+export const FlutterTonguing: Story = {
+  render: () => flutterPhrase(true),
+};
+
+/** `flz.`, `flt.` and `frull.` all mean flutter-tonguing; `ord.`, `nat.` and `norm.` cancel it. */
+export const FlutterLabels: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      ${(['flz', 'flt', 'frull'] as const).map(
+        (label) => html`<music-note
+          note="G"
+          octave="4"
+          duration="eighth"
+          tremolo="unmeasured"
+          tremolo-label=${label}
+        ></music-note>`
+      )}
+      <music-rest duration="eighth"></music-rest>
+      ${(['ord', 'nat', 'norm'] as const).map(
+        (label) => html`<music-note
+          note="G"
+          octave="4"
+          duration="eighth"
+          tremolo-label=${label}
+        ></music-note>`
+      )}
+      <music-rest duration="eighth"></music-rest>
+    </music-staff>
+  `,
+};
+
+/**
+ * Without `ord.` on the last bar's first note, the composition warns in the
+ * console: nothing shows that the tied note stops flutter-tonguing.
+ */
+export const MissingOrd: Story = {
+  name: 'Missing ord. (warns)',
+  render: () => flutterPhrase(false),
 };

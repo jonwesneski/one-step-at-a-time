@@ -52,7 +52,9 @@ export function buildBeamsRenderer(
   tremoloGroups: readonly TremoloGroupPlacement[] = [],
   // Where mid-bar barlines fall, in the same beat-offset space; a beam breaks
   // at each.
-  barlineBeatOffsets: readonly number[] = []
+  barlineBeatOffsets: readonly number[] = [],
+  // Flutter-tongued tremolo entries, which beam with plain notes.
+  flutterTonguedIndices: ReadonlySet<number> = new Set()
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -86,7 +88,8 @@ export function buildBeamsRenderer(
       headExtents,
       externallyBeamedIndices ?? new Set()
     ),
-    barlineBeatOffsets
+    barlineBeatOffsets,
+    flutterTonguedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)

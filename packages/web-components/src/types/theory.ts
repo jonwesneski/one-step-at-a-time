@@ -415,10 +415,20 @@ export type TremoloStrokeCount = 1 | 2 | 3 | 4;
 export type TremoloValue = TremoloStrokeCount | 'unmeasured';
 
 /**
- * Tremolo technique label above the stave: `trem.` marks the start of an
- * unmeasured passage, `non trem.` the first measured or plain note after one.
+ * Technique label above the stave. `trem.` marks the start of an unmeasured
+ * passage, `non trem.` the first measured or plain note after one.
+ * `flz.` / `flt.` / `frull.` mark a flutter-tongued tremolo, and `ord.` /
+ * `nat.` / `norm.` the ordinary note that cancels it.
  */
-export type TremoloLabel = 'trem' | 'non-trem';
+export type TremoloLabel =
+  | 'trem'
+  | 'non-trem'
+  | 'flz'
+  | 'flt'
+  | 'frull'
+  | 'ord'
+  | 'nat'
+  | 'norm';
 
 /**
  * A breath mark after a note: `tick` (✓), a break in the sound, or `comma`

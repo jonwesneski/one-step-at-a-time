@@ -10,7 +10,8 @@ Beam grouping implemented here:
   stream).
 - A rest always breaks the current run (no beaming over rests).
 - A run also breaks where notes change between tremolo and plain, so a
-  change of technique reads from the beaming.
+  change of technique reads from the beaming, except where a flutter-tongued
+  note meets a plain one.
 - A `<music-tremolo>`'s members never join a run; the group is beamed as a
   unit of its own (TremoloGroupRenderer), sharing one stem direction.
 - Notes in one beam group share a single stem direction, resolved from the
@@ -755,7 +756,10 @@ export class BeamsBuilder {
     // beamed as a group of their own.
     tremoloSpecs: readonly TremoloBeamGroupSpec[] = [],
     // Beats of mid-bar barlines: a beam never crosses a barline.
-    breakBeats: readonly number[] = []
+    breakBeats: readonly number[] = [],
+    // Flutter-tongued tremolo entries: flutter-tonguing is a sound, not a
+    // rhythm, so they beam with plain notes.
+    flutterTonguedIndices: ReadonlySet<number> = new Set()
   ) {
     for (const spec of tremoloSpecs) {
       for (const index of spec.memberIndices) {
@@ -770,7 +774,8 @@ export class BeamsBuilder {
         ...externallyBeamedIndices,
         ...this.#tremoloSpecByMember.keys(),
       ]),
-      breakBeats
+      breakBeats,
+      flutterTonguedIndices
     );
     this.#groups = groups;
     this.#beamedIndices = beamedIndices;
@@ -801,7 +806,8 @@ export class BeamsBuilder {
     time: [BeatsInMeasure, BeatTypeInMeasure],
     elementOffsets: readonly number[],
     externallyBeamedIndices: ReadonlySet<number>,
-    breakBeats: readonly number[]
+    breakBeats: readonly number[],
+    flutterTonguedIndices: ReadonlySet<number>
   ): { groups: BeamGroup[]; beamedIndices: Set<number> } {
     const barlineBetween = (previous: number, next: number): boolean =>
       breakBeats.some(
@@ -881,7 +887,8 @@ export class BeamsBuilder {
           if (
             pendingNoteIndices.length > 0 &&
             (pendingNoteIndices[pendingNoteIndices.length - 1] !== i - 1 ||
-              hasTremolo !== pendingHasTremolo ||
+              (hasTremolo !== pendingHasTremolo &&
+                !flutterTonguedIndices.has(hasTremolo ? i : i - 1)) ||
               barlineBetween(i - 1, i))
           ) {
             flushRun(pendingFlagCounts, pendingNoteIndices);

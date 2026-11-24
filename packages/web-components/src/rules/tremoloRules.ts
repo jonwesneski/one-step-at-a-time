@@ -2,8 +2,10 @@ import type {
   ArticulationType,
   DurationType,
   TremoloBeamAttach,
+  TremoloLabel,
   TremoloValue,
 } from '../types/theory';
+import { FLUTTER_TONGUE_LABELS, ORDINARY_LABELS } from '../utils/consts';
 import {
   BASE_STEM_LENGTH_PX,
   BEAM_STEP_PX,
@@ -202,6 +204,30 @@ export function articulationRepeatWarning(
     return `articulation-repeat repeats a staccato, staccatissimo, tenuto, portato or tenuto-staccatissimo mark; articulation="${
       articulation ?? ''
     }" has none`;
+  }
+  return null;
+}
+
+/**
+ * Warning text when a flutter-tongue label has no single-note tremolo under
+ * it, or an `ord.` / `nat.` / `norm.` label sits on a tremolo note.
+ */
+export function flutterLabelConsistencyWarning(
+  label: TremoloLabel | null,
+  tremolo: TremoloValue | null,
+  inTremoloGroup: boolean
+): string | null {
+  if (label === null) {
+    return null;
+  }
+  if (
+    FLUTTER_TONGUE_LABELS.includes(label) &&
+    (tremolo === null || inTremoloGroup)
+  ) {
+    return `tremolo-label="${label}": flutter-tonguing is written as a single-note tremolo`;
+  }
+  if (ORDINARY_LABELS.includes(label) && tremolo !== null) {
+    return `tremolo-label="${label}" marks the ordinary note; remove the tremolo`;
   }
   return null;
 }
@@ -455,9 +481,10 @@ export function beamedTremoloMinimumStemPx(input: {
 
 const CHECKS_BY_ATTRIBUTE: Record<
   string,
-  readonly ('strokes' | 'tuplet' | 'repeat' | 'repeat-count')[]
+  readonly ('strokes' | 'tuplet' | 'repeat' | 'repeat-count' | 'flutter')[]
 > = {
-  tremolo: ['strokes', 'tuplet', 'repeat', 'repeat-count'],
+  tremolo: ['strokes', 'tuplet', 'repeat', 'repeat-count', 'flutter'],
+  'tremolo-label': ['flutter'],
   duration: ['strokes', 'repeat-count'],
   'tremolo-tuplet': ['tuplet', 'repeat-count'],
   articulation: ['repeat', 'repeat-count'],
@@ -475,11 +502,13 @@ export function tremoloConsistencyWarnings(input: {
   articulationRepeat: boolean;
   articulation: ArticulationType | null;
   duration: DurationType;
+  label: TremoloLabel | null;
+  inTremoloGroup: boolean;
 }): string[] {
   const { changed, tremolo, tuplet, articulationRepeat, articulation } = input;
   const checks =
     changed === null
-      ? ['strokes', 'tuplet', 'repeat', 'repeat-count']
+      ? ['strokes', 'tuplet', 'repeat', 'repeat-count', 'flutter']
       : CHECKS_BY_ATTRIBUTE[changed] ?? [];
   const warnings: (string | null)[] = [];
   if (checks.includes('strokes') && tremolo !== null) {
@@ -493,6 +522,11 @@ export function tremoloConsistencyWarnings(input: {
   }
   if (checks.includes('repeat-count')) {
     warnings.push(articulationRepeatCountWarning(input));
+  }
+  if (checks.includes('flutter')) {
+    warnings.push(
+      flutterLabelConsistencyWarning(input.label, tremolo, input.inTremoloGroup)
+    );
   }
   return warnings.filter((warning): warning is string => warning !== null);
 }

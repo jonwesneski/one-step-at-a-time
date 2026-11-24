@@ -431,7 +431,16 @@ export const TREMOLO_VALUES: TremoloValue[] = [
   'unmeasured',
 ];
 
-export const TREMOLO_LABELS: TremoloLabel[] = ['trem', 'non-trem'];
+export const FLUTTER_TONGUE_LABELS: TremoloLabel[] = ['flz', 'flt', 'frull'];
+
+export const ORDINARY_LABELS: TremoloLabel[] = ['ord', 'nat', 'norm'];
+
+export const TREMOLO_LABELS: TremoloLabel[] = [
+  'trem',
+  'non-trem',
+  ...FLUTTER_TONGUE_LABELS,
+  ...ORDINARY_LABELS,
+];
 
 export const BREATH_MARKS: BreathMark[] = ['tick', 'comma'];
 

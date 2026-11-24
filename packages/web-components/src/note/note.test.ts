@@ -2059,6 +2059,51 @@ describe('tremolo numeral, label and repeated articulation', () => {
     );
   });
 
+  it('draws every flutter-tongue and ordinary label', () => {
+    const texts = {
+      flz: 'flz.',
+      flt: 'flt.',
+      frull: 'frull.',
+      ord: 'ord.',
+      nat: 'nat.',
+      norm: 'norm.',
+    } as const;
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const [label, text] of Object.entries(texts)) {
+      const noteElement = standalone({ 'tremolo-label': label });
+      expect(noteElement.tremoloLabel).toBe(label);
+      expect(
+        noteElement.shadowRoot!.querySelector('.tremolo-label')?.textContent
+      ).toBe(text);
+    }
+    warn.mockRestore();
+  });
+
+  it('lists every label when one doesn’t parse', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    standalone({ 'tremolo-label': 'flutter' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/tremolo-label="flutter".*"flz".*"norm"/)
+    );
+    warn.mockRestore();
+  });
+
+  it('warns about a flutter label with no tremolo, and ord. on a tremolo', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    standalone({ 'tremolo-label': 'flz' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('single-note tremolo')
+    );
+    warn.mockClear();
+    standalone({ tremolo: 'unmeasured', 'tremolo-label': 'flz' });
+    expect(warn).not.toHaveBeenCalled();
+    standalone({ tremolo: 'unmeasured', 'tremolo-label': 'ord' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('remove the tremolo')
+    );
+    warn.mockRestore();
+  });
+
   it('repeats the articulation once per repetition', () => {
     const noteElement = standalone({
       tremolo: '2',

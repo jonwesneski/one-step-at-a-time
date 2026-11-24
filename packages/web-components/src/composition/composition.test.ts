@@ -10,6 +10,7 @@ import {
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
 } from '../utils/consts';
 
@@ -690,5 +691,103 @@ describe(`${MUSIC_COMPOSITION} repeat warnings`, () => {
     await nextFrame();
 
     expect([...midBar.markerWarnings]).toEqual([[1 / 2, 'bass']]);
+  });
+});
+
+describe(`${MUSIC_COMPOSITION} flutter-tongue passages`, () => {
+  const note =
+    (name: string, duration: string, attributes: Record<string, string> = {}) =>
+    (): Element => {
+      const element = document.createElement(MUSIC_NOTE);
+      element.setAttribute('note', name);
+      element.setAttribute('octave', '4');
+      element.setAttribute('duration', duration);
+      for (const [attribute, value] of Object.entries(attributes)) {
+        element.setAttribute(attribute, value);
+      }
+      return element;
+    };
+  const rest = (duration: string) => (): Element => {
+    const element = document.createElement(MUSIC_REST);
+    element.setAttribute('duration', duration);
+    return element;
+  };
+  const bars =
+    (...parts: (() => Element)[]) =>
+    () =>
+      parts.map((part) => part());
+  const flutterHalf = (name: string) =>
+    note(name, 'half', {
+      tremolo: 'unmeasured',
+      'tremolo-label': 'flz',
+      tie: 'start',
+    });
+
+  function referencePhrase(composition: HTMLElement, cancel: boolean) {
+    return [
+      addMeasure(
+        composition,
+        { time: '2/4' },
+        bars(
+          note('F', 'quarter', {
+            tremolo: 'unmeasured',
+            'tremolo-label': 'flz',
+            tie: 'start',
+          }),
+          note('F', 'eighth', { tremolo: 'unmeasured', tie: 'end' }),
+          note('A', 'eighth')
+        )
+      ),
+      addMeasure(
+        composition,
+        { time: '3/4' },
+        bars(rest('quarter'), flutterHalf('E'))
+      ),
+      addMeasure(
+        composition,
+        { time: '2/4' },
+        bars(
+          note(
+            'E',
+            'eighth',
+            cancel ? { tie: 'end', 'tremolo-label': 'ord' } : { tie: 'end' }
+          ),
+          note('D', 'eighth'),
+          note('A', 'quarter')
+        )
+      ),
+    ];
+  }
+
+  it('carries an open passage into the next measure', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const [first, second, third] = referencePhrase(composition, true);
+    await nextFrame();
+
+    expect([...first.flutterCarryIn]).toEqual([]);
+    expect([...second.flutterCarryIn]).toEqual([1]);
+    expect([...third.flutterCarryIn]).toEqual([1]);
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('flutter-tongued')
+    );
+    warn.mockRestore();
+  });
+
+  it('warns once, naming the measure, when a tie across a barline lacks ord.', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    referencePhrase(composition, false);
+    await nextFrame();
+
+    const flutterWarnings = warn.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.includes('flutter-tongued'));
+    expect(flutterWarnings).toEqual([
+      expect.stringMatching(/^\[music-composition\] measure 3: /),
+    ]);
+    warn.mockRestore();
   });
 });

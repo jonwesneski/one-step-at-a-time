@@ -122,6 +122,7 @@ import {
   NOTE_EVENTS,
   OCTAVES,
   STAFF_TAGS,
+  TREMOLO_LABELS,
 } from '../utils/consts';
 import { MaybeHTMLElement } from '../utils/maybeHTMLElement';
 import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
@@ -191,7 +192,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
- * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+ * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` ("ord.") or another label, which goes on the ordinary note a flutter-tongued tie runs into.
  * @attr {BreathMark} breath-mark - A breath after this note: `tick` (✓, a break in the sound) or `comma` (a short pause or lift). Drawn above the stave in the gap before the next entry; standalone, just after the note.
  * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
@@ -1626,7 +1627,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         : changed === 'tremolo-tuplet' && parseTremoloTuplet(newValue) === null
         ? 'is not a whole number of at least 2'
         : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
-        ? 'is not "trem" or "non-trem"'
+        ? `is not one of ${TREMOLO_LABELS.map((label) => `"${label}"`).join(
+            ', '
+          )}`
         : null;
     if (invalid !== null) {
       console.warn(
@@ -1644,6 +1647,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       articulationRepeat: this.articulationRepeat,
       articulation: this.articulation,
       duration: this.duration,
+      label: this.tremoloLabel,
+      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
     })) {
       console.warn(`[music-note] ${warning}`);
     }

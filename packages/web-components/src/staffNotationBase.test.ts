@@ -2199,3 +2199,43 @@ describe('key changes and end-of-measure warnings', () => {
     );
   });
 });
+
+describe('staffNotationBase flutter-tongue passages', () => {
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  const flutterTie = `
+    <music-note note="E" octave="4" duration="half" tremolo="unmeasured" tremolo-label="flz" tie="start"></music-note>`;
+
+  it('warns once about a flutter tie into a note with no ord.', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const staff = renderStaff(
+      `${flutterTie}<music-note note="E" octave="4" duration="half" tie="end"></music-note>`
+    );
+    staff.flutterCarryIn = new Set([2]);
+    const flutterWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('flutter-tongued')
+    );
+    expect(flutterWarnings).toEqual([[expect.stringContaining('entry 2')]]);
+    warn.mockRestore();
+  });
+
+  it('is quiet once the tied-into note says ord.', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    renderStaff(
+      `${flutterTie}<music-note note="E" octave="4" duration="half" tie="end" tremolo-label="ord"></music-note>`
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('flutter-tongued')
+    );
+    warn.mockRestore();
+  });
+});

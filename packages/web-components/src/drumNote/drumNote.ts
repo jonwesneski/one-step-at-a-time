@@ -45,7 +45,7 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @attr {string} shared-stem-for - `id` of an element on an adjacent staff this note shares one stem with.
  * @attr {TremoloValue} tremolo - Single-note tremolo, the usual way to write a roll: `1`–`4` strokes through the stem, or `unmeasured`.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo.
- * @attr {TremoloLabel} tremolo-label - `trem` / `non-trem` label above the stave.
+ * @attr {TremoloLabel} tremolo-label - `trem` / `non-trem`, flutter-tongue `flz` / `flt` / `frull`, or `ord` / `nat` / `norm` label above the stave.
  *
  * @example
  * <music-staff-percussion time="4/4">

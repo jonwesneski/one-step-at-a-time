@@ -86,6 +86,7 @@ type DrumNotationProps = {
   'shared-stem-for'?: string;
   tremolo?: TremoloValue;
   'tremolo-tuplet'?: number;
+  /** `trem`/`non-trem`; flutter-tongue `flz`/`flt`/`frull`, cancelled by `ord`/`nat`/`norm`. */
   'tremolo-label'?: TremoloLabel;
 };
 
@@ -246,6 +247,7 @@ declare module 'react' {
         notehead?: NoteheadType;
         tremolo?: TremoloValue;
         'tremolo-tuplet'?: number;
+        /** `trem`/`non-trem`; flutter-tongue `flz`/`flt`/`frull`, cancelled by `ord`/`nat`/`norm`. */
         'tremolo-label'?: TremoloLabel;
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
@@ -312,6 +314,7 @@ declare module 'react' {
         notehead?: NoteheadType;
         tremolo?: TremoloValue;
         'tremolo-tuplet'?: number;
+        /** `trem`/`non-trem`; flutter-tongue `flz`/`flt`/`frull`, cancelled by `ord`/`nat`/`norm`. */
         'tremolo-label'?: TremoloLabel;
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;

@@ -25,6 +25,7 @@ import {
   beamedTremoloMinimumStemPx,
   canPlaceTremoloBetween,
   drawnTremoloTuplet,
+  flutterLabelConsistencyWarning,
   MAX_ARTICULATION_REPEATS,
   repetitionCount,
   resolveBetweenTremoloBeams,
@@ -498,6 +499,8 @@ describe('tremoloConsistencyWarnings', () => {
     articulationRepeat: true,
     articulation: 'staccato' as const,
     duration: 'quarter' as const,
+    label: null,
+    inTremoloGroup: false,
   };
 
   it('checks only what the changed attribute affects', () => {
@@ -527,6 +530,57 @@ describe('tremoloConsistencyWarnings', () => {
     expect(
       tremoloConsistencyWarnings({ ...input, changed: null })
     ).toHaveLength(2);
+  });
+
+  it('checks a flutter label when the label or the tremolo changes', () => {
+    const flutter = {
+      ...input,
+      articulationRepeat: false,
+      label: 'flz' as const,
+    };
+    expect(
+      tremoloConsistencyWarnings({ ...flutter, changed: 'tremolo-label' })
+    ).toEqual([expect.stringContaining('single-note tremolo')]);
+    expect(
+      tremoloConsistencyWarnings({ ...flutter, changed: 'tremolo' })
+    ).toHaveLength(2);
+    expect(
+      tremoloConsistencyWarnings({ ...flutter, changed: 'duration' })
+    ).toHaveLength(0);
+  });
+});
+
+describe('flutterLabelConsistencyWarning', () => {
+  it('needs a single-note tremolo under a flutter label', () => {
+    for (const label of ['flz', 'flt', 'frull'] as const) {
+      expect(flutterLabelConsistencyWarning(label, null, false)).toContain(
+        'single-note tremolo'
+      );
+      expect(
+        flutterLabelConsistencyWarning(label, 'unmeasured', false)
+      ).toBeNull();
+    }
+  });
+
+  it('warns about a flutter label on a <music-tremolo> member', () => {
+    expect(flutterLabelConsistencyWarning('flz', 3, true)).toContain(
+      'single-note tremolo'
+    );
+  });
+
+  it('warns about an ordinary label on a tremolo note', () => {
+    for (const label of ['ord', 'nat', 'norm'] as const) {
+      expect(
+        flutterLabelConsistencyWarning(label, 'unmeasured', false)
+      ).toContain('remove the tremolo');
+      expect(flutterLabelConsistencyWarning(label, null, false)).toBeNull();
+    }
+  });
+
+  it('leaves trem. and non trem. to the tremolo rules', () => {
+    expect(flutterLabelConsistencyWarning('trem', null, false)).toBeNull();
+    expect(flutterLabelConsistencyWarning('non-trem', 2, false)).toBeNull();
+    expect(flutterLabelConsistencyWarning(null, null, false)).toBeNull();
   });
 });
 

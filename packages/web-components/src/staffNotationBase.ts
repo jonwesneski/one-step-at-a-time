@@ -40,6 +40,11 @@ import {
   type SwellSpan,
 } from './rules/dynamicsRules';
 import {
+  flutterEntryOf,
+  missingFlutterCancelWarning,
+  resolveFlutterPassages,
+} from './rules/flutterTongueRules';
+import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
   computeFirstGraceHeadX,
@@ -775,6 +780,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // in the voice containers' frame (which starts at the describe area's end).
   #notesAreaEndX = 0;
   #warnedSwells = new WeakSet<NoteOrChordElementType>();
+  #flutterCarryIn: ReadonlySet<VoiceNumber> = new Set();
+  #flutterTongued = new Set<NoteChordOrRestElementType>();
+  #warnedFlutterCancels = new WeakSet<NoteChordOrRestElementType>();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -1263,6 +1271,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       return;
     }
     this.#boundRenderDynamics();
+  }
+
+  // Set by the ancestor <music-composition>: the voices whose flutter-tongue
+  // passage is still open entering this measure. Compared by content.
+  get flutterCarryIn(): ReadonlySet<VoiceNumber> {
+    return this.#flutterCarryIn;
+  }
+  set flutterCarryIn(value: ReadonlySet<VoiceNumber>) {
+    const current = this.#flutterCarryIn;
+    if (
+      current.size === value.size &&
+      [...current].every((voice) => value.has(voice))
+    ) {
+      return;
+    }
+    this.#flutterCarryIn = value;
+    this.#renderNotes();
   }
 
   // Set by the ancestor <music-measure>: this staff's octave lines break
@@ -2216,7 +2241,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       tremoloGroups,
       mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats)
         .filter((marker) => marker.kind === 'barline')
-        .map((marker) => marker.beat)
+        .map((marker) => marker.beat),
+      new Set(
+        elements
+          .map((element, i) => (this.#flutterTongued.has(element) ? i : -1))
+          .filter((i) => i >= 0)
+      )
     );
     // Beamed lengths come from the beam line and cross-staff ones from the
     // ancestor <music-measure>, so only unbeamed stems take their rule length.
@@ -2463,6 +2493,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       });
     }
 
+    this.#flutterTongued = new Set();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      const { flutterTongued, missingCancels } = resolveFlutterPassages(
+        p.elements.map(flutterEntryOf),
+        this.#flutterCarryIn.has(voiceNumber)
+      );
+      for (const i of flutterTongued) {
+        this.#flutterTongued.add(p.elements[i]);
+      }
+      if (this.closest(MUSIC_COMPOSITION) !== null) {
+        continue;
+      }
+      for (const i of missingCancels) {
+        const element = p.elements[i];
+        if (!this.#warnedFlutterCancels.has(element)) {
+          this.#warnedFlutterCancels.add(element);
+          console.warn(
+            `[staff] ${missingFlutterCancelWarning(
+              isMultiVoice
+                ? `voice ${voiceNumber}, entry ${i + 1}`
+                : `entry ${i + 1}`
+            )}`
+          );
+        }
+      }
+    }
+
     // Clef markers index into voice 1; #voice1BeatOffsets converts those
     // indices into beat-offsets every voice can compare against.
     const voice1 = pass1ByVoice.get(1);
@@ -2600,9 +2657,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
 
       if (combinedGroups.length > 0) {
-        const combinedElements = combinedGroups.map((group) =>
-          this.#synthesizeCombinedChord(group)
-        );
+        const combinedElements = combinedGroups.map((group) => {
+          const chord = this.#synthesizeCombinedChord(group);
+          if (
+            group.members.every((member) =>
+              this.#flutterTongued.has(member.element)
+            )
+          ) {
+            this.#flutterTongued.add(chord);
+          }
+          return chord;
+        });
         trackInputs.set('combined', {
           elements: combinedElements,
           beatOffsets: combinedGroups.map((group) => group.beatOffset),

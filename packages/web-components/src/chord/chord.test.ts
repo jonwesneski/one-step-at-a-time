@@ -2064,6 +2064,23 @@ describe(`${MUSIC_CHORD} tremolo numeral, label and repeated articulation`, () =
       'non trem.'
     );
   });
+
+  it('draws a flutter label over its tremolo without a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = standaloneChord({
+      tremolo: 'unmeasured',
+      'tremolo-label': 'frull',
+    });
+    expect(chord.shadowRoot!.querySelector('.tremolo-label')?.textContent).toBe(
+      'frull.'
+    );
+    expect(warn).not.toHaveBeenCalled();
+    standaloneChord({ 'tremolo-label': 'flt' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('single-note tremolo')
+    );
+    warn.mockRestore();
+  });
 });
 
 describe('augmentation dots', () => {

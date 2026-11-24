@@ -960,6 +960,37 @@ describe('beams with tremolo strokes', () => {
     expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(2);
   });
 
+  it('beams a flutter-tongued note with a plain one', () => {
+    const notes = eighths(['unmeasured', null, null, null]);
+    notes[0].setAttribute('tremolo-label', 'flz');
+    const staff = staffWith(notes);
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('beams a flutter passage carried in from the previous measure', () => {
+    const staff = staffWith(eighths(['unmeasured', 'unmeasured', null, null]));
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(2);
+    (staff as unknown as { flutterCarryIn: Set<number> }).flutterCarryIn =
+      new Set([1]);
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('breaks again once ord. closes the passage', () => {
+    const open = eighths(['unmeasured', null, 'unmeasured', 'unmeasured']);
+    open[0].setAttribute('tremolo-label', 'flz');
+    expect(
+      staffWith(open).shadowRoot!.querySelectorAll('.beam-group')
+    ).toHaveLength(1);
+    document.body.innerHTML = '';
+
+    const closed = eighths(['unmeasured', null, 'unmeasured', 'unmeasured']);
+    closed[0].setAttribute('tremolo-label', 'flz');
+    closed[1].setAttribute('tremolo-label', 'ord');
+    expect(
+      staffWith(closed).shadowRoot!.querySelectorAll('.beam-group')
+    ).toHaveLength(2);
+  });
+
   it('keeps tremolo notes beamed together', () => {
     const staff = staffWith(eighths(['1', '1', '1', '1']));
     expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
