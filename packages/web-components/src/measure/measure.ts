@@ -2067,7 +2067,27 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           (pair) =>
             !pairs.some((other) => other.endElement === pair.startElement)
         );
-        for (const head of heads) {
+        const endpointText = (
+          element: NoteOrChordElementType,
+          direction: -1 | 1
+        ): HairpinEndpointText | null =>
+          element.dynamic === null
+            ? null
+            : {
+                marking: element.dynamic,
+                bracketed: element.dynamicReminder,
+                centerX: textCenterX(element, element.dynamic, direction, gap),
+              };
+        // Each chain is placed as one; `handOver` and `moveOutside` set the
+        // overrides for the angled route and the outside fallback.
+        const chains: {
+          kinds: HairpinKind[];
+          spans: ReturnType<typeof resolveChainSpans>;
+          side: DynamicsSide;
+          baselineClientY: number;
+          handOver: () => void;
+          moveOutside: () => void;
+        }[] = heads.map((head) => {
           const chain = [head];
           for (
             let next = byStart.get(head.endElement);
@@ -2080,32 +2100,93 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             head.startElement,
             ...chain.map((pair) => pair.endElement),
           ];
-          const spans = resolveChainSpans(
-            chain.map((pair) => ({
-              rawStartX: leftX(pair.startElement),
-              rawEndX:
-                pair.endElement.getBoundingClientRect().right -
-                measureRect.left,
-            })),
-            chainElements.map((element, index) =>
-              element.dynamic === null
-                ? null
-                : {
-                    marking: element.dynamic,
-                    bracketed: element.dynamicReminder,
-                    centerX: textCenterX(
-                      element,
-                      element.dynamic,
-                      index === 0 ? -1 : 1,
-                      gap
-                    ),
-                  }
+          return {
+            kinds: chain.map((pair) => pair.kind),
+            spans: resolveChainSpans(
+              chain.map((pair) => ({
+                rawStartX: leftX(pair.startElement),
+                rawEndX:
+                  pair.endElement.getBoundingClientRect().right -
+                  measureRect.left,
+              })),
+              chainElements.map((element, index) =>
+                endpointText(element, index === 0 ? -1 : 1)
+              ),
+              chain.slice(0, -1).map((pair) => {
+                const rect = pair.endElement.getBoundingClientRect();
+                return rect.left + rect.width / 2 - measureRect.left;
+              })
             ),
-            chain.slice(0, -1).map((pair) => {
-              const rect = pair.endElement.getBoundingClientRect();
-              return rect.left + rect.width / 2 - measureRect.left;
-            })
-          );
+            side: head.side,
+            baselineClientY: head.baselineClientY,
+            handOver: () => {
+              override(staff, head.startElement, {
+                hairpin: 'measure',
+                marking: 'measure',
+              });
+              for (const pair of chain) {
+                override(staff, pair.startElement, { hairpin: 'measure' });
+                override(staff, pair.endElement, { marking: 'measure' });
+              }
+            },
+            moveOutside: () => {
+              for (const pair of chain) {
+                override(staff, pair.startElement, {
+                  hairpin: outsideSide,
+                  marking: outsideSide,
+                });
+                override(staff, pair.endElement, { marking: outsideSide });
+              }
+            },
+          };
+        });
+        for (const swell of defaults[staffIndex].swells) {
+          const element = swell.element;
+          if (element.dynamicShared) {
+            continue;
+          }
+          const startText = endpointText(element, -1);
+          const span = resolveSwellSpan({
+            rawStartX: leftX(element),
+            rawEndX: swell.rawEndClientX - measureRect.left,
+            startMarking: startText?.marking ?? null,
+            startBracketed: startText?.bracketed,
+            startTextCenterX: startText?.centerX ?? 0,
+            endMarking: null,
+            endTextCenterX: 0,
+          });
+          if (span === null) {
+            continue;
+          }
+          chains.push({
+            kinds: ['crescendo', 'decrescendo'],
+            spans: [
+              { ...span.crescendo, startText, endText: null },
+              { ...span.diminuendo, startText: null, endText: null },
+            ],
+            side: swell.side,
+            baselineClientY: swell.baselineClientY,
+            handOver: () =>
+              override(staff, element, {
+                hairpin: 'measure',
+                marking: 'measure',
+              }),
+            moveOutside: () =>
+              override(staff, element, {
+                hairpin: outsideSide,
+                marking: outsideSide,
+              }),
+          });
+        }
+
+        for (const {
+          kinds,
+          spans,
+          side,
+          baselineClientY,
+          handOver,
+          moveOutside,
+        } of chains) {
           const overlapsGroup = spans.some((span) =>
             groupSlices.some(
               (slice) => slice.right > span.startX && slice.left < span.endX
@@ -2116,10 +2197,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           const levelChainClear = (y: number, from: number) =>
-            chain.slice(from).every((pair, offset) => {
+            kinds.slice(from).every((kind, offset) => {
               const span = spans[from + offset];
               return isHorizontalHairpinClear({
-                kind: pair.kind,
+                kind,
                 startX: span.startX,
                 endX: span.endX,
                 y,
@@ -2130,12 +2211,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 endText: span.endText,
               });
             });
-          const defaultY = head.baselineClientY - measureRect.top;
+          const defaultY = baselineClientY - measureRect.top;
           const defaultInGap =
             defaultY - HAIRPIN_OPEN_HEIGHT / 2 > gap.topGapEdgeY &&
             defaultY + HAIRPIN_OPEN_HEIGHT / 2 < gap.bottomGapEdgeY;
           if (
-            head.side === gapSide &&
+            side === gapSide &&
             defaultInGap &&
             levelChainClear(defaultY, 0)
           ) {
@@ -2143,7 +2224,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           const route = resolveAngledHairpinRoute({
-            kind: head.kind,
+            kind: kinds[0],
             startX: spans[0].startX,
             endX: spans[0].endX,
             openHeight: HAIRPIN_OPEN_HEIGHT,
@@ -2158,38 +2239,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             endText: spans[0].endText,
           });
           if (route !== null && levelChainClear(route.end.y, 1)) {
-            placeHairpin(head.kind, route.start, route.end, true);
+            placeHairpin(kinds[0], route.start, route.end, true);
             placeText(spans[0].startText, route.start.y);
             placeText(spans[0].endText, route.end.y);
-            override(staff, head.startElement, {
-              hairpin: 'measure',
-              marking: 'measure',
-            });
-            override(staff, head.endElement, { marking: 'measure' });
-            chain.slice(1).forEach((pair, offset) => {
+            kinds.slice(1).forEach((kind, offset) => {
               const span = spans[offset + 1];
               const y = route.end.y;
               placeHairpin(
-                pair.kind,
+                kind,
                 { x: span.startX, y },
                 { x: span.endX, y },
                 false
               );
               placeText(span.endText, y);
-              override(staff, pair.startElement, { hairpin: 'measure' });
-              override(staff, pair.endElement, { marking: 'measure' });
             });
+            handOver();
             continue;
           }
 
-          if (head.side === gapSide) {
-            for (const pair of chain) {
-              override(staff, pair.startElement, {
-                hairpin: outsideSide,
-                marking: outsideSide,
-              });
-              override(staff, pair.endElement, { marking: outsideSide });
-            }
+          if (side === gapSide) {
+            moveOutside();
           }
         }
       });

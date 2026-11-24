@@ -118,21 +118,23 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 
 ## 6. Wind & Brass Techniques
 
-|          | Name             | Notation              | Description                                  |
-| -------- | ---------------- | --------------------- | -------------------------------------------- |
-| &#x2610; | Tongue           | `t` or `Tu`           | Articulate note with tongue                  |
-| &#x2610; | Double Tongue    | `T-K`                 | Rapid double articulation                    |
-| &#x2610; | Triple Tongue    | `T-K-T`               | Rapid triple articulation                    |
-| &#x2611; | Flutter Tongue   | `flz.` or `flutter`   | Roll the tongue while playing                |
-| &#x2610; | Growl            | `growl`               | Sing into instrument while playing           |
-| &#x2610; | Multiphonics     | Special notation      | Produce multiple pitches simultaneously      |
-| &#x2610; | Half-valve       | `(+)` or special mark | Depress valve halfway for microtone/effect   |
-| &#x2611; | Glissando        | `gliss.`              | Slide between pitches (trombones especially) |
-| &#x2610; | Stopped (Horn)   | `+`                   | Hand stops bell (French Horn)                |
-| &#x2610; | Open (Horn)      | `o`                   | Remove hand from bell                        |
-| &#x2610; | Mute             | `con sord.`           | Use a mute                                   |
-| &#x2610; | Remove Mute      | `senza sord.`         | Take off the mute                            |
-| &#x2610; | Sforzando Tongue | `sfz` + note          | Explosive tongued attack                     |
+|          | Name              | Notation                    | Description                                  |
+| -------- | ----------------- | --------------------------- | -------------------------------------------- |
+| &#x2610; | Tongue            | `t` or `Tu`                 | Articulate note with tongue                  |
+| &#x2610; | Double Tongue     | `T-K`                       | Rapid double articulation                    |
+| &#x2610; | Triple Tongue     | `T-K-T`                     | Rapid triple articulation                    |
+| &#x2611; | Flutter Tongue    | `flz.` or `flutter`         | Roll the tongue while playing                |
+| &#x2610; | Growl             | `growl`                     | Sing into instrument while playing           |
+| &#x2610; | Multiphonics      | Special notation            | Produce multiple pitches simultaneously      |
+| &#x2610; | Half-valve        | `(+)` or special mark       | Depress valve halfway for microtone/effect   |
+| &#x2611; | Glissando         | `gliss.`                    | Slide between pitches (trombones especially) |
+| &#x2610; | Stopped (Horn)    | `+`                         | Hand stops bell (French Horn)                |
+| &#x2610; | Open (Horn)       | `o`                         | Remove hand from bell                        |
+| &#x2610; | Mute              | `con sord.`                 | Use a mute                                   |
+| &#x2610; | Remove Mute       | `senza sord.`               | Take off the mute                            |
+| &#x2610; | Sforzando Tongue  | `sfz` + note                | Explosive tongued attack                     |
+| &#x2611; | Breath Mark       | `✓` (`breath-mark="tick"`)  | Break in the sound after the note            |
+| &#x2611; | Comma Breath Mark | `’` (`breath-mark="comma"`) | Short pause or lift within a phrase          |
 
 ---
 
@@ -193,15 +195,17 @@ These alter the rhythmic length of a note.
 
 ## 10. Slurs, Ties & Phrasing
 
-|          | Name                | Notation                | Description                                |
-| -------- | ------------------- | ----------------------- | ------------------------------------------ |
-| &#x2611; | Slur                | Curved line over notes  | Play notes legato (connected)              |
-| &#x2611; | Tie                 | Curved line, same pitch | Extends note duration                      |
-| &#x2611; | Laissez vibrer      | Open-ended curved line  | Let the note ring (`tie="laissez-vibrer"`) |
-| &#x2611; | Phrase Mark         | Long curved line        | Groups a musical phrase visually           |
-| &#x2611; | Hairpin Crescendo   | `<` hairpin             | Get louder over a span of notes            |
-| &#x2611; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes            |
-| &#x2610; | Niente              | `n` or circle at end    | Fade to/from silence                       |
+|          | Name                | Notation                | Description                                 |
+| -------- | ------------------- | ----------------------- | ------------------------------------------- |
+| &#x2611; | Slur                | Curved line over notes  | Play notes legato (connected)               |
+| &#x2611; | Tie                 | Curved line, same pitch | Extends note duration                       |
+| &#x2611; | Laissez vibrer      | Open-ended curved line  | Let the note ring (`tie="laissez-vibrer"`)  |
+| &#x2611; | Phrase Mark         | Long curved line        | Groups a musical phrase visually            |
+| &#x2611; | Hairpin Crescendo   | `<` hairpin             | Get louder over a span of notes             |
+| &#x2611; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes             |
+| &#x2611; | Dotted Slur         | Dashed curved line      | Editorial phrasing (`slur-style="dotted"`)  |
+| &#x2611; | Swell               | `< >` on one note       | Louder to the middle, then softer (`swell`) |
+| &#x2610; | Niente              | `n` or circle at end    | Fade to/from silence                        |
 
 ---
 

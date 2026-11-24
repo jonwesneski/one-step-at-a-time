@@ -806,7 +806,9 @@ test.describe(`${MUSIC_STAFF} breath marks`, () => {
 test.describe(`${MUSIC_STAFF} swells`, () => {
   async function readSwells(
     page: Page
-  ): Promise<{ wedges: number; left: number; right: number }[]> {
+  ): Promise<
+    { wedges: number; left: number; right: number; gapCenter: number }[]
+  > {
     return page.evaluate((staffTag) => {
       const swells = Array.from(
         document
@@ -815,16 +817,20 @@ test.describe(`${MUSIC_STAFF} swells`, () => {
       );
       return swells.map((swell) => {
         const rect = swell.getBoundingClientRect();
+        const wedges = Array.from(swell.querySelectorAll('.hairpin')).map(
+          (wedge) => wedge.getBoundingClientRect()
+        );
         return {
-          wedges: swell.querySelectorAll('.hairpin').length,
+          wedges: wedges.length,
           left: rect.left,
           right: rect.right,
+          gapCenter: (wedges[0].right + wedges[wedges.length - 1].left) / 2,
         };
       });
     }, MUSIC_STAFF);
   }
 
-  test('toggling swell adds and removes its two wedges, which span the note', async ({
+  test('toggling swell adds and removes its two wedges, which span the note and keep their gap centred as the staff resizes', async ({
     page,
   }) => {
     const positioned = waitForStaffNotesPositioned(page);
@@ -860,6 +866,15 @@ test.describe(`${MUSIC_STAFF} swells`, () => {
     expect(swell.wedges).toBe(2);
     expect(swell.left).toBeGreaterThanOrEqual(notes[0] - 1);
     expect(swell.right).toBeLessThan(notes[1]);
+    expect(swell.gapCenter).toBeCloseTo((swell.left + swell.right) / 2, 0);
+
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+    const [narrow] = await readSwells(page);
+    const narrowNotes = await readNoteLefts(page);
+    expect(narrow.right - narrow.left).toBeLessThan(swell.right - swell.left);
+    expect(narrow.right).toBeLessThan(narrowNotes[1]);
+    expect(narrow.gapCenter).toBeCloseTo((narrow.left + narrow.right) / 2, 0);
 
     await page.evaluate((noteTag) => {
       document.querySelector(noteTag)?.removeAttribute('swell');

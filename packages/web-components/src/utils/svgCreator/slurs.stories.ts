@@ -146,59 +146,6 @@ export const ArticulationUnderSlurs: Story = {
 };
 
 /**
- * A slur over a reiterated pitch for woodwind: tenuto lines under the slur
- * show each note is tongued again. Stems down, so the marks and the slur sit
- * above.
- */
-export const RepeatedPitchTenutoUnderSlur: Story = {
-  render: () => html`
-    <music-staff clef="treble" time="3/4">
-      <music-note
-        note="D"
-        octave="5"
-        duration="quarter"
-        articulation="tenuto"
-        slur="start"
-      ></music-note>
-      <music-note
-        note="D"
-        octave="5"
-        duration="quarter"
-        articulation="tenuto"
-      ></music-note>
-      <music-note
-        note="D"
-        octave="5"
-        duration="quarter"
-        articulation="tenuto"
-        slur="end"
-      ></music-note>
-    </music-staff>
-  `,
-};
-
-/** A slur over repeated notes in brass writing: legato tonguing. */
-export const RepeatedPitchBrassLegatoTonguing: Story = {
-  render: () => html`
-    <music-staff clef="treble" time="3/4">
-      <music-note
-        note="D"
-        octave="5"
-        duration="quarter"
-        slur="start"
-      ></music-note>
-      <music-note note="D" octave="5" duration="quarter"></music-note>
-      <music-note
-        note="D"
-        octave="5"
-        duration="quarter"
-        slur="end"
-      ></music-note>
-    </music-staff>
-  `,
-};
-
-/**
  * A dotted slur marks phrase structure apart from the legato slurs inside it,
  * and rides outside them. The style is read from the slur's start.
  */

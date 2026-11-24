@@ -10,12 +10,109 @@ export default meta;
 
 type Story = StoryObj;
 
+// Four eighths on one pitch, each carrying `articulation`; slurred as a group
+// when `slurred`.
+const articulatedGroup = (articulation: string, slurred: boolean) => html`
+  <music-measure>
+    <music-staff clef="treble" time="2/4">
+      ${[0, 1, 2, 3].map(
+        (index) => html`<music-note
+          note="E"
+          octave="4"
+          duration="eighth"
+          articulation=${articulation}
+          slur=${slurred && index === 0
+            ? 'start'
+            : slurred && index === 3
+            ? 'end'
+            : nothing}
+        ></music-note>`
+      )}
+    </music-staff>
+  </music-measure>
+`;
+
+/**
+ * A wind player tongues every note unless it is slurred. Under a slur, marked
+ * notes still get their own attack, with less separation (top row); without
+ * slurs the articulation is more pronounced (bottom row).
+ */
+export const Articulation: Story = {
+  render: () => html`
+    <music-composition>
+      ${articulatedGroup('staccato', true)} ${articulatedGroup('tenuto', true)}
+      ${articulatedGroup('portato', true)}
+    </music-composition>
+    <music-composition>
+      ${articulatedGroup('staccato', false)}
+      ${articulatedGroup('tenuto', false)} ${articulatedGroup('portato', false)}
+    </music-composition>
+  `,
+};
+
+/**
+ * A woodwind slur over a reiterated pitch needs marks under it: each note is
+ * tongued again, so tenuto lines (or staccato dots) show the rearticulation.
+ * A bare slur here is ungrammatical for woodwind; the alternative is a
+ * written `legato`, which needs staff text.
+ */
+export const ReiteratedPitchWoodwind: Story = {
+  name: 'Reiterated Pitch (Woodwind)',
+  render: () => html`
+    <music-staff clef="treble" time="3/4">
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        articulation="tenuto"
+        slur="start"
+      ></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        articulation="tenuto"
+      ></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        articulation="tenuto"
+        slur="end"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+/** A slur over repeated notes in brass writing: legato tonguing. */
+export const ReiteratedPitchBrass: Story = {
+  name: 'Reiterated Pitch (Brass)',
+  render: () => html`
+    <music-staff clef="treble" time="3/4">
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        slur="start"
+      ></music-note>
+      <music-note note="D" octave="5" duration="quarter"></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        slur="end"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
 /**
  * A woodwind phrase with breathing points: each ✓ sits above the stave in
  * the gap after the note the breath is taken from. The held notes swell
  * (`< >`), and the last bar's crescendo meets its diminuendo on one note.
  */
 export const ReferencePhrase: Story = {
+  name: 'Breathing (Reference)',
   render: () => html`
     <music-composition>
       <music-measure>
@@ -137,6 +234,7 @@ export const ReferencePhrase: Story = {
 
 /** ✓ for a break in the sound; the comma for a short pause or lift. */
 export const TickAndComma: Story = {
+  name: 'Breath Marks: Tick and Comma',
   render: () => html`
     <music-staff clef="treble" time="4/4">
       <music-note
@@ -159,6 +257,7 @@ export const TickAndComma: Story = {
 
 /** Above the stave unless something under it reaches higher. */
 export const AboveHighNotes: Story = {
+  name: 'Breath Marks: Above High Notes',
   render: () => html`
     <music-staff clef="treble" time="4/4">
       <music-note
@@ -188,6 +287,7 @@ export const AboveHighNotes: Story = {
 
 /** A breath after the last note sits before the barline. */
 export const LastNoteBeforeBarline: Story = {
+  name: 'Breath Marks: Before the Barline',
   render: () => html`
     <music-staff clef="treble" time="3/4">
       <music-note note="E" octave="4" duration="quarter"></music-note>
@@ -204,6 +304,7 @@ export const LastNoteBeforeBarline: Story = {
 
 /** Every voice's breath mark goes above the stave, stacked when they meet. */
 export const TwoVoices: Story = {
+  name: 'Breath Marks: Two Voices',
   render: () => html`
     <music-staff clef="treble" time="4/4">
       <music-voice>
@@ -292,6 +393,7 @@ const flutterPhrase = (cancel: boolean) => html`
  * flutter-tongued tie runs into an ordinary note, as in the last bar.
  */
 export const FlutterTonguing: Story = {
+  name: 'Flutter-Tonguing (Reference)',
   render: () => flutterPhrase(true),
 };
 
@@ -329,4 +431,21 @@ export const FlutterLabels: Story = {
 export const MissingOrd: Story = {
   name: 'Missing ord. (warns)',
   render: () => flutterPhrase(false),
+};
+
+/**
+ * Still to come: verbal instructions are plain staff text, which isn't
+ * implemented yet.
+ */
+export const StillToCome: Story = {
+  render: () => html`
+    <p>
+      Verbal instructions need staff text, which isn&rsquo;t implemented yet:
+      <em>legato</em> (the woodwind alternative to tenutos over a reiterated
+      pitch) and tonguing instructions such as <em>double-tongue</em>,
+      <em>triple-tongue</em>, <em>t&ndash;k</em> and <em>soft-tongued</em>.
+      Growl, half-valve, stopped/open horn and mutes are tracked in
+      <code>TODO.md</code> &sect;6 &ldquo;Wind &amp; Brass Techniques&rdquo;.
+    </p>
+  `,
 };

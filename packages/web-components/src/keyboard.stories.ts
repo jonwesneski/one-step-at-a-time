@@ -1097,6 +1097,85 @@ export const DoubleStemmedBeamWithAngledHairpin: Story = {
   `,
 };
 
+// A swell under a double-stemmed group is placed like a hairpin chain: it
+// angles through its stave when there is room, otherwise it moves outside the
+// system rather than crossing the shared beam.
+export const DoubleStemmedBeamWithSwell: Story = {
+  render: () => html`
+    <music-composition key-sig="C" mode="major" time="3/4">
+      <music-measure>
+        <music-staff
+          clef="treble"
+          group="grand"
+          key-sig="C"
+          mode="major"
+          time="3/4"
+        >
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-note
+            note="G"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+            swell
+          ></music-note>
+          <music-note
+            note="B"
+            octave="4"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-chord duration="sixteenth" beam-group="g1"
+            ><music-note note="E" octave="5" duration="sixteenth"></music-note
+            ><music-note note="B" octave="5" duration="sixteenth"></music-note
+          ></music-chord>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="eighth" hidden></music-rest>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+        <music-staff clef="bass" key-sig="C" mode="major" time="3/4">
+          <music-note
+            note="D"
+            octave="2"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="2"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="3"
+            duration="sixteenth"
+            beam-group="g1"
+          ></music-note>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-rest duration="sixteenth" hidden></music-rest>
+          <music-chord duration="sixteenth" stem-direction="down" dynamic="ff"
+            ><music-note note="C" octave="3" duration="sixteenth"></music-note
+            ><music-note note="Eb" octave="3" duration="sixteenth"></music-note
+          ></music-chord>
+          <music-note note="G" octave="2" duration="sixteenth"></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
 // When the group climbs and falls back, its beam lies flat across the gap and
 // leaves no room for an angled hairpin under it, so the hairpin keeps its own
 // row below the system.
