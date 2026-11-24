@@ -1,7 +1,13 @@
 import {
+  anchorYClearOfRects,
+  arcEncloses,
+  arcObstacleRects,
+  bulgeHeightEnclosingRects,
   computeNestingLevels,
   consecutivePhrasePairs,
   cubicSlurControlPoints,
+  estimatedSlurReachY,
+  inflateRect,
   isCurveObscured,
   isInnerVoicePosition,
   ObstacleRect,
@@ -16,6 +22,8 @@ import {
   segmentIntersectsRect,
   sliceConvexPolygon,
   slurAnchorKind,
+  slurSpans,
+  slurStyleWarning,
 } from './connectorPlacementRules';
 
 const rect = (
@@ -387,5 +395,285 @@ describe('sliceConvexPolygon', () => {
         3
       )
     ).toEqual([{ left: 0, right: 2, top: 0, bottom: 4 }]);
+  });
+});
+
+describe('anchorYClearOfRects', () => {
+  it('moves a below end past a mark under it, plus clearance', () => {
+    expect(
+      anchorYClearOfRects({ x: 10, y: 50 }, 'below', [rect(5, 45, 15, 58)], 4)
+    ).toBe(62);
+  });
+
+  it('moves an above end past a mark over it', () => {
+    expect(
+      anchorYClearOfRects({ x: 10, y: 50 }, 'above', [rect(5, 40, 15, 55)], 4)
+    ).toBe(36);
+  });
+
+  it('takes the outermost of several marks', () => {
+    expect(
+      anchorYClearOfRects(
+        { x: 10, y: 50 },
+        'below',
+        [rect(5, 45, 15, 58), rect(5, 60, 15, 70)],
+        4
+      )
+    ).toBe(74);
+  });
+
+  it("ignores marks beside the end's x and marks on the other side", () => {
+    expect(
+      anchorYClearOfRects(
+        { x: 10, y: 50 },
+        'below',
+        [rect(20, 45, 30, 70), rect(5, 20, 15, 30)],
+        4
+      )
+    ).toBe(50);
+  });
+});
+
+describe('inflateRect', () => {
+  it('grows every side', () => {
+    expect(inflateRect(rect(10, 20, 30, 40), 2)).toEqual(rect(8, 18, 32, 42));
+  });
+});
+
+describe('bulgeHeightEnclosingRects', () => {
+  const from = { x: 0, y: 50 };
+  const to = { x: 100, y: 50 };
+
+  it('is undefined when the base bulge already passes outside the marks', () => {
+    expect(
+      bulgeHeightEnclosingRects(
+        from,
+        to,
+        'below',
+        9,
+        [rect(45, 50, 55, 52)],
+        99
+      )
+    ).toBeUndefined();
+  });
+
+  it('deepens a below slur until it passes under a mark between its ends', () => {
+    const height = bulgeHeightEnclosingRects(
+      from,
+      to,
+      'below',
+      9,
+      [rect(45, 55, 55, 70)],
+      99
+    );
+    expect(height).toBeDefined();
+    // y = chord + 2t(1−t)·h; at the mark's edges (t = 0.45, 0.55), 70 needs
+    // h = 20 / 0.495.
+    expect(height).toBeCloseTo(20 / (2 * 0.45 * 0.55), 5);
+    expect(
+      quadraticCurveYAtX(from, to, 'below', height!, 45)
+    ).toBeGreaterThanOrEqual(70 - 1e-9);
+  });
+
+  it('raises an above slur over a mark', () => {
+    const height = bulgeHeightEnclosingRects(
+      from,
+      to,
+      'above',
+      9,
+      [rect(45, 30, 55, 45)],
+      99
+    );
+    expect(
+      quadraticCurveYAtX(from, to, 'above', height!, 50)
+    ).toBeLessThanOrEqual(30 + 1e-9);
+  });
+
+  it('never counts the gap between a mark and its note as clear', () => {
+    // A mark well under the line between the ends: a shallow arc would pass
+    // above it, between it and its note.
+    expect(
+      bulgeHeightEnclosingRects(
+        from,
+        to,
+        'below',
+        9,
+        [rect(45, 80, 55, 90)],
+        999
+      )
+    ).toBeGreaterThan(9);
+  });
+
+  it('caps the height', () => {
+    expect(
+      bulgeHeightEnclosingRects(
+        from,
+        to,
+        'below',
+        9,
+        [rect(45, 80, 55, 900)],
+        40
+      )
+    ).toBe(40);
+  });
+
+  it('skips marks outside its x-span', () => {
+    expect(
+      bulgeHeightEnclosingRects(
+        from,
+        to,
+        'below',
+        9,
+        [rect(150, 80, 160, 90)],
+        99
+      )
+    ).toBeUndefined();
+  });
+});
+
+describe('slurSpans', () => {
+  it('pairs starts and ends last in, first out, with nesting levels', () => {
+    expect(slurSpans(['start', 'start', null, 'end', 'end'])).toEqual([
+      { startIndex: 1, endIndex: 3, nestingLevel: 0 },
+      { startIndex: 0, endIndex: 4, nestingLevel: 1 },
+    ]);
+  });
+
+  it('runs an unclosed start to the last entry and an unopened end from the first', () => {
+    expect(slurSpans([null, 'end', 'start', null])).toEqual([
+      { startIndex: 0, endIndex: 1, nestingLevel: 0 },
+      { startIndex: 2, endIndex: 3, nestingLevel: 0 },
+    ]);
+  });
+});
+
+describe('estimatedSlurReachY', () => {
+  const constants = {
+    noteheadOffsetPx: 9,
+    markClearancePx: 4,
+    baseBulgePx: 9,
+    bulgeStepPx: 11,
+  };
+
+  it('is null with no entries', () => {
+    expect(
+      estimatedSlurReachY({
+        entries: [],
+        side: 'below',
+        nestingLevel: 0,
+        ...constants,
+      })
+    ).toBeNull();
+  });
+
+  it('reaches past the lowest head below, adding the arc', () => {
+    expect(
+      estimatedSlurReachY({
+        entries: [
+          { headCenterY: 50, markDepthPx: 0 },
+          { headCenterY: 60, markDepthPx: 0 },
+        ],
+        side: 'below',
+        nestingLevel: 0,
+        ...constants,
+      })
+    ).toBe(60 + 9 + 9);
+  });
+
+  it('reaches past marks that go further than the head offset', () => {
+    expect(
+      estimatedSlurReachY({
+        entries: [{ headCenterY: 50, markDepthPx: 20 }],
+        side: 'below',
+        nestingLevel: 0,
+        ...constants,
+      })
+    ).toBe(50 + 20 + 4 + 9);
+  });
+
+  it('reaches up for a slur above, a step further per nesting level', () => {
+    expect(
+      estimatedSlurReachY({
+        entries: [{ headCenterY: 50, markDepthPx: 0 }],
+        side: 'above',
+        nestingLevel: 1,
+        ...constants,
+      })
+    ).toBe(50 - 9 - 9 - 11);
+  });
+});
+
+describe('slurStyleWarning', () => {
+  it('is silent for a solid style or a slur start', () => {
+    expect(
+      slurStyleWarning({ slurStyle: 'solid', slur: null, slurGroup: null })
+    ).toBeNull();
+    expect(
+      slurStyleWarning({ slurStyle: 'dotted', slur: 'start', slurGroup: null })
+    ).toBeNull();
+    expect(
+      slurStyleWarning({ slurStyle: 'dotted', slur: null, slurGroup: 'p' })
+    ).toBeNull();
+  });
+
+  it('warns when a dotted style sits on an element that starts no slur', () => {
+    expect(
+      slurStyleWarning({ slurStyle: 'dotted', slur: 'end', slurGroup: null })
+    ).toMatch(/starts no slur/);
+  });
+});
+
+describe('arcObstacleRects', () => {
+  it('samples the arc from end to end as rects around points on it', () => {
+    const arc = {
+      from: { x: 0, y: 50 },
+      to: { x: 160, y: 50 },
+      side: 'below' as const,
+      bulgeHeight: 10,
+    };
+    const rects = arcObstacleRects(arc, 3);
+    expect(rects).toHaveLength(17);
+    expect(rects[0]).toEqual(rect(-3, 47, 3, 53));
+    expect(rects[16]).toEqual(rect(157, 47, 163, 53));
+    // The midpoint sits half the bulge height below the chord.
+    expect(rects[8]).toEqual(rect(77, 52, 83, 58));
+  });
+});
+
+describe('arcEncloses', () => {
+  const arc = (fromX: number, toX: number, side: 'above' | 'below') => ({
+    from: { x: fromX, y: 0 },
+    to: { x: toX, y: 0 },
+    side,
+    bulgeHeight: 9,
+  });
+
+  it('holds for an arc within the x-span on the same side', () => {
+    expect(arcEncloses(arc(0, 100, 'below'), arc(20, 80, 'below'))).toBe(true);
+  });
+
+  it('fails across sides or past either end', () => {
+    expect(arcEncloses(arc(0, 100, 'below'), arc(20, 80, 'above'))).toBe(false);
+    expect(arcEncloses(arc(0, 100, 'below'), arc(50, 150, 'below'))).toBe(
+      false
+    );
+  });
+});
+
+describe('estimatedSlurReachY with nested slurs', () => {
+  it('reaches past the slurs it encloses', () => {
+    expect(
+      estimatedSlurReachY({
+        entries: [{ headCenterY: 50, markDepthPx: 0 }],
+        side: 'below',
+        nestingLevel: 1,
+        noteheadOffsetPx: 9,
+        markClearancePx: 4,
+        baseBulgePx: 9,
+        bulgeStepPx: 11,
+        enclosedReachY: 100,
+        nestedGapPx: 3,
+      })
+    ).toBe(103);
   });
 });

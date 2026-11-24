@@ -23,6 +23,7 @@ import type {
   OctaveDisplayMode,
   OctaveShiftAmount,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
   StressType,
@@ -58,6 +59,7 @@ import {
   OCTAVE_SHIFT_AMOUNTS,
   OCTAVES,
   REST_STAFF_SIDES,
+  SLUR_STYLES,
   STAFF_GROUPS,
   STEM_DIRECTIONS,
   STRESSES,
@@ -99,6 +101,7 @@ const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
 const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
 const VALID_TREMOLO_LABELS = new Set<string>(TREMOLO_LABELS);
 const VALID_TIE_STYLES = new Set<string>(TIE_STYLES);
+const VALID_SLUR_STYLES = new Set<string>(SLUR_STYLES);
 const VALID_TREMOLO_STROKE_COUNTS = new Set<string>(
   TREMOLO_STROKE_COUNTS.map(String)
 );
@@ -399,6 +402,12 @@ export const parseTremoloBeamPosition = (
 // Defaults to a solid tie.
 export const parseTieStyle = (value: string | null): TieStyle =>
   value !== null && VALID_TIE_STYLES.has(value) ? (value as TieStyle) : 'solid';
+
+// Defaults to a solid slur.
+export const parseSlurStyle = (value: string | null): SlurStyle =>
+  value !== null && VALID_SLUR_STYLES.has(value)
+    ? (value as SlurStyle)
+    : 'solid';
 
 export const parseOctaveContinuationMode = (
   value: string | null

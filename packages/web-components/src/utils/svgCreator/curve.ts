@@ -27,7 +27,7 @@ export type CurveProps = {
   // rules/connectorPlacementRules.ts#cubicSlurControlPoints). Overrides
   // bulgeHeight/nestingLevel.
   controlHeights?: readonly [number, number];
-  // Draws the curve as a dotted line (a dotted tie).
+  // Draws the curve as a dotted line (a dotted tie or slur).
   dotted?: boolean;
 };
 

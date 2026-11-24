@@ -24,6 +24,7 @@ import type {
   OctaveShiftAmount,
   PercussionInstrument,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
   StressType,
@@ -436,6 +437,8 @@ export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
 export const TREMOLO_BEAM_POSITIONS: TremoloBeamPosition[] = ['between'];
 
 export const TIE_STYLES: TieStyle[] = ['solid', 'dotted'];
+
+export const SLUR_STYLES: SlurStyle[] = ['solid', 'dotted'];
 
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
 

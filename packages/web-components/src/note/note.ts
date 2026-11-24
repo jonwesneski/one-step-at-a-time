@@ -3,6 +3,7 @@ import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
+import { slurStyleWarning } from '../rules/connectorPlacementRules';
 import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
@@ -56,6 +57,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  SlurStyle,
   StemDirection,
   StressType,
   TieStyle,
@@ -98,6 +100,7 @@ import {
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
+  parseSlurStyle,
   parseStemDirection,
   parseStress,
   parseTieStyle,
@@ -188,6 +191,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
  * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
+ * @attr {SlurStyle} slur-style - `dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
  * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
  *
  * @example
@@ -255,6 +259,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'tremolo-label',
       'articulation-repeat',
       'tie-style',
+      'slur-style',
     ];
   }
 
@@ -791,6 +796,17 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  get slurStyle(): SlurStyle {
+    return parseSlurStyle(this.readAttribute('slur-style'));
+  }
+  set slurStyle(value: SlurStyle) {
+    if (value === 'solid') {
+      this.removeAttribute('slur-style');
+    } else {
+      this.setAttribute('slur-style', value);
+    }
+  }
+
   get dottedTieAcrossBarline(): boolean {
     return this.#dottedTieAcrossBarline;
   }
@@ -1266,6 +1282,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   connectedCallback(): void {
     upgradeShadowedProperties(this);
     this.#warnAboutTremolo(null, null);
+    this.#warnAboutSlurStyle(null, null);
     this.#warnAboutDynamicReminder();
     this.render();
   }
@@ -1319,6 +1336,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
 
     this.#warnAboutTremolo(name, newValue);
+    this.#warnAboutSlurStyle(name, newValue);
 
     if (!this.isConnected) {
       return;
@@ -1332,6 +1350,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'glissando-hint' ||
       name === 'slur-group' ||
       name === 'tie-style' ||
+      name === 'slur-style' ||
       name === 'for'
     ) {
       this.dispatchEvent(
@@ -1591,6 +1610,38 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       articulation: this.articulation,
       duration: this.duration,
     })) {
+      console.warn(`[music-note] ${warning}`);
+    }
+  }
+
+  #warnAboutSlurStyle(changed: string | null, newValue: string | null): void {
+    if (
+      changed !== null &&
+      changed !== 'slur-style' &&
+      changed !== 'slur' &&
+      changed !== 'slur-group'
+    ) {
+      return;
+    }
+    if (
+      changed === 'slur-style' &&
+      newValue !== null &&
+      newValue !== parseSlurStyle(newValue)
+    ) {
+      console.warn(
+        `[music-note] slur-style="${newValue}" is not "solid" or "dotted"; ignoring it`
+      );
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+    const warning = slurStyleWarning({
+      slurStyle: this.slurStyle,
+      slur: this.slur,
+      slurGroup: this.slurGroup,
+    });
+    if (warning !== null) {
       console.warn(`[music-note] ${warning}`);
     }
   }

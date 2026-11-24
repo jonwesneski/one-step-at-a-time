@@ -30,7 +30,10 @@ import {
   MUSIC_STAFF,
   MUSIC_VOICE,
 } from './consts';
-import { SLUR_OBSTACLE_CLEARANCE_PX } from './notationDimensions';
+import {
+  SLUR_ARTICULATION_CLEARANCE_PX,
+  SLUR_OBSTACLE_CLEARANCE_PX,
+} from './notationDimensions';
 
 beforeEach(() => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -185,6 +188,21 @@ describe('collectPhraseSlurPairs', () => {
     expect(pairs[0].kind).toBe('slur');
     expect(pairs[0].start).toBe(leftNote);
     expect(pairs[0].end).toBe(rightNote);
+  });
+
+  it("marks each slur-group segment dotted from its own start's slur-style", () => {
+    const root = document.createElement('div');
+    const first = makePositionedNote(
+      { 'slur-group': 'phrase1', 'slur-style': 'dotted' },
+      0
+    );
+    const second = makePositionedNote({ 'slur-group': 'phrase1' }, 100);
+    const third = makePositionedNote({ 'slur-group': 'phrase1' }, 200);
+    root.append(first, second, third);
+
+    const pairs = collectPhraseSlurPairs(root);
+
+    expect(pairs.map((pair) => pair.dotted)).toEqual([true, false]);
   });
 
   it('produces N-1 consecutive pairs for an N-member group', () => {
@@ -378,6 +396,17 @@ describe('pairConnectors', () => {
     const solidEnd = makeNote({ note: 'D', octave: '4', tie: 'end' });
     const pairs = pairConnectors([a, b, solidStart, solidEnd]);
     expect(pairs.find((pair) => pair.start === a)?.dotted).toBe(true);
+    expect(pairs.find((pair) => pair.start === solidStart)?.dotted).toBe(false);
+  });
+
+  it('marks a slur dotted when its start sets slur-style="dotted"', () => {
+    const a = makeNote({ slur: 'start', 'slur-style': 'dotted' });
+    const b = makeNote({ slur: 'end' });
+    const solidStart = makeNote({ slur: 'start' });
+    const solidEnd = makeNote({ slur: 'end', 'slur-style': 'dotted' });
+    const pairs = pairConnectors([a, b, solidStart, solidEnd]);
+    expect(pairs.find((pair) => pair.start === a)?.dotted).toBe(true);
+    // Read from the start only.
     expect(pairs.find((pair) => pair.start === solidStart)?.dotted).toBe(false);
   });
 
@@ -1503,6 +1532,271 @@ describe('buildConnectorSvgs', () => {
     );
 
     expect(withStemPath.fromY).toBeCloseTo(baseline.fromY, 5);
+  });
+
+  // A stand-in for a note's `.articulations` group at a fixed rect.
+  const addMarks = (
+    note: Element,
+    rect: { left: number; top: number; right: number; bottom: number }
+  ): void => {
+    const marks = document.createElement('div');
+    marks.classList.add('articulations');
+    jest.spyOn(marks, 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      width: rect.right - rect.left,
+      height: rect.bottom - rect.top,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({}),
+    } as DOMRect);
+    note.shadowRoot!.appendChild(marks);
+  };
+
+  const quadraticYAt = (
+    path: ReturnType<typeof parsePath>,
+    x: number
+  ): number => {
+    const t = (x - path.fromX) / (path.toX - path.fromX);
+    const mt = 1 - t;
+    return mt * mt * path.fromY + 2 * mt * t * path.cy + t * t * path.toY;
+  };
+
+  describe('slurs and articulation marks', () => {
+    const slurBetween = (
+      start: NoteElementType,
+      end: NoteElementType
+    ): ConnectorPair => ({
+      kind: 'slur',
+      start: start as unknown as NoteLikeElementType,
+      end: end as unknown as NoteLikeElementType,
+      nestingLevel: 0,
+    });
+
+    const drawOne = (pair: ConnectorPair) =>
+      parsePath(
+        buildConnectorSvgs([pair], { rootRect, rowLeft: 0 })[0]
+          .querySelector('path')!
+          .getAttribute('d')!
+      );
+
+    it('moves a slur end below the staccato dot of its stem-up note', () => {
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(start, {
+        left: 56,
+        right: 64,
+        top: plain.fromY - 3,
+        bottom: plain.fromY + 6,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.fromY).toBeCloseTo(
+        plain.fromY + 6 + SLUR_ARTICULATION_CLEARANCE_PX,
+        5
+      );
+      expect(marked.toY).toBeCloseTo(plain.toY, 5);
+    });
+
+    it('moves a slur end above the tenuto line of its stem-down note', () => {
+      const start = makeLayoutNote({ stemUp: false, left: 50 });
+      const end = makeLayoutNote({ stemUp: false, left: 250 });
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(end, {
+        left: 252,
+        right: 268,
+        top: plain.toY - 5,
+        bottom: plain.toY + 2,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.toY).toBeCloseTo(
+        plain.toY - 5 - SLUR_ARTICULATION_CLEARANCE_PX,
+        5
+      );
+    });
+
+    it("ignores marks that don't span the end's x, such as a grace note's", () => {
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(start, {
+        left: 30,
+        right: 40,
+        top: plain.fromY,
+        bottom: plain.fromY + 20,
+      });
+
+      expect(drawOne(pair).fromY).toBeCloseTo(plain.fromY, 5);
+    });
+
+    it('carries the arc outside the marks of every note between its ends', () => {
+      const staff = document.createElement(MUSIC_STAFF);
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const middle = makeLayoutNote({ stemUp: true, left: 150 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const after = makeLayoutNote({ stemUp: true, left: 350 });
+      staff.append(start, middle, end, after);
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      // Deeper than the default arc at the middle note's x.
+      const markBottom = quadraticYAt(plain, 160) + 15;
+      addMarks(middle, {
+        left: 155,
+        right: 165,
+        top: markBottom - 8,
+        bottom: markBottom,
+      });
+      // Marks outside the slur's span change nothing.
+      addMarks(after, {
+        left: 355,
+        right: 365,
+        top: markBottom + 40,
+        bottom: markBottom + 60,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.fromY).toBeCloseTo(plain.fromY, 5);
+      for (const x of [155, 160, 165]) {
+        expect(quadraticYAt(marked, x)).toBeGreaterThanOrEqual(
+          markBottom + SLUR_ARTICULATION_CLEARANCE_PX - 1e-6
+        );
+      }
+    });
+
+    it('leaves a slur over unmarked notes as it was', () => {
+      const staff = document.createElement(MUSIC_STAFF);
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const middle = makeLayoutNote({ stemUp: true, left: 150 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      staff.append(start, middle, end);
+      const plain = parsePath(
+        buildConnectorSvgs(
+          [
+            {
+              kind: 'tie',
+              start: start as unknown as NoteLikeElementType,
+              end: end as unknown as NoteLikeElementType,
+              nestingLevel: 0,
+            },
+          ],
+          { rootRect, rowLeft: 0 }
+        )[0]
+          .querySelector('path')!
+          .getAttribute('d')!
+      );
+      const slur = drawOne(slurBetween(start, end));
+
+      // Same bulge as the default curve; only the head offset differs.
+      expect(slur.cy - (slur.fromY + slur.toY) / 2).toBeCloseTo(
+        plain.cy - (plain.fromY + plain.toY) / 2,
+        5
+      );
+    });
+
+    it("moves a cross-staff slur's end past its own marks", () => {
+      const treble = makeStaffWithRect(0, 100);
+      const bass = makeStaffWithRect(200, 300);
+      const start = makeLayoutNote({ stemUp: false, left: 50, top: 250 });
+      bass.appendChild(start);
+      const end = makeLayoutNote({ stemUp: false, left: 750, top: 50 });
+      treble.appendChild(end);
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(start, {
+        left: 56,
+        right: 64,
+        top: plain.fromY - 8,
+        bottom: plain.fromY + 2,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.fromY).toBeCloseTo(
+        plain.fromY - 8 - SLUR_ARTICULATION_CLEARANCE_PX,
+        5
+      );
+    });
+
+    it('carries an enclosing slur outside the slur nested inside it, whatever order the pairs come in', () => {
+      // The inner notes sit lower, so the outer slur's default arc would cut
+      // through the inner one.
+      const notes = [50, 150, 250, 350].map((left, index) =>
+        makeLayoutNote({
+          stemUp: true,
+          left,
+          top: index === 1 || index === 2 ? 125 : 100,
+        })
+      );
+      document.createElement(MUSIC_STAFF).append(...notes);
+      const outer: ConnectorPair = {
+        ...slurBetween(notes[0], notes[3]),
+        nestingLevel: 1,
+      };
+      const inner = slurBetween(notes[1], notes[2]);
+      const alone = drawOne(outer);
+
+      const [outerSvg, innerSvg] = buildConnectorSvgs([outer, inner], {
+        rootRect,
+        rowLeft: 0,
+      }).sort(
+        (a, b) =>
+          parsePath(a.querySelector('path')!.getAttribute('d')!).fromX -
+          parsePath(b.querySelector('path')!.getAttribute('d')!).fromX
+      );
+      const outerPath = parsePath(
+        outerSvg.querySelector('path')!.getAttribute('d')!
+      );
+      const innerPath = parsePath(
+        innerSvg.querySelector('path')!.getAttribute('d')!
+      );
+
+      expect(outerPath.cy).toBeGreaterThan(alone.cy);
+      for (let k = 0; k <= 10; k++) {
+        const x =
+          innerPath.fromX + ((innerPath.toX - innerPath.fromX) * k) / 10;
+        expect(quadraticYAt(outerPath, x)).toBeGreaterThan(
+          quadraticYAt(innerPath, x)
+        );
+      }
+    });
+
+    it('leaves a slur alone beside one it does not enclose', () => {
+      const notes = [50, 150, 250, 350].map((left) =>
+        makeLayoutNote({ stemUp: true, left })
+      );
+      const first = slurBetween(notes[0], notes[1]);
+      const second = slurBetween(notes[2], notes[3]);
+      const alone = drawOne(second);
+
+      const svgs = buildConnectorSvgs([first, second], {
+        rootRect,
+        rowLeft: 0,
+      });
+      const secondPath = parsePath(
+        svgs[1].querySelector('path')!.getAttribute('d')!
+      );
+      expect(secondPath.cy).toBeCloseTo(alone.cy, 5);
+    });
+
+    it('draws a dotted slur with dashes', () => {
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const [svg] = buildConnectorSvgs(
+        [{ ...slurBetween(start, end), dotted: true }],
+        { rootRect, rowLeft: 0 }
+      );
+      const path = svg.querySelector('path')!;
+      expect(path.classList.contains('dotted')).toBe(true);
+      expect(path.getAttribute('stroke-dasharray')).not.toBeNull();
+    });
   });
 });
 

@@ -482,6 +482,26 @@ export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
 export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
 
 /**
+ * Offset (px) of a slur's end from its notehead centre, so the arc visibly
+ * leaves the head without touching it.
+ * = 0.9 × STAFF_LINE_SPACING
+ */
+export const SLUR_NOTEHEAD_OFFSET_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * Gap (px) a slur keeps from the articulation marks it encloses, at its ends
+ * and over the notes between them.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const SLUR_ARTICULATION_CLEARANCE_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) an outer slur keeps from a slur nested inside it, along the arc.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const SLUR_NESTED_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
  * Gap (px) kept between content drawn past its host's or row's edge and that
  * edge, once the host grows its margin to make room.
  * = 0.5 × STAFF_LINE_SPACING
@@ -1550,16 +1570,16 @@ export const TREMOLO_LABEL_CHAR_WIDTH_PX = TREMOLO_LABEL_FONT_SIZE_PX * 0.55;
  */
 export const TREMOLO_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
-// ─── Dotted ties ──────────────────────────────────────────────────────────────
+// ─── Dotted ties and slurs ────────────────────────────────────────────────────
 
 /**
- * Dash length (px) of a dotted tie.
+ * Dash length (px) of a dotted tie or slur.
  * = 0.3 × STAFF_LINE_SPACING
  */
 export const TIE_DASH_PX = STAFF_LINE_SPACING * 0.3;
 
 /**
- * Gap (px) between a dotted tie's dashes.
+ * Gap (px) between a dotted tie's or slur's dashes.
  * = 0.3 × STAFF_LINE_SPACING
  */
 export const TIE_DASH_GAP_PX = STAFF_LINE_SPACING * 0.3;

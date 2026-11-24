@@ -1671,6 +1671,58 @@ describe('slur group', () => {
   });
 });
 
+describe('slur-style', () => {
+  it('round-trips, defaulting to solid and ignoring a value that doesn’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('slur', 'start');
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.slurStyle).toBe('solid');
+    noteElement.slurStyle = 'dotted';
+    expect(noteElement.getAttribute('slur-style')).toBe('dotted');
+    noteElement.setAttribute('slur-style', 'wavy');
+    expect(noteElement.slurStyle).toBe('solid');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('slur-style="wavy"')
+    );
+    noteElement.slurStyle = 'solid';
+    expect(noteElement.hasAttribute('slur-style')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('dispatches CONNECTOR_ATTRIBUTE_CHANGE', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.slurStyle = 'dotted';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns once connected when a dotted style sits on a note that starts no slur', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('slur-style', 'dotted');
+    expect(warn).not.toHaveBeenCalled();
+
+    document.body.appendChild(noteElement);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('starts no slur')
+    );
+
+    warn.mockClear();
+    noteElement.setAttribute('slur', 'start');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
 describe('stem direction', () => {
   it('round-trips stem-direction, rejecting an invalid value', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;

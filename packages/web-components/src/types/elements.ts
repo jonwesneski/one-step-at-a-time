@@ -25,6 +25,7 @@ import type {
   OctaveShiftAmount,
   PercussionInstrument,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
   StressType,
@@ -90,6 +91,8 @@ export interface INoteElement {
   articulationRepeat: boolean;
   // How the tie this element starts is drawn.
   tieStyle: TieStyle;
+  // How the slur this element starts is drawn.
+  slurStyle: SlurStyle;
   // Set by the composition on the end of a dotted tie that crosses a barline,
   // which shows its accidental again.
   dottedTieAcrossBarline: boolean;
@@ -304,6 +307,8 @@ export interface IChordElement {
   articulationRepeat: boolean;
   // See INoteElement.tieStyle.
   tieStyle: TieStyle;
+  // See INoteElement.slurStyle.
+  slurStyle: SlurStyle;
   // See INoteElement.dottedTieAcrossBarline.
   dottedTieAcrossBarline: boolean;
   // Default for every tone; a slotted <music-note>'s own notehead overrides

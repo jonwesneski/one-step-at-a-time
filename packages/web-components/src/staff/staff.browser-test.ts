@@ -653,6 +653,87 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
   });
 });
 
+test.describe(`${MUSIC_STAFF} slurs and articulation`, () => {
+  async function readSlurAndMarks(
+    page: Page
+  ): Promise<{ slurStartY: number; marksBottom: number | null }> {
+    return page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const staff = document.querySelector(staffTag);
+        const path = staff?.shadowRoot
+          ?.querySelector('.standalone-connectors-overlay')
+          ?.querySelector('path');
+        if (!path) {
+          throw new Error('slur missing');
+        }
+        const marks = document
+          .querySelector(noteTag)
+          ?.shadowRoot?.querySelector('.articulations');
+        // The curve's first point, in client space.
+        const start = path.getPointAtLength(0);
+        const matrix = path.getScreenCTM();
+        if (matrix === null) {
+          throw new Error('slur not laid out');
+        }
+        return {
+          slurStartY: new DOMPoint(start.x, start.y).matrixTransform(matrix).y,
+          marksBottom: marks ? marks.getBoundingClientRect().bottom : null,
+        };
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+  }
+
+  test('a slur moves outside marks added to its first note', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        // E4 stems up, so the marks and the slur sit below.
+        for (let index = 0; index < 4; index++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'E4');
+          note.setAttribute('duration', 'eighth');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === 3) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+    const before = await readSlurAndMarks(page);
+    expect(before.marksBottom).toBeNull();
+
+    await page.evaluate((noteTag) => {
+      document
+        .querySelector(noteTag)
+        ?.setAttribute('articulation', 'accent-portato');
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await readSlurAndMarks(page);
+
+    expect(after.marksBottom).not.toBeNull();
+    expect(after.slurStartY).toBeGreaterThan(before.slurStartY);
+    expect(after.slurStartY).toBeGreaterThan(after.marksBottom as number);
+  });
+});
+
 test.describe(`${MUSIC_STAFF} rests`, () => {
   test('rest elements position left-to-right among pitched notes', async ({
     page,

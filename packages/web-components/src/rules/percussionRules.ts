@@ -39,6 +39,7 @@ const DRUM_SHARED_ATTRIBUTES = [
   'lv-label',
   'tie-style',
   'slur',
+  'slur-style',
   'slur-group',
   'dynamic',
   'dynamic-shared',

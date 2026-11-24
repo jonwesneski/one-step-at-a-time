@@ -37,6 +37,7 @@ import type {
   OctaveShiftAmount,
   PercussionInstrument,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
   StressType,
@@ -65,6 +66,7 @@ type DrumNotationProps = {
   tie?: TieValue;
   'lv-label'?: boolean;
   'tie-style'?: TieStyle;
+  'slur-style'?: SlurStyle;
   slur?: ConnectorRole;
   'slur-group'?: string;
   for?: string;
@@ -245,6 +247,7 @@ declare module 'react' {
         'tremolo-label'?: TremoloLabel;
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
+        'slur-style'?: SlurStyle;
       };
       'music-drum-note': WebComponentNoChildrenProps &
         DrumNotationProps & {
@@ -308,6 +311,7 @@ declare module 'react' {
         'tremolo-label'?: TremoloLabel;
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
+        'slur-style'?: SlurStyle;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

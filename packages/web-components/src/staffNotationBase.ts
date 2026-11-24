@@ -24,6 +24,11 @@ import {
 } from './rules/beatRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
+import {
+  estimatedSlurReachY,
+  SlurReachEntry,
+  slurSpans,
+} from './rules/connectorPlacementRules';
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
@@ -198,6 +203,7 @@ import type {
 } from './types/theory';
 import {
   BeamsBuilder,
+  BULGE_STEP_PX,
   computeYHeadOffset,
   createBarlineSvg,
   createDynamicMarkingSvg,
@@ -214,6 +220,7 @@ import {
   createSharpSvg,
   createStartRepeatSvg,
   createTimeSignatureSvg,
+  DEFAULT_BULGE_HEIGHT,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   octaveSignWidth,
@@ -295,6 +302,9 @@ import {
   REPEAT_START_LEAD_PX,
   REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
+  SLUR_ARTICULATION_CLEARANCE_PX,
+  SLUR_NESTED_CLEARANCE_PX,
+  SLUR_NOTEHEAD_OFFSET_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -752,6 +762,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // A trill span's end and a written trilling notehead's footprint depend
     // on `tie`, so with a trill present a tie change needs a full re-layout.
     if (this.#hasTrillMarkedElement()) {
+      this.#boundNoteYChange();
+      return;
+    }
+    // The dynamics row clears this staff's slurs (#slurReachY).
+    if (this.#hasDynamicsMarkedElement()) {
       this.#boundNoteYChange();
       return;
     }
@@ -4989,6 +5004,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
   }
 
+  #hasDynamicsMarkedElement(): boolean {
+    return this.#allElements.some((element) => {
+      if (
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
+      ) {
+        return false;
+      }
+      const noteOrChord = element as NoteOrChordElementType;
+      return (
+        noteOrChord.dynamic !== null ||
+        noteOrChord.crescendo !== null ||
+        noteOrChord.decrescendo !== null
+      );
+    });
+  }
+
   #hasTrillMarkedElement(): boolean {
     return this.#allElements.some((element) => {
       if (isNoteNodeName(element.nodeName)) {
@@ -6032,26 +6064,125 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const extremeStemTipY = realStems
       ? this.#extremeRealExtentY(state, placeAbove)
       : this.#extremeStemTipY(state, state.elements.keys(), placeAbove);
+    const slurReachY = this.#slurReachY(state, placeAbove);
 
     // The value is a text baseline, so add the glyph's reach
     // (≈DYNAMICS_FONT_SIZE) toward the stem.
     if (placeAbove) {
-      if (extremeStemTipY === null) {
-        return DYNAMICS_ABOVE_BASELINE_Y;
-      }
       return Math.min(
         DYNAMICS_ABOVE_BASELINE_Y,
-        extremeStemTipY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING
+        extremeStemTipY === null
+          ? Infinity
+          : extremeStemTipY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING,
+        slurReachY === null
+          ? Infinity
+          : slurReachY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING / 2
       );
-    }
-
-    if (extremeStemTipY === null) {
-      return DYNAMICS_BASELINE_Y;
     }
     return Math.max(
       DYNAMICS_BASELINE_Y,
-      extremeStemTipY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING
+      extremeStemTipY === null
+        ? -Infinity
+        : extremeStemTipY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING,
+      slurReachY === null
+        ? -Infinity
+        : slurReachY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING / 2
     );
+  }
+
+  // How far this voice's same-staff slurs may reach toward one side: past
+  // their notes' heads and the marks they enclose, plus the arc. Slurs are
+  // drawn after the dynamics row, so it clears this estimate. Null with no
+  // slur on that side.
+  #slurReachY(state: VoiceRenderState, placeAbove: boolean): number | null {
+    const roles = state.elements.map((element) =>
+      element.nodeName === MUSIC_REST_NODE
+        ? null
+        : (element as NoteOrChordElementType).slur ?? null
+    );
+    let extreme: number | null = null;
+    // Nested slurs first: an enclosing slur rides outside them.
+    const spans = slurSpans(roles).sort(
+      (a, b) => a.nestingLevel - b.nestingLevel
+    );
+    const reached: { startIndex: number; endIndex: number; y: number }[] = [];
+    for (const span of spans) {
+      // A slur curves away from the stem of the note it starts on; one that
+      // starts in an earlier measure goes by the note it ends on.
+      const sideIndex =
+        roles[span.startIndex] === 'start' ? span.startIndex : span.endIndex;
+      if (state.stemDirections[sideIndex] === placeAbove) {
+        continue;
+      }
+      const entries: SlurReachEntry[] = [];
+      for (let i = span.startIndex; i <= span.endIndex; i++) {
+        const element = state.elements[i];
+        if (element.nodeName === MUSIC_REST_NODE) {
+          continue;
+        }
+        const headYs = isNoteNodeName(element.nodeName)
+          ? [state.noteStaffYCoords.get(element as NoteElementType)]
+          : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
+        const resolved = headYs.filter((y): y is number => y !== undefined);
+        if (resolved.length === 0) {
+          continue;
+        }
+        const headY = placeAbove
+          ? Math.min(...resolved)
+          : Math.max(...resolved);
+        // Marks sit opposite the stem.
+        const marksOnSide = state.stemDirections[i] !== placeAbove;
+        const noteOrChord = element as NoteOrChordElementType;
+        entries.push({
+          headCenterY: STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION,
+          markDepthPx: marksOnSide
+            ? articulationStackDepth(
+                noteOrChord.articulation,
+                noteOrChord.stress
+              ) * NOTE_SCALE
+            : 0,
+        });
+      }
+      const reach = estimatedSlurReachY({
+        entries,
+        side: placeAbove ? 'above' : 'below',
+        nestingLevel: span.nestingLevel,
+        noteheadOffsetPx: SLUR_NOTEHEAD_OFFSET_PX,
+        markClearancePx: SLUR_ARTICULATION_CLEARANCE_PX,
+        baseBulgePx: DEFAULT_BULGE_HEIGHT,
+        bulgeStepPx: BULGE_STEP_PX,
+        enclosedReachY: reached
+          .filter(
+            (inner) =>
+              inner.startIndex >= span.startIndex &&
+              inner.endIndex <= span.endIndex
+          )
+          .reduce<number | null>(
+            (outermost, inner) =>
+              outermost === null
+                ? inner.y
+                : placeAbove
+                ? Math.min(outermost, inner.y)
+                : Math.max(outermost, inner.y),
+            null
+          ),
+        nestedGapPx: SLUR_NESTED_CLEARANCE_PX,
+      });
+      if (reach !== null) {
+        reached.push({
+          startIndex: span.startIndex,
+          endIndex: span.endIndex,
+          y: reach,
+        });
+        extreme =
+          extreme === null
+            ? reach
+            : placeAbove
+            ? Math.min(extreme, reach)
+            : Math.max(extreme, reach);
+      }
+    }
+    return extreme;
   }
 
   // Runs with no notes too: the describe area and viewBox must still track

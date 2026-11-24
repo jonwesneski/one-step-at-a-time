@@ -784,6 +784,13 @@
             },
             {
               "kind": "field",
+              "name": "slurStyle",
+              "type": {
+                "text": "SlurStyle"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dottedTieAcrossBarline",
               "type": {
                 "text": "boolean"
@@ -1119,6 +1126,30 @@
             {
               "kind": "method",
               "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutSlurStyle",
               "privacy": "private",
               "return": {
                 "type": {
@@ -1641,6 +1672,13 @@
                 "text": "TieStyle"
               },
               "description": "`dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`."
+            },
+            {
+              "name": "slur-style",
+              "type": {
+                "text": "SlurStyle"
+              },
+              "description": "`dotted` draws the slur this chord starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`."
             }
           ],
           "superclass": {
@@ -3255,6 +3293,17 @@
             },
             {
               "kind": "field",
+              "name": "slurStyle",
+              "type": {
+                "text": "SlurStyle"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dottedTieAcrossBarline",
               "type": {
                 "text": "boolean"
@@ -3789,6 +3838,34 @@
             },
             {
               "kind": "method",
+              "name": "#warnAboutSlurStyle",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "render",
               "privacy": "private",
               "return": {
@@ -3969,6 +4046,17 @@
                 "text": "TieStyle"
               },
               "description": "`dotted` draws the tie this chord starts as a dotted line. Defaults to `solid`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "slur-style",
+              "type": {
+                "text": "SlurStyle"
+              },
+              "description": "`dotted` draws the slur this chord starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5430,6 +5518,17 @@
             },
             {
               "kind": "field",
+              "name": "slurStyle",
+              "type": {
+                "text": "SlurStyle"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dottedTieAcrossBarline",
               "type": {
                 "text": "boolean"
@@ -5937,6 +6036,34 @@
             },
             {
               "kind": "method",
+              "name": "#warnAboutSlurStyle",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "render",
               "privacy": "private",
               "return": {
@@ -6086,6 +6213,17 @@
                 "text": "TieStyle"
               },
               "description": "`dotted` draws the tie this note starts as a dotted line. Defaults to `solid`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "slur-style",
+              "type": {
+                "text": "SlurStyle"
+              },
+              "description": "`dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -8587,6 +8725,13 @@
             },
             {
               "kind": "field",
+              "name": "slurStyle",
+              "type": {
+                "text": "SlurStyle"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dottedTieAcrossBarline",
               "type": {
                 "text": "boolean"
@@ -8903,6 +9048,30 @@
             {
               "kind": "method",
               "name": "#warnAboutTremolo",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutSlurStyle",
               "privacy": "private",
               "return": {
                 "type": {
@@ -9400,6 +9569,13 @@
                 "text": "TieStyle"
               },
               "description": "`dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`."
+            },
+            {
+              "name": "slur-style",
+              "type": {
+                "text": "SlurStyle"
+              },
+              "description": "`dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`."
             }
           ],
           "superclass": {
@@ -12536,6 +12712,20 @@
             },
             {
               "kind": "method",
+              "name": "#hasDynamicsMarkedElement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#hasTrillMarkedElement",
               "privacy": "private",
               "return": {
@@ -13399,6 +13589,34 @@
                 {
                   "name": "realStems",
                   "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#slurReachY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -18672,6 +18890,20 @@
             },
             {
               "kind": "method",
+              "name": "#hasDynamicsMarkedElement",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#hasTrillMarkedElement",
               "privacy": "private",
               "return": {
@@ -19535,6 +19767,34 @@
                 {
                   "name": "realStems",
                   "default": "false"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#slurReachY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {

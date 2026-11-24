@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
-import { html } from 'lit';
+import { html, nothing } from 'lit';
 import '../../index';
 import { CLEFS, MODES, NOTES, TIMES } from '../../utils';
 
@@ -106,6 +106,134 @@ export const AcrossChords: Story = {
         <music-note note="A" octave="5" duration="quarter"></music-note>
         <music-note note="C" octave="6" duration="quarter"></music-note>
       </music-chord>
+    </music-staff>
+  `,
+};
+
+// Four eighths on one pitch, each carrying `articulation`; slurred as a group
+// when `slurred`.
+const articulatedGroup = (articulation: string, slurred: boolean) => html`
+  <music-measure>
+    <music-staff clef="treble" time="2/4">
+      ${[0, 1, 2, 3].map(
+        (index) => html`<music-note
+          note="E"
+          octave="4"
+          duration="eighth"
+          articulation=${articulation}
+          slur=${slurred && index === 0
+            ? 'start'
+            : slurred && index === 3
+            ? 'end'
+            : nothing}
+        ></music-note>`
+      )}
+    </music-staff>
+  </music-measure>
+`;
+
+/**
+ * Staccato, tenuto and portato under slurs: each note keeps its own attack and
+ * the slur goes outside the marks, at its ends and over the notes between.
+ */
+export const ArticulationUnderSlurs: Story = {
+  render: () => html`
+    <music-composition>
+      ${articulatedGroup('staccato', true)} ${articulatedGroup('tenuto', true)}
+      ${articulatedGroup('portato', true)}
+    </music-composition>
+  `,
+};
+
+/**
+ * A slur over a reiterated pitch for woodwind: tenuto lines under the slur
+ * show each note is tongued again. Stems down, so the marks and the slur sit
+ * above.
+ */
+export const RepeatedPitchTenutoUnderSlur: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="3/4">
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        articulation="tenuto"
+        slur="start"
+      ></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        articulation="tenuto"
+      ></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        articulation="tenuto"
+        slur="end"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+/** A slur over repeated notes in brass writing: legato tonguing. */
+export const RepeatedPitchBrassLegatoTonguing: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="3/4">
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        slur="start"
+      ></music-note>
+      <music-note note="D" octave="5" duration="quarter"></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="quarter"
+        slur="end"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+/**
+ * A dotted slur marks phrase structure apart from the legato slurs inside it,
+ * and rides outside them. The style is read from the slur's start.
+ */
+export const DottedPhraseSlur: Story = {
+  render: (args) => html`
+    <music-staff
+      clef=${args.clef}
+      key-sig=${args.keySig}
+      mode=${args.mode}
+      time=${args.time}
+    >
+      <music-note
+        note="C"
+        octave="5"
+        duration="eighth"
+        slur="start"
+        slur-style="dotted"
+      ></music-note>
+      <music-note
+        note="D"
+        octave="5"
+        duration="eighth"
+        slur="start"
+      ></music-note>
+      <music-note note="E" octave="5" duration="eighth"></music-note>
+      <music-note note="F" octave="5" duration="eighth" slur="end"></music-note>
+      <music-note
+        note="G"
+        octave="5"
+        duration="eighth"
+        slur="start"
+      ></music-note>
+      <music-note note="F" octave="5" duration="eighth"></music-note>
+      <music-note note="E" octave="5" duration="eighth" slur="end"></music-note>
+      <music-note note="D" octave="5" duration="eighth" slur="end"></music-note>
     </music-staff>
   `,
 };

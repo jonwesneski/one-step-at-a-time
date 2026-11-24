@@ -26,6 +26,7 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a "let ring" tie, as on a crash.
  * @attr {boolean} lv-label - Adds an "l.v." label to a `laissez-vibrer` tie.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line. Defaults to `solid`.
+ * @attr {SlurStyle} slur-style - `dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
  * @attr {'start' | 'end'} slur - Start or end of a slur.
  * @attr {string} slur-group - Joins this note to the other members of one slur phrase that crosses staves.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved ties/slurs.

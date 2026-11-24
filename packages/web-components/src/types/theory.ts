@@ -441,6 +441,12 @@ export type TremoloBeamPosition = 'between';
 export type TieStyle = 'solid' | 'dotted';
 
 /**
+ * How a slur is drawn. A `dotted` slur marks phrase structure apart from a
+ * legato slur.
+ */
+export type SlurStyle = 'solid' | 'dotted';
+
+/**
  * A barline's design: `single`, a thin `double`, a thin–thick `final`, or a
  * repeat barline (`repeat-start` ‖:, `repeat-end` :‖, `repeat-both` :‖:).
  */

@@ -186,6 +186,58 @@ describe('staffNotationBase', () => {
     });
   });
 
+  describe('dynamics row under slurs', () => {
+    // E4 stems up, so its marks and slur sit below, on the dynamics side.
+    function hairpinBaseline(noteAttrs: Record<string, string>[]): number {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      document.body.appendChild(staff);
+      const notes = noteAttrs.map((attrs) => {
+        const note = document.createElement(MUSIC_NOTE) as any;
+        note.setAttribute('duration', 'quarter');
+        note.setAttribute('note', 'E');
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        for (const [key, value] of Object.entries(attrs)) {
+          note.setAttribute(key, value);
+        }
+        return note;
+      });
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => notes;
+      slot.dispatchEvent(new Event('slotchange'));
+      return staff.hairpinDefaultsForMeasure().pairs[0].baselineClientY;
+    }
+
+    const deepMarks = { articulation: 'accent-portato', stress: 'stressed' };
+
+    it('moves past a slur enclosing deep marks', () => {
+      const unslurred = hairpinBaseline([
+        { ...deepMarks, crescendo: 'start' },
+        { ...deepMarks },
+        { ...deepMarks, crescendo: 'end' },
+      ]);
+      const slurred = hairpinBaseline([
+        { ...deepMarks, crescendo: 'start', slur: 'start' },
+        { ...deepMarks },
+        { ...deepMarks, crescendo: 'end', slur: 'end' },
+      ]);
+      expect(slurred).toBeGreaterThan(unslurred);
+    });
+
+    it('stays put for a slur over unmarked notes', () => {
+      const unslurred = hairpinBaseline([
+        { crescendo: 'start' },
+        {},
+        { crescendo: 'end' },
+      ]);
+      const slurred = hairpinBaseline([
+        { crescendo: 'start', slur: 'start' },
+        {},
+        { crescendo: 'end', slur: 'end' },
+      ]);
+      expect(slurred).toBe(unslurred);
+    });
+  });
+
   describe('crossStaffDynamicsOverrides', () => {
     function makeNote(attrs: Record<string, string>) {
       const note = document.createElement(MUSIC_NOTE) as any;

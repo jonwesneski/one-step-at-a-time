@@ -2225,6 +2225,33 @@ describe('chord symbol changes', () => {
     warn.mockRestore();
   });
 
+  it('round-trips slur-style and redraws connectors when it changes', () => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter" slur="start"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    const onConnectorChange = jest.fn();
+    chord.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      onConnectorChange
+    );
+    expect(chord.slurStyle).toBe('solid');
+    chord.slurStyle = 'dotted';
+    expect(chord.getAttribute('slur-style')).toBe('dotted');
+    expect(onConnectorChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns when a dotted slur-style sits on a chord that starts no slur', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter" slur="end" slur-style="dotted"></music-chord>';
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '[music-chord] slur-style="dotted" is set but this element starts no slur'
+      )
+    );
+    warn.mockRestore();
+  });
+
   it('redraws connectors when `for` changes', () => {
     document.body.innerHTML =
       '<music-chord chord="Cmaj" duration="quarter" tie="end"></music-chord>';
