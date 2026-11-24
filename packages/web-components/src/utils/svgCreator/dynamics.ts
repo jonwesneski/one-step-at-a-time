@@ -1,3 +1,4 @@
+import type { SwellSpan } from '../../rules/dynamicsRules';
 import {
   hairpinWedgeEdges,
   type HairpinPoint,
@@ -80,6 +81,35 @@ export function createHairpinSvg(
     )
   );
   group.classList.add('hairpin');
+  return group;
+}
+
+/** A `< >` swell: a crescendo then a diminuendo on one centre line. */
+export function createSwellSvg(
+  span: SwellSpan,
+  centerY: number,
+  openHeight: number = HAIRPIN_OPEN_HEIGHT
+): SVGGElement {
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('swell');
+  group.appendChild(
+    createHairpinSvg(
+      'crescendo',
+      span.crescendo.startX,
+      span.crescendo.endX,
+      centerY,
+      openHeight
+    )
+  );
+  group.appendChild(
+    createHairpinSvg(
+      'decrescendo',
+      span.diminuendo.startX,
+      span.diminuendo.endX,
+      centerY,
+      openHeight
+    )
+  );
   return group;
 }
 

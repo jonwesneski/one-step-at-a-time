@@ -1,5 +1,5 @@
-import { ADJACENT_NOTE_X_DISPLACEMENT_PX } from '../utils/svgCreator/note';
 import { STAFF_Y_STEP } from '../utils/notationDimensions';
+import { ADJACENT_NOTE_X_DISPLACEMENT_PX } from '../utils/svgCreator/note';
 
 export type NoteDisplacement = {
   noteIndex: number;

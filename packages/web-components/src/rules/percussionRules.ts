@@ -44,6 +44,7 @@ const DRUM_SHARED_ATTRIBUTES = [
   'dynamic',
   'dynamic-shared',
   'dynamic-reminder',
+  'swell',
   'crescendo',
   'decrescendo',
   'diminuendo',
@@ -61,6 +62,7 @@ const DRUM_SHARED_ATTRIBUTES = [
 // Attributes <music-note>/<music-chord> have and the drum elements withhold:
 // pitch-dependent ones, plus grace notes, which drums don't support yet.
 const PITCH_ONLY_SHARED_ATTRIBUTES = [
+  'breath-mark',
   'glissando',
   'glissando-hint',
   'accidental-reminder',

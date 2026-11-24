@@ -10,6 +10,9 @@ import {
   DYNAMIC_REMINDER_BRACKET_WIDTH_PX,
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
+  HAIRPIN_JOINT_GAP_PX,
+  SWELL_MID_GAP_PX,
+  SWELL_MIN_WEDGE_PX,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import type { HairpinEndpointText } from './hairpinPlacementRules';
@@ -103,12 +106,61 @@ export function pairHairpinsWithLeftovers(
     }
   });
 
+  separateHairpinsAtJoints(pairs, elements, noteXPositions);
+
   const unpairedStarts = [...openStarts].map(([kind, start]) => ({
     kind,
     element: start.element,
     index: start.index,
   }));
   return { pairs, unpairedStarts, orphanEnds };
+}
+
+/**
+ * Two hairpins that meet on one note (one ends where the next starts) part at
+ * the note's centre with HAIRPIN_JOINT_GAP_PX between them. Each is only cut
+ * back, never lengthened, and a hairpin too short to cut keeps its span.
+ */
+export function splitHairpinsAtJoint(
+  before: { startX: number; endX: number },
+  after: { startX: number; endX: number },
+  jointCenterX: number
+): void {
+  const beforeEndX = Math.min(
+    before.endX,
+    jointCenterX - HAIRPIN_JOINT_GAP_PX / 2
+  );
+  const afterStartX = Math.max(
+    after.startX,
+    jointCenterX + HAIRPIN_JOINT_GAP_PX / 2
+  );
+  if (beforeEndX > before.startX) {
+    before.endX = beforeEndX;
+  }
+  if (afterStartX < after.endX) {
+    after.startX = afterStartX;
+  }
+}
+
+function separateHairpinsAtJoints(
+  pairs: HairpinPair[],
+  elements: readonly NoteChordOrRestElementType[],
+  noteXPositions: ReadonlyMap<number, number>
+): void {
+  for (const before of pairs) {
+    const after = pairs.find(
+      (pair) => pair !== before && pair.startElement === before.endElement
+    );
+    if (after === undefined) {
+      continue;
+    }
+    const jointIndex = elements.indexOf(before.endElement);
+    splitHairpinsAtJoint(
+      before,
+      after,
+      (noteXPositions.get(jointIndex) ?? 0) + NOTE_SVG_WIDTH / 2
+    );
+  }
 }
 
 // Only one open start per kind is representable — the model has no explicit
@@ -299,14 +351,15 @@ export function computeHairpinXSpan({
 // k-1 and starts hairpin k, so a joint's dynamic is the same text for both.
 export function resolveChainSpans(
   hairpins: readonly { rawStartX: number; rawEndX: number }[],
-  texts: readonly (HairpinEndpointText | null)[]
+  texts: readonly (HairpinEndpointText | null)[],
+  jointCenterXs: readonly number[] = []
 ): {
   startX: number;
   endX: number;
   startText: HairpinEndpointText | null;
   endText: HairpinEndpointText | null;
 }[] {
-  return hairpins.map((hairpin, index) => {
+  const spans = hairpins.map((hairpin, index) => {
     const startText = texts[index] ?? null;
     const endText = texts[index + 1] ?? null;
     const span = computeHairpinXSpan({
@@ -321,6 +374,14 @@ export function resolveChainSpans(
     });
     return { startX: span.startX, endX: span.endX, startText, endText };
   });
+  // jointCenterXs[k] is the centre of the note hairpin k ends and k+1 starts.
+  for (let k = 0; k + 1 < spans.length; k++) {
+    const jointCenterX = jointCenterXs[k];
+    if (jointCenterX !== undefined) {
+      splitHairpinsAtJoint(spans[k], spans[k + 1], jointCenterX);
+    }
+  }
+  return spans;
 }
 
 export type HairpinSegment = {
@@ -383,4 +444,63 @@ export function resolveHairpinSegments(
       openAtEnd: false,
     },
   ];
+}
+
+export type SwellSpan = {
+  crescendo: { startX: number; endX: number };
+  diminuendo: { startX: number; endX: number };
+};
+
+/**
+ * A `< >` swell over one note's own span: louder to the middle, then softer,
+ * with SWELL_MID_GAP_PX between the open ends. Both ends clear an adjacent
+ * dynamic as a hairpin's do. Null when either wedge would be shorter than
+ * SWELL_MIN_WEDGE_PX or the dynamics leave no room.
+ */
+export function resolveSwellSpan(input: {
+  rawStartX: number;
+  rawEndX: number;
+  startMarking: DynamicMarking | null;
+  startBracketed?: boolean;
+  startTextCenterX: number;
+  endMarking: DynamicMarking | null;
+  endBracketed?: boolean;
+  endTextCenterX: number;
+}): SwellSpan | null {
+  const span = computeHairpinXSpan(input);
+  if (span.collided) {
+    return null;
+  }
+  const midX = (span.startX + span.endX) / 2;
+  const crescendo = { startX: span.startX, endX: midX - SWELL_MID_GAP_PX / 2 };
+  const diminuendo = { startX: midX + SWELL_MID_GAP_PX / 2, endX: span.endX };
+  if (crescendo.endX - crescendo.startX < SWELL_MIN_WEDGE_PX) {
+    return null;
+  }
+  return { crescendo, diminuendo };
+}
+
+/**
+ * Swell notes that a hairpin also starts, ends or runs over: the two would
+ * overlap, so the hairpin wins.
+ */
+export function swellConflicts(
+  elements: readonly NoteChordOrRestElementType[],
+  pairs: readonly HairpinPair[]
+): NoteOrChordElementType[] {
+  const spans = pairs.map((pair) => [
+    elements.indexOf(pair.startElement),
+    elements.indexOf(pair.endElement),
+  ]);
+  return elements.flatMap((element, index) => {
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      !(element as NoteOrChordElementType).swell
+    ) {
+      return [];
+    }
+    return spans.some(([start, end]) => start <= index && index <= end)
+      ? [element as NoteOrChordElementType]
+      : [];
+  });
 }

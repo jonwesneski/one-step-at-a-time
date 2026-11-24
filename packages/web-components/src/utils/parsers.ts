@@ -4,6 +4,7 @@ import type {
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BreathMark,
   ClefType,
   DurationType,
   DynamicMarking,
@@ -43,6 +44,7 @@ import {
   ARPEGGIOS,
   ARTICULATIONS,
   BARLINE_TYPES,
+  BREATH_MARKS,
   CLEFS,
   DURATIONS,
   DYNAMICS,
@@ -100,6 +102,7 @@ const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
 const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
 const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
 const VALID_TREMOLO_LABELS = new Set<string>(TREMOLO_LABELS);
+const VALID_BREATH_MARKS = new Set<string>(BREATH_MARKS);
 const VALID_TIE_STYLES = new Set<string>(TIE_STYLES);
 const VALID_SLUR_STYLES = new Set<string>(SLUR_STYLES);
 const VALID_TREMOLO_STROKE_COUNTS = new Set<string>(
@@ -371,6 +374,11 @@ export const parseTremoloTuplet = (value: string | null): number | null => {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 2 ? parsed : null;
 };
+
+export const parseBreathMark = (value: string | null): BreathMark | null =>
+  value !== null && VALID_BREATH_MARKS.has(value)
+    ? (value as BreathMark)
+    : null;
 
 export const parseTremoloLabel = (value: string | null): TremoloLabel | null =>
   value !== null && VALID_TREMOLO_LABELS.has(value)

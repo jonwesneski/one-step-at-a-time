@@ -2252,6 +2252,34 @@ describe('chord symbol changes', () => {
     warn.mockRestore();
   });
 
+  it('round-trips breath-mark and draws it standalone', () => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    expect(chord.breathMark).toBeNull();
+    chord.breathMark = 'tick';
+    expect(chord.getAttribute('breath-mark')).toBe('tick');
+    expect(chord.shadowRoot!.querySelectorAll('.breath-mark')).toHaveLength(1);
+  });
+
+  it('leaves its breath mark to the staff', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter" breath-mark="tick"></music-chord>';
+    document.body.appendChild(staff);
+    const chord = staff.querySelector(MUSIC_CHORD) as ChordElementType;
+    expect(chord.shadowRoot!.querySelector('.breath-mark')).toBeNull();
+  });
+
+  it('round-trips swell', () => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="whole"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    expect(chord.swell).toBe(false);
+    chord.swell = true;
+    expect(chord.hasAttribute('swell')).toBe(true);
+  });
+
   it('redraws connectors when `for` changes', () => {
     document.body.innerHTML =
       '<music-chord chord="Cmaj" duration="quarter" tie="end"></music-chord>';

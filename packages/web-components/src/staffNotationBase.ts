@@ -22,6 +22,7 @@ import {
   computeTremoloScaleByIndex,
   durationContribution,
 } from './rules/beatRules';
+import { breathMarkBottomY, breathMarkCenterX } from './rules/breathMarkRules';
 import { computeAdjacentDisplacements } from './rules/chordRules';
 import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
 import {
@@ -34,6 +35,9 @@ import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
   type HairpinPair,
   pairHairpinsWithLeftovers,
+  resolveSwellSpan,
+  swellConflicts,
+  type SwellSpan,
 } from './rules/dynamicsRules';
 import {
   applyResolvedGraceAccidentals,
@@ -187,6 +191,7 @@ import type {
   BarlineType,
   BeatsInMeasure,
   BeatTypeInMeasure,
+  BreathMark,
   ClefType,
   DurationType,
   DynamicMarking,
@@ -203,9 +208,13 @@ import type {
 } from './types/theory';
 import {
   BeamsBuilder,
+  breathMarkHeightPx,
+  breathMarkReservedWidthPx,
+  breathMarkWidthPx,
   BULGE_STEP_PX,
   computeYHeadOffset,
   createBarlineSvg,
+  createBreathMarkSvg,
   createDynamicMarkingSvg,
   createFlatSvg,
   createHairpinSvg,
@@ -219,6 +228,7 @@ import {
   createSempreArpeggiandoText,
   createSharpSvg,
   createStartRepeatSvg,
+  createSwellSvg,
   createTimeSignatureSvg,
   DEFAULT_BULGE_HEIGHT,
   NOTE_HEAD_RADIUS_PX,
@@ -261,6 +271,7 @@ import {
   BARLINE_THICK_PX,
   BASE_STEM_LENGTH_PX,
   BEAM_THICKNESS_PX,
+  BREATH_MARK_INK_GAP_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
   CLUSTER_BRACKET_RISE_PX,
@@ -272,6 +283,7 @@ import {
   DYNAMICS_FONT_SIZE,
   END_WARNING_GAP_PX,
   GRACE_MAIN_GAP_PX,
+  HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_CANCEL_GAP_PX,
   KEY_SIG_FLAT_WIDTH,
@@ -312,6 +324,7 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   STAFF_Y_STEP,
+  SWELL_MIN_SPAN_PX,
   TIME_SIG_GLYPH_CENTER_X_PX,
   TIME_SIG_Y_TRANSLATE,
   TREMOLO_LABEL_FONT_SIZE_PX,
@@ -539,6 +552,20 @@ type OctaveContinuationRow = {
   starts: boolean;
 };
 
+function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
+  return element.nodeName === MUSIC_REST_NODE
+    ? null
+    : (element as NoteElementType | ChordElementType).breathMark ?? null;
+}
+
+// A placed above-staff label or mark (container px), which later ones clear.
+type PlacedAboveStaffRect = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
 function tremoloLabelOf(
   element: NoteChordOrRestElementType
 ): TremoloLabel | null {
@@ -743,6 +770,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #unisonReserves = new Map<VoiceKey, Map<number, number>>();
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #tremoloLabelContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #breathMarkContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  // Where entries stop, before end-of-measure warnings and the end barline,
+  // in the voice containers' frame (which starts at the describe area's end).
+  #notesAreaEndX = 0;
+  #warnedSwells = new WeakSet<NoteOrChordElementType>();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -1341,7 +1373,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       pairs: [],
       unpairedStarts: [],
       orphanEnds: [],
+      swells: [],
     };
+    // The voice containers' frame starts at the describe area's end.
+    const containerLeft =
+      this.transcribeContainer.getBoundingClientRect().left + this.describeEndX;
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       const side = this.#defaultDynamicsSide(voiceKey, state);
       const placement: StaffHairpinPlacement = {
@@ -1369,6 +1405,22 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         result.unpairedStarts.push({ ...placement, ...start });
       }
       result.orphanEnds.push(...pairing.orphanEnds);
+      state.elements.forEach((element, i) => {
+        if (
+          element.nodeName === MUSIC_REST_NODE ||
+          !(element as NoteOrChordElementType).swell
+        ) {
+          return;
+        }
+        const span = this.#swellSpan(voiceKey, state, i);
+        if (span !== null) {
+          result.swells.push({
+            ...placement,
+            element: element as NoteOrChordElementType,
+            rawEndClientX: containerLeft + span.diminuendo.endX,
+          });
+        }
+      });
     }
     return result;
   }
@@ -1867,6 +1919,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     if (reference.articulationRepeat) {
       chord.setAttribute('articulation-repeat', '');
+    }
+    if (reference.breathMark !== null) {
+      chord.setAttribute('breath-mark', reference.breathMark);
+    }
+    if (reference.swell) {
+      chord.setAttribute('swell', '');
     }
     for (const tone of group.tones) {
       const note = document.createElement(MUSIC_NOTE);
@@ -2644,6 +2702,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#prepareVoiceContainers(this.#trillLinesContainers, activeKeys);
     this.#prepareVoiceContainers(this.#octaveSignsContainers, activeKeys);
     this.#prepareVoiceContainers(this.#tremoloLabelContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#breathMarkContainers, activeKeys);
 
     this.#spaceElements();
 
@@ -3517,6 +3576,29 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (!state) {
       return 0;
     }
+    const element = state.elements[index];
+    const breathMark = breathMarkOf(element);
+    // A breath mark above the stave and a swell below it share the gap.
+    const gapReserve = Math.max(
+      breathMark === null ? 0 : breathMarkReservedWidthPx(breathMark),
+      element.nodeName !== MUSIC_REST_NODE &&
+        (element as NoteOrChordElementType).swell
+        ? SWELL_MIN_SPAN_PX + HAIRPIN_DYNAMIC_GAP_PX - NOTE_SVG_WIDTH
+        : 0
+    );
+    return (
+      this.#rightwardInkFootprint(voiceKey, state, index) +
+      Math.max(0, gapReserve)
+    );
+  }
+
+  // The part of #rightwardFootprint that is ink: what a breath mark after
+  // the entry starts beyond.
+  #rightwardInkFootprint(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
     return (
       this.#augmentationDotFootprint(state, index) +
       (state.writtenTrillFootprints.get(index) ?? 0) +
@@ -3914,6 +3996,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.describeEndX -
       this.endBarlineReserve -
       this.endWarningSpace.width;
+    this.#notesAreaEndX = remainingWidth;
     this.#drawEndWarnings(transcribeRect.width - this.endBarlineReserve);
 
     // Conservative budgets, before notes are positioned.
@@ -4398,7 +4481,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
 
-    this.#renderTremoloLabels(remainingWidth);
+    const placedAboveStaff = this.#renderTremoloLabels(remainingWidth);
+    this.#renderBreathMarks(remainingWidth, placedAboveStaff);
 
     this.#renderUnisonOverlay(placementColumns, remainingWidth);
 
@@ -4417,8 +4501,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // `trem.` / `non trem.` labels sit above everything drawn over their note,
   // in any voice, and above the stave; one that would overlap an earlier
   // label moves up past it.
-  #renderTremoloLabels(remainingWidth: number): void {
-    const placed: { left: number; right: number; top: number }[] = [];
+  #renderTremoloLabels(remainingWidth: number): PlacedAboveStaffRect[] {
+    const placed: PlacedAboveStaffRect[] = [];
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       const container = this.#containerFor(
         this.#tremoloLabelContainers,
@@ -4470,10 +4554,258 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           left,
           right,
           top: baseline - TREMOLO_LABEL_FONT_SIZE_PX,
+          bottom: baseline,
         });
         container.appendChild(createTremoloLabel(left, baseline, label));
       }
     }
+    return placed;
+  }
+
+  // A breath mark sits above the stave in the gap after its entry, above
+  // whatever is under it there in any voice, and above a label or mark placed
+  // before it that it would overlap.
+  #renderBreathMarks(
+    remainingWidth: number,
+    placed: PlacedAboveStaffRect[]
+  ): void {
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const container = this.#containerFor(
+        this.#breathMarkContainers,
+        voiceKey,
+        'breath-marks-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+      for (let i = 0; i < state.elements.length; i++) {
+        const kind = breathMarkOf(state.elements[i]);
+        if (kind === null) {
+          continue;
+        }
+        const centerX = this.#breathMarkCenterX(voiceKey, state, i);
+        const halfWidth = breathMarkWidthPx(kind) / 2;
+        const left = centerX - halfWidth;
+        const right = centerX + halfWidth;
+        let bottom = this.#breathMarkBottomY(voiceKey, state, i, {
+          left,
+          right,
+        });
+        for (const [otherKey, otherState] of this.#voiceRenderStates) {
+          if (otherKey === voiceKey) {
+            continue;
+          }
+          for (const [j, x] of otherState.noteXPositions) {
+            if (x > right || x + NOTE_SVG_WIDTH < left) {
+              continue;
+            }
+            const inkTop = this.#tremoloLabelInkTopY(otherState, j);
+            if (inkTop !== null) {
+              bottom = Math.min(bottom, inkTop - BREATH_MARK_INK_GAP_PX);
+            }
+          }
+        }
+        const height = breathMarkHeightPx(kind);
+        let moved = true;
+        while (moved) {
+          moved = false;
+          for (const other of placed) {
+            const overlapsAcross = other.left < right && left < other.right;
+            const overlapsDown =
+              bottom - height < other.bottom + BREATH_MARK_INK_GAP_PX &&
+              bottom + BREATH_MARK_INK_GAP_PX > other.top;
+            if (overlapsAcross && overlapsDown) {
+              bottom = other.top - BREATH_MARK_INK_GAP_PX;
+              moved = true;
+            }
+          }
+        }
+        placed.push({ left, right, top: bottom - height, bottom });
+        container.appendChild(createBreathMarkSvg(kind, centerX, bottom));
+      }
+    }
+  }
+
+  // Centre x (container) of entry i's breath mark: midway between its right
+  // ink edge and the next entry's left edge in its voice, or the end of the
+  // notes area.
+  #breathMarkCenterX(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number {
+    const x = state.noteXPositions.get(i) ?? 0;
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    return breathMarkCenterX({
+      noteRightX:
+        x + NOTE_SVG_WIDTH + this.#rightwardInkFootprint(voiceKey, state, i),
+      nextLeftX:
+        next === null
+          ? this.#notesAreaEndX
+          : (next.state.noteXPositions.get(next.index) ?? 0) -
+            this.#entryLeftwardExtent(next.state.elements[next.index]),
+    });
+  }
+
+  // Entry i's swell, from its start to just before the next entry (or the
+  // end of the notes area), clear of both entries' dynamics. Null when it
+  // has no room.
+  #swellSpan(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): SwellSpan | null {
+    const element = state.elements[i] as NoteOrChordElementType;
+    const x = state.noteXPositions.get(i) ?? 0;
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    const nextElement = next === null ? null : next.state.elements[next.index];
+    const nextX =
+      next === null ? null : next.state.noteXPositions.get(next.index) ?? 0;
+    const nextDynamic =
+      nextElement === null || nextElement.nodeName === MUSIC_REST_NODE
+        ? null
+        : (nextElement as NoteOrChordElementType).dynamic;
+    return resolveSwellSpan({
+      rawStartX: x,
+      rawEndX:
+        nextElement === null || nextX === null
+          ? this.#notesAreaEndX - HAIRPIN_DYNAMIC_GAP_PX
+          : nextX -
+            this.#entryLeftwardExtent(nextElement) -
+            HAIRPIN_DYNAMIC_GAP_PX,
+      startMarking: element.dynamic,
+      startBracketed: element.dynamicReminder,
+      startTextCenterX: x + NOTE_SVG_WIDTH / 2,
+      endMarking: nextDynamic,
+      endBracketed:
+        nextDynamic !== null &&
+        (nextElement as NoteOrChordElementType).dynamicReminder,
+      endTextCenterX: (nextX ?? 0) + NOTE_SVG_WIDTH / 2,
+    });
+  }
+
+  // The entry after entry i, where a breath mark or swell on i stops: the
+  // earliest later beat in
+  // its own voice or the combined-voices track (where its own next note may
+  // have moved), or in any track for a combined chord. Null at the end of
+  // the bar.
+  #nextEntryAfter(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): { state: VoiceRenderState; index: number } | null {
+    const beat = state.beatOffsets[i];
+    let next: { state: VoiceRenderState; index: number; beat: number } | null =
+      null;
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      const candidateTrack =
+        otherKey === voiceKey ||
+        otherKey === 'combined' ||
+        (voiceKey === 'combined' && otherKey !== 'shared-rest');
+      if (!candidateTrack) {
+        continue;
+      }
+      otherState.beatOffsets.forEach((otherBeat, index) => {
+        if (otherBeat > beat && (next === null || otherBeat < next.beat)) {
+          next = { state: otherState, index, beat: otherBeat };
+        }
+      });
+    }
+    return next;
+  }
+
+  // Bottom (container Y) of entry i's breath mark before it clears other
+  // voices and placed labels: above the stave, a beam across the gap, what is
+  // drawn over the entry, and either neighbour's ink inside `xRange` (both,
+  // with no x yet, as the budget estimates it). With no x, the entry's own
+  // label counts too.
+  #breathMarkBottomY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    xRange: { left: number; right: number } | null
+  ): number {
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    const inkTopYs: (number | null)[] = [];
+    const neighbours = [{ state, index: i }, ...(next === null ? [] : [next])];
+    for (const neighbour of neighbours) {
+      const x = neighbour.state.noteXPositions.get(neighbour.index) ?? 0;
+      if (
+        xRange === null ||
+        (x <= xRange.right && x + NOTE_SVG_WIDTH >= xRange.left)
+      ) {
+        inkTopYs.push(
+          this.#tremoloLabelInkTopY(neighbour.state, neighbour.index)
+        );
+      }
+    }
+    // A beam across the gap joins two entries of one track.
+    if (
+      next !== null &&
+      next.state === state &&
+      state.stemDirections[i] &&
+      state.stemDirections[next.index]
+    ) {
+      const startEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, true);
+      const endEdge = state.beamRenderer?.beamStackEdgeYForIndex(
+        next.index,
+        true
+      );
+      if (
+        startEdge !== null &&
+        startEdge !== undefined &&
+        endEdge !== null &&
+        endEdge !== undefined
+      ) {
+        inkTopYs.push(Math.min(startEdge, endEdge));
+      }
+    }
+    inkTopYs.push(this.#aboveStaffDecorationTopY(voiceKey, state, i));
+    if (xRange === null && tremoloLabelOf(state.elements[i]) !== null) {
+      inkTopYs.push(
+        this.#tremoloLabelBaselineY(voiceKey, state, i) -
+          TREMOLO_LABEL_FONT_SIZE_PX
+      );
+    }
+    return breathMarkBottomY({
+      staffTopLineY:
+        STAFF_Y_PADDING + STAFF_TOP_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION,
+      inkTopYs,
+    });
+  }
+
+  // Topmost Y (container) any of this voice's breath marks reaches before
+  // stacking, allowing one more row for each other voice with marks or
+  // labels. Null without marks.
+  #breathMarkTopY(voiceKey: VoiceKey, state: VoiceRenderState): number | null {
+    let top: number | null = null;
+    for (let i = 0; i < state.elements.length; i++) {
+      const kind = breathMarkOf(state.elements[i]);
+      if (kind === null) {
+        continue;
+      }
+      const markTop =
+        this.#breathMarkBottomY(voiceKey, state, i, null) -
+        breathMarkHeightPx(kind);
+      top = top === null ? markTop : Math.min(top, markTop);
+    }
+    if (top === null) {
+      return null;
+    }
+    const otherRows = [...this.#voiceRenderStates].filter(
+      ([otherKey, otherState]) =>
+        otherKey !== voiceKey &&
+        otherState.elements.some(
+          (element) =>
+            breathMarkOf(element) !== null || tremoloLabelOf(element) !== null
+        )
+    ).length;
+    return (
+      top -
+      otherRows *
+        (breathMarkHeightPx('tick') +
+          BREATH_MARK_INK_GAP_PX +
+          TREMOLO_LABEL_FONT_SIZE_PX)
+    );
   }
 
   // Baseline (container Y) of entry i's tremolo label, before it moves past
@@ -4487,12 +4819,31 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   ): number {
     let top =
       STAFF_Y_PADDING + STAFF_TOP_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
-    const consider = (y: number | null): void => {
+    for (const y of [
+      this.#tremoloLabelInkTopY(state, i),
+      this.#aboveStaffDecorationTopY(voiceKey, state, i),
+    ]) {
       if (y !== null) {
         top = Math.min(top, y);
       }
+    }
+    return top - TREMOLO_LABEL_GAP_PX;
+  }
+
+  // Topmost Y (container) of what is drawn above the stave over entry i: a
+  // tuplet bracket over it, a trill sign or line over it, and this voice's
+  // above-staff dynamics row. Null with none.
+  #aboveStaffDecorationTopY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number | null {
+    let top: number | null = null;
+    const consider = (y: number | null): void => {
+      if (y !== null) {
+        top = top === null ? y : Math.min(top, y);
+      }
     };
-    consider(this.#tremoloLabelInkTopY(state, i));
     for (const group of state.tupletGroups) {
       if (
         group.indices.includes(i) &&
@@ -4525,7 +4876,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           DYNAMICS_FONT_SIZE
       );
     }
-    return top - TREMOLO_LABEL_GAP_PX;
+    return top;
   }
 
   // Topmost ink (container Y) of entry i: its top head, then its up-stem, beam
@@ -4678,7 +5029,43 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    for (const pair of this.#pairVoiceHairpins(state).pairs) {
+    const voicePairs = this.#pairVoiceHairpins(state).pairs;
+    const conflicting = new Set(swellConflicts(state.elements, voicePairs));
+    state.elements.forEach((element, i) => {
+      if (
+        element.nodeName === MUSIC_REST_NODE ||
+        !(element as NoteOrChordElementType).swell
+      ) {
+        return;
+      }
+      const noteOrChord = element as NoteOrChordElementType;
+      const span = conflicting.has(noteOrChord)
+        ? null
+        : this.#swellSpan(voiceKey, state, i);
+      if (span === null) {
+        if (!this.#warnedSwells.has(noteOrChord)) {
+          this.#warnedSwells.add(noteOrChord);
+          console.warn(
+            conflicting.has(noteOrChord)
+              ? '[music-staff] swell is not drawn: a hairpin starts, ends or runs over the same note'
+              : '[music-staff] swell is not drawn: its dynamics leave no room for it',
+            noteOrChord
+          );
+        }
+        return;
+      }
+      this.#warnedSwells.delete(noteOrChord);
+      const side =
+        this.#crossStaffDynamicsOverrides?.get(noteOrChord)?.hairpin ??
+        defaultSide;
+      if (side !== 'measure') {
+        container.appendChild(
+          createSwellSvg(span, baselineFor(side), HAIRPIN_OPEN_HEIGHT)
+        );
+      }
+    });
+
+    for (const pair of voicePairs) {
       if (pair.errors.length > 0) {
         console.warn(pair.errors);
       }
@@ -5456,6 +5843,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       budget = Math.max(budget, Math.ceil(-tremoloLabelTop) + 2);
     }
 
+    const breathMarkTop = this.#breathMarkTopY(voiceKey, state);
+    if (breathMarkTop !== null && breathMarkTop < 0) {
+      budget = Math.max(budget, Math.ceil(-breathMarkTop) + 2);
+    }
+
     budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
     budget = Math.max(
       budget,
@@ -5509,7 +5901,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         noteOrChord.decrescendo === 'start';
       const endsHairpin =
         noteOrChord.crescendo === 'end' || noteOrChord.decrescendo === 'end';
-      if (startsHairpin) {
+      if (startsHairpin || noteOrChord.swell) {
         add(override?.hairpin ?? defaultSide);
       } else if (endsHairpin && override === undefined) {
         sides.add(defaultSide);
@@ -5797,9 +6189,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
 
     for (const [labelKey, labelState] of this.#voiceRenderStates) {
-      const labelTop = this.#tremoloLabelTopY(labelKey, labelState);
-      if (labelTop !== null) {
-        consider(labelTop);
+      for (const markTop of [
+        this.#tremoloLabelTopY(labelKey, labelState),
+        this.#breathMarkTopY(labelKey, labelState),
+      ]) {
+        if (markTop !== null) {
+          consider(markTop);
+        }
       }
     }
 

@@ -40,6 +40,8 @@ import {
   ARPEGGIO_CHORD_GAP_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
   BASE_STEM_LENGTH_PX,
+  BREATH_MARK_INK_GAP_PX,
+  BREATH_MARK_STANDALONE_GAP_PX,
   GRACE_MAIN_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
@@ -60,6 +62,7 @@ import {
   createArticulationMarks,
 } from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
+import { breathMarkWidthPx, createBreathMarkSvg } from './breathMarks';
 import { createGraceNotesSvg, createTrillFinishNotesSvg } from './graceNotes';
 import {
   computeYHeadOffset,
@@ -74,6 +77,7 @@ import {
   noteHeadLeftOverhangPx,
   stemBeamJunctionPosition,
   stemTipPosition,
+  TAIL_UP_WIDTH_PX,
   upTailDotClearX,
   type NoteDotLayout,
   type NoteProps,
@@ -148,6 +152,7 @@ export const createChordSvg = ({
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
+  breathMark = null,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -266,7 +271,10 @@ export const createChordSvg = ({
       inkTopY,
       topHeadCenterY - articulationStackDepth(articulation, stress) * NOTE_SCALE
     );
-  } else if (!stemless && !noStem) {
+  }
+  // A breath mark sits beside the stem, clear of whatever is above the heads.
+  const besideStemTopY = inkTopY;
+  if (stemUp && !stemless && !noStem) {
     inkTopY = Math.min(inkTopY, stemOuterY);
   }
   if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
@@ -333,6 +341,36 @@ export const createChordSvg = ({
   if (dots) {
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(dots);
+  }
+
+  if (breathMark !== null) {
+    const tailRightX =
+      stemUp && !noStem && ending.kind === 'tail'
+        ? extremalXOffset +
+          stemTipPosition(stemUp, base, noFlags, 0).x * NOTE_SCALE +
+          TAIL_UP_WIDTH_PX
+        : -Infinity;
+    const rightX = Math.max(
+      chordHeadExtentPx({
+        duration,
+        staffYCoordinates,
+        stemUp,
+        noFlags,
+        noteheads,
+      }).right,
+      dotLayout?.rightEdgeX ?? -Infinity,
+      tailRightX
+    );
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createBreathMarkSvg(
+        breathMark,
+        rightX +
+          BREATH_MARK_STANDALONE_GAP_PX +
+          breathMarkWidthPx(breathMark) / 2,
+        besideStemTopY - BREATH_MARK_INK_GAP_PX
+      )
+    );
   }
 
   // Render accidentals if provided

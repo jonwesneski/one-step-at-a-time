@@ -119,6 +119,8 @@ function combineKey(element: NoteOrChordElementType): string {
     element.tremoloTuplet ?? null,
     element.tremoloLabel ?? null,
     element.articulationRepeat ?? false,
+    element.breathMark ?? null,
+    element.swell ?? false,
   ]);
 }
 

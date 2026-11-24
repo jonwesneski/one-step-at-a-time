@@ -25,6 +25,7 @@ const SUPPORTED = new Set(DRUM_CHORD_ATTRIBUTES);
  * @attr {string} slur-group - Joins this chord to the other members of one slur phrase that crosses staves.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved ties/slurs.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
+ * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both staves of a pair.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets as a reminder.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.

@@ -489,6 +489,13 @@ export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
 export const SLUR_NOTEHEAD_OFFSET_PX = STAFF_LINE_SPACING * 0.9;
 
 /**
+ * Gap (px) between the clef/key/time area and the start of a tie or slur
+ * continued from the previous system.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const CONTINUED_CONNECTOR_LEAD_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
  * Gap (px) a slur keeps from the articulation marks it encloses, at its ends
  * and over the notes between them.
  * = 0.4 × STAFF_LINE_SPACING
@@ -700,6 +707,32 @@ export const DYNAMIC_REMINDER_BRACKET_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.35;
  * an adjacent hairpin's start/end point.
  */
 export const HAIRPIN_DYNAMIC_GAP_PX = 4;
+
+/**
+ * Gap (px) between two hairpins that meet on one note (a crescendo into a
+ * diminuendo): each stops short of the note's centre by half of it.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const HAIRPIN_JOINT_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between the two open ends of a `< >` swell under one note.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const SWELL_MID_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Shortest wedge (px) a swell draws; shorter reads as a mark, not a hairpin.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const SWELL_MIN_WEDGE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Room (px) a swell needs from its note's start: two shortest wedges and the
+ * gap between them.
+ * = 2 × SWELL_MIN_WEDGE_PX + SWELL_MID_GAP_PX
+ */
+export const SWELL_MIN_SPAN_PX = 2 * SWELL_MIN_WEDGE_PX + SWELL_MID_GAP_PX;
 
 /**
  * Share of DYNAMICS_FONT_SIZE a dynamic glyph reaches above / below its
@@ -1569,6 +1602,49 @@ export const TREMOLO_LABEL_CHAR_WIDTH_PX = TREMOLO_LABEL_FONT_SIZE_PX * 0.55;
  * = 0.5 × STAFF_LINE_SPACING
  */
 export const TREMOLO_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Breath marks ─────────────────────────────────────────────────────────────
+
+/**
+ * Drawn height (px) of a ✓ breath mark: about 1½ spaces, as engraved over a
+ * woodwind phrase.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_TICK_HEIGHT_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Drawn height (px) of a comma breath mark, its glyph's own size.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_COMMA_HEIGHT_PX = STAFF_LINE_SPACING;
+
+/**
+ * Gap (px) between a breath mark's bottom and the top stave line; the mark
+ * sits just above the stave.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Gap (px) a breath mark keeps above ink beneath it: a high note, a beam
+ * across the gap, a label or a bracket.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_INK_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Room (px) kept on each side of a breath mark in the gap after its note,
+ * part of the width the entry reserves to its right.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_SIDE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between a standalone note's right edge (head, dots or tail) and its
+ * breath mark.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_STANDALONE_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 // ─── Dotted ties and slurs ────────────────────────────────────────────────────
 

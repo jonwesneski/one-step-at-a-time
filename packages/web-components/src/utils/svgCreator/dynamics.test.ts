@@ -8,6 +8,7 @@ import {
   createAngledHairpinSvg,
   createDynamicMarkingSvg,
   createHairpinSvg,
+  createSwellSvg,
 } from './dynamics';
 
 type Point = { x: number; y: number };
@@ -129,5 +130,19 @@ describe('dynamicTextHalfWidth', () => {
     expect(dynamicTextHalfWidth('f', true) - dynamicTextHalfWidth('f')).toBe(
       DYNAMIC_REMINDER_BRACKET_WIDTH_PX
     );
+  });
+});
+
+describe('createSwellSvg', () => {
+  it('draws a crescendo then a diminuendo on one line', () => {
+    const group = createSwellSvg(
+      {
+        crescendo: { startX: 0, endX: 45 },
+        diminuendo: { startX: 55, endX: 100 },
+      },
+      30
+    );
+    expect(group.classList.contains('swell')).toBe(true);
+    expect(group.querySelectorAll('.hairpin')).toHaveLength(2);
   });
 });

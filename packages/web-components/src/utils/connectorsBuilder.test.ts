@@ -12,6 +12,7 @@ import type {
 import type { DurationType } from '../types/theory';
 import {
   buildConnectorSvgs,
+  collectConnectorPairs,
   collectEntryObstacles,
   collectNoteLikeElements,
   collectPhraseSlurPairs,
@@ -273,6 +274,34 @@ describe('collectPhraseSlurPairs', () => {
     root.appendChild(makePositionedNote({ 'slur-group': 'b' }, 150));
 
     expect(collectPhraseSlurPairs(root)).toHaveLength(2);
+  });
+});
+
+describe('collectConnectorPairs', () => {
+  const breathWarnings = () =>
+    (console.warn as jest.Mock).mock.calls.filter(([message]) =>
+      String(message).includes('breath-mark under a slur')
+    );
+
+  it('pairs connectors and warns once about a breath mark a slur carries on past', () => {
+    const root = document.createElement('div');
+    const start = makeNote({ slur: 'start' });
+    const inside = makeNote({ 'breath-mark': 'tick' });
+    const end = makeNote({ slur: 'end', 'breath-mark': 'tick' });
+    root.append(start, inside, end);
+
+    expect(collectConnectorPairs(root).pairs).toHaveLength(1);
+    expect(breathWarnings()).toHaveLength(1);
+    expect(breathWarnings()[0][1]).toBe(inside);
+
+    collectConnectorPairs(root);
+    expect(breathWarnings()).toHaveLength(1);
+
+    inside.removeAttribute('breath-mark');
+    collectConnectorPairs(root);
+    inside.setAttribute('breath-mark', 'comma');
+    collectConnectorPairs(root);
+    expect(breathWarnings()).toHaveLength(2);
   });
 });
 
@@ -714,7 +743,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -734,7 +763,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -757,7 +786,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -781,7 +810,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const path = parseCubicPath(
@@ -809,7 +838,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const path = parsePath(svgGroup.querySelector('path')!.getAttribute('d')!);
@@ -832,7 +861,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withoutObstacle] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parseCubicPath(
       withoutObstacle.querySelector('path')!.getAttribute('d')!
@@ -848,7 +877,7 @@ describe('buildConnectorSvgs', () => {
     const rest = document.createElement('div');
     const [withObstacle] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       entryObstacles: {
         entries: [
           makeEntry(rest, {
@@ -859,6 +888,7 @@ describe('buildConnectorSvgs', () => {
           }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
     const clearedPath = parseCubicPath(
@@ -886,7 +916,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutEntries] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const anchorBox = (x: number, y: number) => ({
       left: x - 10,
@@ -900,7 +930,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withOwnEndpointsOnly] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       entryObstacles: {
         entries: [
           makeEntry(startNote, {
@@ -915,6 +945,7 @@ describe('buildConnectorSvgs', () => {
           }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
 
@@ -938,7 +969,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       entryObstacles: {
         entries: [
           makeEntry(startNote, { staffIndex: 0, centerX: 60 }),
@@ -953,6 +984,7 @@ describe('buildConnectorSvgs', () => {
           makeEntry(endNote, { staffIndex: 1, centerX: 760 }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
 
@@ -978,7 +1010,7 @@ describe('buildConnectorSvgs', () => {
     // is on the bottom staff.
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       groupSlurStaves: new Map([
         [pair, { topStaffIndex: 0, bottomStaffIndex: 1 }],
       ]),
@@ -1000,6 +1032,7 @@ describe('buildConnectorSvgs', () => {
           makeEntry(endNote, { staffIndex: 0, centerX: 260 }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
 
@@ -1023,7 +1056,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -1043,7 +1076,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -1064,7 +1097,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     expect(svgGroup.querySelector('text')?.textContent).toBe(
@@ -1093,7 +1126,7 @@ describe('buildConnectorSvgs', () => {
 
     const groups = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     expect(groups).toHaveLength(1);
@@ -1124,7 +1157,7 @@ describe('buildConnectorSvgs', () => {
 
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     expect(svgs).toHaveLength(3);
 
@@ -1153,7 +1186,7 @@ describe('buildConnectorSvgs', () => {
           label: 'l.v.',
         } as ConnectorPair,
       ],
-      { rootRect, rowLeft: 0 }
+      { rootRect, rowLeftOf: () => 0 }
     );
     expect(svgs).toHaveLength(1);
     const path = parsePath(svgs[0].querySelector('path')!.getAttribute('d')!);
@@ -1187,7 +1220,7 @@ describe('buildConnectorSvgs', () => {
 
     const svgs = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     // Two short stubs instead of one full curve.
     expect(svgs).toHaveLength(2);
@@ -1211,7 +1244,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1233,7 +1266,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       beamRects: [beamRect],
     });
     const pushedPath = parsePath(
@@ -1261,7 +1294,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1280,7 +1313,7 @@ describe('buildConnectorSvgs', () => {
     } as DOMRect;
     const [withFarBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       beamRects: [farRect],
     });
     const farPath = parsePath(
@@ -1305,7 +1338,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1324,7 +1357,7 @@ describe('buildConnectorSvgs', () => {
     } as DOMRect;
     const [withBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       beamRects: [straddlingRect],
     });
     const pushedPath = parsePath(
@@ -1364,7 +1397,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutFlag] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const baseline = parsePath(
       withoutFlag.querySelector('path')!.getAttribute('d')!
@@ -1372,7 +1405,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withFlag] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       innerVoiceElements: new Set([startNote]),
     });
     const flagged = parsePath(
@@ -1434,7 +1467,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [svg] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const path = parsePath(svg.querySelector('path')!.getAttribute('d')!);
 
@@ -1474,7 +1507,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [svg] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const path = parseCubicPath(svg.querySelector('path')!.getAttribute('d')!);
 
@@ -1502,7 +1535,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutStem] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const baseline = parsePath(
       withoutStem.querySelector('path')!.getAttribute('d')!
@@ -1525,7 +1558,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withStem] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const withStemPath = parsePath(
       withStem.querySelector('path')!.getAttribute('d')!
@@ -1574,7 +1607,7 @@ describe('buildConnectorSvgs', () => {
 
     const drawOne = (pair: ConnectorPair) =>
       parsePath(
-        buildConnectorSvgs([pair], { rootRect, rowLeft: 0 })[0]
+        buildConnectorSvgs([pair], { rootRect, rowLeftOf: () => 0 })[0]
           .querySelector('path')!
           .getAttribute('d')!
       );
@@ -1687,7 +1720,7 @@ describe('buildConnectorSvgs', () => {
               nestingLevel: 0,
             },
           ],
-          { rootRect, rowLeft: 0 }
+          { rootRect, rowLeftOf: () => 0 }
         )[0]
           .querySelector('path')!
           .getAttribute('d')!
@@ -1745,7 +1778,7 @@ describe('buildConnectorSvgs', () => {
 
       const [outerSvg, innerSvg] = buildConnectorSvgs([outer, inner], {
         rootRect,
-        rowLeft: 0,
+        rowLeftOf: () => 0,
       }).sort(
         (a, b) =>
           parsePath(a.querySelector('path')!.getAttribute('d')!).fromX -
@@ -1778,7 +1811,7 @@ describe('buildConnectorSvgs', () => {
 
       const svgs = buildConnectorSvgs([first, second], {
         rootRect,
-        rowLeft: 0,
+        rowLeftOf: () => 0,
       });
       const secondPath = parsePath(
         svgs[1].querySelector('path')!.getAttribute('d')!
@@ -1791,7 +1824,7 @@ describe('buildConnectorSvgs', () => {
       const end = makeLayoutNote({ stemUp: true, left: 250 });
       const [svg] = buildConnectorSvgs(
         [{ ...slurBetween(start, end), dotted: true }],
-        { rootRect, rowLeft: 0 }
+        { rootRect, rowLeftOf: () => 0 }
       );
       const path = svg.querySelector('path')!;
       expect(path.classList.contains('dotted')).toBe(true);

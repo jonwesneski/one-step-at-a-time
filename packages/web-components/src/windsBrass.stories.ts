@@ -1,21 +1,230 @@
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { html } from 'lit';
+import './index';
 
 const meta: Meta = {
   title: 'Instruments/Winds & Brass',
-  tags: ['!autodocs'],
+  tags: ['autodocs'],
 };
 export default meta;
 
 type Story = StoryObj;
 
-export const Planned: Story = {
+/**
+ * A woodwind phrase with breathing points: each ✓ sits above the stave in
+ * the gap after the note the breath is taken from. The held notes swell
+ * (`< >`), and the last bar's crescendo meets its diminuendo on one note.
+ */
+export const ReferencePhrase: Story = {
   render: () => html`
-    <p>
-      Wind &amp; brass notations (tonguing, flutter tongue, growl, half-valve,
-      stopped/open horn, con/senza sordino, mute types) are not implemented yet.
-      Tracked in <code>TODO.md</code> §6 &ldquo;Wind &amp; Brass
-      Techniques&rdquo;.
-    </p>
+    <music-composition>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="A"
+            octave="3"
+            duration="quarter"
+            slur="start"
+          ></music-note>
+          <music-note
+            note="Bb"
+            octave="4"
+            duration="half"
+            slur="end"
+          ></music-note>
+          <music-note note="G#" octave="4" duration="eighth"></music-note>
+          <music-note
+            note="E"
+            octave="4"
+            duration="eighth"
+            tie="start"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="E"
+            octave="4"
+            duration="whole"
+            tie="end"
+            articulation="fermata"
+            swell
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="E"
+            octave="4"
+            duration="quarter"
+            articulation="staccato"
+            breath-mark="tick"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="eighth"
+            articulation="staccato"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-note
+            note="A"
+            octave="4"
+            duration="eighth"
+            articulation="staccato"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+          <music-note
+            note="A"
+            octave="4"
+            duration="quarter"
+            tie="start"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="A"
+            octave="4"
+            duration="whole"
+            tie="end"
+            articulation="fermata"
+            swell
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="A"
+            octave="4"
+            duration="quarter"
+            articulation="staccato"
+            breath-mark="tick"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="4"
+            duration="quarter"
+            articulation="staccato"
+            slur="start"
+            crescendo="start"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="quarter"
+            articulation="staccato"
+            slur="end"
+            crescendo="end"
+            decrescendo="start"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="quarter"
+            articulation="staccato"
+            decrescendo="end"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/** ✓ for a break in the sound; the comma for a short pause or lift. */
+export const TickAndComma: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="G"
+        octave="4"
+        duration="quarter"
+        breath-mark="tick"
+      ></music-note>
+      <music-note note="A" octave="4" duration="quarter"></music-note>
+      <music-note
+        note="B"
+        octave="4"
+        duration="quarter"
+        breath-mark="comma"
+      ></music-note>
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+    </music-staff>
+  `,
+};
+
+/** Above the stave unless something under it reaches higher. */
+export const AboveHighNotes: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="C"
+        octave="6"
+        duration="quarter"
+        breath-mark="tick"
+      ></music-note>
+      <music-note
+        note="A"
+        octave="5"
+        duration="eighth"
+        breath-mark="comma"
+      ></music-note>
+      <music-note note="B" octave="5" duration="eighth"></music-note>
+      <music-note
+        note="E"
+        octave="5"
+        duration="eighth"
+        breath-mark="tick"
+      ></music-note>
+      <music-note note="F" octave="5" duration="eighth"></music-note>
+      <music-note note="G" octave="4" duration="quarter"></music-note>
+    </music-staff>
+  `,
+};
+
+/** A breath after the last note sits before the barline. */
+export const LastNoteBeforeBarline: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="3/4">
+      <music-note note="E" octave="4" duration="quarter"></music-note>
+      <music-note note="F" octave="4" duration="quarter"></music-note>
+      <music-note
+        note="G"
+        octave="4"
+        duration="quarter"
+        breath-mark="tick"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+/** Every voice's breath mark goes above the stave, stacked when they meet. */
+export const TwoVoices: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-voice>
+        <music-note
+          note="E"
+          octave="5"
+          duration="quarter"
+          breath-mark="tick"
+        ></music-note>
+        <music-note note="F" octave="5" duration="quarter"></music-note>
+        <music-note note="G" octave="5" duration="half"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note
+          note="C"
+          octave="5"
+          duration="half"
+          breath-mark="tick"
+        ></music-note>
+        <music-note note="A" octave="4" duration="half"></music-note>
+      </music-voice>
+    </music-staff>
   `,
 };

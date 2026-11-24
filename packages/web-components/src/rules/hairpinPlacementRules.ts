@@ -107,6 +107,12 @@ export type StaffHairpinDefaults = {
   })[];
   unpairedStarts: (HairpinEndpoint & StaffHairpinPlacement)[];
   orphanEnds: HairpinEndpoint[];
+  // `< >` swells, each over its own note; rawEndClientX is where the swell
+  // stops (viewport px), clear of the next entry and its dynamic.
+  swells: (StaffHairpinPlacement & {
+    element: NoteOrChordElementType;
+    rawEndClientX: number;
+  })[];
 };
 
 export type HairpinEndpointText = {

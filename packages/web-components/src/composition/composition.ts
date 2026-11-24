@@ -91,14 +91,11 @@ import {
 } from '../utils';
 import {
   buildConnectorSvgs,
-  collectArpeggioTiePairs,
+  collectConnectorPairs,
   collectEntryObstacles,
-  collectNoteLikeElements,
-  collectPhraseSlurPairs,
   collectStemRects,
   type ConnectorPair,
   type EntryObstacles,
-  pairConnectors,
   partitionByVoice,
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
@@ -123,6 +120,7 @@ import {
 } from '../utils/consts';
 import {
   COMPOSITION_MAX_WIDTH_PX,
+  CONTINUED_CONNECTOR_LEAD_PX,
   DYNAMICS_BASELINE_Y,
   HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
@@ -756,20 +754,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const noteLikeElements = collectNoteLikeElements(this);
-      const byVoice = partitionByVoice(noteLikeElements);
-      const pairs = [
-        ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
-        ...collectArpeggioTiePairs(this),
-        ...collectPhraseSlurPairs(this),
-      ];
+      const { noteLikeElements, pairs } = collectConnectorPairs(this);
       this.#markDottedTiesAcrossBarlines(noteLikeElements, pairs);
       if (pairs.length === 0) {
         return;
       }
 
       const rootRect = wrapper.getBoundingClientRect();
-      const rowLeft = this.#computeNotesAreaLeft(rootRect);
 
       // Double-stemmed beam context, as measure.ts#redrawConnectors resolves
       // it. This runs a frame after each measure drew its beam polygons.
@@ -779,7 +770,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
-        rowLeft,
+        rowLeftOf: (end) => {
+          const staff = end.closest(STAFF_TAGS) as HTMLElement | null;
+          return (
+            (staff
+              ? this.#computeNotesAreaLeftForStaff(staff, rootRect)
+              : this.#computeNotesAreaLeft(rootRect)) +
+            CONTINUED_CONNECTOR_LEAD_PX
+          );
+        },
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,
@@ -1081,9 +1080,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                   topGapEdgeY: gap.topGapEdgeY,
                   bottomGapEdgeY: gap.bottomGapEdgeY,
                   beamSlices: entryObstacles.beamSlices,
-                  obstacles: entryObstacles.entries.flatMap(
-                    (entry) => entry.glyphRects
-                  ),
+                  obstacles: [
+                    ...entryObstacles.entries.flatMap(
+                      (entry) => entry.glyphRects
+                    ),
+                    ...entryObstacles.decorationRects,
+                  ],
                   startText: segmentStartText,
                   endText: segmentEndText,
                 }) ?? centerY;

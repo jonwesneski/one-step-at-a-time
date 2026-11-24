@@ -9,6 +9,7 @@ import type {
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BreathMark,
   Chord,
   ClefType,
   ConnectorRole,
@@ -73,6 +74,7 @@ type DrumNotationProps = {
   dynamic?: DynamicMarking;
   'dynamic-shared'?: boolean;
   'dynamic-reminder'?: boolean;
+  swell?: boolean;
   crescendo?: HairpinRole;
   decrescendo?: HairpinRole;
   diminuendo?: HairpinRole;
@@ -248,6 +250,8 @@ declare module 'react' {
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
         'slur-style'?: SlurStyle;
+        'breath-mark'?: BreathMark;
+        swell?: boolean;
       };
       'music-drum-note': WebComponentNoChildrenProps &
         DrumNotationProps & {
@@ -312,6 +316,8 @@ declare module 'react' {
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
         'slur-style'?: SlurStyle;
+        'breath-mark'?: BreathMark;
+        swell?: boolean;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

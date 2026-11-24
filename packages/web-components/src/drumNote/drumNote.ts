@@ -31,6 +31,7 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @attr {string} slur-group - Joins this note to the other members of one slur phrase that crosses staves.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved ties/slurs.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
+ * @attr {boolean} swell - A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both staves of a pair.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets as a reminder.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.

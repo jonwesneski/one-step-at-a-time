@@ -421,6 +421,12 @@ export type TremoloValue = TremoloStrokeCount | 'unmeasured';
 export type TremoloLabel = 'trem' | 'non-trem';
 
 /**
+ * A breath mark after a note: `tick` (✓), a break in the sound, or `comma`
+ * ('), a short pause or lift within a phrase.
+ */
+export type BreathMark = 'tick' | 'comma';
+
+/**
  * Which of a minim two-note tremolo's beams join its stems: `all` of them, or
  * only the `outer` one. Unset leaves every beam detached.
  */

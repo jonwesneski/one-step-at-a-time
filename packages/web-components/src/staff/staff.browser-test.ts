@@ -734,6 +734,141 @@ test.describe(`${MUSIC_STAFF} slurs and articulation`, () => {
   });
 });
 
+test.describe(`${MUSIC_STAFF} breath marks`, () => {
+  async function readGap(
+    page: Page
+  ): Promise<{ markCenter: number; leftRight: number; rightLeft: number }> {
+    return page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const mark = document
+          .querySelector(staffTag)
+          ?.shadowRoot?.querySelector('.breath-marks-container .breath-mark');
+        if (!mark) {
+          throw new Error('breath mark missing');
+        }
+        const markRect = mark.getBoundingClientRect();
+        const notes = Array.from(document.querySelectorAll(noteTag));
+        return {
+          markCenter: markRect.left + markRect.width / 2,
+          leftRight: notes[1].getBoundingClientRect().right,
+          rightLeft: notes[2].getBoundingClientRect().left,
+        };
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+  }
+
+  test('a breath mark stays centred in the gap after its note as the staff resizes', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '700px';
+        const staff = document.createElement(staffTag);
+        ['E4', 'F4', 'G4', 'A4'].forEach((pitch, index) => {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('duration', 'quarter');
+          if (index === 1) {
+            note.setAttribute('breath-mark', 'tick');
+          }
+          staff.appendChild(note);
+        });
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+    const wide = await readGap(page);
+
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+    const narrow = await readGap(page);
+
+    for (const gap of [wide, narrow]) {
+      expect(gap.markCenter).toBeGreaterThan(gap.leftRight);
+      expect(gap.markCenter).toBeLessThan(gap.rightLeft);
+      expect(
+        Math.abs(gap.markCenter - (gap.leftRight + gap.rightLeft) / 2)
+      ).toBeLessThan(1);
+    }
+    expect(narrow.markCenter).toBeLessThan(wide.markCenter);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} swells`, () => {
+  async function readSwells(
+    page: Page
+  ): Promise<{ wedges: number; left: number; right: number }[]> {
+    return page.evaluate((staffTag) => {
+      const swells = Array.from(
+        document
+          .querySelector(staffTag)
+          ?.shadowRoot?.querySelectorAll('.dynamics-container .swell') ?? []
+      );
+      return swells.map((swell) => {
+        const rect = swell.getBoundingClientRect();
+        return {
+          wedges: swell.querySelectorAll('.hairpin').length,
+          left: rect.left,
+          right: rect.right,
+        };
+      });
+    }, MUSIC_STAFF);
+  }
+
+  test('toggling swell adds and removes its two wedges, which span the note', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        for (const pitch of ['E4', 'G4']) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('duration', 'half');
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+    expect(await readSwells(page)).toHaveLength(0);
+
+    await page.evaluate((noteTag) => {
+      document.querySelector(noteTag)?.setAttribute('swell', '');
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    const [swell] = await readSwells(page);
+    const notes = await readNoteLefts(page);
+    expect(swell.wedges).toBe(2);
+    expect(swell.left).toBeGreaterThanOrEqual(notes[0] - 1);
+    expect(swell.right).toBeLessThan(notes[1]);
+
+    await page.evaluate((noteTag) => {
+      document.querySelector(noteTag)?.removeAttribute('swell');
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    expect(await readSwells(page)).toHaveLength(0);
+  });
+});
+
 test.describe(`${MUSIC_STAFF} rests`, () => {
   test('rest elements position left-to-right among pitched notes', async ({
     page,

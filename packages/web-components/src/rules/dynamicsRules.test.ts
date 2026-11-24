@@ -18,6 +18,8 @@ import {
 import {
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
+  HAIRPIN_JOINT_GAP_PX,
+  SWELL_MID_GAP_PX,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
@@ -27,6 +29,9 @@ import {
   pairSharedHairpinsAcrossStaves,
   resolveChainSpans,
   resolveHairpinSegments,
+  resolveSwellSpan,
+  splitHairpinsAtJoint,
+  swellConflicts,
   type PositionedHairpinEndpoint,
 } from './dynamicsRules';
 
@@ -624,5 +629,111 @@ describe('pairHairpins with chord elements', () => {
     const pairs = pairHairpins([chord1, chord2], makeXPositions(2));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('crescendo');
+  });
+});
+
+describe('hairpins meeting on one note', () => {
+  it('part at the shared note’s centre instead of overlapping', () => {
+    // A crescendo E→A into a diminuendo A→A, 100px apart.
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { crescendo: 'end', decrescendo: 'start' },
+      { decrescendo: 'end' },
+    ]);
+    const [crescendo, diminuendo] = pairHairpins(elements, makeXPositions(3));
+    const jointCenterX = 100 + NOTE_SVG_WIDTH / 2;
+    expect(crescendo.endX).toBeCloseTo(
+      jointCenterX - HAIRPIN_JOINT_GAP_PX / 2,
+      5
+    );
+    expect(diminuendo.startX).toBeCloseTo(
+      jointCenterX + HAIRPIN_JOINT_GAP_PX / 2,
+      5
+    );
+  });
+
+  it('leaves unlinked hairpins alone', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { crescendo: 'end' },
+      { decrescendo: 'start' },
+      { decrescendo: 'end' },
+    ]);
+    const [crescendo] = pairHairpins(elements, makeXPositions(4));
+    expect(crescendo.endX).toBe(100 + NOTE_SVG_WIDTH);
+  });
+
+  it('only ever shortens, and keeps a hairpin too short to cut', () => {
+    const before = { startX: 0, endX: 50 };
+    const after = { startX: 70, endX: 120 };
+    splitHairpinsAtJoint(before, after, 60);
+    expect(before.endX).toBe(50);
+    expect(after.startX).toBe(70);
+
+    const tiny = { startX: 58, endX: 64 };
+    const next = { startX: 56, endX: 120 };
+    splitHairpinsAtJoint(tiny, next, 60);
+    expect(tiny.endX).toBe(64);
+    expect(next.startX).toBe(60 + HAIRPIN_JOINT_GAP_PX / 2);
+  });
+
+  it('splits a measure-level chain at each joint', () => {
+    const [crescendo, diminuendo] = resolveChainSpans(
+      [
+        { rawStartX: 0, rawEndX: 200 },
+        { rawStartX: 170, rawEndX: 320 },
+      ],
+      [null, null, null],
+      [185]
+    );
+    expect(crescendo.endX).toBe(185 - HAIRPIN_JOINT_GAP_PX / 2);
+    expect(diminuendo.startX).toBe(185 + HAIRPIN_JOINT_GAP_PX / 2);
+  });
+});
+
+describe('resolveSwellSpan', () => {
+  const plain = {
+    startMarking: null,
+    startTextCenterX: 0,
+    endMarking: null,
+    endTextCenterX: 0,
+  };
+
+  it('splits the span at its middle with a gap between the open ends', () => {
+    const span = resolveSwellSpan({ rawStartX: 0, rawEndX: 200, ...plain });
+    expect(span).toEqual({
+      crescendo: { startX: 0, endX: 100 - SWELL_MID_GAP_PX / 2 },
+      diminuendo: { startX: 100 + SWELL_MID_GAP_PX / 2, endX: 200 },
+    });
+  });
+
+  it('starts after the note’s own dynamic', () => {
+    const span = resolveSwellSpan({
+      rawStartX: 0,
+      rawEndX: 200,
+      ...plain,
+      startMarking: 'p',
+      startTextCenterX: 16,
+    });
+    expect(span!.crescendo.startX).toBeGreaterThan(16);
+  });
+
+  it('is null when a wedge would be too short', () => {
+    expect(
+      resolveSwellSpan({ rawStartX: 0, rawEndX: 30, ...plain })
+    ).toBeNull();
+  });
+});
+
+describe('swellConflicts', () => {
+  it('finds a swell note that a hairpin starts, ends or runs over', () => {
+    const elements = makeElements([
+      { crescendo: 'start', swell: '' },
+      { swell: '' },
+      { crescendo: 'end' },
+      { swell: '' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(4));
+    expect(swellConflicts(elements, pairs)).toEqual([elements[0], elements[1]]);
   });
 });

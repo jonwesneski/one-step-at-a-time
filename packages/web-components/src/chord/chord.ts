@@ -36,6 +36,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BreathMark,
   Chord,
   DurationType,
   DynamicMarking,
@@ -75,6 +76,7 @@ import {
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
+  parseBreathMark,
   parseConnectorRole,
   parseDynamicMarking,
   parseGlissandoHint,
@@ -104,6 +106,7 @@ import {
 } from '../utils';
 import {
   CHORD_EVENTS,
+  isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_NOTE,
   MUSIC_TREMOLO_NODE,
@@ -138,6 +141,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
+ * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {boolean} accidental-reminder - Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone.
@@ -181,6 +185,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
  * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+ * @attr {BreathMark} breath-mark - A breath after this chord: `tick` (✓, a break in the sound) or `comma` (a short pause or lift). Drawn above the stave in the gap before the next entry; standalone, just after the chord.
  * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`.
  * @attr {SlurStyle} slur-style - `dotted` draws the slur this chord starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
@@ -255,6 +260,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'articulation-repeat',
       'tie-style',
       'slur-style',
+      'breath-mark',
+      'swell',
     ];
   }
 
@@ -800,6 +807,34 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
+  // A staff draws this chord's label and breath mark itself, including for a
+  // combined-voices chord it builds inside its own shadow root.
+  get #drawnByStaff(): boolean {
+    if (this.closest(STAFF_TAGS) !== null) {
+      return true;
+    }
+    const root = this.getRootNode();
+    return root instanceof ShadowRoot && isStaffNodeName(root.host.nodeName);
+  }
+
+  get swell(): boolean {
+    return this.readsAttribute('swell');
+  }
+  set swell(value: boolean) {
+    this.toggleAttribute('swell', value);
+  }
+
+  get breathMark(): BreathMark | null {
+    return parseBreathMark(this.readAttribute('breath-mark'));
+  }
+  set breathMark(value: BreathMark | null) {
+    if (value === null) {
+      this.removeAttribute('breath-mark');
+    } else {
+      this.setAttribute('breath-mark', value);
+    }
+  }
+
   get dottedTieAcrossBarline(): boolean {
     return this.#dottedTieAcrossBarline;
   }
@@ -1322,6 +1357,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
     this.#warnAboutTremolo(name, newValue);
     this.#warnAboutSlurStyle(name, newValue);
+    if (
+      name === 'breath-mark' &&
+      newValue !== null &&
+      parseBreathMark(newValue) === null
+    ) {
+      console.warn(
+        `[music-chord] breath-mark="${newValue}" is not "tick" or "comma"; ignoring it`
+      );
+    }
 
     if (!this.isConnected) {
       return;
@@ -1505,6 +1549,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'tremolo' ||
       name === 'tremolo-tuplet' ||
       name === 'tremolo-label' ||
+      name === 'breath-mark' ||
+      name === 'swell' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -1684,7 +1730,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         tremoloStrokeCount: this.#tremoloStrokeCount(),
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
-        tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+        tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
+        breathMark: this.#drawnByStaff ? null : this.breathMark,
       });
       chordSvg.setAttribute('overflow', 'visible');
       addLedgerLines(
@@ -1767,7 +1814,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         tremoloStrokeCount: this.#tremoloStrokeCount(),
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
-        tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+        tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
+        breathMark: this.#drawnByStaff ? null : this.breathMark,
       });
       chordSvg.setAttribute('overflow', 'visible');
 

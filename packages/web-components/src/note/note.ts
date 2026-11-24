@@ -42,6 +42,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BreathMark,
   DurationType,
   DynamicMarking,
   GlissandoHint,
@@ -85,6 +86,7 @@ import {
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
+  parseBreathMark,
   parseConnectorRole,
   parseDynamicMarking,
   parseGlissandoHint,
@@ -146,6 +148,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
+ * @attr {boolean} swell - A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {boolean} accidental-reminder - Shows the accidental already in force in parentheses, "(♮)", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.
@@ -189,6 +192,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
  * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+ * @attr {BreathMark} breath-mark - A breath after this note: `tick` (✓, a break in the sound) or `comma` (a short pause or lift). Drawn above the stave in the gap before the next entry; standalone, just after the note.
  * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
  * @attr {SlurStyle} slur-style - `dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
@@ -260,6 +264,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'articulation-repeat',
       'tie-style',
       'slur-style',
+      'breath-mark',
+      'swell',
     ];
   }
 
@@ -807,6 +813,24 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  get swell(): boolean {
+    return this.readsAttribute('swell');
+  }
+  set swell(value: boolean) {
+    this.toggleAttribute('swell', value);
+  }
+
+  get breathMark(): BreathMark | null {
+    return parseBreathMark(this.readAttribute('breath-mark'));
+  }
+  set breathMark(value: BreathMark | null) {
+    if (value === null) {
+      this.removeAttribute('breath-mark');
+    } else {
+      this.setAttribute('breath-mark', value);
+    }
+  }
+
   get dottedTieAcrossBarline(): boolean {
     return this.#dottedTieAcrossBarline;
   }
@@ -1337,6 +1361,15 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
 
     this.#warnAboutTremolo(name, newValue);
     this.#warnAboutSlurStyle(name, newValue);
+    if (
+      name === 'breath-mark' &&
+      newValue !== null &&
+      parseBreathMark(newValue) === null
+    ) {
+      console.warn(
+        `[music-note] breath-mark="${newValue}" is not "tick" or "comma"; ignoring it`
+      );
+    }
 
     if (!this.isConnected) {
       return;
@@ -1526,6 +1559,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'tremolo' ||
       name === 'tremolo-tuplet' ||
       name === 'tremolo-label' ||
+      name === 'breath-mark' ||
+      name === 'swell' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -1727,6 +1762,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+      breathMark: this.closest(STAFF_TAGS) ? null : this.breathMark,
     });
 
     if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {

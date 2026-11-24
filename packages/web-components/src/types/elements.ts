@@ -5,6 +5,7 @@ import type {
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BreathMark,
   Chord,
   ClefType,
   DurationType,
@@ -17,8 +18,8 @@ import type {
   HairpinRole,
   Mode,
   Note,
-  NoteLetter,
   NoteheadType,
+  NoteLetter,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -93,6 +94,10 @@ export interface INoteElement {
   tieStyle: TieStyle;
   // How the slur this element starts is drawn.
   slurStyle: SlurStyle;
+  // A breath mark after this element; null for none.
+  breathMark: BreathMark | null;
+  // A `< >` swell over this element's own duration.
+  swell: boolean;
   // Set by the composition on the end of a dotted tie that crosses a barline,
   // which shows its accidental again.
   dottedTieAcrossBarline: boolean;
@@ -309,6 +314,10 @@ export interface IChordElement {
   tieStyle: TieStyle;
   // See INoteElement.slurStyle.
   slurStyle: SlurStyle;
+  // See INoteElement.breathMark.
+  breathMark: BreathMark | null;
+  // See INoteElement.swell.
+  swell: boolean;
   // See INoteElement.dottedTieAcrossBarline.
   dottedTieAcrossBarline: boolean;
   // Default for every tone; a slotted <music-note>'s own notehead overrides

@@ -20,11 +20,7 @@ import {
 import { SVG_NS } from './utils';
 import {
   buildConnectorSvgs,
-  collectArpeggioTiePairs,
-  collectNoteLikeElements,
-  collectPhraseSlurPairs,
-  pairConnectors,
-  partitionByVoice,
+  collectConnectorPairs,
 } from './utils/connectorsBuilder';
 import {
   CHORD_TAGS,
@@ -753,13 +749,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     const root = this as unknown as ParentNode;
-    const noteLikeElements = collectNoteLikeElements(root);
-    const byVoice = partitionByVoice(noteLikeElements);
-    const pairs = [
-      ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
-      ...collectArpeggioTiePairs(root),
-      ...collectPhraseSlurPairs(root),
-    ];
+    const { pairs } = collectConnectorPairs(root);
     if (pairs.length === 0) {
       this.#verticalSpace.release(STANDALONE_OVERLAY_SOURCE);
       return;
@@ -768,7 +758,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const rootRect = (this as unknown as HTMLElement).getBoundingClientRect();
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     for (const svg of svgs) {
       this.#standaloneConnectorsOverlay.appendChild(svg);

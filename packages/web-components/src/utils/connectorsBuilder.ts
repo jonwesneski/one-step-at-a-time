@@ -1,4 +1,5 @@
 import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
+import { breathMarkIndicesInsideSlurs } from '../rules/breathMarkRules';
 import {
   anchorYClearOfRects,
   arcEncloses,
@@ -38,7 +39,7 @@ import type {
   NoteOrChordElementType,
   StaffElementBaseType,
 } from '../types/elements';
-import { GlissandoHint, VoiceNumber } from '../types/theory';
+import { BreathMark, GlissandoHint, VoiceNumber } from '../types/theory';
 import {
   CHORD_TAGS,
   chordSelector,
@@ -320,6 +321,68 @@ export const collectPhraseSlurPairs = (root: ParentNode): ConnectorPair[] => {
     }
   }
   return pairs;
+};
+
+// Every connector pair under `root`: authored ties, slurs and glissandi paired
+// per voice, synthesized arpeggio ties, and slur-group phrases. Whichever
+// level draws the connectors calls this, and it warns about a breath mark
+// a slur carries on past.
+export const collectConnectorPairs = (
+  root: ParentNode
+): { noteLikeElements: NoteLikeElementType[]; pairs: ConnectorPair[] } => {
+  const noteLikeElements = collectNoteLikeElements(root);
+  const byVoice = partitionByVoice(noteLikeElements);
+  const pairs = [
+    ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
+    ...collectArpeggioTiePairs(root),
+    ...collectPhraseSlurPairs(root),
+  ];
+  warnBreathMarksInsideSlurs(byVoice, pairs);
+  return { noteLikeElements, pairs };
+};
+
+const breathMarkOf = (note: NoteLikeElementType): BreathMark | null =>
+  isChordNodeName(note.parentElement?.tagName ?? '')
+    ? null
+    : (note as { breathMark?: BreathMark | null }).breathMark ?? null;
+
+// Each redraw re-checks; an element warns again only after it was fixed.
+const breathInsideSlurWarned = new WeakSet<NoteLikeElementType>();
+
+const warnBreathMarksInsideSlurs = (
+  byVoice: ReadonlyMap<VoiceNumber, NoteLikeElementType[]>,
+  pairs: readonly ConnectorPair[]
+): void => {
+  const slurs = pairs.filter((pair) => pair.kind === 'slur');
+  for (const notes of byVoice.values()) {
+    const indexOf = new Map(notes.map((note, index) => [note, index]));
+    const spans = slurs.flatMap((pair) => {
+      const startIndex = indexOf.get(pair.start);
+      const endIndex = indexOf.get(pair.end);
+      return startIndex === undefined || endIndex === undefined
+        ? []
+        : [{ startIndex, endIndex }];
+    });
+    const flagged = new Set(
+      breathMarkIndicesInsideSlurs(
+        notes.map((note) => breathMarkOf(note) !== null),
+        spans
+      ).map((index) => notes[index])
+    );
+    for (const note of notes) {
+      if (!flagged.has(note)) {
+        breathInsideSlurWarned.delete(note);
+        continue;
+      }
+      if (!breathInsideSlurWarned.has(note)) {
+        breathInsideSlurWarned.add(note);
+        console.warn(
+          '[connectorsBuilder] breath-mark under a slur: a slur is unbroken legato and a breath mark a break in the sound; end the slur on this note or drop the mark',
+          note
+        );
+      }
+    }
+  }
 };
 
 const readRole = (
@@ -1063,6 +1126,8 @@ export type EntryGeometry = {
 export type EntryObstacles = {
   entries: EntryGeometry[];
   beamSlices: ObstacleRect[];
+  // Marks a staff draws above its stave between entries (breath marks).
+  decorationRects: ObstacleRect[];
 };
 
 const OBSTACLE_GLYPH_SELECTOR =
@@ -1163,7 +1228,8 @@ export const collectEntryObstacles = (
   });
 
   const beamPolygons: SVGGraphicsElement[] = [];
-  for (const staff of Array.from(root.querySelectorAll(STAFF_TAGS))) {
+  const staves = Array.from(root.querySelectorAll(STAFF_TAGS));
+  for (const staff of staves) {
     beamPolygons.push(
       ...Array.from(
         staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
@@ -1184,8 +1250,14 @@ export const collectEntryObstacles = (
   const beamSlices = beamPolygons.flatMap((polygon) =>
     collectBeamSlices(polygon, rootRect)
   );
+  const decorationRects = staves.flatMap((staff) =>
+    Array.from(
+      staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>('.breath-mark') ??
+        []
+    ).map((mark) => toRootSpace(mark.getBoundingClientRect(), rootRect))
+  );
 
-  return { entries, beamSlices };
+  return { entries, beamSlices, decorationRects };
 };
 
 // Every rendered stem under `root`, in root-rect space.
@@ -1203,9 +1275,9 @@ export const collectStemRects = (
 
 export type ConnectorsBuildOptions = {
   rootRect: DOMRect;
-  // Where a connector that leaves its row starts again on the next row; it
-  // runs out to the root's right edge.
-  rowLeft: number;
+  // Where a connector that leaves its row starts again on the next row, given
+  // its end element; it runs out to the root's right edge.
+  rowLeftOf: (end: Element) => number;
   // Double-stemmed beam rects (root-relative), drawn before this runs. A
   // same-staff slur is pushed past them; cross-staff slurs use
   // `entryObstacles`.
@@ -1271,7 +1343,7 @@ const buildCrossStaffSlurSvgs = (
   staves: SlurGroupStaves,
   options: ConnectorsBuildOptions
 ): SVGGElement[] => {
-  const { rootRect, rowLeft, innerVoiceElements, entryObstacles } = options;
+  const { rootRect, rowLeftOf, innerVoiceElements, entryObstacles } = options;
   const rowRight = rootRect.width;
   const entries = entryObstacles?.entries ?? [];
   const counts = countNotesPerStaffInSpan(pair, staves, entries, rootRect);
@@ -1286,6 +1358,7 @@ const buildCrossStaffSlurSvgs = (
       .filter((entry) => !endpointOwners.has(entry.element))
       .flatMap((entry) => entry.glyphRects),
     ...(entryObstacles?.beamSlices ?? []),
+    ...(entryObstacles?.decorationRects ?? []),
   ];
 
   const anchorFor = (note: NoteLikeElementType, side: CurveBulge): Anchor => {
@@ -1326,7 +1399,7 @@ const buildCrossStaffSlurSvgs = (
           bulge: side,
         }),
         createCurveSvg({
-          from: { x: rowLeft, y: end.y },
+          from: { x: rowLeftOf(pair.end), y: end.y },
           to: { x: end.x, y: end.y },
           bulge: side,
         }),
@@ -1382,7 +1455,7 @@ export const buildConnectorSvgs = (
 ): SVGGElement[] => {
   const {
     rootRect,
-    rowLeft,
+    rowLeftOf,
     beamRects = [],
     groupSlurStaves,
     innerVoiceElements,
@@ -1610,7 +1683,7 @@ export const buildConnectorSvgs = (
           );
           elements.push(
             createCurveSvg({
-              from: { x: rowLeft, y: endAnchor.y },
+              from: { x: rowLeftOf(pair.end), y: endAnchor.y },
               to: { x: endAnchor.x, y: endAnchor.y },
               bulge: noteBulge,
               style,
@@ -1777,6 +1850,7 @@ export const buildConnectorSvgs = (
     const rowBaseBulge =
       DEFAULT_BULGE_HEIGHT + pair.nestingLevel * BULGE_STEP_PX;
     const startRowEnd = { ...startAnchor, x: rowRight };
+    const rowLeft = rowLeftOf(pair.end);
     const endRowStart = { ...endAnchor, x: rowLeft };
     const startHalfBulge = enclosingBulge(
       startAnchor,

@@ -1723,6 +1723,75 @@ describe('slur-style', () => {
   });
 });
 
+describe('breath-mark', () => {
+  it('round-trips, ignoring a value that doesn’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.breathMark).toBeNull();
+    noteElement.breathMark = 'tick';
+    expect(noteElement.getAttribute('breath-mark')).toBe('tick');
+    noteElement.setAttribute('breath-mark', 'gasp');
+    expect(noteElement.breathMark).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('breath-mark="gasp"')
+    );
+    noteElement.breathMark = null;
+    expect(noteElement.hasAttribute('breath-mark')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws its own mark standalone, right of the head', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('breath-mark', 'comma');
+    document.body.appendChild(noteElement);
+    const marks = noteElement.shadowRoot!.querySelectorAll('.breath-mark');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].classList.contains('breath-mark-comma')).toBe(true);
+  });
+
+  it('leaves the mark to its staff', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('breath-mark', 'tick');
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    expect(noteElement.shadowRoot!.querySelector('.breath-mark')).toBeNull();
+  });
+
+  it('re-lays out its staff when it changes', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    noteElement.breathMark = 'tick';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('swell', () => {
+  it('round-trips and re-lays out its staff', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    expect(noteElement.swell).toBe(false);
+    noteElement.swell = true;
+    expect(noteElement.hasAttribute('swell')).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    noteElement.swell = false;
+    expect(noteElement.hasAttribute('swell')).toBe(false);
+  });
+});
+
 describe('stem direction', () => {
   it('round-trips stem-direction, rejecting an invalid value', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;

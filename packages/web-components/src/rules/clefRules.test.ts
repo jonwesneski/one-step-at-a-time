@@ -1,5 +1,5 @@
-import { generateYCoordinates } from './theoryHelpers';
 import { CLEF_DEFINITIONS, getClefRenderData } from './clefRules';
+import { generateYCoordinates } from './theoryHelpers';
 
 describe('getClefRenderData', () => {
   it('treble: reproduces the C6-C4 Y-coordinate range and octave search order', () => {

@@ -4,6 +4,7 @@ import type {
   ArticulationType,
   BarlineType,
   BaseDurationType,
+  BreathMark,
   ClefType,
   DurationType,
   DynamicMarking,
@@ -431,6 +432,8 @@ export const TREMOLO_VALUES: TremoloValue[] = [
 ];
 
 export const TREMOLO_LABELS: TremoloLabel[] = ['trem', 'non-trem'];
+
+export const BREATH_MARKS: BreathMark[] = ['tick', 'comma'];
 
 export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
 

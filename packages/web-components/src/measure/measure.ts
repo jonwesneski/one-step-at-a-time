@@ -48,6 +48,7 @@ import {
   computeHairpinXSpan,
   pairSharedHairpinsAcrossStaves,
   resolveChainSpans,
+  resolveSwellSpan,
 } from '../rules/dynamicsRules';
 import {
   type EndingSegment,
@@ -146,14 +147,10 @@ import {
 } from '../utils';
 import {
   buildConnectorSvgs,
-  collectArpeggioTiePairs,
+  collectConnectorPairs,
   collectEntryObstacles,
-  collectNoteLikeElements,
-  collectPhraseSlurPairs,
   collectStemRects,
   isInnerVoiceMember,
-  pairConnectors,
-  partitionByVoice,
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
@@ -1594,13 +1591,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const noteLikeElements = collectNoteLikeElements(this);
-      const byVoice = partitionByVoice(noteLikeElements);
-      const pairs = [
-        ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
-        ...collectArpeggioTiePairs(this),
-        ...collectPhraseSlurPairs(this),
-      ];
+      const { pairs } = collectConnectorPairs(this);
       if (pairs.length === 0) {
         this.#reserveOverlaySpace(overlay);
         return;
@@ -1619,7 +1610,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
-        rowLeft: 0,
+        rowLeftOf: () => 0,
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,
@@ -1737,6 +1728,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const beamSlices = entryObstacles.beamSlices;
       const obstacles: ObstacleRect[] = [
         ...entryObstacles.entries.flatMap((entry) => entry.glyphRects),
+        ...entryObstacles.decorationRects,
         ...this.#crossStaffTupletRects(measureRect),
         ...staves.flatMap((staff, staffIndex) => [
           ...(staffIndex > 0
@@ -1971,6 +1963,67 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         placeText(endText, y);
       }
 
+      // A shared `< >` swell over one note, in the gap like a shared hairpin.
+      defaults.forEach((staffDefaults, staffIndex) => {
+        for (const swell of staffDefaults.swells) {
+          const element = swell.element;
+          if (!element.dynamicShared) {
+            continue;
+          }
+          const gap = gapBetween(staffIndex, partnerOf(staffIndex));
+          const startText = element.dynamic
+            ? {
+                marking: element.dynamic,
+                bracketed: element.dynamicReminder,
+                centerX: textCenterX(element, element.dynamic, -1, gap),
+              }
+            : null;
+          const span = resolveSwellSpan({
+            rawStartX: leftX(element),
+            rawEndX: swell.rawEndClientX - measureRect.left,
+            startMarking: startText?.marking ?? null,
+            startBracketed: startText?.bracketed,
+            startTextCenterX: startText?.centerX ?? 0,
+            endMarking: null,
+            endTextCenterX: 0,
+          });
+          if (span === null) {
+            continue;
+          }
+          const y =
+            resolveSharedHairpinY({
+              kind: 'crescendo',
+              startX: span.crescendo.startX,
+              endX: span.diminuendo.endX,
+              openHeight: HAIRPIN_OPEN_HEIGHT,
+              topGapEdgeY: gap.topGapEdgeY,
+              bottomGapEdgeY: gap.bottomGapEdgeY,
+              beamSlices,
+              obstacles,
+              startText,
+              endText: null,
+            }) ?? gap.belowSystemY;
+          override(staves[staffIndex], element, {
+            hairpin: 'measure',
+            marking: 'measure',
+          });
+          placeHairpin(
+            'crescendo',
+            { x: span.crescendo.startX, y },
+            { x: span.crescendo.endX, y },
+            false
+          );
+          placeHairpin(
+            'decrescendo',
+            { x: span.diminuendo.startX, y },
+            { x: span.diminuendo.endX, y },
+            false
+          );
+          placedEndpoints.add(element);
+          placeText(startText, y);
+        }
+      });
+
       // A one-hand hairpin under a double-stemmed group. Hairpins linked end
       // to start on one staff (a crescendo into a diminuendo) form a chain
       // that is placed as one. A chain whose default row sits in the gap and
@@ -2047,7 +2100,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                       gap
                     ),
                   }
-            )
+            ),
+            chain.slice(0, -1).map((pair) => {
+              const rect = pair.endElement.getBoundingClientRect();
+              return rect.left + rect.width / 2 - measureRect.left;
+            })
           );
           const overlapsGroup = spans.some((span) =>
             groupSlices.some(

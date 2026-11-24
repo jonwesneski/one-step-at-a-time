@@ -1697,7 +1697,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     await waitForRedrawCycle(page);
 
     const crossRow = await page.evaluate(
-      ({ compositionTag }) => {
+      ({ compositionTag, noteTag, staffTag }) => {
         const composition = document.querySelector(compositionTag);
         if (composition === null || composition.shadowRoot === null) {
           throw new Error('composition not ready');
@@ -1725,13 +1725,32 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
           };
         };
 
+        const wrapper = composition.shadowRoot.querySelector(
+          '.composition-wrapper'
+        );
+        const endNote = composition.querySelectorAll(noteTag)[4];
+        const endDescribe = endNote
+          .closest(staffTag)
+          ?.shadowRoot?.querySelector('.describe-container');
+        if (wrapper === null || !endDescribe) {
+          throw new Error('wrapper or end staff missing');
+        }
+        const wrapperLeft = wrapper.getBoundingClientRect().left;
+
         return {
           pathCount: paths.length,
           first: parseSegment(paths[0]?.getAttribute('d') ?? ''),
           second: parseSegment(paths[1]?.getAttribute('d') ?? ''),
+          endDescribeRight:
+            endDescribe.getBoundingClientRect().right - wrapperLeft,
+          endNoteLeft: endNote.getBoundingClientRect().left - wrapperLeft,
         };
       },
-      { compositionTag: MUSIC_COMPOSITION }
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        noteTag: MUSIC_NOTE,
+        staffTag: MUSIC_STAFF,
+      }
     );
 
     // Cross-row produces two path segments
@@ -1740,9 +1759,10 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     // First segment: runs from the start-note anchor to the row-right edge
     expect(crossRow.first.toX).toBeGreaterThan(crossRow.first.fromX);
 
-    // Second segment: starts at the row-left edge (notes area start, after the
-    // clef — typically ~40-80px from the left)
-    expect(crossRow.second.fromX).toBeLessThan(100);
+    // Second segment: starts after its own row's clef, not the first row's
+    // clef and time signature, and before the end note
+    expect(crossRow.second.fromX).toBeGreaterThan(crossRow.endDescribeRight);
+    expect(crossRow.second.fromX).toBeLessThan(crossRow.endNoteLeft);
 
     // Both segments arc above (cy < fromY) — C5 is stem-down
     expect(crossRow.first.cy).toBeLessThan(crossRow.first.fromY);

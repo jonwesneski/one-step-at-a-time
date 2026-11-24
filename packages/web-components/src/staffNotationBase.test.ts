@@ -1630,6 +1630,124 @@ describe('staffNotationBase strut min width', () => {
   });
 });
 
+describe('staffNotationBase breath marks', () => {
+  function renderStaff(markup: string): { staff: any; minWidth: number } {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, minWidth };
+  }
+
+  const quarters = (breathMark: string | null) =>
+    ['E', 'F', 'G', 'A']
+      .map(
+        (note, index) =>
+          `<music-note note="${note}" octave="4" duration="quarter"${
+            index === 1 && breathMark !== null
+              ? ` breath-mark="${breathMark}"`
+              : ''
+          }></music-note>`
+      )
+      .join('');
+
+  it('keeps a column free after a note with a breath mark', () => {
+    const plain = renderStaff(quarters(null)).minWidth;
+    document.body.innerHTML = '';
+    const marked = renderStaff(quarters('tick')).minWidth;
+    expect(marked).toBeGreaterThan(plain);
+  });
+
+  it('draws one glyph per mark, above the stave', () => {
+    const { staff } = renderStaff(quarters('comma'));
+    const marks = staff.shadowRoot.querySelectorAll(
+      '.breath-marks-container .breath-mark'
+    );
+    expect(marks).toHaveLength(1);
+    expect(marks[0].classList.contains('breath-mark-comma')).toBe(true);
+  });
+
+  it('draws a combined-voices chord’s breath mark once, from the staff', () => {
+    const { staff } = renderStaff(`
+      <music-voice>
+        <music-note note="E" octave="5" duration="half" breath-mark="tick"></music-note>
+        <music-note note="F" octave="5" duration="half"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="C" octave="5" duration="half" breath-mark="tick"></music-note>
+        <music-note note="A" octave="4" duration="half"></music-note>
+      </music-voice>`);
+    const staffMarks = staff.shadowRoot.querySelectorAll(
+      '.breath-marks-container .breath-mark'
+    );
+    const chordMarks = Array.from<Element>(
+      staff.shadowRoot.querySelectorAll(MUSIC_CHORD)
+    ).flatMap((chord) =>
+      Array.from(chord.shadowRoot?.querySelectorAll('.breath-mark') ?? [])
+    );
+    expect(staffMarks).toHaveLength(1);
+    expect(chordMarks).toHaveLength(0);
+  });
+});
+
+describe('staffNotationBase swells', () => {
+  function renderStaff(markup: string): { staff: any; minWidth: number } {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, minWidth };
+  }
+
+  const swells = (staff: any) =>
+    staff.shadowRoot.querySelectorAll('.dynamics-container .swell');
+
+  it('keeps room after a short note for its swell', () => {
+    const plain = renderStaff(
+      '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+        8
+      )
+    ).minWidth;
+    document.body.innerHTML = '';
+    const swelled = renderStaff(
+      '<music-note note="E" octave="4" duration="eighth" swell></music-note>' +
+        '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+          7
+        )
+    ).minWidth;
+    expect(swelled).toBeGreaterThan(plain);
+  });
+
+  it('gives way to a hairpin on the same note, with one warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { staff } = renderStaff(`
+      <music-note note="E" octave="4" duration="half" swell crescendo="start"></music-note>
+      <music-note note="F" octave="4" duration="half" crescendo="end"></music-note>`);
+    expect(swells(staff)).toHaveLength(0);
+    expect(staff.shadowRoot.querySelectorAll('.hairpin')).toHaveLength(1);
+    staff.onStaffResize();
+    const swellWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('swell is not drawn')
+    );
+    expect(swellWarnings).toHaveLength(1);
+    warn.mockRestore();
+  });
+});
+
 describe('staffNotationBase strut min width with tuplets', () => {
   const makeNote = (duration: DurationType) => {
     const note = document.createElement(MUSIC_NOTE) as any;

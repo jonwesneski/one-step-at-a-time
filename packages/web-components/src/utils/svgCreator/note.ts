@@ -28,6 +28,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BreathMark,
   DurationType,
   DynamicMarking,
   HairpinKind,
@@ -47,6 +48,8 @@ import {
   BASE_STEM_LENGTH_PX,
   BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
+  BREATH_MARK_INK_GAP_PX,
+  BREATH_MARK_STANDALONE_GAP_PX,
   DOWN_TAIL_HEAD_ROOM_PX,
   FLAG_STEM_STEP_PX,
   QUAVER_TAIL_LENGTH_PX,
@@ -71,6 +74,7 @@ import {
   createArticulationMarks,
 } from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
+import { breathMarkWidthPx, createBreathMarkSvg } from './breathMarks';
 import {
   createNoteheadGlyphPath,
   placeNoteheadGlyph,
@@ -222,6 +226,9 @@ export type NoteProps = {
   articulationRepeatCount?: number;
   // Drawn above the note only standalone; a staff draws its own row.
   tremoloLabel?: TremoloLabel | null;
+  // Drawn just after the note only standalone; a staff places it in the gap
+  // before the next entry.
+  breathMark?: BreathMark | null;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -283,6 +290,7 @@ export const createNoteSvg = ({
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
+  breathMark = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -491,7 +499,10 @@ export const createNoteSvg = ({
       inkTopY,
       headCenterPxY - articulationStackDepth(articulation, stress) * NOTE_SCALE
     );
-  } else if (!stemless && !noStem) {
+  }
+  // A breath mark sits beside the stem, clear of whatever is above the head.
+  const besideStemTopY = inkTopY;
+  if (stemUp && !stemless && !noStem) {
     inkTopY = Math.min(inkTopY, stemTipY * NOTE_SCALE);
   }
   if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
@@ -565,6 +576,28 @@ export const createNoteSvg = ({
   if (dots) {
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(dots);
+  }
+
+  if (breathMark !== null && qualifiedElementName === 'svg') {
+    const tailRightX =
+      stemUp && !noStem && !noFlags && flagCount > 0
+        ? stemX * NOTE_SCALE + TAIL_UP_WIDTH_PX
+        : -Infinity;
+    const rightX = Math.max(
+      (headGeometry.cx + headGeometry.halfWidth) * NOTE_SCALE,
+      dotLayout?.rightEdgeX ?? -Infinity,
+      tailRightX
+    );
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createBreathMarkSvg(
+        breathMark,
+        rightX +
+          BREATH_MARK_STANDALONE_GAP_PX +
+          breathMarkWidthPx(breathMark) / 2,
+        besideStemTopY - BREATH_MARK_INK_GAP_PX
+      )
+    );
   }
 
   if (
