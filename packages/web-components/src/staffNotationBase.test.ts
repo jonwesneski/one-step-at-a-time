@@ -224,16 +224,17 @@ describe('staffNotationBase', () => {
       expect(slurred).toBeGreaterThan(unslurred);
     });
 
-    it('stays put for a slur over unmarked notes', () => {
+    it('stays put for a slur well inside the stave', () => {
+      const inside = { note: 'A' };
       const unslurred = hairpinBaseline([
-        { crescendo: 'start' },
-        {},
-        { crescendo: 'end' },
+        { ...inside, crescendo: 'start' },
+        inside,
+        { ...inside, crescendo: 'end' },
       ]);
       const slurred = hairpinBaseline([
-        { crescendo: 'start', slur: 'start' },
-        {},
-        { crescendo: 'end', slur: 'end' },
+        { ...inside, crescendo: 'start', slur: 'start' },
+        inside,
+        { ...inside, crescendo: 'end', slur: 'end' },
       ]);
       expect(slurred).toBe(unslurred);
     });

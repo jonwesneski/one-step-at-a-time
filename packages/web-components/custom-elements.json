@@ -776,6 +776,16 @@
               "readonly": true
             },
             {
+              "kind": "method",
+              "name": "#resolvedStaffYCoordinates",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              }
+            },
+            {
               "kind": "field",
               "name": "augmentationDotsRightEdgePx",
               "type": {
@@ -1363,14 +1373,20 @@
             },
             {
               "kind": "method",
-              "name": "#widestHeadExtent",
+              "name": "#ledgerHeadExtent",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{\n    cxPx: number;\n    halfWidthPx: number;\n  }"
+                  "text": "LedgerHeadExtent"
                 }
               },
               "parameters": [
+                {
+                  "name": "staffYCoordinates",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
                 {
                   "name": "toneNoteheads",
                   "type": {
@@ -1922,6 +1938,10 @@
           },
           "tagName": "music-chord",
           "customElement": true
+        },
+        {
+          "kind": "variable",
+          "name": "staffYCoordinates"
         }
       ],
       "exports": [
@@ -2169,6 +2189,16 @@
             },
             {
               "kind": "method",
+              "name": "#alignLyricsRows",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
+            },
+            {
+              "kind": "method",
               "name": "#computeMeasureRows",
               "privacy": "private",
               "return": {
@@ -2268,7 +2298,7 @@
             },
             {
               "kind": "method",
-              "name": "#getDynamicsBaselineY",
+              "name": "#hairpinRowY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -2277,9 +2307,15 @@
               },
               "parameters": [
                 {
-                  "name": "element",
+                  "name": "staff",
                   "type": {
-                    "text": "Element"
+                    "text": "DynamicsRowStaff | null"
+                  }
+                },
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
                   }
                 },
                 {
@@ -2289,6 +2325,26 @@
                   }
                 }
               ]
+            },
+            {
+              "kind": "method",
+              "name": "#pairHairpinsAcrossMeasures",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      pairs: CrossMeasureHairpin[];\n      orphanEnds: HairpinEndpoint[];\n    }"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#shareHairpinRows",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
             },
             {
               "kind": "method",
@@ -3545,6 +3601,20 @@
               }
             },
             {
+              "kind": "method",
+              "name": "#resolvedStaffYCoordinates",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "kind": "field",
               "name": "augmentationDotsRightEdgePx",
               "type": {
@@ -4396,14 +4466,20 @@
             },
             {
               "kind": "method",
-              "name": "#widestHeadExtent",
+              "name": "#ledgerHeadExtent",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{\n    cxPx: number;\n    halfWidthPx: number;\n  }"
+                  "text": "LedgerHeadExtent"
                 }
               },
               "parameters": [
+                {
+                  "name": "staffYCoordinates",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
                 {
                   "name": "toneNoteheads",
                   "type": {
@@ -8114,6 +8190,11 @@
             },
             {
               "kind": "field",
+              "name": "#boundRefreshGroupBarlines",
+              "privacy": "private"
+            },
+            {
+              "kind": "field",
               "name": "number",
               "type": {
                 "text": "number | null"
@@ -8836,6 +8917,44 @@
               "kind": "method",
               "name": "#redrawSharedStems",
               "privacy": "private"
+            },
+            {
+              "kind": "method",
+              "name": "refreshGroupBarlines",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "Carries each group's barlines (end, start repeat, mid-bar) through the\ngaps between its staves, from where its upper staff drew them. Called\nby the composition once it has set them."
+            },
+            {
+              "kind": "method",
+              "name": "#staves",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "StaffElementBaseType[]"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#barlineStrokes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; width: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "StaffElementBaseType"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -11229,6 +11348,19 @@
             },
             {
               "kind": "field",
+              "name": "#sharedDynamicsRows",
+              "privacy": "private",
+              "type": {
+                "text": "SharedDynamicsRows"
+              },
+              "default": "{}",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#crossStaffOctaveBreakAfter",
               "privacy": "private",
               "type": {
@@ -12508,6 +12640,16 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#combinedChords",
+              "privacy": "private",
+              "default": "new Map<NoteOrChordElementType, ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#clearSyntheticElements",
               "privacy": "private",
@@ -12516,6 +12658,29 @@
                   "text": "void"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "drawnEntryOf",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "HTMLElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "entry",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                }
+              ],
+              "description": "What draws `entry`: itself, or the chord two voices were combined into.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -12742,6 +12907,21 @@
                   "text": "void"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onNotesLaidOut",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "Runs after the notes are laid out, on a render or a resize.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -13886,6 +14066,34 @@
             },
             {
               "kind": "method",
+              "name": "#headFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#augmentationDotFootprint",
               "privacy": "private",
               "return": {
@@ -14232,6 +14440,74 @@
             },
             {
               "kind": "method",
+              "name": "#tieReachY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#outerHeadEdgeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#headCenterX",
               "privacy": "private",
               "return": {
@@ -14326,6 +14602,40 @@
                   "name": "start",
                   "type": {
                     "text": "NoteOrChordElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#restInkY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "j",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -14438,7 +14748,7 @@
             },
             {
               "kind": "method",
-              "name": "#graceInkTopY",
+              "name": "#graceInkY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -14456,6 +14766,12 @@
                   "name": "index",
                   "type": {
                     "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -14964,7 +15280,7 @@
             },
             {
               "kind": "method",
-              "name": "#techniqueLabelInkTopY",
+              "name": "#entryInkY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -14982,6 +15298,12 @@
                   "name": "i",
                   "type": {
                     "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -15929,6 +16251,12 @@
               },
               "parameters": [
                 {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
                   "name": "group",
                   "type": {
                     "text": "TupletGroup"
@@ -16081,6 +16409,112 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "lyricsBelow",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "protected",
+              "description": "Whether lyrics stand below the stave, so every voice's dynamics and a\nsingle voice's tuplet brackets go above.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "connectorsBottomY",
+              "type": {
+                "text": "number | null"
+              },
+              "privacy": "protected",
+              "description": "How far (local px) this staff's slurs and ties are expected to reach below\nits notes; they are drawn over it, outside its own ink. Null with none.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dynamicsSideOf",
+              "return": {
+                "type": {
+                  "text": "DynamicsSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "description": "The side of the stave `element`'s own dynamics and hairpins go.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "ownDynamicsRowY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "description": "The dynamics row this staff's own music needs on one side, in local\ncoordinates: the voices whose dynamics go there, else all of them.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dynamicsRowToClientY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "description": "A row of `ownDynamicsRowY` in client coordinates.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedDynamicsRows",
+              "type": {
+                "text": "SharedDynamicsRows"
+              },
+              "description": "Set by the ancestor <music-composition>: the row (local coordinates) shared\nwith the bars a hairpin joins this one to, so it is level with the\nmarkings at its ends. Compared by content.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -16293,34 +16727,6 @@
             },
             {
               "kind": "method",
-              "name": "#extremeRealExtentY",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "number | null"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "state",
-                  "type": {
-                    "text": "VoiceRenderState"
-                  }
-                },
-                {
-                  "name": "placeAbove",
-                  "type": {
-                    "text": "boolean"
-                  }
-                }
-              ],
-              "inheritedFrom": {
-                "name": "StaffNotationElementBase",
-                "module": "src/staffNotationBase.ts"
-              }
-            },
-            {
-              "kind": "method",
               "name": "#dynamicsBaselineFor",
               "privacy": "private",
               "return": {
@@ -16336,14 +16742,44 @@
                   }
                 },
                 {
-                  "name": "placeAbove",
+                  "name": "above",
                   "type": {
                     "text": "boolean"
                   }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryLeftInkYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(number | null)[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
                 },
                 {
-                  "name": "realStems",
-                  "default": "false"
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -17182,6 +17618,42 @@
               },
               "description": "How far this staff's notes and decorations reach above its top line, in\npx, leaving out the clef/key/time area, barlines and end-of-measure\nwarnings. Measured from the line, so the staff's margin doesn't change it.",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "inkBelowBottomLine",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "description": "As `inkAboveTopLine`, below the staff's bottom line.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#inkExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VerticalBand"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "stave",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -18462,6 +18934,42 @@
               }
             },
             {
+              "kind": "field",
+              "name": "inkBelowBottomLine",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "description": "As `inkAboveTopLine`, below the staff's bottom line.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#inkExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VerticalBand"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "stave",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
@@ -18746,6 +19254,20 @@
             },
             {
               "kind": "field",
+              "name": "lyricsBelow",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "protected",
+              "description": "Whether lyrics stand below the stave, so every voice's dynamics and a\nsingle voice's tuplet brackets go above.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "voice",
               "type": {
                 "text": "VocalType"
@@ -18812,16 +19334,17 @@
             },
             {
               "kind": "method",
-              "name": "onStaffResize",
+              "name": "onNotesLaidOut",
               "privacy": "protected",
               "return": {
                 "type": {
                   "text": "void"
                 }
               },
+              "description": "Runs after the notes are laid out, on a render or a resize.",
               "inheritedFrom": {
-                "name": "StaffElementBase",
-                "module": "src/staffBase.ts"
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
               }
             },
             {
@@ -18859,6 +19382,102 @@
             },
             {
               "kind": "field",
+              "name": "#ownLyricsRowY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "#alignedLyricsRowY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
+              "name": "ownLyricsRowY",
+              "type": {
+                "text": "number | null"
+              },
+              "description": "The lyric line this staff's own music needs; null without lyrics.",
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "alignLyricsRow",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number | null"
+                  }
+                }
+              ],
+              "description": "Set by the ancestor `<music-composition>` so every bar of a system has\nits lyrics on one line. Returns whether this staff's line moved."
+            },
+            {
+              "kind": "field",
+              "name": "#lyricsRowY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "method",
+              "name": "#computeOwnLyricsRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "wrapperBottom",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#reserveLyricsSpace",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "verseCount",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "wrapperHeight",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "field",
               "name": "#lastLyricWarnings",
               "privacy": "private",
               "default": "new Set<string>()"
@@ -18869,7 +19488,7 @@
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "HTMLElement[]"
+                  "text": "NoteOrChordElementType[]"
                 }
               }
             },
@@ -19162,6 +19781,19 @@
                 "text": "ReadonlyMap<\n    NoteOrChordElementType,\n    CrossStaffDynamicsOverride\n  > | null"
               },
               "default": "null",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#sharedDynamicsRows",
+              "privacy": "private",
+              "type": {
+                "text": "SharedDynamicsRows"
+              },
+              "default": "{}",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -20420,6 +21052,16 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#combinedChords",
+              "privacy": "private",
+              "default": "new Map<NoteOrChordElementType, ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#clearSyntheticElements",
               "privacy": "private",
@@ -20428,6 +21070,29 @@
                   "text": "void"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "drawnEntryOf",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "HTMLElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "entry",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                }
+              ],
+              "description": "What draws `entry`: itself, or the chord two voices were combined into.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -21811,6 +22476,34 @@
             },
             {
               "kind": "method",
+              "name": "#headFootprint",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#augmentationDotFootprint",
               "privacy": "private",
               "return": {
@@ -22157,6 +22850,74 @@
             },
             {
               "kind": "method",
+              "name": "#tieReachY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#outerHeadEdgeY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#headCenterX",
               "privacy": "private",
               "return": {
@@ -22251,6 +23012,40 @@
                   "name": "start",
                   "type": {
                     "text": "NoteOrChordElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#restInkY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "j",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -22363,7 +23158,7 @@
             },
             {
               "kind": "method",
-              "name": "#graceInkTopY",
+              "name": "#graceInkY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -22381,6 +23176,12 @@
                   "name": "index",
                   "type": {
                     "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -22889,7 +23690,7 @@
             },
             {
               "kind": "method",
-              "name": "#techniqueLabelInkTopY",
+              "name": "#entryInkY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -22907,6 +23708,12 @@
                   "name": "i",
                   "type": {
                     "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -23854,6 +24661,12 @@
               },
               "parameters": [
                 {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
                   "name": "group",
                   "type": {
                     "text": "TupletGroup"
@@ -24006,6 +24819,98 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "connectorsBottomY",
+              "type": {
+                "text": "number | null"
+              },
+              "privacy": "protected",
+              "description": "How far (local px) this staff's slurs and ties are expected to reach below\nits notes; they are drawn over it, outside its own ink. Null with none.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dynamicsSideOf",
+              "return": {
+                "type": {
+                  "text": "DynamicsSide"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "description": "The side of the stave `element`'s own dynamics and hairpins go.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "ownDynamicsRowY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "side",
+                  "type": {
+                    "text": "DynamicsSide"
+                  }
+                }
+              ],
+              "description": "The dynamics row this staff's own music needs on one side, in local\ncoordinates: the voices whose dynamics go there, else all of them.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "dynamicsRowToClientY",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "y",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "description": "A row of `ownDynamicsRowY` in client coordinates.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedDynamicsRows",
+              "type": {
+                "text": "SharedDynamicsRows"
+              },
+              "description": "Set by the ancestor <music-composition>: the row (local coordinates) shared\nwith the bars a hairpin joins this one to, so it is level with the\nmarkings at its ends. Compared by content.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -24218,34 +25123,6 @@
             },
             {
               "kind": "method",
-              "name": "#extremeRealExtentY",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "number | null"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "state",
-                  "type": {
-                    "text": "VoiceRenderState"
-                  }
-                },
-                {
-                  "name": "placeAbove",
-                  "type": {
-                    "text": "boolean"
-                  }
-                }
-              ],
-              "inheritedFrom": {
-                "name": "StaffNotationElementBase",
-                "module": "src/staffNotationBase.ts"
-              }
-            },
-            {
-              "kind": "method",
               "name": "#dynamicsBaselineFor",
               "privacy": "private",
               "return": {
@@ -24261,14 +25138,44 @@
                   }
                 },
                 {
-                  "name": "placeAbove",
+                  "name": "above",
                   "type": {
                     "text": "boolean"
                   }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryLeftInkYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(number | null)[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
                 },
                 {
-                  "name": "realStems",
-                  "default": "false"
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -24330,6 +25237,20 @@
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "onStaffResize",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
               }
             },
             {
@@ -25099,6 +26020,42 @@
               }
             },
             {
+              "kind": "field",
+              "name": "inkBelowBottomLine",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "protected",
+              "description": "As `inkAboveTopLine`, below the staff's bottom line.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#inkExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "VerticalBand"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "stave",
+                  "type": {
+                    "text": "VerticalBand"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "drawConnectorsWhenStandalone",
               "privacy": "protected",
@@ -25425,7 +26382,7 @@
               "type": {
                 "text": "TupletPlacement"
               },
-              "description": "Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes)."
+              "description": "Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes; on a vocal staff with one voice, above)."
             }
           ],
           "superclass": {

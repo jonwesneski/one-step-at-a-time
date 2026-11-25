@@ -1055,3 +1055,51 @@ test.describe('multi-voice staff', () => {
     });
   });
 });
+
+test.describe('a tie on a staff of two voices', () => {
+  test('moves to its voice’s side when a second voice is there, and back', async ({
+    page,
+  }) => {
+    const half = (pitch: string, attrs = '') =>
+      `<music-note note="${pitch}" octave="4" duration="half" ${attrs}></music-note>`;
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+        <music-voice>${half('G', 'tie="start"')}${half(
+        'G',
+        'tie="end"'
+      )}</music-voice>
+        <music-voice id="lower">${half('D')}${half('C')}</music-voice>
+      </music-staff>`
+    );
+    // Whether the tie's middle is above its ends.
+    const curvesUp = () =>
+      page.evaluate(() => {
+        const path = document
+          .querySelector('music-staff')
+          ?.shadowRoot?.querySelector<SVGPathElement>('.connector path');
+        if (!path) {
+          throw new Error('no tie');
+        }
+        const at = (t: number) =>
+          path.getPointAtLength(path.getTotalLength() * t).y;
+        return at(0.5) < at(0);
+      });
+    expect(await curvesUp()).toBe(true);
+
+    await page.evaluate(() => document.getElementById('lower')?.remove());
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    // Alone, G4's stem points up and the tie goes below.
+    expect(await curvesUp()).toBe(false);
+
+    await page.evaluate((lower) => {
+      document
+        .querySelector('music-staff')
+        ?.insertAdjacentHTML('beforeend', lower);
+    }, `<music-voice>${half('D')}${half('C')}</music-voice>`);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect(await curvesUp()).toBe(true);
+  });
+});

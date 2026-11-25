@@ -33,6 +33,23 @@ export function pickStemSide({
   return stemUp ? 'below' : 'above';
 }
 
+/**
+ * The side of a voice's own ties and slurs when it shares its staff: outside
+ * the other part, whichever way its stems point. Voice 3's follow its stem.
+ * Null with one voice on the staff.
+ */
+export function voiceCurveSide(
+  voiceIndex: number,
+  voiceCount: number,
+  stemUp: boolean
+): CurveSide | null {
+  if (voiceCount < 2) {
+    return null;
+  }
+  const up = voiceIndex === 2 ? stemUp : voiceIndex === 0;
+  return up ? 'above' : 'below';
+}
+
 export type SlurStem = { stemUp: boolean; beamed: boolean };
 
 export function hasMixedStems(stems: readonly SlurStem[]): boolean {
@@ -43,12 +60,16 @@ export function hasMixedStems(stems: readonly SlurStem[]): boolean {
  * The side of a slur over one staff's notes, first to last: opposite stems that
  * all agree, above the stave when they differ. A beam above either end pushes a
  * mixed slur below, unless a beam or a slur inside it (`nestedBelow`) is in the
- * way there too.
+ * way there too. On a staff of several voices, its voice's side.
  */
 export function pickSlurSide(
   stems: readonly SlurStem[],
-  nestedBelow: boolean
+  nestedBelow: boolean,
+  voiceSide: CurveSide | null = null
 ): CurveSide {
+  if (voiceSide !== null) {
+    return voiceSide;
+  }
   if (!hasMixedStems(stems)) {
     return pickStemSide({ stemUp: stems[0].stemUp, isGuitarNote: false });
   }

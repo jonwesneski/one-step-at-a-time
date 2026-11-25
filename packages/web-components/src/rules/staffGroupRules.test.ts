@@ -1,4 +1,4 @@
-import { resolveStaffGroups } from './staffGroupRules';
+import { connectedBarlineGaps, resolveStaffGroups } from './staffGroupRules';
 
 describe('resolveStaffGroups', () => {
   it('pairs a grouped staff with its immediate next sibling', () => {
@@ -136,5 +136,32 @@ describe('resolveStaffGroups', () => {
     ]);
     expect(groups).toEqual([{ index: 0, count: 2, group: 'grand' }]);
     expect(warnings).toHaveLength(0);
+  });
+});
+
+describe('connectedBarlineGaps', () => {
+  it('joins every staff of a group to the next', () => {
+    expect(
+      connectedBarlineGaps(
+        [
+          { index: 0, count: 3, group: 'bracket' },
+          { index: 4, count: 2, group: 'grand' },
+        ],
+        [false, false, false, false, false, false]
+      )
+    ).toEqual([
+      [0, 1],
+      [1, 2],
+      [4, 5],
+    ]);
+  });
+
+  it('leaves out the gap between two vocal staves only', () => {
+    expect(
+      connectedBarlineGaps(
+        [{ index: 0, count: 3, group: 'bracket' }],
+        [true, true, false]
+      )
+    ).toEqual([[1, 2]]);
   });
 });

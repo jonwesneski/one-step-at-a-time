@@ -18,6 +18,22 @@ export type StaffGroupResolution = {
   warnings: string[];
 };
 
+/**
+ * The gaps, as upper and lower staff index, that barlines run through: between
+ * the staves of a group, but not between two vocal staves, where lyrics stand.
+ */
+export function connectedBarlineGaps(
+  groups: readonly StaffGroupSpan[],
+  isVocal: readonly boolean[]
+): [number, number][] {
+  return groups.flatMap(({ index, count }) =>
+    Array.from({ length: count - 1 }, (_, i): [number, number] => [
+      index + i,
+      index + i + 1,
+    ]).filter(([upper, lower]) => !(isVocal[upper] && isVocal[lower]))
+  );
+}
+
 // Resolves which staves should be joined by a brace/bracket connector.
 //
 // group="grand" always pairs positionally with the immediate next sibling

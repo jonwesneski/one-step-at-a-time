@@ -79,7 +79,10 @@ import {
   type SharedStemEntry,
 } from '../rules/sharedStemRules';
 import type { VoiceRooms } from '../rules/spacingRules';
-import { resolveStaffGroups } from '../rules/staffGroupRules';
+import {
+  connectedBarlineGaps,
+  resolveStaffGroups,
+} from '../rules/staffGroupRules';
 import { barMinWidthCss, measureFlexValue } from '../rules/staffWidth';
 import {
   barlineTypeConflicts,
@@ -136,6 +139,7 @@ import {
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_STAFF_GUITAR_TAB_NODE,
+  MUSIC_STAFF_VOCAL_NODE,
   MUSIC_TREMOLO,
   MUSIC_TUPLET,
   MUSIC_VOICE,
@@ -159,6 +163,7 @@ import {
 import { isRowFlexItem } from '../utils/isRowFlexItem';
 import {
   ARPEGGIO_CHORD_GAP_PX,
+  BARLINE_THIN_PX,
   BASE_STEM_LENGTH_PX,
   BEAM_GAP_PX,
   BEAM_STEP_PX,
@@ -568,6 +573,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           target.startRepeat = this.repeatStart ? 'full' : 'none';
         }
       }
+      this.refreshGroupBarlines();
     }
 
     #onStaffMinWidth = (event: Event): void => {
@@ -608,6 +614,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawMeasureDynamics();
       this.#redrawConnectors();
       this.#redrawSharedStems();
+      this.refreshGroupBarlines();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
@@ -637,6 +644,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // tuplets this pass avoids, so each registration below follows theirs.
     #boundRedrawMeasureDynamics = () => this.#redrawMeasureDynamics();
     #boundRedrawGapPasses = () => this.#redrawGapPasses();
+    #boundRefreshGroupBarlines = () => this.refreshGroupBarlines();
 
     constructor() {
       super();
@@ -818,6 +826,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // beam polygon to avoid crossing it, so connectors redraw after beams.
         [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawConnectors],
         [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawSharedStems],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRefreshGroupBarlines],
         [
           STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
           this.#boundUpdateConnectorVisibility,
@@ -1034,6 +1043,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             opacity: 0;
           }
 
+          .group-barlines {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+          }
+
+          .group-barlines > * {
+            position: absolute;
+            background-color: currentColor;
+          }
+
           .group-connectors {
             position: absolute;
             inset: 0;
@@ -1062,6 +1082,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           <div class="staff-connector"></div>
           <div class="group-connectors"></div>
           <div class="staff-labels"></div>
+          <!-- barlines between the staves of a brace or bracket; first, so
+               everything else in the gap is drawn over them -->
+          <div class="group-barlines"></div>
           <!-- must be <svg>: holds <g> arpeggio-sign nodes that share this
                element's coordinate space; inset:0 aligns that space 1:1 with
                the measure box so #redrawArpeggios can position with raw px -->
@@ -1155,6 +1178,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       this.#renderGroupConnectors(this.#firstInRow);
       this.#renderStaffLabels(this.#firstInRow);
+      this.refreshGroupBarlines();
       this.#renderEnding();
     }
 
@@ -3707,6 +3731,82 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         overlay.appendChild(createSharedStemLine(x, topY, bottomY));
       }
+    }
+
+    /**
+     * Carries each group's barlines (end, start repeat, mid-bar) through the
+     * gaps between its staves, from where its upper staff drew them. Called
+     * by the composition once it has set them.
+     */
+    refreshGroupBarlines(): void {
+      const container =
+        this.shadowRoot?.querySelector<HTMLElement>('.group-barlines');
+      if (!container) {
+        return;
+      }
+      container.replaceChildren();
+      const staves = this.#staves();
+      const { groups } = resolveStaffGroups(
+        staves.map((staff) => ({
+          group: staff.group ?? null,
+          groupId: staff.groupId ?? null,
+        }))
+      );
+      if (groups.length === 0) {
+        return;
+      }
+      const bands = this.#staffLineBands(staves);
+      const isVocal = staves.map(
+        ({ nodeName }) => nodeName === MUSIC_STAFF_VOCAL_NODE
+      );
+      for (const [upper, lower] of connectedBarlineGaps(groups, isVocal)) {
+        for (const { left, width } of this.#barlineStrokes(staves[upper])) {
+          // A box rather than SVG, so it lands on the same device pixels as
+          // the staves' own barlines.
+          const line = document.createElement('div');
+          line.classList.add('group-barline');
+          line.style.left = `${left}px`;
+          line.style.width = `${width}px`;
+          line.style.top = `${bands[upper].bottom}px`;
+          line.style.height = `${bands[lower].top - bands[upper].bottom}px`;
+          container.appendChild(line);
+        }
+      }
+    }
+
+    #staves(): StaffElementBaseType[] {
+      return Array.from(this.children).filter((child) =>
+        isStaffNodeName(child.nodeName)
+      ) as StaffElementBaseType[];
+    }
+
+    // Every vertical line of a staff's barlines, as drawn.
+    #barlineStrokes(
+      staff: StaffElementBaseType
+    ): { left: number; width: number }[] {
+      const origin = this.getBoundingClientRect().left + this.clientLeft;
+      const strokes = Array.from(
+        staff.shadowRoot?.querySelectorAll<SVGRectElement>(
+          '.barline-thin, .barline-thick'
+        ) ?? []
+      ).map((line) => {
+        const { left, width } = line.getBoundingClientRect();
+        return { left: left - origin, width };
+      });
+      // A plain barline is the container's border.
+      return (staff as unknown as { endBarline: string }).endBarline ===
+        'single'
+        ? [
+            ...strokes,
+            {
+              left:
+                this.#staffContainerRect(staff).right -
+                BARLINE_THIN_PX -
+                origin,
+              width: BARLINE_THIN_PX,
+            },
+          ]
+        : strokes;
     }
 
     // A brace/bracket is a system-start decoration: only the first measure of

@@ -109,6 +109,9 @@ export const LAST_ENTRY_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 // ─── Voices ───────────────────────────────────────────────────────────────────
 
+/** Half the width (px) of a rest's ink, about its box's centre. = 0.5 × STAFF_LINE_SPACING */
+export const REST_HALF_WIDTH_PX = STAFF_LINE_SPACING * 0.5;
+
 /**
  * Vertical displacement (px) applied to a rest's normal duration-keyed Y
  * position when it belongs to one of 2-3 independent voices sharing a
@@ -496,6 +499,9 @@ export const SLUR_NOTEHEAD_OFFSET_PX = STAFF_LINE_SPACING * 0.9;
 /** How far (px) a tie reaches past its anchors. = half of curve.ts's DEFAULT_BULGE_HEIGHT (0.9 × STAFF_LINE_SPACING) */
 export const TIE_REACH_PX = STAFF_LINE_SPACING * 0.45;
 
+/** Gap (px) between a head, or the stem beside it, and the end of a tie on its voice's side. = 0.3 × STAFF_LINE_SPACING */
+export const TIE_BESIDE_HEAD_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
 /**
  * Gap (px) between the clef/key/time area and the start of a tie or slur
  * continued from the previous system.
@@ -622,6 +628,22 @@ export const MEASURE_MIN_WIDTH_PX = 100;
  * to display lyric syllables without overlap.
  */
 export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
+
+/**
+ * How far (px) above the staff box's bottom edge the first verse's tops stand,
+ * two spaces below the stave.
+ * = STAFF_LINE_SPACING
+ */
+export const LYRICS_WRAPPER_OVERLAP_PX = STAFF_LINE_SPACING;
+
+/** Distance (px) between the lines of two verses. = 1.5 × STAFF_LINE_SPACING */
+export const LYRICS_VERSE_SPACING_PX = STAFF_LINE_SPACING * 1.5;
+
+/** Gap (px) between lyrics and what stands above them. = 0.5 × STAFF_LINE_SPACING */
+export const LYRICS_INK_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Sub-pixel drift (px) that doesn't count as a move of the lyric line. */
+export const LYRICS_ROW_EPSILON_PX = 0.5;
 
 /**
  * Minimum pixel gap between the left edge of the staff's notes area and the
@@ -825,6 +847,18 @@ export const SWELL_MIN_SPAN_PX = 2 * SWELL_MIN_WEDGE_PX + SWELL_MID_GAP_PX;
  */
 export const DYNAMICS_TEXT_ASCENT_RATIO = 0.75;
 export const DYNAMICS_TEXT_DESCENT_RATIO = 0.25;
+
+/** Gap (px) between a row of dynamics and the notes it clears. = 1 × STAFF_LINE_SPACING */
+export const DYNAMICS_ROW_INK_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Gap (px) between a row of dynamics and the slurs, ties and brackets it clears.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DYNAMICS_ROW_CURVE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Sub-pixel drift (px) that doesn't count as a change of dynamics row. */
+export const DYNAMICS_ROW_EPSILON_PX = 0.5;
 
 /**
  * Shallowest slant (radians) an angled hairpin may take — 10°, enough to read

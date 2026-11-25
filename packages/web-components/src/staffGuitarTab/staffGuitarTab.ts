@@ -286,13 +286,22 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const transcribeRect = this.transcribeContainer.getBoundingClientRect();
       const describeRect = this.#describeContainer.getBoundingClientRect();
       this.#barlinesContainer.replaceChildren();
-      this.#ownDescribeEndX = Math.round(
-        this.#drawStartRepeat(describeRect.right - transcribeRect.left)
+      const startAreaEndX = this.#drawStartRepeat(
+        describeRect.right - transcribeRect.left
       );
+      this.#ownDescribeEndX = Math.round(startAreaEndX);
       this.#describeEndX = Math.max(
         this.#ownDescribeEndX,
         this.measureNotesStartX
       );
+      if (this.startRepeat === 'full') {
+        // Ends where the measure's widest start area does, so a group's start
+        // repeats line up.
+        this.#barlinesContainer.firstElementChild?.setAttribute(
+          'transform',
+          `translate(${this.#describeEndX - startAreaEndX} 0)`
+        );
+      }
       const remainingWidth =
         transcribeRect.width -
         this.#describeEndX -

@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { ADJACENT_NOTE_X_DISPLACEMENT_PX } from '../utils/svgCreator/note';
-import { computeAdjacentDisplacements } from './chordRules';
+import { adjacentHeadOffset, computeAdjacentDisplacements } from './chordRules';
 
 const DISPLACEMENT = ADJACENT_NOTE_X_DISPLACEMENT_PX; // 8px
 
@@ -90,6 +90,39 @@ describe('computeAdjacentDisplacements', () => {
       expect(result).toHaveLength(2);
       const indices = result.map((d) => d.noteIndex).sort((a, b) => a - b);
       expect(indices).toEqual([1, 3]); // D4 and A4
+    });
+  });
+
+  describe('with the heads’ widths', () => {
+    const oval = { left: 11, right: 20 };
+    const wide = { left: 11, right: 28 };
+
+    it('starts a stem-up displaced head where a wide head ends', () => {
+      const [displaced] = computeAdjacentDisplacements([70, 65], true, [
+        wide,
+        oval,
+      ]);
+      expect(displaced.xOffset).toBeCloseTo(adjacentHeadOffset(wide, oval));
+      expect(oval.left + displaced.xOffset).toBeGreaterThan(wide.right - 1);
+    });
+
+    it('ends a wide stem-down displaced head where the other starts', () => {
+      const [displaced] = computeAdjacentDisplacements([70, 65], false, [
+        wide,
+        oval,
+      ]);
+      expect(displaced.noteIndex).toBe(0);
+      expect(wide.right + displaced.xOffset).toBeLessThan(oval.left + 1);
+    });
+
+    it('clears both heads a step from it', () => {
+      const displaced = computeAdjacentDisplacements([70, 65, 60], true, [
+        oval,
+        oval,
+        wide,
+      ]);
+      expect(displaced).toHaveLength(1);
+      expect(displaced[0].xOffset).toBeCloseTo(adjacentHeadOffset(wide, oval));
     });
   });
 });

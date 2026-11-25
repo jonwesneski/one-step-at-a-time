@@ -3,7 +3,7 @@
  */
 import type { DurationType } from '../../types/theory';
 import { chordToneHeadCenterY, createChordSvg } from './chord';
-import { NOTE_SCALE } from './note';
+import { NOTE_SCALE, noteHeadGeometry } from './note';
 
 describe('chordToneHeadCenterY', () => {
   it.each<[boolean, DurationType]>([
@@ -26,9 +26,9 @@ describe('chordToneHeadCenterY', () => {
       expect(tones).toHaveLength(staffYCoordinates.length);
       tones.forEach((tone, index) => {
         const head = tone.querySelector('.head');
-        const drawnCenterY =
-          Number(tone.getAttribute('y')) +
-          Number(head?.getAttribute('cy')) * NOTE_SCALE;
+        const { cy } = noteHeadGeometry(stemUp, duration, false);
+        expect(head).not.toBeNull();
+        const drawnCenterY = Number(tone.getAttribute('y')) + cy * NOTE_SCALE;
         expect(
           chordToneHeadCenterY(
             staffYCoordinates[index],

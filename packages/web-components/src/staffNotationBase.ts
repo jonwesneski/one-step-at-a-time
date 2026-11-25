@@ -30,9 +30,9 @@ import {
   durationContribution,
 } from './rules/beatRules';
 import { breathMarkBottomY, breathMarkCenterX } from './rules/breathMarkRules';
-import { computeAdjacentDisplacements } from './rules/chordRules';
 import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
 import {
+  type CurveSide,
   estimatedSlurReachY,
   pickSlurSide,
   SlurReachEntry,
@@ -42,6 +42,7 @@ import {
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
+  dynamicsRowY,
   type HairpinPair,
   pairHairpinsWithLeftovers,
   resolveSwellSpan,
@@ -81,6 +82,7 @@ import type {
   CrossStaffDynamicsOverride,
   DynamicsPlacement,
   DynamicsSide,
+  SharedDynamicsRows,
   StaffHairpinDefaults,
   StaffHairpinPlacement,
 } from './rules/hairpinPlacementRules';
@@ -235,6 +237,7 @@ import type {
   HairpinKind,
   Mode,
   Note,
+  NoteheadType,
   NoteLetter,
   Octave,
   OctaveShiftAmount,
@@ -325,6 +328,7 @@ import {
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
+  DYNAMICS_ROW_EPSILON_PX,
   END_WARNING_GAP_PX,
   GLISSANDO_WAVE_AMPLITUDE_PX,
   GRACE_MAIN_GAP_PX,
@@ -361,6 +365,7 @@ import {
   REPEAT_START_LEAD_PX,
   REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
+  REST_HALF_WIDTH_PX,
   SLUR_ARTICULATION_CLEARANCE_PX,
   SLUR_BEYOND_BEAM_CLEARANCE_PX,
   SLUR_MAX_EXTRA_BULGE_PX,
@@ -406,18 +411,20 @@ import {
   chordUpTailInk,
 } from './utils/svgCreator/chord';
 import { lineLabelBox } from './utils/svgCreator/curve';
-import { graceInkTopY } from './utils/svgCreator/graceNotes';
+import { graceHeadsBottomY, graceInkTopY } from './utils/svgCreator/graceNotes';
 import { ledgerLineOverhangPx } from './utils/svgCreator/ledgerLines';
 import {
   ACCIDENTAL_NOTE_GAP,
   flagStemExtensionPx,
   NOTE_SCALE,
   NOTE_SVG_WIDTH,
+  noteHeadCenterShiftPx,
   noteHeadGeometry,
   stemTipPosition,
   TAIL_UP_WIDTH_PX,
   trillSignLeftX,
 } from './utils/svgCreator/note';
+import { restInkBottomPx, restInkTopPx } from './utils/svgCreator/rest';
 import {
   createTechniqueLabel,
   type TechniqueLabel,
@@ -541,20 +548,25 @@ function footprintArpeggioHairpin(
   return null;
 }
 
-// A stem-down chord's adjacent second shifts its head left by
-// ADJACENT_NOTE_X_DISPLACEMENT_PX, past the notehead inset the arpeggio
-// footprint constants assume — reserve that delta when the chord shows a sign.
-function chordLeftHeadDisplacementPx(chord: ChordElementType): number {
-  const coords = chord.staffYCoordinates;
-  if (coords === null || coords.length < 2) {
+// How far (px) a chord's displaced heads reach left of its own box.
+function chordHeadsLeftReachPx(element: NoteChordOrRestElementType): number {
+  if (!isChordNodeName(element.nodeName)) {
     return 0;
   }
-  return Math.max(
-    0,
-    ...computeAdjacentDisplacements(coords, chord.stemUp).map(
-      (displacement) => -displacement.xOffset
-    )
-  );
+  const chord = element as ChordElementType;
+  const coords = chord.staffYCoordinates;
+  return coords === null || coords.length < 2
+    ? 0
+    : Math.max(
+        0,
+        -chordHeadExtentPx({
+          duration: chord.duration,
+          staffYCoordinates: coords,
+          stemUp: chord.stemUp,
+          noFlags: chord.noFlags,
+          noteheads: chord.toneNoteheads,
+        }).left
+      );
 }
 
 // Whether a note/chord currently shows an accidental — the arpeggio sign sits
@@ -597,6 +609,10 @@ function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
     ? null
     : (element as NoteElementType | ChordElementType).breathMark ?? null;
 }
+
+// The outermost of rows or reaches on one side of the stave.
+const outermost = (ys: readonly number[], above: boolean): number =>
+  above ? Math.min(...ys) : Math.max(...ys);
 
 // A staff Y's height in the transcription containers.
 const containerYOfStaffY = (staffY: number): number =>
@@ -691,6 +707,28 @@ type VoiceRenderState = {
   // single-voice staff, or the 'combined' track).
   direction: VoiceDirection | null;
 };
+
+// The notehead of a note, or a chord's first.
+const entryNotehead = (element: NoteChordOrRestElementType): NoteheadType =>
+  isNoteNodeName(element.nodeName)
+    ? (element as NoteElementType).notehead
+    : (element as ChordElementType).toneNoteheads?.[0] ?? 'normal';
+
+// How far (px) right of its box's centre an entry's semibreve head is centred.
+const entryCenterShiftPx = (element: NoteChordOrRestElementType): number =>
+  element.nodeName === MUSIC_REST_NODE
+    ? 0
+    : noteHeadCenterShiftPx(element.duration, entryNotehead(element));
+
+const entryHeadHalfWidthPx = (element: NoteChordOrRestElementType): number =>
+  entryCenterShiftPx(element) === 0
+    ? NOTE_HEAD_RADIUS_PX
+    : noteHeadGeometry(true, element.duration, false, entryNotehead(element))
+        .halfWidth * NOTE_SCALE;
+
+// The side of a voice's own ties and slurs; null with one voice on the staff.
+const voiceSideOf = ({ direction }: VoiceRenderState): CurveSide | null =>
+  direction === null ? null : direction === 'up' ? 'above' : 'below';
 
 // How far `oldIndex` shifts down once every index in `removedIndices` has
 // been spliced out; re-anchors a voice's tupletsByIndex/arpeggioGroups after
@@ -811,6 +849,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     NoteOrChordElementType,
     CrossStaffDynamicsOverride
   > | null = null;
+  #sharedDynamicsRows: SharedDynamicsRows = {};
   #crossStaffOctaveBreakAfter: ReadonlySet<NoteChordOrRestElementType> | null =
     null;
   #octaveContinuations: ReadonlyMap<Element, OctaveContinuationRow> | null =
@@ -1516,7 +1555,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         side,
         baselineClientY: this.#dynamicsLocalToClientY(
           voiceKey,
-          this.#dynamicsBaselineFor(state, side === 'above')
+          this.#dynamicsBaselineForSide(voiceKey, state, side)
         ),
       };
       const pairing = pairHairpinsWithLeftovers(
@@ -1932,6 +1971,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     for (const [type, listener] of this.#listeners()) {
       this.removeEventListener(type, listener);
     }
+    this.#sharedDynamicsRows = {};
   }
 
   override attributeChangedCallback(
@@ -2013,11 +2053,19 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Synthetic elements (a combined-voices chord or shared whole-measure rest)
   // are re-derived every pass: removed and recreated, never diffed.
   #syntheticElements: HTMLElement[] = [];
+  // The chord each combined entry is drawn in.
+  #combinedChords = new Map<NoteOrChordElementType, ChordElementType>();
   #clearSyntheticElements(): void {
     for (const element of this.#syntheticElements) {
       element.remove();
     }
     this.#syntheticElements = [];
+    this.#combinedChords.clear();
+  }
+
+  /** What draws `entry`: itself, or the chord two voices were combined into. */
+  protected drawnEntryOf(entry: NoteOrChordElementType): HTMLElement {
+    return this.#combinedChords.get(entry) ?? entry;
   }
 
   // Builds the <music-chord> for an auto-combine group, fully assembled before
@@ -2768,6 +2816,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (combinedGroups.length > 0) {
         const combinedElements = combinedGroups.map((group) => {
           const chord = this.#synthesizeCombinedChord(group);
+          for (const { element } of group.members) {
+            this.#combinedChords.set(element, chord);
+          }
           if (
             group.members.every((member) =>
               this.#flutterTongued.has(member.element)
@@ -2991,6 +3042,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           }
         : null
     );
+    this.onNotesLaidOut();
+  }
+
+  /** Runs after the notes are laid out, on a render or a resize. */
+  protected onNotesLaidOut(): void {
+    // Only a staff with content of its own needs it.
   }
 
   #resolveChordStaffYCoordinates(
@@ -4122,11 +4179,36 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     index: number
   ): number {
     return (
-      this.#augmentationDotFootprint(state, index) +
+      Math.max(
+        this.#augmentationDotFootprint(state, index),
+        this.#headFootprint(state, index)
+      ) +
       (state.writtenTrillFootprints.get(index) ?? 0) +
       (state.trillFinishFootprints.get(index) ?? 0) +
       (this.#unisonReserves.get(voiceKey)?.get(index) ?? 0)
     );
+  }
+
+  // How far (px) a chord's displaced heads reach past its own SVG box.
+  #headFootprint(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    if (!isChordNodeName(element?.nodeName ?? '')) {
+      return 0;
+    }
+    const chord = element as ChordElementType;
+    const staffYCoordinates = state.chordStaffYCoords.get(chord) ?? [];
+    return staffYCoordinates.length < 2
+      ? 0
+      : Math.max(
+          0,
+          chordHeadExtentPx({
+            duration: chord.duration,
+            staffYCoordinates,
+            stemUp: state.stemDirections[index],
+            noFlags: chord.noFlags,
+            noteheads: chord.toneNoteheads,
+          }).right - NOTE_SVG_WIDTH
+        );
   }
 
   // How far (px) an entry's duration dots reach past its own SVG box. The
@@ -4190,21 +4272,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       hairpin?.to ?? null
     );
 
-    // A glyph head wider than the ellipse pushes everything drawn left of it
-    // further left (see noteHeadLeftOverhangPx).
-    if (extent > 0) {
-      extent += el.headLeftOverhangPx;
-    }
-
-    if (isChordNodeName(el.nodeName) && footprintArpeggio(el) !== null) {
-      // A cluster chord's leftward-displaced second head only clears the entry's
-      // SVG left edge once the arpeggio sign — positioned off that displaced
-      // head — is present; without a sign the displaced head stays inside the
-      // SVG's own left padding.
-      extent += chordLeftHeadDisplacementPx(el as ChordElementType);
-    }
-
-    return extent;
+    // A head wider than the ellipse, or a displaced one, pushes everything
+    // drawn left of it further left; alone, it may reach past its own box.
+    return extent > 0
+      ? extent + el.headLeftOverhangPx
+      : chordHeadsLeftReachPx(element);
   }
 
   // How far (px) an entry's own accidentals reach left of its box.
@@ -4297,8 +4369,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return columns;
   }
 
-  // A unison moves a part right of its beat x, so the next beat must leave
-  // room for it before it is placed: a trial layout finds each move and
+  // A unison, or a second between wide heads, moves a part right of its beat x,
+  // so the next beat must leave room for it before it is placed: a trial layout finds each move and
   // #rightwardFootprint reserves it on every voice's entry at that beat. Reserving room can move a
   // later unison's parts apart, changing what that one needs, so this repeats
   // until nothing changes; each pass settles at least one more column, in beat
@@ -4346,9 +4418,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       for (const column of columns) {
         const reserve = Math.max(
           0,
-          ...computeCrossVoiceDisplacements(column.placements)
-            .filter((displacement) => displacement.isUnison)
-            .map((displacement) => displacement.xOffset)
+          ...computeCrossVoiceDisplacements(column.placements).map(
+            ({ isUnison, voiceNumber, localIndex, xOffset }) => {
+              const geometry = column.placements.find(
+                (placement) =>
+                  placement.voiceNumber === voiceNumber &&
+                  placement.localIndex === localIndex
+              )?.geometry;
+              return isUnison || geometry === undefined
+                ? xOffset
+                : geometry.headRightX + xOffset - NOTE_SVG_WIDTH;
+            }
+          )
         );
         if (reserve === 0) {
           continue;
@@ -4505,7 +4586,16 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const describeRect = this.#describeContainer.getBoundingClientRect();
       describeEndX = describeRect.right - transcribeRect.left;
     }
-    this.#ownDescribeEndX = Math.round(this.#drawStartRepeat(describeEndX));
+    const startAreaEndX = this.#drawStartRepeat(describeEndX);
+    this.#ownDescribeEndX = Math.round(startAreaEndX);
+    // Ends where the measure's widest start area does, so a group's start
+    // repeats line up.
+    this.#startRepeatContainer.setAttribute(
+      'transform',
+      `translate(${
+        this.startRepeat === 'full' ? this.describeEndX - startAreaEndX : 0
+      } 0)`
+    );
     // A drawn end barline is wider than the plain one, and end-of-measure
     // warnings sit before it, so the notes stop short of both.
     const remainingWidth =
@@ -4924,7 +5014,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           null,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group),
+          this.#tupletSideOverride(state, group),
           (i) =>
             state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
         );
@@ -4966,7 +5056,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           outerBaseY,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group),
+          this.#tupletSideOverride(state, group),
           (i) =>
             state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
         );
@@ -5130,7 +5220,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         const inkTop =
           label.kind === 'tremolo'
             ? this.#entryOverlaps(otherState, j, span)
-              ? this.#techniqueLabelInkTopY(otherState, j)
+              ? this.#entryInkY(otherState, j, true) ??
+                this.#restInkY(otherState, j, true)
               : null
             : this.#inkTopUnderLabel(otherKey, otherState, j, span);
         if (inkTop !== null) {
@@ -5165,13 +5256,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             {
               from: {
                 x: openStart ? 0 : this.#headCenterX(state, startIndex),
-                y: this.#techniqueLabelInkTopY(state, startIndex) ?? y,
+                y: this.#entryInkY(state, startIndex, true) ?? y,
               },
               to: {
                 x: openEnd
                   ? this.#notesAreaEndX
                   : this.#headCenterX(state, endIndex),
-                y: this.#techniqueLabelInkTopY(state, endIndex) ?? y,
+                y: this.#entryInkY(state, endIndex, true) ?? y,
               },
               reachY: y,
               openStart,
@@ -5182,20 +5273,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         );
       }
       state.elements.forEach((element, i) => {
-        if (
-          element.nodeName === MUSIC_REST_NODE ||
-          state.stemDirections[i] ||
-          (element as NoteOrChordElementType).tie !== 'start'
-        ) {
-          return;
-        }
-        const headTop = this.#techniqueLabelInkTopY(state, i);
-        if (headTop === null) {
+        const y = this.#tieReachY(state, i, true);
+        if (y === null || (element as NoteOrChordElementType).tie !== 'start') {
           return;
         }
         const next = i + 1 < state.elements.length;
-        const y =
-          headTop + STAFF_Y_STEP - SLUR_NOTEHEAD_OFFSET_PX - TIE_REACH_PX;
         consider(
           lineTopUnder(
             { x: this.#headCenterX(state, i), y },
@@ -5227,9 +5309,64 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return tops.length === 0 ? null : Math.min(...tops);
   }
 
+  // How far (container Y) entry i's ties are expected to reach toward one side:
+  // a voice's own ties keep to its side, others curve away from the stem, and a
+  // chord's outward both ways. Null with none there.
+  #tieReachY(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const element = state.elements[i];
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      ((element as NoteOrChordElementType).tie ?? null) === null
+    ) {
+      return null;
+    }
+    const voiceSide = voiceSideOf(state);
+    const stemTowardSide = state.stemDirections[i] === above;
+    const reachesSide =
+      voiceSide === null
+        ? !stemTowardSide || isChordNodeName(element.nodeName)
+        : (voiceSide === 'above') === above;
+    const edge = stemTowardSide
+      ? this.#outerHeadEdgeY(state, i, above)
+      : this.#entryInkY(state, i, above);
+    return !reachesSide || edge === null
+      ? null
+      : edge +
+          (above ? -1 : 1) *
+            (SLUR_NOTEHEAD_OFFSET_PX + TIE_REACH_PX - STAFF_Y_STEP);
+  }
+
+  // The outer edge (container Y) of entry i's outermost head toward one side.
+  // Null for a rest.
+  #outerHeadEdgeY(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const headYs = getStaffYs(
+      state.elements[i],
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    if (headYs.length === 0) {
+      return null;
+    }
+    const headY = above ? Math.min(...headYs) : Math.max(...headYs);
+    return containerYOfStaffY(headY) + (above ? -1 : 1) * STAFF_Y_STEP;
+  }
+
   #headCenterX(state: VoiceRenderState, index: number): number {
+    const x = state.noteXPositions.get(index) ?? 0;
+    const shift = entryCenterShiftPx(state.elements[index]);
+    if (shift !== 0) {
+      return x + NOTE_SVG_WIDTH / 2 + shift;
+    }
     return (
-      (state.noteXPositions.get(index) ?? 0) +
+      x +
       (state.stemDirections[index]
         ? NOTE_HEAD_CX_STEM_UP_PX
         : NOTE_HEAD_CX_STEM_DOWN_PX)
@@ -5273,14 +5410,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           const rises = Math.min(...endHeads) < Math.min(...start.headYs);
           lines.push({
             from: {
-              x: this.#headCenterX(state, i) + NOTE_HEAD_RADIUS_PX,
+              x: this.#headCenterX(state, i) + entryHeadHalfWidthPx(element),
               y: rises ? Math.min(...start.headYs) : Math.max(...start.headYs),
             },
             to: {
               x:
                 endIndex < 0
                   ? this.#notesAreaEndX
-                  : this.#headCenterX(state, endIndex) - NOTE_HEAD_RADIUS_PX,
+                  : this.#headCenterX(state, endIndex) -
+                    entryHeadHalfWidthPx(state.elements[endIndex]),
               y: rises ? Math.max(...endHeads) : Math.min(...endHeads),
             },
             shape: start.source.glissandoShape,
@@ -5359,6 +5497,19 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return [];
   }
 
+  // The top (container Y) of entry j's rest; null for a note, or where the
+  // rest is hidden.
+  #restInkY(state: VoiceRenderState, j: number, above: boolean): number | null {
+    const element = state.elements[j];
+    return element.nodeName !== MUSIC_REST_NODE ||
+      element.hasAttribute('hidden') ||
+      element.style.visibility === 'hidden' ||
+      element.style.display === 'none'
+      ? null
+      : parseFloat(element.style.top || '0') +
+          (above ? restInkTopPx : restInkBottomPx)(element.duration);
+  }
+
   #entryOverlaps(
     state: VoiceRenderState,
     index: number,
@@ -5394,14 +5545,21 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const x = state.noteXPositions.get(j) ?? 0;
     const element = state.elements[j];
     if (element.nodeName === MUSIC_REST_NODE) {
-      return null;
+      consider(
+        {
+          left: x + NOTE_SVG_WIDTH / 2 - REST_HALF_WIDTH_PX,
+          right: x + NOTE_SVG_WIDTH / 2 + REST_HALF_WIDTH_PX,
+        },
+        this.#restInkY(state, j, true)
+      );
+      return tops.length === 0 ? null : Math.min(...tops);
     }
     const { headLeftX, headRightX } = this.#voicePartGeometry(
       element as NoteElementType | ChordElementType,
       getStaffYs(element, state.noteStaffYCoords, state.chordStaffYCoords)
     );
     const heads = { left: x + headLeftX, right: x + headRightX };
-    consider(heads, this.#techniqueLabelInkTopY(state, j));
+    consider(heads, this.#entryInkY(state, j, true));
     consider(heads, this.#aboveStaffDecorationTopY(voiceKey, state, j));
     const column = this.#accidentalColumn(state, j);
     for (const { accidental, headCenterY } of this.#shownAccidentals(
@@ -5419,7 +5577,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         left: graceRight - this.#entryLeftwardExtent(element),
         right: graceRight,
       },
-      this.#graceInkTopY(state, j)
+      this.#graceInkY(state, j, true)
     );
     const bendInk = this.#bendInk.get(element) ?? null;
     consider(bendInk, bendInk?.top ?? null);
@@ -5444,7 +5602,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
   // The top (container Y) of entry `index`'s leading grace notes, or null with
   // none.
-  #graceInkTopY(state: VoiceRenderState, index: number): number | null {
+  #graceInkY(
+    state: VoiceRenderState,
+    index: number,
+    above: boolean
+  ): number | null {
     const element = state.elements[index] as NoteElementType | ChordElementType;
     const { grace } = element;
     const [headStaffY] = getStaffYs(
@@ -5471,11 +5633,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       descriptors,
       element.resolvedGraceAccidentals
     );
-    return graceInkTopY(
-      descriptors,
-      element.graceDuration,
-      containerYOfStaffY(headStaffY)
-    );
+    return above
+      ? graceInkTopY(
+          descriptors,
+          element.graceDuration,
+          containerYOfStaffY(headStaffY)
+        )
+      : graceHeadsBottomY(descriptors, containerYOfStaffY(headStaffY));
   }
 
   // A label's baseline moved up past the placed labels it would overlap.
@@ -5725,7 +5889,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             if (x > right || x + NOTE_SVG_WIDTH < left) {
               continue;
             }
-            const inkTop = this.#techniqueLabelInkTopY(otherState, j);
+            const inkTop = this.#entryInkY(otherState, j, true);
             if (inkTop !== null) {
               bottom = Math.min(bottom, inkTop - BREATH_MARK_INK_GAP_PX);
             }
@@ -5801,12 +5965,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             HAIRPIN_DYNAMIC_GAP_PX,
       startMarking: element.dynamic,
       startBracketed: element.dynamicReminder,
-      startTextCenterX: x + NOTE_SVG_WIDTH / 2,
+      startTextCenterX: x + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
       endMarking: nextDynamic,
       endBracketed:
         nextDynamic !== null &&
         (nextElement as NoteOrChordElementType).dynamicReminder,
-      endTextCenterX: (nextX ?? 0) + NOTE_SVG_WIDTH / 2,
+      endTextCenterX:
+        (nextX ?? 0) +
+        NOTE_SVG_WIDTH / 2 +
+        (nextElement === null ? 0 : entryCenterShiftPx(nextElement)),
     });
   }
 
@@ -5860,9 +6027,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         xRange === null ||
         (x <= xRange.right && x + NOTE_SVG_WIDTH >= xRange.left)
       ) {
-        inkTopYs.push(
-          this.#techniqueLabelInkTopY(neighbour.state, neighbour.index)
-        );
+        inkTopYs.push(this.#entryInkY(neighbour.state, neighbour.index, true));
       }
     }
     // A beam across the gap joins two entries of one track.
@@ -5948,7 +6113,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     let top =
       STAFF_Y_PADDING + STAFF_TOP_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
     for (const y of [
-      this.#techniqueLabelInkTopY(state, i),
+      this.#entryInkY(state, i, true),
       this.#aboveStaffDecorationTopY(voiceKey, state, i),
     ]) {
       if (y !== null) {
@@ -6007,60 +6172,55 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return top;
   }
 
-  // Topmost ink (container Y) of entry i: its top head, then its up-stem, beam
-  // and tremolo numeral, a stemless head's strokes, or the marks above a
-  // down-stem head. Null for a rest.
-  #techniqueLabelInkTopY(state: VoiceRenderState, i: number): number | null {
-    const element = state.elements[i];
-    if (element.nodeName === MUSIC_REST_NODE) {
+  // Outermost ink (container Y) of entry i toward one side: its head there,
+  // then a stem pointing that way with its beam and tremolo numeral, a stemless
+  // head's strokes, or the marks past a head whose stem points away. Null for
+  // a rest.
+  #entryInkY(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const headEdgeY = this.#outerHeadEdgeY(state, i, above);
+    if (headEdgeY === null) {
       return null;
     }
-    const noteOrChord = element as NoteElementType | ChordElementType;
-    const headYs = getStaffYs(
-      element,
-      state.noteStaffYCoords,
-      state.chordStaffYCoords
-    );
-    if (headYs.length === 0) {
-      return null;
-    }
-    const topHeadY = Math.min(...headYs);
-    const topHeadCenterY =
-      STAFF_Y_PADDING + topHeadY - NOTE_HEAD_Y_OFFSET_CORRECTION;
-    let top = topHeadCenterY - STAFF_Y_STEP;
-    const stemUp = state.stemDirections[i];
-    if (isStemlessDuration(element.duration)) {
-      if (stemUp) {
-        top = Math.min(
-          top,
-          topHeadCenterY -
-            stemlessTremoloReachPx({
-              tremolo: noteOrChord.tremolo ?? null,
-              tuplet: noteOrChord.tremoloTuplet ?? null,
-              duration: element.duration,
-              headY: topHeadY,
-              stemUp,
-            })
+    const sign = above ? -1 : 1;
+    const headCenterY = headEdgeY - sign * STAFF_Y_STEP;
+    const noteOrChord = state.elements[i] as NoteElementType | ChordElementType;
+    const stemTowardSide = state.stemDirections[i] === above;
+    let reach = STAFF_Y_STEP;
+    if (isStemlessDuration(noteOrChord.duration)) {
+      if (stemTowardSide) {
+        reach = Math.max(
+          reach,
+          stemlessTremoloReachPx({
+            tremolo: noteOrChord.tremolo ?? null,
+            tuplet: noteOrChord.tremoloTuplet ?? null,
+            duration: noteOrChord.duration,
+            headY:
+              headCenterY + NOTE_HEAD_Y_OFFSET_CORRECTION - STAFF_Y_PADDING,
+            stemUp: above,
+          })
         );
       }
-    } else if (stemUp) {
-      const beamEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, true);
+    } else if (stemTowardSide) {
+      const beamEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, above);
       const tip =
         beamEdge !== null && beamEdge !== undefined
-          ? beamEdge - state.tremoloInkPastStemPx[i]
-          : this.#extremeStemTipY(state, [i], true);
+          ? beamEdge + sign * state.tremoloInkPastStemPx[i]
+          : this.#extremeStemTipY(state, [i], above);
       if (tip !== null) {
-        top = Math.min(top, tip);
+        reach = Math.max(reach, sign * (tip - headCenterY));
       }
     } else {
-      top = Math.min(
-        top,
-        topHeadCenterY -
-          articulationStackDepth(noteOrChord.articulation, noteOrChord.stress) *
-            NOTE_SCALE
+      reach = Math.max(
+        reach,
+        articulationStackDepth(noteOrChord.articulation, noteOrChord.stress) *
+          NOTE_SCALE
       );
     }
-    return top;
+    return headCenterY + sign * reach;
   }
 
   // Topmost Y (container) any of this voice's technique labels reaches. Null
@@ -6107,7 +6267,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         markingSide !== 'measure'
       ) {
         const noteX = state.noteXPositions.get(i) ?? 0;
-        const centerX = noteX + NOTE_SVG_WIDTH / 2;
+        const centerX =
+          noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
         container.appendChild(
           createDynamicMarkingSvg(
             noteOrChord.dynamic,
@@ -6670,7 +6831,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       return null;
     }
     const noteX = state.noteXPositions.get(index) ?? 0;
-    const xCenter = noteX + NOTE_SVG_WIDTH / 2;
+    const xCenter = noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
     if (isNoteNodeName(element.nodeName)) {
       const noteElement = element as NoteElementType;
       const rawY = this.noteToYCoordinate(
@@ -7187,7 +7348,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
       if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
         const overflow =
-          this.#dynamicsBaselineForSide(voiceKey, state, 'below') -
+          this.#dynamicsBaselineForSide(voiceKey, state, 'below') +
+          HAIRPIN_OPEN_HEIGHT / 2 -
           STAFF_TRANSCRIPTION_HEIGHT;
         if (overflow > 0) {
           budget = Math.max(budget, Math.ceil(overflow) + 2);
@@ -7275,7 +7437,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         TUPLET_NUMERAL_FONT_SIZE;
 
     const extremeStemTipY =
-      this.#tupletSideOverride(group) === null
+      this.#tupletSideOverride(state, group) === null
         ? this.#extremeStemTipY(state, group.indices, stemUp)
         : this.#forcedSideTupletExtremeY(state, group, stemUp);
 
@@ -7283,7 +7445,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // group hangs its numeral off the beam; any other draws a bracket past
     // the stem tips with the numeral centred on it.
     const bracketOmitted =
-      this.#tupletSideOverride(group) === null &&
+      this.#tupletSideOverride(state, group) === null &&
       group.indices.every(
         (i) =>
           state.beamedIndices.has(i) &&
@@ -7491,13 +7653,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Which side a tuplet group's bracket is forced to, if any — read by both
   // the render pass and #tupletExtremeY so the reserved space and the drawn
   // bracket agree. A cross-staff role outranks the wrapper's own `placement`,
-  // since the measure already folded both wrappers' placement into it.
-  #tupletSideOverride(group: TupletGroup): TupletPlacement | null {
+  // since the measure already folded both wrappers' placement into it. With
+  // lyrics below, a single voice's bracket keeps above.
+  #tupletSideOverride(
+    state: VoiceRenderState,
+    group: TupletGroup
+  ): TupletPlacement | null {
     const role = this.#crossStaffTupletRoles?.get(group.element);
     if (role !== undefined) {
       return role.rendering === 'suppressed' ? null : role.rendering;
     }
-    return group.element.placement;
+    const { placement } = group.element;
+    return placement === null &&
+      this.lyricsBelow &&
+      state.direction === null &&
+      !resolveTupletBracketAbove(group.indices, state.stemDirections, null)
+      ? 'above'
+      : placement;
   }
 
   #isTupletSuppressed(group: TupletGroup): boolean {
@@ -7511,7 +7683,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return resolveTupletBracketAbove(
       group.indices,
       state.stemDirections,
-      this.#tupletSideOverride(group)
+      this.#tupletSideOverride(state, group)
     );
   }
 
@@ -7593,8 +7765,100 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // With several voices, each voice's dynamics sit on its stem side. A single
   // voice and the synthetic tracks stay below.
   #dynamicsPlacedAbove(voiceKey: VoiceKey, state: VoiceRenderState): boolean {
-    return typeof voiceKey === 'number' && state.direction === 'up';
+    return (
+      this.lyricsBelow ||
+      (typeof voiceKey === 'number' && state.direction === 'up')
+    );
   }
+
+  /**
+   * Whether lyrics stand below the stave, so every voice's dynamics and a
+   * single voice's tuplet brackets go above.
+   */
+  protected get lyricsBelow(): boolean {
+    return false;
+  }
+
+  /**
+   * How far (local px) this staff's slurs and ties are expected to reach below
+   * its notes; they are drawn over it, outside its own ink. Null with none.
+   */
+  protected get connectorsBottomY(): number | null {
+    const ys = [...this.#voiceRenderStates.values()].flatMap((state) => [
+      this.#slurReachY(state, false),
+      ...state.elements.map((_, i) => this.#tieReachY(state, i, false)),
+    ]);
+    return ys.reduce(
+      (lowest, y) => (y === null ? lowest : Math.max(y, lowest ?? y)),
+      null
+    );
+  }
+
+  /** The side of the stave `element`'s own dynamics and hairpins go. */
+  dynamicsSideOf(element: Element): DynamicsSide {
+    const [first] = this.#voiceRenderStates;
+    const [voiceKey, state] =
+      [...this.#voiceRenderStates].find(([, { elements }]) =>
+        elements.includes(element as NoteChordOrRestElementType)
+      ) ??
+      first ??
+      [];
+    return voiceKey === undefined || state === undefined
+      ? this.lyricsBelow
+        ? 'above'
+        : 'below'
+      : this.#defaultDynamicsSide(voiceKey, state);
+  }
+
+  /**
+   * The dynamics row this staff's own music needs on one side, in local
+   * coordinates: the voices whose dynamics go there, else all of them.
+   */
+  ownDynamicsRowY(side: DynamicsSide): number {
+    const states = [...this.#voiceRenderStates];
+    const onSide = states.filter(
+      ([voiceKey, state]) => this.#defaultDynamicsSide(voiceKey, state) === side
+    );
+    const above = side === 'above';
+    return (onSide.length > 0 ? onSide : states).reduce(
+      (row, [, state]) =>
+        outermost([row, this.#dynamicsBaselineFor(state, above)], above),
+      above ? DYNAMICS_ABOVE_BASELINE_Y : DYNAMICS_BASELINE_Y
+    );
+  }
+
+  /** A row of `ownDynamicsRowY` in client coordinates. */
+  dynamicsRowToClientY(y: number): number {
+    const [first] = this.#voiceRenderStates;
+    return first === undefined
+      ? this.transcribeContainer.getBoundingClientRect().top + y
+      : this.#dynamicsLocalToClientY(first[0], y);
+  }
+
+  /**
+   * Set by the ancestor <music-composition>: the row (local coordinates) shared
+   * with the bars a hairpin joins this one to, so it is level with the
+   * markings at its ends. Compared by content.
+   */
+  get sharedDynamicsRows(): SharedDynamicsRows {
+    return this.#sharedDynamicsRows;
+  }
+
+  set sharedDynamicsRows(value: SharedDynamicsRows) {
+    const current = this.#sharedDynamicsRows;
+    const unchanged = (['above', 'below'] as const).every((side) => {
+      const [from, to] = [current[side], value[side]];
+      return from === undefined || to === undefined
+        ? from === to
+        : Math.abs(from - to) < DYNAMICS_ROW_EPSILON_PX;
+    });
+    if (unchanged) {
+      return;
+    }
+    this.#sharedDynamicsRows = value;
+    this.#renderNotes();
+  }
+
   #dynamicsLocalToClientY(voiceKey: VoiceKey, y: number): number {
     const matrix = this.#dynamicsContainers.get(voiceKey)?.getScreenCTM?.();
     if (matrix) {
@@ -7665,97 +7929,61 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
   }
 
-  // A row the measure forced to the side opposite this voice's own clears
-  // the notes' real stems: those stems point away from it, so the
-  // conservative every-stem-toward-this-side clamp would float it far
-  // from the notes.
+  // One row per voice and side, so several dynamics line up; every voice's
+  // where they all go above, and the bars' a hairpin joins.
   #dynamicsBaselineForSide(
     voiceKey: VoiceKey,
     state: VoiceRenderState,
     side: DynamicsSide
   ): number {
-    return this.#dynamicsBaselineFor(
-      state,
-      side === 'above',
-      side !== this.#defaultDynamicsSide(voiceKey, state)
-    );
+    const above = side === 'above';
+    const own =
+      this.lyricsBelow && above
+        ? this.ownDynamicsRowY(side)
+        : this.#dynamicsBaselineFor(state, above);
+    const shared =
+      side === this.#defaultDynamicsSide(voiceKey, state)
+        ? this.#sharedDynamicsRows[side]
+        : undefined;
+    return shared === undefined ? own : outermost([own, shared], above);
   }
 
-  // The outermost real extent of the voice toward one side: a stem tip where
-  // the stem points that way, otherwise the notehead's own edge.
-  #extremeRealExtentY(
-    state: VoiceRenderState,
-    placeAbove: boolean
-  ): number | null {
-    let extreme: number | null = null;
-    const consider = (y: number) => {
-      extreme =
-        extreme === null
-          ? y
-          : placeAbove
-          ? Math.min(extreme, y)
-          : Math.max(extreme, y);
-    };
-    state.elements.forEach((element, index) => {
-      if (element.nodeName === MUSIC_REST_NODE) {
-        return;
-      }
-      if (state.stemDirections[index] === placeAbove) {
-        const tip = this.#extremeStemTipY(state, [index], placeAbove);
-        if (tip !== null) {
-          consider(tip);
-        }
-        return;
-      }
-      const headYs = isNoteNodeName(element.nodeName)
-        ? [state.noteStaffYCoords.get(element as NoteElementType)]
-        : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
-      for (const headY of headYs) {
-        if (headY === undefined) {
-          continue;
-        }
-        const centerY = STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION;
-        consider(centerY + ((placeAbove ? -1 : 1) * STAFF_LINE_SPACING) / 2);
-      }
+  // The voice's own row toward one side, clear of everything it draws there.
+  #dynamicsBaselineFor(state: VoiceRenderState, above: boolean): number {
+    return dynamicsRowY({
+      above,
+      inkYs: state.elements.flatMap((_, i) =>
+        [
+          this.#entryInkY(state, i, above),
+          this.#restInkY(state, i, above),
+          ...this.#entryLeftInkYs(state, i, above),
+        ].filter((y): y is number => y !== null)
+      ),
+      curveYs: [
+        this.#slurReachY(state, above),
+        this.#tupletExtremeY(state, above, true),
+        this.#arrowAndBendReachY(state, above),
+        ...state.elements.map((_, i) => this.#tieReachY(state, i, above)),
+      ].filter((y): y is number => y !== null),
     });
-    return extreme;
   }
 
-  // The voice's dynamics baseline, clamped past its worst stem tip on that
-  // side as if every stem pointed there. One row per voice, so several
-  // dynamics line up.
-  #dynamicsBaselineFor(
+  // How far entry i's accidentals and grace notes reach toward one side.
+  #entryLeftInkYs(
     state: VoiceRenderState,
-    placeAbove: boolean,
-    realStems = false
-  ): number {
-    const extremeStemTipY = realStems
-      ? this.#extremeRealExtentY(state, placeAbove)
-      : this.#extremeStemTipY(state, state.elements.keys(), placeAbove);
-    const slurReachY = this.#slurReachY(state, placeAbove);
-
-    // The value is a text baseline, so add the glyph's reach
-    // (≈DYNAMICS_FONT_SIZE) toward the stem.
-    if (placeAbove) {
-      return Math.min(
-        DYNAMICS_ABOVE_BASELINE_Y,
-        extremeStemTipY === null
-          ? Infinity
-          : extremeStemTipY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING,
-        slurReachY === null
-          ? Infinity
-          : slurReachY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING / 2
-      );
+    i: number,
+    above: boolean
+  ): (number | null)[] {
+    if (state.elements[i].nodeName === MUSIC_REST_NODE) {
+      return [];
     }
-    return Math.max(
-      DYNAMICS_BASELINE_Y,
-      extremeStemTipY === null
-        ? -Infinity
-        : extremeStemTipY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING,
-      slurReachY === null
-        ? -Infinity
-        : slurReachY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING / 2
-    );
+    return [
+      ...this.#shownAccidentals(state, i).map(({ accidental, headCenterY }) => {
+        const extent = accidentalVerticalExtent(accidental);
+        return above ? headCenterY - extent.above : headCenterY + extent.below;
+      }),
+      this.#graceInkY(state, i, above),
+    ];
   }
 
   // How far this voice's same-staff slurs may reach toward one side: past
@@ -7808,7 +8036,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           (inner) =>
             inner.startIndex >= span.startIndex &&
             inner.endIndex <= span.endIndex
-        )
+        ),
+        voiceSideOf(state)
       );
       if (side === 'below') {
         belowSpans.push(span);
@@ -7916,5 +8145,6 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       })
     );
     this.drawConnectorsWhenStandalone();
+    this.onNotesLaidOut();
   }
 }

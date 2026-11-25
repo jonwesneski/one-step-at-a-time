@@ -6895,3 +6895,64 @@ test.describe(`${MUSIC_MEASURE} swells and hairpins on the same note`, () => {
     expect(await measureSwells(page)).toEqual([2, 1]);
   });
 });
+
+test.describe('barlines of a group', () => {
+  test('keep filling the gap between its staves as it grows', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.style.width = '600px';
+      host.innerHTML = `<music-measure>
+        <music-staff clef="treble" time="4/4" group="grand">
+          <music-note note="C" octave="5" duration="whole"></music-note>
+        </music-staff>
+        <music-staff clef="bass" time="4/4">
+          <music-note id="lower" note="C" octave="3" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>`;
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const read = () =>
+      page.evaluate(() => {
+        const measure = document.querySelector('music-measure');
+        const line = measure?.shadowRoot
+          ?.querySelector('.group-barline')
+          ?.getBoundingClientRect();
+        const staves = Array.from(
+          document.querySelectorAll('music-staff'),
+          (staff) =>
+            staff.shadowRoot
+              ?.querySelector('.staff-container')
+              ?.getBoundingClientRect()
+        );
+        if (!line || !staves[0] || !staves[1]) {
+          throw new Error('missing line or staff');
+        }
+        return {
+          gap: staves[1].top - staves[0].bottom,
+          above: line.top - staves[0].bottom,
+          below: staves[1].top - line.bottom,
+        };
+      });
+    const before = await read();
+    expect(before.above).toBeCloseTo(0, 0);
+    expect(before.below).toBeCloseTo(0, 0);
+
+    await page.evaluate(() => {
+      document
+        .getElementById('lower')
+        ?.setAttribute('glissando-label', 'a|b|c|d|e|f');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await read();
+    expect(after.above).toBeCloseTo(0, 0);
+    expect(after.below).toBeCloseTo(0, 0);
+    expect(after.gap).toBeGreaterThan(before.gap);
+  });
+});

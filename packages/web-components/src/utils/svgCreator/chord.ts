@@ -13,7 +13,11 @@ import {
   augmentationDotRowWidthPx,
   resolveChordDotStaffYs,
 } from '../../rules/augmentationDotRules';
-import { computeAdjacentDisplacements } from '../../rules/chordRules';
+import {
+  computeAdjacentDisplacements,
+  type HeadExtent,
+  type NoteDisplacement,
+} from '../../rules/chordRules';
 import type { ObstacleRect } from '../../rules/connectorPlacementRules';
 import {
   bendDotYs,
@@ -82,7 +86,6 @@ import {
   NOTE_SVG_WIDTH,
   noteHeadCenter,
   noteHeadGeometry,
-  noteHeadLeftOverhangPx,
   stemBeamJunctionPosition,
   stemTipPosition,
   TAIL_UP_WIDTH_PX,
@@ -187,14 +190,15 @@ export const createChordSvg = ({
     ? stemExtension
     : stemExtension + chordSpread;
 
-  const headLeftOverhang = Math.max(
-    0,
-    ...staffYCoordinates.map((_, i) =>
-      noteHeadLeftOverhangPx(stemUp, duration, noteheads[i] ?? 'normal')
-    )
-  );
-
-  const displacements = computeAdjacentDisplacements(staffYCoordinates, stemUp);
+  const headInput = {
+    duration,
+    staffYCoordinates,
+    stemUp,
+    noFlags,
+    noteheads,
+  };
+  const headLeftOverhang = chordHeadLeftOverhangPx(headInput);
+  const displacements = chordHeadDisplacements(headInput);
   const displacementMap = new Map(
     displacements.map((d) => [d.noteIndex, d.xOffset])
   );
@@ -857,7 +861,7 @@ export function chordAugmentationDotLayout({
   };
 }
 
-type ChordHeadExtentInput = {
+export type ChordHeadExtentInput = {
   duration: DurationType;
   staffYCoordinates: readonly number[];
   stemUp: boolean;
@@ -865,21 +869,11 @@ type ChordHeadExtentInput = {
   noteheads?: readonly NoteheadType[];
 };
 
-/** Left and right ink edges (chord-SVG px) of one tone's head, displaced or not. */
-export function chordToneHeadExtentPx(
-  {
-    duration,
-    staffYCoordinates,
-    stemUp,
-    noFlags,
-    noteheads = [],
-  }: ChordHeadExtentInput,
+// One tone's head in its undisplaced place.
+function undisplacedHeadExtentPx(
+  { duration, stemUp, noFlags, noteheads = [] }: ChordHeadExtentInput,
   toneIndex: number
-): { left: number; right: number } {
-  const shift =
-    computeAdjacentDisplacements([...staffYCoordinates], stemUp).find(
-      (displacement) => displacement.noteIndex === toneIndex
-    )?.xOffset ?? 0;
+): HeadExtent {
   const { cx, halfWidth } = noteHeadGeometry(
     stemUp,
     duration,
@@ -887,9 +881,35 @@ export function chordToneHeadExtentPx(
     noteheads[toneIndex] ?? 'normal'
   );
   return {
-    left: (cx - halfWidth) * NOTE_SCALE + shift,
-    right: (cx + halfWidth) * NOTE_SCALE + shift,
+    left: (cx - halfWidth) * NOTE_SCALE,
+    right: (cx + halfWidth) * NOTE_SCALE,
   };
+}
+
+/** The heads a chord moves aside, each clear of the head a step from it. */
+export function chordHeadDisplacements(
+  input: ChordHeadExtentInput
+): NoteDisplacement[] {
+  return computeAdjacentDisplacements(
+    input.staffYCoordinates,
+    input.stemUp,
+    input.staffYCoordinates.map((_, index) =>
+      undisplacedHeadExtentPx(input, index)
+    )
+  );
+}
+
+/** Left and right ink edges (chord-SVG px) of one tone's head, displaced or not. */
+export function chordToneHeadExtentPx(
+  input: ChordHeadExtentInput,
+  toneIndex: number
+): HeadExtent {
+  const shift =
+    chordHeadDisplacements(input).find(
+      (displacement) => displacement.noteIndex === toneIndex
+    )?.xOffset ?? 0;
+  const { left, right } = undisplacedHeadExtentPx(input, toneIndex);
+  return { left: left + shift, right: right + shift };
 }
 
 // Centre Y (chord-SVG px) of the head at staffY, as createChordSvg places it.
@@ -906,6 +926,22 @@ export function chordToneHeadCenterY(
     staffY -
     computeYHeadOffset(stemUp, base, noFlags) +
     noteHeadGeometry(stemUp, base, noFlags, notehead).cy * NOTE_SCALE
+  );
+}
+
+/**
+ * How far (px) a chord's heads, displaced ones included, reach left of where
+ * an ellipse's left edge would be; what is drawn left of the heads moves left
+ * by it.
+ */
+export function chordHeadLeftOverhangPx(input: ChordHeadExtentInput): number {
+  if (input.staffYCoordinates.length === 0) {
+    return 0;
+  }
+  const plain = noteHeadGeometry(input.stemUp, input.duration, input.noFlags);
+  return Math.max(
+    0,
+    (plain.cx - plain.halfWidth) * NOTE_SCALE - chordHeadExtentPx(input).left
   );
 }
 

@@ -925,7 +925,8 @@ export function noteHeadGeometry(
   const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
   const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
   const cy = stemUp ? yStemEnd : HEAD_WIDTH;
-  const ellipseCx = stemUp ? xStart - 10 : xStart + STEM_WIDTH;
+  const upStemEllipseCx = xStart - 10;
+  const ellipseCx = stemUp ? upStemEllipseCx : xStart + STEM_WIDTH;
   const glyph = resolveNoteheadGlyph(notehead, duration);
   if (!glyph) {
     return {
@@ -945,7 +946,13 @@ export function noteHeadGeometry(
     stemWidth: STEM_WIDTH,
     cy,
     unitsPerPx: 1 / NOTE_SCALE,
-    centreX: isStemlessDuration(duration) ? ellipseCx : undefined,
+    // A semibreve has no stem to stand on either side of, so it starts where
+    // an up-stem ellipse does, whichever way its voice's stems point.
+    ...(glyph === 'whole'
+      ? { leftX: upStemEllipseCx - HEAD_WIDTH }
+      : isStemlessDuration(duration)
+      ? { centreX: ellipseCx }
+      : {}),
   });
   return {
     cx: placement.cx,
@@ -972,6 +979,18 @@ export function noteHeadLeftOverhangPx(
     0,
     (ellipse.cx - ellipse.halfWidth - (head.cx - head.halfWidth)) * NOTE_SCALE
   );
+}
+
+// How far (px) right of the note's box centre a semibreve is centred; every
+// other head is taken to be at the box's centre.
+export function noteHeadCenterShiftPx(
+  duration: DurationType,
+  notehead: NoteheadType = 'normal'
+): number {
+  return resolveNoteheadGlyph(notehead, duration) === 'whole'
+    ? noteHeadGeometry(true, duration, false, notehead).cx * NOTE_SCALE -
+        NOTE_SVG_WIDTH / 2
+    : 0;
 }
 
 // The stem tip (600-unit space), as createNoteSvg draws it.

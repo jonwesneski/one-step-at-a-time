@@ -28,11 +28,13 @@ import {
   MIN_NOTE_WIDTH,
   ORNAMENT_SLUR_MAX_BULGE_PX,
 } from '../utils/notationDimensions';
+import { chordToneHeadExtentPx } from '../utils/svgCreator/chord';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_SCALE,
   NOTE_SVG_WIDTH,
+  noteHeadGeometry,
 } from '../utils/svgCreator/note';
 import './index';
 
@@ -1418,6 +1420,26 @@ describe('staff integration', () => {
       expect(x2 - x1).toBeGreaterThan(ADJACENT_NOTE_X_DISPLACEMENT_PX + 14);
     });
 
+    it('runs a ledger line through a displaced head on it', () => {
+      const staff = makeStaff();
+      // B3 hangs below the C4 line, on which the displaced head stands.
+      const chord = renderChordByNotes(staff, [
+        { value: 'B', octave: 3 },
+        { value: 'C', octave: 4 },
+      ]);
+      const [line] = chord.shadowRoot!.querySelectorAll('.ledger-line');
+      const { right } = chordToneHeadExtentPx(
+        {
+          duration: chord.duration,
+          staffYCoordinates: chord.staffYCoordinates!,
+          stemUp: chord.stemUp,
+          noFlags: chord.noFlags,
+        },
+        1
+      );
+      expect(parseFloat(line.getAttribute('x2')!)).toBeGreaterThan(right);
+    });
+
     it('renders a narrower single-width ledger line for C4 alone than the double-width C4+D4 line', () => {
       const staff = makeStaff();
 
@@ -1974,7 +1996,7 @@ describe(`${MUSIC_CHORD} tremolo`, () => {
     expect(strokes).toHaveLength(3);
     const xs = strokes[0].map(([x]) => x);
     expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(
-      NOTE_HEAD_CX_STEM_DOWN_PX
+      noteHeadGeometry(false, 'whole', false).cx * NOTE_SCALE
     );
   });
 

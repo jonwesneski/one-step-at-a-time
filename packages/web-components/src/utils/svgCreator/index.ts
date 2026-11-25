@@ -84,6 +84,7 @@ export {
   computeYHeadOffset,
   createNoteSvg,
   noteHeadCenter,
+  noteHeadCenterShiftPx,
   noteHeadGeometry,
   noteHeadLeftOverhangPx,
   stemUpTipYPx,

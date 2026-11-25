@@ -19,6 +19,22 @@ import {
 } from './connectorPlacementRules';
 import { dynamicTextHalfWidth, type HairpinEndpoint } from './dynamicsRules';
 
+export type BarSpan = { from: number; to: number };
+
+/** Spans of bars sharing any bar joined into one, in order. */
+export function joinBarSpans(spans: readonly BarSpan[]): BarSpan[] {
+  const joined: BarSpan[] = [];
+  for (const { from, to } of [...spans].sort((a, b) => a.from - b.from)) {
+    const last = joined[joined.length - 1];
+    if (last !== undefined && from <= last.to) {
+      last.to = Math.max(last.to, to);
+    } else {
+      joined.push({ from, to });
+    }
+  }
+  return joined;
+}
+
 export type HairpinPoint = { x: number; y: number };
 
 export type HairpinEdge = [HairpinPoint, HairpinPoint];
@@ -79,6 +95,11 @@ function hairpinEndSpreads(
 }
 
 export type DynamicsSide = 'above' | 'below';
+
+/** A dynamics row per side, in a staff's local coordinates. */
+export type SharedDynamicsRows = Readonly<
+  Partial<Record<DynamicsSide, number>>
+>;
 
 // 'measure' means the ancestor measure draws it; 'above'/'below' force the
 // staff's own row to that side of the stave.

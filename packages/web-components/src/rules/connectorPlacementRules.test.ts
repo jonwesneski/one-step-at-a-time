@@ -27,6 +27,7 @@ import {
   slurSpans,
   slurStyleWarning,
   untiltedStemEndY,
+  voiceCurveSide,
 } from './connectorPlacementRules';
 
 const rect = (
@@ -44,6 +45,25 @@ describe('pickStemSide', () => {
 
   it('always curves above for guitar tab', () => {
     expect(pickStemSide({ stemUp: true, isGuitarNote: true })).toBe('above');
+  });
+});
+
+describe('voiceCurveSide', () => {
+  it('has no say with one voice on the staff', () => {
+    expect(voiceCurveSide(0, 0, true)).toBeNull();
+    expect(voiceCurveSide(0, 1, true)).toBeNull();
+  });
+
+  it('puts voice 1 above and voice 2 below, whichever way the stems point', () => {
+    for (const stemUp of [true, false]) {
+      expect(voiceCurveSide(0, 2, stemUp)).toBe('above');
+      expect(voiceCurveSide(1, 2, stemUp)).toBe('below');
+    }
+  });
+
+  it('follows the stem in voice 3', () => {
+    expect(voiceCurveSide(2, 3, true)).toBe('above');
+    expect(voiceCurveSide(2, 3, false)).toBe('below');
   });
 });
 
@@ -620,6 +640,11 @@ describe('pickSlurSide', () => {
   it('goes opposite stems that all agree', () => {
     expect(pickSlurSide([up, upBeamed, up], false)).toBe('below');
     expect(pickSlurSide([down, downBeamed], false)).toBe('above');
+  });
+
+  it('goes to its voice’s side whatever the stems do', () => {
+    expect(pickSlurSide([up, up], false, 'above')).toBe('above');
+    expect(pickSlurSide([up, down], true, 'below')).toBe('below');
   });
 
   it('goes above mixed stems, whichever note comes first', () => {

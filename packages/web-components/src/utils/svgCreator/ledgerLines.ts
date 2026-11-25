@@ -1,3 +1,4 @@
+import type { HeadExtent } from '../../rules/chordRules';
 import { computeLedgerLines, LedgerLine } from '../../rules/staffNoteRules';
 import { SVG_NS } from '../consts';
 import { STAFF_LINE_THICKNESS_PX } from '../notationDimensions';
@@ -20,52 +21,58 @@ export function ledgerLineOverhangPx(
     : 0;
 }
 
+const ellipseHeadExtent = (stemUp: boolean): LedgerHeadExtent => {
+  const cxPx = stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX;
+  const left = cxPx - NOTE_HEAD_RADIUS_PX;
+  const right = cxPx + NOTE_HEAD_RADIUS_PX;
+  return {
+    cxPx,
+    halfWidthPx: NOTE_HEAD_RADIUS_PX,
+    all: stemUp
+      ? { left, right: right + ADJACENT_NOTE_X_DISPLACEMENT_PX }
+      : { left: left - ADJACENT_NOTE_X_DISPLACEMENT_PX, right },
+  };
+};
+
 // Horizontal extent of the head the ledger lines pass through, in the note
-// SVG's pixel space; defaults to the ellipse head.
-export type LedgerHeadExtent = { cxPx: number; halfWidthPx: number };
+// SVG's pixel space; defaults to the ellipse head. A double line spans `all`
+// the heads, a single one any displaced head it passes through (`tones`).
+export type LedgerHeadExtent = {
+  cxPx: number;
+  halfWidthPx: number;
+  all?: HeadExtent;
+  tones?: readonly (HeadExtent & { staffY: number })[];
+};
 
 export function createLedgerLineElements(
   ledgerLines: LedgerLine[],
   stemUp: boolean,
   staffYPadding: number,
-  head: LedgerHeadExtent = {
-    cxPx: stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX,
-    halfWidthPx: NOTE_HEAD_RADIUS_PX,
-  }
+  head: LedgerHeadExtent = ellipseHeadExtent(stemUp)
 ): SVGLineElement[] {
   const { cxPx, halfWidthPx } = head;
+  const single = { left: cxPx - halfWidthPx, right: cxPx + halfWidthPx };
   return ledgerLines.map((ledgerLine) => {
     const line = document.createElementNS(SVG_NS, 'line');
     line.classList.add('ledger-line');
 
     const svgY = staffYPadding + ledgerLine.staffY;
 
-    let x1: number;
-    let x2: number;
+    const spanned =
+      ledgerLine.widthType === 'double'
+        ? [head.all ?? single]
+        : [
+            single,
+            ...(head.tones ?? []).filter(
+              ({ staffY }) => staffY === ledgerLine.staffY
+            ),
+          ];
+    const left = Math.min(...spanned.map((extent) => extent.left));
+    const right = Math.max(...spanned.map((extent) => extent.right));
 
-    if (stemUp) {
-      x1 = cxPx - halfWidthPx - LEDGER_LINE_MARGIN;
-      x2 =
-        ledgerLine.widthType === 'double'
-          ? cxPx +
-            ADJACENT_NOTE_X_DISPLACEMENT_PX +
-            halfWidthPx +
-            LEDGER_LINE_MARGIN
-          : cxPx + halfWidthPx + LEDGER_LINE_MARGIN;
-    } else {
-      x2 = cxPx + halfWidthPx + LEDGER_LINE_MARGIN;
-      x1 =
-        ledgerLine.widthType === 'double'
-          ? cxPx -
-            ADJACENT_NOTE_X_DISPLACEMENT_PX -
-            halfWidthPx -
-            LEDGER_LINE_MARGIN
-          : cxPx - halfWidthPx - LEDGER_LINE_MARGIN;
-    }
-
-    line.setAttribute('x1', x1.toString());
+    line.setAttribute('x1', (left - LEDGER_LINE_MARGIN).toString());
     line.setAttribute('y1', svgY.toString());
-    line.setAttribute('x2', x2.toString());
+    line.setAttribute('x2', (right + LEDGER_LINE_MARGIN).toString());
     line.setAttribute('y2', svgY.toString());
     line.setAttribute('stroke', 'currentColor');
     line.setAttribute('stroke-width', `${STAFF_LINE_THICKNESS_PX}`);

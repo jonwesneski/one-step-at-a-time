@@ -9,6 +9,7 @@ import {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
   OPPOSITE_STEM_ALIGN_OFFSET_PX,
 } from '../utils/svgCreator/note';
+import { adjacentHeadOffset } from './chordRules';
 import {
   computeCrossVoiceDisplacements,
   resolveCrossVoiceDotRows,
@@ -145,6 +146,10 @@ describe('computeCrossVoiceDisplacements', () => {
       stemX: 20,
       dotsRightEdgeX: null,
     };
+    const headExtent = {
+      left: geometry.headLeftX,
+      right: geometry.headRightX,
+    };
     function unisonPlacement(
       voiceNumber: VoiceNumber,
       direction: 'up' | 'down',
@@ -273,8 +278,8 @@ describe('computeCrossVoiceDisplacements', () => {
           staffYCoordinates: [50 - STAFF_Y_STEP],
         },
       ]);
-      expect(result.find((d) => d.voiceNumber === 1)?.xOffset).toBe(
-        ADJACENT_NOTE_X_DISPLACEMENT_PX
+      expect(result.find((d) => d.voiceNumber === 1)?.xOffset).toBeCloseTo(
+        adjacentHeadOffset(headExtent, headExtent)
       );
       expect(result.every((d) => d.overlappingSemibreves)).toBe(true);
     });

@@ -85,7 +85,6 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   noteHeadGeometry,
-  noteHeadLeftOverhangPx,
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
@@ -140,7 +139,13 @@ import {
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
 import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
-import { chordAugmentationDotLayout } from '../utils/svgCreator/chord';
+import type { LedgerHeadExtent } from '../utils/svgCreator';
+import {
+  chordAugmentationDotLayout,
+  chordHeadExtentPx,
+  chordHeadLeftOverhangPx,
+  chordToneHeadExtentPx,
+} from '../utils/svgCreator/chord';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 /**
@@ -805,20 +810,25 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
-  // The widest tone's overhang — see noteHeadLeftOverhangPx.
   get headLeftOverhangPx(): number {
-    return Math.max(
-      0,
-      ...this.toneNoteheads.map((notehead) =>
-        noteHeadLeftOverhangPx(this.#stemUp, this.duration, notehead)
-      )
+    return chordHeadLeftOverhangPx({
+      duration: this.duration,
+      staffYCoordinates: this.#resolvedStaffYCoordinates(),
+      stemUp: this.#stemUp,
+      noFlags: this.#noFlags,
+      noteheads: this.toneNoteheads,
+    });
+  }
+
+  #resolvedStaffYCoordinates(): number[] {
+    return (
+      this.#staffYCoordinates ??
+      (this.notes.length > 0 ? this.#resolveStandaloneYCoordinates() : [])
     );
   }
 
   get augmentationDotsRightEdgePx(): number | null {
-    const staffYCoordinates =
-      this.#staffYCoordinates ??
-      (this.notes.length > 0 ? this.#resolveStandaloneYCoordinates() : []);
+    const staffYCoordinates = this.#resolvedStaffYCoordinates();
     return (
       chordAugmentationDotLayout({
         duration: this.duration,
@@ -2034,7 +2044,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         this.#staffYCoordinates,
         this.#stemUp,
         STAFF_Y_PADDING - NOTE_HEAD_Y_OFFSET_CORRECTION,
-        this.#widestHeadExtent(toneNoteheads)
+        this.#ledgerHeadExtent(this.#staffYCoordinates, toneNoteheads)
       );
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
@@ -2173,10 +2183,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
   // Grace descriptors are relative to the chord's reference note (notes[0]).
   // Ledger lines span the widest head in the chord.
-  #widestHeadExtent(toneNoteheads: NoteheadType[]): {
-    cxPx: number;
-    halfWidthPx: number;
-  } {
+  #ledgerHeadExtent(
+    staffYCoordinates: readonly number[],
+    toneNoteheads: NoteheadType[]
+  ): LedgerHeadExtent {
     const geometries = (
       toneNoteheads.length > 0 ? toneNoteheads : (['normal'] as const)
     ).map((notehead) =>
@@ -2185,9 +2195,21 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     const widest = geometries.reduce((a, b) =>
       b.halfWidth > a.halfWidth ? b : a
     );
+    const heads = {
+      duration: this.duration,
+      staffYCoordinates,
+      stemUp: this.#stemUp,
+      noFlags: this.#noFlags,
+      noteheads: toneNoteheads,
+    };
     return {
       cxPx: widest.cx * NOTE_SCALE,
       halfWidthPx: widest.halfWidth * NOTE_SCALE,
+      all: chordHeadExtentPx(heads),
+      tones: staffYCoordinates.map((staffY, index) => ({
+        staffY,
+        ...chordToneHeadExtentPx(heads, index),
+      })),
     };
   }
 

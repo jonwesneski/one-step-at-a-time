@@ -27,6 +27,7 @@ import {
   slurAnchorKind,
   SlurStem,
   untiltedStemEndY,
+  voiceCurveSide,
 } from '../rules/connectorPlacementRules';
 import {
   type CrossStaffSlurShape,
@@ -93,6 +94,7 @@ import {
   SLUR_NOTEHEAD_OFFSET_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
   SLUR_STEM_END_CLEARANCE_PX,
+  TIE_BESIDE_HEAD_GAP_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
 import {
@@ -116,6 +118,7 @@ import {
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SVG_WIDTH,
+  noteHeadCenterShiftPx,
 } from './svgCreator/note';
 
 export type ConnectorKind =
@@ -207,15 +210,25 @@ export const collectNoteLikeElements = (
 // voice 2, 3rd = voice 3) — falls back to voice 1 when there is no
 // <music-voice> ancestor at all (the ordinary single-voice case).
 function resolveVoiceNumber(note: NoteLikeElementType): VoiceNumber {
+  return (resolveVoicePosition(note).index + 1) as VoiceNumber;
+}
+
+// A note's voice among its staff's, 0 of 0 outside any <music-voice>.
+function resolveVoicePosition(note: NoteLikeElementType): {
+  index: number;
+  count: number;
+} {
   const voiceElement = note.closest(MUSIC_VOICE);
   if (voiceElement === null || voiceElement.parentElement === null) {
-    return 1;
+    return { index: 0, count: 0 };
   }
   const siblingVoices = Array.from(voiceElement.parentElement.children).filter(
     (child) => child.nodeName === MUSIC_VOICE_NODE
   );
-  const position = siblingVoices.indexOf(voiceElement);
-  return ((position === -1 ? 0 : position) + 1) as VoiceNumber;
+  return {
+    index: Math.max(0, siblingVoices.indexOf(voiceElement)),
+    count: siblingVoices.length,
+  };
 }
 
 // Groups note-like elements by voice, so pairConnectors' LIFO fallback never
@@ -609,6 +622,23 @@ const getRowTop = (note: NoteLikeElementType, rootRect: DOMRect): number => {
 // it without overlapping.
 const TIE_NOTEHEAD_OFFSET_PX = 5;
 
+// How far a note's head, or a chord's first, is centred right of an ellipse's
+// place.
+const headCenterShiftPx = (note: NoteLikeElementType): number => {
+  if (isChordNodeName(note.tagName)) {
+    const { duration, toneNoteheads } = note as unknown as ChordElementType;
+    return noteHeadCenterShiftPx(duration, toneNoteheads?.[0]);
+  }
+  if (!isNoteNodeName(note.tagName)) {
+    return 0;
+  }
+  const { duration } = stemSourceOf(note) as unknown as NoteElementType;
+  return noteHeadCenterShiftPx(
+    duration,
+    (note as unknown as NoteElementType).notehead
+  );
+};
+
 const computeAnchorAtSpecificY = (
   note: NoteLikeElementType,
   rootRect: DOMRect,
@@ -617,7 +647,8 @@ const computeAnchorAtSpecificY = (
   noteheadOffsetPx: number
 ): Anchor => {
   const rect = note.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2 - rootRect.left;
+  const centerX =
+    rect.left + rect.width / 2 + headCenterShiftPx(note) - rootRect.left;
   const edgeOffset = bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
   return {
     x: centerX,
@@ -651,7 +682,11 @@ const computeAnchor = (
       const edgeOffset =
         bulge === 'above' ? -noteheadOffsetPx : noteheadOffsetPx;
       return {
-        x: chordRect.left + chordRect.width / 2 - rootRect.left,
+        x:
+          chordRect.left +
+          chordRect.width / 2 +
+          headCenterShiftPx(note) -
+          rootRect.left,
         y: chordRect.top - rootRect.top + yCoords[noteIndex] + edgeOffset,
         rowTop: getRowTop(chord as unknown as NoteLikeElementType, rootRect),
       };
@@ -659,7 +694,8 @@ const computeAnchor = (
   }
 
   const rect = note.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2 - rootRect.left;
+  const centerX =
+    rect.left + rect.width / 2 + headCenterShiftPx(note) - rootRect.left;
 
   // Guitar notes render their fret text at the top of the element box;
   // apply the notehead offset directly from rect.top so the curve clears the number.
@@ -1060,8 +1096,59 @@ const pickBulge = (note: NoteLikeElementType): CurveBulge =>
 const pickChordNoteBulge = (
   chord: NoteLikeElementType,
   yCoords: readonly number[],
-  index: number
-): CurveBulge => pickChordToneSide(yCoords, index, pickBulge(chord));
+  index: number,
+  voiceSide: CurveBulge | null
+): CurveBulge =>
+  pickChordToneSide(yCoords, index, voiceSide ?? pickBulge(chord));
+
+// The side of a tie's or slur's voice, from whichever of its notes shares its
+// staff with another voice (the rest of them may be in bars where it's alone).
+// A double-stemmed member's stem follows its shared beam instead.
+const voiceSideOf = (notes: readonly Element[]): CurveBulge | null => {
+  for (const note of notes) {
+    const source = stemSourceOf(note as NoteLikeElementType);
+    if (source.hasAttribute('beam-group')) {
+      return null;
+    }
+    const { index, count } = resolveVoicePosition(source);
+    const { stemUp } = source as NoteElementType | ChordElementType;
+    const side = voiceCurveSide(index, count, stemUp);
+    if (side !== null) {
+      return side;
+    }
+  }
+  return null;
+};
+
+// A tie end beside its head, and beside its stem when that points to the tie's
+// side.
+const besideHead = (
+  note: NoteLikeElementType,
+  anchor: Anchor,
+  side: CurveBulge,
+  isStart: boolean,
+  rootRect: DOMRect,
+  toneIndex = 0
+): Anchor => {
+  const source = stemSourceOf(note);
+  const stemInTheWay =
+    (source as NoteElementType | ChordElementType).stemUp ===
+    (side === 'above');
+  const head = shadowRects(note, '.head', rootRect)[toneIndex];
+  const ink = [
+    head ?? {
+      left: anchor.x - NOTE_HEAD_RADIUS_PX,
+      right: anchor.x + NOTE_HEAD_RADIUS_PX,
+    },
+    ...(stemInTheWay ? shadowRects(source, '.stem', rootRect) : []),
+  ];
+  return {
+    ...anchor,
+    x: isStart
+      ? Math.max(...ink.map(({ right }) => right)) + TIE_BESIDE_HEAD_GAP_PX
+      : Math.min(...ink.map(({ left }) => left)) - TIE_BESIDE_HEAD_GAP_PX,
+  };
+};
 
 // True when element is an inner voice of a double-stemmed group: on a staff
 // with two or more <music-voice> children, and not voice 1 (the outer
@@ -1927,7 +2014,18 @@ export const buildConnectorSvgs = (
       ![pair.start, pair.end].some((note) => innerVoiceElements?.has(note));
     const covered = isStaffSlur ? slurEntries(pair, entriesByRoot) : [];
     const coveredStems = covered.map(slurStemOf);
-    const mixedStems = isStaffSlur && hasMixedStems(coveredStems);
+    const voiceSide =
+      isStaffSlur || pair.kind === 'tie'
+        ? voiceSideOf(isStaffSlur ? covered : [pair.start, pair.end])
+        : null;
+    // A slur that may have stems on its own side.
+    const passesStems =
+      isStaffSlur &&
+      (voiceSide === null
+        ? hasMixedStems(coveredStems)
+        : coveredStems.some(
+            ({ stemUp }) => stemUp === (voiceSide === 'above')
+          ));
     const startBulge = isStaffSlur
       ? pickSlurSide(
           coveredStems,
@@ -1935,10 +2033,12 @@ export const buildConnectorSvgs = (
             ({ arc, entries }) =>
               arc.side === 'below' &&
               entries.every((entry) => covered.includes(entry))
-          )
+          ),
+          voiceSide
         )
-      : pickBulge(pair.start);
-    const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
+      : voiceSide ?? pickBulge(pair.start);
+    const endBulge =
+      pair.kind === 'tie' ? voiceSide ?? pickBulge(pair.end) : startBulge;
     const style = pair.kind === 'slide' ? 'straight' : 'smooth';
     const label = CONNECTOR_LABELS[pair.kind];
 
@@ -1949,7 +2049,7 @@ export const buildConnectorSvgs = (
         (pair.start as unknown as ChordElementType).staffYCoordinates ?? [];
       const lvBulge =
         isChord && coords.length > 1 && pair.lvToneIndex !== undefined
-          ? pickChordNoteBulge(pair.start, coords, pair.lvToneIndex)
+          ? pickChordNoteBulge(pair.start, coords, pair.lvToneIndex, voiceSide)
           : startBulge;
       const anchor =
         isChord && pair.lvToneIndex !== undefined
@@ -1964,7 +2064,8 @@ export const buildConnectorSvgs = (
               pair.start,
               rootRect,
               lvBulge,
-              TIE_NOTEHEAD_OFFSET_PX
+              TIE_NOTEHEAD_OFFSET_PX,
+              voiceSide !== null
             );
       elements.push(
         createOpenTieSvg({
@@ -1986,13 +2087,16 @@ export const buildConnectorSvgs = (
         (pair.end as unknown as ChordElementType).staffYCoordinates ?? [];
       const toneBulge =
         endCoords.length > 1
-          ? pickChordNoteBulge(pair.end, endCoords, toneIndex)
+          ? pickChordNoteBulge(pair.end, endCoords, toneIndex, voiceSide)
           : startBulge;
-      const startAnchor = computeAnchor(
-        pair.start,
-        rootRect,
-        toneBulge,
-        TIE_NOTEHEAD_OFFSET_PX
+      const startAnchors = [true, false].map((sideAware) =>
+        computeAnchor(
+          pair.start,
+          rootRect,
+          toneBulge,
+          TIE_NOTEHEAD_OFFSET_PX,
+          sideAware
+        )
       );
       const endAnchor = computeChordToneAnchor(
         pair.end,
@@ -2010,16 +2114,21 @@ export const buildConnectorSvgs = (
           .map((runNote) => noteheadCenter(runNote, rootRect)),
       ];
 
-      if (
-        isCurveObscured(
-          startAnchor,
-          endAnchor,
-          toneBulge,
-          DEFAULT_BULGE_HEIGHT,
-          obstacles,
-          ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX
-        )
-      ) {
+      // From the tie's side of the head, else from the far side where only
+      // that keeps the tie whole.
+      const unobscured = startAnchors.find(
+        (anchor) =>
+          !isCurveObscured(
+            anchor,
+            endAnchor,
+            toneBulge,
+            DEFAULT_BULGE_HEIGHT,
+            obstacles,
+            ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX
+          )
+      );
+      const startAnchor = unobscured ?? startAnchors[0];
+      if (unobscured === undefined) {
         const halfSpan = Math.abs(endAnchor.x - startAnchor.x) / 2;
         const stubLength = Math.max(
           2,
@@ -2073,22 +2182,50 @@ export const buildConnectorSvgs = (
       const count = Math.min(startCoords.length, endCoords.length);
 
       for (let i = 0; i < count; i++) {
-        const noteBulge = pickChordNoteBulge(pair.start, startCoords, i);
-        const noteEndBulge = pickChordNoteBulge(pair.end, endCoords, i);
-        const startAnchor = computeAnchorAtSpecificY(
+        const noteBulge = pickChordNoteBulge(
+          pair.start,
+          startCoords,
+          i,
+          voiceSide
+        );
+        const noteEndBulge = pickChordNoteBulge(
+          pair.end,
+          endCoords,
+          i,
+          voiceSide
+        );
+        let startAnchor = computeAnchorAtSpecificY(
           pair.start,
           rootRect,
           noteBulge,
           startCoords[i],
           TIE_NOTEHEAD_OFFSET_PX
         );
-        const endAnchor = computeAnchorAtSpecificY(
+        let endAnchor = computeAnchorAtSpecificY(
           pair.end,
           rootRect,
           noteEndBulge,
           endCoords[i],
           TIE_NOTEHEAD_OFFSET_PX
         );
+        if (noteBulge === voiceSide) {
+          startAnchor = besideHead(
+            pair.start,
+            startAnchor,
+            noteBulge,
+            true,
+            rootRect,
+            i
+          );
+          endAnchor = besideHead(
+            pair.end,
+            endAnchor,
+            noteBulge,
+            false,
+            rootRect,
+            i
+          );
+        }
 
         if (sameRow(startAnchor, endAnchor)) {
           elements.push(
@@ -2124,7 +2261,7 @@ export const buildConnectorSvgs = (
       continue;
     }
 
-    const staffInk = mixedStems ? staffInkRectsOf(covered, rootRect) : [];
+    const staffInk = passesStems ? staffInkRectsOf(covered, rootRect) : [];
     const noteheadOffsetPx =
       pair.kind === 'slur' ? SLUR_NOTEHEAD_OFFSET_PX : TIE_NOTEHEAD_OFFSET_PX;
 
@@ -2136,7 +2273,13 @@ export const buildConnectorSvgs = (
       note: NoteLikeElementType,
       bulge: CurveBulge
     ): Anchor => {
-      const notehead = computeAnchor(note, rootRect, bulge, noteheadOffsetPx);
+      const notehead = computeAnchor(
+        note,
+        rootRect,
+        bulge,
+        noteheadOffsetPx,
+        voiceSide !== null
+      );
       if (pair.kind !== 'slur') {
         return notehead;
       }
@@ -2216,7 +2359,7 @@ export const buildConnectorSvgs = (
       other: NoteLikeElementType,
       bulge: CurveBulge
     ): Anchor =>
-      mixedStems
+      passesStems
         ? resolveMixedStemAnchor(note, other, bulge)
         : resolveSlurAwareAnchor(note, bulge);
 
@@ -2232,7 +2375,7 @@ export const buildConnectorSvgs = (
               ...articulationRectsOf(note, rootRect).map((rect) =>
                 inflateRect(rect, SLUR_ARTICULATION_CLEARANCE_PX)
               ),
-              ...noteInkRectsOf(note, rootRect, mixedStems).map((rect) =>
+              ...noteInkRectsOf(note, rootRect, passesStems).map((rect) =>
                 inflateRect(rect, SLUR_NOTE_CLEARANCE_PX)
               ),
             ].map((rect) => ({ rect, rowTop }));
@@ -2293,11 +2436,22 @@ export const buildConnectorSvgs = (
       }
     };
 
-    const startAnchor = resolveAnchor(pair.start, pair.end, startBulge);
+    let startAnchor = resolveAnchor(pair.start, pair.end, startBulge);
+    let endAnchor = resolveAnchor(pair.end, pair.start, endBulge);
     if (pair.kind === 'tie') {
-      startAnchor.x += tieStartNudgePx(pair.start);
+      const nudgedX = startAnchor.x + tieStartNudgePx(pair.start);
+      if (voiceSide !== null) {
+        startAnchor = besideHead(
+          pair.start,
+          startAnchor,
+          voiceSide,
+          true,
+          rootRect
+        );
+        endAnchor = besideHead(pair.end, endAnchor, voiceSide, false, rootRect);
+      }
+      startAnchor = { ...startAnchor, x: Math.max(startAnchor.x, nudgedX) };
     }
-    const endAnchor = resolveAnchor(pair.end, pair.start, endBulge);
 
     if (sameRow(startAnchor, endAnchor)) {
       const baseBulgeHeight =

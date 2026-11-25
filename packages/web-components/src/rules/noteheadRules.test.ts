@@ -17,7 +17,8 @@ import {
 describe('resolveNoteheadGlyph', () => {
   const cases: [NoteheadType, DurationType, string | null][] = [
     ['normal', 'quarter', null],
-    ['normal', 'whole', null],
+    ['normal', 'whole', 'whole'],
+    ['normal', 'double-whole', 'whole'],
     ['x', 'eighth', 'x'],
     ['x', 'quarter', 'x'],
     ['x', 'half', 'circle-x'],

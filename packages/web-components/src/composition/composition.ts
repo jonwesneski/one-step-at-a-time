@@ -28,9 +28,13 @@ import {
   resolveFlutterPassages,
 } from '../rules/flutterTongueRules';
 import {
+  type BarSpan,
+  type DynamicsSide,
   dynamicTextCenterClearOfStems,
   type HairpinEndpointText,
+  joinBarSpans,
   resolveSharedHairpinY,
+  type SharedDynamicsRows,
 } from '../rules/hairpinPlacementRules';
 import {
   type EndWarnings,
@@ -113,6 +117,7 @@ import {
   isChordNodeName,
   isNoteNodeName,
   isStaffNodeName,
+  LYRICS_EVENTS,
   MEASURE_EVENTS,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -127,7 +132,6 @@ import {
 import {
   COMPOSITION_MAX_WIDTH_PX,
   CONTINUED_CONNECTOR_LEAD_PX,
-  DYNAMICS_BASELINE_Y,
   HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
@@ -262,6 +266,26 @@ type OctaveRowSource = HTMLElement & {
 // hooks above.
 type FlutterCarryInTarget = HTMLElement & {
   flutterCarryIn?: ReadonlySet<VoiceNumber>;
+};
+
+// A notation staff's dynamics rows, duck-typed like the octave hooks above.
+type DynamicsRowStaff = HTMLElement & {
+  dynamicsSideOf?: (element: Element) => DynamicsSide;
+  ownDynamicsRowY?: (side: DynamicsSide) => number;
+  dynamicsRowToClientY?: (y: number) => number;
+  sharedDynamicsRows?: SharedDynamicsRows;
+};
+
+// A vocal staff's lyric line, duck-typed the same way.
+type LyricStaff = HTMLElement & {
+  ownLyricsRowY?: number | null;
+  alignLyricsRow?: (y: number | null) => boolean;
+};
+
+type CrossMeasureHairpin = {
+  kind: HairpinKind;
+  startElement: NoteOrChordElementType;
+  endElement: NoteOrChordElementType;
 };
 
 // <music-measure>'s continuation hand-off and a staff's octave breaks,
@@ -575,6 +599,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           this.#boundRepeatAttributeChange,
         ],
         [BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [LYRICS_EVENTS.CHANGE, this.#boundRedraw],
       ];
     }
 
@@ -630,6 +655,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         const octaveContinuations = this.#resolveOctaveContinuations();
         this.#applyOctaveRowHeights(octaveContinuations);
         this.#applyOctaveContinuationCoverage(octaveContinuations);
+        const lyricsMoved = this.#alignLyricsRows();
+        if (this.#shareHairpinRows() || lyricsMoved) {
+          this.#alignRowStaffSpace();
+        }
         this.#redrawConnectors();
         if (this.#reserveRowOverlaySpace()) {
           this.#redrawConnectors();
@@ -720,6 +749,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       }
       this.#rowAlignedStaves = alignedStaves;
+    }
+
+    // Puts the lyrics of every bar of a system on one line, the lowest any of
+    // them needs. Returns whether any line moved.
+    #alignLyricsRows(): boolean {
+      let changed = false;
+      for (const track of this.#buildStaffTracks()) {
+        const rowYs = new Map<number, number>();
+        for (const { staff, rowIndex } of track) {
+          const own = (staff as LyricStaff).ownLyricsRowY ?? null;
+          if (own !== null) {
+            rowYs.set(rowIndex, Math.max(own, rowYs.get(rowIndex) ?? own));
+          }
+        }
+        for (const { staff, rowIndex } of track) {
+          changed =
+            (staff as LyricStaff).alignLyricsRow?.(
+              rowYs.get(rowIndex) ?? null
+            ) || changed;
+        }
+      }
+      return changed;
     }
 
     // Groups measures into visual rows by top-position (5px tolerance),
@@ -883,32 +934,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
-    #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
-      const staff = element.closest(NOTATION_STAFF_TAGS) as HTMLElement | null;
-      if (!staff) {
+    // The row of a hairpin in the bar of one of its ends, on the side its start
+    // keeps to.
+    #hairpinRowY(
+      staff: DynamicsRowStaff | null,
+      side: DynamicsSide,
+      rootRect: DOMRect
+    ): number {
+      const own = staff?.ownDynamicsRowY?.(side);
+      if (staff === null || own === undefined) {
         return 0;
       }
-      const staffRect = staff.getBoundingClientRect();
-      return staffRect.top - rootRect.top + DYNAMICS_BASELINE_Y;
+      const row = staff.sharedDynamicsRows?.[side] ?? own;
+      return (staff.dynamicsRowToClientY?.(row) ?? row) - rootRect.top;
     }
 
     // Hairpins whose two ends sit in different measures. Each staff track
     // (every measure's Nth staff, see #buildStaffTracks) and voice pairs on
     // its own, so one hand's start never takes the other hand's end. A start
     // still open afterwards may end on the partner track — the other hand of
-    // a grand staff; a shared (both-hands) one is drawn in that row's gap,
-    // clear of beams, like measure.ts#redrawMeasureDynamics within a measure.
-    #redrawHairpins() {
-      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
-        '.connectors-overlay'
-      );
-      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
-        '.composition-wrapper'
-      );
-      if (!overlay || !wrapper) {
-        return;
-      }
-
+    // a grand staff.
+    #pairHairpinsAcrossMeasures(): {
+      pairs: CrossMeasureHairpin[];
+      orphanEnds: HairpinEndpoint[];
+    } {
       const selector = `${noteSelector('[crescendo]')}, ${noteSelector(
         '[decrescendo]'
       )}, ${chordSelector('[crescendo]')}, ${chordSelector('[decrescendo]')}`;
@@ -927,11 +976,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           MEASURE_ORDINAL_STRIDE +
         element.getBoundingClientRect().left;
 
-      const pairs: {
-        kind: HairpinKind;
-        startElement: NoteOrChordElementType;
-        endElement: NoteOrChordElementType;
-      }[] = [];
+      const pairs: CrossMeasureHairpin[] = [];
       const leftovers = tracks.map((track) => {
         const elements = track.flatMap(({ staff }) =>
           Array.from(staff.querySelectorAll(selector))
@@ -982,12 +1027,108 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           });
         }
       });
-      for (const { orphanEnds } of leftovers) {
-        for (const end of orphanEnds) {
-          console.warn(
-            `[dynamicsRules] orphan ${end.kind} end (no matching start)`
-          );
+      return {
+        pairs,
+        orphanEnds: leftovers.flatMap(({ orphanEnds }) => orphanEnds),
+      };
+    }
+
+    // The bars a hairpin runs over share one dynamics row in each system, the
+    // furthest out any of them needs, so it is level with the markings at its
+    // ends. Rows are in staff coordinates, which the row alignment above keeps
+    // the same for every bar of a system. Returns whether any row changed.
+    #shareHairpinRows(): boolean {
+      const tracks = this.#buildStaffTracks();
+      const spansByRow = new Map<
+        string,
+        { side: DynamicsSide; track: DynamicsRowStaff[]; spans: BarSpan[] }
+      >();
+      const positions = new Map<Element, { track: number; bar: number }>();
+      tracks.forEach((track, trackIndex) =>
+        track.forEach(({ staff }, bar) =>
+          positions.set(staff, { track: trackIndex, bar })
+        )
+      );
+      for (const pair of this.#pairHairpinsAcrossMeasures().pairs) {
+        const startStaff =
+          pair.startElement.closest<DynamicsRowStaff>(NOTATION_STAFF_TAGS);
+        const start = startStaff && positions.get(startStaff);
+        const endStaff = pair.endElement.closest(NOTATION_STAFF_TAGS);
+        const end = endStaff && positions.get(endStaff);
+        if (
+          !start ||
+          !end ||
+          start.track !== end.track ||
+          start.bar === end.bar ||
+          pair.startElement.dynamicShared
+        ) {
+          continue;
         }
+        const side = startStaff.dynamicsSideOf?.(pair.startElement) ?? 'below';
+        const track = tracks[start.track];
+        for (let bar = start.bar; bar <= end.bar; bar++) {
+          const { rowIndex } = track[bar];
+          const key = `${start.track}/${rowIndex}/${side}`;
+          const row = spansByRow.get(key) ?? {
+            side,
+            track: track.map(({ staff }) => staff as DynamicsRowStaff),
+            spans: [],
+          };
+          spansByRow.set(key, row);
+          const open = row.spans[row.spans.length - 1];
+          if (open !== undefined && open.to === bar - 1 && bar > start.bar) {
+            open.to = bar;
+          } else {
+            row.spans.push({ from: bar, to: bar });
+          }
+        }
+      }
+
+      const rows = new Map<Element, { above?: number; below?: number }>();
+      for (const { side, track, spans } of spansByRow.values()) {
+        for (const { from, to } of joinBarSpans(spans)) {
+          const staves = track.slice(from, to + 1);
+          const ys = staves.flatMap(
+            (staff) => staff.ownDynamicsRowY?.(side) ?? []
+          );
+          const y = side === 'above' ? Math.min(...ys) : Math.max(...ys);
+          for (const staff of staves) {
+            rows.set(staff, { ...rows.get(staff), [side]: y });
+          }
+        }
+      }
+
+      let changed = false;
+      for (const staff of Array.from(
+        this.querySelectorAll<DynamicsRowStaff>(NOTATION_STAFF_TAGS)
+      )) {
+        if (staff.ownDynamicsRowY === undefined) {
+          continue;
+        }
+        const before = staff.sharedDynamicsRows;
+        staff.sharedDynamicsRows = rows.get(staff) ?? {};
+        changed ||= staff.sharedDynamicsRows !== before;
+      }
+      return changed;
+    }
+
+    // A shared (both-hands) hairpin is drawn in its row's gap, clear of beams,
+    // like measure.ts#redrawMeasureDynamics within a measure.
+    #redrawHairpins() {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.connectors-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
+      const { pairs, orphanEnds } = this.#pairHairpinsAcrossMeasures();
+      for (const end of orphanEnds) {
+        console.warn(
+          `[dynamicsRules] orphan ${end.kind} end (no matching start)`
+        );
       }
 
       const rootRect = wrapper.getBoundingClientRect();
@@ -1038,8 +1179,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           top: rowTop(endElement, endRect),
         };
 
-        const startCenterY = this.#getDynamicsBaselineY(startElement, rootRect);
-        const endCenterY = this.#getDynamicsBaselineY(endElement, rootRect);
+        const side =
+          (startStaff as DynamicsRowStaff | null)?.dynamicsSideOf?.(
+            startElement
+          ) ?? 'below';
+        const startCenterY = this.#hairpinRowY(startStaff, side, rootRect);
+        const endCenterY = this.#hairpinRowY(endStaff, side, rootRect);
 
         // Use each staff's actual bounding rect so the hairpin ends exactly at
         // the barline (staff right edge) and begins exactly at the notes-area
@@ -2060,6 +2205,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       for (const [staff, mode] of starts) {
         staff.startRepeat = mode;
+      }
+      for (const measure of measures) {
+        (
+          measure as HTMLElement & { refreshGroupBarlines?: () => void }
+        ).refreshGroupBarlines?.();
       }
     }
 

@@ -5,8 +5,10 @@ import {
   isStemlessDuration,
 } from './theoryConsts';
 
-// Drawn outline for a non-`normal` notehead; `normal` keeps the ellipse.
+// Drawn outline of a head; a `normal` one keeps the ellipse, except a
+// semibreve or longer.
 export type NoteheadGlyph =
+  | 'whole'
   | 'x'
   | 'circle-x'
   | 'diamond-black'
@@ -23,7 +25,7 @@ export function resolveNoteheadGlyph(
 ): NoteheadGlyph | null {
   switch (notehead) {
     case 'normal':
-      return null;
+      return isStemlessDuration(duration) ? 'whole' : null;
     case 'x':
       // A cross inside an open oval would obscure the white space, so half
       // and longer durations circle the cross instead.

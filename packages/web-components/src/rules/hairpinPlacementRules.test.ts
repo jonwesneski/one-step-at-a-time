@@ -18,6 +18,7 @@ import {
   estimateDynamicTextBox,
   hairpinWedgeEdges,
   isHorizontalHairpinClear,
+  joinBarSpans,
   resolveAngledHairpinRoute,
   resolveSharedHairpinY,
   type SharedHairpinInput,
@@ -289,5 +290,21 @@ describe('resolveSharedHairpinY', () => {
         endText,
       })
     ).toBe(true);
+  });
+});
+
+describe('joinBarSpans', () => {
+  it('joins spans sharing a bar, not ones in neighbouring bars', () => {
+    expect(
+      joinBarSpans([
+        { from: 5, to: 6 },
+        { from: 0, to: 2 },
+        { from: 2, to: 4 },
+        { from: 1, to: 1 },
+      ])
+    ).toEqual([
+      { from: 0, to: 4 },
+      { from: 5, to: 6 },
+    ]);
   });
 });

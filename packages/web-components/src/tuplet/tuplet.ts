@@ -16,7 +16,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    *
    * @customElement music-tuplet
    * @attr {TupletRatio} ratio - Tuplet ratio: a bare count like `3` or a full `actual:normal` form like `3:2`. Defaults to `3`.
-   * @attr {TupletPlacement} placement - Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes).
+   * @attr {TupletPlacement} placement - Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes; on a vocal staff with one voice, above).
    * @attr {string} tuplet-group - `id` shared by one `<music-tuplet>` on each of a measure's two adjacent grand-staff staves, joining them into one tuplet that spans both hands (single-line passage-work with no shared beam). Each wrapper holds its own staff's share of the tuplet's time — use `<music-rest hidden>` for the beats the other hand plays. Requires a `<music-measure>` ancestor; standalone, each wrapper renders as an ordinary tuplet.
    *
    * @example

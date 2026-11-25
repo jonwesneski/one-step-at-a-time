@@ -14,6 +14,7 @@ import {
   resolveNoteDotStaffY,
   resolveUnisonDotStaffYs,
 } from './augmentationDotRules';
+import { adjacentHeadOffset, type HeadExtent } from './chordRules';
 import {
   canShareNotehead,
   groupUnisonPlacements,
@@ -156,6 +157,24 @@ export type VoiceNoteheadDisplacement = {
   // heads, though stemmed notes would show the part progression better.
   overlappingSemibreves: boolean;
 };
+
+// How far a part moves right to stand beside a part a step from it.
+function secondOffset(
+  left: VoiceNoteheadPlacement,
+  right: VoiceNoteheadPlacement
+): number {
+  if (!left.geometry || !right.geometry) {
+    return ADJACENT_NOTE_X_DISPLACEMENT_PX;
+  }
+  const extent = ({
+    headLeftX,
+    headRightX,
+  }: VoicePartGeometry): HeadExtent => ({
+    left: headLeftX,
+    right: headRightX,
+  });
+  return adjacentHeadOffset(extent(left.geometry), extent(right.geometry));
+}
 
 /**
  * Resolves horizontal displacement for all voices' notes/chords sharing one
@@ -376,7 +395,7 @@ export function computeCrossVoiceDisplacements(
             overlappingSemibreves.add(down);
           }
           const [first, second] = upY > downY ? [down, up] : [up, down];
-          addOffset(second, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+          addOffset(second, secondOffset(first, second));
           separateByDots(first, second);
           continue;
         }
@@ -385,7 +404,7 @@ export function computeCrossVoiceDisplacements(
         // (its dot then separates the two) or both are (they may overlap).
         const upDots = up.dotCount ?? 0;
         if (upY > downY && upDots === 0) {
-          addOffset(up, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+          addOffset(up, secondOffset(down, up));
           separateByDots(down, up);
           continue;
         }
@@ -404,7 +423,7 @@ export function computeCrossVoiceDisplacements(
         if (mover.hasFlagOrBeam && !other.hasFlagOrBeam) {
           mover = other;
         }
-        addOffset(mover, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+        addOffset(mover, secondOffset(mover === a ? b : a, mover));
         continue;
       }
 

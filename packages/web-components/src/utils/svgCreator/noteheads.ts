@@ -3,6 +3,7 @@ import { SVG_NS } from '../consts';
 import {
   CIRCLE_X_HEAD_HEIGHT_PX,
   DIAMOND_HEAD_HEIGHT_PX,
+  STAFF_LINE_SPACING,
   TRIANGLE_HEAD_HEIGHT_PX,
   X_HEAD_HEIGHT_PX,
 } from '../notationDimensions';
@@ -10,6 +11,11 @@ import {
 // Outlines are in staff-space units, bbox-min origin, y-down. Stem anchors
 // sit on the outline's side extremes: the NE / SW arm tips of a cross, the
 // side corners of a diamond.
+const NOTEHEAD_WHOLE_PATH_D =
+  'M 0.864 0 C 0.332 0 0 0.22 0 0.492 C 0 0.76 0.228 1 0.824 1 C 1.48 1 1.688 0.772 1.688 0.492 C 1.688 0.208 1.236 0 0.864 0 M 0.444 0.248 C 0.488 0.108 0.636 0.088 0.76 0.088 C 1.036 0.088 1.256 0.384 1.256 0.624 C 1.256 0.748 1.204 0.86 1.072 0.892 C 1.032 0.904 0.988 0.908 0.948 0.908 C 0.804 0.908 0.656 0.812 0.572 0.7 C 0.492 0.608 0.432 0.472 0.432 0.344 C 0.432 0.312 0.436 0.28 0.444 0.248';
+const NOTEHEAD_WHOLE_NATURAL_WIDTH = 1.688;
+const NOTEHEAD_WHOLE_NATURAL_HEIGHT = 1;
+
 const NOTEHEAD_X_BLACK_PATH_D =
   'M 1.14 0.896 L 0.664 0.5 L 1.14 0.1 C 1.152 0.092 1.16 0.072 1.16 0.056 C 1.16 0.024 1.132 0 1.108 0 C 1.1 0 1.088 0.004 1.08 0.008 L 0.576 0.428 L 0.08 0.008 C 0.072 0.004 0.06 0 0.048 0 C 0.02 0 0 0.028 0 0.052 C 0 0.068 0.008 0.088 0.02 0.1 L 0.496 0.5 L 0.02 0.896 C 0.004 0.908 0 0.924 0 0.94 C 0 0.972 0.02 1 0.052 1 C 0.064 1 0.072 0.996 0.08 0.988 L 0.576 0.568 L 1.08 0.988 C 1.088 0.996 1.1 1 1.108 1 C 1.14 1 1.16 0.968 1.16 0.944 C 1.16 0.924 1.152 0.908 1.14 0.896';
 const NOTEHEAD_X_BLACK_NATURAL_WIDTH = 1.16;
@@ -97,6 +103,16 @@ const triangleOutline = (
 };
 
 const GLYPHS: Record<NoteheadGlyph, GlyphOutline> = {
+  // Always stemless, so its anchors are only where a stem would be.
+  whole: {
+    pathD: NOTEHEAD_WHOLE_PATH_D,
+    width: NOTEHEAD_WHOLE_NATURAL_WIDTH,
+    height: NOTEHEAD_WHOLE_NATURAL_HEIGHT,
+    heightPx: STAFF_LINE_SPACING,
+    stemUpAnchor: { x: NOTEHEAD_WHOLE_NATURAL_WIDTH, y: 0.5 },
+    stemDownAnchor: { x: 0, y: 0.5 },
+    centredAnchor: false,
+  },
   x: {
     pathD: NOTEHEAD_X_BLACK_PATH_D,
     width: NOTEHEAD_X_BLACK_NATURAL_WIDTH,
@@ -170,7 +186,7 @@ const GLYPHS: Record<NoteheadGlyph, GlyphOutline> = {
 
 // Where a glyph head sits in the caller's coordinate space. The stem column
 // never moves; the glyph is translated so its anchor lands on the stem. A
-// stemless head (centreX given) is centred there instead.
+// stemless head is centred on `centreX` or starts at `leftX` instead.
 export type NoteheadPlacement = {
   cx: number;
   cy: number;
@@ -191,6 +207,7 @@ export function placeNoteheadGlyph({
   cy,
   unitsPerPx,
   centreX,
+  leftX,
 }: {
   glyph: NoteheadGlyph;
   stemUp: boolean;
@@ -199,6 +216,7 @@ export function placeNoteheadGlyph({
   cy: number;
   unitsPerPx: number;
   centreX?: number;
+  leftX?: number;
 }): NoteheadPlacement {
   const outline = GLYPHS[glyph];
   const scale = (outline.heightPx * unitsPerPx) / outline.height;
@@ -207,9 +225,10 @@ export function placeNoteheadGlyph({
     ? stemX
     : stemX + ((stemUp ? 1 : -1) * stemWidth) / 2;
   const originX =
-    centreX !== undefined
+    leftX ??
+    (centreX !== undefined
       ? centreX - (outline.width / 2) * scale
-      : anchorTargetX - anchor.x * scale;
+      : anchorTargetX - anchor.x * scale);
   const originY = cy - (outline.height / 2) * scale;
   return {
     cx: originX + (outline.width / 2) * scale,

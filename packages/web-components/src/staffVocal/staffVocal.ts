@@ -13,6 +13,7 @@ import { StaffNotationElementBase } from '../staffNotationBase';
 import type {
   LyricSyllablePosition,
   LyricsElementType,
+  NoteOrChordElementType,
   YCoordinates,
 } from '../types/elements';
 import type { Octave, VocalType } from '../types/theory';
@@ -21,8 +22,15 @@ import {
   LYRICS_EVENTS,
   MUSIC_LYRICS,
   MUSIC_STAFF_VOCAL,
+  MUSIC_VOICE,
   NOTE_TAGS,
 } from '../utils/consts';
+import {
+  LYRICS_INK_GAP_PX,
+  LYRICS_ROW_EPSILON_PX,
+  LYRICS_VERSE_SPACING_PX,
+  LYRICS_WRAPPER_OVERLAP_PX,
+} from '../utils/notationDimensions';
 import {
   createBassClefSvg,
   createTreble8ClefSvg,
@@ -38,10 +46,9 @@ type KeySignatureTables = Pick<
   | 'minorFlatYCoordinates'
 >;
 
-if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
-  const LYRICS_BASELINE_OFFSET = -25; // px below staff to first verse
-  const LYRICS_VERSE_SPACING = 15; // px between verse lines
+const LYRICS_SPACE_SOURCE = 'lyrics';
 
+if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
   /**
    * A vocal staff for one of the six standard vocal types. Behaves like
    * `<music-staff>` (notes, beams, accidentals, key/time signatures) and
@@ -99,6 +106,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     static override get observedAttributes(): string[] {
       return [...super.observedAttributes, 'voice'];
+    }
+
+    protected override get lyricsBelow(): boolean {
+      return true;
     }
 
     get voice(): VocalType {
@@ -176,8 +187,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       };
     }
 
-    override onStaffResize(): void {
-      super.onStaffResize();
+    protected override onNotesLaidOut(): void {
       this.#positionLyricsIfPresent();
     }
 
@@ -191,21 +201,94 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     protected override onDisconnectedCallback(): void {
       super.onDisconnectedCallback();
       this.removeEventListener(LYRICS_EVENTS.CHANGE, this.#boundPositionLyrics);
+      this.#alignedLyricsRowY = null;
+    }
+
+    // Where the first verse's tops stand (px below the staff's top edge): as
+    // this staff's own music needs, null without lyrics, and for the whole
+    // system.
+    #ownLyricsRowY: number | null = null;
+    #alignedLyricsRowY: number | null = null;
+
+    /** The lyric line this staff's own music needs; null without lyrics. */
+    get ownLyricsRowY(): number | null {
+      return this.#ownLyricsRowY;
+    }
+
+    /**
+     * Set by the ancestor `<music-composition>` so every bar of a system has
+     * its lyrics on one line. Returns whether this staff's line moved.
+     */
+    alignLyricsRow(y: number | null): boolean {
+      const before = this.#lyricsRowY;
+      this.#alignedLyricsRowY = y;
+      const moved =
+        before !== null &&
+        Math.abs((this.#lyricsRowY ?? before) - before) >=
+          LYRICS_ROW_EPSILON_PX;
+      if (moved) {
+        this.#positionLyricsIfPresent();
+      }
+      return moved;
+    }
+
+    get #lyricsRowY(): number | null {
+      return this.#ownLyricsRowY === null
+        ? null
+        : Math.max(this.#ownLyricsRowY, this.#alignedLyricsRowY ?? -Infinity);
+    }
+
+    // The usual distance below the stave, or further down to clear what the
+    // staff draws there. Lyrics keep one line, so the lowest ink decides.
+    #computeOwnLyricsRowY(wrapperBottom: number): number {
+      const usual = wrapperBottom - LYRICS_WRAPPER_OVERLAP_PX;
+      const inkBelow = this.inkBelowBottomLine;
+      const bottomLineY =
+        this.staffContainer.getBoundingClientRect().bottom -
+        this.getBoundingClientRect().top;
+      const connectorsBottom = this.connectorsBottomY;
+      return Math.max(
+        usual,
+        inkBelow > 0 ? bottomLineY + inkBelow + LYRICS_INK_GAP_PX : -Infinity,
+        connectorsBottom === null
+          ? -Infinity
+          : connectorsBottom + LYRICS_INK_GAP_PX
+      );
+    }
+
+    // Lyrics hang past the staff's box, so each verse takes page space.
+    #reserveLyricsSpace(verseCount: number, wrapperHeight: number): void {
+      const rowY = this.#lyricsRowY;
+      this.reserveVerticalSpace(LYRICS_SPACE_SOURCE, {
+        top: 0,
+        bottom:
+          rowY === null
+            ? 0
+            : Math.max(
+                0,
+                Math.ceil(
+                  rowY + verseCount * LYRICS_VERSE_SPACING_PX - wrapperHeight
+                )
+              ),
+      });
     }
 
     // Each verse's syllables-vs-notes mismatch, so a resize doesn't repeat it.
     #lastLyricWarnings = new Set<string>();
 
     // A syllable sits under each sung entry: chord tones share their chord's
-    // syllable, and a tie continuation carries the previous one on.
-    #sungEntries(): HTMLElement[] {
-      return Array.from(
-        (this as unknown as ParentNode).querySelectorAll<HTMLElement>(
-          `${NOTE_TAGS}, ${CHORD_TAGS}`
-        )
-      ).filter(
+    // syllable, and a tie continuation carries the previous one on. Of several
+    // voices, the first with notes carries the words.
+    #sungEntries(): NoteOrChordElementType[] {
+      const entries = Array.from(
+        (this as unknown as ParentNode).querySelectorAll<
+          HTMLElement & NoteOrChordElementType
+        >(`${NOTE_TAGS}, ${CHORD_TAGS}`)
+      ).filter((entry) => entry.parentElement?.closest(CHORD_TAGS) === null);
+      const voice = entries[0]?.closest(MUSIC_VOICE) ?? null;
+      return entries.filter(
         (entry) =>
-          entry.parentElement?.closest(CHORD_TAGS) === null &&
+          entry.closest(MUSIC_VOICE) === voice &&
           entry.getAttribute('tie') !== 'end'
       );
     }
@@ -235,12 +318,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
     #positionLyricsIfPresent(): void {
       const lyricsElements = this.#lyricsInVerseOrder();
-      if (lyricsElements.length === 0) {
-        return;
-      }
-
       const noteElements = this.#sungEntries();
-      if (noteElements.length === 0) {
+      if (lyricsElements.length === 0 || noteElements.length === 0) {
+        this.#ownLyricsRowY = null;
+        this.#reserveLyricsSpace(0, 0);
         for (const lyricEl of lyricsElements) {
           (lyricEl as LyricsElementType).updatePositions([]);
         }
@@ -256,10 +337,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
 
       const transcribeRect = transcribeContainer.getBoundingClientRect();
-      const baselineY = transcribeRect.bottom - staffRect.top;
+      const wrapperBottom = transcribeRect.bottom - staffRect.top;
+      this.#ownLyricsRowY = this.#computeOwnLyricsRowY(wrapperBottom);
+      const rowY = this.#lyricsRowY ?? this.#ownLyricsRowY;
+      this.#reserveLyricsSpace(lyricsElements.length, wrapperBottom);
 
       const warnings = new Set<string>();
-      let verseIndex = 1;
+      let verseIndex = 0;
       for (const lyricEl of lyricsElements) {
         const syllables = this.#parseLyricsText(lyricEl.textContent ?? '');
         if (syllables.length > noteElements.length) {
@@ -267,14 +351,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             `[${MUSIC_STAFF_VOCAL}] verse ${lyricEl.verse} has more syllables (${syllables.length}) than notes (${noteElements.length})`
           );
         }
-        const lyricY =
-          baselineY +
-          LYRICS_BASELINE_OFFSET +
-          verseIndex * LYRICS_VERSE_SPACING;
+        const lyricY = rowY + verseIndex * LYRICS_VERSE_SPACING_PX;
         const positions: LyricSyllablePosition[] = syllables
           .slice(0, noteElements.length)
           .map((syllable, sylIndex) => {
-            const noteRect = noteElements[sylIndex].getBoundingClientRect();
+            const noteRect = this.drawnEntryOf(
+              noteElements[sylIndex]
+            ).getBoundingClientRect();
             return {
               text: syllable.text,
               x: noteRect.left - staffRect.left + noteRect.width / 2,

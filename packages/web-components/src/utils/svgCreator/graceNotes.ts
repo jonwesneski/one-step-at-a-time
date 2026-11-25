@@ -326,6 +326,22 @@ export function graceInkTopY(
   return Math.min(...beamYs) - STEM_OVERLAP_PX * GRACE_SCALE;
 }
 
+/** The bottom edge (px) of a grace group's lowest head. */
+export function graceHeadsBottomY(
+  graceNotes: readonly GraceNoteDescriptor[],
+  mainHeadCenterYPx: number
+): number {
+  return (
+    Math.max(
+      ...graceNotes.map(
+        ({ relativeStaffSteps }) =>
+          mainHeadCenterYPx - relativeStaffSteps * STAFF_Y_STEP
+      )
+    ) +
+    STAFF_Y_STEP * GRACE_SCALE
+  );
+}
+
 export function createGraceNotesSvg({
   graceNotes,
   graceType,

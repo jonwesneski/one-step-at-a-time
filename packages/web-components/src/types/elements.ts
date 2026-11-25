@@ -358,7 +358,8 @@ export interface IChordElement {
   set notehead(value: NoteheadType | null);
   // Resolved per tone, in `notes` order.
   readonly toneNoteheads: NoteheadType[];
-  // The widest tone's INoteElement.headLeftOverhangPx.
+  // As INoteElement.headLeftOverhangPx, over every tone, displaced ones
+  // included.
   readonly headLeftOverhangPx: number;
   // Right ink edge (element px) of the duration dots, or null when undotted.
   readonly augmentationDotsRightEdgePx: number | null;

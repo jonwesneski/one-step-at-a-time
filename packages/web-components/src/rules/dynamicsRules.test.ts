@@ -16,6 +16,8 @@ import {
   MUSIC_REST_NODE,
 } from '../utils/consts';
 import {
+  DYNAMICS_ABOVE_BASELINE_Y,
+  DYNAMICS_BASELINE_Y,
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_JOINT_GAP_PX,
@@ -24,6 +26,7 @@ import {
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
   computeHairpinXSpan,
+  dynamicsRowY,
   pairHairpins,
   pairHairpinsWithLeftovers,
   pairSharedHairpinsAcrossStaves,
@@ -747,5 +750,33 @@ describe('swellConflicts', () => {
     expect(
       swellConflicts(elements, [], [{ kind: 'crescendo', element, index: 1 }])
     ).toEqual([element]);
+  });
+});
+
+describe('dynamicsRowY', () => {
+  it('keeps its usual place beside ink that stays near the stave', () => {
+    expect(dynamicsRowY({ above: false, inkYs: [50, 68], curveYs: [60] })).toBe(
+      DYNAMICS_BASELINE_Y
+    );
+    expect(dynamicsRowY({ above: true, inkYs: [28, 50], curveYs: [40] })).toBe(
+      DYNAMICS_ABOVE_BASELINE_Y
+    );
+  });
+
+  it('moves out past the furthest ink, on either side', () => {
+    const below = dynamicsRowY({ above: false, inkYs: [90, 60], curveYs: [] });
+    expect(below).toBeGreaterThan(90);
+    expect(
+      dynamicsRowY({ above: false, inkYs: [100, 90], curveYs: [] }) - below
+    ).toBe(10);
+    expect(
+      dynamicsRowY({ above: true, inkYs: [0, 60], curveYs: [] })
+    ).toBeLessThan(0);
+  });
+
+  it('keeps closer to a curve than to a note', () => {
+    expect(
+      dynamicsRowY({ above: false, inkYs: [], curveYs: [90] })
+    ).toBeLessThan(dynamicsRowY({ above: false, inkYs: [90], curveYs: [] }));
   });
 });

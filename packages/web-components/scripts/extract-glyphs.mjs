@@ -53,6 +53,7 @@ const CODEPOINTS = {
   wiggleTrillSlower: 0xeaa6,
   wiggleTrillSlowerStill: 0xeaa7,
   wiggleTrillSlowest: 0xeaa8,
+  noteheadWhole: 0xe0a2,
   noteheadXBlack: 0xe0a9,
   noteheadCircleX: 0xe0b3,
   noteheadDiamondWhole: 0xe0d8,

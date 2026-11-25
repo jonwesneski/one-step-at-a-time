@@ -8,13 +8,23 @@ import type { DynamicMarking, HairpinKind } from '../types/theory';
 import { HAIRPIN_KINDS, MUSIC_REST_NODE } from '../utils/consts';
 import {
   DYNAMIC_REMINDER_BRACKET_WIDTH_PX,
+  DYNAMICS_ABOVE_BASELINE_Y,
+  DYNAMICS_BASELINE_Y,
   DYNAMICS_CHAR_WIDTH_PX,
+  DYNAMICS_FONT_SIZE,
+  DYNAMICS_ROW_CURVE_GAP_PX,
+  DYNAMICS_ROW_INK_GAP_PX,
+  DYNAMICS_TEXT_ASCENT_RATIO,
+  DYNAMICS_TEXT_DESCENT_RATIO,
   HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_JOINT_GAP_PX,
   SWELL_MID_GAP_PX,
   SWELL_MIN_WEDGE_PX,
 } from '../utils/notationDimensions';
-import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
+import {
+  NOTE_SVG_WIDTH,
+  noteHeadCenterShiftPx,
+} from '../utils/svgCreator/note';
 import type { HairpinEndpointText } from './hairpinPlacementRules';
 
 const ROW_TOLERANCE_PX = 5;
@@ -158,7 +168,9 @@ function separateHairpinsAtJoints(
     splitHairpinsAtJoint(
       before,
       after,
-      (noteXPositions.get(jointIndex) ?? 0) + NOTE_SVG_WIDTH / 2
+      (noteXPositions.get(jointIndex) ?? 0) +
+        NOTE_SVG_WIDTH / 2 +
+        noteHeadCenterShiftPx(before.endElement.duration)
     );
   }
 }
@@ -218,8 +230,14 @@ function buildHairpinPair(
   const span = computeHairpinXSpan({
     rawStartX,
     rawEndX,
-    startTextCenterX: rawStartX + NOTE_SVG_WIDTH / 2,
-    endTextCenterX: (noteXPositions.get(end.index) ?? 0) + NOTE_SVG_WIDTH / 2,
+    startTextCenterX:
+      rawStartX +
+      NOTE_SVG_WIDTH / 2 +
+      noteHeadCenterShiftPx(start.element.duration),
+    endTextCenterX:
+      (noteXPositions.get(end.index) ?? 0) +
+      NOTE_SVG_WIDTH / 2 +
+      noteHeadCenterShiftPx(end.element.duration),
     startMarking: start.element.dynamic,
     endMarking: end.element.dynamic,
     startBracketed: start.element.dynamicReminder,
@@ -507,4 +525,30 @@ export function swellConflicts(
       ? [element as NoteOrChordElementType]
       : [];
   });
+}
+
+/**
+ * The baseline of a row of dynamics (and the centre line of its hairpins) on
+ * one side of the stave: its usual distance, or further out past the ink on
+ * that side, a space clear of notes and half a space of `curveYs` (slurs, ties
+ * and brackets, whose reach is an estimate).
+ */
+export function dynamicsRowY(input: {
+  above: boolean;
+  inkYs: readonly number[];
+  curveYs: readonly number[];
+}): number {
+  const { above, inkYs, curveYs } = input;
+  const clearOf = (ys: readonly number[], gap: number): number[] =>
+    ys.map((y) =>
+      above
+        ? y - gap - DYNAMICS_FONT_SIZE * DYNAMICS_TEXT_DESCENT_RATIO
+        : y + gap + DYNAMICS_FONT_SIZE * DYNAMICS_TEXT_ASCENT_RATIO
+    );
+  const rows = [
+    above ? DYNAMICS_ABOVE_BASELINE_Y : DYNAMICS_BASELINE_Y,
+    ...clearOf(inkYs, DYNAMICS_ROW_INK_GAP_PX),
+    ...clearOf(curveYs, DYNAMICS_ROW_CURVE_GAP_PX),
+  ];
+  return above ? Math.min(...rows) : Math.max(...rows);
 }

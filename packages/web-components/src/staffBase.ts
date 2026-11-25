@@ -795,8 +795,18 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
    * warnings. Measured from the line, so the staff's margin doesn't change it.
    */
   get inkAboveTopLine(): number {
-    const lineTop = this.staffContainer.getBoundingClientRect().top;
-    let top = lineTop;
+    const { top, bottom } = this.staffContainer.getBoundingClientRect();
+    return Math.max(0, top - this.#inkExtent({ top, bottom }).top);
+  }
+
+  /** As `inkAboveTopLine`, below the staff's bottom line. */
+  protected get inkBelowBottomLine(): number {
+    const { top, bottom } = this.staffContainer.getBoundingClientRect();
+    return Math.max(0, this.#inkExtent({ top, bottom }).bottom - bottom);
+  }
+
+  #inkExtent(stave: VerticalBand): VerticalBand {
+    const extent = { ...stave };
     const visit = (root: ParentNode | null | undefined) => {
       for (const element of Array.from(
         root?.querySelectorAll<SVGGraphicsElement>(INK_SELECTOR) ?? []
@@ -806,7 +816,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         }
         const rect = element.getBoundingClientRect();
         if (rect.width > 0 || rect.height > 0) {
-          top = Math.min(top, rect.top);
+          extent.top = Math.min(extent.top, rect.top);
+          extent.bottom = Math.max(extent.bottom, rect.bottom);
         }
       }
     };
@@ -823,7 +834,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     for (const entry of entries) {
       visit(entry.shadowRoot);
     }
-    return Math.max(0, lineTop - top);
+    return extent;
   }
 
   protected drawConnectorsWhenStandalone(): void {
