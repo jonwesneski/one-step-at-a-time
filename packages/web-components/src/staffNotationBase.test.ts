@@ -26,8 +26,8 @@ import {
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
-  TREMOLO_LABEL_FONT_SIZE_PX,
-  TREMOLO_LABEL_GAP_PX,
+  TECHNIQUE_LABEL_FONT_SIZE_PX,
+  TECHNIQUE_LABEL_GAP_PX,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -42,6 +42,7 @@ import {
   noteHeadCenter,
   TAIL_DOWN_WIDTH_PX,
   TAIL_UP_WIDTH_PX,
+  NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 
 afterEach(() => {
@@ -1632,9 +1633,86 @@ describe('staffNotationBase strut min width', () => {
     slot.assignedElements = () => elements;
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(minWidth).toBeCloseTo(
-      parseFloat(plainLastNote.style.left) + MIN_NOTE_WIDTH,
-      5
+    const afterLast = minWidth - parseFloat(plainLastNote.style.left);
+    expect(afterLast).toBeGreaterThanOrEqual(MIN_NOTE_WIDTH);
+    expect(afterLast).toBeLessThanOrEqual(NOTE_SVG_WIDTH);
+  });
+});
+
+describe('staffNotationBase reported widths', () => {
+  function renderStaff(markup: string, parent: HTMLElement = document.body) {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    const widths = { minWidth: 0, naturalWidth: 0 };
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      Object.assign(widths, (event as CustomEvent).detail);
+    });
+    parent.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, slot, widths };
+  }
+  const notes = (...durations: DurationType[]) =>
+    durations
+      .map(
+        (duration) =>
+          `<music-note note="A" octave="4" duration="${duration}"></music-note>`
+      )
+      .join('');
+  const ownMinWidth = (staff: any): string =>
+    staff.style.getPropertyValue('--staff-strut-width');
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('keeps to its own minimum with no measure around it', () => {
+    const { staff, slot, widths } = renderStaff(notes('quarter', 'quarter'));
+    expect(ownMinWidth(staff)).toBe(`${Math.ceil(widths.minWidth)}px`);
+
+    staff.replaceChildren();
+    slot.dispatchEvent(new Event('slotchange'));
+    expect(ownMinWidth(staff)).toBe('');
+  });
+
+  it('leaves its minimum to the measure inside one', () => {
+    const measure = document.createElement('music-measure');
+    document.body.appendChild(measure);
+    const { staff, widths } = renderStaff(notes('quarter', 'quarter'), measure);
+    expect(widths.minWidth).toBeGreaterThan(0);
+    expect(ownMinWidth(staff)).toBe('');
+  });
+
+  it('needs the room of every voice together', () => {
+    const alone = (first: string, second: string) =>
+      `<music-voice number="1">${first}</music-voice><music-voice number="2">${second}</music-voice>`;
+    const busyStart = notes('sixteenth', 'sixteenth', 'sixteenth', 'sixteenth');
+    const early = renderStaff(
+      alone(busyStart + notes('half'), notes('quarter', 'half'))
+    ).widths.minWidth;
+    const late = renderStaff(
+      alone(notes('quarter', 'half'), notes('quarter') + busyStart)
+    ).widths.minWidth;
+    const both = renderStaff(
+      alone(busyStart + notes('half'), notes('quarter') + busyStart)
+    ).widths.minWidth;
+    expect(both).toBeGreaterThan(Math.max(early, late));
+  });
+
+  it('asks for more width when its last notes are short, within limits', () => {
+    const evenly = renderStaff(notes('quarter', 'quarter', 'quarter', 'quarter'))
+      .widths;
+    const shortEnd = renderStaff(
+      notes('half', 'quarter', 'eighth', 'sixteenth', 'sixteenth')
+    ).widths;
+    // Four quarters already keep their proportional places.
+    expect(evenly.naturalWidth - evenly.minWidth).toBeLessThanOrEqual(80);
+    const slack = 60 + 20;
+    expect(shortEnd.naturalWidth).toBeGreaterThan(shortEnd.minWidth + slack);
+    expect(shortEnd.naturalWidth).toBeLessThanOrEqual(
+      (shortEnd.minWidth + slack) * 1.25
     );
   });
 });
@@ -1820,6 +1898,19 @@ describe('staffNotationBase bends', () => {
     expect(new Set(ends).size).toBe(1);
   });
 
+  it('bends one tone of a chord to its own target', () => {
+    const { staff } = renderStaff(
+      `<music-chord duration="quarter">
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="C" octave="5" bend-to="B" bend-to-quarter-tone="down"></music-note>
+      </music-chord>${quarters('')}`
+    );
+    expect(bendLines(staff)).toHaveLength(1);
+    expect(
+      staff.shadowRoot.querySelectorAll('.bends-container .bend-target-note')
+    ).toHaveLength(1);
+  });
+
   it('keeps each voice’s bends in its own container', () => {
     const { staff } = renderStaff(`
       <music-voice>${quarters('bend="up"')}</music-voice>
@@ -1985,10 +2076,9 @@ describe('staffNotationBase strut min width with tuplets', () => {
     slot.assignedElements = () => entries;
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(minWidth).toBeCloseTo(
-      parseFloat(last.style.left) + MIN_NOTE_WIDTH,
-      5
-    );
+    const afterLast = minWidth - parseFloat(last.style.left);
+    expect(afterLast).toBeGreaterThanOrEqual(MIN_NOTE_WIDTH);
+    expect(afterLast).toBeLessThanOrEqual(NOTE_SVG_WIDTH);
   });
 });
 
@@ -2158,7 +2248,7 @@ describe('tremolo labels and numerals', () => {
   const labels = (staff: StaffElementType) =>
     Array.from(
       staff.shadowRoot!.querySelectorAll(
-        '.tremolo-labels-container .tremolo-label'
+        '.technique-labels-container .tremolo-label'
       )
     );
 
@@ -2167,7 +2257,7 @@ describe('tremolo labels and numerals', () => {
     const [label] = labels(staff);
     expect(label.textContent).toBe('trem.');
     expect(Number(label.getAttribute('y'))).toBeLessThanOrEqual(
-      containerY(STAFF_TOP_LINE_Y) - TREMOLO_LABEL_GAP_PX
+      containerY(STAFF_TOP_LINE_Y) - TECHNIQUE_LABEL_GAP_PX
     );
   });
 
@@ -2180,7 +2270,7 @@ describe('tremolo labels and numerals', () => {
       containerY(STAFF_TOP_LINE_Y) -
         TRILL_ABOVE_STAFF_GAP_PX -
         TRILL_SIGN_HEIGHT_PX -
-        TREMOLO_LABEL_GAP_PX
+        TECHNIQUE_LABEL_GAP_PX
     );
   });
 
@@ -2205,7 +2295,7 @@ describe('tremolo labels and numerals', () => {
       .map((label) => Number(label.getAttribute('y')))
       .sort((a, b) => a - b);
     expect(ys).toHaveLength(2);
-    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(TREMOLO_LABEL_FONT_SIZE_PX);
+    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(TECHNIQUE_LABEL_FONT_SIZE_PX);
   });
 
   it('draws no label inside the note on a staff', () => {
@@ -2239,6 +2329,161 @@ describe('tremolo labels and numerals', () => {
       return Math.min(...ys);
     };
     expect(bracketTop(true)).toBeLessThan(bracketTop(false));
+  });
+});
+
+describe('glissando labels', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  const quarter = (attributes: string) =>
+    `<music-note note="C" octave="5" duration="quarter" ${attributes}></music-note>`;
+  const at = (element: Element | null, name: string) =>
+    Number(element?.getAttribute(name));
+  const labelOf = (staff: any, kind = 'glissando'): Element =>
+    staff.shadowRoot.querySelector(
+      `.technique-labels-container .${kind}-label`
+    );
+
+  it('starts at the head, its accidental or its first grace note', () => {
+    const xOf = (attributes: string) => {
+      const x = at(labelOf(renderStaff(quarter(attributes))), 'x');
+      document.body.innerHTML = '';
+      return x;
+    };
+    const ink = 'accidental-reminder grace="A" grace-octave="4"';
+    const head = xOf(`${ink} glissando-label="lip"`);
+    const accidental = xOf(`${ink} glissando-label="quasi-gliss"`);
+    const grace = xOf(`${ink} glissando-label="chrom"`);
+    expect(accidental).toBeLessThan(head);
+    expect(grace).toBeLessThan(accidental);
+    expect(xOf('glissando-label="chrom"')).toBe(xOf('glissando-label="lip"'));
+  });
+
+  it('shifts left rather than run past the bar, never past its start', () => {
+    const xOf = (label: string) => {
+      const x = at(
+        labelOf(
+          renderStaff(
+            `${quarter('').repeat(3)}${quarter(`glissando-label="${label}"`)}`
+          )
+        ),
+        'x'
+      );
+      document.body.innerHTML = '';
+      return x;
+    };
+    const atHead = xOf('lip');
+    const shifted = xOf('m'.repeat(20));
+    expect(shifted).toBeLessThan(atHead);
+    expect(shifted).toBeGreaterThan(0);
+    expect(xOf('m'.repeat(80))).toBe(0);
+  });
+
+  it('wraps a label wider than the bar', () => {
+    const staff = renderStaff(
+      quarter(`glissando-label="${'slowly '.repeat(20).trim()}"`)
+    );
+    expect(labelOf(staff).querySelectorAll('tspan').length).toBeGreaterThan(1);
+  });
+
+  it('moves up for a slur, a tie or a rising glissando over it', () => {
+    const yOf = (first: string, second: string) => {
+      const y = at(
+        labelOf(
+          renderStaff(
+            `<music-note note="F" octave="5" duration="half" glissando-label="a long label" ${first}></music-note>
+             <music-note note="F" octave="5" duration="quarter" ${second}></music-note>`
+          )
+        ),
+        'y'
+      );
+      document.body.innerHTML = '';
+      return y;
+    };
+    const plain = yOf('', '');
+    expect(yOf('slur="start"', 'slur="end"')).toBeLessThan(plain);
+    expect(yOf('tie="start"', 'tie="end"')).toBeLessThan(plain);
+    const line = (note: string) => {
+      const y = at(
+        labelOf(
+          renderStaff(
+            `<music-note note="C" octave="5" duration="half" glissando="start" glissando-label="${'m'.repeat(
+              16
+            )}"></music-note>
+             <music-note note="${note}" octave="6" duration="quarter" glissando="end"></music-note>`
+          )
+        ),
+        'y'
+      );
+      document.body.innerHTML = '';
+      return y;
+    };
+    expect(line('E')).toBeLessThan(line('C'));
+  });
+
+  it('stacks above a tremolo label on its note', () => {
+    const staff = renderStaff(
+      quarter('tremolo="3" tremolo-label="trem" glissando-label="lip"')
+    );
+    expect(
+      at(labelOf(staff, 'tremolo'), 'y') - at(labelOf(staff), 'y')
+    ).toBeGreaterThanOrEqual(
+      TECHNIQUE_LABEL_FONT_SIZE_PX + TECHNIQUE_LABEL_GAP_PX
+    );
+  });
+
+  it('clears the grace notes and later notes it reaches over', () => {
+    const yOf = (markup: string) => {
+      const y = at(labelOf(renderStaff(markup)), 'y');
+      document.body.innerHTML = '';
+      return y;
+    };
+    const plain = yOf(quarter('glissando-label="chrom"'));
+    expect(
+      yOf(
+        quarter('grace="F,G,A" grace-octave="5,5,5" glissando-label="chrom"')
+      )
+    ).toBeLessThan(plain);
+    const high = `<music-note note="C" octave="6" duration="quarter"></music-note>`;
+    const reach = 'm'.repeat(12);
+    expect(yOf(quarter(`glissando-label="${reach}"`) + high)).toBeLessThan(
+      yOf(quarter(`glissando-label="${reach}"`) + quarter(''))
+    );
+    expect(yOf(quarter('glissando-label="lip"') + high)).toBe(
+      yOf(quarter('glissando-label="lip"') + quarter(''))
+    );
+  });
+
+  it('keeps more room above the stave for two lines', () => {
+    const marginOf = (label: string) => {
+      const staff = renderStaff(
+        `<music-note note="A" octave="5" duration="quarter" stem-direction="up" glissando-label="${label}"></music-note>`
+      );
+      const margin = parseFloat(staff.style.marginTop || '0');
+      document.body.innerHTML = '';
+      return margin;
+    };
+    expect(marginOf('bend|down')).toBeGreaterThan(marginOf('bend'));
   });
 });
 

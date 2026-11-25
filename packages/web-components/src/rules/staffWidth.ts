@@ -1,6 +1,7 @@
 import {
   AVG_LYRIC_CHAR_WIDTH_PX,
   LEADING_NOTE_GAP_PX,
+  MAX_UNCROWDED_STRETCH,
   MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
@@ -28,6 +29,11 @@ export type StaffStrutInputs = {
   // End-of-measure warnings that reserve width (see EndWarnings).
   endWarningWidth: number;
   totalSlackWeight: number;
+  // Least width at which the entries' minimum advances, every voice's
+  // together, all fit.
+  requiredWidth: number;
+  // Least width at which every entry keeps its proportional place.
+  uncrowdedWidth: number;
 };
 
 /**
@@ -140,6 +146,20 @@ export function calculateStaffNaturalWidth(
   totalSlackWeight: number
 ): number {
   return minWidth + totalSlackWeight;
+}
+
+/**
+ * A staff's natural width widened toward the width at which nothing in it is
+ * squeezed, up to MAX_UNCROWDED_STRETCH.
+ */
+export function widenToUncrowded(
+  naturalWidth: number,
+  uncrowdedWidth: number
+): number {
+  return Math.max(
+    naturalWidth,
+    Math.min(uncrowdedWidth, naturalWidth * MAX_UNCROWDED_STRETCH)
+  );
 }
 
 /**

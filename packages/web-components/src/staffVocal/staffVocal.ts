@@ -3,6 +3,7 @@ import type { KeySignatureState } from '../rules/keySignatureChangeRules';
 import {
   calculateStaffVocalMinWidth,
   calculateStaffVocalNaturalWidth,
+  widenToUncrowded,
 } from '../rules/staffWidth';
 import {
   generateKeySignatureYCoordinates,
@@ -22,7 +23,6 @@ import {
   MUSIC_LYRICS,
   MUSIC_STAFF_VOCAL,
   NOTE_TAGS,
-  STAFF_EVENTS,
 } from '../utils/consts';
 import {
   createBassClefSvg,
@@ -315,31 +315,36 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           rightwardWidth,
           endWarningWidth,
           totalSlackWeight,
+          requiredWidth,
+          uncrowdedWidth,
         } = strutInputs;
-        const minWidth = calculateStaffVocalMinWidth(
-          this.describeEndX,
-          noteCount,
-          maxLyricChars,
-          leftwardWidth,
-          rightwardWidth,
-          endWarningWidth
+        const minWidth = Math.max(
+          requiredWidth,
+          calculateStaffVocalMinWidth(
+            this.describeEndX,
+            noteCount,
+            maxLyricChars,
+            leftwardWidth,
+            rightwardWidth,
+            endWarningWidth
+          )
         );
-        const naturalWidth = calculateStaffVocalNaturalWidth(
-          this.describeEndX,
-          noteCount,
-          maxLyricChars,
-          totalSlackWeight,
-          leftwardWidth,
-          rightwardWidth,
-          endWarningWidth
+        const naturalWidth = widenToUncrowded(
+          Math.max(
+            requiredWidth,
+            calculateStaffVocalNaturalWidth(
+              this.describeEndX,
+              noteCount,
+              maxLyricChars,
+              totalSlackWeight,
+              leftwardWidth,
+              rightwardWidth,
+              endWarningWidth
+            )
+          ),
+          uncrowdedWidth
         );
-        this.dispatchEvent(
-          new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
-            bubbles: true,
-            composed: false,
-            detail: { minWidth, naturalWidth },
-          })
-        );
+        this.reportStaffWidths({ minWidth, naturalWidth });
       }
     }
 

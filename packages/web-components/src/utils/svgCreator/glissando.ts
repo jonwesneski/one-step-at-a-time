@@ -1,5 +1,4 @@
 import {
-  bendLineShape,
   glissandoDipWidthPx,
   glissandoHalfWaveCount,
   type BendLayout,
@@ -7,7 +6,6 @@ import {
 } from '../../rules/glissandoRules';
 import type {
   AccidentalType,
-  BendShape,
   GlissandoShape,
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
@@ -111,21 +109,17 @@ export function createBendTargetSvg(props: WrittenNoteProps): SVGGElement {
   return createWrittenNoteSvg(BEND_TARGET_STYLE, props).element;
 }
 
-/** A pitch bend's lines, one a head, and the target they run to. */
-export function createBendSvg(
-  shape: BendShape,
-  { lines, targetLeftX }: BendLayout,
-  target: Omit<WrittenNoteProps, 'leftX'> | null
-): SVGGElement {
+/** A note's or chord's pitch bends and the targets they run to. */
+export function createBendSvg({ lines }: BendLayout): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('bend');
-  for (const line of lines) {
-    const path = createGlissandoPath({ ...line, shape: bendLineShape(shape) });
+  for (const { target, ...line } of lines) {
+    const path = createGlissandoPath(line);
     path.classList.add('bend-line');
     group.appendChild(path);
-  }
-  if (target !== null && targetLeftX !== null) {
-    group.appendChild(createBendTargetSvg({ ...target, leftX: targetLeftX }));
+    if (target !== null) {
+      group.appendChild(createBendTargetSvg(target));
+    }
   }
   return group;
 }

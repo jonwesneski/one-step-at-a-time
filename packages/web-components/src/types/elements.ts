@@ -1,3 +1,4 @@
+import type { ResolvedBend } from '../rules/glissandoRules';
 import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
@@ -158,6 +159,11 @@ export interface INoteElement {
   glissandoHint: GlissandoHint | null;
   /** The contour of the glissando line this starts. Defaults to `straight`. */
   glissandoShape: GlissandoShape;
+  /**
+   * Text above the stave: a `GlissandoLabel`, or any other text drawn as
+   * written, `|` starting a new line.
+   */
+  glissandoLabel: string | null;
   /** A pitch bend: a line after this note, inside its own duration. */
   bend: BendShape | null;
   /** The pitch it bends to, in parentheses; alone, a straight bend to it. */
@@ -373,6 +379,8 @@ export interface IChordElement {
   noteAccidentalsParenthesized: boolean[];
   /** Per tone, in `notes` order: a slotted note's own `quarter-tone`. */
   readonly toneQuarterTones: (QuarterTone | null)[];
+  /** Per tone: the bend it draws, its own or the chord's. */
+  readonly toneBends: (ResolvedBend | null)[];
   /** Per tone: the chord's `accidental-reminder`, or the tone's own. */
   readonly toneAccidentalReminders: boolean[];
   tie: TieValue | null;
@@ -389,6 +397,11 @@ export interface IChordElement {
   glissandoHint: GlissandoHint | null;
   /** The contour of the glissando line this starts. Defaults to `straight`. */
   glissandoShape: GlissandoShape;
+  /**
+   * Text above the stave: a `GlissandoLabel`, or any other text drawn as
+   * written, `|` starting a new line.
+   */
+  glissandoLabel: string | null;
   /** A pitch bend: a line after each head, inside the chord's own duration. */
   bend: BendShape | null;
   /** Notes only; ignored, with a warning, on a chord. */

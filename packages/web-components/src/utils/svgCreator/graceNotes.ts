@@ -277,15 +277,7 @@ function renderOrnamentNoteGroup(
       }
     }
 
-    // Grace notes are always stem-up and placed by their head, so tails past
-    // the second move the tip away from it.
-    const stemTipY =
-      headYCenters[0] -
-      GRACE_SCALE *
-        (BASE_STEM_LENGTH_PX +
-          flagStemExtensionPx(
-            durationToFlagCountMap.get(writtenDuration) ?? 0
-          ));
+    const stemTipY = loneGraceStemTipY(writtenDuration, headYCenters[0]);
     firstStemTipY = stemTipY;
     lastStemTipY = stemTipY;
 
@@ -298,6 +290,40 @@ function renderOrnamentNoteGroup(
   }
 
   return { group, firstStemTipY, lastStemTipY };
+}
+
+// Grace notes are always stem-up and placed by their head, so tails past the
+// second move the tip away from it.
+function loneGraceStemTipY(
+  duration: GraceDuration,
+  headYCenter: number
+): number {
+  return (
+    headYCenter -
+    GRACE_SCALE *
+      (BASE_STEM_LENGTH_PX +
+        flagStemExtensionPx(durationToFlagCountMap.get(duration) ?? 0))
+  );
+}
+
+/** The top of a leading grace group's stems and beams (px). */
+export function graceInkTopY(
+  graceNotes: GraceNoteDescriptor[],
+  graceDuration: GraceDuration | null,
+  mainHeadCenterYPx: number
+): number {
+  const headYCenters = graceNotes.map(
+    ({ relativeStaffSteps }) =>
+      mainHeadCenterYPx - relativeStaffSteps * STAFF_Y_STEP
+  );
+  if (graceNotes.length === 1) {
+    return loneGraceStemTipY(graceDuration ?? 'eighth', headYCenters[0]);
+  }
+  const beamYs = computeGraceBeamYs(
+    computeGraceLayout(graceNotes).headXCenters,
+    headYCenters
+  );
+  return Math.min(...beamYs) - STEM_OVERLAP_PX * GRACE_SCALE;
 }
 
 export function createGraceNotesSvg({

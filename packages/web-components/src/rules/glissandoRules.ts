@@ -11,8 +11,12 @@ import type {
 } from '../types/theory';
 import {
   BEND_BARLINE_GAP_PX,
+  BEND_FREE_MAX_TRAVEL_PX,
+  BEND_FREE_SLOPE,
   BEND_FREE_TRAVEL_PX,
   BEND_SAME_POSITION_TILT_PX,
+  BEND_TARGET_GAP_PX,
+  BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
   GLISSANDO_DIP_WIDTH_PX,
   GLISSANDO_GAP_PX,
   GLISSANDO_INK_CLEARANCE_PX,
@@ -24,12 +28,14 @@ import {
   GLISSANDO_WAVE_AMPLITUDE_PX,
   GLISSANDO_WAVELENGTH_PX,
   STAFF_LINE_SPACING,
+  STAFF_Y_STEP,
 } from '../utils/notationDimensions';
 import {
   baseAccidental,
   pitchAccidental,
   quarterToneOf,
 } from './accidentalRules';
+import { isOnStaffLine } from './augmentationDotRules';
 import { diatonicStepsBetween } from './graceRules';
 import { noteSemitoneMap } from './theoryConsts';
 
@@ -168,6 +174,8 @@ export type BendTarget = {
   octave: Octave;
   /** The accidental drawn on it. */
   accidental: AccidentalType | null;
+  /** Diatonic steps up to it from its note (negative below). */
+  steps: number;
 };
 
 export type ResolvedBend = { shape: BendShape; target: BendTarget | null };
@@ -276,9 +284,16 @@ export function resolveBend(
   };
   const letter = bendTo[0] as NoteLetter;
   const noteAccidental = pitchAccidental(note, quarterTone);
+  const { octave: targetOctave } = nearestBendTarget(pitches);
   const target: BendTarget = {
     letter,
-    octave: nearestBendTarget(pitches).octave,
+    octave: targetOctave,
+    steps: diatonicStepsBetween(
+      note[0] as NoteLetter,
+      octave,
+      letter,
+      targetOctave
+    ),
     accidental:
       pitchAccidental(bendTo, bendToQuarterTone) ??
       (letter === note[0] && noteAccidental !== null ? 'natural' : null),
@@ -292,31 +307,11 @@ export function resolveBend(
   };
 }
 
-/** Diatonic steps from a note up to its bend's target (negative below). */
-export function bendTargetSteps(
-  note: Note,
-  octave: Octave,
-  target: BendTarget
-): number {
-  return diatonicStepsBetween(
-    note[0] as NoteLetter,
-    octave,
-    target.letter,
-    target.octave
-  );
-}
-
 /**
- * Room (px) a bend keeps between its note's ink and the next note's; a target
- * stands in it, after the line.
+ * Room (px) a bend keeps between its note's ink and the next note's; targets
+ * stand in it, after the line.
  */
-export function bendReserveWidthPx(
-  shape: BendShape | null,
-  targetWidth: number
-): number {
-  if (shape === null) {
-    return 0;
-  }
+export function bendReserveWidthPx(targetWidth: number): number {
   return (
     GLISSANDO_MIN_LENGTH_PX +
     2 * GLISSANDO_GAP_PX +
@@ -328,10 +323,15 @@ export type BendHead = {
   /** The head's centre, and its dot, or null with none. */
   y: number;
   dotY: number | null;
-  onLine: boolean;
+  /** Null outside a staff, where there are no lines to keep off. */
+  staffY: number | null;
+  bend: ResolvedBend;
 };
 
-export type BendTargetHead = { y: number; onLine: boolean; width: number };
+const isOnLine = (staffY: number | null): boolean =>
+  staffY !== null && isOnStaffLine(staffY);
+
+const targetOffsetY = ({ steps }: BendTarget): number => -steps * STAFF_Y_STEP;
 
 // Whether the space above a head's stave line is free for a level line; a
 // neighbouring head's own line may already run there.
@@ -345,33 +345,96 @@ function levelLift(head: BendHead, heads: readonly BendHead[]): number {
 }
 
 // A bend's line starts level with a dot or its head, off any stave line the
-// head is on: just off it when sloped, in the space when level or wavy.
+// head is on: just off it when sloped, in the space when level or wavy. A
+// free straight one moves at least BEND_FREE_TRAVEL_PX, and keeps a slope that
+// still reads over a long note.
 function bendEndYs(
-  shape: BendShape,
   head: BendHead,
   heads: readonly BendHead[],
-  target: BendTargetHead | null
+  length: number
 ): { fromY: number; toY: number } {
+  const { shape, target } = head.bend;
   const rise = shape === 'up' ? -1 : shape === 'down' ? 1 : 0;
-  if (target !== null && target.y !== head.y) {
-    const { fromY, toY } = glissandoEndYs({
+  const startOnLine = isOnLine(head.staffY);
+  if (target !== null && target.steps !== 0) {
+    return glissandoEndYs({
       startHeadY: head.y,
-      endHeadY: target.y,
+      endHeadY: head.y + targetOffsetY(target),
       startDotY: head.dotY,
-      startOnLine: head.onLine,
-      endOnLine: target.onLine,
+      startOnLine,
+      endOnLine: isOnLine(
+        head.staffY === null ? null : head.staffY + targetOffsetY(target)
+      ),
       shape: bendLineShape(shape),
     });
-    return { fromY, toY };
   }
   const level = target !== null || rise === 0;
   const offLine = level
     ? levelLift(head, heads)
     : -rise * GLISSANDO_OFF_LINE_PX;
-  const fromY = head.dotY ?? head.y + (head.onLine ? offLine : 0);
+  const fromY = head.dotY ?? head.y + (startOnLine ? offLine : 0);
   const travel =
-    target === null ? BEND_FREE_TRAVEL_PX : BEND_SAME_POSITION_TILT_PX;
+    target === null
+      ? Math.max(
+          BEND_FREE_TRAVEL_PX,
+          Math.min(BEND_FREE_MAX_TRAVEL_PX, length * BEND_FREE_SLOPE)
+        )
+      : BEND_SAME_POSITION_TILT_PX;
   return { fromY, toY: fromY + rise * travel };
+}
+
+// Targets too close to share a column stand in columns side by side.
+function bendTargetColumns(
+  targets: readonly { y: number; width: number }[]
+): { columnOf: number[]; lefts: number[]; width: number } {
+  const columns: { ys: number[]; width: number }[] = [];
+  const columnOf = targets.map(() => 0);
+  const order = targets.map((_, i) => i).sort((a, b) => targets[a].y - targets[b].y);
+  for (const i of order) {
+    const { y, width } = targets[i];
+    let column = columns.findIndex(({ ys }) =>
+      ys.every(
+        (other) =>
+          Math.abs(other - y) >= 2 * BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX
+      )
+    );
+    if (column < 0) {
+      column = columns.push({ ys: [], width: 0 }) - 1;
+    }
+    columns[column].ys.push(y);
+    columns[column].width = Math.max(columns[column].width, width);
+    columnOf[i] = column;
+  }
+  const lefts: number[] = [];
+  let left = 0;
+  for (const { width } of columns) {
+    lefts.push(left);
+    left += width + BEND_TARGET_GAP_PX;
+  }
+  return {
+    columnOf,
+    lefts,
+    width: columns.length === 0 ? 0 : left - BEND_TARGET_GAP_PX,
+  };
+}
+
+/** Room (px) the targets of a note's or chord's bends take; 0 with none. */
+export function bendTargetsWidthPx(
+  heads: readonly Pick<BendHead, 'y' | 'bend'>[],
+  targetWidthPx: (accidental: AccidentalType | null) => number
+): number {
+  return bendTargetColumns(
+    heads.flatMap(({ y, bend: { target } }) =>
+      target === null
+        ? []
+        : [
+            {
+              y: y + targetOffsetY(target),
+              width: targetWidthPx(target.accidental),
+            },
+          ]
+    )
+  ).width;
 }
 
 /** Where a bend stops: before ink, before a barline, or at a set length. */
@@ -380,75 +443,138 @@ export type BendLimit =
   | { kind: 'barline'; left: number }
   | { kind: 'length'; length: number };
 
-export type BendLayout = {
-  lines: { from: LinePoint; to: LinePoint }[];
-  /** Where the target's left parenthesis begins, or null with no target. */
-  targetLeftX: number | null;
+export type BendTargetPlacement = {
+  /** Where its left parenthesis begins. */
+  leftX: number;
+  centerY: number;
+  accidental: AccidentalType | null;
+  staffY: number | null;
 };
 
+export type BendLine = {
+  from: LinePoint;
+  to: LinePoint;
+  shape: GlissandoShape;
+  target: BendTargetPlacement | null;
+};
+
+export type BendLayout = { lines: BendLine[]; rightX: number };
+
 /**
- * A bend's lines, one a head, all between the same two x's: from the note's
- * ink to the limit, or to a target standing before it. Null when there is no
- * room. An up-tail counts as ink only where a line would cross it.
+ * A note's or chord's bends, one line a head, all between the same two x's:
+ * from the note's ink to the limit, or to the targets standing before it. Null
+ * when there is no room. An up-tail counts as ink only where a line would
+ * cross it.
  */
-export function layoutBend({
-  shape,
+export function layoutBends({
   heads,
-  target,
   inkRight,
   tail,
   limit,
+  targetWidthPx,
 }: {
-  shape: BendShape;
   heads: readonly BendHead[];
-  target: BendTargetHead | null;
   /** The right edge of the heads, dots and trill notes. */
   inkRight: number;
   tail: { right: number; bottomY: number } | null;
   limit: BendLimit;
+  targetWidthPx: (accidental: AccidentalType | null) => number;
 }): BendLayout | null {
-  const ys = heads.map((head) => bendEndYs(shape, head, heads, target));
-  const topY =
-    Math.min(...ys.flatMap(({ fromY, toY }) => [fromY, toY])) -
-    (shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0) -
-    GLISSANDO_INK_CLEARANCE_PX;
-  const startRight =
-    tail !== null && topY < tail.bottomY
-      ? Math.max(inkRight, tail.right)
-      : inkRight;
-  const targetWidth = target?.width ?? 0;
-  const targetRoom = target === null ? 0 : targetWidth + GLISSANDO_GAP_PX;
+  const targeted = heads.flatMap(({ y, bend: { target } }, i) =>
+    target === null
+      ? []
+      : [
+          {
+            head: i,
+            y: y + targetOffsetY(target),
+            width: targetWidthPx(target.accidental),
+          },
+        ]
+  );
+  const columns = bendTargetColumns(targeted);
+  const targetRoom =
+    targeted.length === 0 ? 0 : columns.width + GLISSANDO_GAP_PX;
 
-  const lineEnd = ((): number => {
-    if (limit.kind === 'length') {
-      return startRight + GLISSANDO_GAP_PX + limit.length;
-    }
-    if (limit.kind === 'ink') {
-      return limit.left - GLISSANDO_GAP_PX - targetRoom;
-    }
+  // The lines from one x to the limit, or null where they would be too short.
+  // The gap before them closes up before that.
+  const linesFrom = (startRight: number): BendLine[] | null => {
     const spare =
-      limit.left - startRight - bendReserveWidthPx(shape, targetWidth);
-    const barlineGap = Math.max(
-      GLISSANDO_GAP_PX,
-      Math.min(BEND_BARLINE_GAP_PX, GLISSANDO_GAP_PX + spare)
-    );
-    return limit.left - barlineGap - targetRoom;
-  })();
-
-  // The gaps before the line close up when it would be too short.
-  const fromX = [GLISSANDO_GAP_PX, GLISSANDO_MIN_GAP_PX]
-    .map((gap) => startRight + gap)
-    .find((x) => lineEnd - x >= GLISSANDO_MIN_DRAWN_PX);
-  if (fromX === undefined) {
-    return null;
-  }
-  return {
-    lines: ys.map(({ fromY, toY }) => ({
-      from: { x: fromX, y: fromY },
-      to: { x: lineEnd, y: toY },
-    })),
-    targetLeftX: target === null ? null : lineEnd + GLISSANDO_GAP_PX,
+      limit.kind === 'barline'
+        ? limit.left - startRight - bendReserveWidthPx(columns.width)
+        : 0;
+    const lineEnd =
+      limit.kind === 'length'
+        ? startRight + GLISSANDO_GAP_PX + limit.length
+        : limit.left -
+          targetRoom -
+          (limit.kind === 'ink'
+            ? GLISSANDO_GAP_PX
+            : Math.max(
+                GLISSANDO_GAP_PX,
+                Math.min(BEND_BARLINE_GAP_PX, GLISSANDO_GAP_PX + spare)
+              ));
+    const fromX = [GLISSANDO_GAP_PX, GLISSANDO_MIN_GAP_PX]
+      .map((gap) => startRight + gap)
+      .find((x) => lineEnd - x >= GLISSANDO_MIN_DRAWN_PX);
+    if (fromX === undefined) {
+      return null;
+    }
+    return heads.map((head, i): BendLine => {
+      const { fromY, toY } = bendEndYs(head, heads, lineEnd - fromX);
+      const { shape, target } = head.bend;
+      const column = targeted.findIndex((candidate) => candidate.head === i);
+      return {
+        from: { x: fromX, y: fromY },
+        to: { x: lineEnd, y: toY },
+        shape: bendLineShape(shape),
+        target:
+          target === null
+            ? null
+            : {
+                leftX:
+                  lineEnd +
+                  GLISSANDO_GAP_PX +
+                  columns.lefts[columns.columnOf[column]],
+                centerY: targeted[column].y,
+                accidental: target.accidental,
+                staffY:
+                  head.staffY === null
+                    ? null
+                    : head.staffY + targetOffsetY(target),
+              },
+      };
+    });
   };
+
+  let lines = linesFrom(inkRight);
+  if (
+    tail !== null &&
+    (lines === null || lines.some((line) => crossesTail(line, tail)))
+  ) {
+    lines = linesFrom(Math.max(inkRight, tail.right));
+  }
+  return lines === null
+    ? null
+    : {
+        lines,
+        rightX: lines[0].to.x + targetRoom,
+      };
+}
+
+// A tail hangs from the stem's tip down to bottomY, left of `right`.
+function crossesTail(
+  { from, to, shape }: BendLine,
+  tail: { right: number; bottomY: number }
+): boolean {
+  const x = Math.min(tail.right, to.x);
+  const yAtTail = from.y + ((to.y - from.y) * (x - from.x)) / (to.x - from.x);
+  return (
+    from.x < tail.right &&
+    Math.min(from.y, yAtTail) -
+      (shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0) -
+      GLISSANDO_INK_CLEARANCE_PX <
+      tail.bottomY
+  );
 }
 
 /** Each head's own dot among a note's or chord's dot rows. */

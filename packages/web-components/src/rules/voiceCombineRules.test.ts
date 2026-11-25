@@ -384,10 +384,11 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('excludes a bend, free or to a target', () => {
+  it('excludes a bend, free or to a target, and a glissando label', () => {
     for (const [name, value] of [
       ['bend', 'down'],
       ['bend-to', 'D'],
+      ['glissando-label', 'lip'],
     ]) {
       const bent = note('E', 5);
       bent.setAttribute(name, value);

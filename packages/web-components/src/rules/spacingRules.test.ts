@@ -1,8 +1,12 @@
 import { DurationType } from '../types/theory';
 import { MIN_NOTE_WIDTH, PIXELS_PER_BEAT } from '../utils/notationDimensions';
 import {
+  columnRoomAt,
   computeMeasureProportionalOffsets,
+  computeRoomAfterEntries,
   computeSpacingWeights,
+  computeUncrowdedWidth,
+  mergeColumnRooms,
 } from './spacingRules';
 import { durationToFactor } from './theoryConsts';
 
@@ -126,5 +130,135 @@ describe('computeMeasureProportionalOffsets (position)', () => {
     expect(computeMeasureProportionalOffsets([0, 0.25], 1, -50)).toEqual([
       0, 0,
     ]);
+  });
+});
+
+describe('computeMeasureProportionalOffsets — limits', () => {
+  it('changes nothing while no limit is passed', () => {
+    expect(
+      computeMeasureProportionalOffsets([0, 0.25, 0.5], 1, 400, [
+        { beat: 0.5, offset: 200 },
+      ])
+    ).toEqual([0, 100, 200]);
+  });
+
+  it('squeezes the beats before a limit in proportion and spreads the rest', () => {
+    expect(
+      computeMeasureProportionalOffsets([0, 0.25, 0.5, 0.75], 1, 400, [
+        { beat: 0.5, offset: 100 },
+      ])
+    ).toEqual([0, 50, 100, 250]);
+  });
+
+  it('passes no limit, and never runs backwards', () => {
+    const limits = [
+      { beat: 0.25, offset: 90 },
+      { beat: 0.5, offset: 60 },
+      { beat: 0.75, offset: 200 },
+    ];
+    const offsets = computeMeasureProportionalOffsets(
+      [0, 0.25, 0.5, 0.75],
+      1,
+      400,
+      limits
+    );
+    limits.forEach(({ offset }, i) =>
+      expect(offsets[i + 1]).toBeLessThanOrEqual(offset)
+    );
+    expect([...offsets].sort((a, b) => a - b)).toEqual(offsets);
+    expect(
+      computeMeasureProportionalOffsets([0.5], 1, 400, [
+        { beat: 0.5, offset: -50 },
+      ])
+    ).toEqual([0]);
+  });
+});
+
+describe('computeRoomAfterEntries', () => {
+  it('sums the room to the end of the bar', () => {
+    const { roomAfter, columns } = computeRoomAfterEntries([
+      { beatOffsets: [0, 0.5, 0.75], rooms: [30, 20, 25] },
+    ]);
+    expect(roomAfter).toEqual([[75, 45, 25]]);
+    expect(columns).toEqual([
+      { beat: 0, roomAfter: 75 },
+      { beat: 0.5, roomAfter: 45 },
+      { beat: 0.75, roomAfter: 25 },
+    ]);
+  });
+
+  it('gives a beat the most any voice needs, and earlier beats no less', () => {
+    const { roomAfter } = computeRoomAfterEntries([
+      { beatOffsets: [0, 0.5], rooms: [20, 20] },
+      { beatOffsets: [0, 0.5, 0.75], rooms: [20, 30, 40] },
+    ]);
+    expect(roomAfter).toEqual([
+      [90, 70],
+      [90, 70, 40],
+    ]);
+  });
+
+  it('takes other staves into account', () => {
+    const { roomAfter } = computeRoomAfterEntries(
+      [{ beatOffsets: [0, 0.5], rooms: [20, 20] }],
+      [{ beat: 0.75, roomAfter: 100 }]
+    );
+    expect(roomAfter).toEqual([[120, 100]]);
+  });
+
+  it('keeps entries on one beat apart', () => {
+    expect(
+      computeRoomAfterEntries([
+        { beatOffsets: [0, 0, 0.5], rooms: [20, 20, 25] },
+      ]).roomAfter
+    ).toEqual([[65, 45, 25]]);
+  });
+});
+
+describe('column rooms', () => {
+  it('merges staves, keeping the most at each beat', () => {
+    const merged = mergeColumnRooms([
+      [{ beat: 0.5, roomAfter: 40 }],
+      [
+        { beat: 0.25, roomAfter: 70 },
+        { beat: 0.5, roomAfter: 60 },
+      ],
+    ]);
+    expect(merged).toEqual([
+      { beat: 0.25, roomAfter: 70 },
+      { beat: 0.5, roomAfter: 60 },
+    ]);
+    expect(columnRoomAt(merged, 0)).toBe(70);
+    expect(columnRoomAt(merged, 0.5)).toBe(60);
+    expect(columnRoomAt(merged, 0.75)).toBe(0);
+  });
+});
+
+describe('computeUncrowdedWidth', () => {
+  const columns = [
+    { beat: 0, roomAfter: 90 },
+    { beat: 0.5, roomAfter: 60 },
+    { beat: 0.75, roomAfter: 40 },
+  ];
+
+  it('is the least width at which no limit moves a beat', () => {
+    const width = computeUncrowdedWidth(columns, 1);
+    const offsetsAt = (available: number) =>
+      computeMeasureProportionalOffsets(
+        columns.map(({ beat }) => beat),
+        1,
+        available,
+        columns.map(({ beat, roomAfter }) => ({
+          beat,
+          offset: available - roomAfter,
+        }))
+      );
+    expect(width).toBe(160);
+    expect(offsetsAt(width)).toEqual([0, 80, 120]);
+    expect(offsetsAt(width - 20)[2]).toBeLessThan(0.75 * (width - 20));
+  });
+
+  it('ignores beats past the end of the bar', () => {
+    expect(computeUncrowdedWidth([{ beat: 1, roomAfter: 40 }], 1)).toBe(0);
   });
 });

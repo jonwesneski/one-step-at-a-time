@@ -24,6 +24,7 @@ import {
   HAIRPIN_MIN_ROUTE_SLANT_RADIANS,
   HAIRPIN_NOTE_CLEARANCE_PX,
   HAIRPIN_ROUTE_OUTSIDE_CLEARANCE_PX,
+  MAX_UNCROWDED_STRETCH,
   OCTAVE_SIGN_BEAM_CLEARANCE_PX,
   REST_BEAM_CLEARANCE_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
@@ -257,17 +258,34 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
   test('basis scales linearly with note count — delta = noteCount × (strut + slack)', async ({
     page,
   }) => {
-    await buildMeasureWithNotes(page, 'eighth', ONE_NOTE);
+    await buildMeasureWithNotes(page, 'quarter', ONE_NOTE);
     await waitForRedrawCycle(page);
     const flex1 = await readMeasureFlex(page);
 
+    await buildMeasureWithNotes(page, 'quarter', FOUR_NOTES);
+    await waitForRedrawCycle(page);
+    const flex4 = await readMeasureFlex(page);
+
+    expect(flex4.basis - flex1.basis).toBeCloseTo(
+      3 * entryNatural('quarter'),
+      0
+    );
+  });
+
+  test('a full bar of short notes — basis widens so the last one keeps its place, up to the limit', async ({
+    page,
+  }) => {
     await buildMeasureWithNotes(page, 'eighth', EIGHT_NOTES);
     await waitForRedrawCycle(page);
-    const flex8 = await readMeasureFlex(page);
+    const flex = await readMeasureFlex(page);
+    const natural =
+      (await readDescribeEndX(page)) +
+      LEADING_NOTE_GAP +
+      8 * entryNatural('eighth');
 
-    expect(flex8.basis - flex1.basis).toBeCloseTo(
-      7 * entryNatural('eighth'),
-      0
+    expect(flex.basis).toBeGreaterThan(natural);
+    expect(flex.basis).toBeLessThanOrEqual(
+      Math.ceil(natural * MAX_UNCROWDED_STRETCH)
     );
   });
 
@@ -281,14 +299,11 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     const describeEndX = await readDescribeEndX(page);
 
     expect(flex.basis).toBeGreaterThan(300);
-    expect(
-      Math.abs(
-        flex.basis -
-          (describeEndX +
-            LEADING_NOTE_GAP +
-            16 * entryNatural('hundredtwentyeighth'))
-      )
-    ).toBeLessThanOrEqual(1);
+    // The last note's head and the gap after it take more than its strut.
+    const strut =
+      describeEndX + LEADING_NOTE_GAP + 16 * entryNatural('hundredtwentyeighth');
+    expect(flex.basis).toBeGreaterThanOrEqual(Math.floor(strut));
+    expect(flex.basis).toBeLessThan(strut + MIN_NOTE_WIDTH);
   });
 
   test('notes do not bleed — the staff is wide enough for 15 hundredtwentyeighth notes', async ({
@@ -387,12 +402,14 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
       describeEndX + LEADING_NOTE_GAP + 16 * MIN_NOTE_WIDTH;
 
     expect(naturalFor16Sixteenths).toBeGreaterThan(naturalFor1Whole);
-    expect(Math.abs(flex.basis - naturalFor16Sixteenths)).toBeLessThanOrEqual(
-      1
+    expect(flex.basis).toBeGreaterThanOrEqual(
+      Math.floor(naturalFor16Sixteenths)
     );
-    expect(
-      Math.abs(minWidth - Math.max(strutFor16Notes, MEASURE_MIN_WIDTH))
-    ).toBeLessThanOrEqual(1);
+    expect(flex.basis).toBeLessThanOrEqual(
+      Math.ceil((minWidth + 1) * MAX_UNCROWDED_STRETCH)
+    );
+    expect(minWidth).toBeGreaterThanOrEqual(Math.floor(strutFor16Notes));
+    expect(minWidth).toBeLessThan(strutFor16Notes + MIN_NOTE_WIDTH);
     expect(flex.basis).toBeGreaterThan(naturalFor1Whole);
   });
 

@@ -255,8 +255,8 @@ export const PitchBends: Story = {
 };
 
 /**
- * Bends make room in quick notes, past dots and tails and for their targets,
- * and a chord bends from every head.
+ * Bends make room in quick notes, past dots and tails and for their targets. A
+ * chord bends from every head, or from one tone's alone.
  */
 export const BendsInAPassage: Story = {
   render: () => html`
@@ -302,10 +302,74 @@ export const BendsInAPassage: Story = {
             <music-note note="F" octave="4"></music-note>
             <music-note note="G" octave="4"></music-note>
           </music-chord>
-          <music-chord duration="half" bend="wave">
+          <music-chord duration="half">
             <music-note note="G" octave="4"></music-note>
-            <music-note note="Eb" octave="5"></music-note>
+            <music-note note="Eb" octave="5" bend-to="D"></music-note>
           </music-chord>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/**
+ * A label sits above the stave and the ink under it, grace beams included, and
+ * stacks above a tremolo label. It starts at the head, at the note's own
+ * accidental (quasi gliss.) or over the grace notes (chrom.), and shifts left
+ * rather than run past the bar.
+ */
+export const LabelsAboveTheStave: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="E"
+            octave="4"
+            duration="quarter"
+            tremolo="unmeasured"
+            tremolo-label="flz"
+            glissando-label="lip"
+          ></music-note>
+          <music-note note="G" octave="4" duration="quarter"></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="half"
+            bend="dip"
+            glissando-label="bend down|¼-tone"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-tuplet ratio="3">
+            <music-note
+              note="Eb"
+              octave="5"
+              duration="eighth"
+              glissando-label="quasi-gliss"
+            ></music-note>
+            <music-note note="C" octave="5" duration="eighth"></music-note>
+            <music-note note="Bb" octave="4" duration="eighth"></music-note>
+          </music-tuplet>
+          <music-note
+            note="C"
+            octave="5"
+            duration="quarter"
+            grace="G#,A,A#,B"
+            grace-octave="4,4,4,4"
+            grace-duration="sixteenth"
+            glissando-label="chrom"
+          ></music-note>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+          <music-note
+            note="G"
+            octave="4"
+            duration="quarter"
+            bend="wave"
+            glissando-label="bend pitch by a ¼-tone"
+          ></music-note>
         </music-staff>
       </music-measure>
     </music-composition>

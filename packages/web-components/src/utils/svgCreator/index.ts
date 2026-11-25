@@ -110,11 +110,9 @@ export { createBraceSvg, createBracketSvg } from './staffGroup';
 export { createTimeSignatureSvg } from './timeSignature';
 export {
   createTremoloBeamPolygon,
-  createTremoloLabel,
   createTremoloNumeral,
   createTremoloStrokes,
   tremoloBeamPoints,
-  tremoloLabelWidthPx,
 } from './tremolo';
 export {
   TRILL_SIGN_WIDTH_PX,

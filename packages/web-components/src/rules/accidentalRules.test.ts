@@ -827,6 +827,23 @@ describe('computeNoteAccidentals — bend targets', () => {
     expect(bendTargetAccidentals.get(afterFlat)).toBe('natural');
   });
 
+  it('resolves the target of each tone of a chord', () => {
+    const chord = makeChord({
+      notes: [
+        { note: 'C', octave: 4 },
+        { note: 'E', octave: 4 },
+      ],
+    });
+    chord.querySelectorAll('music-note')[1].setAttribute('bend-to', 'F');
+    document.body.appendChild(chord);
+    const { chordBendTargetAccidentals } = computeNoteAccidentals(
+      [chord],
+      'G',
+      'major'
+    );
+    expect(chordBendTargetAccidentals.get(chord)).toEqual([null, 'natural']);
+  });
+
   it('never changes the rest of the bar', () => {
     const after = makeNote({ note: 'C' });
     const { noteShowAccidentals } = computeNoteAccidentals(

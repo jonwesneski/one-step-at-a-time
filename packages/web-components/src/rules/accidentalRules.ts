@@ -105,6 +105,8 @@ export type NoteAccidentals = {
   // What a note's `bend-to` draws: its own accidental, or a natural where one
   // in force would otherwise carry over to it.
   bendTargetAccidentals: Map<NoteElementType, AccidentalType | null>;
+  // The same for a chord's tones.
+  chordBendTargetAccidentals: Map<ChordElementType, (AccidentalType | null)[]>;
 };
 
 export function computeNoteAccidentals(
@@ -166,13 +168,37 @@ export function computeNoteAccidentals(
   };
 
   // A bend's target never alters the rest of the bar.
+  const chordBendTargetAccidentals = new Map<
+    ChordElementType,
+    (AccidentalType | null)[]
+  >();
+  const targetAccidental = (
+    letter: string,
+    accidental: AccidentalType | null
+  ): AccidentalType | null =>
+    accidental ?? (stateFor(letter) === null ? null : 'natural');
   const resolveBendTarget = (noteElement: NoteElementType): void => {
     const bendTo = noteElement.bendTo ?? null;
     if (bendTo !== null) {
       bendTargetAccidentals.set(
         noteElement,
-        pitchAccidental(bendTo, noteElement.bendToQuarterTone) ??
-          (stateFor(bendTo[0]) === null ? null : 'natural')
+        targetAccidental(
+          bendTo[0],
+          pitchAccidental(bendTo, noteElement.bendToQuarterTone)
+        )
+      );
+    }
+  };
+  const resolveChordBendTargets = (chordElement: ChordElementType): void => {
+    const bends = chordElement.toneBends;
+    if (bends.some((bend) => bend?.target)) {
+      chordBendTargetAccidentals.set(
+        chordElement,
+        bends.map((bend) =>
+          bend?.target
+            ? targetAccidental(bend.target.letter, bend.target.accidental)
+            : null
+        )
       );
     }
   };
@@ -244,6 +270,7 @@ export function computeNoteAccidentals(
           chordElement,
           chordElement.notes.map(() => null)
         );
+        resolveChordBendTargets(chordElement);
         resolveOrnamentAccidentals(
           chordElement.trillFinish,
           chordElement.trillFinishQuarterTone,
@@ -273,6 +300,7 @@ export function computeNoteAccidentals(
         inMeasureState.set(letter, noteAccidental);
       });
       chordNoteAccidentals.set(chordElement, accidentals);
+      resolveChordBendTargets(chordElement);
       if (parenthesized.some(Boolean)) {
         chordParenthesizedAccidentals.set(chordElement, parenthesized);
       }
@@ -293,6 +321,7 @@ export function computeNoteAccidentals(
     parenthesizedAccidentals,
     chordParenthesizedAccidentals,
     bendTargetAccidentals,
+    chordBendTargetAccidentals,
   };
 }
 

@@ -327,6 +327,14 @@ export type GlissandoHint = 'white-key' | 'black-key' | 'gliss';
  * A `glissando` line's contour: straight, straight with a short dip, or wavy.
  */
 export type GlissandoShape = 'straight' | 'dip' | 'wave';
+/** The named `glissando-label`s; any other text is drawn as written. */
+export type GlissandoLabel =
+  | 'gliss'
+  | 'quasi-gliss'
+  | 'chrom'
+  | 'chromatic'
+  | 'lip'
+  | 'bend';
 /** The contour of a pitch bend after one note. */
 export type BendShape = 'up' | 'down' | 'dip' | 'wave';
 

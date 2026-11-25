@@ -66,6 +66,7 @@ const PITCH_ONLY_SHARED_ATTRIBUTES = [
   'glissando',
   'glissando-hint',
   'glissando-shape',
+  'glissando-label',
   'bend',
   'bend-to',
   'bend-to-quarter-tone',

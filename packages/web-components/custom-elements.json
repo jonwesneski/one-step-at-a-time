@@ -593,6 +593,14 @@
             },
             {
               "kind": "field",
+              "name": "toneBends",
+              "type": {
+                "text": "(ResolvedBend | null)[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "tie",
               "type": {
                 "text": "TieValue | null"
@@ -631,6 +639,13 @@
               "name": "glissandoShape",
               "type": {
                 "text": "GlissandoShape"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoLabel",
+              "type": {
+                "text": "string | null"
               }
             },
             {
@@ -1320,11 +1335,11 @@
             },
             {
               "kind": "method",
-              "name": "#standaloneBend",
+              "name": "#standaloneBends",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "BendShape | null"
+                  "text": "(ResolvedBend | null)[]"
                 }
               }
             },
@@ -1499,18 +1514,25 @@
               "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`."
             },
             {
+              "name": "glissando-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Text above the stave over this chord: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar."
+            },
+            {
               "name": "bend",
               "type": {
                 "text": "'up' | 'down' | 'dip' | 'wave'"
               },
-              "description": "A pitch bend: a line after each of this chord's heads, ending inside its own duration. Ignored, with a warning, beside `glissando=\"start\"` and on a `<music-tremolo>` member."
+              "description": "A pitch bend: a line after each of this chord's heads, ending inside its own duration. A slotted note's own `bend` / `bend-to` replaces it for that tone. Ignored, with a warning, beside `glissando=\"start\"` and on a `<music-tremolo>` member."
             },
             {
               "name": "bend-to",
               "type": {
                 "text": "Note"
               },
-              "description": "Notes only: ignored, with a warning, on a chord."
+              "description": "Notes only, slotted ones included: ignored, with a warning, on a chord."
             },
             {
               "name": "bend-to-quarter-tone",
@@ -3236,6 +3258,18 @@
             },
             {
               "kind": "field",
+              "name": "toneBends",
+              "type": {
+                "text": "(ResolvedBend | null)[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "tie",
               "type": {
                 "text": "TieValue | null"
@@ -3294,6 +3328,17 @@
               "name": "glissandoShape",
               "type": {
                 "text": "GlissandoShape"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoLabel",
+              "type": {
+                "text": "string | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -4315,11 +4360,11 @@
             },
             {
               "kind": "method",
-              "name": "#standaloneBend",
+              "name": "#standaloneBends",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "BendShape | null"
+                  "text": "(ResolvedBend | null)[]"
                 }
               },
               "inheritedFrom": {
@@ -4765,11 +4810,22 @@
               }
             },
             {
+              "name": "glissando-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Text above the stave over this chord: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "name": "bend",
               "type": {
                 "text": "'up' | 'down' | 'dip' | 'wave'"
               },
-              "description": "A pitch bend: a line after each of this chord's heads, ending inside its own duration. Ignored, with a warning, beside `glissando=\"start\"` and on a `<music-tremolo>` member.",
+              "description": "A pitch bend: a line after each of this chord's heads, ending inside its own duration. A slotted note's own `bend` / `bend-to` replaces it for that tone. Ignored, with a warning, beside `glissando=\"start\"` and on a `<music-tremolo>` member.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -4780,7 +4836,7 @@
               "type": {
                 "text": "Note"
               },
-              "description": "Notes only: ignored, with a warning, on a chord.",
+              "description": "Notes only, slotted ones included: ignored, with a warning, on a chord.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5831,6 +5887,17 @@
               "name": "glissandoShape",
               "type": {
                 "text": "GlissandoShape"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "glissandoLabel",
+              "type": {
+                "text": "string | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -7242,11 +7309,22 @@
               }
             },
             {
+              "name": "glissando-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Text above the stave over this note: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
               "name": "bend",
               "type": {
                 "text": "'up' | 'down' | 'dip' | 'wave'"
               },
-              "description": "A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando=\"start\"`, on a `<music-tremolo>` member and on a triangle notehead; read from a note, not from a chord's slotted tone.",
+              "description": "A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando=\"start\"`, on a `<music-tremolo>` member and on a triangle notehead. On a note slotted in a chord it bends just that tone, whatever the chord's own `bend`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -7939,6 +8017,16 @@
             {
               "kind": "method",
               "name": "#syncMarkerBeats",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#syncColumnRooms",
               "privacy": "private",
               "return": {
                 "type": {
@@ -9433,6 +9521,13 @@
             },
             {
               "kind": "field",
+              "name": "glissandoLabel",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "bend",
               "type": {
                 "text": "BendShape | null"
@@ -10244,11 +10339,18 @@
               "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`."
             },
             {
+              "name": "glissando-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Text above the stave over this note: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar."
+            },
+            {
               "name": "bend",
               "type": {
                 "text": "'up' | 'down' | 'dip' | 'wave'"
               },
-              "description": "A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando=\"start\"`, on a `<music-tremolo>` member and on a triangle notehead; read from a note, not from a chord's slotted tone."
+              "description": "A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando=\"start\"`, on a `<music-tremolo>` member and on a triangle notehead. On a note slotted in a chord it bends just that tone, whatever the chord's own `bend`."
             },
             {
               "name": "bend-to",
@@ -11192,6 +11294,45 @@
             },
             {
               "kind": "field",
+              "name": "#ownColumnRooms",
+              "privacy": "private",
+              "type": {
+                "text": "ColumnRoom[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#spacingMarkers",
+              "privacy": "private",
+              "type": {
+                "text": "{\n    all: readonly MarkerBeat[];\n    slots: readonly MarkerBeat[];\n  }"
+              },
+              "default": "{ all: [], slots: [] }",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#roomAfterEntries",
+              "privacy": "private",
+              "type": {
+                "text": "{\n    unisonReserves: ReadonlyMap<VoiceKey, Map<number, number>>;\n    byVoice: Map<VoiceKey, number[]>;\n    ownByVoice: Map<VoiceKey, number[]>;\n    columns: ColumnRoom[];\n    limits: OffsetLimit[];\n  } | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#voice1BeatOffsets",
               "privacy": "private",
               "type": {
@@ -11365,12 +11506,25 @@
             },
             {
               "kind": "field",
-              "name": "#tremoloLabelContainers",
+              "name": "#techniqueLabelContainers",
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#placedTechniqueLabels",
+              "privacy": "private",
+              "type": {
+                "text": "PlacedTechniqueLabel[]"
+              },
+              "default": "[]",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -11424,9 +11578,29 @@
             },
             {
               "kind": "field",
-              "name": "#bendRightXs",
+              "name": "#bendsByEntry",
               "privacy": "private",
-              "default": "new Map<NoteChordOrRestElementType, number>()",
+              "default": "new Map<Element, (ResolvedBend | null)[]>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#chordBendTargetAccidentals",
+              "privacy": "private",
+              "default": "new Map< ChordElementType, (AccidentalType | null)[] >()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendInk",
+              "privacy": "private",
+              "default": "new Map< NoteChordOrRestElementType, { left: number; right: number; top: number } >()",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -12637,6 +12811,18 @@
             },
             {
               "kind": "field",
+              "name": "ownColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "ownBarlineSlotLefts",
               "type": {
                 "text": "readonly BarlineSlotLeft[]"
@@ -13137,6 +13323,146 @@
                   "type": {
                     "text": "number"
                   }
+                },
+                {
+                  "name": "limits",
+                  "type": {
+                    "text": "() => readonly OffsetLimit[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#roomAfter",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    byVoice: Map<VoiceKey, number[]>;\n    // Without the other staves' needs.\n    ownByVoice: Map<VoiceKey, number[]>;\n    columns: ColumnRoom[];\n    limits: OffsetLimit[];\n  }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#contentWidths",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ requiredWidth: number; uncrowdedWidth: number }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#offsetLimits",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OffsetLimit[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "columns",
+                  "type": {
+                    "text": "readonly ColumnRoom[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#crowdedColumns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ColumnRoom[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measureCapacity",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#roomToNext",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryInkRight",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -13176,6 +13502,12 @@
                   "name": "measureCapacity",
                   "type": {
                     "text": "number"
+                  }
+                },
+                {
+                  "name": "limits",
+                  "type": {
+                    "text": "readonly OffsetLimit[]"
                   }
                 }
               ],
@@ -13260,6 +13592,28 @@
                   "name": "barlineFloor",
                   "type": {
                     "text": "(slotIndex: number) => number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#latestSlotLeft",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "slot",
+                  "type": {
+                    "text": "MarkerBeat"
                   }
                 }
               ],
@@ -13416,11 +13770,11 @@
             },
             {
               "kind": "method",
-              "name": "#bendOf",
+              "name": "#bendsOf",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "ResolvedBend | null"
+                  "text": "BendHead[]"
                 }
               },
               "parameters": [
@@ -13444,30 +13798,40 @@
             },
             {
               "kind": "method",
-              "name": "#bendTargetStaffY",
+              "name": "#entryBends",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "number"
+                  "text": "(ResolvedBend | null)[]"
                 }
               },
               "parameters": [
                 {
-                  "name": "state",
+                  "name": "element",
                   "type": {
-                    "text": "VoiceRenderState"
+                    "text": "NoteElementType | ChordElementType"
                   }
-                },
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveEntryBends",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(ResolvedBend | null)[]"
+                }
+              },
+              "parameters": [
                 {
-                  "name": "index",
+                  "name": "element",
                   "type": {
-                    "text": "number"
-                  }
-                },
-                {
-                  "name": "target",
-                  "type": {
-                    "text": "BendTarget"
+                    "text": "NoteElementType | ChordElementType"
                   }
                 }
               ],
@@ -13482,7 +13846,7 @@
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{\n    staffYs: number[];\n    inkRight: number;\n    tail: { right: number; bottomY: number } | null;\n  }"
+                  "text": "{\n    inkRight: number;\n    tail: { right: number; bottomY: number } | null;\n  }"
                 }
               },
               "parameters": [
@@ -13838,7 +14202,21 @@
             },
             {
               "kind": "method",
-              "name": "#renderTremoloLabels",
+              "name": "#layoutTechniqueLabels",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderTechniqueLabels",
               "privacy": "private",
               "return": {
                 "type": {
@@ -13850,6 +14228,382 @@
                   "name": "remainingWidth",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueLabelSpan",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; right: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "label",
+                  "type": {
+                    "text": "TechniqueLabel"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueLabelClearBaselineY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "label",
+                  "type": {
+                    "text": "TechniqueLabel"
+                  }
+                },
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#connectorTopUnderLabel",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "LabelSpan"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#headCenterX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoLines",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    from: LinePoint;\n    to: LinePoint;\n    shape: GlissandoShape;\n    hint: GlissandoHint | null;\n  }[]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoEnds",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ source: NoteOrChordElementType; headYs: number[] }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "role",
+                  "type": {
+                    "text": "ConnectorRole"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoEndStaffYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                },
+                {
+                  "name": "start",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryOverlaps",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "{ left, right }",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#inkTopUnderLabel",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "j",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#graceShiftX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#graceInkTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clearOfPlaced",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "from",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "height",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "{ left, right }",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "placed",
+                  "type": {
+                    "text": "readonly PlacedAboveStaffRect[]"
                   }
                 }
               ],
@@ -14250,7 +15004,7 @@
             },
             {
               "kind": "method",
-              "name": "#tremoloLabelBaselineY",
+              "name": "#techniqueLabelBaselineY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -14318,7 +15072,7 @@
             },
             {
               "kind": "method",
-              "name": "#tremoloLabelInkTopY",
+              "name": "#techniqueLabelInkTopY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -14346,7 +15100,7 @@
             },
             {
               "kind": "method",
-              "name": "#tremoloLabelTopY",
+              "name": "#techniqueLabelTopY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -14358,12 +15112,6 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
-                  }
-                },
-                {
-                  "name": "state",
-                  "type": {
-                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -14956,11 +15704,11 @@
             },
             {
               "kind": "method",
-              "name": "#bendTargetReachYs",
+              "name": "#bendTargetReachY",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "number[]"
+                  "text": "number | null"
                 }
               },
               "parameters": [
@@ -14968,6 +15716,12 @@
                   "name": "state",
                   "type": {
                     "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
                   }
                 },
                 {
@@ -15735,6 +16489,34 @@
             },
             {
               "kind": "method",
+              "name": "#slurReaches",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ startIndex: number; endIndex: number; y: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "onStaffResize",
               "privacy": "protected",
               "return": {
@@ -16010,6 +16792,30 @@
             },
             {
               "kind": "field",
+              "name": "measureColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "endBarline",
               "type": {
                 "text": "ResolvedEndBarline"
@@ -16139,6 +16945,28 @@
               },
               "privacy": "protected",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reportStaffWidths",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "widths",
+                  "type": {
+                    "text": "StaffWidths | null"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -16651,6 +17479,24 @@
             },
             {
               "kind": "field",
+              "name": "#ownColumnRooms",
+              "privacy": "private",
+              "type": {
+                "text": "ColumnRoom[]"
+              },
+              "default": "[]"
+            },
+            {
+              "kind": "field",
+              "name": "#uncrowdedWidth",
+              "privacy": "private",
+              "type": {
+                "text": "number"
+              },
+              "default": "0"
+            },
+            {
+              "kind": "field",
               "name": "#describeEndX",
               "privacy": "private",
               "type": {
@@ -16690,6 +17536,18 @@
               "name": "showDescribe",
               "type": {
                 "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "ownColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
               }
             },
             {
@@ -17187,6 +18045,30 @@
             },
             {
               "kind": "field",
+              "name": "measureColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "endBarline",
               "type": {
                 "text": "ResolvedEndBarline"
@@ -17328,6 +18210,28 @@
               },
               "privacy": "protected",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reportStaffWidths",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "widths",
+                  "type": {
+                    "text": "StaffWidths | null"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -17746,6 +18650,10 @@
           },
           "tagName": "music-staff-guitar-tab",
           "customElement": true
+        },
+        {
+          "kind": "variable",
+          "name": "beatOffsets"
         }
       ],
       "exports": [
@@ -18429,6 +19337,45 @@
             },
             {
               "kind": "field",
+              "name": "#ownColumnRooms",
+              "privacy": "private",
+              "type": {
+                "text": "ColumnRoom[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#spacingMarkers",
+              "privacy": "private",
+              "type": {
+                "text": "{\n    all: readonly MarkerBeat[];\n    slots: readonly MarkerBeat[];\n  }"
+              },
+              "default": "{ all: [], slots: [] }",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#roomAfterEntries",
+              "privacy": "private",
+              "type": {
+                "text": "{\n    unisonReserves: ReadonlyMap<VoiceKey, Map<number, number>>;\n    byVoice: Map<VoiceKey, number[]>;\n    ownByVoice: Map<VoiceKey, number[]>;\n    columns: ColumnRoom[];\n    limits: OffsetLimit[];\n  } | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#voice1BeatOffsets",
               "privacy": "private",
               "type": {
@@ -18602,12 +19549,25 @@
             },
             {
               "kind": "field",
-              "name": "#tremoloLabelContainers",
+              "name": "#techniqueLabelContainers",
               "privacy": "private",
               "type": {
                 "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#placedTechniqueLabels",
+              "privacy": "private",
+              "type": {
+                "text": "PlacedTechniqueLabel[]"
+              },
+              "default": "[]",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -18661,9 +19621,29 @@
             },
             {
               "kind": "field",
-              "name": "#bendRightXs",
+              "name": "#bendsByEntry",
               "privacy": "private",
-              "default": "new Map<NoteChordOrRestElementType, number>()",
+              "default": "new Map<Element, (ResolvedBend | null)[]>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#chordBendTargetAccidentals",
+              "privacy": "private",
+              "default": "new Map< ChordElementType, (AccidentalType | null)[] >()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendInk",
+              "privacy": "private",
+              "default": "new Map< NoteChordOrRestElementType, { left: number; right: number; top: number } >()",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -19846,6 +20826,18 @@
             },
             {
               "kind": "field",
+              "name": "ownColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "ownBarlineSlotLefts",
               "type": {
                 "text": "readonly BarlineSlotLeft[]"
@@ -20359,6 +21351,146 @@
                   "type": {
                     "text": "number"
                   }
+                },
+                {
+                  "name": "limits",
+                  "type": {
+                    "text": "() => readonly OffsetLimit[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#roomAfter",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    byVoice: Map<VoiceKey, number[]>;\n    // Without the other staves' needs.\n    ownByVoice: Map<VoiceKey, number[]>;\n    columns: ColumnRoom[];\n    limits: OffsetLimit[];\n  }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#contentWidths",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ requiredWidth: number; uncrowdedWidth: number }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#offsetLimits",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "OffsetLimit[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "columns",
+                  "type": {
+                    "text": "readonly ColumnRoom[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#crowdedColumns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ColumnRoom[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "measureCapacity",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#roomToNext",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryInkRight",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -20398,6 +21530,12 @@
                   "name": "measureCapacity",
                   "type": {
                     "text": "number"
+                  }
+                },
+                {
+                  "name": "limits",
+                  "type": {
+                    "text": "readonly OffsetLimit[]"
                   }
                 }
               ],
@@ -20482,6 +21620,28 @@
                   "name": "barlineFloor",
                   "type": {
                     "text": "(slotIndex: number) => number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#latestSlotLeft",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "slot",
+                  "type": {
+                    "text": "MarkerBeat"
                   }
                 }
               ],
@@ -20638,11 +21798,11 @@
             },
             {
               "kind": "method",
-              "name": "#bendOf",
+              "name": "#bendsOf",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "ResolvedBend | null"
+                  "text": "BendHead[]"
                 }
               },
               "parameters": [
@@ -20666,30 +21826,40 @@
             },
             {
               "kind": "method",
-              "name": "#bendTargetStaffY",
+              "name": "#entryBends",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "number"
+                  "text": "(ResolvedBend | null)[]"
                 }
               },
               "parameters": [
                 {
-                  "name": "state",
+                  "name": "element",
                   "type": {
-                    "text": "VoiceRenderState"
+                    "text": "NoteElementType | ChordElementType"
                   }
-                },
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#resolveEntryBends",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "(ResolvedBend | null)[]"
+                }
+              },
+              "parameters": [
                 {
-                  "name": "index",
+                  "name": "element",
                   "type": {
-                    "text": "number"
-                  }
-                },
-                {
-                  "name": "target",
-                  "type": {
-                    "text": "BendTarget"
+                    "text": "NoteElementType | ChordElementType"
                   }
                 }
               ],
@@ -20704,7 +21874,7 @@
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{\n    staffYs: number[];\n    inkRight: number;\n    tail: { right: number; bottomY: number } | null;\n  }"
+                  "text": "{\n    inkRight: number;\n    tail: { right: number; bottomY: number } | null;\n  }"
                 }
               },
               "parameters": [
@@ -21060,7 +22230,21 @@
             },
             {
               "kind": "method",
-              "name": "#renderTremoloLabels",
+              "name": "#layoutTechniqueLabels",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderTechniqueLabels",
               "privacy": "private",
               "return": {
                 "type": {
@@ -21072,6 +22256,382 @@
                   "name": "remainingWidth",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueLabelSpan",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; right: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "label",
+                  "type": {
+                    "text": "TechniqueLabel"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueLabelClearBaselineY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "label",
+                  "type": {
+                    "text": "TechniqueLabel"
+                  }
+                },
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#connectorTopUnderLabel",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "LabelSpan"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#headCenterX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoLines",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    from: LinePoint;\n    to: LinePoint;\n    shape: GlissandoShape;\n    hint: GlissandoHint | null;\n  }[]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoEnds",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ source: NoteOrChordElementType; headYs: number[] }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "role",
+                  "type": {
+                    "text": "ConnectorRole"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoEndStaffYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                },
+                {
+                  "name": "start",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryOverlaps",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "{ left, right }",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#inkTopUnderLabel",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "j",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#graceShiftX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#graceInkTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clearOfPlaced",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "from",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "height",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "{ left, right }",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "placed",
+                  "type": {
+                    "text": "readonly PlacedAboveStaffRect[]"
                   }
                 }
               ],
@@ -21472,7 +23032,7 @@
             },
             {
               "kind": "method",
-              "name": "#tremoloLabelBaselineY",
+              "name": "#techniqueLabelBaselineY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -21540,7 +23100,7 @@
             },
             {
               "kind": "method",
-              "name": "#tremoloLabelInkTopY",
+              "name": "#techniqueLabelInkTopY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -21568,7 +23128,7 @@
             },
             {
               "kind": "method",
-              "name": "#tremoloLabelTopY",
+              "name": "#techniqueLabelTopY",
               "privacy": "private",
               "return": {
                 "type": {
@@ -21580,12 +23140,6 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
-                  }
-                },
-                {
-                  "name": "state",
-                  "type": {
-                    "text": "VoiceRenderState"
                   }
                 }
               ],
@@ -22178,11 +23732,11 @@
             },
             {
               "kind": "method",
-              "name": "#bendTargetReachYs",
+              "name": "#bendTargetReachY",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "number[]"
+                  "text": "number | null"
                 }
               },
               "parameters": [
@@ -22190,6 +23744,12 @@
                   "name": "state",
                   "type": {
                     "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
                   }
                 },
                 {
@@ -22956,6 +24516,34 @@
               }
             },
             {
+              "kind": "method",
+              "name": "#slurReaches",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ startIndex: number; endIndex: number; y: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "placeAbove",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
               "kind": "field",
               "name": "staffContainer",
               "type": {
@@ -23218,6 +24806,30 @@
             },
             {
               "kind": "field",
+              "name": "measureColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sharedColumnRooms",
+              "type": {
+                "text": "readonly ColumnRoom[]"
+              },
+              "privacy": "protected",
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "endBarline",
               "type": {
                 "text": "ResolvedEndBarline"
@@ -23347,6 +24959,28 @@
               },
               "privacy": "protected",
               "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "reportStaffWidths",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "widths",
+                  "type": {
+                    "text": "StaffWidths | null"
+                  }
+                }
+              ],
               "inheritedFrom": {
                 "name": "StaffElementBase",
                 "module": "src/staffBase.ts"
@@ -23704,17 +25338,6 @@
               }
             }
           ],
-          "events": [
-            {
-              "type": {
-                "text": "CustomEvent"
-              },
-              "inheritedFrom": {
-                "name": "StaffElementBase",
-                "module": "src/staffBase.ts"
-              }
-            }
-          ],
           "attributes": [
             {
               "name": "voice",
@@ -23794,7 +25417,18 @@
             "module": "/src/staffNotationBase"
           },
           "tagName": "music-staff-vocal",
-          "customElement": true
+          "customElement": true,
+          "events": [
+            {
+              "type": {
+                "text": "CustomEvent"
+              },
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            }
+          ]
         }
       ],
       "exports": [

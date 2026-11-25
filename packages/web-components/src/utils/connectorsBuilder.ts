@@ -142,7 +142,7 @@ const CONNECTOR_LABELS: Partial<Record<ConnectorKind, string>> = {
 
 // Text shown near a glissando line when its start element sets
 // `glissando-hint`.
-const GLISSANDO_HINT_LABELS: Record<GlissandoHint, string> = {
+export const GLISSANDO_HINT_LABELS: Record<GlissandoHint, string> = {
   'white-key': 'white-note gliss.',
   'black-key': 'black-note gliss.',
   gliss: 'gliss.',

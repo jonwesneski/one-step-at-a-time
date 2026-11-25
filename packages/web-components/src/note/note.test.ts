@@ -1866,6 +1866,57 @@ describe('bend', () => {
   });
 });
 
+describe('glissando-label', () => {
+  it('round-trips, and warns about one with no text', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    expect(noteElement.glissandoLabel).toBeNull();
+    noteElement.glissandoLabel = 'bend down|¼-tone';
+    expect(noteElement.getAttribute('glissando-label')).toBe(
+      'bend down|¼-tone'
+    );
+    expect(warn).not.toHaveBeenCalled();
+    noteElement.setAttribute('glissando-label', ' | ');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('glissando-label is empty')
+    );
+    expect(
+      noteElement.shadowRoot!.querySelector('.glissando-label')
+    ).toBeNull();
+    noteElement.glissandoLabel = null;
+    expect(noteElement.hasAttribute('glissando-label')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws both labels standalone, its own above the tremolo label', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('tremolo', 'unmeasured');
+    noteElement.setAttribute('tremolo-label', 'flz');
+    noteElement.setAttribute('glissando-label', 'lip');
+    document.body.appendChild(noteElement);
+    const y = (selector: string) =>
+      Number(
+        noteElement.shadowRoot!.querySelector(selector)?.getAttribute('y')
+      );
+    expect(y('.glissando-label')).toBeLessThan(y('.tremolo-label'));
+  });
+
+  it('leaves the label to its staff, which it re-lays out', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    noteElement.glissandoLabel = 'lip';
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(
+      noteElement.shadowRoot!.querySelector('.glissando-label')
+    ).toBeNull();
+  });
+});
+
 describe('breath-mark', () => {
   it('round-trips, ignoring a value that doesn’t parse with a warning', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});

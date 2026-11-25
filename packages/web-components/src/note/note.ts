@@ -9,10 +9,10 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
 import {
   bendConsistencyWarning,
   bendTargetDirection,
-  bendTargetSteps,
   glissandoShapeWarning,
   resolveBend,
   type ResolvedBend,
@@ -141,6 +141,7 @@ import {
 import {
   CHORD_TAGS,
   MUSIC_NOTE,
+  MUSIC_TREMOLO,
   MUSIC_TREMOLO_NODE,
   NOTE_EVENTS,
   OCTAVES,
@@ -172,7 +173,8 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
  * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
  * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
- * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando="start"`, on a `<music-tremolo>` member and on a triangle notehead; read from a note, not from a chord's slotted tone.
+ * @attr {string} glissando-label - Text above the stave over this note: `gliss` ("gliss.", for a passage with no line), `quasi-gliss` ("quasi gliss."), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.
+ * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando="start"`, on a `<music-tremolo>` member and on a triangle notehead. On a note slotted in a chord it bends just that tone, whatever the chord's own `bend`.
  * @attr {Note} bend-to - The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there.
  * @attr {QuarterTone} bend-to-quarter-tone - `up` / `down`: raises or lowers `bend-to` by a quarter-tone.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
@@ -249,6 +251,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'glissando',
       'glissando-hint',
       'glissando-shape',
+      'glissando-label',
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
@@ -604,6 +607,17 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('glissando-shape');
     } else {
       this.setAttribute('glissando-shape', value);
+    }
+  }
+
+  get glissandoLabel(): string | null {
+    return this.readAttribute('glissando-label');
+  }
+  set glissandoLabel(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('glissando-label');
+    } else {
+      this.setAttribute('glissando-label', value);
     }
   }
 
@@ -1500,6 +1514,13 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     this.#warnAboutGlissandoShape(name, newValue);
     this.#warnAboutBend(name, newValue);
     if (
+      name === 'glissando-label' &&
+      newValue !== null &&
+      resolveGlissandoLabel(newValue) === null
+    ) {
+      console.warn(`[music-note] glissando-label is empty; drawing no label`);
+    }
+    if (
       name === 'breath-mark' &&
       newValue !== null &&
       parseBreathMark(newValue) === null
@@ -1713,6 +1734,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'glissando-label' ||
       name === 'bend' ||
       name === 'bend-to' ||
       name === 'bend-to-quarter-tone' ||
@@ -1878,7 +1900,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       bendTo: this.bendTo,
       glissando: this.glissando,
       isChord: false,
-      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
+      inTremoloGroup: this.closest(MUSIC_TREMOLO) !== null,
       onTriangle: isTriangle(this.notehead),
       targetDirection:
         this.bendTo === null
@@ -1962,7 +1984,6 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       accidentalParenthesized = this.#accidentalParenthesized;
     }
 
-    const bend = this.#standaloneBend();
     const [noteSvg, yHeadOffset] = createNoteSvg({
       duration: this.duration,
       stemUp,
@@ -2003,11 +2024,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+      glissandoLabel: this.closest(STAFF_TAGS) ? null : this.glissandoLabel,
       breathMark: this.closest(STAFF_TAGS) ? null : this.breathMark,
-      bend,
-      bendTargetSteps: bend?.target
-        ? bendTargetSteps(this.note, this.octave ?? 4, bend.target)
-        : 0,
+      bend: this.#standaloneBend(),
     });
 
     if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {

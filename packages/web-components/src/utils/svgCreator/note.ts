@@ -9,7 +9,7 @@ import {
   augmentationDotRowWidthPx,
   resolveNoteDotStaffY,
 } from '../../rules/augmentationDotRules';
-import { layoutBend, type ResolvedBend } from '../../rules/glissandoRules';
+import { layoutBends, type ResolvedBend } from '../../rules/glissandoRules';
 import {
   forcedStemUp,
   resolveNoteheadGlyph,
@@ -61,10 +61,8 @@ import {
   STACKED_TAIL_LENGTH_PX,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
-  STAFF_Y_STEP,
   STEM_OVERLAP_PX,
   STEM_STROKE_WIDTH_PX,
-  TREMOLO_LABEL_GAP_PX,
   TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
@@ -87,8 +85,8 @@ import {
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
+import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
 import {
-  createTremoloLabel,
   createTremoloNumeral,
   createTremoloStrokes,
 } from './tremolo';
@@ -233,13 +231,12 @@ export type NoteProps = {
   articulationRepeatCount?: number;
   // Drawn above the note only standalone; a staff draws its own row.
   tremoloLabel?: TremoloLabel | null;
+  glissandoLabel?: string | null;
   // Drawn just after the note only standalone; a staff places it in the gap
   // before the next entry.
   breathMark?: BreathMark | null;
-  // A standalone note's bend; its target is placed by `bendTargetSteps`.
+  // A standalone note's bend.
   bend?: ResolvedBend | null;
-  // Diatonic steps from the note up to the bend's target.
-  bendTargetSteps?: number;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -301,9 +298,9 @@ export const createNoteSvg = ({
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
+  glissandoLabel = null,
   breathMark = null,
   bend = null,
-  bendTargetSteps = 0,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -563,14 +560,12 @@ export const createNoteSvg = ({
     }
   }
 
-  if (tremoloLabel !== null && qualifiedElementName === 'svg') {
-    svg.setAttribute('overflow', 'visible');
-    svg.appendChild(
-      createTremoloLabel(
-        (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE,
-        inkTopY - TREMOLO_LABEL_GAP_PX,
-        tremoloLabel
-      )
+  if (qualifiedElementName === 'svg') {
+    appendTechniqueLabels(
+      svg,
+      (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE,
+      inkTopY,
+      techniqueLabels(tremoloLabel, glissandoLabel)
     );
   }
 
@@ -623,40 +618,26 @@ export const createNoteSvg = ({
       stemExtension,
       tailRoomStemExtension,
     });
-    const targetY = headY - bendTargetSteps * STAFF_Y_STEP;
-    const layout = layoutBend({
-      shape: bend.shape,
+    const layout = layoutBends({
       heads: [
         {
           y: headY,
           dotY: dotLayout?.rowCentersY[0] ?? null,
-          onLine: false,
+          staffY: null,
+          bend,
         },
       ],
-      target: bend.target && {
-        y: targetY,
-        onLine: false,
-        width: bendTargetWidthPx(bend.target.accidental),
-      },
       inkRight: Math.max(
         (headGeometry.cx + headGeometry.halfWidth) * NOTE_SCALE,
         dotLayout?.rightEdgeX ?? -Infinity
       ),
       tail: tail && { right: tail.rightX, bottomY: tail.bottomY },
       limit: { kind: 'length', length: BEND_STANDALONE_LENGTH_PX },
+      targetWidthPx: bendTargetWidthPx,
     });
     if (layout !== null) {
       svg.setAttribute('overflow', 'visible');
-      svg.appendChild(
-        createBendSvg(
-          bend.shape,
-          layout,
-          bend.target && {
-            centerY: targetY,
-            accidental: bend.target.accidental,
-          }
-        )
-      );
+      svg.appendChild(createBendSvg(layout));
     }
   }
 

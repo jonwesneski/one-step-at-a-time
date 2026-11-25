@@ -89,34 +89,40 @@ describe('createGlissandoLineSvg', () => {
 });
 
 describe('createBendSvg', () => {
-  const lines = [
-    { from, to },
-    { from: { x: 0, y: 30 }, to: { x: 200, y: 37 } },
-  ];
+  const line = { from, to, shape: 'straight' as const, target: null };
 
-  it('draws a line for each head and no target without one', () => {
-    const bend = createBendSvg('down', { lines, targetLeftX: null }, null);
+  it('draws each head’s own line, and no target without one', () => {
+    const bend = createBendSvg({
+      lines: [line, { ...line, shape: 'dip' }],
+      rightX: 200,
+    });
     const paths = Array.from(bend.querySelectorAll('.bend-line'));
-    expect(paths.map((path) => path.getAttribute('d'))).toEqual([
-      'M 0 50 L 200 50',
-      'M 0 30 L 200 37',
-    ]);
+    expect(paths[0].getAttribute('d')).toBe('M 0 50 L 200 50');
+    expect(paths[1].getAttribute('d')).toContain('C');
     expect(bend.querySelector('.bend-target-note')).toBeNull();
     expect(bend.classList.contains('connector')).toBe(false);
   });
 
-  it('puts the target where the layout says', () => {
-    const bend = createBendSvg(
-      'up',
-      { lines: [{ from, to }], targetLeftX: 210 },
-      { centerY: 40, accidental: 'sharp-up', staffY: 40 }
-    );
-    const open = bend.querySelector('.parenthesis-open');
-    expect(open?.getAttribute('d')).toBe(
-      `M ${210 + BEND_TARGET_PARENTHESIS_WIDTH_PX} ${
-        40 - BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX
-      }${open?.getAttribute('d')?.slice(open.getAttribute('d')?.indexOf(' Q'))}`
-    );
+  it('puts a target where the layout says', () => {
+    const bend = createBendSvg({
+      lines: [
+        {
+          ...line,
+          target: { leftX: 210, centerY: 40, accidental: 'sharp', staffY: 40 },
+        },
+      ],
+      rightX: 240,
+    });
+    expect(
+      bend
+        .querySelector('.parenthesis-open')
+        ?.getAttribute('d')
+        ?.startsWith(
+          `M ${210 + BEND_TARGET_PARENTHESIS_WIDTH_PX} ${
+            40 - BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX
+          } `
+        )
+    ).toBe(true);
     expect(bend.querySelector('.bend-target-note-accidental')).not.toBeNull();
   });
 });

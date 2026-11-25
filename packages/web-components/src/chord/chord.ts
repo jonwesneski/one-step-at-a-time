@@ -1,8 +1,11 @@
 import { pitchAccidental } from '../rules/accidentalRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
 import {
   bendConsistencyWarning,
   glissandoShapeWarning,
+  resolveBend,
+  type ResolvedBend,
 } from '../rules/glissandoRules';
 import {
   applyGraceHeadOverhangs,
@@ -156,8 +159,9 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
  * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
  * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
- * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after each of this chord's heads, ending inside its own duration. Ignored, with a warning, beside `glissando="start"` and on a `<music-tremolo>` member.
- * @attr {Note} bend-to - Notes only: ignored, with a warning, on a chord.
+ * @attr {string} glissando-label - Text above the stave over this chord: `gliss` ("gliss.", for a passage with no line), `quasi-gliss` ("quasi gliss."), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.
+ * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after each of this chord's heads, ending inside its own duration. A slotted note's own `bend` / `bend-to` replaces it for that tone. Ignored, with a warning, beside `glissando="start"` and on a `<music-tremolo>` member.
+ * @attr {Note} bend-to - Notes only, slotted ones included: ignored, with a warning, on a chord.
  * @attr {QuarterTone} bend-to-quarter-tone - Applies to `bend-to`.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
@@ -236,6 +240,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'glissando',
       'glissando-hint',
       'glissando-shape',
+      'glissando-label',
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
@@ -510,6 +515,32 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     return this.notes.map((_, i) => noteElements[i]?.quarterTone ?? null);
   }
 
+  // Per tone: a slotted note's own bend, else the chord's. A tone that starts
+  // a glissando draws that line instead.
+  get toneBends(): (ResolvedBend | null)[] {
+    const noteElements: NoteElementType[] = Array.from(
+      this.querySelectorAll(this.childNoteTag)
+    );
+    return this.notes.map(({ value, octave }, i) => {
+      const tone: NoteElementType | undefined = noteElements[i];
+      if (tone?.glissando === 'start') {
+        return null;
+      }
+      const bend = tone?.bend ?? null;
+      const bendTo = tone?.bendTo ?? null;
+      return bend === null && bendTo === null
+        ? this.bend && { shape: this.bend, target: null }
+        : resolveBend(
+            bend,
+            bendTo,
+            tone.bendToQuarterTone,
+            value,
+            octave ?? 4,
+            tone.quarterTone
+          );
+    });
+  }
+
   get tie(): TieValue | null {
     return parseTieValue(this.readAttribute('tie'));
   }
@@ -573,6 +604,17 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('glissando-shape');
     } else {
       this.setAttribute('glissando-shape', value);
+    }
+  }
+
+  get glissandoLabel(): string | null {
+    return this.readAttribute('glissando-label');
+  }
+  set glissandoLabel(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('glissando-label');
+    } else {
+      this.setAttribute('glissando-label', value);
     }
   }
 
@@ -1438,6 +1480,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         'instrument',
         'accidental-reminder',
         'quarter-tone',
+        'bend',
+        'bend-to',
+        'bend-to-quarter-tone',
+        'glissando',
       ],
     });
   }
@@ -1496,6 +1542,13 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     this.#warnAboutSlurStyle(name, newValue);
     this.#warnAboutGlissandoShape(name, newValue);
     this.#warnAboutBend(name, newValue);
+    if (
+      name === 'glissando-label' &&
+      newValue !== null &&
+      resolveGlissandoLabel(newValue) === null
+    ) {
+      console.warn(`[music-chord] glissando-label is empty; drawing no label`);
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1703,6 +1756,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'glissando-label' ||
       name === 'bend' ||
       name === 'bend-to' ||
       name === 'bend-to-quarter-tone' ||
@@ -1970,8 +2024,9 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
+        glissandoLabel: this.#drawnByStaff ? null : this.glissandoLabel,
         breathMark: this.#drawnByStaff ? null : this.breathMark,
-        bend: this.#standaloneBend(),
+        bends: this.#standaloneBends(),
       });
       chordSvg.setAttribute('overflow', 'visible');
       addLedgerLines(
@@ -2055,8 +2110,9 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
+        glissandoLabel: this.#drawnByStaff ? null : this.glissandoLabel,
         breathMark: this.#drawnByStaff ? null : this.breathMark,
-        bend: this.#standaloneBend(),
+        bends: this.#standaloneBends(),
       });
       chordSvg.setAttribute('overflow', 'visible');
 
@@ -2084,12 +2140,12 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   }
 
   // A staff draws its chords' bends itself.
-  #standaloneBend(): BendShape | null {
+  #standaloneBends(): (ResolvedBend | null)[] {
     return this.#drawnByStaff ||
       this.glissando === 'start' ||
       this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
-      ? null
-      : this.bend;
+      ? []
+      : this.toneBends;
   }
 
   #wireInteractionEvents(svg: SVGSVGElement): void {

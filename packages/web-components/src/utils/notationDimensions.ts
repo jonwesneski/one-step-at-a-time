@@ -101,6 +101,9 @@ export const STAFF_Y_STEP = STAFF_LINE_SPACING / 2; // = 5
  */
 export const MIN_NOTE_WIDTH = STAFF_LINE_SPACING * 2;
 
+/** Blank (px) the last entry of a crowded bar keeps before the barline, where it fits. = 0.5 × STAFF_LINE_SPACING */
+export const LAST_ENTRY_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Voices ───────────────────────────────────────────────────────────────────
 
 /**
@@ -488,6 +491,9 @@ export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
  */
 export const SLUR_NOTEHEAD_OFFSET_PX = STAFF_LINE_SPACING * 0.9;
 
+/** How far (px) a tie reaches past its anchors. = half of curve.ts's DEFAULT_BULGE_HEIGHT (0.9 × STAFF_LINE_SPACING) */
+export const TIE_REACH_PX = STAFF_LINE_SPACING * 0.45;
+
 /**
  * Gap (px) between the clef/key/time area and the start of a tie or slur
  * continued from the previous system.
@@ -640,6 +646,13 @@ export const CONNECTOR_LABEL_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 1.1 * 0.65;
  * = 16 × STAFF_LINE_SPACING
  */
 export const PIXELS_PER_BEAT = STAFF_LINE_SPACING * 16;
+
+/**
+ * How far a staff's natural width may stretch, as a multiple, so that a bar
+ * whose later entries are short keeps every entry at its proportional place.
+ * Past it the bar is squeezed instead, so one short note can't swell a bar.
+ */
+export const MAX_UNCROWDED_STRETCH = 1.25;
 
 /**
  * Gap (px) between the end of the clef/key/time area and the first entry, so a
@@ -1695,22 +1708,26 @@ export const TREMOLO_STEM_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
  */
 export const TREMOLO_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 0.4;
 
-/** Font size (px) of the `trem.` / `non trem.` labels. */
-export const TREMOLO_LABEL_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
+/** Font size (px) of the technique labels above the stave: `trem.`, `flz.`, `quasi gliss.`, … */
+export const TECHNIQUE_LABEL_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
 
 /**
  * Estimated width (px) of one label character, for stacking labels that
  * would overlap; the usual estimate-don't-measure ratio (× 0.55).
- * = TREMOLO_LABEL_FONT_SIZE_PX × 0.55
+ * = TECHNIQUE_LABEL_FONT_SIZE_PX × 0.55
  */
-export const TREMOLO_LABEL_CHAR_WIDTH_PX = TREMOLO_LABEL_FONT_SIZE_PX * 0.55;
+export const TECHNIQUE_LABEL_CHAR_WIDTH_PX = TECHNIQUE_LABEL_FONT_SIZE_PX * 0.55;
+
+/** Baseline to baseline (px) in a label of several lines. = 1.1 × TECHNIQUE_LABEL_FONT_SIZE_PX */
+export const TECHNIQUE_LABEL_LINE_HEIGHT_PX =
+  TECHNIQUE_LABEL_FONT_SIZE_PX * 1.1;
 
 /**
- * Gap (px) between a `trem.` / `non trem.` label's baseline and whatever it
+ * Gap (px) between a technique label's baseline and whatever it
  * sits above: the stave, its note, a tuplet bracket, a trill or another label.
  * = 0.5 × STAFF_LINE_SPACING
  */
-export const TREMOLO_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
+export const TECHNIQUE_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 // ─── Breath marks ─────────────────────────────────────────────────────────────
 
@@ -1833,8 +1850,12 @@ export const GLISSANDO_WAVE_AMPLITUDE_PX = STAFF_LINE_SPACING * 0.435;
 /** Vertical clearance (px) a glissando line keeps from its notes' other ink. = 0.1 × STAFF_LINE_SPACING */
 export const GLISSANDO_INK_CLEARANCE_PX = STAFF_LINE_SPACING * 0.1;
 
-/** How far (px) a free straight bend moves, whatever its length. = 0.7 × STAFF_LINE_SPACING */
+/** How far (px) a free straight bend moves, up to 5 spaces long. = 0.7 × STAFF_LINE_SPACING */
 export const BEND_FREE_TRAVEL_PX = STAFF_LINE_SPACING * 0.7;
+
+/** The slope a longer one keeps, and the most (px) it moves. = 0.7 / 5 and 2 × STAFF_LINE_SPACING */
+export const BEND_FREE_SLOPE = 0.14;
+export const BEND_FREE_MAX_TRAVEL_PX = STAFF_LINE_SPACING * 2;
 
 /** Tilt (px) of a bend toward a pitch on its own staff position. = 0.25 × STAFF_LINE_SPACING */
 export const BEND_SAME_POSITION_TILT_PX = STAFF_LINE_SPACING * 0.25;

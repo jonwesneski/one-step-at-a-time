@@ -66,6 +66,12 @@ function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
 }
 
 // Merged tones dedupe by pitch and don't carry an arrow.
+function hasBend(element: NoteOrChordElementType): boolean {
+  return isNoteNodeName(element.nodeName)
+    ? (element.bend ?? null) !== null || (element.bendTo ?? null) !== null
+    : (element as ChordElementType).toneBends.some((bend) => bend !== null);
+}
+
 function hasQuarterTone(element: NoteOrChordElementType): boolean {
   return isNoteNodeName(element.nodeName)
     ? (element as NoteElementType).quarterTone !== null
@@ -106,8 +112,8 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.grace === null &&
     element.trillFinish === null &&
     element.glissando === null &&
-    (element.bend ?? null) === null &&
-    (element.bendTo ?? null) === null &&
+    (element.glissandoLabel ?? null) === null &&
+    !hasBend(element) &&
     element.stress === null &&
     !element.dynamicShared &&
     !hasAccidentalReminder(element) &&

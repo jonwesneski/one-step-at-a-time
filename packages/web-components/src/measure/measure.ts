@@ -78,6 +78,7 @@ import {
   resolveSharedStemPairs,
   type SharedStemEntry,
 } from '../rules/sharedStemRules';
+import { mergeColumnRooms, type ColumnRoom } from '../rules/spacingRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
 import { measureFlexValue } from '../rules/staffWidth';
 import {
@@ -382,7 +383,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Relative to each staff's top line (see applyOctaveContinuationRects).
     #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
     #boundSyncMarkerBeats = () => this.#syncMarkerBeats();
-    #boundSyncBarlineSlots = () => this.#syncBarlineSlots();
+    #boundSyncBarlineSlots = () => {
+      this.#syncColumnRooms();
+      this.#syncBarlineSlots();
+    };
     #lastTabMirrorWarnings = new Set<string>();
     #lastBarlineWarnings = new Set<string>();
 
@@ -488,6 +492,24 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         staff.measureMarkerBeats =
           kinds[i] === 'notation' || links.has(i) ? union : barlinesOnly;
       });
+    }
+
+    // Every staff keeps its entries as far from the end of the bar as the most
+    // crowded staff needs, so same-beat entries stay aligned.
+    #syncColumnRooms(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) && 'measureColumnRooms' in child
+      ) as unknown as {
+        ownColumnRooms: readonly ColumnRoom[];
+        measureColumnRooms: readonly ColumnRoom[];
+      }[];
+      const shared = mergeColumnRooms(
+        staves.map((staff) => staff.ownColumnRooms)
+      );
+      for (const staff of staves) {
+        staff.measureColumnRooms = shared;
+      }
     }
 
     // A mid-bar barline runs through every staff at one x: each staff places

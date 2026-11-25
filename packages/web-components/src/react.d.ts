@@ -207,6 +207,8 @@ declare module 'react' {
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
         'glissando-shape'?: GlissandoShape;
+        // A GlissandoLabel, or any other text, `|` starting a new line.
+        'glissando-label'?: string;
         bend?: BendShape;
         'bend-to'?: Note;
         'bend-to-quarter-tone'?: QuarterTone;
@@ -282,6 +284,8 @@ declare module 'react' {
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
         'glissando-shape'?: GlissandoShape;
+        // A GlissandoLabel, or any other text, `|` starting a new line.
+        'glissando-label'?: string;
         bend?: BendShape;
         'bend-to'?: Note;
         'bend-to-quarter-tone'?: QuarterTone;

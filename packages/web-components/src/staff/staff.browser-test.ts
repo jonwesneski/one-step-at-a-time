@@ -2321,6 +2321,224 @@ test.describe('pitch bends', () => {
   });
 });
 
+test.describe('a crowded bar', () => {
+  const layOut = (page: Page, html: string, width: number) =>
+    page.evaluate(
+      ({ markup, hostWidth }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host element missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { markup: html, hostWidth: width }
+    );
+  const headsAndEnds = (page: Page) =>
+    page.evaluate(() =>
+      Array.from(document.querySelectorAll('music-staff')).map((staff) => ({
+        right: staff.getBoundingClientRect().right,
+        heads: Array.from(staff.querySelectorAll('music-note')).map((note) => {
+          const rect = note.shadowRoot
+            ?.querySelector('.head')
+            ?.getBoundingClientRect();
+          return { left: rect?.left ?? NaN, right: rect?.right ?? NaN };
+        }),
+      }))
+    );
+  const note = (duration: string, attributes = '') =>
+    `<music-note note="A" octave="4" duration="${duration}" ${attributes}></music-note>`;
+  const busyEnd =
+    note('half') + note('quarter') + note('sixteenth', '').repeat(4);
+
+  test('keeps its last notes before the barline, and spreads out again when it widens', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-staff clef="treble" time="4/4">${busyEnd}</music-staff>`,
+      240
+    );
+    await waitForRedrawCycle(page);
+    const [narrow] = await headsAndEnds(page);
+    expect(Math.max(...narrow.heads.map(({ right }) => right))).toBeLessThan(
+      narrow.right
+    );
+    const halfToQuarter = (heads: { left: number }[]) =>
+      (heads[1].left - heads[0].left) / (heads[2].left - heads[1].left);
+    expect(halfToQuarter(narrow.heads)).toBeGreaterThan(1.5);
+
+    await page.evaluate(() => {
+      (document.getElementById('host') as HTMLElement).style.width = '900px';
+    });
+    await waitForRedrawCycle(page);
+    const [wide] = await headsAndEnds(page);
+    expect(halfToQuarter(wide.heads)).toBeCloseTo(2, 1);
+  });
+
+  test('keeps every staff of the measure aligned with the crowded one', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-measure><music-staff clef="treble" time="4/4">${busyEnd}</music-staff>
+       <music-staff clef="treble" time="4/4">${note('half')}${note(
+         'quarter'
+       )}${note('quarter')}</music-staff></music-measure>`,
+      240
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const aligned = async () => {
+      const [busy, sparse] = await headsAndEnds(page);
+      [0, 1, 2].forEach((i) =>
+        expect(sparse.heads[i].left).toBeCloseTo(busy.heads[i].left, 0)
+      );
+      return busy;
+    };
+    const crowded = await aligned();
+    expect(Math.max(...crowded.heads.map(({ right }) => right))).toBeLessThan(
+      crowded.right
+    );
+
+    await page.evaluate(() => {
+      const [staff] = Array.from(document.querySelectorAll('music-staff'));
+      Array.from(staff.querySelectorAll('[duration="sixteenth"]'))
+        .slice(1)
+        .forEach((extra) => extra.remove());
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const relaxed = await aligned();
+    expect(relaxed.heads[2].left).toBeGreaterThan(crowded.heads[2].left);
+  });
+
+  test('a staff with no measure stops shrinking where its notes would overrun, until some are removed', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-staff clef="treble" time="4/4">${busyEnd}</music-staff>`,
+      900
+    );
+    await waitForRedrawCycle(page);
+    await resizeHost(page, 100);
+    await waitForRedrawCycle(page);
+    const [full] = await headsAndEnds(page);
+    expect(Math.max(...full.heads.map(({ right }) => right))).toBeLessThan(
+      full.right
+    );
+
+    await page.evaluate(() => {
+      Array.from(document.querySelectorAll('[duration="sixteenth"]')).forEach(
+        (extra) => extra.remove()
+      );
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const [fewer] = await headsAndEnds(page);
+    expect(fewer.right).toBeLessThan(full.right);
+    expect(Math.max(...fewer.heads.map(({ right }) => right))).toBeLessThan(
+      fewer.right
+    );
+  });
+
+  test('a bar with short last notes takes more of its row instead of squeezing the earlier ones', async ({
+    page,
+  }) => {
+    const shortEnd = note('half') + note('eighth').repeat(4);
+    await layOut(
+      page,
+      `<music-composition time="4/4" clef="treble"><music-measure><music-staff>${shortEnd}</music-staff></music-measure>
+       <music-measure><music-staff>${note(
+         'whole'
+       )}</music-staff></music-measure>
+       <music-measure><music-staff>${note(
+         'whole'
+       )}</music-staff></music-measure></music-composition>`,
+      620
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const [busy] = await headsAndEnds(page);
+    expect(
+      (busy.heads[1].left - busy.heads[0].left) /
+        (busy.heads[2].left - busy.heads[1].left)
+    ).toBeCloseTo(4, 0);
+  });
+
+  test('a bend on a short last note finds room', async ({ page }) => {
+    await layOut(
+      page,
+      `<music-measure><music-staff clef="treble" time="4/4">${note(
+        'half'
+      )}${note('quarter')}${note('sixteenth').repeat(3)}${note(
+        'sixteenth',
+        'bend="down"'
+      )}</music-staff></music-measure>`,
+      320
+    );
+    await waitForRedrawCycle(page);
+    const line = await page.evaluate(() => {
+      const staff = document.querySelector('music-staff');
+      return {
+        right:
+          staff?.shadowRoot
+            ?.querySelector('.bend-line')
+            ?.getBoundingClientRect().right ?? NaN,
+        staffRight: staff?.getBoundingClientRect().right ?? NaN,
+      };
+    });
+    expect(line.right).toBeLessThan(line.staffRight);
+  });
+});
+
+test.describe('glissando labels', () => {
+  test('a label near the end of the bar shifts left as the staff narrows and returns as it widens', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.innerHTML = `<music-staff clef="treble">
+        <music-note note="C" octave="5" duration="dotted-half"></music-note>
+        <music-note note="C" octave="5" duration="quarter" glissando-label="bend pitch by a ¼-tone"></music-note>
+      </music-staff>`;
+    });
+    const at = async (width: number) => {
+      await page.evaluate((value) => {
+        (
+          document.getElementById('host') as HTMLElement
+        ).style.width = `${value}px`;
+      }, width);
+      await waitForRedrawCycle(page);
+      return page.evaluate(() => {
+        const staff = document.querySelector('music-staff');
+        const label = staff?.shadowRoot
+          ?.querySelector('.glissando-label')
+          ?.getBoundingClientRect();
+        const head = document
+          .querySelectorAll('music-note')[1]
+          .shadowRoot?.querySelector('.head')
+          ?.getBoundingClientRect();
+        return {
+          fromHead: (label?.left ?? NaN) - (head?.left ?? NaN),
+          overrun:
+            (label?.right ?? NaN) -
+            (staff?.getBoundingClientRect().right ?? NaN),
+        };
+      });
+    };
+    const wide = await at(900);
+    const narrow = await at(300);
+    expect(narrow.fromHead).toBeLessThan(wide.fromHead);
+    expect(narrow.overrun).toBeLessThanOrEqual(0);
+    expect(await at(900)).toEqual(wide);
+  });
+});
+
 test.describe('quarter-tone arrows under a beam', () => {
   test('the beam rises to clear an arrow and returns without it', async ({
     page,

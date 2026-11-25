@@ -15,7 +15,11 @@ import {
 } from '../../rules/augmentationDotRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import type { ObstacleRect } from '../../rules/connectorPlacementRules';
-import { bendDotYs, layoutBend } from '../../rules/glissandoRules';
+import {
+  bendDotYs,
+  layoutBends,
+  type ResolvedBend,
+} from '../../rules/glissandoRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
 import {
   durationToBase,
@@ -30,7 +34,6 @@ import {
 } from '../../rules/tremoloRules';
 import type {
   AccidentalType,
-  BendShape,
   DurationType,
   GraceDuration,
   GraceSlur,
@@ -51,7 +54,6 @@ import {
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   STEM_OVERLAP_PX,
-  TREMOLO_LABEL_GAP_PX,
   TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
@@ -68,7 +70,7 @@ import {
 } from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
 import { breathMarkWidthPx, createBreathMarkSvg } from './breathMarks';
-import { createBendSvg } from './glissando';
+import { bendTargetWidthPx, createBendSvg } from './glissando';
 import { createGraceNotesSvg, createTrillFinishNotesSvg } from './graceNotes';
 import {
   computeYHeadOffset,
@@ -89,8 +91,8 @@ import {
   type NoteDotLayout,
   type NoteProps,
 } from './note';
+import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
 import {
-  createTremoloLabel,
   createTremoloNumeral,
   createTremoloStrokes,
 } from './tremolo';
@@ -106,7 +108,6 @@ type ChordProps = Omit<
   | 'accidental'
   | 'staffY'
   | 'bend'
-  | 'bendTargetSteps'
 > & {
   staffYCoordinates: number[];
   noteAccidentals?: (AccidentalType | null | undefined)[];
@@ -127,8 +128,8 @@ type ChordProps = Omit<
   // reference-note relationship as graceNotes.
   trillFinishNotes?: GraceNoteDescriptor[] | null;
   trillFinishSlur?: TrillFinishSlur;
-  // A standalone chord's bend.
-  bend?: BendShape | null;
+  // A standalone chord's bends, per tone.
+  bends?: readonly (ResolvedBend | null)[];
 };
 
 export const createChordSvg = ({
@@ -163,8 +164,9 @@ export const createChordSvg = ({
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
+  glissandoLabel = null,
   breathMark = null,
-  bend = null,
+  bends = [],
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -327,17 +329,13 @@ export const createChordSvg = ({
       }
     }
   }
-  if (tremoloLabel !== null) {
-    const { cx, halfWidth } = noteHeadGeometry(stemUp, base, noFlags);
-    svg.setAttribute('overflow', 'visible');
-    svg.appendChild(
-      createTremoloLabel(
-        (cx - halfWidth) * NOTE_SCALE,
-        inkTopY - TREMOLO_LABEL_GAP_PX,
-        tremoloLabel
-      )
-    );
-  }
+  const labelHead = noteHeadGeometry(stemUp, base, noFlags);
+  appendTechniqueLabels(
+    svg,
+    (labelHead.cx - labelHead.halfWidth) * NOTE_SCALE,
+    inkTopY,
+    techniqueLabels(tremoloLabel, glissandoLabel)
+  );
 
   const dotLayout = chordAugmentationDotLayout({
     duration,
@@ -385,15 +383,18 @@ export const createChordSvg = ({
     );
   }
 
-  if (bend !== null) {
+  if (bends.some((bend) => bend !== null)) {
     const headYs = staffYCoordinates.map(
       (staffY) => STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION
     );
     const dotYs = bendDotYs(headYs, dotLayout?.rowCentersY ?? []);
-    const layout = layoutBend({
-      shape: bend,
-      heads: headYs.map((y, i) => ({ y, dotY: dotYs[i], onLine: false })),
-      target: null,
+    const layout = layoutBends({
+      heads: headYs.flatMap((y, i) => {
+        const bend = bends[i] ?? null;
+        return bend === null
+          ? []
+          : [{ y, dotY: dotYs[i], staffY: null, bend }];
+      }),
       inkRight: Math.max(
         chordHeadExtentPx({
           duration,
@@ -413,10 +414,11 @@ export const createChordSvg = ({
         stemExtension,
       }),
       limit: { kind: 'length', length: BEND_STANDALONE_LENGTH_PX },
+      targetWidthPx: bendTargetWidthPx,
     });
     if (layout !== null) {
       svg.setAttribute('overflow', 'visible');
-      svg.appendChild(createBendSvg(bend, layout, null));
+      svg.appendChild(createBendSvg(layout));
     }
   }
 

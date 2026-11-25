@@ -35,6 +35,9 @@ export const DEFAULT_BULGE_HEIGHT = STAFF_LINE_SPACING * 0.9;
 export const BULGE_STEP_PX = STAFF_LINE_SPACING * 1.1;
 const STROKE_WIDTH = 1.4;
 const LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
+// How far a line's label reaches past the line's own clearance: its baseline's
+// distance and its ascent.
+const LINE_LABEL_REACH_PX = LABEL_FONT_SIZE * 1.65;
 
 export const createCurveSvg = ({
   from,
@@ -144,6 +147,28 @@ export function createLineLabel({
     (from.x + to.x) / 2,
     nearestY + sign * LABEL_FONT_SIZE * 0.9
   );
+}
+
+/** The box over a line's label (see createLineLabel), above the line. */
+export function lineLabelBox(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  label: string,
+  clearance: number
+): { left: number; right: number; top: number } {
+  const span = to.x - from.x;
+  const slope = span === 0 ? 0 : (to.y - from.y) / span;
+  const halfText = (label.length * CONNECTOR_LABEL_CHAR_WIDTH_PX) / 2;
+  const midX = (from.x + to.x) / 2;
+  return {
+    left: midX - halfText,
+    right: midX + halfText,
+    top:
+      (from.y + to.y) / 2 -
+      Math.abs(slope) * Math.min(halfText, Math.abs(span) / 2) -
+      clearance -
+      LINE_LABEL_REACH_PX,
+  };
 }
 
 /** Redraws an already built curve's line as a dotted one. */

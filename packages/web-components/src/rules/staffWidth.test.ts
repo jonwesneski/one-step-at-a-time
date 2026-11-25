@@ -1,6 +1,7 @@
 import {
   AVG_LYRIC_CHAR_WIDTH_PX,
   LEADING_NOTE_GAP_PX,
+  MAX_UNCROWDED_STRETCH,
   MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
@@ -12,6 +13,7 @@ import {
   calculateStaffVocalNaturalWidth,
   computeMinimumEntryAdvance,
   measureFlexValue,
+  widenToUncrowded,
 } from './staffWidth';
 
 const TYPICAL_DESCRIBE_END_X = 90;
@@ -249,6 +251,14 @@ describe('calculateStaffVocalNaturalWidth', () => {
         LEADING_NOTE_GAP_PX +
         80 * AVG_LYRIC_CHAR_WIDTH_PX
     );
+  });
+});
+
+describe('widenToUncrowded', () => {
+  it('widens as far as the bar needs, up to the limit, and never narrows', () => {
+    expect(widenToUncrowded(200, 150)).toBe(200);
+    expect(widenToUncrowded(200, 220)).toBe(220);
+    expect(widenToUncrowded(200, 900)).toBe(200 * MAX_UNCROWDED_STRETCH);
   });
 });
 

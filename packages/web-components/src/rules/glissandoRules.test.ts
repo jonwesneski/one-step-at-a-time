@@ -1,8 +1,11 @@
 import type { BendShape, Note, Octave, QuarterTone } from '../types/theory';
 import {
   BEND_BARLINE_GAP_PX,
+  BEND_FREE_MAX_TRAVEL_PX,
+  BEND_FREE_SLOPE,
   BEND_FREE_TRAVEL_PX,
   BEND_SAME_POSITION_TILT_PX,
+  BEND_TARGET_GAP_PX,
   GLISSANDO_DIP_WIDTH_PX,
   GLISSANDO_GAP_PX,
   GLISSANDO_LEVEL_LIFT_PX,
@@ -16,17 +19,18 @@ import {
   bendConsistencyWarning,
   bendDotYs,
   bendReserveWidthPx,
-  bendTargetSteps,
+  bendTargetsWidthPx,
   glissandoDipWidthPx,
   glissandoEndpoints,
   glissandoEndYs,
   glissandoHalfWaveCount,
   glissandoShapeWarning,
   glissandoXSpan,
-  layoutBend,
+  layoutBends,
   resolveBend,
   splitGlissandoAcrossRows,
   type BendHead,
+  type ResolvedBend,
 } from './glissandoRules';
 
 const heights = {
@@ -190,6 +194,7 @@ describe('resolveBend', () => {
       letter: 'C',
       octave: 4,
       accidental: 'sharp-up',
+      steps: 0,
     });
     const down = resolve('C#', { bendTo: 'C#', bendToQuarterTone: 'down' });
     expect(down?.shape).toBe('down');
@@ -197,6 +202,11 @@ describe('resolveBend', () => {
       resolve('C', { quarterTone: 'up', bendTo: 'C#', bendToQuarterTone: null })
         ?.shape
     ).toBe('up');
+  });
+
+  it('counts staff steps across the octave', () => {
+    expect(resolve('B', { bendTo: 'C' })?.target?.steps).toBe(1);
+    expect(resolve('D', { octave: 5, bendTo: 'C' })?.target?.steps).toBe(-1);
   });
 
   it('takes the octave nearest the note', () => {
@@ -221,119 +231,150 @@ describe('resolveBend', () => {
   });
 });
 
-describe('bendTargetSteps', () => {
-  it('counts staff steps across the octave', () => {
-    const target = { letter: 'C' as const, octave: 5 as Octave, accidental: null };
-    expect(bendTargetSteps('B', 4, target)).toBe(1);
-    expect(bendTargetSteps('D', 5, target)).toBe(-1);
-  });
-});
-
 describe('bendReserveWidthPx', () => {
   it('adds a target and its gap to the line and both gaps', () => {
     const free = GLISSANDO_MIN_LENGTH_PX + 2 * GLISSANDO_GAP_PX;
-    expect(bendReserveWidthPx(null, 0)).toBe(0);
-    expect(bendReserveWidthPx('down', 0)).toBe(free);
-    expect(bendReserveWidthPx('down', 18)).toBe(free + 18 + GLISSANDO_GAP_PX);
+    expect(bendReserveWidthPx(0)).toBe(free);
+    expect(bendReserveWidthPx(18)).toBe(free + 18 + GLISSANDO_GAP_PX);
   });
 });
 
-describe('layoutBend', () => {
-  const head: BendHead = { y: 50, dotY: null, onLine: false };
+describe('layoutBends', () => {
+  const TARGET_WIDTH = 20;
+  // In a space on staff Y 45; on a line on 50.
+  const headAt = (
+    bend: Partial<ResolvedBend> & { steps?: number } = {},
+    { y = 50, staffY = 45 as number | null, dotY = null as number | null } = {}
+  ): BendHead => ({
+    y,
+    dotY,
+    staffY,
+    bend: {
+      shape: bend.shape ?? 'down',
+      target:
+        bend.steps === undefined
+          ? null
+          : { letter: 'C', octave: 4, accidental: null, steps: bend.steps },
+    },
+  });
   const base = {
-    shape: 'down' as BendShape,
-    heads: [head],
-    target: null,
+    heads: [headAt()],
     inkRight: 20,
     tail: null,
-    limit: { kind: 'ink' as const, left: 100 },
+    limit: { kind: 'ink' as const, left: 70 },
+    targetWidthPx: () => TARGET_WIDTH,
   };
-  const lineOf = (input: Partial<Parameters<typeof layoutBend>[0]>) => {
-    const layout = layoutBend({ ...base, ...input });
+  const linesOf = (input: Partial<Parameters<typeof layoutBends>[0]>) => {
+    const layout = layoutBends({ ...base, ...input });
     if (layout === null) {
       throw new Error('no layout');
     }
-    return layout.lines[0];
+    return layout.lines;
   };
+  const lineOf = (input: Partial<Parameters<typeof layoutBends>[0]>) =>
+    linesOf(input)[0];
 
   it('runs from its note to the next ink, half a space from each', () => {
     const { from, to } = lineOf({});
     expect(from).toEqual({ x: 20 + GLISSANDO_GAP_PX, y: 50 });
-    expect(to).toEqual({ x: 100 - GLISSANDO_GAP_PX, y: 50 + BEND_FREE_TRAVEL_PX });
+    expect(to).toEqual({
+      x: 70 - GLISSANDO_GAP_PX,
+      y: 50 + BEND_FREE_TRAVEL_PX,
+    });
   });
 
-  it('moves as far whatever its length', () => {
-    const { from, to } = lineOf({ limit: { kind: 'ink', left: 400 } });
-    expect(to.y - from.y).toBeCloseTo(BEND_FREE_TRAVEL_PX);
+  it('moves a set amount, then keeps its slope over a longer note, up to a limit', () => {
+    const travelTo = (left: number) => {
+      const { from, to } = lineOf({ limit: { kind: 'ink', left } });
+      return { travel: to.y - from.y, length: to.x - from.x };
+    };
+    expect(travelTo(50).travel).toBe(BEND_FREE_TRAVEL_PX);
+    const longer = travelTo(150);
+    expect(longer.travel).toBeCloseTo(longer.length * BEND_FREE_SLOPE);
+    expect(longer.travel).toBeGreaterThan(BEND_FREE_TRAVEL_PX);
+    expect(travelTo(800).travel).toBe(BEND_FREE_MAX_TRAVEL_PX);
   });
 
   it('starts just off a stave line, away from its travel', () => {
-    const onLine = [{ ...head, onLine: true }];
-    expect(lineOf({ heads: onLine }).from.y).toBe(50 - GLISSANDO_OFF_LINE_PX);
-    expect(lineOf({ heads: onLine, shape: 'up' }).from.y).toBe(
+    const onLine = { staffY: 50 };
+    expect(lineOf({ heads: [headAt({}, onLine)] }).from.y).toBe(
+      50 - GLISSANDO_OFF_LINE_PX
+    );
+    expect(lineOf({ heads: [headAt({ shape: 'up' }, onLine)] }).from.y).toBe(
       50 + GLISSANDO_OFF_LINE_PX
     );
   });
 
+  it('keeps off no lines outside a staff', () => {
+    expect(lineOf({ heads: [headAt({}, { staffY: null })] }).from.y).toBe(50);
+  });
+
   it('lifts a wave or dip into the space, and starts level with a dot', () => {
-    const onLine = { ...head, onLine: true };
     for (const shape of ['wave', 'dip'] as const) {
-      const { from, to } = lineOf({ heads: [onLine], shape });
+      const { from, to } = lineOf({ heads: [headAt({ shape }, { staffY: 50 })] });
       expect(from.y).toBe(50 - GLISSANDO_LEVEL_LIFT_PX);
       expect(to.y).toBe(from.y);
     }
-    expect(lineOf({ heads: [{ ...onLine, dotY: 45 }] }).from.y).toBe(45);
+    expect(
+      lineOf({ heads: [headAt({}, { staffY: 50, dotY: 45 })] }).from.y
+    ).toBe(45);
   });
 
   it('drops a level line where a neighbouring head has the space above', () => {
-    const layout = layoutBend({
-      ...base,
-      shape: 'wave',
+    const lines = linesOf({
       heads: [
-        { y: 50, dotY: null, onLine: true },
-        { y: 45, dotY: null, onLine: false },
+        headAt({ shape: 'wave' }, { y: 50, staffY: 50 }),
+        headAt({ shape: 'wave' }, { y: 45, staffY: 45 }),
       ],
     });
-    expect(layout?.lines.map(({ from }) => from.y)).toEqual([55, 45]);
+    expect(lines.map(({ from }) => from.y)).toEqual([55, 45]);
   });
 
   it('keeps off a barline as far as its room allows', () => {
     expect(lineOf({ limit: { kind: 'barline', left: 100 } }).to.x).toBe(
       100 - BEND_BARLINE_GAP_PX
     );
-    const tight = 20 + bendReserveWidthPx('down', 0);
+    const tight = 20 + bendReserveWidthPx(0);
     expect(lineOf({ limit: { kind: 'barline', left: tight } }).to.x).toBe(
       tight - GLISSANDO_GAP_PX
     );
   });
 
   it('puts a target before the limit and runs to it', () => {
-    const layout = layoutBend({
-      ...base,
-      shape: 'up',
-      target: { y: 40, onLine: false, width: 20 },
+    const { to, target } = lineOf({
+      heads: [headAt({ shape: 'up', steps: 2 })],
+      limit: { kind: 'ink', left: 100 },
     });
-    expect(layout?.targetLeftX).toBe(100 - GLISSANDO_GAP_PX - 20);
-    expect(layout?.lines[0].to).toEqual({
-      x: 100 - 2 * GLISSANDO_GAP_PX - 20,
-      y: 40,
-    });
+    expect(target?.leftX).toBe(100 - GLISSANDO_GAP_PX - TARGET_WIDTH);
+    expect(target?.centerY).toBe(40);
+    expect(target?.staffY).toBe(35);
+    expect(to).toEqual({ x: 100 - 2 * GLISSANDO_GAP_PX - TARGET_WIDTH, y: 40 });
   });
 
   it('tilts toward a target on its own position', () => {
-    const target = { y: 50, onLine: false, width: 20 };
-    expect(lineOf({ target, shape: 'up' }).to.y).toBe(
-      50 - BEND_SAME_POSITION_TILT_PX
-    );
-    expect(lineOf({ target, shape: 'down' }).to.y).toBe(
-      50 + BEND_SAME_POSITION_TILT_PX
-    );
+    const toY = (shape: BendShape) =>
+      lineOf({
+        heads: [headAt({ shape, steps: 0 })],
+        limit: { kind: 'ink', left: 100 },
+      }).to.y;
+    expect(toY('up')).toBe(50 - BEND_SAME_POSITION_TILT_PX);
+    expect(toY('down')).toBe(50 + BEND_SAME_POSITION_TILT_PX);
   });
 
   it('clears a tail only where the line would cross it', () => {
     const tail = { right: 30, bottomY: 46 };
     expect(lineOf({ tail }).from.x).toBe(20 + GLISSANDO_GAP_PX);
-    expect(lineOf({ tail, shape: 'wave' }).from.x).toBe(30 + GLISSANDO_GAP_PX);
+    expect(lineOf({ tail, heads: [headAt({ shape: 'wave' })] }).from.x).toBe(
+      30 + GLISSANDO_GAP_PX
+    );
+    // A long rise is past the tail before it gets that high.
+    expect(
+      lineOf({
+        tail,
+        heads: [headAt({ shape: 'up' })],
+        limit: { kind: 'ink', left: 400 },
+      }).from.x
+    ).toBe(20 + GLISSANDO_GAP_PX);
   });
 
   it('closes its first gap before giving up', () => {
@@ -342,10 +383,10 @@ describe('layoutBend', () => {
       ...base,
       limit: { kind: 'ink' as const, left: left + GLISSANDO_GAP_PX },
     });
-    expect(layoutBend(limitAt(short))?.lines[0].from.x).toBe(
+    expect(layoutBends(limitAt(short))?.lines[0].from.x).toBe(
       20 + GLISSANDO_MIN_GAP_PX
     );
-    expect(layoutBend(limitAt(short - 1))).toBeNull();
+    expect(layoutBends(limitAt(short - 1))).toBeNull();
   });
 
   it('is a set length standalone', () => {
@@ -353,12 +394,37 @@ describe('layoutBend', () => {
     expect(to.x - from.x).toBe(50);
   });
 
-  it('ends every line of a chord at one x', () => {
-    const layout = layoutBend({
-      ...base,
-      heads: [head, { ...head, y: 30 }, { ...head, y: 10 }],
+  it('ends every line of a chord at one x, whatever each does', () => {
+    const lines = linesOf({
+      heads: [
+        headAt({ shape: 'up', steps: 1 }),
+        headAt({ shape: 'down' }, { y: 10, staffY: 5 }),
+      ],
+      limit: { kind: 'ink', left: 120 },
     });
-    expect(new Set(layout?.lines.map(({ to }) => to.x)).size).toBe(1);
+    expect(new Set(lines.map(({ to }) => to.x)).size).toBe(1);
+    expect(lines.map(({ target }) => target === null)).toEqual([false, true]);
+  });
+
+  it('puts targets too close for one column side by side', () => {
+    const lefts = (gap: number) =>
+      linesOf({
+        heads: [
+          headAt({ steps: 0 }),
+          headAt({ steps: 0 }, { y: 50 + gap, staffY: 45 + gap }),
+        ],
+        limit: { kind: 'ink', left: 160 },
+      }).map(({ target }) => target?.leftX ?? 0);
+    const [first, second] = lefts(20);
+    expect(first).toBe(second);
+    const [upper, lower] = lefts(10);
+    expect(lower - upper).toBe(TARGET_WIDTH + BEND_TARGET_GAP_PX);
+    expect(
+      bendTargetsWidthPx(
+        [headAt({ steps: 0 }), headAt({ steps: 0 }, { y: 60 })],
+        () => TARGET_WIDTH
+      )
+    ).toBe(2 * TARGET_WIDTH + BEND_TARGET_GAP_PX);
   });
 });
 

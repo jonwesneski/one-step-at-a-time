@@ -1,10 +1,7 @@
 import type { TremoloBeamSegment } from '../../rules/tremoloRules';
-import type { TremoloLabel } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   BEAM_THICKNESS_PX,
-  TREMOLO_LABEL_CHAR_WIDTH_PX,
-  TREMOLO_LABEL_FONT_SIZE_PX,
   TREMOLO_STROKE_RISE_PX,
   TREMOLO_STROKE_THICKNESS_PX,
   TREMOLO_STROKE_WIDTH_PX,
@@ -56,40 +53,6 @@ export function createTremoloNumeral(
   value: number
 ): SVGTextElement {
   return createTupletNumeralText(x, centerY, `${value}`, 'tremolo-numeral');
-}
-
-const TREMOLO_LABEL_TEXT: Record<TremoloLabel, string> = {
-  trem: 'trem.',
-  'non-trem': 'non trem.',
-  flz: 'flz.',
-  flt: 'flt.',
-  frull: 'frull.',
-  ord: 'ord.',
-  nat: 'nat.',
-  norm: 'norm.',
-};
-
-/** Estimated drawn width (px) of a technique label. */
-export function tremoloLabelWidthPx(label: TremoloLabel): number {
-  return TREMOLO_LABEL_TEXT[label].length * TREMOLO_LABEL_CHAR_WIDTH_PX;
-}
-
-/** A technique label starting at leftX on baselineY. */
-export function createTremoloLabel(
-  leftX: number,
-  baselineY: number,
-  label: TremoloLabel
-): SVGTextElement {
-  const text = document.createElementNS(SVG_NS, 'text');
-  text.classList.add('tremolo-label');
-  text.setAttribute('x', `${leftX}`);
-  text.setAttribute('y', `${baselineY}`);
-  text.setAttribute('text-anchor', 'start');
-  text.setAttribute('font-family', 'serif');
-  text.setAttribute('font-size', `${TREMOLO_LABEL_FONT_SIZE_PX}`);
-  text.setAttribute('fill', 'currentColor');
-  text.textContent = TREMOLO_LABEL_TEXT[label];
-  return text;
 }
 
 /** `points` for a tremolo beam whose top edge runs along `segment`. */

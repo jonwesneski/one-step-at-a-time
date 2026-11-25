@@ -11,6 +11,7 @@ import type {
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoLabel,
   GlissandoShape,
   GraceDuration,
   GraceSlur,
@@ -428,6 +429,15 @@ export const GLISSANDO_HINTS: GlissandoHint[] = [
 ];
 
 export const GLISSANDO_SHAPES: GlissandoShape[] = ['straight', 'dip', 'wave'];
+
+export const GLISSANDO_LABELS: GlissandoLabel[] = [
+  'gliss',
+  'quasi-gliss',
+  'chrom',
+  'chromatic',
+  'lip',
+  'bend',
+];
 
 export const BEND_SHAPES: BendShape[] = ['up', 'down', 'dip', 'wave'];
 

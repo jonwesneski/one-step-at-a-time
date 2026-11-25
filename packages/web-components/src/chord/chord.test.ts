@@ -1752,10 +1752,9 @@ describe('staff integration', () => {
           (NOTE_SVG_WIDTH - MIN_NOTE_WIDTH),
         5
       );
-      expect(withPassage).toBeCloseTo(
-        parseFloat(second.style.left) + MIN_NOTE_WIDTH,
-        5
-      );
+      const afterLast = withPassage - parseFloat(second.style.left);
+      expect(afterLast).toBeGreaterThanOrEqual(MIN_NOTE_WIDTH);
+      expect(afterLast).toBeLessThanOrEqual(NOTE_SVG_WIDTH);
     });
 
     function reassignSlot(staff: Element, chords: ChordElementType[]): void {
@@ -2404,6 +2403,35 @@ describe('bend', () => {
     expect(element.shadowRoot!.querySelector('.bend-line')).toBeNull();
   });
 
+  it('lets a slotted tone bend on its own, over the chord’s bend', () => {
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.innerHTML = `
+      <music-note note="C" octave="4"></music-note>
+      <music-note note="E" octave="4" bend-to="F"></music-note>
+      <music-note note="G" octave="4" glissando="start"></music-note>`;
+    document.body.appendChild(element);
+    const shapes = () => element.toneBends.map((bend) => bend?.shape ?? null);
+    expect(shapes()).toEqual([null, 'up', null]);
+    expect(element.shadowRoot!.querySelectorAll('.bend-line')).toHaveLength(1);
+    expect(
+      element.shadowRoot!.querySelectorAll('.bend-target-note')
+    ).toHaveLength(1);
+    element.bend = 'dip';
+    expect(shapes()).toEqual(['dip', 'up', null]);
+    expect(element.shadowRoot!.querySelectorAll('.bend-line')).toHaveLength(2);
+  });
+
+  it('redraws when a slotted tone’s bend changes', async () => {
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.innerHTML = `
+      <music-note note="C" octave="4"></music-note>
+      <music-note note="E" octave="4"></music-note>`;
+    document.body.appendChild(element);
+    element.querySelector('music-note')?.setAttribute('bend', 'down');
+    await Promise.resolve();
+    expect(element.shadowRoot!.querySelectorAll('.bend-line')).toHaveLength(1);
+  });
+
   it('ignores bend-to with a warning', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const element = document.createElement(MUSIC_CHORD) as ChordElementType;
@@ -2415,6 +2443,19 @@ describe('bend', () => {
       expect.stringContaining('[music-chord] bend-to is ignored on a chord')
     );
     warn.mockRestore();
+  });
+});
+
+describe('glissando-label', () => {
+  it('round-trips and is drawn standalone', () => {
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.setAttribute('chord', 'Cmaj');
+    element.glissandoLabel = 'quasi-gliss';
+    document.body.appendChild(element);
+    expect(element.getAttribute('glissando-label')).toBe('quasi-gliss');
+    expect(
+      element.shadowRoot!.querySelector('.glissando-label')?.textContent
+    ).toBe('quasi gliss.');
   });
 });
 

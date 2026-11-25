@@ -5,6 +5,7 @@ import {
   type ResolvedEndBarline,
   type StartRepeatMode,
 } from './rules/barlineRules';
+import type { ColumnRoom } from './rules/spacingRules';
 import {
   MARKER_BEAT_EPSILON,
   type MarkerBeat,
@@ -69,6 +70,9 @@ export type BarlineSlotLeft = { beat: number; left: number };
 /** Px an end-of-measure warning area takes, and how much of it the strut counts. */
 export type EndWarningSpace = { width: number; reserved: number };
 
+/** A staff's collision floor and the width it would rather have. */
+export type StaffWidths = { minWidth: number; naturalWidth: number };
+
 const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
 
 const INK_SELECTOR =
@@ -94,6 +98,23 @@ function sameBarlineSlotLefts(
     )
   );
 }
+
+function sameColumnRooms(
+  a: readonly ColumnRoom[],
+  b: readonly ColumnRoom[]
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (column, i) =>
+        Math.abs(column.beat - b[i].beat) <= MARKER_BEAT_EPSILON &&
+        Math.abs(column.roomAfter - b[i].roomAfter) <= BARLINE_SLOT_TOLERANCE_PX
+    )
+  );
+}
+
+// What a staff with no <music-measure> around it needs, which sizes itself.
+const STRUT_WIDTH_PROPERTY = '--staff-strut-width';
 
 const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
 const ROW_ALIGNMENT_SOURCE = 'row-alignment';
@@ -267,6 +288,30 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected sharedBarlineSlotLefts: readonly BarlineSlotLeft[] = [];
 
+  // The room this staff's entries need before the end of the bar, from each
+  // beat whose entries would otherwise sit too late for what follows; empty
+  // when nothing is crowded. Own content only, never another staff's, so the
+  // exchange through the ancestor <music-measure> ends on the next pass.
+  get ownColumnRooms(): readonly ColumnRoom[] {
+    return [];
+  }
+
+  // What any staff of the measure needs, so beat columns stay aligned when
+  // only one is crowded.
+  get measureColumnRooms(): readonly ColumnRoom[] {
+    return this.sharedColumnRooms;
+  }
+
+  set measureColumnRooms(value: readonly ColumnRoom[]) {
+    if (sameColumnRooms(this.sharedColumnRooms, value)) {
+      return;
+    }
+    this.sharedColumnRooms = [...value];
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedColumnRooms: readonly ColumnRoom[] = [];
+
   // The barline this staff draws at its right edge, set by its
   // <music-measure> (and adjusted by <music-composition> where two bars
   // meet). A plain barline stays the staff container's right border.
@@ -387,6 +432,27 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     };
   }
 
+  // The widths this staff's entries want, or null with none. The ancestor
+  // <music-measure> sizes itself to its widest staff; a staff without one
+  // keeps to its own minimum.
+  protected reportStaffWidths(widths: StaffWidths | null): void {
+    const style = (this as unknown as HTMLElement).style;
+    if (widths === null || this.closest(MUSIC_MEASURE) !== null) {
+      style.removeProperty(STRUT_WIDTH_PROPERTY);
+    } else {
+      style.setProperty(STRUT_WIDTH_PROPERTY, `${Math.ceil(widths.minWidth)}px`);
+    }
+    if (widths !== null) {
+      this.dispatchEvent(
+        new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
+          bubbles: true,
+          composed: false,
+          detail: widths,
+        })
+      );
+    }
+  }
+
   protected onMeasureLayoutChange(): void {
     // Staves that space notes override this to relayout.
   }
@@ -490,7 +556,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
       <style>
       :host {
           flex: var(--flex-staff-basis, 1 1 280px);
-          min-width: var(--flex-staff-minw, 0);
+          min-width: var(--flex-staff-minw, var(${STRUT_WIDTH_PROPERTY}, 0));
           box-sizing: border-box;
           display: block;
         }
