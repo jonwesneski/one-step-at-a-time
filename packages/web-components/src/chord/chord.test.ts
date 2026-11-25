@@ -2391,3 +2391,53 @@ describe('quarter-tones', () => {
     ).toBe('0 0 100 100');
   });
 });
+
+describe('glissando-shape', () => {
+  it('round-trips, defaulting to straight and ignoring a value that doesn’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.setAttribute('glissando', 'start');
+    document.body.appendChild(element);
+
+    expect(element.glissandoShape).toBe('straight');
+    element.glissandoShape = 'dip';
+    expect(element.getAttribute('glissando-shape')).toBe('dip');
+    element.setAttribute('glissando-shape', 'bump');
+    expect(element.glissandoShape).toBe('straight');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[music-chord] glissando-shape="bump"')
+    );
+    element.glissandoShape = 'straight';
+    expect(element.hasAttribute('glissando-shape')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('warns once connected where no glissando starts', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.setAttribute('glissando-shape', 'wave');
+    element.setAttribute('glissando', 'end');
+    expect(warn).not.toHaveBeenCalled();
+    document.body.appendChild(element);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('starts no glissando')
+    );
+    warn.mockRestore();
+  });
+
+  it('redraws connectors when the shape changes, and re-lays the staff out when the glissando does', () => {
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    document.body.appendChild(element);
+    const redraw = jest.fn();
+    const relayout = jest.fn();
+    element.addEventListener(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, redraw);
+    element.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, relayout);
+
+    element.glissando = 'start';
+    expect(redraw).toHaveBeenCalledTimes(1);
+    expect(relayout).toHaveBeenCalledTimes(1);
+    element.glissandoShape = 'dip';
+    expect(redraw).toHaveBeenCalledTimes(2);
+    expect(relayout).toHaveBeenCalledTimes(1);
+  });
+});

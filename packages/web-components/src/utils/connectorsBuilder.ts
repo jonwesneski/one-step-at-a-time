@@ -1,4 +1,5 @@
 import { resolveArpeggioTiePairings } from '../rules/arpeggioRules';
+import { isOnStaffLine } from '../rules/augmentationDotRules';
 import { breathMarkIndicesInsideSlurs } from '../rules/breathMarkRules';
 import {
   anchorYClearOfRects,
@@ -22,6 +23,7 @@ import {
   resolveEnclosingArc,
   resolveRectClearingBulgeHeight,
   resolveSlurCurve,
+  segmentIntersectsRect,
   sliceConvexPolygon,
   slurAnchorKind,
   SlurCurveResolution,
@@ -33,6 +35,12 @@ import {
   DoubleStemmedBeamGroup,
   resolveDoubleStemmedBeamGroups,
 } from '../rules/doubleStemmedBeamRules';
+import {
+  glissandoEndpoints,
+  glissandoEndYs,
+  type LinePoint,
+  splitGlissandoAcrossRows,
+} from '../rules/glissandoRules';
 import { computeGraceFootprintWidth } from '../rules/graceRules';
 import type {
   ArpeggioElementType,
@@ -69,6 +77,8 @@ import {
   ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
   AUGMENTATION_DOT_SPACING_GAP_PX,
   CROSS_STAFF_SLUR_BULGE_SPAN_RATIO,
+  GLISSANDO_GAP_PX,
+  GLISSANDO_INK_CLEARANCE_PX,
   LAISSEZ_VIBRER_CURVE_LENGTH_PX,
   SLUR_ARTICULATION_CLEARANCE_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
@@ -85,11 +95,17 @@ import {
   STAFF_LINE_SPACING,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
-import { parseGlissandoHint, parseSlurStyle, parseTieStyle } from './parsers';
+import {
+  parseGlissandoHint,
+  parseGlissandoShape,
+  parseSlurStyle,
+  parseTieStyle,
+} from './parsers';
 import {
   BULGE_STEP_PX,
   computeWrittenTrillNoteWidth,
   createCurveSvg,
+  createGlissandoLineSvg,
   createOpenTieSvg,
   CurveBulge,
   DEFAULT_BULGE_HEIGHT,
@@ -97,6 +113,7 @@ import {
 } from './svgCreator';
 import {
   computeYHeadOffset,
+  NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SVG_WIDTH,
 } from './svgCreator/note';
@@ -124,11 +141,11 @@ const CONNECTOR_LABELS: Partial<Record<ConnectorKind, string>> = {
 };
 
 // Text shown near a glissando line when its start element sets
-// `glissando-hint` — standard keyboard engraving practice for clarifying
-// which keys the line slides across.
+// `glissando-hint`.
 const GLISSANDO_HINT_LABELS: Record<GlissandoHint, string> = {
   'white-key': 'white-note gliss.',
   'black-key': 'black-note gliss.',
+  gliss: 'gliss.',
 };
 
 // Row-split tolerance (px). Matches the pattern in measure.ts's #updateConnectorVisibility.
@@ -916,19 +933,24 @@ const stemSourceOf = (note: NoteLikeElementType): NoteLikeElementType =>
     ? (note.parentElement as unknown as NoteLikeElementType)
     : note;
 
+const shadowRects = (
+  note: NoteLikeElementType,
+  selector: string,
+  rootRect: DOMRect
+): ObstacleRect[] =>
+  Array.from(
+    note.shadowRoot?.querySelectorAll<SVGGraphicsElement>(selector) ?? []
+  )
+    .map((ink) => ink.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 || rect.height > 0)
+    .map((rect) => toRootSpace(rect, rootRect));
+
 // Root-space rects of an entry's articulation marks, its grace notes' included.
 const articulationRectsOf = (
   note: NoteLikeElementType,
   rootRect: DOMRect
 ): ObstacleRect[] =>
-  Array.from(
-    stemSourceOf(note).shadowRoot?.querySelectorAll<SVGGraphicsElement>(
-      '.articulations'
-    ) ?? []
-  )
-    .map((group) => group.getBoundingClientRect())
-    .filter((rect) => rect.width > 0 || rect.height > 0)
-    .map((rect) => toRootSpace(rect, rootRect));
+  shadowRects(stemSourceOf(note), '.articulations', rootRect);
 
 // Root-space rects of an entry's own heads and accidentals, with its stem and
 // tail for a slur that passes on the stem side.
@@ -937,14 +959,11 @@ const noteInkRectsOf = (
   rootRect: DOMRect,
   includeStems: boolean
 ): ObstacleRect[] =>
-  Array.from(
-    stemSourceOf(note).shadowRoot?.querySelectorAll<SVGGraphicsElement>(
-      includeStems ? '.head, .accidental, .stem, .flag' : '.head, .accidental'
-    ) ?? []
-  )
-    .map((ink) => ink.getBoundingClientRect())
-    .filter((rect) => rect.width > 0 || rect.height > 0)
-    .map((rect) => toRootSpace(rect, rootRect));
+  shadowRects(
+    stemSourceOf(note),
+    includeStems ? '.head, .accidental, .stem, .flag' : '.head, .accidental',
+    rootRect
+  );
 
 // A slur encloses the marks on its own endpoints.
 const clearOwnArticulations = (
@@ -1556,6 +1575,274 @@ const buildCrossStaffSlurSvgs = (
   ];
 };
 
+type GlissandoEnd = {
+  headY: number;
+  headLeft: number;
+  headRight: number;
+  /** The head's staff Y, or null outside a staff. */
+  staffY: number | null;
+  rowTop: number;
+};
+
+// Every head a glissando may start or end at: the tone it is authored on, or
+// all of a chord's. A head that isn't drawn yet is placed by its note's box.
+const glissandoHeads = (
+  note: NoteLikeElementType,
+  rootRect: DOMRect
+): GlissandoEnd[] => {
+  const source = stemSourceOf(note);
+  const rowTop = getRowTop(source, rootRect);
+  const isChord = isChordNodeName(source.tagName);
+  const staffYs = isChord
+    ? (source as ChordElementType).staffYCoordinates ?? []
+    : [(source as NoteElementType).staffY];
+  const heads = Array.from(
+    source.shadowRoot?.querySelectorAll<SVGGraphicsElement>('.head') ?? []
+  )
+    .map((head) => head.getBoundingClientRect())
+    .map((rect, tone): GlissandoEnd | null =>
+      rect.width === 0 && rect.height === 0
+        ? null
+        : {
+            headY: (rect.top + rect.bottom) / 2 - rootRect.top,
+            headLeft: rect.left - rootRect.left,
+            headRight: rect.right - rootRect.left,
+            staffY: staffYs[tone] ?? null,
+            rowTop,
+          }
+    );
+  const toneIndex =
+    note === source
+      ? null
+      : Array.from(source.querySelectorAll(NOTE_TAGS)).indexOf(note);
+  const drawn = (
+    toneIndex === null ? heads : heads.slice(toneIndex, toneIndex + 1)
+  ).filter((head): head is GlissandoEnd => head !== null);
+  if (drawn.length > 0) {
+    return drawn;
+  }
+  const center = computeAnchor(note, rootRect, 'above', 0);
+  return [
+    {
+      headY: center.y,
+      headLeft: center.x - NOTE_HEAD_RADIUS_PX,
+      headRight: center.x + NOTE_HEAD_RADIUS_PX,
+      staffY: staffYs[toneIndex ?? 0] ?? null,
+      rowTop,
+    },
+  ];
+};
+
+const meanHeadY = (heads: readonly GlissandoEnd[]): number =>
+  heads.reduce((sum, { headY }) => sum + headY, 0) / heads.length;
+
+const outerHead = (
+  heads: readonly GlissandoEnd[],
+  top: boolean
+): GlissandoEnd =>
+  heads.reduce((outer, head) =>
+    (top ? head.headY < outer.headY : head.headY > outer.headY) ? head : outer
+  );
+
+// The right edge of what a glissando always starts after: its head, its note's
+// dots, and a trill's written note or finishing notes.
+const glissandoStartRight = (
+  note: NoteLikeElementType,
+  head: GlissandoEnd,
+  rootRect: DOMRect
+): number => {
+  const source = stemSourceOf(note) as NoteElementType | ChordElementType;
+  const { resolvedTrillPitch } = source;
+  const writtenTrillRight = resolvedTrillPitch?.written
+    ? source.getBoundingClientRect().left -
+      rootRect.left +
+      Math.max(NOTE_SVG_WIDTH, source.augmentationDotsRightEdgePx ?? 0) +
+      TRILL_WRITTEN_NOTE_GAP_PX +
+      computeWrittenTrillNoteWidth(resolvedTrillPitch.accidental)
+    : -Infinity;
+  return Math.max(
+    head.headRight,
+    writtenTrillRight,
+    ...shadowRects(
+      source,
+      '.augmentation-dot, .trill-finish-notes',
+      rootRect
+    ).map(({ right }) => right)
+  );
+};
+
+// The glyphs a glissando line stops short of when it would cross them.
+const GLISSANDO_IGNORED_GLYPHS =
+  '.head, .augmentation-dot, .ledger-line, .grace-ledger-line';
+
+/**
+ * A glissando's line beside its heads, clear of both notes' dots, accidentals
+ * and ornaments; two lines of one slope over a system break.
+ */
+const buildGlissandoSvgs = (
+  pair: ConnectorPair,
+  { rootRect, rowLeftOf }: ConnectorsBuildOptions
+): SVGGElement[] => {
+  const startHeads = glissandoHeads(pair.start, rootRect);
+  const endHeads = glissandoHeads(pair.end, rootRect);
+  const acrossStaves = crossesStaves(pair);
+  const acrossRows =
+    Math.abs(startHeads[0].rowTop - endHeads[0].rowTop) > ROW_TOLERANCE_PX;
+  // Across a system break only stave positions compare.
+  const heightsOf = (heads: readonly GlissandoEnd[]): number =>
+    acrossRows
+      ? heads.reduce((sum, { staffY }) => sum + (staffY ?? 0), 0) / heads.length
+      : meanHeadY(heads);
+  const rises = heightsOf(endHeads) <= heightsOf(startHeads);
+  const start = outerHead(startHeads, rises);
+  const end = outerHead(endHeads, !rises);
+
+  const shape = parseGlissandoShape(pair.start.getAttribute('glissando-shape'));
+  const startSource = stemSourceOf(pair.start);
+  const endSource = stemSourceOf(pair.end);
+  const dotYs = shadowRects(startSource, '.augmentation-dot', rootRect).map(
+    ({ top, bottom }) => (top + bottom) / 2
+  );
+  const startDotY = dotYs.reduce<number | null>(
+    (nearest, y) =>
+      nearest === null ||
+      Math.abs(y - start.headY) < Math.abs(nearest - start.headY)
+        ? y
+        : nearest,
+    null
+  );
+  // Over a system break heights are measured from the start's row: the end
+  // head goes where its stave position would be there.
+  const endHeadY =
+    acrossRows && start.staffY !== null && end.staffY !== null
+      ? start.headY + (end.staffY - start.staffY)
+      : end.headY;
+  const heights = {
+    startHeadY: start.headY,
+    endHeadY,
+    startDotY,
+    startOnLine: start.staffY !== null && isOnStaffLine(start.staffY),
+    endOnLine: end.staffY !== null && isOnStaffLine(end.staffY),
+    shape,
+  };
+  const { fromY, toY } = glissandoEndYs(heights);
+
+  const rowRight = rootRect.width;
+  const rowLeft = acrossRows ? rowLeftOf(pair.end) : 0;
+  const endDropY = end.headY - endHeadY;
+  // Where the line runs, one segment a row, for the ink at its ends so far.
+  const segmentsFor = (
+    startRight: number,
+    endLeft: number
+  ): { from: LinePoint; to: LinePoint }[] | null => {
+    if (!acrossRows) {
+      const line = glissandoEndpoints({
+        ...heights,
+        startInkRight: startRight,
+        endInkLeft: endLeft,
+      });
+      return line === null ? null : [line];
+    }
+    const fromX = startRight + GLISSANDO_GAP_PX;
+    const toX = endLeft - GLISSANDO_GAP_PX;
+    const firstLength = Math.max(0, rowRight - fromX);
+    const secondLength = Math.max(0, toX - rowLeft);
+    const { breakRelY } = splitGlissandoAcrossRows({
+      fromRelY: fromY,
+      toRelY: toY,
+      firstLength,
+      secondLength,
+    });
+    return [
+      {
+        from: { x: fromX, y: fromY },
+        to: { x: rowRight, y: acrossStaves ? fromY : breakRelY },
+      },
+      {
+        from: {
+          x: rowLeft,
+          y: (acrossStaves ? toY : breakRelY) + endDropY,
+        },
+        to: { x: toX, y: toY + endDropY },
+      },
+    ].filter(({ from, to }) => to.x > from.x);
+  };
+
+  let startRight = glissandoStartRight(pair.start, start, rootRect);
+  let endLeft = Math.min(
+    end.headLeft,
+    ...shadowRects(endSource, '.grace-notes', rootRect).map(({ left }) => left)
+  );
+  const inkOf = (source: NoteLikeElementType): ObstacleRect[] =>
+    collectGlyphRects(source, rootRect, GLISSANDO_IGNORED_GLYPHS).map(
+      ({ left, right, top, bottom }) => ({
+        left,
+        right,
+        top: top - GLISSANDO_INK_CLEARANCE_PX,
+        bottom: bottom + GLISSANDO_INK_CLEARANCE_PX,
+      })
+    );
+  const startInk = inkOf(startSource);
+  const endInk = inkOf(endSource);
+  let segments = segmentsFor(startRight, endLeft);
+  // Moving an end changes the slope, and so what the line crosses: repeat until
+  // it crosses nothing.
+  for (let moved = true; moved && segments !== null && segments.length > 0; ) {
+    const [first] = segments;
+    const last = segments[segments.length - 1];
+    const blockedAfter = startInk
+      .filter(
+        (rect) =>
+          rect.right > first.from.x &&
+          segmentIntersectsRect(first.from, first.to, rect)
+      )
+      .map(({ right }) => right);
+    const blockedBefore = endInk
+      .filter(
+        (rect) =>
+          rect.left < last.to.x &&
+          segmentIntersectsRect(last.from, last.to, rect)
+      )
+      .map(({ left }) => left);
+    const nextRight = Math.max(startRight, ...blockedAfter);
+    const nextLeft = Math.min(endLeft, ...blockedBefore);
+    moved = nextRight !== startRight || nextLeft !== endLeft;
+    startRight = nextRight;
+    endLeft = nextLeft;
+    segments = segmentsFor(startRight, endLeft);
+  }
+  if (segments === null) {
+    if (!warnedGlissandoStarts.has(pair.start)) {
+      warnedGlissandoStarts.add(pair.start);
+      console.warn(
+        '[connectorsBuilder] no room between these notes for their glissando line; not drawing it',
+        pair.start
+      );
+    }
+    return [];
+  }
+  warnedGlissandoStarts.delete(pair.start);
+
+  // A dip belongs to the start's own bar.
+  const startBar = startSource.closest(MUSIC_MEASURE);
+  const barRight =
+    startBar !== null && startBar !== endSource.closest(MUSIC_MEASURE)
+      ? startBar.getBoundingClientRect().right - rootRect.left
+      : Infinity;
+  return segments.map(({ from, to }, i) =>
+    createGlissandoLineSvg({
+      from,
+      to,
+      shape: i > 0 && shape === 'dip' ? 'straight' : shape,
+      dipCenterX: (from.x + Math.min(to.x, barRight)) / 2,
+      label: i === 0 ? pair.label : undefined,
+    })
+  );
+};
+
+// Starts already warned about, until they draw again.
+const warnedGlissandoStarts = new WeakSet<NoteLikeElementType>();
+
 const MAX_BEAM_AVOIDANCE_STEPS = 6;
 
 // A same-staff slur already drawn, which a slur enclosing it stays outside.
@@ -1599,6 +1886,10 @@ export const buildConnectorSvgs = (
   for (const pair of orderedPairs) {
     styleDottedPair();
     dottedPairStart = pair.dotted ? elements.length : null;
+    if (pair.kind === 'glissando') {
+      elements.push(...buildGlissandoSvgs(pair, options));
+      continue;
+    }
     if (pair.kind === 'slur') {
       const groupStaves = groupSlurStaves?.get(pair);
       if (groupStaves) {
@@ -1642,12 +1933,8 @@ export const buildConnectorSvgs = (
         )
       : pickBulge(pair.start);
     const endBulge = pair.kind === 'tie' ? pickBulge(pair.end) : startBulge;
-    const style =
-      pair.kind === 'slide' || pair.kind === 'glissando'
-        ? 'straight'
-        : 'smooth';
-    const label =
-      pair.kind === 'glissando' ? pair.label : CONNECTOR_LABELS[pair.kind];
+    const style = pair.kind === 'slide' ? 'straight' : 'smooth';
+    const label = CONNECTOR_LABELS[pair.kind];
 
     // Laissez-vibrer: an open-ended tie curving forward off the notehead.
     if (pair.laissezVibrer) {
@@ -2006,12 +2293,6 @@ export const buildConnectorSvgs = (
     }
     const endAnchor = resolveAnchor(pair.end, pair.start, endBulge);
 
-    // A glissando's hint label always sits above the line, regardless of the
-    // notes' stem direction — a fixed annotation position, unlike a slur or
-    // tie's bulge (which follows the stem to stay clear of it).
-    const renderStartBulge = pair.kind === 'glissando' ? 'above' : startBulge;
-    const renderEndBulge = pair.kind === 'glissando' ? 'above' : endBulge;
-
     if (sameRow(startAnchor, endAnchor)) {
       const baseBulgeHeight =
         DEFAULT_BULGE_HEIGHT + pair.nestingLevel * BULGE_STEP_PX;
@@ -2020,7 +2301,7 @@ export const buildConnectorSvgs = (
           ? resolveRectClearingBulgeHeight(
               startAnchor,
               endAnchor,
-              renderStartBulge,
+              startBulge,
               baseBulgeHeight,
               beamRects,
               { step: BULGE_STEP_PX, maxSteps: MAX_BEAM_AVOIDANCE_STEPS }
@@ -2029,14 +2310,14 @@ export const buildConnectorSvgs = (
       const enclosing = enclosingArc(
         startAnchor,
         endAnchor,
-        renderStartBulge,
+        startBulge,
         beamClearingBulge ?? baseBulgeHeight
       );
       elements.push(
         createCurveSvg({
           from: { x: startAnchor.x, y: startAnchor.y },
           to: { x: endAnchor.x, y: endAnchor.y },
-          bulge: renderStartBulge,
+          bulge: startBulge,
           label,
           style,
           nestingLevel: pair.nestingLevel,
@@ -2047,7 +2328,7 @@ export const buildConnectorSvgs = (
       recordSlur(
         startAnchor,
         endAnchor,
-        renderStartBulge,
+        startBulge,
         enclosing ?? { bulgeHeight: beamClearingBulge ?? baseBulgeHeight }
       );
       continue;
@@ -2062,20 +2343,20 @@ export const buildConnectorSvgs = (
     const startHalf = enclosingArc(
       startAnchor,
       startRowEnd,
-      renderStartBulge,
+      startBulge,
       rowBaseBulge
     );
     const endHalf = enclosingArc(
       endRowStart,
       endAnchor,
-      renderEndBulge,
+      endBulge,
       rowBaseBulge
     );
     elements.push(
       createCurveSvg({
         from: { x: startAnchor.x, y: startAnchor.y },
         to: { x: rowRight, y: startAnchor.y },
-        bulge: renderStartBulge,
+        bulge: startBulge,
         label,
         style,
         nestingLevel: pair.nestingLevel,
@@ -2086,7 +2367,7 @@ export const buildConnectorSvgs = (
       createCurveSvg({
         from: { x: rowLeft, y: endAnchor.y },
         to: { x: endAnchor.x, y: endAnchor.y },
-        bulge: renderEndBulge,
+        bulge: endBulge,
         style,
         nestingLevel: pair.nestingLevel,
         ...endHalf,
@@ -2095,13 +2376,13 @@ export const buildConnectorSvgs = (
     recordSlur(
       startAnchor,
       startRowEnd,
-      renderStartBulge,
+      startBulge,
       startHalf ?? { bulgeHeight: rowBaseBulge }
     );
     recordSlur(
       endRowStart,
       endAnchor,
-      renderEndBulge,
+      endBulge,
       endHalf ?? { bulgeHeight: rowBaseBulge }
     );
   }

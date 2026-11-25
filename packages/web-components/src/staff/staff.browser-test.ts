@@ -2152,6 +2152,79 @@ test.describe(`${MUSIC_STAFF} glissando`, () => {
   });
 });
 
+test.describe('glissando room', () => {
+  const build = async (page: Page, notes: string): Promise<void> => {
+    await page.evaluate((html) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.style.width = '320px';
+      host.innerHTML = `<music-staff clef="treble">${html}</music-staff>`;
+    }, notes);
+    await waitForRedrawCycle(page);
+  };
+  const setOnNotes = async (
+    page: Page,
+    changes: { index: number; name: string; value: string }[]
+  ): Promise<void> => {
+    await page.evaluate((all) => {
+      const notes = document.querySelectorAll('music-note');
+      for (const { index, name, value } of all) {
+        notes[index].setAttribute(name, value);
+      }
+    }, changes);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+
+  test('an accidental on the end note shortens the line', async ({ page }) => {
+    await build(
+      page,
+      `<music-note note="F" octave="4" duration="half" glissando="start"></music-note>
+       <music-note note="A" octave="4" duration="half" glissando="end"></music-note>`
+    );
+    const lineWidth = () =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector('music-staff')
+            ?.shadowRoot?.querySelector('.glissando path')
+            ?.getBoundingClientRect().width ?? 0
+      );
+    const plain = await lineWidth();
+    expect(plain).toBeGreaterThan(0);
+    await setOnNotes(page, [{ index: 1, name: 'note', value: 'A#' }]);
+    expect(await lineWidth()).toBeLessThan(plain);
+  });
+
+  test('a glissando into an accidental widens a tight gap', async ({
+    page,
+  }) => {
+    // Every second note shows an accidental.
+    await build(
+      page,
+      `<music-note note="F" octave="4" duration="sixteenth"></music-note>
+       <music-note note="F#" octave="4" duration="sixteenth"></music-note>`.repeat(
+        8
+      )
+    );
+    const gap = () =>
+      page.evaluate(() => {
+        const [first, second] = Array.from(
+          document.querySelectorAll('music-note')
+        ).map((note) => note.getBoundingClientRect().left);
+        return second - first;
+      });
+    const plain = await gap();
+    await setOnNotes(page, [
+      { index: 0, name: 'glissando', value: 'start' },
+      { index: 1, name: 'glissando', value: 'end' },
+    ]);
+    expect(await gap()).toBeGreaterThan(plain);
+  });
+});
+
 test.describe('quarter-tone arrows under a beam', () => {
   test('the beam rises to clear an arrow and returns without it', async ({
     page,

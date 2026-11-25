@@ -10,6 +10,7 @@ import type {
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -51,6 +52,7 @@ import {
   DYNAMICS,
   ENDING_NUMBERINGS,
   GLISSANDO_HINTS,
+  GLISSANDO_SHAPES,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
@@ -117,6 +119,7 @@ const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
+const VALID_GLISSANDO_SHAPES = new Set<string>(GLISSANDO_SHAPES);
 const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
 const VALID_BARLINE_TYPES = new Set<string>(BARLINE_TYPES);
 const VALID_MEASURE_END_BARLINES = new Set<string>(MEASURE_END_BARLINES);
@@ -208,6 +211,11 @@ export const parseStaffGroup = (
   }
   return null;
 };
+
+export const parseGlissandoShape = (value: string | null): GlissandoShape =>
+  value !== null && VALID_GLISSANDO_SHAPES.has(value)
+    ? (value as GlissandoShape)
+    : 'straight';
 
 export const parseGlissandoHint = (
   value: string | null

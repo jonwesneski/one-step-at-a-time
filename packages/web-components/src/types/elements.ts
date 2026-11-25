@@ -12,6 +12,7 @@ import type {
   DurationType,
   DynamicMarking,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -152,8 +153,10 @@ export interface INoteElement {
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
-  /** Which register of key the glissando line starts on — shown as text. */
+  /** Text above the glissando line this starts. */
   glissandoHint: GlissandoHint | null;
+  /** The contour of the glissando line this starts. Defaults to `straight`. */
+  glissandoShape: GlissandoShape;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
@@ -375,8 +378,10 @@ export interface IChordElement {
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
-  /** Which register of key the glissando line starts on — shown as text. */
+  /** Text above the glissando line this starts. */
   glissandoHint: GlissandoHint | null;
+  /** The contour of the glissando line this starts. Defaults to `straight`. */
+  glissandoShape: GlissandoShape;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;

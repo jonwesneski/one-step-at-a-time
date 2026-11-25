@@ -1,5 +1,6 @@
 import { pitchAccidental } from '../rules/accidentalRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { glissandoShapeWarning } from '../rules/glissandoRules';
 import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
@@ -44,6 +45,7 @@ import type {
   DurationType,
   DynamicMarking,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -84,6 +86,7 @@ import {
   parseConnectorRole,
   parseDynamicMarking,
   parseGlissandoHint,
+  parseGlissandoShape,
   parseGraceArticulations,
   parseGraceDuration,
   parseGraceNoteheads,
@@ -144,8 +147,9 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
  * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
  * @attr {'start' | 'end'} slur - Marks this chord as the start or end of a slur.
- * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando (a straight line indicating a continuous slide between pitches).
- * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
+ * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
+ * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
+ * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
  * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
@@ -222,6 +226,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'slur',
       'glissando',
       'glissando-hint',
+      'glissando-shape',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
@@ -545,6 +550,17 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('glissando-hint');
     } else {
       this.setAttribute('glissando-hint', value);
+    }
+  }
+
+  get glissandoShape(): GlissandoShape {
+    return parseGlissandoShape(this.readAttribute('glissando-shape'));
+  }
+  set glissandoShape(value: GlissandoShape) {
+    if (value === 'straight') {
+      this.removeAttribute('glissando-shape');
+    } else {
+      this.setAttribute('glissando-shape', value);
     }
   }
 
@@ -1361,6 +1377,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     upgradeShadowedProperties(this);
     this.#warnAboutTremolo(null, null);
     this.#warnAboutSlurStyle(null, null);
+    this.#warnAboutGlissandoShape(null, null);
     this.#warnAboutDynamicReminder();
     this.render();
     this.#childObserver = new MutationObserver(() => {
@@ -1431,6 +1448,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
     this.#warnAboutTremolo(name, newValue);
     this.#warnAboutSlurStyle(name, newValue);
+    this.#warnAboutGlissandoShape(name, newValue);
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1451,6 +1469,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'lv-label' ||
       name === 'glissando' ||
       name === 'glissando-hint' ||
+      name === 'glissando-shape' ||
       name === 'slur-group' ||
       name === 'tie-style' ||
       name === 'slur-style' ||
@@ -1462,6 +1481,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
           composed: true,
         })
       );
+      if (name === 'glissando') {
+        // The staff keeps room after a glissando's start.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
       return;
     }
 
@@ -1729,6 +1757,39 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       label: this.tremoloLabel,
       inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
     })) {
+      console.warn(`[music-chord] ${warning}`);
+    }
+  }
+
+  #warnAboutGlissandoShape(
+    changed: string | null,
+    newValue: string | null
+  ): void {
+    if (
+      changed !== null &&
+      changed !== 'glissando-shape' &&
+      changed !== 'glissando'
+    ) {
+      return;
+    }
+    if (
+      changed === 'glissando-shape' &&
+      newValue !== null &&
+      newValue !== parseGlissandoShape(newValue)
+    ) {
+      console.warn(
+        `[music-chord] glissando-shape="${newValue}" is not "straight", "dip" or "wave"; ignoring it`
+      );
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+    const warning = glissandoShapeWarning({
+      shape: this.glissandoShape,
+      glissando: this.glissando,
+    });
+    if (warning !== null) {
       console.warn(`[music-chord] ${warning}`);
     }
   }

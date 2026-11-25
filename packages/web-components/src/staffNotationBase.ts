@@ -49,6 +49,7 @@ import {
   missingFlutterCancelWarning,
   resolveFlutterPassages,
 } from './rules/flutterTongueRules';
+import { glissandoReserveWidthPx } from './rules/glissandoRules';
 import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
@@ -181,6 +182,7 @@ import type {
   ArpeggioGroupPlacement,
   ChordElementType,
   ChordNote,
+  ConnectorRole,
   IChordElement,
   INoteElement,
   NoteChordOrRestElementType,
@@ -241,6 +243,7 @@ import {
   createSwellSvg,
   createTimeSignatureSvg,
   DEFAULT_BULGE_HEIGHT,
+  NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   octaveSignWidth,
@@ -551,6 +554,19 @@ function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
   return element.nodeName === MUSIC_REST_NODE
     ? null
     : (element as NoteElementType | ChordElementType).breathMark ?? null;
+}
+
+// A glissando line starts or ends on this entry or one of a chord's tones.
+function hasGlissandoRole(
+  element: NoteChordOrRestElementType,
+  role: ConnectorRole
+): boolean {
+  return (
+    element.nodeName !== MUSIC_REST_NODE &&
+    ((element as NoteElementType | ChordElementType).glissando === role ||
+      (isChordNodeName(element.nodeName) &&
+        element.querySelector(`:scope > [glissando="${role}"]`) !== null))
+  );
 }
 
 // A placed above-staff label or mark (container px), which later ones clear.
@@ -3636,18 +3652,43 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     const element = state.elements[index];
     const breathMark = breathMarkOf(element);
-    // A breath mark above the stave and a swell below it share the gap.
+    // A breath mark above the stave, a swell below it and a glissando line
+    // beside the note share the gap.
     const gapReserve = Math.max(
       breathMark === null ? 0 : breathMarkReservedWidthPx(breathMark),
       element.nodeName !== MUSIC_REST_NODE &&
         (element as NoteOrChordElementType).swell
         ? SWELL_MIN_SPAN_PX + HAIRPIN_DYNAMIC_GAP_PX - NOTE_SVG_WIDTH
-        : 0
+        : 0,
+      this.#glissandoReserve(state, index)
     );
     return (
       this.#rightwardInkFootprint(voiceKey, state, index) +
       Math.max(0, gapReserve)
     );
+  }
+
+  // Room (px) past an entry's SVG box for the glissando line it starts: the
+  // rest of what the line needs beyond the blank beside the two heads. A line
+  // that runs past another entry has room already.
+  #glissandoReserve(state: VoiceRenderState, index: number): number {
+    const next: NoteChordOrRestElementType | undefined =
+      state.elements[index + 1];
+    if (
+      !hasGlissandoRole(state.elements[index], 'start') ||
+      (next !== undefined && !hasGlissandoRole(next, 'end'))
+    ) {
+      return 0;
+    }
+    const headLeftX = NOTE_HEAD_CX_STEM_UP_PX - NOTE_HEAD_RADIUS_PX;
+    const blankAfter =
+      NOTE_SVG_WIDTH - NOTE_HEAD_CX_STEM_UP_PX - NOTE_HEAD_RADIUS_PX;
+    // An accidental or ornament fills the blank before the next head.
+    const blankBefore =
+      next !== undefined && this.#entryLeftwardExtent(next) === 0
+        ? headLeftX
+        : 0;
+    return Math.max(0, glissandoReserveWidthPx() - blankAfter - blankBefore);
   }
 
   // The part of #rightwardFootprint that is ink: what a breath mark after

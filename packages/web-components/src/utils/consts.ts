@@ -10,6 +10,7 @@ import type {
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -419,7 +420,13 @@ export const OCTAVE_SHIFT_AMOUNTS: OctaveShiftAmount[] = [
 
 export const OCTAVE_DISPLAY_MODES: OctaveDisplayMode[] = ['sign', 'col'];
 
-export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
+export const GLISSANDO_HINTS: GlissandoHint[] = [
+  'white-key',
+  'black-key',
+  'gliss',
+];
+
+export const GLISSANDO_SHAPES: GlissandoShape[] = ['straight', 'dip', 'wave'];
 
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 

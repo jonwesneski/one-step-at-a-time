@@ -65,6 +65,7 @@ const PITCH_ONLY_SHARED_ATTRIBUTES = [
   'breath-mark',
   'glissando',
   'glissando-hint',
+  'glissando-shape',
   'accidental-reminder',
   'quarter-tone',
   'arpeggio',

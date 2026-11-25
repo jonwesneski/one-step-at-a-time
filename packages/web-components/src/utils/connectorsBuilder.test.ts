@@ -32,6 +32,8 @@ import {
   MUSIC_VOICE,
 } from './consts';
 import {
+  GLISSANDO_GAP_PX,
+  GLISSANDO_OFF_LINE_PX,
   SLUR_ARTICULATION_CLEARANCE_PX,
   SLUR_NOTE_CLEARANCE_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
@@ -573,6 +575,14 @@ describe('pairConnectors', () => {
     });
   });
 
+  it('labels a glissando-hint="gliss" pair "gliss."', () => {
+    const [pair] = pairConnectors([
+      makeNote({ glissando: 'start', 'glissando-hint': 'gliss' }),
+      makeNote({ glissando: 'end' }),
+    ]);
+    expect(pair.label).toBe('gliss.');
+  });
+
   it('leaves a glissando pair with no label when no hint is set', () => {
     const a = makeNote({ note: 'C', octave: '4', glissando: 'start' });
     const b = makeNote({ note: 'C', octave: '5', glissando: 'end' });
@@ -1067,45 +1077,153 @@ describe('buildConnectorSvgs', () => {
     }
   );
 
-  it('glissando renders a straight line, not a curve', () => {
-    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
-    const endNote = makeLayoutNote({ stemUp: true, left: 150, top: 60 });
-    const pair: ConnectorPair = {
-      kind: 'glissando',
-      start: startNote,
-      end: endNote,
-      nestingLevel: 0,
+  describe('glissandos', () => {
+    type Box = { left: number; right: number; top: number; bottom: number };
+    const makeGlissandoNote = (
+      box: Box,
+      options: {
+        staffY?: number;
+        attributes?: Record<string, string>;
+        ink?: { className: string; rect: Box; tag?: string }[];
+      } = {}
+    ): NoteElementType => {
+      const note = makeLayoutNote({
+        stemUp: true,
+        left: box.left - 10,
+        top: box.top - 10,
+      });
+      for (const [name, value] of Object.entries(options.attributes ?? {})) {
+        note.setAttribute(name, value);
+      }
+      Object.defineProperty(note, 'staffY', {
+        get: () => options.staffY ?? 5,
+      });
+      const ink = [
+        { className: 'head', rect: box, tag: 'ellipse' },
+        ...(options.ink ?? []),
+      ].map(({ className, rect, tag = 'path' }) => {
+        const element = document.createElement(tag);
+        element.classList.add(className);
+        jest.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+          ...rect,
+          width: rect.right - rect.left,
+          height: rect.bottom - rect.top,
+          x: rect.left,
+          y: rect.top,
+          toJSON: () => ({}),
+        } as DOMRect);
+        return element;
+      });
+      note.shadowRoot!.replaceChildren(...ink);
+      return note;
+    };
+    const box = (left: number, top: number): Box => ({
+      left,
+      right: left + 10,
+      top,
+      bottom: top + 8,
+    });
+    const draw = (
+      start: NoteElementType,
+      end: NoteElementType,
+      label?: string
+    ): SVGGElement[] => {
+      document.createElement(MUSIC_STAFF).append(start, end);
+      return buildConnectorSvgs(
+        [{ kind: 'glissando', start, end, nestingLevel: 0, label }],
+        { rootRect, rowLeftOf: () => 0 }
+      );
+    };
+    const lineOf = (svg: SVGGElement): number[] => {
+      const d = svg.querySelector('path')!.getAttribute('d')!;
+      expect(d).toMatch(/^M \S+ \S+ L \S+ \S+$/);
+      return d.match(/-?\d+(\.\d+)?/g)!.map(Number);
     };
 
-    const [svgGroup] = buildConnectorSvgs([pair], {
-      rootRect,
-      rowLeftOf: () => 0,
+    it('runs between the heads, half a space from each', () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 100)),
+        makeGlissandoNote(box(200, 60))
+      );
+      expect(lineOf(svg)).toEqual([
+        60 + GLISSANDO_GAP_PX,
+        104,
+        200 - GLISSANDO_GAP_PX,
+        64,
+      ]);
     });
 
-    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
-    expect(d).not.toContain('Q');
-    expect(d).toMatch(/^M \S+ \S+ L \S+ \S+$/);
-  });
-
-  it('glissando renders its hint text as a label near the line', () => {
-    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
-    const endNote = makeLayoutNote({ stemUp: true, left: 150, top: 60 });
-    const pair: ConnectorPair = {
-      kind: 'glissando',
-      start: startNote,
-      end: endNote,
-      nestingLevel: 0,
-      label: 'white-note gliss.',
-    };
-
-    const [svgGroup] = buildConnectorSvgs([pair], {
-      rootRect,
-      rowLeftOf: () => 0,
+    it("starts past a dot, at the dot's height", () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 100), {
+          ink: [
+            {
+              className: 'augmentation-dot',
+              rect: { left: 64, right: 68, top: 97, bottom: 101 },
+            },
+          ],
+        }),
+        makeGlissandoNote(box(200, 60))
+      );
+      expect(lineOf(svg).slice(0, 2)).toEqual([68 + GLISSANDO_GAP_PX, 99]);
     });
 
-    expect(svgGroup.querySelector('text')?.textContent).toBe(
-      'white-note gliss.'
-    );
+    it("stops before an accidental it would cross, but not for ink it doesn't", () => {
+      const accidental = (top: number) =>
+        makeGlissandoNote(box(200, 60), {
+          ink: [
+            {
+              className: 'accidental-stroke',
+              rect: { left: 186, right: 194, top, bottom: top + 30 },
+            },
+          ],
+        });
+      const [crossed] = draw(makeGlissandoNote(box(50, 60)), accidental(50));
+      expect(lineOf(crossed)[2]).toBe(186 - GLISSANDO_GAP_PX);
+      const [clear] = draw(makeGlissandoNote(box(50, 60)), accidental(0));
+      expect(lineOf(clear)[2]).toBe(200 - GLISSANDO_GAP_PX);
+    });
+
+    it('ends before grace notes wherever they are', () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 60)),
+        makeGlissandoNote(box(200, 60), {
+          ink: [
+            {
+              className: 'grace-notes',
+              rect: { left: 170, right: 190, top: 10, bottom: 30 },
+              tag: 'g',
+            },
+          ],
+        })
+      );
+      expect(lineOf(svg)[2]).toBe(170 - GLISSANDO_GAP_PX);
+    });
+
+    it('keeps off the stave line its start is on', () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 100), { staffY: 40 }),
+        makeGlissandoNote(box(200, 60))
+      );
+      expect(lineOf(svg)[1]).toBe(104 + GLISSANDO_OFF_LINE_PX);
+    });
+
+    it("draws its start's shape and label", () => {
+      const start = makeGlissandoNote(box(50, 100), {
+        attributes: { 'glissando-shape': 'wave' },
+      });
+      const [svg] = draw(start, makeGlissandoNote(box(200, 60)), 'gliss.');
+      expect(svg.querySelector('path')!.getAttribute('d')).toContain('C');
+      expect(svg.querySelector('text')?.textContent).toBe('gliss.');
+    });
+
+    it('is left out, with one warning, where there is no room', () => {
+      const start = makeGlissandoNote(box(50, 100));
+      const end = makeGlissandoNote(box(65, 60));
+      expect(draw(start, end)).toHaveLength(0);
+      expect(draw(start, end)).toHaveLength(0);
+      expect(console.warn).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('slur across a pitch interval on a standalone staff renders one curve, not a split pair', () => {

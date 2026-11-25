@@ -628,6 +628,13 @@
             },
             {
               "kind": "field",
+              "name": "glissandoShape",
+              "type": {
+                "text": "GlissandoShape"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -1201,6 +1208,30 @@
             },
             {
               "kind": "method",
+              "name": "#warnAboutGlissandoShape",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
               "return": {
@@ -1387,14 +1418,21 @@
               "type": {
                 "text": "'start' | 'end'"
               },
-              "description": "Marks this chord as the start or end of a glissando (a straight line indicating a continuous slide between pitches)."
+              "description": "Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads."
             },
             {
               "name": "glissando-hint",
               "type": {
-                "text": "'white-key' | 'black-key'"
+                "text": "'white-key' | 'black-key' | 'gliss'"
               },
-              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across."
+              "description": "Text above the line of a `glissando=\"start\"`: which keys it slides across (\"white-note gliss.\" / \"black-note gliss.\"), or plain \"gliss.\"."
+            },
+            {
+              "name": "glissando-shape",
+              "type": {
+                "text": "'straight' | 'dip' | 'wave'"
+              },
+              "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`."
             },
             {
               "name": "dynamic",
@@ -3168,6 +3206,17 @@
             },
             {
               "kind": "field",
+              "name": "glissandoShape",
+              "type": {
+                "text": "GlissandoShape"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -4037,6 +4086,34 @@
             },
             {
               "kind": "method",
+              "name": "#warnAboutGlissandoShape",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
               "return": {
@@ -4486,7 +4563,7 @@
               "type": {
                 "text": "'start' | 'end'"
               },
-              "description": "Marks this chord as the start or end of a glissando (a straight line indicating a continuous slide between pitches).",
+              "description": "Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -4495,9 +4572,20 @@
             {
               "name": "glissando-hint",
               "type": {
-                "text": "'white-key' | 'black-key'"
+                "text": "'white-key' | 'black-key' | 'gliss'"
               },
-              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across.",
+              "description": "Text above the line of a `glissando=\"start\"`: which keys it slides across (\"white-note gliss.\" / \"black-note gliss.\"), or plain \"gliss.\".",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "glissando-shape",
+              "type": {
+                "text": "'straight' | 'dip' | 'wave'"
+              },
+              "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5534,6 +5622,17 @@
             },
             {
               "kind": "field",
+              "name": "glissandoShape",
+              "type": {
+                "text": "GlissandoShape"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -6363,6 +6462,34 @@
             },
             {
               "kind": "method",
+              "name": "#warnAboutGlissandoShape",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
               "return": {
@@ -6792,7 +6919,7 @@
               "type": {
                 "text": "'start' | 'end'"
               },
-              "description": "Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches).",
+              "description": "Marks this note as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -6801,9 +6928,20 @@
             {
               "name": "glissando-hint",
               "type": {
-                "text": "'white-key' | 'black-key'"
+                "text": "'white-key' | 'black-key' | 'gliss'"
               },
-              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across.",
+              "description": "Text above the line of a `glissando=\"start\"`: which keys it slides across (\"white-note gliss.\" / \"black-note gliss.\"), or plain \"gliss.\".",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "glissando-shape",
+              "type": {
+                "text": "'straight' | 'dip' | 'wave'"
+              },
+              "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -8961,6 +9099,13 @@
             },
             {
               "kind": "field",
+              "name": "glissandoShape",
+              "type": {
+                "text": "GlissandoShape"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -9506,6 +9651,30 @@
             },
             {
               "kind": "method",
+              "name": "#warnAboutGlissandoShape",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
               "return": {
@@ -9667,14 +9836,21 @@
               "type": {
                 "text": "'start' | 'end'"
               },
-              "description": "Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches)."
+              "description": "Marks this note as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads."
             },
             {
               "name": "glissando-hint",
               "type": {
-                "text": "'white-key' | 'black-key'"
+                "text": "'white-key' | 'black-key' | 'gliss'"
               },
-              "description": "Shown as text near a `glissando=\"start\"` line (\"white-note gliss.\" / \"black-note gliss.\") clarifying which keys it slides across."
+              "description": "Text above the line of a `glissando=\"start\"`: which keys it slides across (\"white-note gliss.\" / \"black-note gliss.\"), or plain \"gliss.\"."
+            },
+            {
+              "name": "glissando-shape",
+              "type": {
+                "text": "'straight' | 'dip' | 'wave'"
+              },
+              "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`."
             },
             {
               "name": "dynamic",
@@ -12728,6 +12904,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {
@@ -19466,6 +19670,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#glissandoReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {

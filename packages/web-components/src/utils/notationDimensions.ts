@@ -1798,3 +1798,37 @@ export const TREMOLO_BEAM_MIN_LENGTH_PX = STAFF_LINE_SPACING;
  * = 7 × STAFF_Y_STEP
  */
 export const TREMOLO_BETWEEN_MIN_INTERVAL_PX = 7 * STAFF_Y_STEP;
+
+// ─── Glissandos ───────────────────────────────────────────────────────────────
+
+/** Gap (px) between a glissando line and the ink at each end. = 0.5 × STAFF_LINE_SPACING */
+export const GLISSANDO_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** The gap a line too short for GLISSANDO_GAP_PX closes to. = 0.2 × STAFF_LINE_SPACING */
+export const GLISSANDO_MIN_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/** Line length (px) a glissando's start reserves room for. = 2 × STAFF_LINE_SPACING */
+export const GLISSANDO_MIN_LENGTH_PX = STAFF_LINE_SPACING * 2;
+
+/** Shortest line (px) worth drawing. = 1 × STAFF_LINE_SPACING */
+export const GLISSANDO_MIN_DRAWN_PX = STAFF_LINE_SPACING;
+
+/** Stroke width (px) of a glissando line. = STAFF_LINE_THICKNESS_PX */
+export const GLISSANDO_LINE_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
+
+/** How far (px) a sloped line keeps off the stave line its head is on. = 0.2 × STAFF_LINE_SPACING */
+export const GLISSANDO_OFF_LINE_PX = STAFF_LINE_SPACING * 0.2;
+
+/** How far (px) a level line or a wave moves off that line, into the space. = 0.5 × STAFF_LINE_SPACING */
+export const GLISSANDO_LEVEL_LIFT_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Width and depth (px) of a glissando's dip. = 4 and 0.4 × STAFF_LINE_SPACING */
+export const GLISSANDO_DIP_WIDTH_PX = STAFF_LINE_SPACING * 4;
+export const GLISSANDO_DIP_DEPTH_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Wavelength and amplitude (px) of a wavy glissando. = 2.65 and 0.435 × STAFF_LINE_SPACING */
+export const GLISSANDO_WAVELENGTH_PX = STAFF_LINE_SPACING * 2.65;
+export const GLISSANDO_WAVE_AMPLITUDE_PX = STAFF_LINE_SPACING * 0.435;
+
+/** Vertical clearance (px) a glissando line keeps from its notes' other ink. = 0.1 × STAFF_LINE_SPACING */
+export const GLISSANDO_INK_CLEARANCE_PX = STAFF_LINE_SPACING * 0.1;

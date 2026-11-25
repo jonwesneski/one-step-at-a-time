@@ -47,6 +47,7 @@ export {
 } from './dynamics';
 export { createEndingSegmentSvg } from './endings';
 export { createFlatSvg } from './flat';
+export { createGlissandoLineSvg } from './glissando';
 export {
   TRILL_FINISH_HEAD_RY,
   createGraceNotesSvg,

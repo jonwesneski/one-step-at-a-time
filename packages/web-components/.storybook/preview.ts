@@ -36,6 +36,7 @@ const preview: Preview = {
           [
             'Ties',
             'Slurs',
+            'Glissandos',
             'Dynamics & Hairpins',
             'Tuplets',
             'Arpeggio',

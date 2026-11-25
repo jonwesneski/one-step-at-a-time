@@ -17,6 +17,7 @@ import type {
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoShape,
   GraceArticulationsType,
   GraceDuration,
   GraceNoteheadsType,
@@ -204,6 +205,7 @@ declare module 'react' {
         slur?: ConnectorRole;
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
+        'glissando-shape'?: GlissandoShape;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
@@ -275,6 +277,7 @@ declare module 'react' {
         slur?: ConnectorRole;
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
+        'glissando-shape'?: GlissandoShape;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;

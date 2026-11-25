@@ -318,10 +318,15 @@ export type GraceDuration = Extract<
 export type GraceSlur = 'auto' | 'none';
 
 /**
- * Which keys a `glissando` slides across, shown as "white-note gliss." /
- * "black-note gliss." near the line.
+ * Text above a `glissando` line: "gliss.", or which keys it slides across
+ * ("white-note gliss." / "black-note gliss.").
  */
-export type GlissandoHint = 'white-key' | 'black-key';
+export type GlissandoHint = 'white-key' | 'black-key' | 'gliss';
+
+/**
+ * A `glissando` line's contour: straight, straight with a short dip, or wavy.
+ */
+export type GlissandoShape = 'straight' | 'dip' | 'wave';
 
 /**
  * Which measures of a `<music-composition>` show their own `number` —

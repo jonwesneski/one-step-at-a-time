@@ -4272,3 +4272,52 @@ test.describe(`${MUSIC_COMPOSITION} octave continuation over a double-stemmed be
     expect(gap).toBeGreaterThanOrEqual(OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5);
   });
 });
+
+test.describe('a glissando over a system break', () => {
+  test('becomes two lines of one slope when its bars wrap, and one again when they fit', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.style.width = '900px';
+      host.innerHTML = `<music-composition time="4/4">
+        <music-measure><music-staff clef="treble">
+          <music-note note="C" octave="4" duration="half"></music-note>
+          <music-note note="E" octave="4" duration="half" glissando="start"></music-note>
+        </music-staff></music-measure>
+        <music-measure><music-staff clef="treble">
+          <music-note note="F" octave="5" duration="half" glissando="end"></music-note>
+          <music-note note="C" octave="5" duration="half"></music-note>
+        </music-staff></music-measure>
+      </music-composition>`;
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const readSlopes = () =>
+      page.evaluate(() =>
+        Array.from(
+          document
+            .querySelector('music-composition')
+            ?.shadowRoot?.querySelectorAll('.glissando path') ?? []
+        ).map((path) => {
+          const [x1, y1, x2, y2] = (path.getAttribute('d') ?? '')
+            .match(/-?\d+(\.\d+)?/g)!
+            .map(Number);
+          return (y2 - y1) / (x2 - x1);
+        })
+      );
+
+    expect(await readSlopes()).toHaveLength(1);
+    await resizeHost(page, 320);
+    const [first, second, ...rest] = await readSlopes();
+    expect(rest).toHaveLength(0);
+    expect(first).toBeLessThan(0);
+    expect(second).toBeCloseTo(first, 3);
+    await resizeHost(page, 900);
+    expect(await readSlopes()).toHaveLength(1);
+  });
+});
