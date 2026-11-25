@@ -1760,6 +1760,112 @@ describe('staffNotationBase breath marks', () => {
   });
 });
 
+describe('staffNotationBase bends', () => {
+  function renderStaff(markup: string): { staff: any; minWidth: number } {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, minWidth };
+  }
+  const quarters = (attributes: string) =>
+    ['E', 'F', 'G', 'A']
+      .map(
+        (note, index) =>
+          `<music-note note="${note}" octave="4" duration="quarter" ${
+            index === 1 ? attributes : ''
+          }></music-note>`
+      )
+      .join('');
+  const bendLines = (staff: any): Element[] =>
+    Array.from(staff.shadowRoot.querySelectorAll('.bends-container .bend-line'));
+
+  it('keeps room for a line, and more for a target', () => {
+    const plain = renderStaff(quarters('')).minWidth;
+    document.body.innerHTML = '';
+    const free = renderStaff(quarters('bend="down"')).minWidth;
+    document.body.innerHTML = '';
+    const target = renderStaff(quarters('bend-to="G"')).minWidth;
+    expect(free).toBeGreaterThan(plain);
+    expect(target).toBeGreaterThan(free);
+  });
+
+  it('draws one line a note and its target', () => {
+    const { staff } = renderStaff(quarters('bend-to="G"'));
+    expect(bendLines(staff)).toHaveLength(1);
+    expect(
+      staff.shadowRoot.querySelectorAll('.bends-container .bend-target-note')
+    ).toHaveLength(1);
+  });
+
+  it('draws one line per chord head, all ending at one x', () => {
+    const { staff } = renderStaff(
+      `<music-chord duration="quarter" bend="down">
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+        <music-note note="C" octave="5"></music-note>
+      </music-chord>${quarters('')}`
+    );
+    const ends = bendLines(staff).map(
+      (line) => line.getAttribute('d')?.split('L ')[1].split(' ')[0]
+    );
+    expect(ends).toHaveLength(3);
+    expect(new Set(ends).size).toBe(1);
+  });
+
+  it('keeps each voice’s bends in its own container', () => {
+    const { staff } = renderStaff(`
+      <music-voice>${quarters('bend="up"')}</music-voice>
+      <music-voice>
+        <music-note note="C" octave="3" duration="half" bend="down"></music-note>
+        <music-note note="D" octave="3" duration="half"></music-note>
+      </music-voice>`);
+    const counts = Array.from<Element>(
+      staff.shadowRoot.querySelectorAll('.bends-container')
+    ).map((container) => container.querySelectorAll('.bend').length);
+    expect(counts).toEqual([1, 1]);
+  });
+
+  it('draws none for a glissando’s start, a tremolo member or a triangle', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const markup of [
+      quarters('bend="down" glissando="start"'),
+      quarters('bend="down" notehead="triangle-up"'),
+      `<music-tremolo strokes="2">
+        <music-note note="E" octave="4" duration="half" bend="down"></music-note>
+        <music-note note="G" octave="4" duration="half"></music-note>
+      </music-tremolo>
+      <music-note note="G" octave="4" duration="half"></music-note>`,
+    ]) {
+      expect(bendLines(renderStaff(markup).staff)).toHaveLength(0);
+      document.body.innerHTML = '';
+    }
+    warn.mockRestore();
+  });
+
+  it('stops a bend before a mid-bar barline', () => {
+    const { staff } = renderStaff(
+      `<music-note note="E" octave="4" duration="half" bend="down"></music-note>
+       <music-barline type="double"></music-barline>
+       <music-note note="G" octave="4" duration="half"></music-note>`
+    );
+    const endX = Number(
+      bendLines(staff)[0].getAttribute('d')?.split('L ')[1].split(' ')[0]
+    );
+    expect(staff.ownBarlineSlotLefts).toHaveLength(1);
+    expect(endX).toBeLessThan(
+      staff.ownBarlineSlotLefts[0].left - staff.describeEndX
+    );
+  });
+});
+
 describe('staffNotationBase swells', () => {
   function renderStaff(markup: string): { staff: any; minWidth: number } {
     const staff = document.createElement(MUSIC_STAFF) as any;

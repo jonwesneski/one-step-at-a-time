@@ -635,6 +635,27 @@
             },
             {
               "kind": "field",
+              "name": "bend",
+              "type": {
+                "text": "BendShape | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendTo",
+              "type": {
+                "text": "Note | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendToQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -1231,6 +1252,39 @@
               ]
             },
             {
+              "kind": "field",
+              "name": "#lastBendWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
+            },
+            {
               "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
@@ -1261,6 +1315,16 @@
               "return": {
                 "type": {
                   "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#standaloneBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BendShape | null"
                 }
               }
             },
@@ -1433,6 +1497,27 @@
                 "text": "'straight' | 'dip' | 'wave'"
               },
               "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`."
+            },
+            {
+              "name": "bend",
+              "type": {
+                "text": "'up' | 'down' | 'dip' | 'wave'"
+              },
+              "description": "A pitch bend: a line after each of this chord's heads, ending inside its own duration. Ignored, with a warning, beside `glissando=\"start\"` and on a `<music-tremolo>` member."
+            },
+            {
+              "name": "bend-to",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Notes only: ignored, with a warning, on a chord."
+            },
+            {
+              "name": "bend-to-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "Applies to `bend-to`."
             },
             {
               "name": "dynamic",
@@ -3217,6 +3302,39 @@
             },
             {
               "kind": "field",
+              "name": "bend",
+              "type": {
+                "text": "BendShape | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendTo",
+              "type": {
+                "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendToQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -4113,6 +4231,47 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#lastBendWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
@@ -4147,6 +4306,20 @@
               "return": {
                 "type": {
                   "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#standaloneBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BendShape | null"
                 }
               },
               "inheritedFrom": {
@@ -4586,6 +4759,39 @@
                 "text": "'straight' | 'dip' | 'wave'"
               },
               "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "bend",
+              "type": {
+                "text": "'up' | 'down' | 'dip' | 'wave'"
+              },
+              "description": "A pitch bend: a line after each of this chord's heads, ending inside its own duration. Ignored, with a warning, beside `glissando=\"start\"` and on a `<music-tremolo>` member.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "bend-to",
+              "type": {
+                "text": "Note"
+              },
+              "description": "Notes only: ignored, with a warning, on a chord.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "bend-to-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "Applies to `bend-to`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5633,6 +5839,39 @@
             },
             {
               "kind": "field",
+              "name": "bend",
+              "type": {
+                "text": "BendShape | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendTo",
+              "type": {
+                "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendToQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -6489,6 +6728,47 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#lastBendWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
@@ -6523,6 +6803,20 @@
               "return": {
                 "type": {
                   "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#standaloneBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ResolvedBend | null"
                 }
               },
               "inheritedFrom": {
@@ -6942,6 +7236,39 @@
                 "text": "'straight' | 'dip' | 'wave'"
               },
               "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "bend",
+              "type": {
+                "text": "'up' | 'down' | 'dip' | 'wave'"
+              },
+              "description": "A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando=\"start\"`, on a `<music-tremolo>` member and on a triangle notehead; read from a note, not from a chord's slotted tone.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "bend-to",
+              "type": {
+                "text": "Note"
+              },
+              "description": "The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "bend-to-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers `bend-to` by a quarter-tone.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -9106,6 +9433,27 @@
             },
             {
               "kind": "field",
+              "name": "bend",
+              "type": {
+                "text": "BendShape | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendTo",
+              "type": {
+                "text": "Note | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendToQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking | null"
@@ -9674,6 +10022,39 @@
               ]
             },
             {
+              "kind": "field",
+              "name": "#lastBendWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#warnAboutBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "changed",
+                  "type": {
+                    "text": "string | null"
+                  }
+                },
+                {
+                  "name": "newValue",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ]
+            },
+            {
               "kind": "method",
               "name": "#warnAboutSlurStyle",
               "privacy": "private",
@@ -9704,6 +10085,16 @@
               "return": {
                 "type": {
                   "text": "void"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#standaloneBend",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ResolvedBend | null"
                 }
               }
             },
@@ -9851,6 +10242,27 @@
                 "text": "'straight' | 'dip' | 'wave'"
               },
               "description": "Contour of the line a `glissando=\"start\"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`."
+            },
+            {
+              "name": "bend",
+              "type": {
+                "text": "'up' | 'down' | 'dip' | 'wave'"
+              },
+              "description": "A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando=\"start\"`, on a `<music-tremolo>` member and on a triangle notehead; read from a note, not from a chord's slotted tone."
+            },
+            {
+              "name": "bend-to",
+              "type": {
+                "text": "Note"
+              },
+              "description": "The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there."
+            },
+            {
+              "name": "bend-to-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers `bend-to` by a quarter-tone."
             },
             {
               "name": "dynamic",
@@ -10972,6 +11384,62 @@
                 "text": "Map<VoiceKey, SVGSVGElement>"
               },
               "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedBends",
+              "privacy": "private",
+              "default": "new WeakSet<NoteOrChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendTargetAccidentals",
+              "privacy": "private",
+              "default": "new Map<NoteElementType, AccidentalType | null>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendRightXs",
+              "privacy": "private",
+              "default": "new Map<NoteChordOrRestElementType, number>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#markerInk",
+              "privacy": "private",
+              "type": {
+                "text": "{ beat: number; left: number; kind: MarkerBeat['kind'] }[]"
+              },
+              "default": "[]",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -12948,6 +13416,186 @@
             },
             {
               "kind": "method",
+              "name": "#bendOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ResolvedBend | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendTargetStaffY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "target",
+                  "type": {
+                    "text": "BendTarget"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendStart",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    staffYs: number[];\n    inkRight: number;\n    tail: { right: number; bottomY: number } | null;\n  }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markerInBeats",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "after",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "upTo",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryInkLeft",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardInkFootprint",
               "privacy": "private",
               "return": {
@@ -13202,6 +13850,198 @@
                   "name": "remainingWidth",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderBends",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#augmentationDotRowYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "readonly number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendLimit",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BendLimit"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bendYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryInkLeftX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherVoiceEntriesBeside",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ otherState: VoiceRenderState; j: number; staffYs: number[] }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "beat",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "ys",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherVoicesInkRight",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "headYs",
+                  "type": {
+                    "text": "readonly number[]"
                   }
                 }
               ],
@@ -14088,11 +14928,39 @@
             },
             {
               "kind": "method",
-              "name": "#quarterToneArrowReachY",
+              "name": "#arrowAndBendReachY",
               "privacy": "private",
               "return": {
                 "type": {
                   "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendTargetReachYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
                 }
               },
               "parameters": [
@@ -17760,6 +18628,62 @@
             },
             {
               "kind": "field",
+              "name": "#bendContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedBends",
+              "privacy": "private",
+              "default": "new WeakSet<NoteOrChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendTargetAccidentals",
+              "privacy": "private",
+              "default": "new Map<NoteElementType, AccidentalType | null>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#bendRightXs",
+              "privacy": "private",
+              "default": "new Map<NoteChordOrRestElementType, number>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#markerInk",
+              "privacy": "private",
+              "type": {
+                "text": "{ beat: number; left: number; kind: MarkerBeat['kind'] }[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#notesAreaEndX",
               "privacy": "private",
               "type": {
@@ -19714,6 +20638,186 @@
             },
             {
               "kind": "method",
+              "name": "#bendOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ResolvedBend | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendTargetStaffY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "target",
+                  "type": {
+                    "text": "BendTarget"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendStart",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    staffYs: number[];\n    inkRight: number;\n    tail: { right: number; bottomY: number } | null;\n  }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#markerInBeats",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "after",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "upTo",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryInkLeft",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#rightwardInkFootprint",
               "privacy": "private",
               "return": {
@@ -19968,6 +21072,198 @@
                   "name": "remainingWidth",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderBends",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#augmentationDotRowYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "readonly number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendLimit",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BendLimit"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "bendYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#entryInkLeftX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherVoiceEntriesBeside",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ otherState: VoiceRenderState; j: number; staffYs: number[] }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "beat",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "ys",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#otherVoicesInkRight",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "headYs",
+                  "type": {
+                    "text": "readonly number[]"
                   }
                 }
               ],
@@ -20854,11 +22150,39 @@
             },
             {
               "kind": "method",
-              "name": "#quarterToneArrowReachY",
+              "name": "#arrowAndBendReachY",
               "privacy": "private",
               "return": {
                 "type": {
                   "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#bendTargetReachYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
                 }
               },
               "parameters": [

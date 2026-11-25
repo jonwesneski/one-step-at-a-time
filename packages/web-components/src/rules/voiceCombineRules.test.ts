@@ -384,6 +384,23 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('excludes a bend, free or to a target', () => {
+    for (const [name, value] of [
+      ['bend', 'down'],
+      ['bend-to', 'D'],
+    ]) {
+      const bent = note('E', 5);
+      bent.setAttribute(name, value);
+      const groups = detectCombinableGroups(
+        new Map([
+          [1, voiceInput([bent], [0])],
+          [2, voiceInput([note('C', 5)], [0])],
+        ])
+      );
+      expect(groups).toHaveLength(0);
+    }
+  });
+
   it('excludes a quarter-tone, on a note or a chord tone', () => {
     const arrowed = note('E', 4);
     arrowed.setAttribute('quarter-tone', 'up');

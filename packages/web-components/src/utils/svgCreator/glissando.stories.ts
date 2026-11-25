@@ -198,3 +198,116 @@ export const AcrossASystemBreak: Story = {
     </div>
   `,
 };
+
+/**
+ * A bend is a line after one note that fills its duration: free, to a pitch in
+ * parentheses, or shaped by its contour. It stops before the next note, its
+ * accidental or the barline.
+ */
+export const PitchBends: Story = {
+  render: () => html`
+    <music-composition time="2/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="Bb"
+            octave="4"
+            duration="quarter"
+            bend="down"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="quarter"
+            bend="up"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="C#"
+            octave="5"
+            duration="half"
+            bend-to="C#"
+            bend-to-quarter-tone="up"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="G"
+            octave="4"
+            duration="quarter"
+            bend="wave"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="5"
+            duration="quarter"
+            bend="dip"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/**
+ * Bends make room in quick notes, past dots and tails and for their targets,
+ * and a chord bends from every head.
+ */
+export const BendsInAPassage: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="F"
+            octave="4"
+            duration="eighth"
+            bend="wave"
+          ></music-note>
+          <music-note
+            note="A"
+            octave="5"
+            duration="quarter"
+            bend-to="B"
+            bend-to-quarter-tone="down"
+          ></music-note>
+          <music-note note="C#" octave="6" duration="eighth"></music-note>
+          <music-note
+            note="C#"
+            octave="5"
+            duration="dotted-quarter"
+            bend-to="C"
+          ></music-note>
+          <music-note
+            note="D"
+            octave="5"
+            duration="eighth"
+            bend="down"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-chord duration="dotted-quarter" bend="down">
+            <music-note note="E" octave="4"></music-note>
+            <music-note note="G" octave="4"></music-note>
+            <music-note note="C" octave="5"></music-note>
+          </music-chord>
+          <music-chord duration="eighth" bend="up">
+            <music-note note="F" octave="4"></music-note>
+            <music-note note="G" octave="4"></music-note>
+          </music-chord>
+          <music-chord duration="half" bend="wave">
+            <music-note note="G" octave="4"></music-note>
+            <music-note note="Eb" octave="5"></music-note>
+          </music-chord>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};

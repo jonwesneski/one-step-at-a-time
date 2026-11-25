@@ -2392,6 +2392,32 @@ describe('quarter-tones', () => {
   });
 });
 
+describe('bend', () => {
+  it('draws a line after every head standalone', () => {
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.setAttribute('chord', 'Cmaj');
+    element.bend = 'down';
+    document.body.appendChild(element);
+    expect(element.getAttribute('bend')).toBe('down');
+    expect(element.shadowRoot!.querySelectorAll('.bend-line')).toHaveLength(3);
+    element.bend = null;
+    expect(element.shadowRoot!.querySelector('.bend-line')).toBeNull();
+  });
+
+  it('ignores bend-to with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.setAttribute('chord', 'Cmaj');
+    document.body.appendChild(element);
+    element.bendTo = 'D';
+    expect(element.shadowRoot!.querySelector('.bend')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[music-chord] bend-to is ignored on a chord')
+    );
+    warn.mockRestore();
+  });
+});
+
 describe('glissando-shape', () => {
   it('round-trips, defaulting to straight and ignoring a value that doesn’t parse with a warning', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});

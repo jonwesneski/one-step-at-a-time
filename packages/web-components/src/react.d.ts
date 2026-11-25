@@ -8,6 +8,7 @@ import type {
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BendShape,
   BreathMark,
   Chord,
   ClefType,
@@ -206,6 +207,9 @@ declare module 'react' {
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
         'glissando-shape'?: GlissandoShape;
+        bend?: BendShape;
+        'bend-to'?: Note;
+        'bend-to-quarter-tone'?: QuarterTone;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
@@ -278,6 +282,9 @@ declare module 'react' {
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
         'glissando-shape'?: GlissandoShape;
+        bend?: BendShape;
+        'bend-to'?: Note;
+        'bend-to-quarter-tone'?: QuarterTone;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;

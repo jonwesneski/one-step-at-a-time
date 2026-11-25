@@ -47,7 +47,12 @@ export {
 } from './dynamics';
 export { createEndingSegmentSvg } from './endings';
 export { createFlatSvg } from './flat';
-export { createGlissandoLineSvg } from './glissando';
+export {
+  bendTargetWidthPx,
+  createBendSvg,
+  createBendTargetSvg,
+  createGlissandoLineSvg,
+} from './glissando';
 export {
   TRILL_FINISH_HEAD_RY,
   createGraceNotesSvg,
@@ -123,8 +128,6 @@ export {
   type TrillContinuationSignResult,
   type TrillLineProps,
   type TrillSignProps,
-  type WrittenTrillNoteProps,
-  type WrittenTrillNoteResult,
 } from './trill';
 export { createTupletBracketSvg, createTupletNumeralText } from './tuplet';
 export { createUnisonBracketSvg } from './unison';

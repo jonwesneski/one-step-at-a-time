@@ -9,6 +9,7 @@ import {
   augmentationDotRowWidthPx,
   resolveNoteDotStaffY,
 } from '../../rules/augmentationDotRules';
+import { layoutBend, type ResolvedBend } from '../../rules/glissandoRules';
 import {
   forcedStemUp,
   resolveNoteheadGlyph,
@@ -51,6 +52,7 @@ import {
   BASE_STEM_LENGTH_PX,
   BEAM_STEP_PX,
   BEAM_THICKNESS_PX,
+  BEND_STANDALONE_LENGTH_PX,
   BREATH_MARK_INK_GAP_PX,
   BREATH_MARK_STANDALONE_GAP_PX,
   DOWN_TAIL_HEAD_ROOM_PX,
@@ -59,6 +61,7 @@ import {
   STACKED_TAIL_LENGTH_PX,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  STAFF_Y_STEP,
   STEM_OVERLAP_PX,
   STEM_STROKE_WIDTH_PX,
   TREMOLO_LABEL_GAP_PX,
@@ -78,6 +81,7 @@ import {
 } from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
 import { breathMarkWidthPx, createBreathMarkSvg } from './breathMarks';
+import { bendTargetWidthPx, createBendSvg } from './glissando';
 import {
   createNoteheadGlyphPath,
   placeNoteheadGlyph,
@@ -232,6 +236,10 @@ export type NoteProps = {
   // Drawn just after the note only standalone; a staff places it in the gap
   // before the next entry.
   breathMark?: BreathMark | null;
+  // A standalone note's bend; its target is placed by `bendTargetSteps`.
+  bend?: ResolvedBend | null;
+  // Diatonic steps from the note up to the bend's target.
+  bendTargetSteps?: number;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -294,6 +302,8 @@ export const createNoteSvg = ({
   articulationRepeatCount = 1,
   tremoloLabel = null,
   breathMark = null,
+  bend = null,
+  bendTargetSteps = 0,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
@@ -603,6 +613,53 @@ export const createNoteSvg = ({
     );
   }
 
+  if (bend !== null && qualifiedElementName === 'svg') {
+    const headY = headGeometry.cy * NOTE_SCALE;
+    const tail = upTailInk({
+      duration,
+      stemUp,
+      noFlags,
+      noStem,
+      stemExtension,
+      tailRoomStemExtension,
+    });
+    const targetY = headY - bendTargetSteps * STAFF_Y_STEP;
+    const layout = layoutBend({
+      shape: bend.shape,
+      heads: [
+        {
+          y: headY,
+          dotY: dotLayout?.rowCentersY[0] ?? null,
+          onLine: false,
+        },
+      ],
+      target: bend.target && {
+        y: targetY,
+        onLine: false,
+        width: bendTargetWidthPx(bend.target.accidental),
+      },
+      inkRight: Math.max(
+        (headGeometry.cx + headGeometry.halfWidth) * NOTE_SCALE,
+        dotLayout?.rightEdgeX ?? -Infinity
+      ),
+      tail: tail && { right: tail.rightX, bottomY: tail.bottomY },
+      limit: { kind: 'length', length: BEND_STANDALONE_LENGTH_PX },
+    });
+    if (layout !== null) {
+      svg.setAttribute('overflow', 'visible');
+      svg.appendChild(
+        createBendSvg(
+          bend.shape,
+          layout,
+          bend.target && {
+            centerY: targetY,
+            accidental: bend.target.accidental,
+          }
+        )
+      );
+    }
+  }
+
   if (
     accidental &&
     qualifiedElementName === 'svg' &&
@@ -786,27 +843,27 @@ export function noteAugmentationDotLayout({
   };
 }
 
-/**
- * The x (note-local px) a dot row must start at to clear an unbeamed
- * up-stem's tails, or null when the tails end clear of every row.
- */
-export function upTailDotClearX({
-  duration,
-  stemUp,
-  noFlags,
-  noStem,
-  stemExtension,
-  tailRoomStemExtension,
-  rowCentersY,
-}: {
+type UpTailInput = {
   duration: DurationType;
   stemUp: boolean;
   noFlags: boolean;
   noStem: boolean;
   stemExtension: number;
   tailRoomStemExtension: number;
-  rowCentersY: readonly number[];
-}): number | null {
+};
+
+/**
+ * How far right and down (note-local px) an unbeamed up-stem's tails reach,
+ * or null with none.
+ */
+export function upTailInk({
+  duration,
+  stemUp,
+  noFlags,
+  noStem,
+  stemExtension,
+  tailRoomStemExtension,
+}: UpTailInput): { rightX: number; bottomY: number } | null {
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   if (!stemUp || noStem || noFlags || flagCount === 0) {
     return null;
@@ -817,14 +874,30 @@ export function upTailDotClearX({
     noFlags,
     stemExtension
   );
-  const tailInkBottomY =
-    (stemTipY + (flagCount - 1) * FLAG_Y_SPACING) * NOTE_SCALE +
-    tailLengthPx(stemUp, flagCount, tailRoomStemExtension);
-  const dotTopY = Math.min(...rowCentersY) - AUGMENTATION_DOT_DIAMETER_PX / 2;
-  if (tailInkBottomY + AUGMENTATION_DOT_TAIL_CLEARANCE_PX <= dotTopY) {
+  return {
+    rightX: stemX * NOTE_SCALE + TAIL_UP_WIDTH_PX,
+    bottomY:
+      (stemTipY + (flagCount - 1) * FLAG_Y_SPACING) * NOTE_SCALE +
+      tailLengthPx(stemUp, flagCount, tailRoomStemExtension),
+  };
+}
+
+/**
+ * The x (note-local px) a dot row must start at to clear an unbeamed
+ * up-stem's tails, or null when the tails end clear of every row.
+ */
+export function upTailDotClearX({
+  rowCentersY,
+  ...tailInput
+}: UpTailInput & { rowCentersY: readonly number[] }): number | null {
+  const tail = upTailInk(tailInput);
+  if (tail === null) {
     return null;
   }
-  return stemX * NOTE_SCALE + TAIL_UP_WIDTH_PX + AUGMENTATION_DOT_TAIL_GAP_PX;
+  const dotTopY = Math.min(...rowCentersY) - AUGMENTATION_DOT_DIAMETER_PX / 2;
+  return tail.bottomY + AUGMENTATION_DOT_TAIL_CLEARANCE_PX <= dotTopY
+    ? null
+    : tail.rightX + AUGMENTATION_DOT_TAIL_GAP_PX;
 }
 
 // Compute the Y offset from the top of the note SVG to the notehead center.

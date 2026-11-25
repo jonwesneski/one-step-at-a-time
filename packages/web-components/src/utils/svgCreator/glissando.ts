@@ -1,16 +1,34 @@
 import {
+  bendLineShape,
   glissandoDipWidthPx,
   glissandoHalfWaveCount,
+  type BendLayout,
   type LinePoint,
 } from '../../rules/glissandoRules';
-import type { GlissandoShape } from '../../types/theory';
+import type {
+  AccidentalType,
+  BendShape,
+  GlissandoShape,
+} from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  BEND_TARGET_GAP_PX,
+  BEND_TARGET_LEDGER_OVERHANG_PX,
+  BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+  BEND_TARGET_PARENTHESIS_WIDTH_PX,
+  BEND_TARGET_SCALE,
   GLISSANDO_DIP_DEPTH_PX,
   GLISSANDO_LINE_THICKNESS_PX,
   GLISSANDO_WAVE_AMPLITUDE_PX,
 } from '../notationDimensions';
 import { createLineLabel } from './curve';
+import { createParenthesisSvg } from './parenthesis';
+import {
+  createWrittenNoteSvg,
+  writtenNoteWidthPx,
+  type WrittenNoteProps,
+  type WrittenNoteStyle,
+} from './writtenNote';
 
 export type GlissandoLineProps = {
   from: LinePoint;
@@ -25,16 +43,12 @@ export type GlissandoLineProps = {
 // amplitude out, follows a half sine closely.
 const HALF_WAVE_CONTROL_FRACTIONS = [0.3642, 0.6358];
 
-/** The line of a glissando or pitch bend, beside its notes' heads. */
-export function createGlissandoLineSvg({
+function createGlissandoPath({
   from,
   to,
   shape,
   dipCenterX = (from.x + to.x) / 2,
-  label,
-}: GlissandoLineProps): SVGGElement {
-  const group = document.createElementNS(SVG_NS, 'g');
-  group.classList.add('connector', 'glissando');
+}: GlissandoLineProps): SVGPathElement {
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute(
     'd',
@@ -47,7 +61,15 @@ export function createGlissandoLineSvg({
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke', 'currentColor');
   path.setAttribute('stroke-width', `${GLISSANDO_LINE_THICKNESS_PX}`);
-  group.appendChild(path);
+  return path;
+}
+
+/** The line of a glissando, beside its notes' heads. */
+export function createGlissandoLineSvg(props: GlissandoLineProps): SVGGElement {
+  const { from, to, shape, label } = props;
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('connector', 'glissando');
+  group.appendChild(createGlissandoPath(props));
   if (label) {
     group.appendChild(
       createLineLabel({
@@ -58,6 +80,52 @@ export function createGlissandoLineSvg({
         clearance: shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0,
       })
     );
+  }
+  return group;
+}
+
+const BEND_TARGET_STYLE: WrittenNoteStyle = {
+  classPrefix: 'bend-target',
+  scale: BEND_TARGET_SCALE,
+  parenthesisWidthPx: BEND_TARGET_PARENTHESIS_WIDTH_PX,
+  gapPx: BEND_TARGET_GAP_PX,
+  // An arrow reaches past the parentheses rather than lengthening them.
+  parenthesisHalfHeightPx: () => BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+  createParenthesis: (side, x, centerY, halfHeight) =>
+    createParenthesisSvg(
+      side === 'left' ? 'open' : 'close',
+      x,
+      centerY - halfHeight,
+      BEND_TARGET_PARENTHESIS_WIDTH_PX,
+      2 * halfHeight
+    ),
+  ledgerOverhangPx: BEND_TARGET_LEDGER_OVERHANG_PX,
+};
+
+export function bendTargetWidthPx(accidental: AccidentalType | null): number {
+  return writtenNoteWidthPx(BEND_TARGET_STYLE, accidental);
+}
+
+/** The pitch a bend ends on: a small notehead in parentheses. */
+export function createBendTargetSvg(props: WrittenNoteProps): SVGGElement {
+  return createWrittenNoteSvg(BEND_TARGET_STYLE, props).element;
+}
+
+/** A pitch bend's lines, one a head, and the target they run to. */
+export function createBendSvg(
+  shape: BendShape,
+  { lines, targetLeftX }: BendLayout,
+  target: Omit<WrittenNoteProps, 'leftX'> | null
+): SVGGElement {
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('bend');
+  for (const line of lines) {
+    const path = createGlissandoPath({ ...line, shape: bendLineShape(shape) });
+    path.classList.add('bend-line');
+    group.appendChild(path);
+  }
+  if (target !== null && targetLeftX !== null) {
+    group.appendChild(createBendTargetSvg({ ...target, leftX: targetLeftX }));
   }
   return group;
 }

@@ -1772,6 +1772,100 @@ describe('slur-style', () => {
   });
 });
 
+describe('bend', () => {
+  it('round-trips, ignoring values that don’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.bend).toBeNull();
+    expect(noteElement.bendTo).toBeNull();
+    noteElement.bend = 'down';
+    noteElement.bendTo = 'Bb';
+    noteElement.bendToQuarterTone = 'down';
+    expect(noteElement.getAttribute('bend')).toBe('down');
+    expect(noteElement.getAttribute('bend-to')).toBe('Bb');
+    expect(noteElement.getAttribute('bend-to-quarter-tone')).toBe('down');
+
+    for (const [name, value] of [
+      ['bend', 'sideways'],
+      ['bend-to', 'H'],
+      ['bend-to-quarter-tone', 'sharp'],
+    ]) {
+      noteElement.setAttribute(name, value);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(`${name}="${value}"`)
+      );
+    }
+    expect(noteElement.bend).toBeNull();
+    expect(noteElement.bendTo).toBeNull();
+    expect(noteElement.bendToQuarterTone).toBeNull();
+
+    noteElement.bend = null;
+    noteElement.bendTo = null;
+    noteElement.bendToQuarterTone = null;
+    expect(noteElement.attributes).toHaveLength(0);
+    warn.mockRestore();
+  });
+
+  it('warns once connected about a target that lies the other way', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C');
+    noteElement.setAttribute('bend', 'down');
+    noteElement.setAttribute('bend-to', 'D');
+    expect(warn).not.toHaveBeenCalled();
+    document.body.appendChild(noteElement);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('disagrees'));
+    warn.mockRestore();
+  });
+
+  it('draws its own line and target standalone, and no line beside a glissando', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('bend-to', 'D');
+    document.body.appendChild(noteElement);
+    const drawn = (selector: string) =>
+      noteElement.shadowRoot!.querySelectorAll(selector).length;
+    expect(drawn('.bend-line')).toBe(1);
+    expect(drawn('.bend-target-note')).toBe(1);
+
+    noteElement.setAttribute('glissando', 'start');
+    noteElement.setAttribute('bend', 'up');
+    expect(drawn('.bend-line')).toBe(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('glissando="start"')
+    );
+    warn.mockRestore();
+  });
+
+  it('draws nothing on a triangle', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('notehead', 'triangle-up');
+    noteElement.setAttribute('bend', 'down');
+    document.body.appendChild(noteElement);
+    expect(noteElement.shadowRoot!.querySelector('.bend-line')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('triangle'));
+    warn.mockRestore();
+  });
+
+  it('leaves the line to its staff, which it re-lays out', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    noteElement.bend = 'wave';
+    noteElement.bendTo = 'E';
+    noteElement.bendToQuarterTone = 'up';
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(noteElement.shadowRoot!.querySelector('.bend')).toBeNull();
+  });
+});
+
 describe('breath-mark', () => {
   it('round-trips, ignoring a value that doesn’t parse with a warning', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});

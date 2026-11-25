@@ -1832,3 +1832,30 @@ export const GLISSANDO_WAVE_AMPLITUDE_PX = STAFF_LINE_SPACING * 0.435;
 
 /** Vertical clearance (px) a glissando line keeps from its notes' other ink. = 0.1 × STAFF_LINE_SPACING */
 export const GLISSANDO_INK_CLEARANCE_PX = STAFF_LINE_SPACING * 0.1;
+
+/** How far (px) a free straight bend moves, whatever its length. = 0.7 × STAFF_LINE_SPACING */
+export const BEND_FREE_TRAVEL_PX = STAFF_LINE_SPACING * 0.7;
+
+/** Tilt (px) of a bend toward a pitch on its own staff position. = 0.25 × STAFF_LINE_SPACING */
+export const BEND_SAME_POSITION_TILT_PX = STAFF_LINE_SPACING * 0.25;
+
+/** Room (px) a bend leaves before a barline when it can. = 1.5 × STAFF_LINE_SPACING */
+export const BEND_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/** Length (px) of a standalone note's bend. = 5 × STAFF_LINE_SPACING */
+export const BEND_STANDALONE_LENGTH_PX = STAFF_LINE_SPACING * 5;
+
+/** Size of a bend's target notehead and its accidental, against full-size ones. */
+export const BEND_TARGET_SCALE = 0.75;
+
+/** Width (px) of each parenthesis around a bend's target. = 0.6 × STAFF_LINE_SPACING */
+export const BEND_TARGET_PARENTHESIS_WIDTH_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Half-height (px) of those parentheses. = 1 × STAFF_LINE_SPACING */
+export const BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX = STAFF_LINE_SPACING;
+
+/** Gap (px) between the parentheses, the accidental and the head they enclose. = 0.15 × STAFF_LINE_SPACING */
+export const BEND_TARGET_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/** How far (px) a bend target's ledger lines reach past its head. = 0.3 × STAFF_LINE_SPACING */
+export const BEND_TARGET_LEDGER_OVERHANG_PX = STAFF_LINE_SPACING * 0.3;

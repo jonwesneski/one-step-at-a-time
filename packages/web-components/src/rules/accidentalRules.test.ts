@@ -800,3 +800,40 @@ describe('computeChordAccidentalPlacements — flats', () => {
     expect(sharesColumn('sharp', 'flat', SEVENTH)).toBe(false);
   });
 });
+
+describe('computeNoteAccidentals — bend targets', () => {
+  const bending = (note: Note, bendTo: Note, quarterTone?: QuarterTone) => {
+    const element = makeNote({ note });
+    element.setAttribute('bend-to', bendTo);
+    if (quarterTone) {
+      element.setAttribute('bend-to-quarter-tone', quarterTone);
+    }
+    return element;
+  };
+
+  it("draws a target's own accidental, and a natural against one in force", () => {
+    const plain = bending('B', 'C');
+    const arrowed = bending('B', 'C', 'up');
+    const inKey = bending('E', 'F');
+    const afterFlat = bending('A', 'B');
+    const { bendTargetAccidentals } = computeNoteAccidentals(
+      [plain, arrowed, inKey, makeNote({ note: 'Bb' }), afterFlat],
+      'G',
+      'major'
+    );
+    expect(bendTargetAccidentals.get(plain)).toBeNull();
+    expect(bendTargetAccidentals.get(arrowed)).toBe('natural-up');
+    expect(bendTargetAccidentals.get(inKey)).toBe('natural');
+    expect(bendTargetAccidentals.get(afterFlat)).toBe('natural');
+  });
+
+  it('never changes the rest of the bar', () => {
+    const after = makeNote({ note: 'C' });
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [bending('B', 'C#'), after],
+      'C',
+      'major'
+    );
+    expect(noteShowAccidentals.get(after)).toBeNull();
+  });
+});

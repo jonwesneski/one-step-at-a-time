@@ -1,6 +1,9 @@
 import { pitchAccidental } from '../rules/accidentalRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
-import { glissandoShapeWarning } from '../rules/glissandoRules';
+import {
+  bendConsistencyWarning,
+  glissandoShapeWarning,
+} from '../rules/glissandoRules';
 import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
@@ -39,6 +42,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BendShape,
   BreathMark,
   Chord,
   ConventionalAccidentalType,
@@ -82,6 +86,7 @@ import {
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
+  parseBendShape,
   parseBreathMark,
   parseConnectorRole,
   parseDynamicMarking,
@@ -96,6 +101,7 @@ import {
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseNote,
   parseNotehead,
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
@@ -150,6 +156,9 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
  * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
  * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
+ * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after each of this chord's heads, ending inside its own duration. Ignored, with a warning, beside `glissando="start"` and on a `<music-tremolo>` member.
+ * @attr {Note} bend-to - Notes only: ignored, with a warning, on a chord.
+ * @attr {QuarterTone} bend-to-quarter-tone - Applies to `bend-to`.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
  * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
@@ -227,6 +236,9 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'glissando',
       'glissando-hint',
       'glissando-shape',
+      'bend',
+      'bend-to',
+      'bend-to-quarter-tone',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
@@ -561,6 +573,39 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('glissando-shape');
     } else {
       this.setAttribute('glissando-shape', value);
+    }
+  }
+
+  get bend(): BendShape | null {
+    return parseBendShape(this.readAttribute('bend'));
+  }
+  set bend(value: BendShape | null) {
+    if (value === null) {
+      this.removeAttribute('bend');
+    } else {
+      this.setAttribute('bend', value);
+    }
+  }
+
+  get bendTo(): Note | null {
+    return parseNote(this.readAttribute('bend-to'));
+  }
+  set bendTo(value: Note | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to');
+    } else {
+      this.setAttribute('bend-to', value);
+    }
+  }
+
+  get bendToQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('bend-to-quarter-tone'));
+  }
+  set bendToQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to-quarter-tone');
+    } else {
+      this.setAttribute('bend-to-quarter-tone', value);
     }
   }
 
@@ -1378,6 +1423,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     this.#warnAboutTremolo(null, null);
     this.#warnAboutSlurStyle(null, null);
     this.#warnAboutGlissandoShape(null, null);
+    this.#warnAboutBend(null, null);
     this.#warnAboutDynamicReminder();
     this.render();
     this.#childObserver = new MutationObserver(() => {
@@ -1449,6 +1495,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     this.#warnAboutTremolo(name, newValue);
     this.#warnAboutSlurStyle(name, newValue);
     this.#warnAboutGlissandoShape(name, newValue);
+    this.#warnAboutBend(name, newValue);
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1656,6 +1703,9 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'bend' ||
+      name === 'bend-to' ||
+      name === 'bend-to-quarter-tone' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -1794,6 +1844,53 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
+  #lastBendWarning: string | null = null;
+
+  // An invalid value warns as soon as it's set; what doesn't fit together
+  // warns once connected.
+  #warnAboutBend(changed: string | null, newValue: string | null): void {
+    const invalid =
+      newValue === null
+        ? null
+        : changed === 'bend' && parseBendShape(newValue) === null
+        ? 'is not "up", "down", "dip" or "wave"'
+        : changed === 'bend-to' && parseNote(newValue) === null
+        ? 'is not a pitch such as "C#"'
+        : changed === 'bend-to-quarter-tone' &&
+          parseQuarterTone(newValue) === null
+        ? 'is not "up" or "down"'
+        : null;
+    if (invalid !== null) {
+      console.warn(
+        `[music-chord] ${changed}="${newValue}" ${invalid}; ignoring it`
+      );
+      return;
+    }
+    if (
+      !this.isConnected ||
+      (changed !== null &&
+        changed !== 'bend' &&
+        changed !== 'bend-to' &&
+        changed !== 'bend-to-quarter-tone' &&
+        changed !== 'glissando')
+    ) {
+      return;
+    }
+    const warning = bendConsistencyWarning({
+      bend: this.bend,
+      bendTo: this.bendTo,
+      glissando: this.glissando,
+      isChord: true,
+      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
+      onTriangle: false,
+      targetDirection: null,
+    });
+    if (warning !== null && warning !== this.#lastBendWarning) {
+      console.warn(`[music-chord] ${warning}`);
+    }
+    this.#lastBendWarning = warning;
+  }
+
   #warnAboutSlurStyle(changed: string | null, newValue: string | null): void {
     if (
       changed !== null &&
@@ -1874,6 +1971,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
         breathMark: this.#drawnByStaff ? null : this.breathMark,
+        bend: this.#standaloneBend(),
       });
       chordSvg.setAttribute('overflow', 'visible');
       addLedgerLines(
@@ -1958,6 +2056,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
         breathMark: this.#drawnByStaff ? null : this.breathMark,
+        bend: this.#standaloneBend(),
       });
       chordSvg.setAttribute('overflow', 'visible');
 
@@ -1982,6 +2081,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.shadowRoot!.appendChild(svg);
       this.#wireInteractionEvents(svg);
     }
+  }
+
+  // A staff draws its chords' bends itself.
+  #standaloneBend(): BendShape | null {
+    return this.#drawnByStaff ||
+      this.glissando === 'start' ||
+      this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+      ? null
+      : this.bend;
   }
 
   #wireInteractionEvents(svg: SVGSVGElement): void {

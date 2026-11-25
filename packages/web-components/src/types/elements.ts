@@ -5,6 +5,7 @@ import type {
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BendShape,
   BreathMark,
   Chord,
   ClefType,
@@ -157,6 +158,12 @@ export interface INoteElement {
   glissandoHint: GlissandoHint | null;
   /** The contour of the glissando line this starts. Defaults to `straight`. */
   glissandoShape: GlissandoShape;
+  /** A pitch bend: a line after this note, inside its own duration. */
+  bend: BendShape | null;
+  /** The pitch it bends to, in parentheses; alone, a straight bend to it. */
+  bendTo: Note | null;
+  /** Raises or lowers `bendTo` by a quarter-tone. */
+  bendToQuarterTone: QuarterTone | null;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
@@ -382,6 +389,12 @@ export interface IChordElement {
   glissandoHint: GlissandoHint | null;
   /** The contour of the glissando line this starts. Defaults to `straight`. */
   glissandoShape: GlissandoShape;
+  /** A pitch bend: a line after each head, inside the chord's own duration. */
+  bend: BendShape | null;
+  /** Notes only; ignored, with a warning, on a chord. */
+  bendTo: Note | null;
+  /** Applies to `bendTo`. */
+  bendToQuarterTone: QuarterTone | null;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;

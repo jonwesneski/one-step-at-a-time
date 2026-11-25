@@ -3,6 +3,7 @@ import type {
   ArticulationType,
   BarlineType,
   BaseDurationType,
+  BendShape,
   BreathMark,
   ClefType,
   ConventionalAccidentalType,
@@ -427,6 +428,8 @@ export const GLISSANDO_HINTS: GlissandoHint[] = [
 ];
 
 export const GLISSANDO_SHAPES: GlissandoShape[] = ['straight', 'dip', 'wave'];
+
+export const BEND_SHAPES: BendShape[] = ['up', 'down', 'dip', 'wave'];
 
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 

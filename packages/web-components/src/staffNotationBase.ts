@@ -49,7 +49,23 @@ import {
   missingFlutterCancelWarning,
   resolveFlutterPassages,
 } from './rules/flutterTongueRules';
-import { glissandoReserveWidthPx } from './rules/glissandoRules';
+import {
+  isOnStaffLine,
+  resolveChordDotStaffYs,
+  resolveNoteDotStaffY,
+} from './rules/augmentationDotRules';
+import {
+  bendDotYs,
+  bendReserveWidthPx,
+  bendTargetSteps,
+  glissandoReserveWidthPx,
+  layoutBend,
+  resolveBend,
+  type BendLimit,
+  type BendTarget,
+  type BendTargetHead,
+  type ResolvedBend,
+} from './rules/glissandoRules';
 import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
@@ -223,6 +239,8 @@ import {
   breathMarkHeightPx,
   breathMarkReservedWidthPx,
   breathMarkWidthPx,
+  bendTargetWidthPx,
+  createBendSvg,
   BULGE_STEP_PX,
   computeYHeadOffset,
   createBarlineSvg,
@@ -285,6 +303,8 @@ import {
   BARLINE_THICK_PX,
   BASE_STEM_LENGTH_PX,
   BEAM_THICKNESS_PX,
+  BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+  BEND_TARGET_SCALE,
   BREATH_MARK_INK_GAP_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
@@ -367,6 +387,7 @@ import {
 import { articulationStackDepth } from './utils/svgCreator/articulations';
 import {
   chordHeadExtentPx,
+  chordUpTailInk,
   chordToneHeadCenterY,
   chordToneHeadExtentPx,
 } from './utils/svgCreator/chord';
@@ -391,8 +412,10 @@ import {
   createWrittenTrillNoteSvg,
   TRILL_SIGN_WIDTH_PX,
 } from './utils/svgCreator/trill';
+import { ledgerLineOverhangPx } from './utils/svgCreator/ledgerLines';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
 import { createUnisonBracketSvg } from './utils/svgCreator/unison';
+import type { WrittenNoteProps } from './utils/svgCreator/writtenNote';
 
 // Undoes what the staff's cross-voice pass sets on an element, so a note or
 // chord that leaves the staff draws as its own again.
@@ -555,6 +578,10 @@ function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
     ? null
     : (element as NoteElementType | ChordElementType).breathMark ?? null;
 }
+
+// A staff Y's height in the transcription containers.
+const containerYOfStaffY = (staffY: number): number =>
+  STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION;
 
 // A glissando line starts or ends on this entry or one of a chord's tones.
 function hasGlissandoRole(
@@ -782,6 +809,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #tremoloLabelContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #breathMarkContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #bendContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #warnedBends = new WeakSet<NoteOrChordElementType>();
+  #bendTargetAccidentals = new Map<NoteElementType, AccidentalType | null>();
+  // Where each drawn bend ends (container px), target included.
+  #bendRightXs = new Map<NoteChordOrRestElementType, number>();
+  // What a bend never crosses: this staff's clef changes and every barline
+  // (container px).
+  #markerInk: { beat: number; left: number; kind: MarkerBeat['kind'] }[] = [];
   // Where entries stop, before end-of-measure warnings and the end barline,
   // in the voice containers' frame (which starts at the describe area's end).
   #notesAreaEndX = 0;
@@ -2707,6 +2742,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#effectiveKeySig,
       this.#effectiveMode
     );
+    this.#bendTargetAccidentals = accidentals.bendTargetAccidentals;
 
     const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>();
     for (const [voiceNumber, p] of pass1ByVoice) {
@@ -2777,6 +2813,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#prepareVoiceContainers(this.#octaveSignsContainers, activeKeys);
     this.#prepareVoiceContainers(this.#tremoloLabelContainers, activeKeys);
     this.#prepareVoiceContainers(this.#breathMarkContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#bendContainers, activeKeys);
 
     this.#spaceElements();
 
@@ -3652,7 +3689,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     const element = state.elements[index];
     const breathMark = breathMarkOf(element);
-    // A breath mark above the stave, a swell below it and a glissando line
+    // A breath mark above the stave, a swell below it and a glissando or bend
     // beside the note share the gap.
     const gapReserve = Math.max(
       breathMark === null ? 0 : breathMarkReservedWidthPx(breathMark),
@@ -3660,7 +3697,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         (element as NoteOrChordElementType).swell
         ? SWELL_MIN_SPAN_PX + HAIRPIN_DYNAMIC_GAP_PX - NOTE_SVG_WIDTH
         : 0,
-      this.#glissandoReserve(state, index)
+      this.#glissandoReserve(state, index),
+      this.#bendReserve(voiceKey, state, index)
     );
     return (
       this.#rightwardInkFootprint(voiceKey, state, index) +
@@ -3689,6 +3727,168 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         ? headLeftX
         : 0;
     return Math.max(0, glissandoReserveWidthPx() - blankAfter - blankBefore);
+  }
+
+  // The bend entry `index` draws, its target with the accidental the bar
+  // calls for. A glissando's line takes its place.
+  #bendOf(state: VoiceRenderState, index: number): ResolvedBend | null {
+    const element = state.elements[index];
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      state.tremoloScaleByIndex.has(index) ||
+      hasGlissandoRole(element, 'start') ||
+      getStaffYs(element, state.noteStaffYCoords, state.chordStaffYCoords)
+        .length === 0
+    ) {
+      return null;
+    }
+    if (isChordNodeName(element.nodeName)) {
+      const { bend } = element as ChordElementType;
+      return bend === null ? null : { shape: bend, target: null };
+    }
+    const note = element as NoteElementType;
+    if (isTriangle(note.notehead)) {
+      return null;
+    }
+    const bend = resolveBend(
+      note.bend,
+      note.bendTo,
+      note.bendToQuarterTone,
+      note.note,
+      note.octave ?? 4,
+      note.quarterTone
+    );
+    return bend === null || bend.target === null
+      ? bend
+      : {
+          ...bend,
+          target: {
+            ...bend.target,
+            accidental:
+              this.#bendTargetAccidentals.get(note) ?? bend.target.accidental,
+          },
+        };
+  }
+
+  // The staff Y of a note's bend target, the same steps from its head.
+  #bendTargetStaffY(
+    state: VoiceRenderState,
+    index: number,
+    target: BendTarget
+  ): number {
+    const note = state.elements[index] as NoteElementType;
+    return (
+      (state.noteStaffYCoords.get(note) ?? 0) -
+      bendTargetSteps(note.note, note.octave ?? 4, target) * STAFF_Y_STEP
+    );
+  }
+
+  // Where a bend on entry `index` starts, in px from the entry's left edge:
+  // after its heads, dots and trill notes, and after its tail where the line
+  // would cross it.
+  #bendStart(
+    state: VoiceRenderState,
+    index: number
+  ): {
+    staffYs: number[];
+    inkRight: number;
+    tail: { right: number; bottomY: number } | null;
+  } {
+    const element = state.elements[index] as NoteElementType | ChordElementType;
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    const { headRightX, dotsRightEdgeX } = this.#voicePartGeometry(
+      element,
+      staffYs
+    );
+    const ornaments =
+      (state.writtenTrillFootprints.get(index) ?? 0) +
+      (state.trillFinishFootprints.get(index) ?? 0);
+    return {
+      staffYs,
+      inkRight: Math.max(
+        headRightX,
+        dotsRightEdgeX ?? -Infinity,
+        ornaments > 0
+          ? NOTE_SVG_WIDTH +
+              this.#augmentationDotFootprint(state, index) +
+              ornaments
+          : -Infinity
+      ),
+      tail: chordUpTailInk({
+        duration: element.duration,
+        staffYCoordinates: staffYs,
+        stemUp: element.stemUp,
+        noFlags: element.noFlags,
+        noStem: element.noStem,
+        stemExtension: element.stemExtension,
+      }),
+    };
+  }
+
+  // Room (px) past an entry's SVG box and ink for the bend it draws, less the
+  // blank beside the next head.
+  #bendReserve(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
+    const bend = this.#bendOf(state, index);
+    if (bend === null) {
+      return 0;
+    }
+    const { inkRight, tail } = this.#bendStart(state, index);
+    const next: NoteChordOrRestElementType | undefined =
+      state.elements[index + 1];
+    const blankBefore =
+      next === undefined ||
+      this.#markerInBeats(
+        state.beatOffsets[index],
+        state.beatOffsets[index + 1]
+      )
+        ? 0
+        : Math.max(0, this.#entryInkLeft(state, index + 1));
+    return Math.max(
+      0,
+      Math.max(inkRight, tail?.right ?? -Infinity) +
+        bendReserveWidthPx(
+          bend.shape,
+          bend.target === null ? 0 : bendTargetWidthPx(bend.target.accidental)
+        ) -
+        blankBefore -
+        NOTE_SVG_WIDTH -
+        this.#rightwardInkFootprint(voiceKey, state, index)
+    );
+  }
+
+  // Whether a clef change or barline falls after one beat, up to another.
+  #markerInBeats(after: number, upTo: number): boolean {
+    return mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats).some(
+      ({ beat }) =>
+        beat > after + MARKER_BEAT_EPSILON && beat <= upTo + MARKER_BEAT_EPSILON
+    );
+  }
+
+  // The left edge of entry `index`'s ink, in px from its own left edge.
+  #entryInkLeft(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    const extent = this.#entryLeftwardExtent(element);
+    if (extent > 0 || element.nodeName === MUSIC_REST_NODE) {
+      return -extent;
+    }
+    const noteOrChord = element as NoteElementType | ChordElementType;
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    return (
+      this.#voicePartGeometry(noteOrChord, staffYs).headLeftX -
+      ledgerLineOverhangPx(staffYs, noteOrChord.stemUp)
+    );
   }
 
   // The part of #rightwardFootprint that is ink: what a breath mark after
@@ -4190,6 +4390,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     });
     this.#drawMidBarBarlines(barlineSlots);
     const slotMarkers = slots.map((slot) => slot.marker);
+    this.#markerInk = slotMarkers.map(({ beat, kind }, k) => ({
+      beat,
+      kind,
+      left: slotLefts[k] - this.describeEndX,
+    }));
 
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       state.noteXPositions.clear();
@@ -4582,6 +4787,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
 
+    this.#renderBends(remainingWidth);
     const placedAboveStaff = this.#renderTremoloLabels(remainingWidth);
     this.#renderBreathMarks(remainingWidth, placedAboveStaff);
 
@@ -4661,6 +4867,208 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
     return placed;
+  }
+
+  // Each bend runs from its note to just before the next entry, or before the
+  // barline or clef change that comes first.
+  #renderBends(remainingWidth: number): void {
+    this.#bendRightXs.clear();
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const container = this.#containerFor(
+        this.#bendContainers,
+        voiceKey,
+        'bends-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+      for (let i = 0; i < state.elements.length; i++) {
+        const bend = this.#bendOf(state, i);
+        if (bend === null) {
+          continue;
+        }
+        const x = state.noteXPositions.get(i) ?? 0;
+        const { staffYs, inkRight, tail } = this.#bendStart(state, i);
+        const headYs = staffYs.map(containerYOfStaffY);
+        const dotYs = bendDotYs(
+          headYs,
+          this.#augmentationDotRowYs(state, i).map(containerYOfStaffY)
+        );
+        let target: Omit<WrittenNoteProps, 'leftX'> | null = null;
+        let targetHead: BendTargetHead | null = null;
+        if (bend.target !== null) {
+          const { accidental } = bend.target;
+          const staffY = this.#bendTargetStaffY(state, i, bend.target);
+          const centerY = containerYOfStaffY(staffY);
+          target = { centerY, accidental, staffY };
+          targetHead = {
+            y: centerY,
+            onLine: isOnStaffLine(staffY),
+            width: bendTargetWidthPx(accidental),
+          };
+        }
+        const layout = layoutBend({
+          shape: bend.shape,
+          heads: headYs.map((y, head) => ({
+            y,
+            dotY: dotYs[head],
+            onLine: isOnStaffLine(staffYs[head]),
+          })),
+          target: targetHead,
+          inkRight: Math.max(
+            x + inkRight,
+            this.#otherVoicesInkRight(voiceKey, state, i, headYs)
+          ),
+          tail: tail && { right: x + tail.right, bottomY: tail.bottomY },
+          limit: this.#bendLimit(
+            voiceKey,
+            state,
+            i,
+            targetHead === null ? headYs : [...headYs, targetHead.y]
+          ),
+        });
+        const element = state.elements[i] as NoteOrChordElementType;
+        if (layout === null) {
+          // An unlaid-out staff has no width yet.
+          if (remainingWidth > 0 && !this.#warnedBends.has(element)) {
+            this.#warnedBends.add(element);
+            console.warn(
+              '[staff] no room for a bend beside its note; it is not drawn'
+            );
+          }
+          continue;
+        }
+        container.appendChild(createBendSvg(bend.shape, layout, target));
+        this.#bendRightXs.set(
+          element,
+          layout.targetLeftX === null
+            ? layout.lines[0].to.x
+            : layout.targetLeftX + (targetHead?.width ?? 0)
+        );
+      }
+    }
+  }
+
+  // An entry's dot rows (staff Y), empty with no dots.
+  #augmentationDotRowYs(
+    state: VoiceRenderState,
+    index: number
+  ): readonly number[] {
+    const element = state.elements[index] as NoteElementType | ChordElementType;
+    if (durationToDotCount[element.duration] === 0) {
+      return [];
+    }
+    if (element.augmentationDotRows !== null) {
+      return element.augmentationDotRows;
+    }
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    return isNoteNodeName(element.nodeName)
+      ? staffYs.map(resolveNoteDotStaffY)
+      : resolveChordDotStaffYs(staffYs);
+  }
+
+  // Where a bend on entry i stops (container px), by what its own voice plays
+  // next and any other voice's heads there level with it.
+  #bendLimit(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    bendYs: readonly number[]
+  ): BendLimit {
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    const nextBeat =
+      next === null
+        ? Number.POSITIVE_INFINITY
+        : next.state.beatOffsets[next.index];
+    const marker = this.#markerInk.find(
+      ({ beat }) =>
+        beat > state.beatOffsets[i] + MARKER_BEAT_EPSILON &&
+        beat <= nextBeat + MARKER_BEAT_EPSILON
+    );
+    if (marker !== undefined) {
+      return {
+        kind: marker.kind === 'barline' ? 'barline' : 'ink',
+        left: marker.left,
+      };
+    }
+    if (next === null) {
+      return { kind: 'barline', left: this.#notesAreaEndX };
+    }
+    const lefts = [this.#entryInkLeftX(next.state, next.index)];
+    for (const { otherState, j } of this.#otherVoiceEntriesBeside(
+      voiceKey,
+      nextBeat,
+      bendYs
+    )) {
+      lefts.push(this.#entryInkLeftX(otherState, j));
+    }
+    return { kind: 'ink', left: Math.min(...lefts) };
+  }
+
+  #entryInkLeftX(state: VoiceRenderState, index: number): number {
+    return (
+      (state.noteXPositions.get(index) ?? 0) + this.#entryInkLeft(state, index)
+    );
+  }
+
+  // Other voices' notes and chords on a beat with a head within a space of
+  // one of `ys` (container Y).
+  #otherVoiceEntriesBeside(
+    voiceKey: VoiceKey,
+    beat: number,
+    ys: readonly number[]
+  ): { otherState: VoiceRenderState; j: number; staffYs: number[] }[] {
+    return [...this.#voiceRenderStates].flatMap(([otherKey, otherState]) =>
+      otherKey === voiceKey
+        ? []
+        : otherState.elements.flatMap((element, j) => {
+            const staffYs = getStaffYs(
+              element,
+              otherState.noteStaffYCoords,
+              otherState.chordStaffYCoords
+            );
+            const beside =
+              Math.abs(otherState.beatOffsets[j] - beat) <=
+                MARKER_BEAT_EPSILON &&
+              staffYs.some((staffY) =>
+                ys.some(
+                  (y) =>
+                    Math.abs(y - containerYOfStaffY(staffY)) <=
+                    STAFF_LINE_SPACING
+                )
+              );
+            return beside ? [{ otherState, j, staffYs }] : [];
+          })
+    );
+  }
+
+  // The right edge (container px) of other voices' heads and dots beside
+  // entry i's own heads, which its bend starts after too.
+  #otherVoicesInkRight(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    headYs: readonly number[]
+  ): number {
+    return Math.max(
+      ...this.#otherVoiceEntriesBeside(
+        voiceKey,
+        state.beatOffsets[i],
+        headYs
+      ).map(({ otherState, j, staffYs }) => {
+        const { headRightX, dotsRightEdgeX } = this.#voicePartGeometry(
+          otherState.elements[j] as NoteElementType | ChordElementType,
+          staffYs
+        );
+        return (
+          (otherState.noteXPositions.get(j) ?? 0) +
+          Math.max(headRightX, dotsRightEdgeX ?? -Infinity)
+        );
+      })
+    );
   }
 
   // A breath mark sits above the stave in the gap after its entry, above
@@ -5303,6 +5711,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         const trillEndX = this.#trillLineEndX(state, closingTrillSpan, width);
         endX = Math.max(endX, trillEndX);
       }
+      // A bend the closing note draws is covered too.
+      const bendRightX = this.#bendRightXs.get(state.elements[span.stopIndex]);
+      if (bendRightX !== undefined) {
+        endX = Math.max(endX, bendRightX + OCTAVE_SIGN_CORNER_PX);
+      }
       const raisesPitch = isOctaveRaise(span.amount);
 
       container.appendChild(
@@ -5917,19 +6330,41 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
   }
 
-  // How far up or down (container Y) this voice's quarter-tone arrows reach on
-  // one side, or null with none pointing there.
-  #quarterToneArrowReachY(
-    state: VoiceRenderState,
-    above: boolean
-  ): number | null {
-    const tipYs = this.#quarterToneArrows(state)
-      .filter((arrow) => arrow.up === above)
-      .map((arrow) => arrow.tipY);
+  // How far up or down (container Y) this voice's quarter-tone arrows and bend
+  // targets reach on one side, or null with none there.
+  #arrowAndBendReachY(state: VoiceRenderState, above: boolean): number | null {
+    const tipYs = [
+      ...this.#quarterToneArrows(state)
+        .filter((arrow) => arrow.up === above)
+        .map((arrow) => arrow.tipY),
+      ...this.#bendTargetReachYs(state, above),
+    ];
     if (tipYs.length === 0) {
       return null;
     }
     return above ? Math.min(...tipYs) : Math.max(...tipYs);
+  }
+
+  // The upper or lower edge (container Y) of each bend target this voice draws.
+  #bendTargetReachYs(state: VoiceRenderState, above: boolean): number[] {
+    return state.elements.flatMap((_, index) => {
+      const target = this.#bendOf(state, index)?.target ?? null;
+      if (target === null) {
+        return [];
+      }
+      const accidental =
+        target.accidental === null
+          ? { above: 0, below: 0 }
+          : accidentalVerticalExtent(target.accidental);
+      const centerY = containerYOfStaffY(
+        this.#bendTargetStaffY(state, index, target)
+      );
+      const reach = Math.max(
+        BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+        BEND_TARGET_SCALE * (above ? accidental.above : accidental.below)
+      );
+      return [centerY + (above ? -reach : reach)];
+    });
   }
 
   // The boxes a beam of this voice keeps off so it doesn't touch an arrow.
@@ -6024,7 +6459,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
     for (const topY of [
       this.#trillAccidentalTopY(state),
-      this.#quarterToneArrowReachY(state, true),
+      this.#arrowAndBendReachY(state, true),
     ]) {
       if (topY !== null && topY < 0) {
         budget = Math.max(budget, Math.ceil(-topY) + 2);
@@ -6137,7 +6572,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         this.#octaveSignVerticalOverflow(voiceKey, state, false)
       );
 
-      const arrowBottomY = this.#quarterToneArrowReachY(state, false);
+      const arrowBottomY = this.#arrowAndBendReachY(state, false);
       if (arrowBottomY !== null && arrowBottomY > STAFF_TRANSCRIPTION_HEIGHT) {
         budget = Math.max(
           budget,
@@ -6367,7 +6802,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
     for (const topY of [
       this.#trillAccidentalTopY(state),
-      this.#quarterToneArrowReachY(state, true),
+      this.#arrowAndBendReachY(state, true),
     ]) {
       if (topY !== null) {
         consider(topY);
@@ -6430,7 +6865,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       bottom = tupletBottom;
     }
 
-    const arrowBottom = this.#quarterToneArrowReachY(state, false);
+    const arrowBottom = this.#arrowAndBendReachY(state, false);
     if (arrowBottom !== null) {
       bottom = bottom === null ? arrowBottom : Math.max(bottom, arrowBottom);
     }

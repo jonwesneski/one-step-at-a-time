@@ -15,6 +15,7 @@ import {
 } from '../../rules/augmentationDotRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
 import type { ObstacleRect } from '../../rules/connectorPlacementRules';
+import { bendDotYs, layoutBend } from '../../rules/glissandoRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
 import {
   durationToBase,
@@ -29,6 +30,7 @@ import {
 } from '../../rules/tremoloRules';
 import type {
   AccidentalType,
+  BendShape,
   DurationType,
   GraceDuration,
   GraceSlur,
@@ -42,6 +44,7 @@ import {
   ARPEGGIO_CHORD_GAP_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
   BASE_STEM_LENGTH_PX,
+  BEND_STANDALONE_LENGTH_PX,
   BREATH_MARK_INK_GAP_PX,
   BREATH_MARK_STANDALONE_GAP_PX,
   GRACE_MAIN_GAP_PX,
@@ -65,6 +68,7 @@ import {
 } from './articulations';
 import { createAugmentationDotsSvg } from './augmentationDots';
 import { breathMarkWidthPx, createBreathMarkSvg } from './breathMarks';
+import { createBendSvg } from './glissando';
 import { createGraceNotesSvg, createTrillFinishNotesSvg } from './graceNotes';
 import {
   computeYHeadOffset,
@@ -81,6 +85,7 @@ import {
   stemTipPosition,
   TAIL_UP_WIDTH_PX,
   upTailDotClearX,
+  upTailInk,
   type NoteDotLayout,
   type NoteProps,
 } from './note';
@@ -100,6 +105,8 @@ type ChordProps = Omit<
   | 'notehead'
   | 'accidental'
   | 'staffY'
+  | 'bend'
+  | 'bendTargetSteps'
 > & {
   staffYCoordinates: number[];
   noteAccidentals?: (AccidentalType | null | undefined)[];
@@ -120,6 +127,8 @@ type ChordProps = Omit<
   // reference-note relationship as graceNotes.
   trillFinishNotes?: GraceNoteDescriptor[] | null;
   trillFinishSlur?: TrillFinishSlur;
+  // A standalone chord's bend.
+  bend?: BendShape | null;
 };
 
 export const createChordSvg = ({
@@ -155,6 +164,7 @@ export const createChordSvg = ({
   articulationRepeatCount = 1,
   tremoloLabel = null,
   breathMark = null,
+  bend = null,
 }: ChordProps): [SVGElement | SVGGElement, number] => {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.classList.add('chord');
@@ -373,6 +383,41 @@ export const createChordSvg = ({
         besideStemTopY - BREATH_MARK_INK_GAP_PX
       )
     );
+  }
+
+  if (bend !== null) {
+    const headYs = staffYCoordinates.map(
+      (staffY) => STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION
+    );
+    const dotYs = bendDotYs(headYs, dotLayout?.rowCentersY ?? []);
+    const layout = layoutBend({
+      shape: bend,
+      heads: headYs.map((y, i) => ({ y, dotY: dotYs[i], onLine: false })),
+      target: null,
+      inkRight: Math.max(
+        chordHeadExtentPx({
+          duration,
+          staffYCoordinates,
+          stemUp,
+          noFlags,
+          noteheads,
+        }).right,
+        dotLayout?.rightEdgeX ?? -Infinity
+      ),
+      tail: chordUpTailInk({
+        duration,
+        staffYCoordinates,
+        stemUp,
+        noFlags,
+        noStem,
+        stemExtension,
+      }),
+      limit: { kind: 'length', length: BEND_STANDALONE_LENGTH_PX },
+    });
+    if (layout !== null) {
+      svg.setAttribute('overflow', 'visible');
+      svg.appendChild(createBendSvg(bend, layout, null));
+    }
   }
 
   // Render accidentals if provided
@@ -684,6 +729,73 @@ export type ChordDotLayoutInput = {
   rowStaffYs?: readonly number[] | null;
 };
 
+// The note the chord's stem starts from, the top of its SVG and how far the
+// stem passes the other heads (px).
+function chordStemNote(
+  staffYCoordinates: readonly number[],
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean
+): { index: number; top: number; spread: number } {
+  const lowest = Math.max(...staffYCoordinates);
+  const highest = Math.min(...staffYCoordinates);
+  const index = staffYCoordinates.indexOf(stemUp ? lowest : highest);
+  return {
+    index,
+    top:
+      STAFF_Y_PADDING +
+      staffYCoordinates[index] -
+      computeYHeadOffset(stemUp, duration, noFlags),
+    spread: lowest - highest,
+  };
+}
+
+/**
+ * How far right (chord px) and down (staff container px) a chord's up-stem
+ * tails reach, or null with none. One staff Y gives a note's.
+ */
+export function chordUpTailInk({
+  duration,
+  staffYCoordinates,
+  stemUp,
+  noFlags,
+  noStem,
+  stemExtension,
+}: {
+  duration: DurationType;
+  staffYCoordinates: readonly number[];
+  stemUp: boolean;
+  noFlags: boolean;
+  noStem: boolean;
+  stemExtension: number;
+}): { right: number; bottomY: number } | null {
+  const { index, top, spread } = chordStemNote(
+    staffYCoordinates,
+    stemUp,
+    duration,
+    noFlags
+  );
+  const tail = upTailInk({
+    duration,
+    stemUp,
+    noFlags,
+    noStem,
+    stemExtension: noFlags ? stemExtension : stemExtension + spread,
+    tailRoomStemExtension: stemExtension,
+  });
+  if (tail === null) {
+    return null;
+  }
+  const displacement = computeAdjacentDisplacements(
+    [...staffYCoordinates],
+    stemUp
+  ).find(({ noteIndex }) => noteIndex === index);
+  return {
+    right: tail.rightX + (displacement?.xOffset ?? 0),
+    bottomY: top + tail.bottomY,
+  };
+}
+
 /**
  * One dot column after the chord's rightmost head (displaced heads included),
  * in chord-SVG px; rows follow resolveChordDotStaffYs.
@@ -724,28 +836,20 @@ export function chordAugmentationDotLayout({
   ).map((staffY) => STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION);
   let leftX = headRightX + AUGMENTATION_DOT_NOTEHEAD_GAP_PX;
 
-  const stemNoteIndex = staffYCoordinates.indexOf(
-    stemUp ? Math.max(...staffYCoordinates) : Math.min(...staffYCoordinates)
-  );
-  const chordSpread =
-    Math.max(...staffYCoordinates) - Math.min(...staffYCoordinates);
-  const stemNoteTop =
-    STAFF_Y_PADDING +
-    staffYCoordinates[stemNoteIndex] -
-    computeYHeadOffset(stemUp, duration, noFlags);
+  const stemNote = chordStemNote(staffYCoordinates, stemUp, duration, noFlags);
   const tailClearX = upTailDotClearX({
     duration,
     stemUp,
     noFlags,
     noStem,
-    stemExtension: noFlags ? stemExtension : stemExtension + chordSpread,
+    stemExtension: noFlags ? stemExtension : stemExtension + stemNote.spread,
     tailRoomStemExtension: stemExtension,
-    rowCentersY: rowCentersY.map((y) => y - stemNoteTop),
+    rowCentersY: rowCentersY.map((y) => y - stemNote.top),
   });
   if (tailClearX !== null) {
     leftX = Math.max(
       leftX,
-      tailClearX + (displacementMap.get(stemNoteIndex) ?? 0)
+      tailClearX + (displacementMap.get(stemNote.index) ?? 0)
     );
   }
   return {

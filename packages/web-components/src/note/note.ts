@@ -9,7 +9,14 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
-import { glissandoShapeWarning } from '../rules/glissandoRules';
+import {
+  bendConsistencyWarning,
+  bendTargetDirection,
+  bendTargetSteps,
+  glissandoShapeWarning,
+  resolveBend,
+  type ResolvedBend,
+} from '../rules/glissandoRules';
 import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
@@ -49,6 +56,7 @@ import type {
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BendShape,
   BreathMark,
   ConventionalAccidentalType,
   DurationType,
@@ -96,6 +104,7 @@ import {
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
+  parseBendShape,
   parseBreathMark,
   parseConnectorRole,
   parseDynamicMarking,
@@ -110,6 +119,7 @@ import {
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseNote,
   parseNotehead,
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
@@ -162,6 +172,9 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
  * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
  * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
+ * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando="start"`, on a `<music-tremolo>` member and on a triangle notehead; read from a note, not from a chord's slotted tone.
+ * @attr {Note} bend-to - The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there.
+ * @attr {QuarterTone} bend-to-quarter-tone - `up` / `down`: raises or lowers `bend-to` by a quarter-tone.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
  * @attr {boolean} swell - A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.
@@ -236,6 +249,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'glissando',
       'glissando-hint',
       'glissando-shape',
+      'bend',
+      'bend-to',
+      'bend-to-quarter-tone',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
@@ -588,6 +604,39 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('glissando-shape');
     } else {
       this.setAttribute('glissando-shape', value);
+    }
+  }
+
+  get bend(): BendShape | null {
+    return parseBendShape(this.readAttribute('bend'));
+  }
+  set bend(value: BendShape | null) {
+    if (value === null) {
+      this.removeAttribute('bend');
+    } else {
+      this.setAttribute('bend', value);
+    }
+  }
+
+  get bendTo(): Note | null {
+    return parseNote(this.readAttribute('bend-to'));
+  }
+  set bendTo(value: Note | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to');
+    } else {
+      this.setAttribute('bend-to', value);
+    }
+  }
+
+  get bendToQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('bend-to-quarter-tone'));
+  }
+  set bendToQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to-quarter-tone');
+    } else {
+      this.setAttribute('bend-to-quarter-tone', value);
     }
   }
 
@@ -1393,6 +1442,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     this.#warnAboutTremolo(null, null);
     this.#warnAboutSlurStyle(null, null);
     this.#warnAboutGlissandoShape(null, null);
+    this.#warnAboutBend(null, null);
     this.#warnAboutDynamicReminder();
     this.render();
   }
@@ -1448,6 +1498,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     this.#warnAboutTremolo(name, newValue);
     this.#warnAboutSlurStyle(name, newValue);
     this.#warnAboutGlissandoShape(name, newValue);
+    this.#warnAboutBend(name, newValue);
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1662,6 +1713,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'bend' ||
+      name === 'bend-to' ||
+      name === 'bend-to-quarter-tone' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -1787,6 +1841,63 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  #lastBendWarning: string | null = null;
+
+  // An invalid value warns as soon as it's set; what doesn't fit together
+  // warns once connected.
+  #warnAboutBend(changed: string | null, newValue: string | null): void {
+    const invalid =
+      newValue === null
+        ? null
+        : changed === 'bend' && parseBendShape(newValue) === null
+        ? 'is not "up", "down", "dip" or "wave"'
+        : changed === 'bend-to' && parseNote(newValue) === null
+        ? 'is not a pitch such as "C#"'
+        : changed === 'bend-to-quarter-tone' &&
+          parseQuarterTone(newValue) === null
+        ? 'is not "up" or "down"'
+        : null;
+    if (invalid !== null) {
+      console.warn(
+        `[music-note] ${changed}="${newValue}" ${invalid}; ignoring it`
+      );
+      return;
+    }
+    if (
+      !this.isConnected ||
+      (changed !== null &&
+        changed !== 'bend' &&
+        changed !== 'bend-to' &&
+        changed !== 'bend-to-quarter-tone' &&
+        changed !== 'glissando')
+    ) {
+      return;
+    }
+    const warning = bendConsistencyWarning({
+      bend: this.bend,
+      bendTo: this.bendTo,
+      glissando: this.glissando,
+      isChord: false,
+      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
+      onTriangle: isTriangle(this.notehead),
+      targetDirection:
+        this.bendTo === null
+          ? null
+          : bendTargetDirection({
+              bend: this.bend,
+              bendTo: this.bendTo,
+              bendToQuarterTone: this.bendToQuarterTone,
+              note: this.note,
+              octave: this.octave ?? 4,
+              quarterTone: this.quarterTone,
+            }),
+    });
+    if (warning !== null && warning !== this.#lastBendWarning) {
+      console.warn(`[music-note] ${warning}`);
+    }
+    this.#lastBendWarning = warning;
+  }
+
   #warnAboutSlurStyle(changed: string | null, newValue: string | null): void {
     if (
       changed !== null &&
@@ -1851,6 +1962,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       accidentalParenthesized = this.#accidentalParenthesized;
     }
 
+    const bend = this.#standaloneBend();
     const [noteSvg, yHeadOffset] = createNoteSvg({
       duration: this.duration,
       stemUp,
@@ -1892,6 +2004,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
       breathMark: this.closest(STAFF_TAGS) ? null : this.breathMark,
+      bend,
+      bendTargetSteps: bend?.target
+        ? bendTargetSteps(this.note, this.octave ?? 4, bend.target)
+        : 0,
     });
 
     if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
@@ -1963,6 +2079,26 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         })
       );
     });
+  }
+
+  // A staff draws its notes' bends itself.
+  #standaloneBend(): ResolvedBend | null {
+    if (
+      this.closest(STAFF_TAGS) ||
+      this.glissando === 'start' ||
+      isTriangle(this.notehead) ||
+      this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+    ) {
+      return null;
+    }
+    return resolveBend(
+      this.bend,
+      this.bendTo,
+      this.bendToQuarterTone,
+      this.note,
+      this.octave ?? 4,
+      this.quarterTone
+    );
   }
 
   #appendGraceNotes(

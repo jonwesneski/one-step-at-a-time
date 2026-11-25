@@ -10,6 +10,16 @@ import {
 
 const LEDGER_LINE_MARGIN = 6;
 
+/** How far (px) ledger lines reach past the heads they pass through. */
+export function ledgerLineOverhangPx(
+  staffYCoordinates: number[],
+  stemUp: boolean
+): number {
+  return computeLedgerLines(staffYCoordinates, stemUp).length > 0
+    ? LEDGER_LINE_MARGIN
+    : 0;
+}
+
 // Horizontal extent of the head the ledger lines pass through, in the note
 // SVG's pixel space; defaults to the ellipse head.
 export type LedgerHeadExtent = { cxPx: number; halfWidthPx: number };

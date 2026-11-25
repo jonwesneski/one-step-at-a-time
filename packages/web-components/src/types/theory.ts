@@ -327,6 +327,8 @@ export type GlissandoHint = 'white-key' | 'black-key' | 'gliss';
  * A `glissando` line's contour: straight, straight with a short dip, or wavy.
  */
 export type GlissandoShape = 'straight' | 'dip' | 'wave';
+/** The contour of a pitch bend after one note. */
+export type BendShape = 'up' | 'down' | 'dip' | 'wave';
 
 /**
  * Which measures of a `<music-composition>` show their own `number` —

@@ -102,6 +102,9 @@ export type NoteAccidentals = {
   >;
   parenthesizedAccidentals: Set<NoteElementType>;
   chordParenthesizedAccidentals: Map<ChordElementType, boolean[]>;
+  // What a note's `bend-to` draws: its own accidental, or a natural where one
+  // in force would otherwise carry over to it.
+  bendTargetAccidentals: Map<NoteElementType, AccidentalType | null>;
 };
 
 export function computeNoteAccidentals(
@@ -134,6 +137,10 @@ export function computeNoteAccidentals(
   >();
   const parenthesizedAccidentals = new Set<NoteElementType>();
   const chordParenthesizedAccidentals = new Map<ChordElementType, boolean[]>();
+  const bendTargetAccidentals = new Map<
+    NoteElementType,
+    AccidentalType | null
+  >();
 
   // Shared by both ornament kinds (a leading grace group and a trill's
   // finishing grace note(s)) — same suffix-vs-in-measure-state resolution as
@@ -158,6 +165,18 @@ export function computeNoteAccidentals(
     target.set(hostElement, resolved);
   };
 
+  // A bend's target never alters the rest of the bar.
+  const resolveBendTarget = (noteElement: NoteElementType): void => {
+    const bendTo = noteElement.bendTo ?? null;
+    if (bendTo !== null) {
+      bendTargetAccidentals.set(
+        noteElement,
+        pitchAccidental(bendTo, noteElement.bendToQuarterTone) ??
+          (stateFor(bendTo[0]) === null ? null : 'natural')
+      );
+    }
+  };
+
   for (const element of elements) {
     if (isNoteNodeName(element.nodeName)) {
       const noteElement = element as NoteElementType;
@@ -180,6 +199,7 @@ export function computeNoteAccidentals(
         isTriangle(noteElement.notehead)
       ) {
         noteShowAccidentals.set(noteElement, null);
+        resolveBendTarget(noteElement);
         resolveOrnamentAccidentals(
           noteElement.trillFinish,
           noteElement.trillFinishQuarterTone,
@@ -204,6 +224,7 @@ export function computeNoteAccidentals(
         parenthesizedAccidentals.add(noteElement);
       }
       inMeasureState.set(letter, noteAccidental);
+      resolveBendTarget(noteElement);
       resolveOrnamentAccidentals(
         noteElement.trillFinish,
         noteElement.trillFinishQuarterTone,
@@ -271,6 +292,7 @@ export function computeNoteAccidentals(
     trillFinishShowAccidentals,
     parenthesizedAccidentals,
     chordParenthesizedAccidentals,
+    bendTargetAccidentals,
   };
 }
 

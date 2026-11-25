@@ -3,6 +3,7 @@ import type {
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BendShape,
   BreathMark,
   ClefType,
   ConventionalAccidentalType,
@@ -46,6 +47,7 @@ import {
   ARPEGGIOS,
   ARTICULATIONS,
   BARLINE_TYPES,
+  BEND_SHAPES,
   BREATH_MARKS,
   CLEFS,
   DURATIONS,
@@ -119,13 +121,14 @@ const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
+const VALID_BEND_SHAPES = new Set<string>(BEND_SHAPES);
 const VALID_GLISSANDO_SHAPES = new Set<string>(GLISSANDO_SHAPES);
 const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
 const VALID_BARLINE_TYPES = new Set<string>(BARLINE_TYPES);
 const VALID_MEASURE_END_BARLINES = new Set<string>(MEASURE_END_BARLINES);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
-const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
+const NOTE_NAME_PATTERN = /^[A-G](##|bb|#|b)?$/;
 
 export const parseDuration = (value: string | null): DurationType | null =>
   value !== null && VALID_DURATIONS.has(value) ? (value as DurationType) : null;
@@ -216,6 +219,13 @@ export const parseGlissandoShape = (value: string | null): GlissandoShape =>
   value !== null && VALID_GLISSANDO_SHAPES.has(value)
     ? (value as GlissandoShape)
     : 'straight';
+
+export const parseBendShape = (value: string | null): BendShape | null =>
+  value !== null && VALID_BEND_SHAPES.has(value) ? (value as BendShape) : null;
+
+/** One pitch name: a letter with an optional accidental. */
+export const parseNote = (value: string | null): Note | null =>
+  value !== null && NOTE_NAME_PATTERN.test(value) ? (value as Note) : null;
 
 export const parseGlissandoHint = (
   value: string | null
@@ -482,7 +492,7 @@ export const parseGraceNotes = (value: string | null): Note[] | null => {
     return null;
   }
   for (const token of tokens) {
-    if (!GRACE_NOTE_PATTERN.test(token)) {
+    if (!NOTE_NAME_PATTERN.test(token)) {
       console.warn(
         `invalid grace note "${token}" — expected letter A-G with an optional accidental (e.g. "F#")`
       );

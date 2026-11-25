@@ -2,13 +2,23 @@
  * @jest-environment jsdom
  */
 import {
+  BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+  BEND_TARGET_PARENTHESIS_WIDTH_PX,
   GLISSANDO_DIP_DEPTH_PX,
   GLISSANDO_DIP_WIDTH_PX,
   GLISSANDO_LINE_THICKNESS_PX,
   GLISSANDO_WAVE_AMPLITUDE_PX,
   GLISSANDO_WAVELENGTH_PX,
+  TRILL_WRITTEN_NOTE_GAP_PX,
 } from '../notationDimensions';
-import { createGlissandoLineSvg, type GlissandoLineProps } from './glissando';
+import {
+  bendTargetWidthPx,
+  createBendSvg,
+  createBendTargetSvg,
+  createGlissandoLineSvg,
+  type GlissandoLineProps,
+} from './glissando';
+import { computeWrittenTrillNoteWidth, createWrittenTrillNoteSvg } from './trill';
 
 const from = { x: 0, y: 50 };
 const to = { x: 200, y: 50 };
@@ -75,5 +85,88 @@ describe('createGlissandoLineSvg', () => {
     expect(labelY('wave')).toBeCloseTo(
       labelY('straight') - GLISSANDO_WAVE_AMPLITUDE_PX
     );
+  });
+});
+
+describe('createBendSvg', () => {
+  const lines = [
+    { from, to },
+    { from: { x: 0, y: 30 }, to: { x: 200, y: 37 } },
+  ];
+
+  it('draws a line for each head and no target without one', () => {
+    const bend = createBendSvg('down', { lines, targetLeftX: null }, null);
+    const paths = Array.from(bend.querySelectorAll('.bend-line'));
+    expect(paths.map((path) => path.getAttribute('d'))).toEqual([
+      'M 0 50 L 200 50',
+      'M 0 30 L 200 37',
+    ]);
+    expect(bend.querySelector('.bend-target-note')).toBeNull();
+    expect(bend.classList.contains('connector')).toBe(false);
+  });
+
+  it('puts the target where the layout says', () => {
+    const bend = createBendSvg(
+      'up',
+      { lines: [{ from, to }], targetLeftX: 210 },
+      { centerY: 40, accidental: 'sharp-up', staffY: 40 }
+    );
+    const open = bend.querySelector('.parenthesis-open');
+    expect(open?.getAttribute('d')).toBe(
+      `M ${210 + BEND_TARGET_PARENTHESIS_WIDTH_PX} ${
+        40 - BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX
+      }${open?.getAttribute('d')?.slice(open.getAttribute('d')?.indexOf(' Q'))}`
+    );
+    expect(bend.querySelector('.bend-target-note-accidental')).not.toBeNull();
+  });
+});
+
+describe('createBendTargetSvg', () => {
+  it('is not a drag target', () => {
+    const target = createBendTargetSvg({
+      leftX: 0,
+      centerY: 40,
+      accidental: null,
+    });
+    expect(target.querySelector('.bend-target-head')).not.toBeNull();
+    expect(target.querySelector('.head, .head-hit-zone')).toBeNull();
+  });
+
+  it('keeps its parentheses one height, arrow or no arrow', () => {
+    const parenthesisOf = (accidental: 'sharp' | 'sharp-up') =>
+      createBendTargetSvg({ leftX: 0, centerY: 40, accidental })
+        .querySelector('.parenthesis-open')
+        ?.getAttribute('d');
+    expect(parenthesisOf('sharp-up')).toBe(parenthesisOf('sharp'));
+  });
+
+  it('widens for an accidental', () => {
+    expect(bendTargetWidthPx('sharp')).toBeGreaterThan(bendTargetWidthPx(null));
+  });
+
+  it('draws ledger lines outside the stave', () => {
+    const ledgers = (staffY: number | null) =>
+      createBendTargetSvg({ leftX: 0, centerY: 0, accidental: null, staffY })
+        .querySelectorAll('.bend-target-ledger-line').length;
+    expect(ledgers(null)).toBe(0);
+    expect(ledgers(40)).toBe(0);
+    expect(ledgers(-40)).toBeGreaterThan(0);
+  });
+});
+
+describe('a written trilling note', () => {
+  it('is as wide as the room reserved for it', () => {
+    for (const accidental of [null, 'flat', 'natural-up'] as const) {
+      const { element, width } = createWrittenTrillNoteSvg({
+        leftX: 0,
+        centerY: 40,
+        accidental,
+      });
+      expect(TRILL_WRITTEN_NOTE_GAP_PX + width).toBeCloseTo(
+        computeWrittenTrillNoteWidth(accidental)
+      );
+      expect(element.querySelectorAll('.trill-parenthesis')).toHaveLength(2);
+      expect(element.querySelector('.trill-written-head')).not.toBeNull();
+    }
   });
 });

@@ -2225,6 +2225,102 @@ test.describe('glissando room', () => {
   });
 });
 
+test.describe('pitch bends', () => {
+  const build = async (
+    page: Page,
+    notes: string,
+    width: number
+  ): Promise<void> => {
+    await page.evaluate(
+      ({ html, hostWidth }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host element missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = `<music-staff clef="treble">${html}</music-staff>`;
+      },
+      { html: notes, hostWidth: width }
+    );
+    await waitForRedrawCycle(page);
+  };
+  const measure = (page: Page) =>
+    page.evaluate(() => {
+      const lines = Array.from(
+        document
+          .querySelector('music-staff')
+          ?.shadowRoot?.querySelectorAll('.bend-line') ?? []
+      );
+      const notes = Array.from(document.querySelectorAll('music-note'));
+      return {
+        lineRights: lines.map((line) => line.getBoundingClientRect().right),
+        noteLefts: notes.map((note) => note.getBoundingClientRect().left),
+        headLefts: notes.map(
+          (note) =>
+            note.shadowRoot?.querySelector('.head')?.getBoundingClientRect()
+              .left ?? 0
+        ),
+      };
+    });
+
+  test('setting bend draws its line and makes room for it, and unsetting undoes both', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<music-note note="F" octave="4" duration="sixteenth"></music-note>`.repeat(
+        16
+      ),
+      320
+    );
+    const setBend = async (value: string | null) => {
+      await page.evaluate((bend) => {
+        const note = document.querySelector('music-note') as Element & {
+          bend: string | null;
+        };
+        note.bend = bend;
+      }, value);
+      await waitForRedrawCycle(page);
+      return measure(page);
+    };
+    const plain = await setBend(null);
+    expect(plain.lineRights).toHaveLength(0);
+
+    const bent = await setBend('down');
+    expect(bent.lineRights).toHaveLength(1);
+    expect(bent.noteLefts[1] - bent.noteLefts[0]).toBeGreaterThan(
+      plain.noteLefts[1] - plain.noteLefts[0]
+    );
+
+    expect(await setBend(null)).toEqual(plain);
+  });
+
+  test('its line follows the next note as the staff resizes', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<music-note note="A" octave="4" duration="half" bend="up"></music-note>
+       <music-note note="A" octave="4" duration="half"></music-note>`,
+      800
+    );
+    const rightAt = async (width: number) => {
+      await page.evaluate((value) => {
+        (
+          document.getElementById('host') as HTMLElement
+        ).style.width = `${value}px`;
+      }, width);
+      await waitForRedrawCycle(page);
+      const { lineRights, headLefts } = await measure(page);
+      expect(lineRights[0]).toBeLessThan(headLefts[1]);
+      return lineRights[0];
+    };
+    const wide = await rightAt(800);
+    expect(await rightAt(400)).toBeLessThan(wide);
+    expect(await rightAt(800)).toBe(wide);
+  });
+});
+
 test.describe('quarter-tone arrows under a beam', () => {
   test('the beam rises to clear an arrow and returns without it', async ({
     page,

@@ -106,6 +106,8 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.grace === null &&
     element.trillFinish === null &&
     element.glissando === null &&
+    (element.bend ?? null) === null &&
+    (element.bendTo ?? null) === null &&
     element.stress === null &&
     !element.dynamicShared &&
     !hasAccidentalReminder(element) &&
