@@ -2081,6 +2081,24 @@
             },
             {
               "kind": "method",
+              "name": "#firstStaffInRowOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HTMLElement"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "HTMLElement"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
               "name": "#computeNotesAreaLeftForStaff",
               "privacy": "private",
               "return": {

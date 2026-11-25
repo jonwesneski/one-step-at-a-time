@@ -104,6 +104,7 @@ import {
   partitionByVoice,
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
+  ROW_TOLERANCE_PX,
 } from '../utils/connectorsBuilder';
 import {
   BARLINE_EVENTS,
@@ -787,7 +788,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const staff = end.closest(STAFF_TAGS) as HTMLElement | null;
           return (
             (staff
-              ? this.#computeNotesAreaLeftForStaff(staff, rootRect)
+              ? this.#computeNotesAreaLeftForStaff(
+                  this.#firstStaffInRowOf(staff),
+                  rootRect
+                )
               : this.#computeNotesAreaLeft(rootRect)) +
             CONTINUED_CONNECTOR_LEAD_PX
           );
@@ -840,6 +844,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         return 0;
       }
       return describeContainer.getBoundingClientRect().right - rootRect.left;
+    }
+
+    // The same staff in the first measure of its row.
+    #firstStaffInRowOf(staff: HTMLElement): HTMLElement {
+      const measure = staff.closest(MUSIC_MEASURE);
+      if (measure === null) {
+        return staff;
+      }
+      const stavesOf = (element: Element): Element[] =>
+        Array.from(element.querySelectorAll(STAFF_TAGS));
+      const rowTop = measure.getBoundingClientRect().top;
+      const firstMeasure = Array.from(
+        this.querySelectorAll(MUSIC_MEASURE)
+      ).find(
+        (candidate) =>
+          Math.abs(candidate.getBoundingClientRect().top - rowTop) <=
+          ROW_TOLERANCE_PX
+      );
+      const index = stavesOf(measure).indexOf(staff);
+      return (
+        (firstMeasure &&
+          (stavesOf(firstMeasure)[index] as HTMLElement | undefined)) ??
+        staff
+      );
     }
 
     #computeNotesAreaLeftForStaff(

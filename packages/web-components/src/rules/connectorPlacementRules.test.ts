@@ -13,9 +13,11 @@ import {
   ObstacleRect,
   pickChordToneSide,
   pickCrossStaffSlurSide,
+  pickSlurSide,
   pickStemSide,
   quadraticCrossesRect,
   quadraticCurveYAtX,
+  resolveEnclosingArc,
   resolveRectClearingBulgeHeight,
   resolveSlurCurve,
   sampleCubicSlur,
@@ -24,6 +26,7 @@ import {
   slurAnchorKind,
   slurSpans,
   slurStyleWarning,
+  untiltedStemEndY,
 } from './connectorPlacementRules';
 
 const rect = (
@@ -547,13 +550,26 @@ describe('slurSpans', () => {
   });
 });
 
+const entryAt = (
+  headCenterY: number,
+  markDepthPx: number,
+  index = 0,
+  inkDepthPx = 4,
+  stemDepthPx = 0
+) => ({ headCenterY, markDepthPx, inkDepthPx, stemDepthPx, index });
+
+const slurReachConstants = {
+  noteheadOffsetPx: 9,
+  markClearancePx: 4,
+  noteClearancePx: 3,
+  stemClearancePx: 12,
+  baseBulgePx: 9,
+  bulgeStepPx: 11,
+  maxExtraBulgePx: 66,
+};
+
 describe('estimatedSlurReachY', () => {
-  const constants = {
-    noteheadOffsetPx: 9,
-    markClearancePx: 4,
-    baseBulgePx: 9,
-    bulgeStepPx: 11,
-  };
+  const constants = slurReachConstants;
 
   it('is null with no entries', () => {
     expect(
@@ -569,10 +585,7 @@ describe('estimatedSlurReachY', () => {
   it('reaches past the lowest head below, adding the arc', () => {
     expect(
       estimatedSlurReachY({
-        entries: [
-          { headCenterY: 50, markDepthPx: 0 },
-          { headCenterY: 60, markDepthPx: 0 },
-        ],
+        entries: [entryAt(50, 0), entryAt(60, 0, 1)],
         side: 'below',
         nestingLevel: 0,
         ...constants,
@@ -583,7 +596,7 @@ describe('estimatedSlurReachY', () => {
   it('reaches past marks that go further than the head offset', () => {
     expect(
       estimatedSlurReachY({
-        entries: [{ headCenterY: 50, markDepthPx: 20 }],
+        entries: [entryAt(50, 20)],
         side: 'below',
         nestingLevel: 0,
         ...constants,
@@ -594,12 +607,138 @@ describe('estimatedSlurReachY', () => {
   it('reaches up for a slur above, a step further per nesting level', () => {
     expect(
       estimatedSlurReachY({
-        entries: [{ headCenterY: 50, markDepthPx: 0 }],
+        entries: [entryAt(50, 0)],
         side: 'above',
         nestingLevel: 1,
         ...constants,
       })
     ).toBe(50 - 9 - 9 - 11);
+  });
+});
+
+describe('estimatedSlurReachY over the notes inside it', () => {
+  const reach = (entries: ReturnType<typeof entryAt>[]) =>
+    estimatedSlurReachY({
+      entries,
+      side: 'below',
+      nestingLevel: 0,
+      ...slurReachConstants,
+    }) as number;
+
+  it('counts the arc a low inner note beside an end needs', () => {
+    const withLowNoteAt = (low: number) =>
+      [0, 1, 2, 3, 4, 5, 6].map((index) =>
+        entryAt(index === low ? 80 : 50, 0, index)
+      );
+    expect(reach(withLowNoteAt(1))).toBeGreaterThan(reach(withLowNoteAt(3)));
+  });
+
+  it('clears a stem on its side, at an end and inside', () => {
+    const entries = (stemDepthPx: number, at: number) =>
+      [0, 1, 2].map((index) =>
+        entryAt(50, 0, index, 4, index === at ? stemDepthPx : 0)
+      );
+    expect(reach(entries(35, 0))).toBeGreaterThanOrEqual(50 + 35);
+    expect(reach(entries(35, 1))).toBeGreaterThanOrEqual(50 + 35);
+  });
+
+  it('counts an inner accidental that reaches past its head', () => {
+    const entries = (inkDepthPx: number) => [
+      entryAt(50, 0, 0),
+      entryAt(60, 0, 1, inkDepthPx),
+      entryAt(50, 0, 2),
+    ];
+    expect(reach(entries(40))).toBeGreaterThan(reach(entries(4)));
+  });
+});
+
+describe('pickSlurSide', () => {
+  const up = { stemUp: true, beamed: false };
+  const down = { stemUp: false, beamed: false };
+  const upBeamed = { stemUp: true, beamed: true };
+  const downBeamed = { stemUp: false, beamed: true };
+
+  it('goes opposite stems that all agree', () => {
+    expect(pickSlurSide([up, upBeamed, up], false)).toBe('below');
+    expect(pickSlurSide([down, downBeamed], false)).toBe('above');
+  });
+
+  it('goes above mixed stems, whichever note comes first', () => {
+    expect(pickSlurSide([up, down, up], false)).toBe('above');
+    expect(pickSlurSide([down, up], false)).toBe('above');
+    expect(pickSlurSide([up, upBeamed, upBeamed, down, up], false)).toBe(
+      'above'
+    );
+  });
+
+  it('goes below when a beam is above either end', () => {
+    expect(pickSlurSide([down, upBeamed, upBeamed], false)).toBe('below');
+    expect(pickSlurSide([upBeamed, upBeamed, down], false)).toBe('below');
+  });
+
+  it('stays above when a beam or a slur inside it is in the way below', () => {
+    expect(pickSlurSide([downBeamed, downBeamed, up, upBeamed], false)).toBe(
+      'above'
+    );
+    expect(pickSlurSide([upBeamed, upBeamed, down], true)).toBe('above');
+  });
+});
+
+describe('untiltedStemEndY', () => {
+  it('drops a stem end level with a higher head at the other end', () => {
+    expect(untiltedStemEndY(20, 60, 40, 'above')).toBe(40);
+    expect(untiltedStemEndY(80, 40, 60, 'below')).toBe(60);
+  });
+
+  it('leaves an end that already tilts with the pitches', () => {
+    expect(untiltedStemEndY(50, 60, 40, 'above')).toBe(50);
+    expect(untiltedStemEndY(10, 30, 40, 'above')).toBe(10);
+  });
+});
+
+describe('resolveEnclosingArc', () => {
+  const from = { x: 0, y: 0 };
+  const to = { x: 400, y: 0 };
+
+  it('is undefined when the plain arc clears', () => {
+    expect(resolveEnclosingArc(from, to, 'below', 20, [], 75)).toBeUndefined();
+  });
+
+  it('deepens the quadratic up to the limit', () => {
+    const arc = resolveEnclosingArc(
+      from,
+      to,
+      'below',
+      9,
+      [{ left: 190, right: 210, top: 0, bottom: 30 }],
+      75
+    );
+    expect(arc?.controlHeights).toBeUndefined();
+    expect(arc?.bulgeHeight).toBeGreaterThan(9);
+    expect(arc?.bulgeHeight).toBeLessThanOrEqual(75);
+  });
+
+  it('turns to a convex cubic, shallower than the quadratic would be, past it', () => {
+    const rect = { left: 45, right: 55, top: 0, bottom: 30 };
+    const arc = resolveEnclosingArc(from, to, 'below', 9, [rect], 75);
+    const [near, far] = arc?.controlHeights as readonly [number, number];
+    expect(near).toBeGreaterThan(far);
+    expect(near).toBeLessThanOrEqual(2 * far);
+    const points = sampleCubicSlur(from, to, 'below', [near, far], 100);
+    for (const { x, y } of points) {
+      if (x >= rect.left && x <= rect.right) {
+        expect(y).toBeGreaterThanOrEqual(rect.bottom);
+      }
+    }
+    const quadratic = bulgeHeightEnclosingRects(
+      from,
+      to,
+      'below',
+      9,
+      [rect],
+      Infinity
+    ) as number;
+    expect(Math.max(...points.map(({ y }) => y))).toBeLessThan(quadratic / 2);
   });
 });
 
@@ -638,6 +777,22 @@ describe('arcObstacleRects', () => {
     // The midpoint sits half the bulge height below the chord.
     expect(rects[8]).toEqual(rect(77, 52, 83, 58));
   });
+
+  it('follows a cubic arc', () => {
+    const rects = arcObstacleRects(
+      {
+        from: { x: 0, y: 50 },
+        to: { x: 160, y: 50 },
+        side: 'below',
+        bulgeHeight: 10,
+        controlHeights: [80, 40],
+      },
+      3
+    );
+    // Midway, 3/8 of each control height below the chord.
+    expect(rects[8]).toEqual(rect(77, 92, 83, 98));
+    expect(rects[4].bottom).toBeGreaterThan(rects[12].bottom);
+  });
 });
 
 describe('arcEncloses', () => {
@@ -664,13 +819,10 @@ describe('estimatedSlurReachY with nested slurs', () => {
   it('reaches past the slurs it encloses', () => {
     expect(
       estimatedSlurReachY({
-        entries: [{ headCenterY: 50, markDepthPx: 0 }],
+        entries: [entryAt(50, 0)],
         side: 'below',
         nestingLevel: 1,
-        noteheadOffsetPx: 9,
-        markClearancePx: 4,
-        baseBulgePx: 9,
-        bulgeStepPx: 11,
+        ...slurReachConstants,
         enclosedReachY: 100,
         nestedGapPx: 3,
       })

@@ -9,6 +9,7 @@ import type {
 } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
+  GRACE_ACCIDENTAL_LEAD_GAP_PX,
   GRACE_MAIN_GAP_PX,
   GRACE_MIN_STEM_LENGTH_PX,
   GRACE_NOTE_ADVANCE_PX,
@@ -138,9 +139,16 @@ export function rebaseGraceSteps(
   }
 }
 
-// Width (px) an accidental column adds in front of a grace head, at grace scale.
-function graceAccidentalWidth(accidental: AccidentalType): number {
-  return GRACE_SCALE * (accidentalReach(accidental) + ACCIDENTAL_NOTE_GAP);
+// Width (px) an accidental column adds in front of a grace head, at grace
+// scale. Past the first of a group it also keeps off the head before it.
+function graceAccidentalWidth(
+  accidental: AccidentalType,
+  graceIndex: number
+): number {
+  return (
+    GRACE_SCALE * (accidentalReach(accidental) + ACCIDENTAL_NOTE_GAP) +
+    (graceIndex > 0 ? GRACE_ACCIDENTAL_LEAD_GAP_PX : 0)
+  );
 }
 
 // Left-to-right column layout: each grace head advances GRACE_NOTE_ADVANCE_PX,
@@ -150,10 +158,10 @@ export function computeGraceLayout(
 ): GraceLayout {
   const headXCenters: number[] = [];
   let runningX = 0;
-  for (const graceNote of graceNotes) {
+  for (const [i, graceNote] of graceNotes.entries()) {
     if (graceNote.accidental !== null) {
       runningX +=
-        graceAccidentalWidth(graceNote.accidental) +
+        graceAccidentalWidth(graceNote.accidental, i) +
         (graceNote.headLeftOverhangPx ?? 0);
     }
     headXCenters.push(runningX + GRACE_NOTE_ADVANCE_PX / 2);
@@ -185,7 +193,7 @@ export function computeFirstGraceHeadX(
     : pitchAccidental(graceNotes[0]);
   const firstAccidentalWidth =
     firstAccidental !== null
-      ? graceAccidentalWidth(firstAccidental) + (headLeftOverhangsPx[0] ?? 0)
+      ? graceAccidentalWidth(firstAccidental, 0) + (headLeftOverhangsPx[0] ?? 0)
       : 0;
   const firstHeadXCenter = firstAccidentalWidth + GRACE_NOTE_ADVANCE_PX / 2;
   return noteX - leftwardWidth + firstHeadXCenter;
@@ -226,7 +234,8 @@ export function computeGraceFootprintWidth(
       ? resolvedAccidentals[i]
       : pitchAccidental(graceNotes[i]);
     if (accidental !== null) {
-      width += graceAccidentalWidth(accidental) + (headLeftOverhangsPx[i] ?? 0);
+      width +=
+        graceAccidentalWidth(accidental, i) + (headLeftOverhangsPx[i] ?? 0);
     }
     width += GRACE_NOTE_ADVANCE_PX;
   }

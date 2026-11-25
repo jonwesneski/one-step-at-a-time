@@ -30,7 +30,9 @@ import { computeAdjacentDisplacements } from './rules/chordRules';
 import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
 import {
   estimatedSlurReachY,
+  pickSlurSide,
   SlurReachEntry,
+  SlurSpan,
   slurSpans,
 } from './rules/connectorPlacementRules';
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
@@ -324,7 +326,10 @@ import {
   REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   SLUR_ARTICULATION_CLEARANCE_PX,
+  SLUR_BEYOND_BEAM_CLEARANCE_PX,
+  SLUR_MAX_EXTRA_BULGE_PX,
   SLUR_NESTED_CLEARANCE_PX,
+  SLUR_NOTE_CLEARANCE_PX,
   SLUR_NOTEHEAD_OFFSET_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
@@ -6688,12 +6693,35 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       (a, b) => a.nestingLevel - b.nestingLevel
     );
     const reached: { startIndex: number; endIndex: number; y: number }[] = [];
+    const belowSpans: SlurSpan[] = [];
     for (const span of spans) {
-      // A slur curves away from the stem of the note it starts on; one that
-      // starts in an earlier measure goes by the note it ends on.
-      const sideIndex =
-        roles[span.startIndex] === 'start' ? span.startIndex : span.endIndex;
-      if (state.stemDirections[sideIndex] === placeAbove) {
+      const stems = state.elements.flatMap((element, i) =>
+        i < span.startIndex ||
+        i > span.endIndex ||
+        element.nodeName === MUSIC_REST_NODE
+          ? []
+          : [
+              {
+                stemUp: state.stemDirections[i],
+                beamed: (element as NoteOrChordElementType).noFlags,
+              },
+            ]
+      );
+      if (stems.length === 0) {
+        continue;
+      }
+      const side = pickSlurSide(
+        stems,
+        belowSpans.some(
+          (inner) =>
+            inner.startIndex >= span.startIndex &&
+            inner.endIndex <= span.endIndex
+        )
+      );
+      if (side === 'below') {
+        belowSpans.push(span);
+      }
+      if (side !== (placeAbove ? 'above' : 'below')) {
         continue;
       }
       const entries: SlurReachEntry[] = [];
@@ -6715,14 +6743,35 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         // Marks sit opposite the stem.
         const marksOnSide = state.stemDirections[i] !== placeAbove;
         const noteOrChord = element as NoteOrChordElementType;
+        const headCenterY =
+          STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION;
         entries.push({
-          headCenterY: STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION,
+          headCenterY,
           markDepthPx: marksOnSide
             ? articulationStackDepth(
                 noteOrChord.articulation,
                 noteOrChord.stress
               ) * NOTE_SCALE
             : 0,
+          stemDepthPx:
+            state.stemDirections[i] === placeAbove
+              ? Math.abs(
+                  (this.#extremeStemTipY(state, [i], placeAbove) ??
+                    headCenterY) - headCenterY
+                )
+              : 0,
+          inkDepthPx: Math.max(
+            NOTE_HEAD_RADIUS_PX,
+            ...this.#shownAccidentals(state, i).map((shown) => {
+              const { above, below } = accidentalVerticalExtent(
+                shown.accidental
+              );
+              return placeAbove
+                ? headCenterY - (shown.headCenterY - above)
+                : shown.headCenterY + below - headCenterY;
+            })
+          ),
+          index: i,
         });
       }
       const reach = estimatedSlurReachY({
@@ -6731,8 +6780,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         nestingLevel: span.nestingLevel,
         noteheadOffsetPx: SLUR_NOTEHEAD_OFFSET_PX,
         markClearancePx: SLUR_ARTICULATION_CLEARANCE_PX,
+        noteClearancePx: SLUR_NOTE_CLEARANCE_PX,
+        stemClearancePx: SLUR_BEYOND_BEAM_CLEARANCE_PX,
         baseBulgePx: DEFAULT_BULGE_HEIGHT,
         bulgeStepPx: BULGE_STEP_PX,
+        maxExtraBulgePx: SLUR_MAX_EXTRA_BULGE_PX,
         enclosedReachY: reached
           .filter(
             (inner) =>

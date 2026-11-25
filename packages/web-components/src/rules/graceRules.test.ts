@@ -5,6 +5,7 @@ import type { Note } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  GRACE_ACCIDENTAL_LEAD_GAP_PX,
   GRACE_MAIN_GAP_PX,
   GRACE_MIN_STEM_LENGTH_PX,
   GRACE_NOTE_ADVANCE_PX,
@@ -201,6 +202,25 @@ describe('computeGraceLayout', () => {
     expect(layout.totalWidth).toBe(2 * GRACE_NOTE_ADVANCE_PX + accidentalWidth);
     expect(layout.headXCenters[0]).toBe(
       accidentalWidth + GRACE_NOTE_ADVANCE_PX / 2
+    );
+  });
+
+  it('keeps a later accidental off the head before it, in layout and footprint alike', () => {
+    const accidentalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
+    const layout = computeGraceLayout([
+      { relativeStaffSteps: 0, accidental: 'sharp', articulation: null },
+      { relativeStaffSteps: 1, accidental: 'sharp', articulation: null },
+    ]);
+    expect(layout.headXCenters[1] - layout.headXCenters[0]).toBeCloseTo(
+      GRACE_NOTE_ADVANCE_PX + accidentalWidth + GRACE_ACCIDENTAL_LEAD_GAP_PX
+    );
+    expect(computeGraceFootprintWidth(['F#', 'G#'])).toBeCloseTo(
+      GRACE_MAIN_GAP_PX + layout.totalWidth
+    );
+    // The first head keeps its place in the group.
+    expect(computeFirstGraceHeadX(100, 40, ['F#', 'G#'])).toBeCloseTo(
+      60 + layout.headXCenters[0]
     );
   });
 

@@ -33,6 +33,50 @@ export function pickStemSide({
   return stemUp ? 'below' : 'above';
 }
 
+export type SlurStem = { stemUp: boolean; beamed: boolean };
+
+export function hasMixedStems(stems: readonly SlurStem[]): boolean {
+  return stems.some(({ stemUp }) => stemUp !== stems[0].stemUp);
+}
+
+/**
+ * The side of a slur over one staff's notes, first to last: opposite stems that
+ * all agree, above the stave when they differ. A beam above either end pushes a
+ * mixed slur below, unless a beam or a slur inside it (`nestedBelow`) is in the
+ * way there too.
+ */
+export function pickSlurSide(
+  stems: readonly SlurStem[],
+  nestedBelow: boolean
+): CurveSide {
+  if (!hasMixedStems(stems)) {
+    return pickStemSide({ stemUp: stems[0].stemUp, isGuitarNote: false });
+  }
+  const beamAboveEnd = [stems[0], stems[stems.length - 1]].some(
+    ({ stemUp, beamed }) => stemUp && beamed
+  );
+  const beamBelow = stems.some(({ stemUp, beamed }) => !stemUp && beamed);
+  return beamAboveEnd && !beamBelow && !nestedBelow ? 'below' : 'above';
+}
+
+/**
+ * Where a slur end beside its stem goes when the other end is at a head, so
+ * the slur doesn't tilt against the pitches: level with the other end at most,
+ * and never nearer its own head than `headAnchorY`. Both `...AnchorY`s are the
+ * ends' places at their heads.
+ */
+export function untiltedStemEndY(
+  stemEndY: number,
+  headAnchorY: number,
+  otherHeadAnchorY: number,
+  side: CurveSide
+): number {
+  const sign = sideSign(side);
+  const headLeads = sign * (headAnchorY - otherHeadAnchorY) > 0;
+  const endLeads = sign * (stemEndY - otherHeadAnchorY) > 0;
+  return headLeads || !endLeads ? stemEndY : otherHeadAnchorY;
+}
+
 /**
  * A chord tie curves outward from the chord's vertical midpoint (top tones
  * above, bottom tones below) — position-based, not stem-based. A tone exactly
@@ -344,31 +388,43 @@ export type DrawnArc = {
   to: CurvePoint;
   side: CurveSide;
   bulgeHeight: number;
+  /** Set for a cubic arc; overrides `bulgeHeight`. */
+  controlHeights?: readonly [number, number];
 };
 
 const ARC_SAMPLE_COUNT = 16;
 
+const sampleArc = (arc: DrawnArc): CurvePoint[] =>
+  arc.controlHeights
+    ? sampleCubicSlur(
+        arc.from,
+        arc.to,
+        arc.side,
+        arc.controlHeights,
+        ARC_SAMPLE_COUNT
+      )
+    : Array.from({ length: ARC_SAMPLE_COUNT + 1 }, (_, k) => {
+        const t = k / ARC_SAMPLE_COUNT;
+        return {
+          x: arc.from.x + (arc.to.x - arc.from.x) * t,
+          y: quadraticYAtT(arc.from, arc.to, arc.side, arc.bulgeHeight, t),
+        };
+      });
+
 /**
- * Points along a drawn quadratic arc as rects grown by `clearance`, so a slur
- * around it can be kept outside with bulgeHeightEnclosingRects.
+ * Points along a drawn arc as rects grown by `clearance`, so a slur around it
+ * can be kept outside with resolveEnclosingArc.
  */
 export function arcObstacleRects(
   arc: DrawnArc,
   clearance: number
 ): ObstacleRect[] {
-  const rects: ObstacleRect[] = [];
-  for (let k = 0; k <= ARC_SAMPLE_COUNT; k++) {
-    const t = k / ARC_SAMPLE_COUNT;
-    const x = arc.from.x + (arc.to.x - arc.from.x) * t;
-    const y = quadraticYAtT(arc.from, arc.to, arc.side, arc.bulgeHeight, t);
-    rects.push({
-      left: x - clearance,
-      right: x + clearance,
-      top: y - clearance,
-      bottom: y + clearance,
-    });
-  }
-  return rects;
+  return sampleArc(arc).map(({ x, y }) => ({
+    left: x - clearance,
+    right: x + clearance,
+    top: y - clearance,
+    bottom: y + clearance,
+  }));
 }
 
 /** True when `inner` lies within `outer`'s x-span, on the same side. */
@@ -380,6 +436,69 @@ export function arcEncloses(outer: DrawnArc, inner: DrawnArc): boolean {
     Math.min(inner.from.x, inner.to.x) >= outerLeft - 1 &&
     Math.max(inner.from.x, inner.to.x) <= outerRight + 1
   );
+}
+
+export type EnclosingArc = Pick<DrawnArc, 'bulgeHeight' | 'controlHeights'>;
+
+const ENCLOSING_ARC_SEARCH_STEP_PX = 4;
+
+/**
+ * The arc that carries a slur outside every rect between its ends: the plain
+ * quadratic, deeper where it must be. A rect close beside one end would bow
+ * that past `maxBulgeHeight`, so a cubic, whose ends can climb at different
+ * rates, is used there instead. `crossings` are what the cubic must not cut
+ * through either. Undefined when the arc at `baseBulgeHeight` already clears.
+ */
+export function resolveEnclosingArc(
+  from: CurvePoint,
+  to: CurvePoint,
+  side: CurveSide,
+  baseBulgeHeight: number,
+  rects: readonly ObstacleRect[],
+  maxBulgeHeight: number,
+  crossings: readonly ObstacleRect[] = []
+): EnclosingArc | undefined {
+  const bulgeHeight = bulgeHeightEnclosingRects(
+    from,
+    to,
+    side,
+    baseBulgeHeight,
+    rects,
+    Infinity
+  );
+  if (bulgeHeight === undefined) {
+    return undefined;
+  }
+  if (bulgeHeight <= maxBulgeHeight) {
+    return { bulgeHeight };
+  }
+  const left = Math.min(from.x, to.x);
+  const right = Math.max(from.x, to.x);
+  const between = rects.filter(
+    (rect) => rect.right > left && rect.left < right
+  );
+  // Open-ended towards the notes: passing between a mark or an accidental and
+  // its note never counts as clear.
+  const walls = between.map((rect) =>
+    side === 'below'
+      ? { ...rect, top: -Infinity }
+      : { ...rect, bottom: Infinity }
+  );
+  const { controlHeights } = resolveSlurCurve(
+    from,
+    to,
+    side,
+    [...walls, ...crossings],
+    {
+      minHeight: 0,
+      floorHeight: (baseBulgeHeight * 2) / 3,
+      maxHeight: bulgeHeight,
+      step: ENCLOSING_ARC_SEARCH_STEP_PX,
+      clearance: 0,
+      preferShallow: true,
+    }
+  );
+  return { bulgeHeight: maxBulgeHeight, controlHeights };
 }
 
 export type SlurSpan = {
@@ -424,12 +543,24 @@ export type SlurReachEntry = {
   headCenterY: number;
   /** How far marks on the slur's side reach past that centre; 0 for none. */
   markDepthPx: number;
+  /** How far its stem reaches past that centre on the slur's side; 0 for none. */
+  stemDepthPx: number;
+  /** How far the head and accidentals reach past that centre. */
+  inkDepthPx: number;
+  /** Which of the voice's entries this is. */
+  index: number;
 };
+
+// Only proportions matter to the arc an estimate draws, so entries stand a
+// nominal distance apart, each as wide as a head and its accidental.
+const ESTIMATE_ENTRY_SPACING_PX = 40;
+const ESTIMATE_ENTRY_HALF_WIDTH_PX = 12;
 
 /**
  * An upper bound on how far a same-staff slur over `entries` reaches on
- * `side`: past each head (or the marks it encloses) and then its arc. Rows
- * drawn before the slur stay clear of it with this.
+ * `side`: past each head (or the marks it encloses) and then its arc, which
+ * deepens around the notes inside it. Rows drawn before the slur stay clear of
+ * it with this.
  */
 export function estimatedSlurReachY({
   entries,
@@ -437,8 +568,11 @@ export function estimatedSlurReachY({
   nestingLevel,
   noteheadOffsetPx,
   markClearancePx,
+  noteClearancePx,
+  stemClearancePx,
   baseBulgePx,
   bulgeStepPx,
+  maxExtraBulgePx,
   enclosedReachY = null,
   nestedGapPx = 0,
 }: {
@@ -447,8 +581,11 @@ export function estimatedSlurReachY({
   nestingLevel: number;
   noteheadOffsetPx: number;
   markClearancePx: number;
+  noteClearancePx: number;
+  stemClearancePx: number;
   baseBulgePx: number;
   bulgeStepPx: number;
+  maxExtraBulgePx: number;
   /** The outermost reach of the slurs nested inside this one, if any. */
   enclosedReachY?: number | null;
   /** How far past a nested slur this one stays. */
@@ -459,16 +596,42 @@ export function estimatedSlurReachY({
   }
   const sign = sideSign(side);
   const bulge = baseBulgePx + nestingLevel * bulgeStepPx;
-  const reaches = entries.map(
-    ({ headCenterY, markDepthPx }) =>
-      headCenterY +
-      sign *
-        (Math.max(
-          noteheadOffsetPx,
-          markDepthPx > 0 ? markDepthPx + markClearancePx : 0
-        ) +
-          bulge)
+  const markReachPx = ({ markDepthPx }: SlurReachEntry): number =>
+    markDepthPx > 0 ? markDepthPx + markClearancePx : 0;
+  const stemReachPx = ({ stemDepthPx }: SlurReachEntry): number =>
+    stemDepthPx > 0 ? stemDepthPx + stemClearancePx : 0;
+  const endAnchor = (entry: SlurReachEntry): CurvePoint => ({
+    x: entry.index * ESTIMATE_ENTRY_SPACING_PX,
+    y:
+      entry.headCenterY +
+      sign * Math.max(noteheadOffsetPx, markReachPx(entry), stemReachPx(entry)),
+  });
+  const reaches = entries.map((entry) => endAnchor(entry).y + sign * bulge);
+  const from = endAnchor(entries[0]);
+  const to = endAnchor(entries[entries.length - 1]);
+  const shape = resolveEnclosingArc(
+    from,
+    to,
+    side,
+    bulge,
+    entries.slice(1, -1).map((entry) => {
+      const x = entry.index * ESTIMATE_ENTRY_SPACING_PX;
+      const depth = Math.max(
+        Math.max(entry.inkDepthPx, entry.stemDepthPx) + noteClearancePx,
+        markReachPx(entry)
+      );
+      return {
+        left: x - ESTIMATE_ENTRY_HALF_WIDTH_PX,
+        right: x + ESTIMATE_ENTRY_HALF_WIDTH_PX,
+        top: entry.headCenterY - (side === 'above' ? depth : 0),
+        bottom: entry.headCenterY + (side === 'below' ? depth : 0),
+      };
+    }),
+    bulge + maxExtraBulgePx
   );
+  if (shape) {
+    reaches.push(...sampleArc({ from, to, side, ...shape }).map(({ y }) => y));
+  }
   if (enclosedReachY !== null) {
     reaches.push(enclosedReachY + sign * nestedGapPx);
   }
@@ -642,6 +805,11 @@ export type SlurCurveSearchOptions = {
   step: number;
   clearance: number;
   sampleCount?: number;
+  /**
+   * Tries shallow lopsided shapes before deep symmetric ones, leaving out any
+   * that bends back on itself.
+   */
+  preferShallow?: boolean;
 };
 
 export type SlurCurveResolution = {
@@ -672,6 +840,7 @@ export function resolveSlurCurve(
     floorHeight,
     clearance,
     sampleCount = DEFAULT_SAMPLE_COUNT,
+    preferShallow = false,
   } = options;
   const maxHeight = Math.max(options.maxHeight, floorHeight);
   const step = Math.max(
@@ -700,7 +869,11 @@ export function resolveSlurCurve(
   const candidates: [number, number][] = [];
   for (const h1 of heights) {
     for (const h2 of heights) {
-      if (Math.max(h1, h2) >= floorHeight - 1e-6) {
+      const convex = h1 <= 2 * h2 && h2 <= 2 * h1;
+      if (
+        Math.max(h1, h2) >= floorHeight - 1e-6 &&
+        (convex || !preferShallow)
+      ) {
         candidates.push([h1, h2]);
       }
     }
@@ -708,10 +881,11 @@ export function resolveSlurCurve(
   if (candidates.length === 0) {
     candidates.push([floorHeight, floorHeight]);
   }
-  candidates.sort(
-    (a, b) =>
-      Math.max(...a) - Math.max(...b) ||
-      Math.abs(a[0] - a[1]) - Math.abs(b[0] - b[1])
+  candidates.sort((a, b) =>
+    preferShallow
+      ? Math.hypot(...a) - Math.hypot(...b)
+      : Math.max(...a) - Math.max(...b) ||
+        Math.abs(a[0] - a[1]) - Math.abs(b[0] - b[1])
   );
 
   let best: SlurCurveResolution | null = null;

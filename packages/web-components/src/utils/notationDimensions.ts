@@ -509,6 +509,27 @@ export const SLUR_ARTICULATION_CLEARANCE_PX = STAFF_LINE_SPACING * 0.4;
 export const SLUR_NESTED_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
 
 /**
+ * How far (px) beside a stem, and short of its end, a slur's own end sits on
+ * the stem side of a note.
+ * = 0.6 and 0.5 × STAFF_LINE_SPACING
+ */
+export const SLUR_BESIDE_STEM_GAP_PX = STAFF_LINE_SPACING * 0.6;
+export const SLUR_BESIDE_STEM_INSET_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Clearance (px) between a slur and the heads and accidentals it passes.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const SLUR_NOTE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How much further (px) than usual a slur's symmetric arc bows around what it
+ * spans before a lopsided one takes over.
+ * = 6.6 × STAFF_LINE_SPACING
+ */
+export const SLUR_MAX_EXTRA_BULGE_PX = STAFF_LINE_SPACING * 6.6;
+
+/**
  * Gap (px) kept between content drawn past its host's or row's edge and that
  * edge, once the host grows its margin to make room.
  * = 0.5 × STAFF_LINE_SPACING
@@ -972,6 +993,9 @@ export const GRACE_SLASH_STROKE_WIDTH = 1.1;
  * space shows above it, per standard engraving practice.
  */
 export const GRACE_SLASH_TIP_INSET_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between a grace head and the accidental of the grace note after it. = 0.3 × STAFF_LINE_SPACING */
+export const GRACE_ACCIDENTAL_LEAD_GAP_PX = STAFF_LINE_SPACING * 0.3;
 
 /** Clearance (px) an ornament's slur keeps from the heads and accidentals it passes. = 0.2 × STAFF_LINE_SPACING */
 export const ORNAMENT_SLUR_CLEARANCE_PX = STAFF_LINE_SPACING * 0.2;

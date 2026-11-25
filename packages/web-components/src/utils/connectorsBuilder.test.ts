@@ -33,6 +33,7 @@ import {
 } from './consts';
 import {
   SLUR_ARTICULATION_CLEARANCE_PX,
+  SLUR_NOTE_CLEARANCE_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
 } from './notationDimensions';
 
@@ -1042,27 +1043,29 @@ describe('buildConnectorSvgs', () => {
     expect(path.pointAt(0.5).y).toBeGreaterThan((path.fromY + path.toY) / 2);
   });
 
-  it('slur uses start note stem direction for curve direction regardless of end note stem direction', () => {
-    // start stemUp=true (startBulge='below'), end stemUp=false (would be 'above' if independent)
-    // slur keeps startBulge for createCurveSvg → control point must be below the midpoint
-    const startNote = makeLayoutNote({ stemUp: true, left: 50 });
-    const endNote = makeLayoutNote({ stemUp: false, left: 150 });
-    const pair: ConnectorPair = {
-      kind: 'slur',
-      start: startNote,
-      end: endNote,
-      nestingLevel: 0,
-    };
-
-    const [svgGroup] = buildConnectorSvgs([pair], {
-      rootRect,
-      rowLeftOf: () => 0,
-    });
-
-    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
-    const { fromY, cy, toY } = parsePath(d);
-    expect(cy).toBeGreaterThan((fromY + toY) / 2);
-  });
+  it.each([
+    [true, false],
+    [false, true],
+  ])(
+    'a slur between opposite stems (first up: %s) goes above',
+    (startUp, endUp) => {
+      const [svgGroup] = buildConnectorSvgs(
+        [
+          {
+            kind: 'slur',
+            start: makeLayoutNote({ stemUp: startUp, left: 50 }),
+            end: makeLayoutNote({ stemUp: endUp, left: 150 }),
+            nestingLevel: 0,
+          },
+        ],
+        { rootRect, rowLeftOf: () => 0 }
+      );
+      const { fromY, cy, toY } = parsePath(
+        svgGroup.querySelector('path')!.getAttribute('d')!
+      );
+      expect(cy).toBeLessThan((fromY + toY) / 2);
+    }
+  );
 
   it('glissando renders a straight line, not a curve', () => {
     const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
@@ -1585,6 +1588,25 @@ describe('buildConnectorSvgs', () => {
     note.shadowRoot!.appendChild(marks);
   };
 
+  // Replaces what the note drew itself with one piece of ink at `rect`.
+  const setInk = (
+    note: Element,
+    className: 'head' | 'accidental' | 'stem',
+    rect: { left: number; top: number; right: number; bottom: number }
+  ): void => {
+    const ink = document.createElement('div');
+    ink.classList.add(className);
+    jest.spyOn(ink, 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      width: rect.right - rect.left,
+      height: rect.bottom - rect.top,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({}),
+    } as DOMRect);
+    note.shadowRoot!.replaceChildren(ink);
+  };
+
   const quadraticYAt = (
     path: ReturnType<typeof parsePath>,
     x: number
@@ -1817,6 +1839,209 @@ describe('buildConnectorSvgs', () => {
         svgs[1].querySelector('path')!.getAttribute('d')!
       );
       expect(secondPath.cy).toBeCloseTo(alone.cy, 5);
+    });
+
+    describe('over the notes it spans', () => {
+      const makeRow = (lefts: number[], stemUp = true) => {
+        const notes = lefts.map((left) => makeLayoutNote({ stemUp, left }));
+        document.createElement(MUSIC_STAFF).append(...notes);
+        return notes;
+      };
+      const pathOf = (pair: ConnectorPair): string =>
+        buildConnectorSvgs([pair], { rootRect, rowLeftOf: () => 0 })[0]
+          .querySelector('path')!
+          .getAttribute('d')!;
+
+      it.each(['head', 'accidental'] as const)(
+        'carries the arc outside an inner %s, leaving its ends alone',
+        (className) => {
+          const [start, middle, end] = makeRow([50, 150, 250]);
+          const pair = slurBetween(start, end);
+          const plain = drawOne(pair);
+          const bottom = quadraticYAt(plain, 160) + 20;
+          setInk(middle, className, {
+            left: 155,
+            right: 165,
+            top: bottom - 9,
+            bottom,
+          });
+          const lifted = drawOne(pair);
+
+          expect(lifted.fromY).toBeCloseTo(plain.fromY, 5);
+          expect(lifted.toY).toBeCloseTo(plain.toY, 5);
+          for (const x of [155, 160, 165]) {
+            expect(quadraticYAt(lifted, x)).toBeGreaterThanOrEqual(
+              bottom + SLUR_NOTE_CLEARANCE_PX - 1e-6
+            );
+          }
+        }
+      );
+
+      it('is not moved by an inner note on its far side', () => {
+        const [start, middle, end] = makeRow([50, 150, 250]);
+        const pair = slurBetween(start, end);
+        const plain = drawOne(pair);
+        setInk(middle, 'head', {
+          left: 155,
+          right: 165,
+          top: plain.fromY - 60,
+          bottom: plain.fromY - 50,
+        });
+        expect(drawOne(pair).cy).toBeCloseTo(plain.cy, 5);
+      });
+
+      it('leaves a tie over the same note alone', () => {
+        const [start, middle, end] = makeRow([50, 150, 250]);
+        const pair: ConnectorPair = { ...slurBetween(start, end), kind: 'tie' };
+        const plain = drawOne(pair);
+        setInk(middle, 'head', {
+          left: 155,
+          right: 165,
+          top: plain.fromY + 20,
+          bottom: plain.fromY + 30,
+        });
+        expect(drawOne(pair).cy).toBeCloseTo(plain.cy, 5);
+      });
+
+      it('turns to a cubic for a low note close beside an end', () => {
+        const [start, middle, end] = makeRow([50, 90, 450]);
+        const pair = slurBetween(start, end);
+        expect(pathOf(pair)).toContain('Q');
+        const { fromY } = drawOne(pair);
+        setInk(middle, 'head', {
+          left: 95,
+          right: 105,
+          top: fromY + 20,
+          bottom: fromY + 30,
+        });
+        expect(pathOf(pair)).toContain('C');
+      });
+
+      describe('with mixed stems', () => {
+        const makeMixedRow = (stems: boolean[]) => {
+          const notes = stems.map((stemUp, i) =>
+            makeLayoutNote({ stemUp, left: 50 + i * 100 })
+          );
+          document.createElement(MUSIC_STAFF).append(...notes);
+          return notes;
+        };
+        // A stem-up note's stem at the right of its head.
+        const addStem = (note: Element, left: number, top: number) =>
+          setInk(note, 'stem', {
+            left: left + 16,
+            right: left + 17,
+            top,
+            bottom: top + 35,
+          });
+
+        it("ends beside an up-stem, on the slur's inside and below its tip", () => {
+          const [start, , end] = makeMixedRow([true, false, true]);
+          addStem(start, 50, 60);
+          addStem(end, 250, 60);
+          const { fromX, fromY, toX, toY } = drawOne(slurBetween(start, end));
+          expect(fromX).toBeGreaterThan(50 + 17);
+          expect(toX).toBeLessThan(250 + 16);
+          expect(fromY).toBeGreaterThan(60);
+          expect(toY).toBeGreaterThan(60);
+        });
+
+        it('goes outside the beam of a beamed up-stem', () => {
+          const [start, , end] = makeMixedRow([true, false, true]);
+          addStem(start, 50, 60);
+          addStem(end, 250, 60);
+          Object.defineProperty(start, 'noFlags', { get: () => true });
+          // A beam in the way below as well keeps the slur above.
+          const [, inner] = Array.from(start.parentElement!.children);
+          Object.defineProperty(inner, 'noFlags', { get: () => true });
+          const { fromX, fromY } = drawOne(slurBetween(start, end));
+          expect(fromX).toBeCloseTo(50 + 16.5);
+          expect(fromY).toBeLessThan(60);
+        });
+
+        it('does not tilt against the pitches', () => {
+          // The up-stem is the lower note but reaches higher.
+          const [start, end] = makeMixedRow([true, false]);
+          addStem(start, 50, 20);
+          const { fromY, toY } = drawOne(slurBetween(start, end));
+          expect(fromY).toBeGreaterThanOrEqual(toY);
+        });
+
+        it('passes outside an inner up-stem', () => {
+          const [start, inner, end] = makeMixedRow([false, true, false]);
+          const pair = slurBetween(start, end);
+          const plain = drawOne(pair);
+          const stemTop = quadraticYAt(plain, 166) - 20;
+          addStem(inner, 150, stemTop);
+          const lifted = drawOne(pair);
+          expect(quadraticYAt(lifted, 166)).toBeLessThanOrEqual(
+            stemTop - SLUR_NOTE_CLEARANCE_PX + 1e-6
+          );
+        });
+
+        it('keeps a slur inside it on its own side', () => {
+          // The inner pair is beamed up, so its slur is below; the outer one
+          // would join it there but for that.
+          const notes = makeMixedRow([true, true, false]);
+          for (const note of notes.slice(0, 2)) {
+            Object.defineProperty(note, 'noFlags', { get: () => true });
+          }
+          const outer = {
+            ...slurBetween(notes[0], notes[2]),
+            nestingLevel: 1,
+          };
+          const controlOffset = (svg: SVGGElement): number => {
+            const { fromY, cy, toY } = parsePath(
+              svg.querySelector('path')!.getAttribute('d')!
+            );
+            return cy - (fromY + toY) / 2;
+          };
+          const [alone] = buildConnectorSvgs([outer], {
+            rootRect,
+            rowLeftOf: () => 0,
+          });
+          expect(controlOffset(alone)).toBeGreaterThan(0);
+          const [inner, around] = buildConnectorSvgs(
+            [outer, slurBetween(notes[0], notes[1])],
+            { rootRect, rowLeftOf: () => 0 }
+          );
+          expect(controlOffset(inner)).toBeGreaterThan(0);
+          expect(controlOffset(around)).toBeLessThan(0);
+        });
+      });
+
+      describe('across a barline', () => {
+        const makeBars = (stems: boolean[]) => {
+          const composition = document.createElement('div');
+          const notes = stems.map((stemUp, i) => {
+            const note = makeLayoutNote({ stemUp, left: 50 + i * 100 });
+            const measure = document.createElement(MUSIC_MEASURE);
+            const staff = document.createElement(MUSIC_STAFF);
+            staff.append(note);
+            measure.append(staff);
+            composition.append(measure);
+            return note;
+          });
+          return notes;
+        };
+        const sideOf = (d: string): 'above' | 'below' => {
+          const ys = (d.match(/-?[\d.]+/g) ?? [])
+            .map(Number)
+            .filter((_, i) => i % 2 === 1);
+          return ys[1] > Math.max(ys[0], ys[ys.length - 1]) ? 'below' : 'above';
+        };
+
+        it('sits opposite the stems when they all agree', () => {
+          const up = makeBars([true, true]);
+          expect(sideOf(pathOf(slurBetween(up[0], up[1])))).toBe('below');
+          const down = makeBars([false, false]);
+          expect(sideOf(pathOf(slurBetween(down[0], down[1])))).toBe('above');
+        });
+
+        it('sits above the stave when they differ', () => {
+          const mixed = makeBars([true, false]);
+          expect(sideOf(pathOf(slurBetween(mixed[0], mixed[1])))).toBe('above');
+        });
+      });
     });
 
     it('draws a dotted slur with dashes', () => {

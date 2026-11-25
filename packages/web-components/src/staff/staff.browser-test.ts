@@ -734,6 +734,174 @@ test.describe(`${MUSIC_STAFF} slurs and articulation`, () => {
   });
 });
 
+test.describe(`${MUSIC_STAFF} slurs over the notes they span`, () => {
+  test('lowering an inner note deepens the slur past its head, and raising it restores the slur', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        for (let index = 0; index < 4; index++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'A');
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'quarter');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === 3) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const read = () =>
+      page.evaluate(
+        ({ staffTag, noteTag }) => {
+          const path = document
+            .querySelector(staffTag)
+            ?.shadowRoot?.querySelector(
+              '.standalone-connectors-overlay path'
+            ) as SVGPathElement | null;
+          const head = document
+            .querySelectorAll(noteTag)[1]
+            .shadowRoot?.querySelector('.head');
+          const matrix = path?.getScreenCTM();
+          if (!path || !head || !matrix) {
+            throw new Error('slur or head missing');
+          }
+          const headRect = head.getBoundingClientRect();
+          const total = path.getTotalLength();
+          const points = Array.from({ length: 201 }, (_, i) => {
+            const { x, y } = path.getPointAtLength((total * i) / 200);
+            return new DOMPoint(x, y).matrixTransform(matrix);
+          });
+          const underHead = points.filter(
+            ({ x }) => x >= headRect.left && x <= headRect.right
+          );
+          return {
+            d: path.getAttribute('d'),
+            gap: Math.min(...underHead.map(({ y }) => y)) - headRect.bottom,
+          };
+        },
+        { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+      );
+    const setInnerNote = async (note: string): Promise<void> => {
+      await page.evaluate(
+        ({ noteTag, value }) =>
+          document.querySelectorAll(noteTag)[1].setAttribute('note', value),
+        { noteTag: MUSIC_NOTE, value: note }
+      );
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+    };
+
+    const before = await read();
+    await setInnerNote('C');
+    const lowered = await read();
+    expect(lowered.d).not.toBe(before.d);
+    expect(lowered.gap).toBeGreaterThan(0);
+
+    await setInnerNote('A');
+    expect((await read()).d).toBe(before.d);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} slurs over mixed stems`, () => {
+  test('a slur moves above when one note inside turns its stem down, and back when it turns up', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        for (let index = 0; index < 4; index++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'F');
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'quarter');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === 3) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    // The slur's middle against the first note's head.
+    const isAbove = () =>
+      page.evaluate(
+        ({ staffTag, noteTag }) => {
+          const path = document
+            .querySelector(staffTag)
+            ?.shadowRoot?.querySelector(
+              '.standalone-connectors-overlay path'
+            ) as SVGPathElement | null;
+          const head = document
+            .querySelector(noteTag)
+            ?.shadowRoot?.querySelector('.head');
+          const matrix = path?.getScreenCTM();
+          if (!path || !head || !matrix) {
+            throw new Error('slur or head missing');
+          }
+          const { x, y } = path.getPointAtLength(path.getTotalLength() / 2);
+          return (
+            new DOMPoint(x, y).matrixTransform(matrix).y <
+            head.getBoundingClientRect().top
+          );
+        },
+        { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+      );
+    const setInnerNote = async (
+      note: string,
+      octave: string
+    ): Promise<void> => {
+      await page.evaluate(
+        ({ noteTag, value }) => {
+          const inner = document.querySelectorAll(noteTag)[1];
+          inner.setAttribute('note', value.note);
+          inner.setAttribute('octave', value.octave);
+        },
+        { noteTag: MUSIC_NOTE, value: { note, octave } }
+      );
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+    };
+
+    expect(await isAbove()).toBe(false);
+    await setInnerNote('D', '5');
+    expect(await isAbove()).toBe(true);
+    await setInnerNote('F', '4');
+    expect(await isAbove()).toBe(false);
+  });
+});
+
 test.describe(`${MUSIC_STAFF} breath marks`, () => {
   async function readGap(
     page: Page
