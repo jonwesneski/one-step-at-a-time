@@ -65,11 +65,20 @@ function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
   );
 }
 
+// Merged tones dedupe by pitch and don't carry an arrow.
+function hasQuarterTone(element: NoteOrChordElementType): boolean {
+  return isNoteNodeName(element.nodeName)
+    ? (element as NoteElementType).quarterTone !== null
+    : (element as ChordElementType).toneQuarterTones.some(
+        (quarterTone) => quarterTone !== null
+      );
+}
+
 /**
  * Combine-eligible only when none of these is set: the synthetic chord
  * doesn't copy them, so they'd vanish (a reminder on a tone
- * included). A non-normal notehead is excluded too,
- * since merged tones dedupe by pitch.
+ * included). A non-normal notehead or a quarter-tone is excluded too, since
+ * merged tones dedupe by pitch.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   if (voice.tupletsByIndex.has(index)) {
@@ -99,7 +108,8 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.glissando === null &&
     element.stress === null &&
     !element.dynamicShared &&
-    !hasAccidentalReminder(element)
+    !hasAccidentalReminder(element) &&
+    !hasQuarterTone(element)
   );
 }
 

@@ -8,22 +8,35 @@
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
 - **Down-stem accidental displacement** (move accidental closer to stem than a displaced notehead when room allows)
 - **Ornament accidentals** (confirm/cancel altered pitches for trills, turns, etc.)
-- **Microtones** (quarter-tones, arrows)
+- **Microtones** other than quarter-tones
  */
 import {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../types/elements';
-import { AccidentalType, Mode, Note } from '../types/theory';
+import {
+  AccidentalType,
+  ConventionalAccidentalType,
+  Mode,
+  Note,
+  QuarterTone,
+} from '../types/theory';
 import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 import {
+  ACCIDENTAL_ARROW_HEAD_WIDTH_PX,
+  ACCIDENTAL_ARROW_OVERSHOOT_PX,
+  ACCIDENTAL_ARROW_PAREN_GAP_PX,
+  ACCIDENTAL_ARROW_STROKES,
   ACCIDENTAL_NOTE_GAP,
+  ACCIDENTAL_PITCH_RATIO,
   ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
+  NATURAL_LEFT_STROKE_INSET_PX,
   STAFF_LINE_SPACING,
 } from '../utils/notationDimensions';
+import type { ObstacleRect } from './connectorPlacementRules';
 import { isTriangle } from './noteheadRules';
 import { MINOR_TO_RELATIVE_MAJOR } from './theoryConsts';
 
@@ -127,18 +140,19 @@ export function computeNoteAccidentals(
   // a plain note, just keyed by a pitch list instead of one pitch.
   const resolveOrnamentAccidentals = (
     pitches: Note[] | null,
+    quarterTones: readonly (QuarterTone | null)[] | null,
     target: Map<NoteElementType | ChordElementType, (AccidentalType | null)[]>,
     hostElement: NoteElementType | ChordElementType
   ): void => {
     if (pitches == null || pitches.length === 0) {
       return;
     }
-    const resolved = pitches.map((pitch) => {
+    const resolved = pitches.map((pitch, i) => {
       const letter = pitch[0].toUpperCase();
-      const pitchAccidental = suffixToType(parseAccidentalSuffix(pitch));
+      const accidental = pitchAccidental(pitch, quarterTones?.[i] ?? null);
       const effectiveState = stateFor(letter);
-      const showAccidental = resolveAccidental(pitchAccidental, effectiveState);
-      inMeasureState.set(letter, pitchAccidental);
+      const showAccidental = resolveAccidental(accidental, effectiveState);
+      inMeasureState.set(letter, accidental);
       return showAccidental;
     });
     target.set(hostElement, resolved);
@@ -153,6 +167,7 @@ export function computeNoteAccidentals(
       // the host note itself re-sounds (tie="end" below).
       resolveOrnamentAccidentals(
         noteElement.grace,
+        noteElement.graceQuarterTone,
         graceShowAccidentals,
         noteElement
       );
@@ -167,14 +182,17 @@ export function computeNoteAccidentals(
         noteShowAccidentals.set(noteElement, null);
         resolveOrnamentAccidentals(
           noteElement.trillFinish,
+          noteElement.trillFinishQuarterTone,
           trillFinishShowAccidentals,
           noteElement
         );
         continue;
       }
       const letter = noteElement.note[0].toUpperCase();
-      const suffix = parseAccidentalSuffix(noteElement.note);
-      const noteAccidental = suffixToType(suffix);
+      const noteAccidental = pitchAccidental(
+        noteElement.note,
+        noteElement.quarterTone
+      );
       const effectiveState = stateFor(letter);
       const { accidental, parenthesized } = withReminder(
         resolveAccidental(noteAccidental, effectiveState),
@@ -188,6 +206,7 @@ export function computeNoteAccidentals(
       inMeasureState.set(letter, noteAccidental);
       resolveOrnamentAccidentals(
         noteElement.trillFinish,
+        noteElement.trillFinishQuarterTone,
         trillFinishShowAccidentals,
         noteElement
       );
@@ -195,6 +214,7 @@ export function computeNoteAccidentals(
       const chordElement = element as ChordElementType;
       resolveOrnamentAccidentals(
         chordElement.grace,
+        chordElement.graceQuarterTone,
         graceShowAccidentals,
         chordElement
       );
@@ -205,6 +225,7 @@ export function computeNoteAccidentals(
         );
         resolveOrnamentAccidentals(
           chordElement.trillFinish,
+          chordElement.trillFinishQuarterTone,
           trillFinishShowAccidentals,
           chordElement
         );
@@ -213,10 +234,13 @@ export function computeNoteAccidentals(
       const accidentals: (AccidentalType | null | undefined)[] = [];
       const parenthesized: boolean[] = [];
       const reminders = chordElement.toneAccidentalReminders;
+      const quarterTones = chordElement.toneQuarterTones;
       chordElement.notes.forEach((chordNote, toneIndex) => {
         const letter = chordNote.value[0].toUpperCase();
-        const suffix = parseAccidentalSuffix(chordNote.value);
-        const noteAccidental = suffixToType(suffix);
+        const noteAccidental = pitchAccidental(
+          chordNote.value,
+          quarterTones[toneIndex]
+        );
         const effectiveState = stateFor(letter);
         const shown = withReminder(
           resolveAccidental(noteAccidental, effectiveState),
@@ -233,6 +257,7 @@ export function computeNoteAccidentals(
       }
       resolveOrnamentAccidentals(
         chordElement.trillFinish,
+        chordElement.trillFinishQuarterTone,
         trillFinishShowAccidentals,
         chordElement
       );
@@ -276,7 +301,9 @@ export function parseAccidentalSuffix(noteName: Note): AccidentalSuffix {
   return '';
 }
 
-export function suffixToType(suffix: AccidentalSuffix): AccidentalType | null {
+export function suffixToType(
+  suffix: AccidentalSuffix
+): ConventionalAccidentalType | null {
   switch (suffix) {
     case '##':
       return 'double-sharp';
@@ -291,16 +318,128 @@ export function suffixToType(suffix: AccidentalSuffix): AccidentalType | null {
   }
 }
 
+/** The `Note` suffix that spells an accidental; a natural has none. */
+export function accidentalSuffix(
+  accidental: AccidentalType | null
+): AccidentalSuffix {
+  switch (accidental === null ? null : baseAccidental(accidental)) {
+    case 'sharp':
+      return '#';
+    case 'flat':
+      return 'b';
+    case 'double-sharp':
+      return '##';
+    case 'double-flat':
+      return 'bb';
+    default:
+      return '';
+  }
+}
+
+// ─── Quarter-tones ─────────────────────────────────────────────────────────────
+
+/** An arrow goes on the pitch's own accidental, a plain pitch's on a natural. */
+export function withQuarterTone(
+  accidental: ConventionalAccidentalType | null,
+  quarterTone: QuarterTone | null | undefined
+): AccidentalType | null {
+  return quarterTone ? `${accidental ?? 'natural'}-${quarterTone}` : accidental;
+}
+
+/** The accidental a pitch is spelled with, shown or not; null for a natural. */
+export function pitchAccidental(
+  note: Note,
+  quarterTone: QuarterTone | null | undefined = null
+): AccidentalType | null {
+  return withQuarterTone(
+    suffixToType(parseAccidentalSuffix(note)),
+    quarterTone
+  );
+}
+
+export function quarterToneOf(accidental: AccidentalType): QuarterTone | null {
+  return accidental.endsWith('-up')
+    ? 'up'
+    : accidental.endsWith('-down')
+    ? 'down'
+    : null;
+}
+
+/** The accidental without its arrow. */
+export function baseAccidental(
+  accidental: AccidentalType
+): ConventionalAccidentalType {
+  return accidental.replace(/-(up|down)$/, '') as ConventionalAccidentalType;
+}
+
+export type AccidentalOverhangs = {
+  left: number;
+  right: number;
+  above: number;
+  below: number;
+};
+
+/** How far (px) an accidental's arrow reaches outside its glyph's own box. */
+export function accidentalArrowOverhangs(
+  accidental: AccidentalType
+): AccidentalOverhangs {
+  const quarterTone = quarterToneOf(accidental);
+  if (quarterTone === null) {
+    return { left: 0, right: 0, above: 0, below: 0 };
+  }
+  const base = baseAccidental(accidental);
+  const { x, endY } = ACCIDENTAL_ARROW_STROKES[base][quarterTone];
+  const halfHead = ACCIDENTAL_ARROW_HEAD_WIDTH_PX / 2;
+  const up = quarterTone === 'up';
+  return {
+    left: Math.max(0, halfHead - x),
+    right: Math.max(0, x + halfHead - ACCIDENTAL_SYMBOL_WIDTH[base]),
+    above: up ? ACCIDENTAL_ARROW_OVERSHOOT_PX - endY : 0,
+    below: up
+      ? 0
+      : endY + ACCIDENTAL_ARROW_OVERSHOOT_PX - ACCIDENTAL_SYMBOL_HEIGHT[base],
+  };
+}
+
 // ─── Accidental resolution ─────────────────────────────────────────────────────
 
-/** An accidental's drawn width, with its parentheses when it's a reminder. */
+/**
+ * An accidental's box width, with its parentheses when it's a reminder. Only
+ * a reminder's box takes in a quarter-tone arrow, since its parentheses
+ * enclose it; a plain glyph's box stays the glyph's, so it keeps its place
+ * beside the head and the arrow reaches outside it.
+ */
 export function accidentalSymbolWidth(
   accidental: AccidentalType,
   parenthesized = false
 ): number {
+  const width = ACCIDENTAL_SYMBOL_WIDTH[baseAccidental(accidental)];
+  if (!parenthesized) {
+    return width;
+  }
+  const { left, right } = accidentalReminderPadding(accidental);
+  return width + left + right + ACCIDENTAL_REMINDER_PAREN_WIDTH_PX * 2;
+}
+
+/** Room (px) a reminder leaves between its glyph and each parenthesis. */
+export function accidentalReminderPadding(accidental: AccidentalType): {
+  left: number;
+  right: number;
+} {
+  const { left, right } = accidentalArrowOverhangs(accidental);
+  const padding = (overhang: number): number =>
+    overhang > 0 ? overhang + ACCIDENTAL_ARROW_PAREN_GAP_PX : 0;
+  return { left: padding(left), right: padding(right) };
+}
+
+/** From the right edge of an accidental's box to its leftmost ink (px). */
+export function accidentalReach(
+  accidental: AccidentalType,
+  parenthesized = false
+): number {
   return (
-    ACCIDENTAL_SYMBOL_WIDTH[accidental] +
-    (parenthesized ? ACCIDENTAL_REMINDER_PAREN_WIDTH_PX * 2 : 0)
+    accidentalSymbolWidth(accidental, parenthesized) +
+    (parenthesized ? 0 : accidentalArrowOverhangs(accidental).left)
   );
 }
 
@@ -308,23 +447,86 @@ export function accidentalSymbolWidth(
 export function accidentalReminderParenHeight(
   accidental: AccidentalType
 ): number {
+  const { above, below } = accidentalArrowOverhangs(accidental);
   return Math.max(
-    ACCIDENTAL_SYMBOL_HEIGHT[accidental] * 0.8,
+    (accidentalSymbolHeight(accidental) + above + below) * 0.8,
     STAFF_LINE_SPACING * 2
   );
 }
 
-/** An accidental's drawn height, with its parentheses when it's a reminder. */
+/**
+ * An accidental's box height, with its parentheses when it's a reminder. A
+ * quarter-tone arrow reaches outside it (`accidentalArrowOverhangs`).
+ */
 export function accidentalSymbolHeight(
   accidental: AccidentalType,
   parenthesized = false
 ): number {
+  const height = ACCIDENTAL_SYMBOL_HEIGHT[baseAccidental(accidental)];
   return parenthesized
-    ? Math.max(
-        ACCIDENTAL_SYMBOL_HEIGHT[accidental],
-        accidentalReminderParenHeight(accidental)
-      )
-    : ACCIDENTAL_SYMBOL_HEIGHT[accidental];
+    ? Math.max(height, accidentalReminderParenHeight(accidental))
+    : height;
+}
+
+/** From the top of an accidental's box down to the pitch it alters (px). */
+export function accidentalPitchOffset(accidental: AccidentalType): number {
+  const base = baseAccidental(accidental);
+  return ACCIDENTAL_SYMBOL_HEIGHT[base] * ACCIDENTAL_PITCH_RATIO[base];
+}
+
+/**
+ * The middle of a reminder's parentheses, from the top of its glyph's box.
+ * Around a flat they sit between the glyph's middle and its bowl's.
+ */
+export function accidentalReminderParenCenter(
+  accidental: AccidentalType
+): number {
+  const { above, below } = accidentalArrowOverhangs(accidental);
+  const inkCenter = (accidentalSymbolHeight(accidental) - above + below) / 2;
+  return quarterToneOf(accidental) === null
+    ? (inkCenter + accidentalPitchOffset(accidental)) / 2
+    : inkCenter;
+}
+
+/** How far (px) an accidental's ink reaches above and below its pitch. */
+export function accidentalVerticalExtent(
+  accidental: AccidentalType,
+  parenthesized = false
+): { above: number; below: number } {
+  const pitch = accidentalPitchOffset(accidental);
+  const arrow = accidentalArrowOverhangs(accidental);
+  const above = pitch + arrow.above;
+  const below = accidentalSymbolHeight(accidental) - pitch + arrow.below;
+  if (!parenthesized) {
+    return { above, below };
+  }
+  const parenCenter = accidentalReminderParenCenter(accidental) - pitch;
+  const parenHalfHeight = accidentalReminderParenHeight(accidental) / 2;
+  return {
+    above: Math.max(above, parenHalfHeight - parenCenter),
+    below: Math.max(below, parenHalfHeight + parenCenter),
+  };
+}
+
+/**
+ * The box of an accidental's ink, arrow and parentheses included, for a glyph
+ * whose own box starts at `left` and whose pitch is at `pitchY`.
+ */
+export function accidentalInkRect(
+  accidental: AccidentalType,
+  left: number,
+  pitchY: number,
+  { parenthesized = false, scale = 1 } = {}
+): ObstacleRect {
+  const { above, below } = accidentalVerticalExtent(accidental, parenthesized);
+  const arrow = accidentalArrowOverhangs(accidental);
+  const width = accidentalSymbolWidth(accidental, parenthesized);
+  return {
+    left: left - (parenthesized ? 0 : arrow.left * scale),
+    right: left + (width + (parenthesized ? 0 : arrow.right)) * scale,
+    top: pitchY - above * scale,
+    bottom: pitchY + below * scale,
+  };
 }
 
 // A reminder shows the accidental already in force, in parentheses: the
@@ -359,6 +561,12 @@ export function resolveAccidental(
 
 const COLUMN_GAP = 2;
 
+// A sixth: closer than that, the higher accidental keeps the nearer column.
+const FLAT_MIN_CLEARANCE_PX = STAFF_LINE_SPACING * 2.5;
+
+// Keeps a flat's stem from joining up with the accidental above it.
+const FLAT_INK_GAP_PX = STAFF_LINE_SPACING * 0.1;
+
 export type AccidentalPlacementInput = {
   noteIndex: number;
   accidental: AccidentalType;
@@ -372,23 +580,65 @@ export type AccidentalPlacement = AccidentalPlacementInput & {
 };
 
 function hasVerticalStrokes(type: AccidentalType): boolean {
-  return type === 'sharp' || type === 'natural';
+  const base = baseAccidental(type);
+  return base === 'sharp' || base === 'natural';
+}
+
+function isFlat(type: AccidentalType): boolean {
+  const base = baseAccidental(type);
+  return base === 'flat' || base === 'double-flat';
+}
+
+// A flat reaches much further up than down, so what it clears depends on
+// which of the two is higher.
+function flatVerticalClearance(
+  upper: AccidentalPlacementInput,
+  lower: AccidentalPlacementInput
+): number {
+  const upperBelow = accidentalVerticalExtent(
+    upper.accidental,
+    upper.parenthesized
+  ).below;
+  const lowerAbove = accidentalVerticalExtent(
+    lower.accidental,
+    lower.parenthesized
+  ).above;
+  const inset =
+    isFlat(lower.accidental) &&
+    upper.accidental === 'natural' &&
+    !upper.parenthesized
+      ? NATURAL_LEFT_STROKE_INSET_PX
+      : 0;
+  return Math.max(
+    FLAT_MIN_CLEARANCE_PX,
+    upperBelow + lowerAbove - inset + FLAT_INK_GAP_PX
+  );
 }
 
 function minVerticalClearance(
-  a: AccidentalType,
-  b: AccidentalType,
-  aParenthesized = false,
-  bParenthesized = false
+  a: AccidentalPlacementInput,
+  b: AccidentalPlacementInput
 ): number {
-  if (hasVerticalStrokes(a) || hasVerticalStrokes(b)) {
+  const [upper, lower] = a.yPixel <= b.yPixel ? [a, b] : [b, a];
+  if (isFlat(upper.accidental) || isFlat(lower.accidental)) {
+    return flatVerticalClearance(upper, lower);
+  }
+  // Arrows that point at each other need room on top of the glyphs' own.
+  const facingArrows =
+    accidentalArrowOverhangs(upper.accidental).below +
+    accidentalArrowOverhangs(lower.accidental).above;
+  if (
+    hasVerticalStrokes(upper.accidental) ||
+    hasVerticalStrokes(lower.accidental)
+  ) {
     // Vertical strokes must not join — require clearance just over a sixth (~25px).
-    return 26;
+    return 26 + facingArrows;
   }
   return (
-    (accidentalSymbolHeight(a, aParenthesized) +
-      accidentalSymbolHeight(b, bParenthesized)) /
-    2
+    (accidentalSymbolHeight(upper.accidental, upper.parenthesized) +
+      accidentalSymbolHeight(lower.accidental, lower.parenthesized)) /
+      2 +
+    facingArrows
   );
 }
 
@@ -431,12 +681,7 @@ export function computeChordAccidentalPlacements(
       const fits = columns[col].every(
         (existing) =>
           Math.abs(existing.yPixel - item.yPixel) >=
-          minVerticalClearance(
-            existing.accidental,
-            item.accidental,
-            existing.parenthesized,
-            item.parenthesized
-          )
+          minVerticalClearance(existing, item)
       );
       if (fits) {
         assignedColumn = col;
@@ -457,7 +702,7 @@ export function computeChordAccidentalPlacements(
   const columnWidths = columns.map(
     (col) =>
       Math.max(
-        ...col.map((i) => accidentalSymbolWidth(i.accidental, i.parenthesized))
+        ...col.map((i) => accidentalReach(i.accidental, i.parenthesized))
       ) + COLUMN_GAP
   );
   const cumulativeX: number[] = [];
@@ -508,6 +753,13 @@ export function totalChordAccidentalWidth(
     return 0;
   }
   return (
-    Math.min(...placements.map((p) => p.xOffset)) * -1 + ACCIDENTAL_NOTE_GAP
+    Math.max(
+      ...placements.map(
+        (p) =>
+          -p.xOffset +
+          accidentalReach(p.accidental, p.parenthesized) -
+          accidentalSymbolWidth(p.accidental, p.parenthesized)
+      )
+    ) + ACCIDENTAL_NOTE_GAP
   );
 }

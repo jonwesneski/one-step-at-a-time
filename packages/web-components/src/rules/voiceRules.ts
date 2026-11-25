@@ -1,6 +1,5 @@
 import { VoiceNumber } from '../types/theory';
 import {
-  ACCIDENTAL_SYMBOL_WIDTH,
   AUGMENTATION_DOT_SPACING_GAP_PX,
   CROSSED_VOICE_CLEARANCE_PX,
   STAFF_Y_STEP,
@@ -9,6 +8,7 @@ import {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
   OPPOSITE_STEM_ALIGN_OFFSET_PX,
 } from '../utils/svgCreator/note';
+import { accidentalReach as accidentalReachPx } from './accidentalRules';
 import {
   resolveChordDotStaffYs,
   resolveNoteDotStaffY,
@@ -210,9 +210,7 @@ export function computeCrossVoiceDisplacements(
     )?.rowStaffYs ?? [];
   const accidentalReach = (input: UnisonPartInput): number =>
     input.accidentalReachPx ??
-    (input.shownAccidental
-      ? ACCIDENTAL_SYMBOL_WIDTH[input.shownAccidental]
-      : 0);
+    (input.shownAccidental ? accidentalReachPx(input.shownAccidental) : 0);
   const dotsFollowGroup = (placement: VoiceNoteheadPlacement): boolean =>
     dotShifts.has(placement);
   const addOffset = (placement: VoiceNoteheadPlacement, offset: number) => {

@@ -6747,3 +6747,128 @@ test.describe(`${MUSIC_MEASURE} mid-bar clef changes across staves`, () => {
     });
   });
 });
+
+test.describe(`${MUSIC_MEASURE} swells and hairpins on the same note`, () => {
+  // Two staves; `top` and `bottom` are each staff's notes.
+  async function render(
+    page: Page,
+    top: string,
+    bottom: string
+  ): Promise<void> {
+    await page.goto('./');
+    await page.evaluate(
+      ([topNotes, bottomNotes]) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = '700px';
+        host.innerHTML = `<music-measure time="4/4">
+          <music-staff clef="treble" group="grand">${topNotes}</music-staff>
+          <music-staff clef="bass">${bottomNotes}</music-staff>
+        </music-measure>`;
+      },
+      [top, bottom]
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  const half = (id: string, octave: number, extra = '') =>
+    `<music-note id="${id}" note="C" octave="${octave}" duration="half" ${extra}></music-note>`;
+
+  const sharedHairpins = (page: Page) =>
+    page.evaluate(
+      () =>
+        document
+          .querySelector('music-measure')
+          ?.shadowRoot?.querySelectorAll('.shared-dynamics-overlay .hairpin')
+          .length
+    );
+
+  const measureSwells = (page: Page) =>
+    page.evaluate(() =>
+      Array.from(document.querySelectorAll('music-staff')).map(
+        (staff) =>
+          (
+            staff as unknown as {
+              hairpinDefaultsForMeasure(): { swells: unknown[] };
+            }
+          ).hairpinDefaultsForMeasure().swells.length
+      )
+    );
+
+  async function setAttributes(
+    page: Page,
+    id: string,
+    attributes: Record<string, string | null>
+  ): Promise<void> {
+    await page.evaluate(
+      ([elementId, values]) => {
+        const element = document.getElementById(elementId);
+        for (const [name, value] of Object.entries(values)) {
+          if (value === null) {
+            element?.removeAttribute(name);
+          } else {
+            element?.setAttribute(name, value);
+          }
+        }
+      },
+      [id, attributes] as const
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test('a shared hairpin wins over a swell on its notes, which draws once the hairpin goes', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      half('a', 5, 'dynamic-shared crescendo="start"') +
+        half('b', 5, 'dynamic-shared crescendo="end"'),
+      half('c', 3) + half('d', 3)
+    );
+    expect(await sharedHairpins(page)).toBe(1);
+
+    await setAttributes(page, 'a', { swell: '' });
+    expect(await sharedHairpins(page)).toBe(1);
+
+    await setAttributes(page, 'b', { crescendo: null });
+    await setAttributes(page, 'a', { crescendo: null });
+    expect(await sharedHairpins(page)).toBe(2);
+  });
+
+  test('a shared hairpin ending on the other staff wins over a swell on either end', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      half('a', 5, 'dynamic-shared crescendo="start"') + half('b', 5),
+      half('c', 3) + half('d', 3, 'dynamic-shared crescendo="end"')
+    );
+    expect(await sharedHairpins(page)).toBe(1);
+
+    await setAttributes(page, 'a', { swell: '' });
+    await setAttributes(page, 'd', { swell: '' });
+    expect(await sharedHairpins(page)).toBe(1);
+  });
+
+  test('a staff hands the measure no swell a hairpin of its own starts, ends or runs over', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      half('a', 5, 'crescendo="start"') + half('b', 5, 'crescendo="end"'),
+      half('c', 3) + half('d', 3)
+    );
+    await setAttributes(page, 'a', { swell: '' });
+    await setAttributes(page, 'b', { swell: '' });
+    await setAttributes(page, 'c', { swell: '' });
+    expect(await measureSwells(page)).toEqual([0, 1]);
+
+    await setAttributes(page, 'b', { crescendo: null });
+    await setAttributes(page, 'a', { crescendo: null });
+    expect(await measureSwells(page)).toEqual([2, 1]);
+  });
+});

@@ -1,11 +1,11 @@
 import type {
-  AccidentalType,
   ArpeggioType,
   ArticulationType,
   BarlineType,
   BaseDurationType,
   BreathMark,
   ClefType,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
@@ -24,6 +24,7 @@ import type {
   OctaveDisplayMode,
   OctaveShiftAmount,
   PercussionInstrument,
+  QuarterTone,
   RestStaffSide,
   SlurStyle,
   StaffGroupType,
@@ -501,13 +502,15 @@ export const TRILL_FINISH_SLURS: TrillFinishSlur[] = [
   'both',
 ];
 
-export const ACCIDENTAL_TYPES: AccidentalType[] = [
+export const ACCIDENTAL_TYPES: ConventionalAccidentalType[] = [
   'sharp',
   'flat',
   'natural',
   'double-sharp',
   'double-flat',
 ];
+
+export const QUARTER_TONES: QuarterTone[] = ['up', 'down'];
 
 export const CLEFS: ClefType[] = ['treble', 'bass'];
 

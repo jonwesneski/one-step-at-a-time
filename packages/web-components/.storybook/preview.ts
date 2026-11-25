@@ -45,6 +45,7 @@ const preview: Preview = {
             'Octave Signs',
             'Clef Changes',
             'Key Changes',
+            'Quarter-Tones',
             'Repeats',
             'Beams',
             'Voices',

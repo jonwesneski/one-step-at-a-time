@@ -736,4 +736,16 @@ describe('swellConflicts', () => {
     const pairs = pairHairpins(elements, makeXPositions(4));
     expect(swellConflicts(elements, pairs)).toEqual([elements[0], elements[1]]);
   });
+
+  it('counts a hairpin end whose partner is outside the elements', () => {
+    const elements = makeElements([
+      { swell: '' },
+      { crescendo: 'start', swell: '' },
+    ]);
+    const element = elements[1] as NoteElementType;
+    expect(swellConflicts(elements, [])).toEqual([]);
+    expect(
+      swellConflicts(elements, [], [{ kind: 'crescendo', element, index: 1 }])
+    ).toEqual([element]);
+  });
 });

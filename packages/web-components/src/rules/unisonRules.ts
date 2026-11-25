@@ -1,13 +1,18 @@
 import type {
   AccidentalType,
   BaseDurationType,
+  ConventionalAccidentalType,
   VoiceNumber,
 } from '../types/theory';
 import {
-  ACCIDENTAL_SYMBOL_WIDTH,
   AUGMENTATION_DOT_SPACING_GAP_PX,
   UNISON_STEM_CLEARANCE_PX,
 } from '../utils/notationDimensions';
+import {
+  accidentalReach,
+  baseAccidental,
+  quarterToneOf,
+} from './accidentalRules';
 import type { NoteheadGlyph } from './noteheadRules';
 import { isOpenDuration, isStemlessDuration } from './theoryConsts';
 import type { VoiceDirection, VoicePartGeometry } from './voiceRules';
@@ -59,7 +64,7 @@ export type UnisonPartInput = UnisonPartDescriptor & {
 
 const accidentalReachOf = (part: UnisonPartInput): number =>
   part.accidentalReachPx ??
-  (part.shownAccidental ? ACCIDENTAL_SYMBOL_WIDTH[part.shownAccidental] : 0);
+  (part.shownAccidental ? accidentalReach(part.shownAccidental) : 0);
 
 const hasAccidentalShown = (part: UnisonPartInput): boolean =>
   accidentalReachOf(part) > 0;
@@ -185,7 +190,7 @@ export function resolveUnisonPair(
 }
 
 // Ascending chromatic order, flat to sharp; no accidental ranks as natural.
-const ACCIDENTAL_RANK: Record<AccidentalType, number> = {
+const ACCIDENTAL_RANK: Record<ConventionalAccidentalType, number> = {
   'double-flat': -2,
   flat: -1,
   natural: 0,
@@ -193,8 +198,14 @@ const ACCIDENTAL_RANK: Record<AccidentalType, number> = {
   'double-sharp': 2,
 };
 
+/** In semitones, a quarter-tone counting half. */
 export function accidentalChromaticRank(type: AccidentalType | null): number {
-  return type === null ? 0 : ACCIDENTAL_RANK[type];
+  if (type === null) {
+    return 0;
+  }
+  const quarterTone = quarterToneOf(type);
+  const arrow = quarterTone === null ? 0 : quarterTone === 'up' ? 0.5 : -0.5;
+  return ACCIDENTAL_RANK[baseAccidental(type)] + arrow;
 }
 
 export type UnisonPartRef = { voiceNumber: VoiceNumber; localIndex: number };

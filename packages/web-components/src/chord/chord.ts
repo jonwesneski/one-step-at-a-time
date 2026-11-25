@@ -1,3 +1,4 @@
+import { pitchAccidental } from '../rules/accidentalRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
 import {
   applyGraceHeadOverhangs,
@@ -27,6 +28,7 @@ import type {
   GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
+  GraceQuarterTonesType,
   IChordElement,
   NoteElementType,
   NoteLetterOctave,
@@ -38,6 +40,7 @@ import type {
   ArticulationType,
   BreathMark,
   Chord,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   GlissandoHint,
@@ -53,6 +56,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  QuarterTone,
   SlurStyle,
   StemDirection,
   StressType,
@@ -85,6 +89,7 @@ import {
   parseGraceNoteheads,
   parseGraceNotes,
   parseGraceOctaves,
+  parseGraceQuarterTones,
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
@@ -92,6 +97,7 @@ import {
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
+  parseQuarterTone,
   parseSlurStyle,
   parseStemDirection,
   parseStress,
@@ -159,6 +165,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
  * @attr {string} grace - Comma-separated grace-note pitches preceding the chord, e.g. `"F#,G"`. The property also accepts a `Note[]`.
  * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} grace-quarter-tone - Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `"up,,down"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`.
  * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`. The property also accepts an `(ArticulationType | null)[]`.
  * @attr {'acciaccatura' | 'appoggiatura' | 'trill'} grace-type - Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.
  * @attr {GraceDuration} grace-duration - Note value drawn for the grace notes.
@@ -167,11 +174,13 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord.
  * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
  * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
- * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
+ * @attr {ConventionalAccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
  * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
+ * @attr {QuarterTone} trill-quarter-tone - `up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor.
  * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the trill.
  * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this chord (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
  * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} trill-finish-quarter-tone - Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`.
  * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
  * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this chord: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone chord).
  * @attr {OctaveDisplayMode} octave-mode - Set on the chord that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
@@ -217,6 +226,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'dynamic-shared',
       'dynamic-reminder',
       'accidental-reminder',
+      'quarter-tone',
       'crescendo',
       'decrescendo',
       'diminuendo',
@@ -230,6 +240,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'arpeggiate',
       'grace',
       'grace-octave',
+      'grace-quarter-tone',
       'grace-articulation',
       'grace-type',
       'grace-duration',
@@ -240,9 +251,11 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'trill-stop',
       'trill-accidental',
       'trill-note',
+      'trill-quarter-tone',
       'trill-continuation',
       'trill-finish',
       'trill-finish-octave',
+      'trill-finish-quarter-tone',
       'trill-finish-slur',
       'octave-shift',
       'octave-mode',
@@ -471,6 +484,13 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         ((noteElements[i] as NoteElementType | undefined)?.accidentalReminder ??
           false)
     );
+  }
+
+  get toneQuarterTones(): (QuarterTone | null)[] {
+    const noteElements: NoteElementType[] = Array.from(
+      this.querySelectorAll(this.childNoteTag)
+    );
+    return this.notes.map((_, i) => noteElements[i]?.quarterTone ?? null);
   }
 
   get tie(): TieValue | null {
@@ -1007,10 +1027,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   // Overrides only the accidental of the trilling (auxiliary) pitch —
   // normally the diatonic upper neighbor as modified by the key signature.
   // Ignored (with a warning) when trill-note is also set.
-  get trillAccidental(): AccidentalType | null {
+  get trillAccidental(): ConventionalAccidentalType | null {
     return parseAccidentalType(this.readAttribute('trill-accidental'));
   }
-  set trillAccidental(value: AccidentalType | null) {
+  set trillAccidental(value: ConventionalAccidentalType | null) {
     if (value === null) {
       this.removeAttribute('trill-accidental');
     } else {
@@ -1029,6 +1049,19 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('trill-note');
     } else {
       this.setAttribute('trill-note', value);
+    }
+  }
+
+  // Applies to the trilling pitch wherever it comes from: trill-note,
+  // trill-accidental or the diatonic neighbor.
+  get trillQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('trill-quarter-tone'));
+  }
+  set trillQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('trill-quarter-tone');
+    } else {
+      this.setAttribute('trill-quarter-tone', value);
     }
   }
 
@@ -1074,6 +1107,18 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('grace-octave');
     } else {
       this.setAttribute('grace-octave', attr);
+    }
+  }
+
+  get graceQuarterTone(): (QuarterTone | null)[] | null {
+    return parseGraceQuarterTones(this.readAttribute('grace-quarter-tone'));
+  }
+  set graceQuarterTone(value: GraceQuarterTonesType) {
+    const attr = graceListToAttr(value, parseGraceQuarterTones);
+    if (attr === null) {
+      this.removeAttribute('grace-quarter-tone');
+    } else {
+      this.setAttribute('grace-quarter-tone', attr);
     }
   }
 
@@ -1184,6 +1229,20 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('trill-finish-octave');
     } else {
       this.setAttribute('trill-finish-octave', attr);
+    }
+  }
+
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null {
+    return parseGraceQuarterTones(
+      this.readAttribute('trill-finish-quarter-tone')
+    );
+  }
+  set trillFinishQuarterTone(value: GraceQuarterTonesType) {
+    const attr = graceListToAttr(value, parseGraceQuarterTones);
+    if (attr === null) {
+      this.removeAttribute('trill-finish-quarter-tone');
+    } else {
+      this.setAttribute('trill-finish-quarter-tone', attr);
     }
   }
 
@@ -1311,7 +1370,12 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['notehead', 'instrument', 'accidental-reminder'],
+      attributeFilter: [
+        'notehead',
+        'instrument',
+        'accidental-reminder',
+        'quarter-tone',
+      ],
     });
   }
 
@@ -1331,6 +1395,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
     if (name === 'duration') {
       warnIfInvalidDuration(this.localName, newValue);
+    }
+
+    if (name === 'quarter-tone') {
+      if (this.readAttribute(name) !== null) {
+        console.warn(
+          `[music-chord] quarter-tone does nothing on a chord; set it on the slotted notes it raises or lowers`
+        );
+      }
+      return;
     }
 
     // `diminuendo` is rewritten to `decrescendo`, even before connecting.
@@ -1536,6 +1609,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'arpeggiate' ||
       name === 'grace' ||
       name === 'grace-octave' ||
+      name === 'grace-quarter-tone' ||
       name === 'grace-articulation' ||
       name === 'grace-notehead' ||
       name === 'notehead' ||
@@ -1543,8 +1617,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'grace-duration' ||
       name === 'grace-slur' ||
       name === 'trill-note' ||
+      name === 'trill-quarter-tone' ||
       name === 'trill-finish' ||
       name === 'trill-finish-octave' ||
+      name === 'trill-finish-quarter-tone' ||
       name === 'trill-finish-slur' ||
       name === 'duration' ||
       name === 'tremolo' ||
@@ -1901,7 +1977,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       notes[0].value[0] as NoteLetter,
       notes[0].octave ?? 4,
       this.graceArticulation ?? [],
-      this.graceNotehead
+      this.graceNotehead,
+      this.graceQuarterTone
     );
     applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
     applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
@@ -1921,7 +1998,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       trillFinishLetters,
       this.trillFinishOctave ?? [],
       notes[0].value[0] as NoteLetter,
-      notes[0].octave ?? 4
+      notes[0].octave ?? 4,
+      [],
+      null,
+      this.trillFinishQuarterTone
     );
     applyResolvedGraceAccidentals(
       trillFinishNotes,
@@ -1964,14 +2044,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   }
 
   #resolveStandaloneNoteAccidentals(): (AccidentalType | null | undefined)[] {
-    return this.notes.map((note) => {
-      if (note.value.includes('#')) {
-        return 'sharp';
-      } else if (note.value.length > 1 && note.value[1] === 'b') {
-        return 'flat';
-      }
-      return null;
-    });
+    const quarterTones = this.toneQuarterTones;
+    return this.notes.map((note, i) =>
+      pitchAccidental(note.value, quarterTones[i])
+    );
   }
 }
 

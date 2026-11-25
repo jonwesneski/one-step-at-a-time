@@ -8,6 +8,7 @@ import type {
   BreathMark,
   Chord,
   ClefType,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   GlissandoHint,
@@ -25,6 +26,7 @@ import type {
   OctaveDisplayMode,
   OctaveShiftAmount,
   PercussionInstrument,
+  QuarterTone,
   RestStaffSide,
   SlurStyle,
   StaffGroupType,
@@ -67,6 +69,7 @@ export type GraceArticulationsType =
   | string
   | null;
 export type GraceNoteheadsType = (NoteheadType | null)[] | string | null;
+export type GraceQuarterTonesType = (QuarterTone | null)[] | string | null;
 
 // A note's role in a unison with another voice (see rules/unisonRules.ts).
 export type UnisonPart = {
@@ -77,6 +80,9 @@ export type UnisonPart = {
 export interface INoteElement {
   duration: DurationType;
   note: Note;
+  // Raises or lowers `note` by a quarter-tone, drawn as an arrow on its
+  // accidental; null for an ordinary pitch.
+  quarterTone: QuarterTone | null;
   octave: Octave | null;
   stemUp: boolean;
   // Author override for stemUp; null leaves the pitch, voice or beam-group
@@ -200,10 +206,13 @@ export interface INoteElement {
   // normally the diatonic upper neighbor as modified by the key signature.
   // Never changes the letter itself. Ignored (with a warning) when
   // `trillNote` is also set.
-  trillAccidental: AccidentalType | null;
+  trillAccidental: ConventionalAccidentalType | null;
   // Full override of the trilling pitch, drawn as a small parenthesized
   // notehead after the main one. Wins over `trillAccidental`.
   trillNote: Note | null;
+  // Raises or lowers the trilling pitch by a quarter-tone, whether it comes
+  // from `trillNote`, `trillAccidental` or the diatonic neighbor.
+  trillQuarterTone: QuarterTone | null;
   // How a trill restates itself after a system break; read from the element
   // that starts the trill.
   trillContinuation: TrillContinuationMode;
@@ -222,6 +231,10 @@ export interface INoteElement {
   // missing trailing slot) falls back to the host element's own octave.
   get graceOctave(): (Octave | null)[] | null;
   set graceOctave(value: GraceOctavesType);
+  // Per-grace-note quarter-tone, aligned by index with `grace`. A null slot
+  // (or a missing trailing slot) is an ordinary pitch.
+  get graceQuarterTone(): (QuarterTone | null)[] | null;
+  set graceQuarterTone(value: GraceQuarterTonesType);
   // Per-grace-note articulation, aligned by index with `grace`. A null slot
   // (or a missing trailing slot) means no mark for that grace note.
   get graceArticulation(): (ArticulationType | null)[] | null;
@@ -251,6 +264,9 @@ export interface INoteElement {
   // shape and fallback behavior as `graceOctave`.
   get trillFinishOctave(): (Octave | null)[] | null;
   set trillFinishOctave(value: GraceOctavesType);
+  // Per-trill-finish-note quarter-tone, aligned by index with `trillFinish`.
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null;
+  set trillFinishQuarterTone(value: GraceQuarterTonesType);
   // Which slur(s) a trill's finishing grace note(s) draw: back to this
   // element ('to-main', default), forward to the next element ('to-next'),
   // 'both', or 'none'.
@@ -345,6 +361,8 @@ export interface IChordElement {
   noteAccidentals: (AccidentalType | null | undefined)[];
   /** Set by the staff: per tone, the shown accidental is a reminder. */
   noteAccidentalsParenthesized: boolean[];
+  /** Per tone, in `notes` order: a slotted note's own `quarter-tone`. */
+  readonly toneQuarterTones: (QuarterTone | null)[];
   /** Per tone: the chord's `accidental-reminder`, or the tone's own. */
   readonly toneAccidentalReminders: boolean[];
   tie: TieValue | null;
@@ -411,10 +429,13 @@ export interface IChordElement {
   // normally the diatonic upper neighbor as modified by the key signature.
   // Never changes the letter itself. Ignored (with a warning) when
   // `trillNote` is also set.
-  trillAccidental: AccidentalType | null;
+  trillAccidental: ConventionalAccidentalType | null;
   // Full override of the trilling pitch, drawn as a small parenthesized
   // notehead after the main one. Wins over `trillAccidental`.
   trillNote: Note | null;
+  // Raises or lowers the trilling pitch by a quarter-tone, whether it comes
+  // from `trillNote`, `trillAccidental` or the diatonic neighbor.
+  trillQuarterTone: QuarterTone | null;
   // How a trill restates itself after a system break; read from the element
   // that starts the trill.
   trillContinuation: TrillContinuationMode;
@@ -433,6 +454,10 @@ export interface IChordElement {
   // missing trailing slot) falls back to the host element's reference octave.
   get graceOctave(): (Octave | null)[] | null;
   set graceOctave(value: GraceOctavesType);
+  // Per-grace-note quarter-tone, aligned by index with `grace`. A null slot
+  // (or a missing trailing slot) is an ordinary pitch.
+  get graceQuarterTone(): (QuarterTone | null)[] | null;
+  set graceQuarterTone(value: GraceQuarterTonesType);
   // Per-grace-note articulation, aligned by index with `grace`. A null slot
   // (or a missing trailing slot) means no mark for that grace note.
   get graceArticulation(): (ArticulationType | null)[] | null;
@@ -462,6 +487,9 @@ export interface IChordElement {
   // shape and fallback behavior as `graceOctave`.
   get trillFinishOctave(): (Octave | null)[] | null;
   set trillFinishOctave(value: GraceOctavesType);
+  // Per-trill-finish-note quarter-tone, aligned by index with `trillFinish`.
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null;
+  set trillFinishQuarterTone(value: GraceQuarterTonesType);
   // Which slur(s) a trill's finishing grace note(s) draw: back to this
   // element ('to-main', default), forward to the next element ('to-next'),
   // 'both', or 'none'.

@@ -312,6 +312,25 @@ describe('accidentalChromaticRank', () => {
       accidentalChromaticRank('natural')
     );
   });
+
+  it('puts quarter-tones between their neighbors', () => {
+    const ascending: AccidentalType[] = [
+      'double-flat-down',
+      'double-flat',
+      'double-flat-up',
+      'flat',
+      'flat-up',
+      'natural',
+      'natural-up',
+      'sharp',
+      'sharp-up',
+      'double-sharp',
+      'double-sharp-up',
+    ];
+    const ranks = ascending.map(accidentalChromaticRank);
+    expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+    expect(new Set(ranks).size).toBe(ranks.length);
+  });
 });
 
 describe('resolveStemlessClusters', () => {

@@ -1,4 +1,10 @@
-import { parseEnding, parseEndingNumbering } from './parsers';
+import {
+  parseAccidentalType,
+  parseEnding,
+  parseEndingNumbering,
+  parseGraceQuarterTones,
+  parseQuarterTone,
+} from './parsers';
 
 describe('parseEnding', () => {
   it('reads comma-separated passes, sorted and de-duplicated', () => {
@@ -23,5 +29,25 @@ describe('parseEndingNumbering', () => {
     expect(parseEndingNumbering('consecutive')).toBe('consecutive');
     expect(parseEndingNumbering('letters')).toBeNull();
     expect(parseEndingNumbering(null)).toBeNull();
+  });
+});
+
+describe('quarter-tones', () => {
+  it('reads up and down only', () => {
+    expect(parseQuarterTone('up')).toBe('up');
+    expect(parseQuarterTone('down')).toBe('down');
+    expect(parseQuarterTone('sharp')).toBeNull();
+    expect(parseQuarterTone(null)).toBeNull();
+  });
+
+  it('reads one slot per grace note', () => {
+    expect(parseGraceQuarterTones('up,,down')).toEqual(['up', null, 'down']);
+    expect(parseGraceQuarterTones(' up , x')).toEqual(['up', null]);
+    expect(parseGraceQuarterTones(null)).toBeNull();
+  });
+
+  it('keeps arrows out of an authored accidental', () => {
+    expect(parseAccidentalType('sharp')).toBe('sharp');
+    expect(parseAccidentalType('sharp-up')).toBeNull();
   });
 });

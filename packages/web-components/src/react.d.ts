@@ -5,7 +5,6 @@
  *   /// <reference types="@one-step-at-a-time/web-components/react" />
  */
 import type {
-  AccidentalType,
   ArpeggioType,
   ArticulationType,
   BarlineType,
@@ -13,6 +12,7 @@ import type {
   Chord,
   ClefType,
   ConnectorRole,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
@@ -22,6 +22,7 @@ import type {
   GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
+  GraceQuarterTonesType,
   GraceSlur,
   GraceType,
   GuitarFret,
@@ -37,6 +38,7 @@ import type {
   OctaveDisplayMode,
   OctaveShiftAmount,
   PercussionInstrument,
+  QuarterTone,
   RestStaffSide,
   SlurStyle,
   StaffGroupType,
@@ -220,6 +222,7 @@ declare module 'react' {
         arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
+        'grace-quarter-tone'?: GraceQuarterTonesType;
         'grace-articulation'?: GraceArticulationsType;
         'grace-notehead'?: GraceNoteheadsType;
         'grace-type'?: GraceType;
@@ -229,11 +232,13 @@ declare module 'react' {
         trill?: boolean;
         'trill-line'?: TrillLineMode;
         'trill-stop'?: boolean;
-        'trill-accidental'?: AccidentalType;
+        'trill-accidental'?: ConventionalAccidentalType;
+        'trill-quarter-tone'?: QuarterTone;
         'trill-note'?: Note;
         'trill-continuation'?: TrillContinuationMode;
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
+        'trill-finish-quarter-tone'?: GraceQuarterTonesType;
         'trill-finish-slur'?: TrillFinishSlur;
         'octave-shift'?: OctaveShiftAmount;
         'octave-mode'?: OctaveDisplayMode;
@@ -262,6 +267,7 @@ declare module 'react' {
       'music-drum-chord': WebComponentProps & DrumNotationProps;
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
+        'quarter-tone'?: QuarterTone;
         duration?: DurationType;
         octave?: Octave;
         tie?: TieValue;
@@ -287,6 +293,7 @@ declare module 'react' {
         arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
+        'grace-quarter-tone'?: GraceQuarterTonesType;
         'grace-articulation'?: GraceArticulationsType;
         'grace-notehead'?: GraceNoteheadsType;
         'grace-type'?: GraceType;
@@ -296,11 +303,13 @@ declare module 'react' {
         trill?: boolean;
         'trill-line'?: TrillLineMode;
         'trill-stop'?: boolean;
-        'trill-accidental'?: AccidentalType;
+        'trill-accidental'?: ConventionalAccidentalType;
+        'trill-quarter-tone'?: QuarterTone;
         'trill-note'?: Note;
         'trill-continuation'?: TrillContinuationMode;
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
+        'trill-finish-quarter-tone'?: GraceQuarterTonesType;
         'trill-finish-slur'?: TrillFinishSlur;
         'octave-shift'?: OctaveShiftAmount;
         'octave-mode'?: OctaveDisplayMode;

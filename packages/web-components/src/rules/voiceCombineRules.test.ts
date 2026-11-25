@@ -384,6 +384,26 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('excludes a quarter-tone, on a note or a chord tone', () => {
+    const arrowed = note('E', 4);
+    arrowed.setAttribute('quarter-tone', 'up');
+    const tones = chord([
+      ['E', 4],
+      ['G', 4],
+    ]);
+    const combinable = (element: NoteElementType | ChordElementType) =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([note('C', 4)], [0])],
+          [2, voiceInput([element], [0])],
+        ])
+      ).length;
+    expect(combinable(arrowed)).toBe(0);
+    expect(combinable(tones)).toBe(1);
+    tones.querySelector('music-note')?.setAttribute('quarter-tone', 'down');
+    expect(combinable(tones)).toBe(0);
+  });
+
   it('excludes a glissando-anchored note from combining, since the synthetic chord would drop the anchor', () => {
     const v1Note = note('C', 4);
     const v2Note = note('E', 4);

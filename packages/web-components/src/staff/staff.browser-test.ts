@@ -1983,3 +1983,59 @@ test.describe(`${MUSIC_STAFF} glissando`, () => {
     expect(result.textBottom).toBeLessThan(result.lineYAtTextRight);
   });
 });
+
+test.describe('quarter-tone arrows under a beam', () => {
+  test('the beam rises to clear an arrow and returns without it', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.style.width = '600px';
+      host.innerHTML = `<music-staff clef="treble">
+        <music-note note="F" octave="4" duration="sixteenth"></music-note>
+        <music-note note="G" octave="4" duration="sixteenth"></music-note>
+        <music-note note="Ab" octave="4" duration="sixteenth"></music-note>
+        <music-note note="B" octave="4" duration="sixteenth"></music-note>
+      </music-staff>`;
+    });
+    await waitForRedrawCycle(page);
+
+    const overlapAfter = async (quarterTone: 'up' | null) => {
+      await page.evaluate((value) => {
+        const note = document.querySelectorAll('music-note')[2] as Element & {
+          quarterTone: 'up' | null;
+        };
+        note.quarterTone = value;
+      }, quarterTone);
+      await waitForRedrawCycle(page);
+      return page.evaluate(() => {
+        const staff = document.querySelector('music-staff');
+        const beams = Array.from(
+          staff?.shadowRoot?.querySelectorAll('.beams-container .beam') ?? []
+        ).map((beam) => beam.getBoundingClientRect());
+        const arrow = document
+          .querySelectorAll('music-note')[2]
+          .shadowRoot?.querySelector('.accidental-arrow path')
+          ?.getBoundingClientRect();
+        return {
+          beamTop: Math.min(...beams.map((beam) => beam.top)),
+          beamBottom: Math.max(...beams.map((beam) => beam.bottom)),
+          arrowTop: arrow?.top ?? null,
+        };
+      });
+    };
+
+    const plain = await overlapAfter(null);
+    expect(plain.arrowTop).toBeNull();
+
+    const arrowed = await overlapAfter('up');
+    expect(arrowed.beamTop).toBeLessThan(plain.beamTop);
+    expect(arrowed.beamBottom).toBeLessThanOrEqual(arrowed.arrowTop ?? 0);
+
+    const restored = await overlapAfter(null);
+    expect(restored).toEqual(plain);
+  });
+});

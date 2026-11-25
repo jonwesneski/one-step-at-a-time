@@ -21,6 +21,7 @@ import {
   computeGraceLayout,
   diatonicStepsBetween,
   rebaseGraceSteps,
+  resolveOrnamentSlur,
   type GraceNoteDescriptor,
 } from './graceRules';
 
@@ -133,6 +134,45 @@ describe('buildGraceNoteDescriptors', () => {
     const descriptors = buildGraceNoteDescriptors(['G', 'A'], [4, 4], 'C', 5);
     expect(descriptors[0].articulation).toBeNull();
     expect(descriptors[1].articulation).toBeNull();
+  });
+});
+
+describe('buildGraceNoteDescriptors with quarter-tones', () => {
+  it('arrows each slot that has one', () => {
+    const descriptors = buildGraceNoteDescriptors(
+      ['F#', 'G', 'A'],
+      [4, 4, 4],
+      'C',
+      5,
+      [],
+      null,
+      ['up', null, 'down']
+    );
+    expect(descriptors.map(({ accidental }) => accidental)).toEqual([
+      'sharp-up',
+      null,
+      'natural-down',
+    ]);
+  });
+
+  it('keeps the layout and the reserved width in step', () => {
+    const graceNotes: Note[] = ['Bb', 'Ab'];
+    const descriptors = buildGraceNoteDescriptors(
+      graceNotes,
+      [4, 4],
+      'C',
+      5,
+      [],
+      null,
+      ['up', 'down']
+    );
+    const resolved = descriptors.map(({ accidental }) => accidental);
+    expect(computeGraceFootprintWidth(graceNotes, resolved)).toBeCloseTo(
+      computeGraceLayout(descriptors).totalWidth + GRACE_MAIN_GAP_PX
+    );
+    expect(computeGraceFootprintWidth(graceNotes, resolved)).toBeGreaterThan(
+      computeGraceFootprintWidth(graceNotes, ['flat', 'flat'])
+    );
   });
 });
 
@@ -376,5 +416,68 @@ describe('rebaseGraceSteps', () => {
     expect(5 - graces[0].relativeStaffSteps * STAFF_Y_STEP).toBe(
       80 - 3 * STAFF_Y_STEP
     );
+  });
+});
+
+describe('resolveOrnamentSlur', () => {
+  const BASE = 9;
+  const base = () => BASE;
+  const from = { x: 0, y: 100 };
+  const to = { x: 40, y: 100 };
+  const arcY = (
+    shape: ReturnType<typeof resolveOrnamentSlur>,
+    side: 'above' | 'below',
+    x: number
+  ) => {
+    const t = (x - shape.from.x) / (shape.to.x - shape.from.x);
+    const chord = shape.from.y + (shape.to.y - shape.from.y) * t;
+    return (
+      chord + (side === 'below' ? 1 : -1) * 2 * t * (1 - t) * shape.bulgeHeight
+    );
+  };
+
+  it('keeps the plain arc when nothing is in its way', () => {
+    expect(resolveOrnamentSlur(from, to, 'below', base, [])).toEqual({
+      from,
+      to,
+      bulgeHeight: BASE,
+    });
+    const shallow = { left: 15, right: 25, top: 90, bottom: 101 };
+    expect(resolveOrnamentSlur(from, to, 'below', base, [shallow])).toEqual({
+      from,
+      to,
+      bulgeHeight: BASE,
+    });
+  });
+
+  it('bows past an obstacle without moving its ends', () => {
+    const obstacle = { left: 15, right: 25, top: 90, bottom: 108 };
+    const shape = resolveOrnamentSlur(from, to, 'below', base, [obstacle]);
+    expect(shape.from).toEqual(from);
+    expect(shape.to).toEqual(to);
+    expect(shape.bulgeHeight).toBeGreaterThan(BASE);
+    expect(arcY(shape, 'below', 15)).toBeGreaterThan(obstacle.bottom);
+  });
+
+  it('lifts an end beside a tall obstacle instead of bowing high', () => {
+    const arrow = { left: 24, right: 32, top: 72, bottom: 110 };
+    const shape = resolveOrnamentSlur(from, to, 'above', base, [arrow]);
+    expect(shape.to.y).toBeLessThan(to.y);
+    for (const x of [24, 28, 32]) {
+      expect(arcY(shape, 'above', x)).toBeLessThan(arrow.top);
+    }
+  });
+
+  it('moves an end out of the obstacle it would start inside', () => {
+    const obstacle = { left: -4, right: 4, top: 90, bottom: 106 };
+    const shape = resolveOrnamentSlur(from, to, 'below', base, [obstacle]);
+    expect(shape.from.y).toBeGreaterThan(obstacle.bottom);
+  });
+
+  it('ignores obstacles outside its ends', () => {
+    const beside = { left: -20, right: -8, top: 60, bottom: 140 };
+    expect(
+      resolveOrnamentSlur(from, to, 'below', base, [beside]).bulgeHeight
+    ).toBe(BASE);
   });
 });

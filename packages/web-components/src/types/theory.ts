@@ -31,13 +31,21 @@ export type Octave = 2 | 3 | 4 | 5 | 6;
 export type Sharp = '#';
 export type Flat = 'b';
 
-/** A drawn accidental glyph. */
-export type AccidentalType =
+/** An accidental without a quarter-tone arrow. */
+export type ConventionalAccidentalType =
   | 'sharp'
   | 'flat'
   | 'natural'
   | 'double-sharp'
   | 'double-flat';
+
+/** Raises or lowers a written pitch by a quarter-tone. */
+export type QuarterTone = 'up' | 'down';
+
+/** A drawn accidental glyph, with or without a quarter-tone arrow. */
+export type AccidentalType =
+  | ConventionalAccidentalType
+  | `${ConventionalAccidentalType}-${QuarterTone}`;
 
 /** Pitch letter `A`–`G` with an optional accidental suffix (`#`, `b`, `##`, `bb`). */
 export type Note =

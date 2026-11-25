@@ -585,6 +585,14 @@
             },
             {
               "kind": "field",
+              "name": "toneQuarterTones",
+              "type": {
+                "text": "(QuarterTone | null)[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
               "name": "tie",
               "type": {
                 "text": "TieValue | null"
@@ -923,7 +931,7 @@
               "kind": "field",
               "name": "trillAccidental",
               "type": {
-                "text": "AccidentalType | null"
+                "text": "ConventionalAccidentalType | null"
               }
             },
             {
@@ -931,6 +939,13 @@
               "name": "trillNote",
               "type": {
                 "text": "Note | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
               }
             },
             {
@@ -959,6 +974,13 @@
               "name": "graceOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               }
             },
             {
@@ -1030,6 +1052,13 @@
               "name": "trillFinishOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               }
             },
             {
@@ -1396,6 +1425,9 @@
               "description": "Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone."
             },
             {
+              "name": "quarter-tone"
+            },
+            {
               "name": "crescendo",
               "type": {
                 "text": "'start' | 'end'"
@@ -1487,6 +1519,13 @@
               "description": "Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`."
             },
             {
+              "name": "grace-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `\"up,,down\"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`."
+            },
+            {
               "name": "grace-articulation",
               "type": {
                 "text": "string"
@@ -1545,7 +1584,7 @@
             {
               "name": "trill-accidental",
               "type": {
-                "text": "AccidentalType"
+                "text": "ConventionalAccidentalType"
               },
               "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set."
             },
@@ -1555,6 +1594,13 @@
                 "text": "Note"
               },
               "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set."
+            },
+            {
+              "name": "trill-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor."
             },
             {
               "name": "trill-continuation",
@@ -1576,6 +1622,13 @@
                 "text": "string"
               },
               "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`."
+            },
+            {
+              "name": "trill-finish-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`."
             },
             {
               "name": "trill-finish-slur",
@@ -3030,6 +3083,18 @@
             },
             {
               "kind": "field",
+              "name": "toneQuarterTones",
+              "type": {
+                "text": "(QuarterTone | null)[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "tie",
               "type": {
                 "text": "TieValue | null"
@@ -3552,7 +3617,7 @@
               "kind": "field",
               "name": "trillAccidental",
               "type": {
-                "text": "AccidentalType | null"
+                "text": "ConventionalAccidentalType | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -3564,6 +3629,17 @@
               "name": "trillNote",
               "type": {
                 "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -3608,6 +3684,17 @@
               "name": "graceOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -3719,6 +3806,17 @@
               "name": "trillFinishOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -4399,6 +4497,13 @@
               }
             },
             {
+              "name": "quarter-tone",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "name": "arpeggio",
               "type": {
                 "text": "ArpeggioType"
@@ -4481,6 +4586,17 @@
                 "text": "string"
               },
               "description": "Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "grace-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `\"up,,down\"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -4577,7 +4693,7 @@
             {
               "name": "trill-accidental",
               "type": {
-                "text": "AccidentalType"
+                "text": "ConventionalAccidentalType"
               },
               "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.",
               "inheritedFrom": {
@@ -4591,6 +4707,17 @@
                 "text": "Note"
               },
               "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -4624,6 +4751,17 @@
                 "text": "string"
               },
               "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "trill-finish-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5150,6 +5288,17 @@
               "name": "note",
               "type": {
                 "text": "Note"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "quarterTone",
+              "type": {
+                "text": "QuarterTone | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -5821,7 +5970,7 @@
               "kind": "field",
               "name": "trillAccidental",
               "type": {
-                "text": "AccidentalType | null"
+                "text": "ConventionalAccidentalType | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -5833,6 +5982,17 @@
               "name": "trillNote",
               "type": {
                 "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -5877,6 +6037,17 @@
               "name": "graceOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -5988,6 +6159,17 @@
               "name": "trillFinishOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -6621,6 +6803,17 @@
               }
             },
             {
+              "name": "quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers `note` by a quarter-tone, drawn as an arrow on its accidental (on a natural for a plain letter). On a note slotted in a chord it marks just that tone.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
               "name": "arpeggio",
               "type": {
                 "text": "ArpeggioType"
@@ -6703,6 +6896,17 @@
                 "text": "string"
               },
               "description": "Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "grace-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `\"up,,down\"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -6799,7 +7003,7 @@
             {
               "name": "trill-accidental",
               "type": {
-                "text": "AccidentalType"
+                "text": "ConventionalAccidentalType"
               },
               "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.",
               "inheritedFrom": {
@@ -6813,6 +7017,17 @@
                 "text": "Note"
               },
               "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -6846,6 +7061,17 @@
                 "text": "string"
               },
               "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "trill-finish-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -8568,6 +8794,13 @@
             },
             {
               "kind": "field",
+              "name": "quarterTone",
+              "type": {
+                "text": "QuarterTone | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "octave",
               "type": {
                 "text": "Octave | null"
@@ -9004,7 +9237,7 @@
               "kind": "field",
               "name": "trillAccidental",
               "type": {
-                "text": "AccidentalType | null"
+                "text": "ConventionalAccidentalType | null"
               }
             },
             {
@@ -9012,6 +9245,13 @@
               "name": "trillNote",
               "type": {
                 "text": "Note | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillQuarterTone",
+              "type": {
+                "text": "QuarterTone | null"
               }
             },
             {
@@ -9040,6 +9280,13 @@
               "name": "graceOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "graceQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               }
             },
             {
@@ -9111,6 +9358,13 @@
               "name": "trillFinishOctave",
               "type": {
                 "text": "(Octave | null)[] | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "trillFinishQuarterTone",
+              "type": {
+                "text": "(QuarterTone | null)[] | null"
               }
             },
             {
@@ -9433,6 +9687,13 @@
               "description": "Shows the accidental already in force in parentheses, \"(♮)\", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly."
             },
             {
+              "name": "quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers `note` by a quarter-tone, drawn as an arrow on its accidental (on a natural for a plain letter). On a note slotted in a chord it marks just that tone."
+            },
+            {
               "name": "crescendo",
               "type": {
                 "text": "'start' | 'end'"
@@ -9524,6 +9785,13 @@
               "description": "Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`."
             },
             {
+              "name": "grace-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `\"up,,down\"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`."
+            },
+            {
               "name": "grace-articulation",
               "type": {
                 "text": "string"
@@ -9582,7 +9850,7 @@
             {
               "name": "trill-accidental",
               "type": {
-                "text": "AccidentalType"
+                "text": "ConventionalAccidentalType"
               },
               "description": "Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set."
             },
@@ -9592,6 +9860,13 @@
                 "text": "Note"
               },
               "description": "Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set."
+            },
+            {
+              "name": "trill-quarter-tone",
+              "type": {
+                "text": "QuarterTone"
+              },
+              "description": "`up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor."
             },
             {
               "name": "trill-continuation",
@@ -9613,6 +9888,13 @@
                 "text": "string"
               },
               "description": "Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`."
+            },
+            {
+              "name": "trill-finish-quarter-tone",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`."
             },
             {
               "name": "trill-finish-slur",
@@ -12532,6 +12814,28 @@
             },
             {
               "kind": "method",
+              "name": "#accidentalExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#sizeVoiceContainer",
               "privacy": "private",
               "return": {
@@ -13462,6 +13766,156 @@
             },
             {
               "kind": "method",
+              "name": "#trillAccidentalTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#shownAccidentals",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ accidental: AccidentalType; headCenterY: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#accidentalColumn",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; right: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#quarterToneArrows",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    index: number;\n    up: boolean;\n    headCenterY: number;\n    tipY: number;\n  }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#quarterToneArrowReachY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#arrowBeamObstacles",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BeamObstacle[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#estimateAboveStaffBudget",
               "privacy": "private",
               "return": {
@@ -14010,6 +14464,20 @@
             },
             {
               "kind": "method",
+              "name": "#hairpinsCanLeaveStaff",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#pairVoiceHairpins",
               "privacy": "private",
               "parameters": [
@@ -14017,6 +14485,34 @@
                   "name": "state",
                   "type": {
                     "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#conflictingSwells",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ReadonlySet<NoteOrChordElementType>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "pairing",
+                  "type": {
+                    "text": "ReturnType<typeof pairHairpinsWithLeftovers>"
                   }
                 }
               ],
@@ -19056,6 +19552,28 @@
             },
             {
               "kind": "method",
+              "name": "#accidentalExtent",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteChordOrRestElementType"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#sizeVoiceContainer",
               "privacy": "private",
               "return": {
@@ -19986,6 +20504,156 @@
             },
             {
               "kind": "method",
+              "name": "#trillAccidentalTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#shownAccidentals",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ accidental: AccidentalType; headCenterY: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#accidentalColumn",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; right: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#quarterToneArrows",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    index: number;\n    up: boolean;\n    headCenterY: number;\n    tipY: number;\n  }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#quarterToneArrowReachY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#arrowBeamObstacles",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "BeamObstacle[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#estimateAboveStaffBudget",
               "privacy": "private",
               "return": {
@@ -20534,6 +21202,20 @@
             },
             {
               "kind": "method",
+              "name": "#hairpinsCanLeaveStaff",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#pairVoiceHairpins",
               "privacy": "private",
               "parameters": [
@@ -20541,6 +21223,34 @@
                   "name": "state",
                   "type": {
                     "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#conflictingSwells",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "ReadonlySet<NoteOrChordElementType>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "pairing",
+                  "type": {
+                    "text": "ReturnType<typeof pairHairpinsWithLeftovers>"
                   }
                 }
               ],

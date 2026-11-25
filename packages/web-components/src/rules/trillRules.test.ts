@@ -412,3 +412,27 @@ describe('resolveTrillPitch', () => {
     });
   });
 });
+
+describe('resolveTrillPitch with a quarter-tone', () => {
+  const accidental = (...args: Parameters<typeof resolveTrillPitch>) =>
+    resolveTrillPitch(...args).accidental;
+
+  it('applies to the diatonic neighbor', () => {
+    expect(accidental('C', 4, 'C', 'major', null, null, 'up')).toBe(
+      'natural-up'
+    );
+    expect(accidental('E', 4, 'G', 'major', null, null, 'down')).toBe(
+      'sharp-down'
+    );
+  });
+
+  it('applies to trill-accidental and trill-note', () => {
+    expect(accidental('C', 4, 'C', 'major', 'flat', null, 'up')).toBe(
+      'flat-up'
+    );
+    expect(accidental('C', 4, 'C', 'major', null, 'C#', 'up')).toBe('sharp-up');
+    expect(accidental('C', 4, 'C', 'major', null, 'D', 'down')).toBe(
+      'natural-down'
+    );
+  });
+});

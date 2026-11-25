@@ -18,6 +18,7 @@ import {
   NOTE_EVENTS,
 } from '../utils/consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_VERTICAL_OVERSHOOT_PX,
   FLAG_STEM_STEP_PX,
@@ -569,7 +570,7 @@ describe('grace notes', () => {
     expect(below[3]).toBeGreaterThan(Math.max(below[1], below[5]));
   });
 
-  it('routes the slur clear of the main accidental horizontally, without growing its gap to the notehead', () => {
+  it('lands the slur over the main head, past its accidental, without growing its gap to the head', () => {
     const endPoint = (element: NoteElementType): number[] => {
       const d =
         element.shadowRoot
@@ -603,23 +604,55 @@ describe('grace notes', () => {
 
     const [endXWithAccidental, endYWithAccidental] = endPoint(withAccidental);
     const [mainHeadCenterX, mainHeadCenterY] = headCenter(withAccidental);
-    // A sharp is 10px wide (ACCIDENTAL_SYMBOL_WIDTH), sat ACCIDENTAL_NOTE_GAP
-    // (-7px, i.e. overlapping) left of the head center — so its bounding box
-    // left edge sits accidentalWidth + gap px away.
-    const accidentalLeftEdgeX = mainHeadCenterX - (10 + -7);
+    expect(endXWithAccidental).toBeGreaterThan(-ACCIDENTAL_NOTE_GAP);
+    expect(endXWithAccidental).toBeCloseTo(mainHeadCenterX, 5);
 
-    // The slur's main-side endpoint must clear the accidental horizontally...
-    expect(endXWithAccidental).toBeLessThan(accidentalLeftEdgeX);
-
-    // ...but its *distance to the main notehead* must be the same constant
-    // whether or not an accidental is shown — the accidental should only
-    // ever push the endpoint further left (X), never further from the head
-    // (Y), no matter how tall/wide the accidental is.
+    // An ordinary accidental this close to the grace note needs no lift.
     const [, endYPlain] = endPoint(plain);
     const [, mainHeadCenterYPlain] = headCenter(plain);
     const gapWithAccidental = Math.abs(mainHeadCenterY - endYWithAccidental);
     const gapPlain = Math.abs(mainHeadCenterYPlain - endYPlain);
     expect(gapWithAccidental).toBeCloseTo(gapPlain, 5);
+  });
+
+  it("lifts the slur's end over a quarter-tone arrow and puts it back without one", () => {
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('note', 'Bb' satisfies Note);
+    element.setAttribute('octave', '4');
+    element.setAttribute('grace', 'G');
+    element.setAttribute('grace-octave', '4');
+    element.setAttribute('grace-type', 'acciaccatura');
+    document.body.appendChild(element);
+    const slur = () =>
+      element.shadowRoot?.querySelector('.grace-slur path')?.getAttribute('d');
+    const endY = () => Number(slur()?.split(' ').at(-1));
+
+    const plain = slur();
+    const plainEndY = endY();
+    element.setAttribute('quarter-tone', 'up');
+    expect(endY()).toBeLessThan(plainEndY);
+    element.removeAttribute('quarter-tone');
+    expect(slur()).toBe(plain);
+  });
+
+  it('dips a slur below an inner grace note with a down-arrow', () => {
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('note', 'B' satisfies Note);
+    element.setAttribute('octave', '4');
+    element.setAttribute('grace', 'F,G,A');
+    element.setAttribute('grace-octave', '4,4,4');
+    document.body.appendChild(element);
+    const controlY = () => {
+      const d =
+        element.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      return Number(d.match(/-?\d+(\.\d+)?/g)?.[3]);
+    };
+
+    const plain = controlY();
+    element.setAttribute('grace-quarter-tone', ',down');
+    expect(controlY()).toBeGreaterThan(plain);
   });
 
   it('anchors the grace-side slur start at the stem/beam tip (not the notehead) when clearing a main accidental', () => {
@@ -745,9 +778,8 @@ describe('grace notes', () => {
       NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX
     );
 
-    // Only stemUp and accidental-shown vary. Stem-down without an accidental
-    // clears the main stem; with an accidental, the ~8.5px accidental pullback
-    // is the largest of the three.
+    // A stem-down main note's stem is out of the way of a slur that arrives
+    // above, over its accidental.
     const stemDownNoAccidental = document.createElement(
       MUSIC_NOTE
     ) as NoteElementType;
@@ -770,10 +802,27 @@ describe('grace notes', () => {
     stemDownWithAccidental.showAccidental = 'natural';
 
     const stemDownEnd = pathPoints(stemDownNoAccidental).at(-2) as number;
-    const stemDownAccidentalEnd = pathPoints(stemDownWithAccidental).at(
-      -2
-    ) as number;
-    expect(stemDownAccidentalEnd).toBeLessThanOrEqual(stemDownEnd);
+    const [accidentalEndX, accidentalEndY] = pathPoints(
+      stemDownWithAccidental
+    ).slice(-2);
+    const stemDownHead =
+      stemDownWithAccidental.shadowRoot?.querySelector('.head');
+    expect(
+      Number(
+        stemDownNoAccidental.shadowRoot
+          ?.querySelector('.head')
+          ?.getAttribute('cx')
+      ) *
+        NOTE_SCALE -
+        stemDownEnd
+    ).toBeGreaterThan(NOTE_HEAD_RADIUS_PX);
+    expect(accidentalEndX).toBeCloseTo(
+      Number(stemDownHead?.getAttribute('cx')) * NOTE_SCALE,
+      5
+    );
+    expect(accidentalEndY).toBeLessThan(
+      Number(stemDownHead?.getAttribute('cy')) * NOTE_SCALE
+    );
   });
 
   describe('descending grace group (stem-tip slur anchoring)', () => {
@@ -2984,5 +3033,77 @@ describe('standalone redraw', () => {
     const before = note.shadowRoot!.innerHTML;
     note.note = 'F#';
     expect(note.shadowRoot!.innerHTML).not.toBe(before);
+  });
+});
+
+describe('quarter-tones', () => {
+  const make = (attributes: Record<string, string> = {}) => {
+    const element = document.createElement(MUSIC_NOTE) as any;
+    element.setAttribute('duration', 'quarter');
+    element.setAttribute('note', 'C#');
+    for (const [name, value] of Object.entries(attributes)) {
+      element.setAttribute(name, value);
+    }
+    document.body.appendChild(element);
+    return element;
+  };
+
+  it.each([
+    ['quarter-tone', 'quarterTone', 'up', 'up'],
+    ['trill-quarter-tone', 'trillQuarterTone', 'down', 'down'],
+    [
+      'grace-quarter-tone',
+      'graceQuarterTone',
+      'up,,down',
+      ['up', null, 'down'],
+    ],
+    [
+      'trill-finish-quarter-tone',
+      'trillFinishQuarterTone',
+      ',up',
+      [null, 'up'],
+    ],
+  ])(
+    'reflects %s and re-lays out the staff on a change',
+    (attribute, property, text, value) => {
+      const element = make();
+      const handler = jest.fn();
+      element.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+      element[property] = value;
+      expect(element.getAttribute(attribute)).toBe(text);
+      expect(element[property]).toEqual(value);
+      expect(handler).toHaveBeenCalledTimes(1);
+      element[property] = null;
+      expect(element.hasAttribute(attribute)).toBe(false);
+      expect(element[property]).toBeNull();
+    }
+  );
+
+  it('ignores a value that is not up or down', () => {
+    const element = make({ 'quarter-tone': 'sharp' });
+    expect(element.quarterTone).toBeNull();
+    expect(element.shadowRoot.querySelector('.accidental-arrow')).toBeNull();
+  });
+
+  it('standalone, adds and removes the arrow', () => {
+    const element = make({ 'quarter-tone': 'up' });
+    const arrows = () =>
+      element.shadowRoot.querySelectorAll('.accidental .accidental-arrow');
+    expect(arrows()).toHaveLength(1);
+    element.quarterTone = null;
+    expect(arrows()).toHaveLength(0);
+    expect(element.shadowRoot.querySelector('.accidental')).not.toBeNull();
+  });
+
+  it('standalone, arrows its grace and finishing notes', () => {
+    const element = make({
+      grace: 'D,E',
+      'grace-quarter-tone': ',up',
+      'trill-finish': 'B',
+      'trill-finish-quarter-tone': 'down',
+    });
+    expect(
+      element.shadowRoot.querySelectorAll('.grace-accidental .accidental-arrow')
+    ).toHaveLength(2);
   });
 });

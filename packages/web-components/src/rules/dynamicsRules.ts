@@ -482,12 +482,15 @@ export function resolveSwellSpan(input: {
 
 /**
  * Swell notes that a hairpin also starts, ends or runs over: the two would
- * overlap, so the hairpin wins.
+ * overlap, so the hairpin wins. `openEnds` are the hairpin ends whose partner
+ * is outside `elements` (another staff or measure).
  */
 export function swellConflicts(
   elements: readonly NoteChordOrRestElementType[],
-  pairs: readonly HairpinPair[]
+  pairs: readonly HairpinPair[],
+  openEnds: readonly HairpinEndpoint[] = []
 ): NoteOrChordElementType[] {
+  const open = new Set<Element>(openEnds.map((end) => end.element));
   const spans = pairs.map((pair) => [
     elements.indexOf(pair.startElement),
     elements.indexOf(pair.endElement),
@@ -499,7 +502,8 @@ export function swellConflicts(
     ) {
       return [];
     }
-    return spans.some(([start, end]) => start <= index && index <= end)
+    return open.has(element) ||
+      spans.some(([start, end]) => start <= index && index <= end)
       ? [element as NoteOrChordElementType]
       : [];
   });

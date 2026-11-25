@@ -539,12 +539,11 @@ export const KEY_SIG_SHARP_WIDTH = STAFF_LINE_SPACING;
 export const KEY_SIG_FLAT_WIDTH = STAFF_LINE_SPACING * 0.8;
 
 /**
- * Vertical y-offset (px) applied to flat accidentals in the key signature.
- * Flats render taller than their bounding box, so a negative offset shifts
- * them up to align with the staff lines.
- * = −1.8 × STAFF_LINE_SPACING
+ * Vertical y-offset (px) applied to flat accidentals in the key signature,
+ * which puts the bowl, not the glyph's middle, on the pitch.
+ * = −0.55 × STAFF_LINE_SPACING
  */
-export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -1.8;
+export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -0.55;
 
 /**
  * Y translation (px) applied to the time signature SVG within the describe
@@ -630,13 +629,16 @@ export const LEADING_NOTE_GAP_PX = STAFF_LINE_SPACING;
 
 // ─── Accidental symbol dimensions ────────────────────────────────────────────
 
-import { AccidentalType } from '../types/theory';
+import type { ConventionalAccidentalType, QuarterTone } from '../types/theory';
 
 /**
  * Rendered pixel width of each accidental symbol type.
  * Used for collision detection and column layout when stacking accidentals on chords.
  */
-export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
+export const ACCIDENTAL_SYMBOL_WIDTH: Record<
+  ConventionalAccidentalType,
+  number
+> = {
   'double-flat': 18,
   flat: 10,
   natural: 10,
@@ -654,6 +656,59 @@ export const ACCIDENTAL_NOTE_GAP = -7;
  * = 0.35 × STAFF_LINE_SPACING
  */
 export const ACCIDENTAL_REMINDER_PAREN_WIDTH_PX = STAFF_LINE_SPACING * 0.35;
+
+/** How far (px) a quarter-tone arrow reaches past its stroke. = 0.75 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.75;
+
+/** Width (px) of a quarter-tone arrow's head. = 0.85 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_HEAD_WIDTH_PX = STAFF_LINE_SPACING * 0.85;
+
+/** Height (px) of a quarter-tone arrow's head. = 0.6 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Stroke width (px) of a quarter-tone arrow's head. = 0.13 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_HEAD_STROKE_PX = STAFF_LINE_SPACING * 0.13;
+
+/** Clearance (px) a beam keeps from a quarter-tone arrow's tip. = 0.2 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_BEAM_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/** Gap (px) between a quarter-tone arrow and a reminder's parenthesis. = 0.15 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_PAREN_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/**
+ * The stroke each accidental's arrow extends, in px of its glyph: the stroke's
+ * x, the end the arrow grows from, its width, and for a glyph with no stroke
+ * how far inside that end (px) the shaft starts. A glyph scaled into a taller
+ * or narrower box than its viewBox is centred, so its left edge is inset.
+ */
+export const ACCIDENTAL_ARROW_STROKES: Record<
+  ConventionalAccidentalType,
+  Record<
+    QuarterTone,
+    { x: number; endY: number; width: number; startInset?: number }
+  >
+> = {
+  flat: {
+    up: { x: 0.83, endY: 0, width: 2 },
+    down: { x: 0.83, endY: 25, width: 2 },
+  },
+  'double-flat': {
+    up: { x: 1.5, endY: 0, width: 2 },
+    down: { x: 1.5, endY: 25, width: 2 },
+  },
+  natural: {
+    up: { x: 2.5, endY: 0, width: 1.67 },
+    down: { x: 7.5, endY: 25, width: 1.67 },
+  },
+  sharp: {
+    up: { x: 7, endY: 0, width: 1.5 },
+    down: { x: 3, endY: 30, width: 1.5 },
+  },
+  'double-sharp': {
+    up: { x: 5, endY: 0, width: 1.5, startInset: 3.5 },
+    down: { x: 5, endY: 10, width: 1.5, startInset: 3.5 },
+  },
+};
 
 // ─── Dynamics ─────────────────────────────────────────────────────────────────
 
@@ -813,13 +868,37 @@ export const TUPLET_STAFF_CLEARANCE_PX = STAFF_LINE_SPACING * 0.6;
  * Rendered pixel height of each accidental symbol type.
  * Used to compute vertical clearance when stacking accidentals on chords.
  */
-export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
+export const ACCIDENTAL_SYMBOL_HEIGHT: Record<
+  ConventionalAccidentalType,
+  number
+> = {
   'double-sharp': 10,
   sharp: 30,
-  natural: 30,
+  natural: 25,
   flat: 25,
   'double-flat': 25,
 };
+
+/**
+ * Where each accidental's pitch falls, as a fraction of its height from the
+ * top: a flat's is the centre of its bowl, the others' their own middle.
+ */
+export const ACCIDENTAL_PITCH_RATIO: Record<
+  ConventionalAccidentalType,
+  number
+> = {
+  'double-sharp': 0.5,
+  sharp: 0.5,
+  natural: 0.5,
+  flat: 0.75,
+  'double-flat': 0.75,
+};
+
+/**
+ * How much higher (px) a natural's left stroke ends than its right one, in
+ * the column a flat's stem rises into.
+ */
+export const NATURAL_LEFT_STROKE_INSET_PX = STAFF_LINE_SPACING / 3;
 
 // ─── Grace notes ──────────────────────────────────────────────────────────────
 
@@ -893,6 +972,12 @@ export const GRACE_SLASH_STROKE_WIDTH = 1.1;
  * space shows above it, per standard engraving practice.
  */
 export const GRACE_SLASH_TIP_INSET_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Clearance (px) an ornament's slur keeps from the heads and accidentals it passes. = 0.2 × STAFF_LINE_SPACING */
+export const ORNAMENT_SLUR_CLEARANCE_PX = STAFF_LINE_SPACING * 0.2;
+
+/** Bulge height (px) past which an ornament's slur lifts off its notes instead. = 3 × STAFF_LINE_SPACING */
+export const ORNAMENT_SLUR_MAX_BULGE_PX = STAFF_LINE_SPACING * 3;
 
 // ─── Clef changes ─────────────────────────────────────────────────────────────
 

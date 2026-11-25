@@ -1,8 +1,13 @@
+import {
+  accidentalArrowOverhangs,
+  accidentalPitchOffset,
+  accidentalReach,
+  accidentalSymbolHeight,
+  accidentalSymbolWidth,
+} from '../../rules/accidentalRules';
 import type { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
-  ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH,
   STAFF_LINE_SPACING,
   TRILL_ACCIDENTAL_GAP_PX,
   TRILL_ACCIDENTAL_SCALE,
@@ -65,13 +70,18 @@ function appendTrillAccidental(
   signTopY: number,
   signWidth: number
 ): void {
-  const width = ACCIDENTAL_SYMBOL_WIDTH[accidental] * TRILL_ACCIDENTAL_SCALE;
-  const height = ACCIDENTAL_SYMBOL_HEIGHT[accidental] * TRILL_ACCIDENTAL_SCALE;
+  const width = accidentalSymbolWidth(accidental) * TRILL_ACCIDENTAL_SCALE;
+  const height = accidentalSymbolHeight(accidental) * TRILL_ACCIDENTAL_SCALE;
+  const arrowBelow =
+    accidentalArrowOverhangs(accidental).below * TRILL_ACCIDENTAL_SCALE;
   const symbol = createAccidentalSvg(accidental);
   symbol.setAttribute('width', `${width}`);
   symbol.setAttribute('height', `${height}`);
   symbol.setAttribute('x', `${leftX + signWidth / 2 - width / 2}`);
-  symbol.setAttribute('y', `${signTopY - TRILL_ACCIDENTAL_GAP_PX - height}`);
+  symbol.setAttribute(
+    'y',
+    `${signTopY - TRILL_ACCIDENTAL_GAP_PX - arrowBelow - height}`
+  );
   symbol.classList.add('trill-accidental');
   group.appendChild(symbol);
 }
@@ -284,7 +294,7 @@ export function computeWrittenTrillNoteWidth(
     writtenNoteHeadWidthPx();
   if (accidental !== null) {
     width +=
-      ACCIDENTAL_SYMBOL_WIDTH[accidental] * TRILL_WRITTEN_NOTE_SCALE +
+      accidentalReach(accidental) * TRILL_WRITTEN_NOTE_SCALE +
       TRILL_PARENTHESIS_NOTE_GAP_PX;
   }
   return width;
@@ -320,23 +330,34 @@ export function createWrittenTrillNoteSvg({
   const noteHeadWidth = writtenNoteHeadWidthPx();
   const noteHeadHalfHeight =
     NOTE_HEAD_RADIUS_PX * 0.75 * TRILL_WRITTEN_NOTE_SCALE;
+  const arrow =
+    accidental === null
+      ? { left: 0, above: 0, below: 0 }
+      : accidentalArrowOverhangs(accidental);
   const parenthesisHalfHeight =
-    noteHeadHalfHeight + TRILL_PARENTHESIS_OVERSHOOT_PX;
+    noteHeadHalfHeight +
+    TRILL_PARENTHESIS_OVERSHOOT_PX +
+    Math.max(arrow.above, arrow.below) * TRILL_WRITTEN_NOTE_SCALE;
 
   let x = leftX;
   appendParenthesis(wrapper, x, centerY, parenthesisHalfHeight, 'left');
   x += TRILL_PARENTHESIS_STROKE_WIDTH + TRILL_PARENTHESIS_NOTE_GAP_PX;
 
   if (accidental !== null) {
-    const width =
-      ACCIDENTAL_SYMBOL_WIDTH[accidental] * TRILL_WRITTEN_NOTE_SCALE;
+    const width = accidentalSymbolWidth(accidental) * TRILL_WRITTEN_NOTE_SCALE;
     const height =
-      ACCIDENTAL_SYMBOL_HEIGHT[accidental] * TRILL_WRITTEN_NOTE_SCALE;
+      accidentalSymbolHeight(accidental) * TRILL_WRITTEN_NOTE_SCALE;
+    x += arrow.left * TRILL_WRITTEN_NOTE_SCALE;
     const symbol = createAccidentalSvg(accidental);
     symbol.setAttribute('width', `${width}`);
     symbol.setAttribute('height', `${height}`);
     symbol.setAttribute('x', `${x}`);
-    symbol.setAttribute('y', `${centerY - height / 2}`);
+    symbol.setAttribute(
+      'y',
+      `${
+        centerY - accidentalPitchOffset(accidental) * TRILL_WRITTEN_NOTE_SCALE
+      }`
+    );
     symbol.classList.add('trill-written-note-accidental');
     wrapper.appendChild(symbol);
     x += width + TRILL_PARENTHESIS_NOTE_GAP_PX;

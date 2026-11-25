@@ -1,6 +1,10 @@
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
-import { accidentalSymbolWidth } from '../../rules/accidentalRules';
+import {
+  accidentalPitchOffset,
+  accidentalReach,
+  accidentalSymbolWidth,
+} from '../../rules/accidentalRules';
 import {
   augmentationDotRowWidthPx,
   resolveNoteDotStaffY,
@@ -39,7 +43,6 @@ import type {
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
-  ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_CHORD_GAP_PX,
   AUGMENTATION_DOT_DIAMETER_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
@@ -609,16 +612,19 @@ export const createNoteSvg = ({
       accidental,
       accidentalParenthesized
     );
-    const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[accidental];
     const yHeadCenter = headGeometry.cy * NOTE_SCALE;
 
     const symbolSvg = createAccidentalSvg(accidental, accidentalParenthesized);
+    symbolSvg.classList.add('accidental');
 
     symbolSvg.setAttribute(
       'x',
       `${-(symbolWidth + ACCIDENTAL_NOTE_GAP + leftOverhang)}`
     );
-    symbolSvg.setAttribute('y', `${yHeadCenter - symbolHeight / 2}`);
+    symbolSvg.setAttribute(
+      'y',
+      `${yHeadCenter - accidentalPitchOffset(accidental)}`
+    );
     svg.setAttribute('overflow', 'visible');
     svg.appendChild(symbolSvg);
   }
@@ -629,7 +635,7 @@ export const createNoteSvg = ({
     const accidentalLeftX =
       accidental && !suppressesAccidental(notehead)
         ? -(
-            accidentalSymbolWidth(accidental, accidentalParenthesized) +
+            accidentalReach(accidental, accidentalParenthesized) +
             ACCIDENTAL_NOTE_GAP +
             leftOverhang
           )

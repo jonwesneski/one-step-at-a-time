@@ -1,10 +1,13 @@
 import {
-  accidentalSymbolWidth,
+  accidentalArrowOverhangs,
+  accidentalReach,
+  accidentalSuffix,
+  accidentalVerticalExtent,
   computeInterNoteSpacing,
   computeNoteAccidentals,
   type NoteAccidentals,
-  parseAccidentalSuffix,
-  suffixToType,
+  pitchAccidental,
+  quarterToneOf,
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import {
@@ -268,6 +271,7 @@ import {
   TUPLET_EVENTS,
 } from './utils/consts';
 import {
+  ACCIDENTAL_ARROW_BEAM_GAP_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX,
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
@@ -381,25 +385,6 @@ import {
 } from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
 import { createUnisonBracketSvg } from './utils/svgCreator/unison';
-
-// The `Note` suffix for an accidental — the inverse of
-// rules/accidentalRules.ts's parseAccidentalSuffix/suffixToType, needed to
-// rebuild a resolved trilling pitch (letter + AccidentalType) into a `Note`
-// string for noteToYCoordinate.
-function accidentalSuffix(accidental: AccidentalType | null): string {
-  switch (accidental) {
-    case 'sharp':
-      return '#';
-    case 'flat':
-      return 'b';
-    case 'double-sharp':
-      return '##';
-    case 'double-flat':
-      return 'bb';
-    default:
-      return '';
-  }
-}
 
 // Undoes what the staff's cross-voice pass sets on an element, so a note or
 // chord that leaves the staff draws as its own again.
@@ -1430,10 +1415,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         result.unpairedStarts.push({ ...placement, ...start });
       }
       result.orphanEnds.push(...pairing.orphanEnds);
+      const conflicting = this.#conflictingSwells(state, pairing);
       state.elements.forEach((element, i) => {
         if (
           element.nodeName === MUSIC_REST_NODE ||
-          !(element as NoteOrChordElementType).swell
+          !(element as NoteOrChordElementType).swell ||
+          conflicting.has(element as NoteOrChordElementType)
         ) {
           return;
         }
@@ -2373,7 +2360,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
                 this.#effectiveKeySig,
                 this.#effectiveMode,
                 noteElement.trillAccidental,
-                noteElement.trillNote
+                noteElement.trillNote,
+                noteElement.trillQuarterTone
               )
             : null;
         });
@@ -3540,13 +3528,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   ): UnisonPartDescriptor {
     if (isNoteNodeName(element.nodeName)) {
       const note = element as NoteElementType;
-      const pitchAccidental = suffixToType(parseAccidentalSuffix(note.note));
+      const ownAccidental = pitchAccidental(note.note, note.quarterTone);
       return {
         duration: durationToBase[duration],
-        pitchAccidental,
+        pitchAccidental: ownAccidental,
         shownAccidental:
           note.showAccidental === undefined
-            ? pitchAccidental
+            ? ownAccidental
             : note.showAccidental,
         notehead: resolveNoteheadGlyph(note.notehead, duration),
         isChord: false,
@@ -3560,17 +3548,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       noFlags: chord.noFlags,
       noteheads: chord.toneNoteheads,
     };
+    const quarterTones = chord.toneQuarterTones;
     return {
       duration: durationToBase[duration],
       pitchAccidental: null,
       shownAccidental: null,
       isChord: true,
       tones: chord.notes.map((tone, index) => {
-        const pitchAccidental = suffixToType(parseAccidentalSuffix(tone.value));
         const { left, right } = chordToneHeadExtentPx(headInput, index);
         return {
           staffY: staffYs[index],
-          pitchAccidental,
+          pitchAccidental: pitchAccidental(tone.value, quarterTones[index]),
           shownAccidental: chord.noteAccidentals[index] ?? null,
           headCenterX: (left + right) / 2,
           headLeftX: left,
@@ -3706,31 +3694,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       return 0;
     }
     const el = element as NoteElementType | ChordElementType;
-    let extent = 0;
-
-    if (includeAccidental) {
-      if (isNoteNodeName(el.nodeName)) {
-        const note = el as NoteElementType;
-        const accidental = note.showAccidental;
-        if (accidental) {
-          extent +=
-            accidentalSymbolWidth(accidental, note.accidentalParenthesized) +
-            ACCIDENTAL_NOTE_GAP;
-        }
-      } else {
-        const chord = el as ChordElementType;
-        if (
-          chord.staffYCoordinates &&
-          chord.noteAccidentals.some((a) => a != null)
-        ) {
-          extent += totalChordAccidentalWidth(
-            chord.noteAccidentals,
-            chord.staffYCoordinates,
-            chord.noteAccidentalsParenthesized
-          );
-        }
-      }
-    }
+    let extent = includeAccidental ? this.#accidentalExtent(el) : 0;
 
     extent += computeGraceFootprintWidth(
       el.grace,
@@ -3772,6 +3736,29 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
 
     return extent;
+  }
+
+  // How far (px) an entry's own accidentals reach left of its box.
+  #accidentalExtent(element: NoteChordOrRestElementType): number {
+    if (isNoteNodeName(element.nodeName)) {
+      const note = element as NoteElementType;
+      return note.showAccidental
+        ? accidentalReach(note.showAccidental, note.accidentalParenthesized) +
+            ACCIDENTAL_NOTE_GAP
+        : 0;
+    }
+    if (!isChordNodeName(element.nodeName)) {
+      return 0;
+    }
+    const chord = element as ChordElementType;
+    return chord.staffYCoordinates &&
+      chord.noteAccidentals.some((accidental) => accidental != null)
+      ? totalChordAccidentalWidth(
+          chord.noteAccidentals,
+          chord.staffYCoordinates,
+          chord.noteAccidentalsParenthesized
+        )
+      : 0;
   }
 
   // Sets the standard x/width/viewBox/height attributes shared by every
@@ -4272,7 +4259,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
 
     for (const state of this.#voiceRenderStates.values()) {
-      state.beamRenderer?.setObstacles(clefObstacles);
+      state.beamRenderer?.setObstacles([
+        ...clefObstacles,
+        ...this.#arrowBeamObstacles(state),
+      ]);
       state.beamRenderer?.spaceAll();
     }
 
@@ -5094,8 +5084,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    const voicePairs = this.#pairVoiceHairpins(state).pairs;
-    const conflicting = new Set(swellConflicts(state.elements, voicePairs));
+    const pairing = this.#pairVoiceHairpins(state);
+    const voicePairs = pairing.pairs;
+    const conflicting = this.#conflictingSwells(state, pairing);
     state.elements.forEach((element, i) => {
       if (
         element.nodeName === MUSIC_REST_NODE ||
@@ -5452,7 +5443,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#effectiveKeySig,
       this.#effectiveMode,
       chordElement.trillAccidental,
-      chordElement.trillNote
+      chordElement.trillNote,
+      chordElement.trillQuarterTone
     );
   }
 
@@ -5731,7 +5723,19 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         TRILL_FINISH_HEAD_RY,
         targetPosition.xCenter,
         targetPosition.y,
-        NOTE_HEAD_RADIUS_PX * 0.75
+        NOTE_HEAD_RADIUS_PX * 0.75,
+        (state.elements[nextIndex] as NoteElementType | ChordElementType)
+          .stemUp,
+        this.#shownAccidentals(state, nextIndex).map(
+          ({ accidental, headCenterY }) => {
+            const { above, below } = accidentalVerticalExtent(accidental);
+            return {
+              ...this.#accidentalColumn(state, nextIndex),
+              top: headCenterY - above,
+              bottom: headCenterY + below,
+            };
+          }
+        )
       );
       container.appendChild(slur);
     }
@@ -5775,6 +5779,127 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       accidental: resolvedTrillPitch.accidental,
     });
     container.appendChild(element);
+  }
+
+  // Topmost Y of the accidentals above this voice's trill signs, or null with
+  // none. A written trilling note draws its accidental beside its head.
+  #trillAccidentalTopY(state: VoiceRenderState): number | null {
+    const heights = state.elements.flatMap((element) => {
+      const pitch =
+        element.nodeName === MUSIC_REST_NODE
+          ? null
+          : (element as NoteElementType | ChordElementType).resolvedTrillPitch;
+      if (!pitch || pitch.written || pitch.accidental === null) {
+        return [];
+      }
+      const { above, below } = accidentalArrowOverhangs(pitch.accidental);
+      return [
+        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) + above + below,
+      ];
+    });
+    return heights.length === 0
+      ? null
+      : TRILL_ABOVE_STAFF_BOTTOM_Y -
+          TRILL_SIGN_HEIGHT_PX -
+          TRILL_ACCIDENTAL_GAP_PX -
+          Math.max(...heights) * TRILL_ACCIDENTAL_SCALE;
+  }
+
+  // An entry's shown accidentals and the container Y of their heads.
+  #shownAccidentals(
+    state: VoiceRenderState,
+    index: number
+  ): { accidental: AccidentalType; headCenterY: number }[] {
+    const element = state.elements[index];
+    const shown: [AccidentalType | null | undefined, number | undefined][] = [];
+    if (isNoteNodeName(element.nodeName)) {
+      const note = element as NoteElementType;
+      shown.push([note.showAccidental, state.noteStaffYCoords.get(note)]);
+    } else if (isChordNodeName(element.nodeName)) {
+      const chord = element as ChordElementType;
+      const staffYs = state.chordStaffYCoords.get(chord) ?? [];
+      chord.noteAccidentals.forEach((accidental, tone) =>
+        shown.push([accidental, staffYs[tone]])
+      );
+    }
+    return shown.flatMap(([accidental, staffY]) =>
+      accidental && staffY !== undefined
+        ? [
+            {
+              accidental,
+              headCenterY:
+                STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION,
+            },
+          ]
+        : []
+    );
+  }
+
+  // The x-span of an entry's accidentals, every column of a chord's included.
+  #accidentalColumn(
+    state: VoiceRenderState,
+    index: number
+  ): { left: number; right: number } {
+    const x = state.noteXPositions.get(index) ?? 0;
+    return {
+      left: x - this.#accidentalExtent(state.elements[index]),
+      right: x - ACCIDENTAL_NOTE_GAP,
+    };
+  }
+
+  // The quarter-tone arrows this voice's own accidentals draw: which entry,
+  // which way each points, and the container Y of its head and tip.
+  #quarterToneArrows(state: VoiceRenderState): {
+    index: number;
+    up: boolean;
+    headCenterY: number;
+    tipY: number;
+  }[] {
+    return state.elements.flatMap((_, index) =>
+      this.#shownAccidentals(state, index).flatMap(
+        ({ accidental, headCenterY }) => {
+          const quarterTone = quarterToneOf(accidental);
+          if (quarterTone === null) {
+            return [];
+          }
+          const up = quarterTone === 'up';
+          const { above, below } = accidentalVerticalExtent(accidental);
+          const tipY = up ? headCenterY - above : headCenterY + below;
+          return [{ index, up, headCenterY, tipY }];
+        }
+      )
+    );
+  }
+
+  // How far up or down (container Y) this voice's quarter-tone arrows reach on
+  // one side, or null with none pointing there.
+  #quarterToneArrowReachY(
+    state: VoiceRenderState,
+    above: boolean
+  ): number | null {
+    const tipYs = this.#quarterToneArrows(state)
+      .filter((arrow) => arrow.up === above)
+      .map((arrow) => arrow.tipY);
+    if (tipYs.length === 0) {
+      return null;
+    }
+    return above ? Math.min(...tipYs) : Math.max(...tipYs);
+  }
+
+  // The boxes a beam of this voice keeps off so it doesn't touch an arrow.
+  // Each spans the entry's whole accidental column, from the head to past the
+  // arrow's tip.
+  #arrowBeamObstacles(state: VoiceRenderState): BeamObstacle[] {
+    return this.#quarterToneArrows(state).map(
+      ({ index, up, headCenterY, tipY }) => {
+        const clearTipY = tipY + (up ? -1 : 1) * ACCIDENTAL_ARROW_BEAM_GAP_PX;
+        return {
+          ...this.#accidentalColumn(state, index),
+          top: Math.min(headCenterY, clearTipY),
+          bottom: Math.max(headCenterY, clearTipY),
+        };
+      }
+    );
   }
 
   // Conservative above-staff budget, before x-positions exist: the max over
@@ -5851,31 +5976,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    // A trill-accidental sits above the sign (written mode draws it beside
-    // the notehead instead).
-    const hasTrillAccidental = state.elements.some((element) => {
-      if (
-        !isNoteNodeName(element.nodeName) &&
-        !isChordNodeName(element.nodeName)
-      ) {
-        return false;
-      }
-      const pitch = (element as NoteElementType | ChordElementType)
-        .resolvedTrillPitch;
-      return (
-        pitch !== null && pitch.written === false && pitch.accidental !== null
-      );
-    });
-    if (hasTrillAccidental) {
-      const tallestAccidentalHeight =
-        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
-        TRILL_ACCIDENTAL_SCALE;
-      const topY =
-        TRILL_ABOVE_STAFF_BOTTOM_Y -
-        TRILL_SIGN_HEIGHT_PX -
-        TRILL_ACCIDENTAL_GAP_PX -
-        tallestAccidentalHeight;
-      if (topY < 0) {
+    for (const topY of [
+      this.#trillAccidentalTopY(state),
+      this.#quarterToneArrowReachY(state, true),
+    ]) {
+      if (topY !== null && topY < 0) {
         budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
     }
@@ -5985,6 +6090,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         budget,
         this.#octaveSignVerticalOverflow(voiceKey, state, false)
       );
+
+      const arrowBottomY = this.#quarterToneArrowReachY(state, false);
+      if (arrowBottomY !== null && arrowBottomY > STAFF_TRANSCRIPTION_HEIGHT) {
+        budget = Math.max(
+          budget,
+          Math.ceil(arrowBottomY - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        );
+      }
 
       if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
         const overflow =
@@ -6206,29 +6319,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       );
     }
 
-    const hasTrillAccidental = state.elements.some((element) => {
-      if (
-        !isNoteNodeName(element.nodeName) &&
-        !isChordNodeName(element.nodeName)
-      ) {
-        return false;
+    for (const topY of [
+      this.#trillAccidentalTopY(state),
+      this.#quarterToneArrowReachY(state, true),
+    ]) {
+      if (topY !== null) {
+        consider(topY);
       }
-      const pitch = (element as NoteElementType | ChordElementType)
-        .resolvedTrillPitch;
-      return (
-        pitch !== null && pitch.written === false && pitch.accidental !== null
-      );
-    });
-    if (hasTrillAccidental) {
-      const tallestAccidentalHeight =
-        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
-        TRILL_ACCIDENTAL_SCALE;
-      consider(
-        TRILL_ABOVE_STAFF_BOTTOM_Y -
-          TRILL_SIGN_HEIGHT_PX -
-          TRILL_ACCIDENTAL_GAP_PX -
-          tallestAccidentalHeight
-      );
     }
 
     const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
@@ -6274,8 +6371,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return top;
   }
 
-  // Below-staff mirror of #otherAboveStaffDecorationTopY (tuplets and
-  // dynamics only, like #estimateBelowStaffBudget).
+  // Below-staff mirror of #otherAboveStaffDecorationTopY (tuplets, quarter-tone
+  // arrows and dynamics only, like #estimateBelowStaffBudget).
   #otherBelowStaffDecorationBottomY(
     voiceKey: VoiceKey,
     state: VoiceRenderState
@@ -6285,6 +6382,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const tupletBottom = this.#tupletExtremeY(state, false, true);
     if (tupletBottom !== null) {
       bottom = tupletBottom;
+    }
+
+    const arrowBottom = this.#quarterToneArrowReachY(state, false);
+    if (arrowBottom !== null) {
+      bottom = bottom === null ? arrowBottom : Math.max(bottom, arrowBottom);
     }
 
     if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
@@ -6444,18 +6546,37 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // An end whose start sits on the other staff, or in another measure, is
   // expected whenever an ancestor can see both — only a staff on its own
   // (or alone in its measure) treats it as an authoring mistake.
-  #pairVoiceHairpins(state: VoiceRenderState) {
+  #hairpinsCanLeaveStaff(): boolean {
     const measure = this.closest(MUSIC_MEASURE);
     const hasSiblingStaff =
       measure !== null &&
       Array.from<Element>(measure.children).filter((child) =>
         isStaffNodeName(child.nodeName)
       ).length > 1;
-    const warnOrphans =
-      this.closest(MUSIC_COMPOSITION) === null && !hasSiblingStaff;
+    return this.closest(MUSIC_COMPOSITION) !== null || hasSiblingStaff;
+  }
+
+  #pairVoiceHairpins(state: VoiceRenderState) {
     return pairHairpinsWithLeftovers(state.elements, state.noteXPositions, {
-      warnOrphans,
+      warnOrphans: !this.#hairpinsCanLeaveStaff(),
     });
+  }
+
+  // An unmatched hairpin end draws nothing on a staff on its own, so only one
+  // an ancestor may complete rules a swell out.
+  #conflictingSwells(
+    state: VoiceRenderState,
+    pairing: ReturnType<typeof pairHairpinsWithLeftovers>
+  ): ReadonlySet<NoteOrChordElementType> {
+    return new Set(
+      swellConflicts(
+        state.elements,
+        pairing.pairs,
+        this.#hairpinsCanLeaveStaff()
+          ? [...pairing.unpairedStarts, ...pairing.orphanEnds]
+          : []
+      )
+    );
   }
 
   // A row the measure forced to the side opposite this voice's own clears

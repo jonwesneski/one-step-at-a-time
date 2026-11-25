@@ -1,10 +1,10 @@
 import type {
-  AccidentalType,
   ArpeggioType,
   ArticulationType,
   BarlineType,
   ClefType,
   ConnectorRole,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
@@ -107,7 +107,7 @@ export type GraceGroup = {
 export type TrillMarking = {
   line?: TrillLineMode | null;
   stop?: boolean;
-  accidental?: AccidentalType | null;
+  accidental?: ConventionalAccidentalType | null;
   note?: Note | null;
   continuation?: TrillContinuationMode | null;
   finish?: {

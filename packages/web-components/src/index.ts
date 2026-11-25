@@ -42,6 +42,7 @@ export type {
   GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
+  GraceQuarterTonesType,
   GuitarFret,
   TieValue,
 } from './types/elements';
@@ -78,6 +79,7 @@ export {
   OCTAVE_SHIFT_AMOUNTS,
   PERCUSSION_INSTRUMENTS,
   PITCH_NOTES,
+  QUARTER_TONES,
   REST_STAFF_SIDES,
   SLUR_STYLES,
   STAFF_GROUPS,

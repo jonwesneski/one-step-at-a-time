@@ -19,12 +19,14 @@ import {
   NOTE_EVENTS,
 } from '../utils/consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ARPEGGIO_CHORD_GAP_PX,
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_HAIRPIN_FOOTPRINT_PX,
   ARPEGGIO_WAVE_WIDTH_PX,
   BASE_STEM_LENGTH_PX,
   MIN_NOTE_WIDTH,
+  ORNAMENT_SLUR_MAX_BULGE_PX,
 } from '../utils/notationDimensions';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
@@ -877,7 +879,7 @@ describe(MUSIC_CHORD, () => {
       expect(graceGroup?.querySelector('.grace-slur')).not.toBeNull();
     });
 
-    it('routes the grace slur clear of the reference note accidental horizontally, without growing its gap to the notehead', () => {
+    it('lands the grace slur over the top head, past the accidental, without growing its gap to the head', () => {
       const endPoint = (element: ChordElementType): number[] => {
         const d =
           element.shadowRoot
@@ -924,16 +926,11 @@ describe(MUSIC_CHORD, () => {
       // (bottom/index-0) note, C4.
       const mainHeadCenterYWithAccidental = 8 + 70 - 10;
       const mainHeadCenterYPlain = 8 + 80 - 10;
-      // A sharp is 10px wide (ACCIDENTAL_SYMBOL_WIDTH), sat ACCIDENTAL_NOTE_GAP
-      // (-7px, i.e. overlapping) left of the head center.
-      const accidentalLeftEdgeX = mainHeadCenterX - (10 + -7);
+      expect(endXWithAccidental).toBeGreaterThan(-ACCIDENTAL_NOTE_GAP);
+      expect(endXWithAccidental).toBeCloseTo(mainHeadCenterX, 5);
 
-      // Clears the accidental horizontally...
-      expect(endXWithAccidental).toBeLessThan(accidentalLeftEdgeX);
-
-      // ...and the endpoint's distance to its target notehead is the same
-      // constant whether or not an accidental is shown (only which note it
-      // targets, and the horizontal pullback, differ).
+      // The endpoint's distance to its target notehead is the same whether or
+      // not an accidental is shown.
       const [, endYPlain] = endPoint(plain);
       const gapWithAccidental = Math.abs(
         mainHeadCenterYWithAccidental - endYWithAccidental
@@ -983,7 +980,7 @@ describe(MUSIC_CHORD, () => {
       expect(gapOnNonReference).toBeCloseTo(gapOnReference, 5);
     });
 
-    it('keeps the slur-to-notehead gap constant for a grace GROUP into a chord with a multi-position accidental column', () => {
+    it('lifts the slur off the top head rather than bow it high over an accidental beside that head', () => {
       // Mirrors chord.stories.ts's WithGraceNotes second chord: a 2-note
       // grace group into a chord with accidentals on both the reference note
       // (C#4, index 0) and a note 20px of staffY away (G#4, index 2). Both
@@ -1008,24 +1005,21 @@ describe(MUSIC_CHORD, () => {
         '4,4'
       );
 
-      const endY = (element: ChordElementType): number => {
+      const slurOf = (element: ChordElementType) => {
         const d =
           element.shadowRoot
             ?.querySelector('.grace-slur path')
             ?.getAttribute('d') ?? '';
-        const [, , , , , y] = d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
-        return y;
+        const [, fromY, , controlY, , toY] =
+          d.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+        return { toY, bulgeHeight: (fromY + toY) / 2 - controlY };
       };
 
-      const topNoteHeadCenterY = 8 + 60 - 10; // top note G#4/G4, staffY=60
-      const gapTwoAccidentals = Math.abs(
-        topNoteHeadCenterY - endY(twoAccidentals)
+      const lifted = slurOf(twoAccidentals);
+      expect(lifted.toY).toBeLessThan(slurOf(oneAccidental).toY);
+      expect(lifted.bulgeHeight).toBeLessThanOrEqual(
+        ORNAMENT_SLUR_MAX_BULGE_PX
       );
-      const gapOneAccidental = Math.abs(
-        topNoteHeadCenterY - endY(oneAccidental)
-      );
-      // Adding a second accidental must not increase the end-point gap.
-      expect(gapTwoAccidentals).toBeCloseTo(gapOneAccidental, 5);
     });
 
     it('positions grace heads relative to the reference note (notes[0])', () => {
@@ -2342,5 +2336,58 @@ describe('parsed with child notes', () => {
       { value: 'C', octave: 5 },
       { value: 'E', octave: 5 },
     ]);
+  });
+});
+
+describe('quarter-tones', () => {
+  const make = (markup: string) => {
+    document.body.innerHTML = markup;
+    return document.querySelector(MUSIC_CHORD) as any;
+  };
+  const TONES =
+    '<music-note note="C" octave="4"></music-note>' +
+    '<music-note note="G##" octave="4" quarter-tone="down"></music-note>';
+
+  it('reads each slotted tone and draws its arrow', () => {
+    const chord = make(`<music-chord duration="half">${TONES}</music-chord>`);
+    expect(chord.toneQuarterTones).toEqual([null, 'down']);
+    expect(
+      chord.shadowRoot.querySelectorAll('.accidental .accidental-arrow')
+    ).toHaveLength(1);
+  });
+
+  it('redraws when a slotted tone changes', async () => {
+    const chord = make(`<music-chord duration="half">${TONES}</music-chord>`);
+    chord.querySelector('music-note').setAttribute('quarter-tone', 'up');
+    await Promise.resolve();
+    expect(
+      chord.shadowRoot.querySelectorAll('.accidental .accidental-arrow')
+    ).toHaveLength(2);
+  });
+
+  it('does nothing on the chord itself, and warns', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = make(
+      '<music-chord chord="C" quarter-tone="up"></music-chord>'
+    );
+    expect(chord.toneQuarterTones.every((tone: unknown) => tone === null)).toBe(
+      true
+    );
+    expect(chord.shadowRoot.querySelector('.accidental-arrow')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('quarter-tone does nothing on a chord')
+    );
+    warn.mockRestore();
+  });
+
+  it('standalone, draws double accidentals as such', () => {
+    const chord = make(
+      '<music-chord duration="half">' +
+        '<music-note note="F##" octave="4"></music-note>' +
+        '</music-chord>'
+    );
+    expect(
+      chord.shadowRoot.querySelector('.accidental').getAttribute('viewBox')
+    ).toBe('0 0 100 100');
   });
 });

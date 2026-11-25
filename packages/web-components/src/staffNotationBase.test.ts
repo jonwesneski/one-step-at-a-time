@@ -1590,6 +1590,15 @@ describe('staffNotationBase strut min width', () => {
 
   it.each<[string, (index: number) => Record<string, string>]>([
     ['an accidental', (index) => ({ note: ACCIDENTAL_NOTES[index] })],
+    [
+      'a quarter-tone',
+      () => ({
+        note: 'Bb',
+        'quarter-tone': 'up',
+        grace: 'Ab',
+        'grace-quarter-tone': 'up',
+      }),
+    ],
     ['grace notes', () => ({ note: 'G', grace: 'A,B' })],
     [
       'a written trilling notehead',
@@ -1627,6 +1636,60 @@ describe('staffNotationBase strut min width', () => {
       parseFloat(plainLastNote.style.left) + MIN_NOTE_WIDTH,
       5
     );
+  });
+});
+
+describe('staffNotationBase quarter-tones', () => {
+  const renderNotes = (markup: string) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  };
+  const topMargin = (staff: any) => parseFloat(staff.style.marginTop || '0');
+  const bottomMargin = (staff: any) =>
+    parseFloat(staff.style.marginBottom || '0');
+
+  it('shows the arrowed accidental and updates it', () => {
+    const staff = renderNotes(
+      '<music-note note="C#" octave="5" duration="quarter" quarter-tone="down"></music-note>' +
+        '<music-note note="C#" octave="5" duration="quarter"></music-note>'
+    );
+    const [first, second] = staff.children;
+    expect(first.showAccidental).toBe('sharp-down');
+    expect(second.showAccidental).toBe('sharp');
+    first.quarterTone = null;
+    expect(first.showAccidental).toBe('sharp');
+    expect(second.showAccidental).toBeNull();
+  });
+
+  it('applies to the trilling pitch', () => {
+    const staff = renderNotes(
+      '<music-note note="E" octave="4" duration="quarter" trill trill-quarter-tone="up"></music-note>'
+    );
+    const note = staff.children[0];
+    expect(note.resolvedTrillPitch.accidental).toBe('natural-up');
+    note.setAttribute('trill-accidental', 'sharp');
+    expect(note.resolvedTrillPitch.accidental).toBe('sharp-up');
+  });
+
+  it('reserves room for an arrow past the stave, on its own side', () => {
+    const high = (quarterTone: string) =>
+      renderNotes(
+        `<music-note note="B#" octave="5" duration="quarter" ${quarterTone}></music-note>`
+      );
+    expect(topMargin(high(''))).toBe(0);
+    expect(topMargin(high('quarter-tone="up"'))).toBeGreaterThan(0);
+    expect(topMargin(high('quarter-tone="down"'))).toBe(0);
+    const low = renderNotes(
+      '<music-note note="Gb" octave="2" duration="quarter" quarter-tone="down"></music-note>'
+    );
+    expect(bottomMargin(low)).toBeGreaterThan(0);
+    expect(topMargin(low)).toBe(0);
   });
 });
 

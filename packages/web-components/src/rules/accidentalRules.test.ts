@@ -4,22 +4,34 @@
 import '@/src/index';
 
 import { makeChord, makeNote } from '../test-fixtures/unitHelpers';
+import type { Note, QuarterTone } from '../types/theory';
 import {
   ACCIDENTAL_REMINDER_PAREN_WIDTH_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ACCIDENTAL_SYMBOL_WIDTH,
 } from '../utils/notationDimensions';
 import {
+  accidentalArrowOverhangs,
+  accidentalInkRect,
+  accidentalPitchOffset,
+  accidentalReach,
+  accidentalReminderParenCenter,
   accidentalReminderParenHeight,
+  accidentalSuffix,
   accidentalSymbolHeight,
   accidentalSymbolWidth,
+  accidentalVerticalExtent,
+  baseAccidental,
   computeChordAccidentalPlacements,
   computeInterNoteSpacing,
   computeNoteAccidentals,
   getKeySignatureAccidentals,
   parseAccidentalSuffix,
+  pitchAccidental,
+  quarterToneOf,
   resolveAccidental,
   suffixToType,
+  totalChordAccidentalWidth,
 } from './accidentalRules';
 
 describe('parseAccidentalSuffix', () => {
@@ -511,5 +523,280 @@ describe('computeNoteAccidentals — a natural earlier in the bar', () => {
       computeNoteAccidentals([first, reminder], 'F', 'major');
     expect(noteShowAccidentals.get(reminder)).toBe('natural');
     expect(parenthesizedAccidentals.has(reminder)).toBe(true);
+  });
+});
+
+describe('pitchAccidental', () => {
+  it('puts the arrow on the written accidental, or on a natural', () => {
+    expect(pitchAccidental('G#', 'up')).toBe('sharp-up');
+    expect(pitchAccidental('G', 'up')).toBe('natural-up');
+    expect(pitchAccidental('Bb', 'down')).toBe('flat-down');
+    expect(pitchAccidental('F##', 'down')).toBe('double-sharp-down');
+    expect(pitchAccidental('Bbb', 'up')).toBe('double-flat-up');
+    expect(pitchAccidental('G#')).toBe('sharp');
+    expect(pitchAccidental('G', null)).toBeNull();
+  });
+
+  it('comes apart into the base accidental, the arrow and the suffix', () => {
+    expect(baseAccidental('double-sharp-down')).toBe('double-sharp');
+    expect(baseAccidental('natural')).toBe('natural');
+    expect(quarterToneOf('flat-up')).toBe('up');
+    expect(quarterToneOf('flat-down')).toBe('down');
+    expect(quarterToneOf('flat')).toBeNull();
+    expect(accidentalSuffix('double-flat-up')).toBe('bb');
+    expect(accidentalSuffix('natural-up')).toBe('');
+    expect(accidentalSuffix(null)).toBe('');
+  });
+});
+
+describe('computeNoteAccidentals — quarter-tones', () => {
+  type Pitch = [Note, QuarterTone?];
+  const build = ([note, quarterTone]: Pitch) => {
+    const element = makeNote({ note, octave: 4, duration: 'quarter' });
+    element.quarterTone = quarterTone ?? null;
+    return element;
+  };
+  const shown = (pitches: Pitch[], keySig: Note = 'C') => {
+    const elements = pitches.map(build);
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      elements,
+      keySig,
+      'major'
+    );
+    return elements.map((element) => noteShowAccidentals.get(element));
+  };
+
+  it('cancels a quarter-tone with an ordinary accidental', () => {
+    expect(shown([['D'], ['D', 'up'], ['D']])).toEqual([
+      null,
+      'natural-up',
+      'natural',
+    ]);
+    expect(shown([['B', 'down'], ['B'], ['B', 'up'], ['B']])).toEqual([
+      'natural-down',
+      'natural',
+      'natural-up',
+      'natural',
+    ]);
+  });
+
+  it('keeps a quarter-tone in force for the rest of the bar', () => {
+    expect(
+      shown([
+        ['B', 'down'],
+        ['B', 'down'],
+        ['B', 'up'],
+        ['B', 'up'],
+      ])
+    ).toEqual(['natural-down', null, 'natural-up', null]);
+  });
+
+  it('confirms or cancels an accidental before it', () => {
+    expect(shown([['C#'], ['C#', 'down']])).toEqual(['sharp', 'sharp-down']);
+    expect(shown([['C#'], ['C', 'down']])).toEqual(['sharp', 'natural-down']);
+  });
+
+  it('applies to the spelling, not to the key signature', () => {
+    expect(shown([['F#'], ['F#', 'up'], ['F#'], ['F', 'up']], 'D')).toEqual([
+      null,
+      'sharp-up',
+      'sharp',
+      'natural-up',
+    ]);
+  });
+
+  it('resolves each chord tone with its own quarter-tone', () => {
+    const chord = makeChord({
+      notes: [
+        { note: 'C', octave: 4 },
+        { note: 'G#', octave: 4 },
+      ],
+    });
+    chord.querySelectorAll('music-note')[1].setAttribute('quarter-tone', 'up');
+    const { chordNoteAccidentals } = computeNoteAccidentals(
+      [chord],
+      'C',
+      'major'
+    );
+    expect(chordNoteAccidentals.get(chord)).toEqual([null, 'sharp-up']);
+  });
+
+  it('resolves grace and finishing notes slot by slot', () => {
+    const host = build(['A']);
+    host.grace = ['F#', 'G', 'G'];
+    host.graceQuarterTone = ['up', null, 'down'];
+    host.trillFinish = ['G', 'A'];
+    host.trillFinishQuarterTone = 'down';
+    const { graceShowAccidentals, trillFinishShowAccidentals } =
+      computeNoteAccidentals([host], 'C', 'major');
+    expect(graceShowAccidentals.get(host)).toEqual([
+      'sharp-up',
+      null,
+      'natural-down',
+    ]);
+    // The grace notes' G quarter-tone flat still holds.
+    expect(trillFinishShowAccidentals.get(host)).toEqual([null, null]);
+  });
+
+  it('brackets the arrowed accidental of a reminder', () => {
+    const first = build(['Bb', 'up']);
+    const reminder = build(['Bb', 'up']);
+    reminder.setAttribute('accidental-reminder', '');
+    const { noteShowAccidentals, parenthesizedAccidentals } =
+      computeNoteAccidentals([first, reminder], 'C', 'major');
+    expect(noteShowAccidentals.get(reminder)).toBe('flat-up');
+    expect(parenthesizedAccidentals.has(reminder)).toBe(true);
+  });
+
+  it('hides it on a note tied from the same pitch', () => {
+    const start = build(['D', 'up']);
+    const end = build(['D', 'up']);
+    end.setAttribute('tie', 'end');
+    const { noteShowAccidentals } = computeNoteAccidentals(
+      [start, end],
+      'C',
+      'major'
+    );
+    expect(noteShowAccidentals.get(end)).toBeNull();
+  });
+});
+
+describe('accidental extents with an arrow', () => {
+  it('reaches above or below the plain glyph, whose box is unchanged', () => {
+    expect(accidentalSymbolWidth('flat-up')).toBe(ACCIDENTAL_SYMBOL_WIDTH.flat);
+    expect(accidentalSymbolHeight('flat-up')).toBe(
+      ACCIDENTAL_SYMBOL_HEIGHT.flat
+    );
+    const up = accidentalArrowOverhangs('flat-up');
+    const down = accidentalArrowOverhangs('flat-down');
+    expect(up.above).toBeGreaterThan(0);
+    expect(up.below).toBe(0);
+    expect(down.below).toBeGreaterThan(0);
+    expect(down.above).toBe(0);
+    expect(accidentalArrowOverhangs('flat')).toEqual({
+      left: 0,
+      right: 0,
+      above: 0,
+      below: 0,
+    });
+  });
+
+  it('reaches further left when the head leans out of the box', () => {
+    expect(accidentalReach('flat')).toBe(ACCIDENTAL_SYMBOL_WIDTH.flat);
+    expect(accidentalReach('flat-up')).toBeGreaterThan(accidentalReach('flat'));
+    expect(accidentalReach('sharp-up')).toBe(accidentalReach('sharp'));
+  });
+});
+
+describe('computeChordAccidentalPlacements — arrows', () => {
+  const columns = (upper: 'flat' | 'flat-down', lower: 'flat' | 'flat-up') => {
+    const placements = computeChordAccidentalPlacements([
+      { noteIndex: 0, accidental: upper, yPixel: 40 },
+      { noteIndex: 1, accidental: lower, yPixel: 70 },
+    ]);
+    return placements.map(({ xOffset }) => xOffset);
+  };
+
+  it('separates accidentals whose arrows face each other', () => {
+    const [plainUpper, plainLower] = columns('flat', 'flat');
+    expect(plainUpper).toBe(plainLower);
+    const [upper, lower] = columns('flat-down', 'flat-up');
+    expect(upper).not.toBe(lower);
+  });
+
+  it('ignores arrows that point away from each other', () => {
+    const placements = computeChordAccidentalPlacements([
+      { noteIndex: 0, accidental: 'flat-up', yPixel: 40 },
+      { noteIndex: 1, accidental: 'flat-down', yPixel: 70 },
+    ]);
+    expect(placements[0].xOffset).toBe(placements[1].xOffset);
+  });
+
+  it('counts an arrow head that leans left in the column width', () => {
+    expect(totalChordAccidentalWidth(['flat-up'], [40])).toBeGreaterThan(
+      totalChordAccidentalWidth(['flat'], [40])
+    );
+  });
+});
+
+describe('where an accidental sits on its pitch', () => {
+  it("centres a flat's bowl on the pitch and the other signs themselves", () => {
+    expect(accidentalPitchOffset('flat')).toBeGreaterThan(
+      ACCIDENTAL_SYMBOL_HEIGHT.flat / 2
+    );
+    expect(accidentalPitchOffset('double-flat')).toBe(
+      accidentalPitchOffset('flat')
+    );
+    for (const accidental of ['sharp', 'natural', 'double-sharp'] as const) {
+      expect(accidentalPitchOffset(accidental)).toBe(
+        ACCIDENTAL_SYMBOL_HEIGHT[accidental] / 2
+      );
+    }
+  });
+
+  it('reaches further above the pitch than below for a flat', () => {
+    const { above, below } = accidentalVerticalExtent('flat');
+    expect(above).toBeGreaterThan(below);
+    expect(above + below).toBe(ACCIDENTAL_SYMBOL_HEIGHT.flat);
+  });
+
+  it("adds an arrow's overshoot to the side it points to", () => {
+    const plain = accidentalVerticalExtent('flat');
+    const up = accidentalVerticalExtent('flat-up');
+    const down = accidentalVerticalExtent('flat-down');
+    expect(up.above).toBeGreaterThan(plain.above);
+    expect(up.below).toBe(plain.below);
+    expect(down.below).toBeGreaterThan(plain.below);
+    expect(down.above).toBe(plain.above);
+  });
+
+  it("brackets a flat reminder between the glyph's middle and its bowl's", () => {
+    const center = accidentalReminderParenCenter('flat');
+    expect(center).toBeGreaterThan(ACCIDENTAL_SYMBOL_HEIGHT.flat / 2);
+    expect(center).toBeLessThan(accidentalPitchOffset('flat'));
+    expect(accidentalReminderParenCenter('natural')).toBe(
+      ACCIDENTAL_SYMBOL_HEIGHT.natural / 2
+    );
+  });
+
+  it('boxes the ink around the pitch at the given scale', () => {
+    expect(accidentalInkRect('sharp', 10, 50, { scale: 0.5 })).toEqual({
+      left: 10,
+      right: 10 + ACCIDENTAL_SYMBOL_WIDTH.sharp / 2,
+      top: 50 - ACCIDENTAL_SYMBOL_HEIGHT.sharp / 4,
+      bottom: 50 + ACCIDENTAL_SYMBOL_HEIGHT.sharp / 4,
+    });
+  });
+});
+
+describe('computeChordAccidentalPlacements — flats', () => {
+  type Plain = 'flat' | 'natural' | 'sharp';
+  const sharesColumn = (upper: Plain, lower: Plain, distancePx: number) => {
+    const [a, b] = computeChordAccidentalPlacements([
+      { noteIndex: 0, accidental: upper, yPixel: 40 },
+      { noteIndex: 1, accidental: lower, yPixel: 40 + distancePx },
+    ]);
+    return a.xOffset === b.xOffset;
+  };
+  const FIFTH = 20;
+  const SIXTH = 25;
+  const SEVENTH = 30;
+
+  it('aligns a flat with a sharp or natural a sixth below it', () => {
+    expect(sharesColumn('flat', 'sharp', SIXTH)).toBe(true);
+    expect(sharesColumn('flat', 'natural', SIXTH)).toBe(true);
+    expect(sharesColumn('flat', 'sharp', FIFTH)).toBe(false);
+    expect(sharesColumn('flat', 'natural', FIFTH)).toBe(false);
+  });
+
+  it('aligns two flats, or a natural above a flat, from a seventh', () => {
+    expect(sharesColumn('flat', 'flat', SIXTH)).toBe(false);
+    expect(sharesColumn('flat', 'flat', SEVENTH)).toBe(true);
+    expect(sharesColumn('natural', 'flat', SIXTH)).toBe(false);
+    expect(sharesColumn('natural', 'flat', SEVENTH)).toBe(true);
+  });
+
+  it('separates a sharp from the flat whose stem would meet it a seventh below', () => {
+    expect(sharesColumn('sharp', 'flat', SEVENTH)).toBe(false);
   });
 });

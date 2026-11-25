@@ -1,4 +1,6 @@
 import {
+  accidentalInkRect,
+  accidentalPitchOffset,
   computeChordAccidentalPlacements,
   totalChordAccidentalWidth,
   type AccidentalPlacementInput,
@@ -12,6 +14,7 @@ import {
   resolveChordDotStaffYs,
 } from '../../rules/augmentationDotRules';
 import { computeAdjacentDisplacements } from '../../rules/chordRules';
+import type { ObstacleRect } from '../../rules/connectorPlacementRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
 import {
   durationToBase,
@@ -36,7 +39,6 @@ import type {
 import { SVG_NS } from '../consts';
 import {
   ACCIDENTAL_NOTE_GAP,
-  ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_CHORD_GAP_PX,
   AUGMENTATION_DOT_NOTEHEAD_GAP_PX,
   BASE_STEM_LENGTH_PX,
@@ -374,6 +376,7 @@ export const createChordSvg = ({
   }
 
   // Render accidentals if provided
+  const accidentalRects: ObstacleRect[] = [];
   if (noteAccidentals) {
     const inputs: AccidentalPlacementInput[] = [];
     for (let i = 0; i < noteAccidentals.length; i++) {
@@ -400,19 +403,26 @@ export const createChordSvg = ({
       svg.setAttribute('overflow', 'visible');
 
       for (const placement of placements) {
-        const symbolHeight = ACCIDENTAL_SYMBOL_HEIGHT[placement.accidental];
         const symbolSvg = createAccidentalSvg(
           placement.accidental,
           placement.parenthesized ?? false
         );
+        symbolSvg.classList.add('accidental');
 
         // xOffset is already negative (left of notehead left edge)
         // yPixel is the notehead center in chord SVG space
-        symbolSvg.setAttribute(
-          'x',
-          `${placement.xOffset - ACCIDENTAL_NOTE_GAP - headLeftOverhang}`
+        const symbolX =
+          placement.xOffset - ACCIDENTAL_NOTE_GAP - headLeftOverhang;
+        accidentalRects.push(
+          accidentalInkRect(placement.accidental, symbolX, placement.yPixel, {
+            parenthesized: placement.parenthesized,
+          })
         );
-        symbolSvg.setAttribute('y', `${placement.yPixel - symbolHeight / 2}`);
+        symbolSvg.setAttribute('x', `${symbolX}`);
+        symbolSvg.setAttribute(
+          'y',
+          `${placement.yPixel - accidentalPitchOffset(placement.accidental)}`
+        );
         svg.appendChild(symbolSvg);
       }
     }
@@ -527,7 +537,7 @@ export const createChordSvg = ({
         arpeggioFootprint -
         arpeggioHairpinFootprint -
         GRACE_MAIN_GAP_PX,
-      mainAccidentalShown: anyAccidentalShown,
+      mainAccidentalRects: accidentalRects,
       mainStemUp: stemUp,
       mainStaffY: graceLedgerStaffY,
     });

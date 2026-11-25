@@ -1,11 +1,11 @@
 import type { ConnectorRole, TieValue } from '../types/elements';
 import type {
-  AccidentalType,
   ArpeggioType,
   ArticulationType,
   BarlineType,
   BreathMark,
   ClefType,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
@@ -23,6 +23,7 @@ import type {
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  QuarterTone,
   RestStaffSide,
   SlurStyle,
   StaffGroupType,
@@ -56,10 +57,11 @@ import {
   MEASURE_END_BARLINES,
   MEASURE_NUMBER_DISPLAYS,
   NOTEHEADS,
+  OCTAVES,
   OCTAVE_CONTINUATION_MODES,
   OCTAVE_DISPLAY_MODES,
   OCTAVE_SHIFT_AMOUNTS,
-  OCTAVES,
+  QUARTER_TONES,
   REST_STAFF_SIDES,
   SLUR_STYLES,
   STAFF_GROUPS,
@@ -78,6 +80,7 @@ import {
 } from './consts';
 
 const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
+const VALID_QUARTER_TONES = new Set<string>(QUARTER_TONES);
 const VALID_DURATIONS = new Set<string>(DURATIONS);
 const VALID_TIMES = new Set<string>(TIMES);
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
@@ -283,9 +286,16 @@ export const parseArpeggio = (value: string | null): ArpeggioType | null => {
 
 export const parseAccidentalType = (
   value: string | null
-): AccidentalType | null => {
+): ConventionalAccidentalType | null => {
   if (value !== null && VALID_ACCIDENTAL_TYPES.has(value)) {
-    return value as AccidentalType;
+    return value as ConventionalAccidentalType;
+  }
+  return null;
+};
+
+export const parseQuarterTone = (value: string | null): QuarterTone | null => {
+  if (value !== null && VALID_QUARTER_TONES.has(value)) {
+    return value as QuarterTone;
   }
   return null;
 };
@@ -518,6 +528,17 @@ export const parseGraceNoteheads = (
   return tokens.map((token) =>
     VALID_NOTEHEADS.has(token) ? (token as NoteheadType) : null
   );
+};
+
+// Parses a comma-separated quarter-tone list (e.g. "up,,down"), one slot per
+// grace note; an empty or invalid slot is an ordinary pitch.
+export const parseGraceQuarterTones = (
+  value: string | null
+): (QuarterTone | null)[] | null => {
+  if (value === null) {
+    return null;
+  }
+  return value.split(',').map((token) => parseQuarterTone(token.trim()));
 };
 
 // Setter body for the array-valued grace properties, which accept a
