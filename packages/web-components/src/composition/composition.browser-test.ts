@@ -3440,26 +3440,55 @@ test.describe(`${MUSIC_COMPOSITION} row spacing for connectors`, () => {
     ]);
   });
 
+  test('each slur keeps its shape as the composition resizes', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    await page.evaluate((compositionTag) => {
+      document.querySelector(compositionTag)?.setAttribute('max-width', 'none');
+    }, MUSIC_COMPOSITION);
+    // Each arc's top, from the top of its measure.
+    const arcTops = async (width: number): Promise<number[]> => {
+      await resizeHost(page, width);
+      await waitForRedrawCycle(page);
+      const { pathTops, measureTops } = await readLayout(page);
+      return pathTops.map((top) => top - measureTops[0]);
+    };
+    let previous = await arcTops(700);
+    for (let width = 730; width <= 1180; width += 30) {
+      const current = await arcTops(width);
+      current.forEach((top, i) =>
+        expect(Math.abs(top - previous[i])).toBeLessThan(8)
+      );
+      previous = current;
+    }
+  });
+
   test('dropping the tallest slur shrinks the margin instead of keeping the old value', async ({
     page,
   }) => {
     await buildChainedHandCrossing(page);
+    // Without G5 the phrase is F2 to D5, which climbs over the treble rests,
+    // then D5 down to C3, which stays below its first note.
+    const dropFromPhrase = (staffIndex: number) =>
+      page.evaluate((index) => {
+        document
+          .querySelectorAll('music-staff')
+          [index].querySelector('music-note[slur-group]')
+          ?.removeAttribute('slur-group');
+      }, staffIndex);
+    await dropFromPhrase(2);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
     const before = await readLayout(page);
+    expect(before.pathTops).toHaveLength(2);
 
-    // F2 starts the first segment (F2 to D5), the arc that climbs over the
-    // treble rests; D5 to C3 to G5 remain.
-    await page.evaluate(() => {
-      const firstBass = document
-        .querySelectorAll('music-measure')[0]
-        .querySelectorAll('music-staff')[1]
-        .querySelector('music-note[slur-group]');
-      firstBass?.removeAttribute('slur-group');
-    });
+    await dropFromPhrase(1);
     await waitForRedrawCycle(page);
     await waitForRedrawCycle(page);
     const after = await readLayout(page);
 
-    expect(after.pathTops).toHaveLength(2);
+    expect(after.pathTops).toHaveLength(1);
     expect(marginTopPx(after.margins[0])).toBeLessThan(
       marginTopPx(before.margins[0])
     );
@@ -4271,6 +4300,43 @@ test.describe(`${MUSIC_COMPOSITION} octave continuation over a double-stemmed be
     }
     expect(gap).toBeGreaterThanOrEqual(OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5);
   });
+});
+
+test.describe('a page as wide as its music', () => {
+  const measure = `
+    <music-measure><music-staff clef="treble">
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+      <music-note note="D" octave="5" duration="quarter"></music-note>
+    </music-staff></music-measure>`;
+  const cases = [
+    [
+      'a composition with a narrow last bar',
+      `<music-composition time="2/4">${measure.repeat(5)}</music-composition>`,
+    ],
+    ['a standalone measure', measure],
+    [
+      'a standalone staff',
+      `<music-staff clef="treble" time="2/4">
+        <music-note note="C" octave="5" duration="half"></music-note>
+      </music-staff>`,
+    ],
+  ];
+  for (const [name, markup] of cases) {
+    test(`never scrolls sideways as ${name} resizes`, async ({ page }) => {
+      await page.evaluate((html) => {
+        document.getElementById('host')!.innerHTML = html;
+      }, markup);
+      for (const width of [900, 700, 500, 300]) {
+        await resizeHost(page, width);
+        await waitForRedrawCycle(page);
+        const past = await page.evaluate(() => {
+          const host = document.getElementById('host')!;
+          return host.scrollWidth - host.clientWidth;
+        });
+        expect(past, `at ${width}px`).toBe(0);
+      }
+    });
+  }
 });
 
 test.describe('a glissando over a system break', () => {

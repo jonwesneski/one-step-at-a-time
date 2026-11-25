@@ -110,7 +110,5 @@ export function arcTopUnder(
   const height = (t: number): number => 4 * t * (1 - t);
   const fullest =
     start <= 0.5 && end >= 0.5 ? 1 : Math.max(height(start), height(end));
-  return (
-    chordTop + (reachY - chordTop) * Math.min(1, fullest * ARC_FULLNESS)
-  );
+  return chordTop + (reachY - chordTop) * Math.min(1, fullest * ARC_FULLNESS);
 }

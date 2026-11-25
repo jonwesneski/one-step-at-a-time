@@ -1,12 +1,13 @@
 import { DurationType } from '../types/theory';
 import { MIN_NOTE_WIDTH, PIXELS_PER_BEAT } from '../utils/notationDimensions';
 import {
-  columnRoomAt,
+  columnOffsetAt,
+  computeColumnOffsets,
   computeMeasureProportionalOffsets,
   computeRoomAfterEntries,
   computeSpacingWeights,
   computeUncrowdedWidth,
-  mergeColumnRooms,
+  layOutBar,
 } from './spacingRules';
 import { durationToFactor } from './theoryConsts';
 
@@ -177,60 +178,113 @@ describe('computeMeasureProportionalOffsets — limits', () => {
 describe('computeRoomAfterEntries', () => {
   it('sums the room to the end of the bar', () => {
     const { roomAfter, columns } = computeRoomAfterEntries([
-      { beatOffsets: [0, 0.5, 0.75], rooms: [30, 20, 25] },
+      { beatOffsets: [0, 0.5, 0.75], rooms: [20, 30, 25], lead: 0 },
     ]);
-    expect(roomAfter).toEqual([[75, 45, 25]]);
+    expect(roomAfter).toEqual([[75, 55, 25]]);
     expect(columns).toEqual([
       { beat: 0, roomAfter: 75 },
-      { beat: 0.5, roomAfter: 45 },
+      { beat: 0.5, roomAfter: 55 },
       { beat: 0.75, roomAfter: 25 },
     ]);
   });
 
   it('gives a beat the most any voice needs, and earlier beats no less', () => {
-    const { roomAfter } = computeRoomAfterEntries([
-      { beatOffsets: [0, 0.5], rooms: [20, 20] },
-      { beatOffsets: [0, 0.5, 0.75], rooms: [20, 30, 40] },
+    const { roomAfter, columns } = computeRoomAfterEntries([
+      { beatOffsets: [0, 0.5], rooms: [20, 25], lead: 0 },
+      { beatOffsets: [0.5, 0.75], rooms: [40, 30], lead: 0 },
     ]);
     expect(roomAfter).toEqual([
       [90, 70],
-      [90, 70, 40],
+      [70, 30],
     ]);
-  });
-
-  it('takes other staves into account', () => {
-    const { roomAfter } = computeRoomAfterEntries(
-      [{ beatOffsets: [0, 0.5], rooms: [20, 20] }],
-      [{ beat: 0.75, roomAfter: 100 }]
-    );
-    expect(roomAfter).toEqual([[120, 100]]);
+    expect(columns[0]).toEqual({ beat: 0, roomAfter: 90 });
   });
 
   it('keeps entries on one beat apart', () => {
     expect(
       computeRoomAfterEntries([
-        { beatOffsets: [0, 0, 0.5], rooms: [20, 20, 25] },
+        { beatOffsets: [0, 0, 0.5], rooms: [20, 20, 25], lead: 0 },
       ]).roomAfter
     ).toEqual([[65, 45, 25]]);
   });
 });
 
-describe('column rooms', () => {
-  it('merges staves, keeping the most at each beat', () => {
-    const merged = mergeColumnRooms([
-      [{ beat: 0.5, roomAfter: 40 }],
+describe('computeColumnOffsets', () => {
+  it('keeps a beat at its place unless an entry before it is in the way', () => {
+    expect(
+      computeColumnOffsets(
+        [{ beatOffsets: [0, 0.25, 0.5], rooms: [20, 60, 20], lead: 0 }],
+        (beat) => beat * 200
+      )
+    ).toEqual([
+      { beat: 0, offset: 0 },
+      { beat: 0.25, offset: 50 },
+      { beat: 0.5, offset: 110 },
+    ]);
+  });
+
+  it('moves a beat for every voice when one of them is pushed', () => {
+    const columns = computeColumnOffsets(
       [
-        { beat: 0.25, roomAfter: 70 },
-        { beat: 0.5, roomAfter: 60 },
+        { beatOffsets: [0, 0.25], rooms: [80, 20], lead: 0 },
+        { beatOffsets: [0, 0.25, 0.5], rooms: [20, 40, 20], lead: 12 },
       ],
-    ]);
-    expect(merged).toEqual([
-      { beat: 0.25, roomAfter: 70 },
-      { beat: 0.5, roomAfter: 60 },
-    ]);
-    expect(columnRoomAt(merged, 0)).toBe(70);
-    expect(columnRoomAt(merged, 0.5)).toBe(60);
-    expect(columnRoomAt(merged, 0.75)).toBe(0);
+      (beat) => beat * 100
+    );
+    expect(columnOffsetAt(columns, 0)).toBe(12);
+    expect(columnOffsetAt(columns, 0.25)).toBe(92);
+    expect(columnOffsetAt(columns, 0.5)).toBe(132);
+  });
+
+  it('clears a whole run of entries on one beat', () => {
+    const columns = computeColumnOffsets(
+      [{ beatOffsets: [0, 0, 0, 0.5], rooms: [20, 20, 20, 20], lead: 0 }],
+      () => 0
+    );
+    expect(columnOffsetAt(columns, 0.5)).toBe(60);
+  });
+});
+
+describe('layOutBar', () => {
+  const busyStart = {
+    beatOffsets: [0, 0.125, 0.25, 0.375, 0.5],
+    rooms: [20, 20, 20, 20, 25],
+    lead: 0,
+  };
+  const busyEnd = {
+    beatOffsets: [0, 0.5, 0.625, 0.75, 0.875],
+    rooms: [20, 20, 20, 20, 25],
+    lead: 0,
+  };
+
+  it('needs the room of both halves, whichever staff each is on', () => {
+    const { requiredWidth } = layOutBar([busyStart, busyEnd], [], 1, 0);
+    expect(requiredWidth).toBe(165);
+    expect(layOutBar([busyStart], [], 1, 0).requiredWidth).toBe(105);
+  });
+
+  it('holds every beat in its required width, in the same place for both', () => {
+    const { columns, requiredWidth } = layOutBar(
+      [busyStart, busyEnd],
+      [],
+      1,
+      165
+    );
+    expect(columnOffsetAt(columns, 0.5)).toBe(80);
+    expect(columnOffsetAt(columns, 0.875)).toBe(requiredWidth - 25);
+  });
+
+  it('moves nothing when the last entry of an evenly filled bar is added', () => {
+    const evenly = (count: number) => ({
+      beatOffsets: Array.from({ length: count }, (_, i) => i / 8),
+      rooms: Array.from({ length: count }, (_, i) => (i < count - 1 ? 20 : 25)),
+      lead: 0,
+    });
+    const { requiredWidth, uncrowdedWidth } = layOutBar([evenly(8)], [], 1, 0);
+    expect(uncrowdedWidth).toBe(requiredWidth);
+    const full = layOutBar([evenly(8)], [], 1, requiredWidth).columns;
+    const before = layOutBar([evenly(7)], [], 1, requiredWidth).columns;
+    expect(full.slice(0, 7)).toEqual(before);
   });
 });
 

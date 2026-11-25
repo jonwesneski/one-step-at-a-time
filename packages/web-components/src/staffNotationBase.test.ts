@@ -39,10 +39,10 @@ import {
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
+  NOTE_SVG_WIDTH,
   noteHeadCenter,
   TAIL_DOWN_WIDTH_PX,
   TAIL_UP_WIDTH_PX,
-  NOTE_SVG_WIDTH,
 } from './utils/svgCreator/note';
 
 afterEach(() => {
@@ -1701,19 +1701,33 @@ describe('staffNotationBase reported widths', () => {
     expect(both).toBeGreaterThan(Math.max(early, late));
   });
 
-  it('asks for more width when its last notes are short, within limits', () => {
-    const evenly = renderStaff(notes('quarter', 'quarter', 'quarter', 'quarter'))
-      .widths;
+  it('asks for more width when its last notes are shorter than its others', () => {
+    const slackWidth = 10 + 4 * 20 + 4 * 20;
+    const evenly = renderStaff(
+      notes('quarter', 'quarter', 'quarter', 'quarter')
+    );
     const shortEnd = renderStaff(
       notes('half', 'quarter', 'eighth', 'sixteenth', 'sixteenth')
-    ).widths;
-    // Four quarters already keep their proportional places.
-    expect(evenly.naturalWidth - evenly.minWidth).toBeLessThanOrEqual(80);
-    const slack = 60 + 20;
-    expect(shortEnd.naturalWidth).toBeGreaterThan(shortEnd.minWidth + slack);
-    expect(shortEnd.naturalWidth).toBeLessThanOrEqual(
-      (shortEnd.minWidth + slack) * 1.25
     );
+    expect(evenly.widths.naturalWidth).toBeLessThanOrEqual(slackWidth);
+    expect(shortEnd.widths.naturalWidth).toBeGreaterThan(slackWidth * 1.5);
+  });
+
+  it('takes up to its container for that, but may shrink beside other items', () => {
+    const shortEnd = notes(
+      'half',
+      'quarter',
+      'eighth',
+      'sixteenth',
+      'sixteenth'
+    );
+    expect(ownMinWidth(renderStaff(shortEnd).staff)).toMatch(
+      /^max\(\d+px, min\(100%, \d+px\)\)$/
+    );
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    document.body.appendChild(row);
+    expect(ownMinWidth(renderStaff(shortEnd, row).staff)).toMatch(/^\d+px$/);
   });
 });
 
@@ -1863,7 +1877,9 @@ describe('staffNotationBase bends', () => {
       )
       .join('');
   const bendLines = (staff: any): Element[] =>
-    Array.from(staff.shadowRoot.querySelectorAll('.bends-container .bend-line'));
+    Array.from(
+      staff.shadowRoot.querySelectorAll('.bends-container .bend-line')
+    );
 
   it('keeps room for a line, and more for a target', () => {
     const plain = renderStaff(quarters('')).minWidth;
@@ -2460,9 +2476,7 @@ describe('glissando labels', () => {
     };
     const plain = yOf(quarter('glissando-label="chrom"'));
     expect(
-      yOf(
-        quarter('grace="F,G,A" grace-octave="5,5,5" glissando-label="chrom"')
-      )
+      yOf(quarter('grace="F,G,A" grace-octave="5,5,5" glissando-label="chrom"'))
     ).toBeLessThan(plain);
     const high = `<music-note note="C" octave="6" duration="quarter"></music-note>`;
     const reach = 'm'.repeat(12);

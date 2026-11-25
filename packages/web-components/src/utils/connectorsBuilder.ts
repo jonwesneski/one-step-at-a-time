@@ -22,14 +22,17 @@ import {
   pickStemSide,
   resolveEnclosingArc,
   resolveRectClearingBulgeHeight,
-  resolveSlurCurve,
   segmentIntersectsRect,
   sliceConvexPolygon,
   slurAnchorKind,
-  SlurCurveResolution,
   SlurStem,
   untiltedStemEndY,
 } from '../rules/connectorPlacementRules';
+import {
+  type CrossStaffSlurShape,
+  resolveCrossStaffSlurShape,
+  type SlurObstacle,
+} from '../rules/crossStaffSlurRules';
 import {
   DoubleStemmedBeamEntry,
   DoubleStemmedBeamGroup,
@@ -76,7 +79,6 @@ import {
   ARPEGGIO_RUN_TIE_OBSCURE_CLEARANCE_PX,
   ARPEGGIO_RUN_TIE_STUB_LENGTH_PX,
   AUGMENTATION_DOT_SPACING_GAP_PX,
-  CROSS_STAFF_SLUR_BULGE_SPAN_RATIO,
   GLISSANDO_GAP_PX,
   GLISSANDO_INK_CLEARANCE_PX,
   LAISSEZ_VIBRER_CURVE_LENGTH_PX,
@@ -85,14 +87,12 @@ import {
   SLUR_BESIDE_STEM_GAP_PX,
   SLUR_BESIDE_STEM_INSET_PX,
   SLUR_BEYOND_BEAM_CLEARANCE_PX,
-  SLUR_CONTROL_HEIGHT_MAX_RATIO,
   SLUR_MAX_EXTRA_BULGE_PX,
   SLUR_NESTED_CLEARANCE_PX,
   SLUR_NOTE_CLEARANCE_PX,
   SLUR_NOTEHEAD_OFFSET_PX,
   SLUR_OBSTACLE_CLEARANCE_PX,
   SLUR_STEM_END_CLEARANCE_PX,
-  STAFF_LINE_SPACING,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from './notationDimensions';
 import {
@@ -1223,9 +1223,15 @@ export type EntryGeometry = {
 // double-stemmed beam (sliced so a sloped beam keeps its outline).
 export type EntryObstacles = {
   entries: EntryGeometry[];
-  beamSlices: ObstacleRect[];
+  beamSlices: PlacedRect[];
   // Marks a staff draws above its stave between entries (breath marks).
-  decorationRects: ObstacleRect[];
+  decorationRects: PlacedRect[];
+};
+
+/** A rect on one staff of a row; a beam both staves share has none. */
+export type PlacedRect = ObstacleRect & {
+  staffIndex: number | null;
+  rowTop: number;
 };
 
 const OBSTACLE_GLYPH_SELECTOR =
@@ -1362,34 +1368,36 @@ export const collectEntryObstacles = (
     };
   });
 
-  const beamPolygons: SVGGraphicsElement[] = [];
   const staves = Array.from(root.querySelectorAll(STAFF_TAGS));
-  for (const staff of staves) {
-    beamPolygons.push(
-      ...Array.from(
-        staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
-          '.beam, .tremolo-beam'
-        ) ?? []
-      )
-    );
-  }
-  for (const measure of measureElements) {
-    beamPolygons.push(
-      ...Array.from(
-        measure.shadowRoot?.querySelectorAll<SVGGraphicsElement>(
-          '.double-stemmed-beam, .tremolo-beam'
-        ) ?? []
-      )
-    );
-  }
-  const beamSlices = beamPolygons.flatMap((polygon) =>
-    collectBeamSlices(polygon, rootRect)
-  );
+  const beamsOf = (
+    owner: Element,
+    selector: string,
+    staffIndex: number | null
+  ): PlacedRect[] => {
+    const rowTop = getRowTop(owner as NoteLikeElementType, rootRect);
+    return Array.from(
+      owner.shadowRoot?.querySelectorAll<SVGGraphicsElement>(selector) ?? []
+    )
+      .flatMap((polygon) => collectBeamSlices(polygon, rootRect))
+      .map((rect) => ({ ...rect, staffIndex, rowTop }));
+  };
+  const beamSlices = [
+    ...staves.flatMap((staff) =>
+      beamsOf(staff, '.beam, .tremolo-beam', staffIndexOf(staff))
+    ),
+    ...measureElements.flatMap((measure) =>
+      beamsOf(measure, '.double-stemmed-beam, .tremolo-beam', null)
+    ),
+  ];
   const decorationRects = staves.flatMap((staff) =>
     Array.from(
       staff.shadowRoot?.querySelectorAll<SVGGraphicsElement>('.breath-mark') ??
         []
-    ).map((mark) => toRootSpace(mark.getBoundingClientRect(), rootRect))
+    ).map((mark) => ({
+      ...toRootSpace(mark.getBoundingClientRect(), rootRect),
+      staffIndex: staffIndexOf(staff),
+      rowTop: getRowTop(staff as NoteLikeElementType, rootRect),
+    }))
   );
 
   return { entries, beamSlices, decorationRects };
@@ -1466,13 +1474,11 @@ const countNotesPerStaffInSpan = (
   return { top, bottom };
 };
 
-const CROSS_STAFF_SLUR_EXTRA_HEIGHT_PX = STAFF_LINE_SPACING * 6;
-
 // A slur spanning two staves (or a double-stemmed beam-group's two staves),
 // placed by the rules in rules/connectorPlacementRules.ts: the majority
-// staff's side (above on an even split), both anchors on that side, and a
-// shape that keeps clear of every other entry — switching to the other side
-// only when that one is clear and the preferred one is not.
+// staff's side (above on an even split), both anchors on that side, and the
+// shape rules/crossStaffSlurRules.ts gives — switching to the other side only
+// when the preferred one would touch an entry and the other keeps clearer.
 const buildCrossStaffSlurSvgs = (
   pair: ConnectorPair,
   staves: SlurGroupStaves,
@@ -1488,12 +1494,21 @@ const buildCrossStaffSlurSvgs = (
     stemSourceOf(pair.start),
     stemSourceOf(pair.end),
   ]);
-  const obstacles = [
+  const rowTop = getRowTop(pair.start, rootRect);
+  const isOnRow = (item: { rowTop: number }): boolean =>
+    Math.abs(item.rowTop - rowTop) <= ROW_TOLERANCE_PX;
+  const obstacles: SlurObstacle[] = [
     ...entries
-      .filter((entry) => !endpointOwners.has(entry.element))
-      .flatMap((entry) => entry.glyphRects),
-    ...(entryObstacles?.beamSlices ?? []),
-    ...(entryObstacles?.decorationRects ?? []),
+      .filter((entry) => !endpointOwners.has(entry.element) && isOnRow(entry))
+      .flatMap(({ glyphRects, centerX, staffIndex }) =>
+        glyphRects.map((rect) => ({ rect, columnX: centerX, staffIndex }))
+      ),
+    ...[
+      ...(entryObstacles?.beamSlices ?? []),
+      ...(entryObstacles?.decorationRects ?? []),
+    ]
+      .filter(isOnRow)
+      .map((rect) => ({ rect, columnX: null, staffIndex: rect.staffIndex })),
   ];
 
   const anchorFor = (note: NoteLikeElementType, side: CurveBulge): Anchor => {
@@ -1521,7 +1536,7 @@ const buildCrossStaffSlurSvgs = (
     side: CurveBulge;
     start: Anchor;
     end: Anchor;
-    curve: SlurCurveResolution;
+    shape: CrossStaffSlurShape;
   } | null = null;
   for (const side of [preferredSide, oppositeSide(preferredSide)]) {
     const start = anchorFor(pair.start, side);
@@ -1540,25 +1555,16 @@ const buildCrossStaffSlurSvgs = (
         }),
       ];
     }
-    const span = Math.abs(end.x - start.x);
-    const floorHeight = Math.max(
-      DEFAULT_BULGE_HEIGHT,
-      span * CROSS_STAFF_SLUR_BULGE_SPAN_RATIO
+    const shape = resolveCrossStaffSlurShape(
+      { x: start.x, y: start.y, staffIndex: staffIndexOf(pair.start) },
+      { x: end.x, y: end.y, staffIndex: staffIndexOf(pair.end) },
+      side,
+      obstacles
     );
-    const curve = resolveSlurCurve(start, end, side, obstacles, {
-      minHeight: 0,
-      floorHeight,
-      maxHeight: Math.max(
-        span * SLUR_CONTROL_HEIGHT_MAX_RATIO,
-        floorHeight + CROSS_STAFF_SLUR_EXTRA_HEIGHT_PX
-      ),
-      step: BULGE_STEP_PX / 2,
-      clearance: SLUR_OBSTACLE_CLEARANCE_PX,
-    });
-    if (chosen === null || curve.collisions < chosen.curve.collisions) {
-      chosen = { side, start, end, curve };
+    if (chosen === null || shape.overlap < chosen.shape.overlap) {
+      chosen = { side, start, end, shape };
     }
-    if (curve.collisions === 0) {
+    if (shape.overlap <= SLUR_OBSTACLE_CLEARANCE_PX) {
       break;
     }
   }
@@ -1570,7 +1576,7 @@ const buildCrossStaffSlurSvgs = (
       from: { x: chosen.start.x, y: chosen.start.y },
       to: { x: chosen.end.x, y: chosen.end.y },
       bulge: chosen.side,
-      controlHeights: chosen.curve.controlHeights,
+      controlHeights: chosen.shape.controlHeights,
     }),
   ];
 };

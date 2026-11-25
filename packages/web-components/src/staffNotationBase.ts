@@ -15,6 +15,10 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from './rules/arpeggioRules';
 import {
+  resolveChordDotStaffYs,
+  resolveNoteDotStaffY,
+} from './rules/augmentationDotRules';
+import {
   barlineGlyphWidth,
   midBarBarlineSlotWidth,
 } from './rules/barlineRules';
@@ -50,24 +54,20 @@ import {
   resolveFlutterPassages,
 } from './rules/flutterTongueRules';
 import {
-  resolveChordDotStaffYs,
-  resolveNoteDotStaffY,
-} from './rules/augmentationDotRules';
-import {
   arcTopUnder,
-  lineTopUnder,
   type LabelSpan,
+  lineTopUnder,
 } from './rules/glissandoLabelRules';
 import {
   bendDotYs,
+  type BendHead,
+  type BendLimit,
   bendReserveWidthPx,
   bendTargetsWidthPx,
   glissandoReserveWidthPx,
   layoutBends,
-  resolveBend,
-  type BendHead,
-  type BendLimit,
   type LinePoint,
+  resolveBend,
   type ResolvedBend,
 } from './rules/glissandoRules';
 import {
@@ -117,13 +117,10 @@ import {
 } from './rules/repeatWarningRules';
 import { restToYCoordinate } from './rules/restRules';
 import {
-  computeMeasureProportionalOffsets,
-  computeUncrowdedWidth,
+  type BarSpacing,
+  columnOffsetAt,
   computeSpacingWeights,
-  computeRoomAfterEntries,
-  mergeColumnRooms,
-  type ColumnRoom,
-  type OffsetLimit,
+  layOutBar,
   type VoiceRooms,
 } from './rules/spacingRules';
 import { getStaffYs } from './rules/staffNoteRules';
@@ -132,7 +129,6 @@ import {
   calculateStaffNaturalWidth,
   computeMinimumEntryAdvance,
   type StaffStrutInputs,
-  widenToUncrowded,
 } from './rules/staffWidth';
 import {
   determineVoiceStemDirections,
@@ -248,14 +244,14 @@ import type {
 } from './types/theory';
 import {
   BeamsBuilder,
+  bendTargetWidthPx,
   breathMarkHeightPx,
   breathMarkReservedWidthPx,
   breathMarkWidthPx,
-  bendTargetWidthPx,
-  createBendSvg,
   BULGE_STEP_PX,
   computeYHeadOffset,
   createBarlineSvg,
+  createBendSvg,
   createBreathMarkSvg,
   createDynamicMarkingSvg,
   createFlatSvg,
@@ -281,6 +277,7 @@ import {
   TRILL_FINISH_HEAD_RY,
   trillFinishTailOverhangPx,
 } from './utils';
+import { GLISSANDO_HINT_LABELS } from './utils/connectorsBuilder';
 import {
   CLEF_EVENTS,
   COMMON_ATTRIBUTES,
@@ -329,7 +326,9 @@ import {
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
   END_WARNING_GAP_PX,
+  GLISSANDO_WAVE_AMPLITUDE_PX,
   GRACE_MAIN_GAP_PX,
+  GRACE_SCALE,
   HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_CANCEL_GAP_PX,
@@ -338,15 +337,13 @@ import {
   KEY_SIG_NATURAL_WIDTH,
   KEY_SIG_NATURAL_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
+  LAST_ENTRY_GAP_PX,
   LEADING_NOTE_GAP_PX,
   MID_BAR_BARLINE_PADDING_PX,
   MID_BAR_WARNING_CLEF_WIDTH_PX,
   MID_STREAM_CLEF_SVG_HEIGHT_PX,
   MID_STREAM_CLEF_WIDTH_PX,
   MID_STREAM_CLEF_Y_OFFSET,
-  GLISSANDO_WAVE_AMPLITUDE_PX,
-  GRACE_SCALE,
-  LAST_ENTRY_GAP_PX,
   MIN_NOTE_WIDTH,
   NOTE_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
   NOTES_AREA_LEFT_MARGIN,
@@ -370,7 +367,6 @@ import {
   SLUR_NESTED_CLEARANCE_PX,
   SLUR_NOTE_CLEARANCE_PX,
   SLUR_NOTEHEAD_OFFSET_PX,
-  TIE_REACH_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -379,10 +375,11 @@ import {
   STAFF_Y_PADDING,
   STAFF_Y_STEP,
   SWELL_MIN_SPAN_PX,
-  TIME_SIG_GLYPH_CENTER_X_PX,
-  TIME_SIG_Y_TRANSLATE,
   TECHNIQUE_LABEL_FONT_SIZE_PX,
   TECHNIQUE_LABEL_GAP_PX,
+  TIE_REACH_PX,
+  TIME_SIG_GLYPH_CENTER_X_PX,
+  TIME_SIG_Y_TRANSLATE,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -401,15 +398,16 @@ import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
-import { GLISSANDO_HINT_LABELS } from './utils/connectorsBuilder';
 import { articulationStackDepth } from './utils/svgCreator/articulations';
-import { lineLabelBox } from './utils/svgCreator/curve';
 import {
   chordHeadExtentPx,
-  chordUpTailInk,
   chordToneHeadCenterY,
   chordToneHeadExtentPx,
+  chordUpTailInk,
 } from './utils/svgCreator/chord';
+import { lineLabelBox } from './utils/svgCreator/curve';
+import { graceInkTopY } from './utils/svgCreator/graceNotes';
+import { ledgerLineOverhangPx } from './utils/svgCreator/ledgerLines';
 import {
   ACCIDENTAL_NOTE_GAP,
   flagStemExtensionPx,
@@ -422,11 +420,11 @@ import {
 } from './utils/svgCreator/note';
 import {
   createTechniqueLabel,
+  type TechniqueLabel,
   techniqueLabelHeightPx,
   techniqueLabels,
   techniqueLabelWidthPx,
   wrapTechniqueLabel,
-  type TechniqueLabel,
 } from './utils/svgCreator/techniqueLabel';
 import {
   computeWrittenTrillNoteWidth,
@@ -435,8 +433,6 @@ import {
   createWrittenTrillNoteSvg,
   TRILL_SIGN_WIDTH_PX,
 } from './utils/svgCreator/trill';
-import { graceInkTopY } from './utils/svgCreator/graceNotes';
-import { ledgerLineOverhangPx } from './utils/svgCreator/ledgerLines';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
 import { createUnisonBracketSvg } from './utils/svgCreator/unison';
 
@@ -653,6 +649,13 @@ function techniqueLabelsOf(
   return techniqueLabels(tremoloLabel ?? null, glissandoLabel ?? null);
 }
 
+type StaffBarSpacing = BarSpacing & {
+  unisonReserves: ReadonlyMap<VoiceKey, Map<number, number>>;
+  // This staff's own voices.
+  own: VoiceRooms[];
+  roomAfterByVoice: Map<VoiceKey, number[]>;
+};
+
 // One voice's snapshot of a render pass; one per active VoiceKey.
 type VoiceRenderState = {
   elements: NoteChordOrRestElementType[];
@@ -818,22 +821,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Where each mid-bar barline's slot would sit from this staff's own
   // entries, per #spaceElements() pass (see ownBarlineSlotLefts).
   #ownBarlineSlotLefts: BarlineSlotLeft[] = [];
-  #ownColumnRooms: ColumnRoom[] = [];
+  #ownVoiceRooms: VoiceRooms[] | null = null;
   // The markers this pass spaces entries around: the measure's, and those with
   // a slot on this staff.
   #spacingMarkers: {
     all: readonly MarkerBeat[];
     slots: readonly MarkerBeat[];
   } = { all: [], slots: [] };
-  // Each entry's room to the end of the notes area, for the unison reserves it
-  // was computed with.
-  #roomAfterEntries: {
-    unisonReserves: ReadonlyMap<VoiceKey, Map<number, number>>;
-    byVoice: Map<VoiceKey, number[]>;
-    ownByVoice: Map<VoiceKey, number[]>;
-    columns: ColumnRoom[];
-    limits: OffsetLimit[];
-  } | null = null;
+  // Where the bar's beats go, for the unison reserves it was computed with.
+  #cachedBarSpacing: StaffBarSpacing | null = null;
   // Voice 1's beat-offsets, per #renderNotes() pass: clef markers and
   // noteToYCoordinate()'s `elementIndex` both index into voice 1.
   #voice1BeatOffsets: number[] = [];
@@ -2933,7 +2929,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const reservedEndWarningWidth = this.endWarningSpace.reserved;
       for (let i = 0; i < state.elements.length; i++) {
         rightwardWidth += this.#rightwardFootprint(voiceKey, i);
-        if (i === state.elements.length - 1 && this.#bendsOf(state, i).length > 0) {
+        if (
+          i === state.elements.length - 1 &&
+          this.#bendsOf(state, i).length > 0
+        ) {
           // A bend at the end of the bar stops inside it.
           rightwardWidth += NOTE_SVG_WIDTH - MIN_NOTE_WIDTH;
         }
@@ -2983,10 +2982,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       anyVoiceHasContent
         ? {
             minWidth: Math.max(maxMinWidth, requiredWidth),
-            naturalWidth: widenToUncrowded(
-              Math.max(maxNaturalWidth, requiredWidth),
+            naturalWidth: Math.max(
+              maxNaturalWidth,
+              requiredWidth,
               uncrowdedWidth
             ),
+            uncrowdedWidth,
           }
         : null
     );
@@ -3096,8 +3097,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return own;
   }
 
-  override get ownColumnRooms(): readonly ColumnRoom[] {
-    return this.#ownColumnRooms;
+  override get ownVoiceRooms(): readonly VoiceRooms[] | null {
+    return this.#ownVoiceRooms;
   }
 
   override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
@@ -3468,145 +3469,61 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
   }
 
-  // An entry's x (wrapper px) from its beat alone: its share of the width
-  // left after the leading gap and every marker's reserved room, shifted
-  // past each marker it comes after. Every voice uses the same formula, so
-  // entries on the same beat line up across voices. In a crowded bar the
-  // shares shrink to leave room for what comes later (`limits`).
-  #proportionalEntryX(
-    state: VoiceRenderState,
-    markers: readonly MarkerBeat[],
-    remainingWidth: number,
-    measureCapacity: number,
-    limits: () => readonly OffsetLimit[]
-  ): (i: number) => number {
-    return (i) =>
-      this.describeEndX +
-      LEADING_NOTE_GAP_PX +
-      markerWidthReached(markers, state.beatOffsets[i]) +
-      computeMeasureProportionalOffsets(
-        [state.beatOffsets[i]],
-        measureCapacity,
-        remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers),
-        limits()
-      )[0];
-  }
-
-  // How far from the end of the notes area each entry must stay for what
-  // follows it to fit, its own staff's markers included.
-  #roomAfter(): {
-    byVoice: Map<VoiceKey, number[]>;
-    // Without the other staves' needs.
-    ownByVoice: Map<VoiceKey, number[]>;
-    columns: ColumnRoom[];
-    limits: OffsetLimit[];
-  } {
-    if (
-      this.#roomAfterEntries !== null &&
-      this.#roomAfterEntries.unisonReserves === this.#unisonReserves
-    ) {
-      return this.#roomAfterEntries;
+  // Where the bar's beats go, from this staff's voices and the other staves'.
+  #barSpacing(): StaffBarSpacing {
+    if (this.#cachedBarSpacing?.unisonReserves === this.#unisonReserves) {
+      return this.#cachedBarSpacing;
     }
-    const keys = [...this.#voiceRenderStates.keys()].filter(
-      (voiceKey) => voiceKey !== 'shared-rest'
+    const { all, slots } = this.#spacingMarkers;
+    const voices = [...this.#voiceRenderStates].filter(
+      ([voiceKey, { elements }]) =>
+        voiceKey !== 'shared-rest' && elements.length > 0
     );
-    const voices = keys.map((voiceKey): VoiceRooms => {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- keys of the same map
-      const state = this.#voiceRenderStates.get(voiceKey)!;
-      return {
+    const own = voices.map(
+      ([voiceKey, state]): VoiceRooms => ({
         beatOffsets: state.beatOffsets,
         rooms: state.elements.map((_, i) =>
           this.#roomToNext(voiceKey, state, i)
         ),
-      };
-    });
-    const { roomAfter } = computeRoomAfterEntries(
-      voices,
-      this.sharedColumnRooms
+        lead:
+          this.#entryLeftwardExtent(state.elements[0]) +
+          markerWidthReached(slots, state.beatOffsets[0]),
+      })
     );
-    const { roomAfter: ownRoomAfter, columns } =
-      computeRoomAfterEntries(voices);
-    this.#roomAfterEntries = {
+    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
+    const spacing = layOutBar(
+      [...own, ...this.sharedVoiceRooms],
+      all,
+      beatsInMeasure / beatType,
+      this.#notesAreaEndX - LEADING_NOTE_GAP_PX
+    );
+    this.#cachedBarSpacing = {
+      ...spacing,
       unisonReserves: this.#unisonReserves,
-      byVoice: new Map(keys.map((key, i) => [key, roomAfter[i]])),
-      ownByVoice: new Map(keys.map((key, i) => [key, ownRoomAfter[i]])),
-      columns,
-      limits: this.#offsetLimits(
-        mergeColumnRooms([columns, this.sharedColumnRooms])
+      own,
+      roomAfterByVoice: new Map(
+        voices.map(([voiceKey], i) => [voiceKey, spacing.roomAfter[i]])
       ),
     };
-    return this.#roomAfterEntries;
+    return this.#cachedBarSpacing;
   }
 
-  // The least widths (px) this staff's entries, every voice's together, fit in
-  // at all and fit in at their proportional places. Own content only: another
-  // staff's crowded beats depend on the width.
+  // The least widths (px) the bar's entries fit in at all, and fit in with
+  // none moved for what follows it.
   #contentWidths(): { requiredWidth: number; uncrowdedWidth: number } {
-    const { all, slots } = this.#spacingMarkers;
-    const { ownByVoice, columns } = this.#roomAfter();
-    let notesWidth = 0;
-    for (const [voiceKey, roomAfter] of ownByVoice) {
-      const state = this.#voiceRenderStates.get(voiceKey);
-      if (!state || state.elements.length === 0) {
-        continue;
-      }
-      notesWidth = Math.max(
-        notesWidth,
-        LEADING_NOTE_GAP_PX +
-          this.#entryLeftwardExtent(state.elements[0]) +
-          markerWidthReached(slots, state.beatOffsets[0]) +
-          roomAfter[0]
-      );
-    }
-    if (notesWidth === 0) {
+    const { own, requiredWidth, uncrowdedWidth } = this.#barSpacing();
+    if (own.length === 0) {
       return { requiredWidth: 0, uncrowdedWidth: 0 };
     }
-    const markersWidth = totalMarkerWidth(all);
     const fixedWidth =
       this.describeEndX +
-      markersWidth +
+      LEADING_NOTE_GAP_PX +
       this.endBarlineReserve +
       this.endWarningSpace.reserved;
-    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
     return {
-      requiredWidth: fixedWidth + notesWidth - totalMarkerWidth(slots),
-      uncrowdedWidth:
-        fixedWidth +
-        LEADING_NOTE_GAP_PX +
-        computeUncrowdedWidth(
-          columns.map(({ beat, roomAfter }) => ({
-            beat,
-            roomAfter: roomAfter + markerWidthReached(all, beat) - markersWidth,
-          })),
-          beatsInMeasure / beatType
-        ),
+      requiredWidth: fixedWidth + requiredWidth,
+      uncrowdedWidth: fixedWidth + uncrowdedWidth,
     };
-  }
-
-  // The furthest each beat may go, as an offset within the notes area.
-  #offsetLimits(columns: readonly ColumnRoom[]): OffsetLimit[] {
-    return columns.map(({ beat, roomAfter }) => ({
-      beat,
-      offset:
-        this.#notesAreaEndX -
-        LEADING_NOTE_GAP_PX -
-        markerWidthReached(this.#spacingMarkers.all, beat) -
-        roomAfter,
-    }));
-  }
-
-  // The beats whose own proportional place leaves too little room after it.
-  #crowdedColumns(measureCapacity: number): ColumnRoom[] {
-    const { columns } = this.#roomAfter();
-    const limits = this.#offsetLimits(columns);
-    const offsets = computeMeasureProportionalOffsets(
-      columns.map(({ beat }) => beat),
-      measureCapacity,
-      this.#notesAreaEndX - LEADING_NOTE_GAP_PX - totalMarkerWidth(this.#spacingMarkers.all)
-    );
-    return columns.filter(
-      ({ beat }, i) => beat > 0 && limits[i].offset < offsets[i]
-    );
   }
 
   // Least distance (px) from an entry's x to the next one's, or the last's to
@@ -3617,8 +3534,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     index: number
   ): number {
     const footprint = this.#rightwardFootprint(voiceKey, index);
-    const nextBeat =
-      state.beatOffsets[index + 1] ?? Number.POSITIVE_INFINITY;
+    const nextBeat = state.beatOffsets[index + 1] ?? Number.POSITIVE_INFINITY;
     const markerWidth = totalMarkerWidth(
       this.#spacingMarkers.slots.filter(
         ({ beat }) =>
@@ -3671,25 +3587,16 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
   // Where the slot of `markers[index]` starts from its beat alone: just
   // before the entries on its beat, by the same formula as
-  // #proportionalEntryX.
+  // computeColumnOffsets.
   #proportionalMarkerLeft(
     markers: readonly MarkerBeat[],
-    index: number,
-    remainingWidth: number,
-    measureCapacity: number,
-    limits: readonly OffsetLimit[]
+    index: number
   ): number {
-    const [offset] = computeMeasureProportionalOffsets(
-      [Math.max(0, markers[index].beat)],
-      measureCapacity,
-      remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers),
-      limits
-    );
     return (
       this.describeEndX +
       LEADING_NOTE_GAP_PX +
       totalMarkerWidth(markers.slice(0, index)) +
-      offset
+      this.#barSpacing().placeOf(Math.max(0, markers[index].beat))
     );
   }
 
@@ -3703,7 +3610,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     state: VoiceRenderState,
     slots: readonly MarkerBeat[],
     slotLefts: readonly number[],
-    proportionalX: (i: number) => number,
+    columnX: (i: number) => number,
     endBeat = Number.POSITIVE_INFINITY
   ): { x: number; leftwardWidth: number; rightEdge: number }[] {
     const placements: {
@@ -3711,7 +3618,6 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       leftwardWidth: number;
       rightEdge: number;
     }[] = [];
-    const roomAfter = this.#roomAfter().byVoice.get(voiceKey) ?? [];
     let previousNoteX: number | null = null;
     let previousRightEdge = this.describeEndX + LEADING_NOTE_GAP_PX;
     let markersPassed = 0;
@@ -3730,17 +3636,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         markersPassed++;
       }
 
-      // Where its beat puts it, or earlier in a crowded bar, leaving room for
-      // what follows. Only there can appending an entry move a placed one.
-      let x = Math.max(
-        this.describeEndX + LEADING_NOTE_GAP_PX,
-        Math.min(
-          proportionalX(i),
-          this.describeEndX +
-            this.#notesAreaEndX -
-            (roomAfter[i] ?? 0)
-        )
-      );
+      let x = columnX(i);
       // Collision floor: the proportional position has no built-in minimum
       // gap, so enforce one against the *previous* entry alone.
       if (previousNoteX !== null) {
@@ -3785,7 +3681,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // it runs through every staff at once.
   #resolveMarkerSlots(
     slots: readonly MarkerBeat[],
-    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
+    columnXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
     barlineFloor: (slotIndex: number) => number
   ): number[] {
     const slotLefts: number[] = [];
@@ -3793,7 +3689,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     for (const [slotIndex, slot] of slots.entries()) {
       const changeBeat = slot.beat;
       let left = this.describeEndX + LEADING_NOTE_GAP_PX;
-      for (const [voiceKey, proportionalX] of proportionalXByVoice) {
+      for (const [voiceKey, columnX] of columnXByVoice) {
         const state = this.#voiceRenderStates.get(voiceKey);
         if (!state) {
           continue;
@@ -3803,7 +3699,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           state,
           slots,
           slotLefts,
-          proportionalX,
+          columnX,
           changeBeat
         );
         if (before.length > 0) {
@@ -3834,7 +3730,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // after it to fit.
   #latestSlotLeft(slot: MarkerBeat): number {
     let room = 0;
-    for (const [voiceKey, roomAfter] of this.#roomAfter().byVoice) {
+    for (const [voiceKey, roomAfter] of this.#barSpacing().roomAfterByVoice) {
       const state = this.#voiceRenderStates.get(voiceKey);
       const index =
         state?.beatOffsets.findIndex(
@@ -4410,13 +4306,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #reserveUnisonRoom(
     isMultiVoice: boolean,
     slots: readonly MarkerBeat[],
-    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
+    columnXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
     barlineFloor: (slotIndex: number) => number
   ): number[] {
     this.#unisonReserves = new Map();
     let slotLefts = this.#resolveMarkerSlots(
       slots,
-      proportionalXByVoice,
+      columnXByVoice,
       barlineFloor
     );
     if (!isMultiVoice) {
@@ -4425,7 +4321,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     let passesLeft = Infinity;
     while (passesLeft-- > 0) {
       const xByVoice = new Map<VoiceKey, number[]>();
-      for (const [voiceKey, proportionalX] of proportionalXByVoice) {
+      for (const [voiceKey, columnX] of columnXByVoice) {
         const state = this.#voiceRenderStates.get(voiceKey);
         if (state) {
           xByVoice.set(
@@ -4435,7 +4331,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               state,
               slots,
               slotLefts,
-              proportionalX
+              columnX
             ).map((placement) => placement.x)
           );
         }
@@ -4489,11 +4385,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         break;
       }
       this.#unisonReserves = reserves;
-      slotLefts = this.#resolveMarkerSlots(
-        slots,
-        proportionalXByVoice,
-        barlineFloor
-      );
+      slotLefts = this.#resolveMarkerSlots(slots, columnXByVoice, barlineFloor);
     }
     return slotLefts;
   }
@@ -4628,8 +4520,6 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // scaled by the available width. Neither depends on entry count, so
     // appending moves a placed entry only to make room in a crowded bar, and
     // same-beat entries line up across voices.
-    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
-    const measureCapacity = beatsInMeasure / beatType;
     const isMultiVoice = this.#voices.size > 1;
 
     // Markers are staff-wide: every voice makes room for each one, and every
@@ -4639,8 +4529,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.ownMarkerBeats,
       this.measureMarkerBeats
     );
-    this.#roomAfterEntries = null;
-    const proportionalXByVoice = new Map<VoiceKey, (i: number) => number>();
+    this.#cachedBarSpacing = null;
+    const columnXByVoice = new Map<VoiceKey, (i: number) => number>();
     // The slots this staff fills: its own clef changes (other staves' only
     // shift its entries) and every barline in the measure, which runs
     // through all of its staves.
@@ -4649,29 +4539,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#spacingMarkers = { all: layoutMarkers, slots: slotMarkers };
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       if (voiceKey !== 'shared-rest') {
-        proportionalXByVoice.set(
+        columnXByVoice.set(
           voiceKey,
-          this.#proportionalEntryX(
-            state,
-            layoutMarkers,
-            remainingWidth,
-            measureCapacity,
-            () => this.#roomAfter().limits
-          )
+          (i) =>
+            this.describeEndX +
+            LEADING_NOTE_GAP_PX +
+            columnOffsetAt(this.#barSpacing().columns, state.beatOffsets[i])
         );
       }
     }
     const slotLefts = this.#reserveUnisonRoom(
       isMultiVoice,
       slotMarkers,
-      proportionalXByVoice,
+      columnXByVoice,
       (slotIndex) =>
         this.#proportionalMarkerLeft(
           layoutMarkers,
-          slots[slotIndex].layoutIndex,
-          remainingWidth,
-          measureCapacity,
-          this.#roomAfter().limits
+          slots[slotIndex].layoutIndex
         )
     );
     const clefObstacles: BeamObstacle[] = [];
@@ -4700,7 +4584,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     });
     this.#drawMidBarBarlines(barlineSlots);
-    this.#ownColumnRooms = this.#crowdedColumns(measureCapacity);
+    this.#ownVoiceRooms = this.#barSpacing().own;
     this.#markerInk = slotMarkers.map(({ beat, kind }, k) => ({
       beat,
       kind,
@@ -4743,7 +4627,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         state,
         slotMarkers,
         slotLefts,
-        proportionalXByVoice.get(voiceKey) ?? (() => this.describeEndX)
+        columnXByVoice.get(voiceKey) ?? (() => this.describeEndX)
       );
 
       for (let i = 0; i < state.elements.length; i++) {
@@ -5390,9 +5274,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           lines.push({
             from: {
               x: this.#headCenterX(state, i) + NOTE_HEAD_RADIUS_PX,
-              y: rises
-                ? Math.min(...start.headYs)
-                : Math.max(...start.headYs),
+              y: rises ? Math.min(...start.headYs) : Math.max(...start.headYs),
             },
             to: {
               x:
@@ -5576,11 +5458,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           octave: (element as NoteElementType).octave,
         }
       : (element as ChordElementType).notes[0];
-    if (
-      grace === null ||
-      headStaffY === undefined ||
-      reference === undefined
-    ) {
+    if (grace === null || headStaffY === undefined || reference === undefined) {
       return null;
     }
     const descriptors = buildGraceNoteDescriptors(

@@ -24,7 +24,6 @@ import {
   HAIRPIN_MIN_ROUTE_SLANT_RADIANS,
   HAIRPIN_NOTE_CLEARANCE_PX,
   HAIRPIN_ROUTE_OUTSIDE_CLEARANCE_PX,
-  MAX_UNCROWDED_STRETCH,
   OCTAVE_SIGN_BEAM_CLEARANCE_PX,
   REST_BEAM_CLEARANCE_PX,
   SLUR_BEAM_SLICE_WIDTH_PX,
@@ -272,21 +271,28 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     );
   });
 
-  test('a full bar of short notes — basis widens so the last one keeps its place, up to the limit', async ({
+  test('a bar whose last notes are shorter than the rest — basis widens so they keep their places', async ({
     page,
   }) => {
     await buildMeasureWithNotes(page, 'eighth', EIGHT_NOTES);
     await waitForRedrawCycle(page);
-    const flex = await readMeasureFlex(page);
+    const evenly = await readMeasureFlex(page);
     const natural =
       (await readDescribeEndX(page)) +
       LEADING_NOTE_GAP +
       8 * entryNatural('eighth');
+    expect(evenly.basis).toBeLessThan(natural + MIN_NOTE_WIDTH);
 
-    expect(flex.basis).toBeGreaterThan(natural);
-    expect(flex.basis).toBeLessThanOrEqual(
-      Math.ceil(natural * MAX_UNCROWDED_STRETCH)
-    );
+    await page.evaluate((noteTag) => {
+      const notes = Array.from(document.querySelectorAll(noteTag));
+      notes[0].setAttribute('duration', 'half' satisfies DurationType);
+      notes.slice(1, 4).forEach((note) => note.remove());
+      notes[7].setAttribute('duration', 'sixteenth' satisfies DurationType);
+      notes[7].after(notes[7].cloneNode());
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    const shortEnd = await readMeasureFlex(page);
+    expect(shortEnd.basis).toBeGreaterThan(evenly.basis + MIN_NOTE_WIDTH);
   });
 
   test('16 hundredtwentyeighth notes — basis exceeds old 300px cap (regression)', async ({
@@ -301,7 +307,9 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     expect(flex.basis).toBeGreaterThan(300);
     // The last note's head and the gap after it take more than its strut.
     const strut =
-      describeEndX + LEADING_NOTE_GAP + 16 * entryNatural('hundredtwentyeighth');
+      describeEndX +
+      LEADING_NOTE_GAP +
+      16 * entryNatural('hundredtwentyeighth');
     expect(flex.basis).toBeGreaterThanOrEqual(Math.floor(strut));
     expect(flex.basis).toBeLessThan(strut + MIN_NOTE_WIDTH);
   });
@@ -405,9 +413,7 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     expect(flex.basis).toBeGreaterThanOrEqual(
       Math.floor(naturalFor16Sixteenths)
     );
-    expect(flex.basis).toBeLessThanOrEqual(
-      Math.ceil((minWidth + 1) * MAX_UNCROWDED_STRETCH)
-    );
+    expect(flex.basis).toBeLessThan(naturalFor16Sixteenths + MIN_NOTE_WIDTH);
     expect(minWidth).toBeGreaterThanOrEqual(Math.floor(strutFor16Notes));
     expect(minWidth).toBeLessThan(strutFor16Notes + MIN_NOTE_WIDTH);
     expect(flex.basis).toBeGreaterThan(naturalFor1Whole);

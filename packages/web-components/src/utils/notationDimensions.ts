@@ -101,7 +101,10 @@ export const STAFF_Y_STEP = STAFF_LINE_SPACING / 2; // = 5
  */
 export const MIN_NOTE_WIDTH = STAFF_LINE_SPACING * 2;
 
-/** Blank (px) the last entry of a crowded bar keeps before the barline, where it fits. = 0.5 × STAFF_LINE_SPACING */
+/**
+ * Blank (px) kept before the end barline: no beat's share of the bar reaches
+ * into it, and the last entry's ink stops before it. = 0.5 × STAFF_LINE_SPACING
+ */
 export const LAST_ENTRY_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 // ─── Voices ───────────────────────────────────────────────────────────────────
@@ -470,10 +473,9 @@ export const SLUR_BEYOND_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.2;
 export const SLUR_OBSTACLE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Upper bound of a cross-staff slur's control-point height search, as a
- * fraction of its own real horizontal span — keeps the obstacle search
- * bounded; a slur that can't clear within it falls back to the least-colliding
- * shape.
+ * Upper bound of a cross-staff slur's control heights, as a fraction of its
+ * own real horizontal span; a slur that can't clear everything within it tries
+ * its other side.
  */
 export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
 
@@ -646,13 +648,6 @@ export const CONNECTOR_LABEL_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 1.1 * 0.65;
  * = 16 × STAFF_LINE_SPACING
  */
 export const PIXELS_PER_BEAT = STAFF_LINE_SPACING * 16;
-
-/**
- * How far a staff's natural width may stretch, as a multiple, so that a bar
- * whose later entries are short keeps every entry at its proportional place.
- * Past it the bar is squeezed instead, so one short note can't swell a bar.
- */
-export const MAX_UNCROWDED_STRETCH = 1.25;
 
 /**
  * Gap (px) between the end of the clef/key/time area and the first entry, so a
@@ -1716,7 +1711,8 @@ export const TECHNIQUE_LABEL_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
  * would overlap; the usual estimate-don't-measure ratio (× 0.55).
  * = TECHNIQUE_LABEL_FONT_SIZE_PX × 0.55
  */
-export const TECHNIQUE_LABEL_CHAR_WIDTH_PX = TECHNIQUE_LABEL_FONT_SIZE_PX * 0.55;
+export const TECHNIQUE_LABEL_CHAR_WIDTH_PX =
+  TECHNIQUE_LABEL_FONT_SIZE_PX * 0.55;
 
 /** Baseline to baseline (px) in a label of several lines. = 1.1 × TECHNIQUE_LABEL_FONT_SIZE_PX */
 export const TECHNIQUE_LABEL_LINE_HEIGHT_PX =

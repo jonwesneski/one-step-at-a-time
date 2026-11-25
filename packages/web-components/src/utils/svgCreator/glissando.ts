@@ -4,10 +4,7 @@ import {
   type BendLayout,
   type LinePoint,
 } from '../../rules/glissandoRules';
-import type {
-  AccidentalType,
-  GlissandoShape,
-} from '../../types/theory';
+import type { AccidentalType, GlissandoShape } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   BEND_TARGET_GAP_PX,

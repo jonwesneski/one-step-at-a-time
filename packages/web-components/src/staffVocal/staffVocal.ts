@@ -3,7 +3,6 @@ import type { KeySignatureState } from '../rules/keySignatureChangeRules';
 import {
   calculateStaffVocalMinWidth,
   calculateStaffVocalNaturalWidth,
-  widenToUncrowded,
 } from '../rules/staffWidth';
 import {
   generateKeySignatureYCoordinates,
@@ -329,22 +328,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             endWarningWidth
           )
         );
-        const naturalWidth = widenToUncrowded(
-          Math.max(
-            requiredWidth,
-            calculateStaffVocalNaturalWidth(
-              this.describeEndX,
-              noteCount,
-              maxLyricChars,
-              totalSlackWeight,
-              leftwardWidth,
-              rightwardWidth,
-              endWarningWidth
-            )
-          ),
-          uncrowdedWidth
+        const naturalWidth = Math.max(
+          requiredWidth,
+          uncrowdedWidth,
+          calculateStaffVocalNaturalWidth(
+            this.describeEndX,
+            noteCount,
+            maxLyricChars,
+            totalSlackWeight,
+            leftwardWidth,
+            rightwardWidth,
+            endWarningWidth
+          )
         );
-        this.reportStaffWidths({ minWidth, naturalWidth });
+        this.reportStaffWidths({ minWidth, naturalWidth, uncrowdedWidth });
       }
     }
 

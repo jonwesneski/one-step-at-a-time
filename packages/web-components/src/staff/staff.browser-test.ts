@@ -2383,8 +2383,8 @@ test.describe('a crowded bar', () => {
       page,
       `<music-measure><music-staff clef="treble" time="4/4">${busyEnd}</music-staff>
        <music-staff clef="treble" time="4/4">${note('half')}${note(
-         'quarter'
-       )}${note('quarter')}</music-staff></music-measure>`,
+        'quarter'
+      )}${note('quarter')}</music-staff></music-measure>`,
       240
     );
     await waitForRedrawCycle(page);
@@ -2465,6 +2465,64 @@ test.describe('a crowded bar', () => {
       (busy.heads[1].left - busy.heads[0].left) /
         (busy.heads[2].left - busy.heads[1].left)
     ).toBeCloseTo(4, 0);
+  });
+
+  test('short notes early on one staff push the same beat on the others, until there is room', async ({
+    page,
+  }) => {
+    const four = note('sixteenth').repeat(4);
+    await layOut(
+      page,
+      `<music-measure><music-staff clef="treble" time="2/4">${four}${note(
+        'quarter'
+      )}</music-staff>
+       <music-staff clef="treble" time="2/4">${note(
+         'quarter'
+       )}${four}</music-staff></music-measure>`,
+      150
+    );
+    const secondBeats = async () => {
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+      const [early, late] = await headsAndEnds(page);
+      expect(late.heads[1].left).toBeCloseTo(early.heads[4].left, 0);
+      expect(late.heads[4].right).toBeLessThan(late.right);
+      return (
+        (late.heads[1].left - late.heads[0].left) /
+        (late.right - late.heads[0].left)
+      );
+    };
+    const narrow = await secondBeats();
+    await resizeHost(page, 700);
+    expect(await secondBeats()).toBeCloseTo(0.5, 1);
+    await resizeHost(page, 150);
+    expect(await secondBeats()).toBeCloseTo(narrow, 2);
+  });
+
+  test('a staff with a width of its own outgrows it, up to its container, before moving notes', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-staff clef="treble" time="4/4" style="width: 250px">${busyEnd}</music-staff>`,
+      900
+    );
+    await waitForRedrawCycle(page);
+    const [roomy] = await headsAndEnds(page);
+    expect(
+      (roomy.heads[1].left - roomy.heads[0].left) /
+        (roomy.heads[2].left - roomy.heads[1].left)
+    ).toBeCloseTo(2, 1);
+
+    await resizeHost(page, 300);
+    const [tight] = await headsAndEnds(page);
+    const hostRight = await page.evaluate(
+      () => document.getElementById('host')?.getBoundingClientRect().right ?? 0
+    );
+    expect(tight.right).toBeLessThanOrEqual(hostRight + 1);
+    expect(Math.max(...tight.heads.map(({ right }) => right))).toBeLessThan(
+      tight.right
+    );
   });
 
   test('a bend on a short last note finds room', async ({ page }) => {

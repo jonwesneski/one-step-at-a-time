@@ -8,7 +8,6 @@
 - **System-break repetition on tied notes** (repeat accidental at start of new system for cross-break ties)
 - **Down-stem accidental displacement** (move accidental closer to stem than a displaced notehead when room allows)
 - **Ornament accidentals** (confirm/cancel altered pitches for trills, turns, etc.)
-- **Microtones** other than quarter-tones
  */
 import {
   ChordElementType,

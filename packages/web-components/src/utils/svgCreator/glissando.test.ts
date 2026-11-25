@@ -18,7 +18,10 @@ import {
   createGlissandoLineSvg,
   type GlissandoLineProps,
 } from './glissando';
-import { computeWrittenTrillNoteWidth, createWrittenTrillNoteSvg } from './trill';
+import {
+  computeWrittenTrillNoteWidth,
+  createWrittenTrillNoteSvg,
+} from './trill';
 
 const from = { x: 0, y: 50 };
 const to = { x: 200, y: 50 };
@@ -152,8 +155,12 @@ describe('createBendTargetSvg', () => {
 
   it('draws ledger lines outside the stave', () => {
     const ledgers = (staffY: number | null) =>
-      createBendTargetSvg({ leftX: 0, centerY: 0, accidental: null, staffY })
-        .querySelectorAll('.bend-target-ledger-line').length;
+      createBendTargetSvg({
+        leftX: 0,
+        centerY: 0,
+        accidental: null,
+        staffY,
+      }).querySelectorAll('.bend-target-ledger-line').length;
     expect(ledgers(null)).toBe(0);
     expect(ledgers(40)).toBe(0);
     expect(ledgers(-40)).toBeGreaterThan(0);

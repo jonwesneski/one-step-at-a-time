@@ -1,7 +1,6 @@
 import {
   AVG_LYRIC_CHAR_WIDTH_PX,
   LEADING_NOTE_GAP_PX,
-  MAX_UNCROWDED_STRETCH,
   MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
@@ -32,7 +31,7 @@ export type StaffStrutInputs = {
   // Least width at which the entries' minimum advances, every voice's
   // together, all fit.
   requiredWidth: number;
-  // Least width at which every entry keeps its proportional place.
+  // Least width at which no entry is moved to fit what follows it.
   uncrowdedWidth: number;
 };
 
@@ -149,17 +148,18 @@ export function calculateStaffNaturalWidth(
 }
 
 /**
- * A staff's natural width widened toward the width at which nothing in it is
- * squeezed, up to MAX_UNCROWDED_STRETCH.
+ * The CSS min-width that holds a bar's collision floor, and beyond that as
+ * much of its container as the bar needs for nothing to be moved to fit what
+ * follows it. `container` is a CSS length.
  */
-export function widenToUncrowded(
-  naturalWidth: number,
-  uncrowdedWidth: number
-): number {
-  return Math.max(
-    naturalWidth,
-    Math.min(uncrowdedWidth, naturalWidth * MAX_UNCROWDED_STRETCH)
-  );
+export function barMinWidthCss(
+  minWidth: number,
+  uncrowdedWidth: number,
+  container: string
+): string {
+  return uncrowdedWidth > minWidth
+    ? `max(${minWidth}px, min(${container}, ${uncrowdedWidth}px))`
+    : `${minWidth}px`;
 }
 
 /**

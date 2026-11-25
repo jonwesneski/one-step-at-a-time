@@ -311,7 +311,9 @@ describe('layoutBends', () => {
 
   it('lifts a wave or dip into the space, and starts level with a dot', () => {
     for (const shape of ['wave', 'dip'] as const) {
-      const { from, to } = lineOf({ heads: [headAt({ shape }, { staffY: 50 })] });
+      const { from, to } = lineOf({
+        heads: [headAt({ shape }, { staffY: 50 })],
+      });
       expect(from.y).toBe(50 - GLISSANDO_LEVEL_LIFT_PX);
       expect(to.y).toBe(from.y);
     }

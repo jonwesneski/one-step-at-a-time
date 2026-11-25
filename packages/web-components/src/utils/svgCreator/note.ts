@@ -86,10 +86,7 @@ import {
   type NoteheadPlacement,
 } from './noteheads';
 import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
-import {
-  createTremoloNumeral,
-  createTremoloStrokes,
-} from './tremolo';
+import { createTremoloNumeral, createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // scaled down to the 32px note SVG viewport. Used to compute beam attachment points.

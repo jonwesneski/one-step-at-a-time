@@ -92,10 +92,7 @@ import {
   type NoteProps,
 } from './note';
 import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
-import {
-  createTremoloNumeral,
-  createTremoloStrokes,
-} from './tremolo';
+import { createTremoloNumeral, createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
 
 // A chord draws its tones itself, so the per-note head/accidental/staff
@@ -391,9 +388,7 @@ export const createChordSvg = ({
     const layout = layoutBends({
       heads: headYs.flatMap((y, i) => {
         const bend = bends[i] ?? null;
-        return bend === null
-          ? []
-          : [{ y, dotY: dotYs[i], staffY: null, bend }];
+        return bend === null ? [] : [{ y, dotY: dotYs[i], staffY: null, bend }];
       }),
       inkRight: Math.max(
         chordHeadExtentPx({

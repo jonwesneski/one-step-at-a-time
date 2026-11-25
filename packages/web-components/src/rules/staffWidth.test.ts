@@ -1,11 +1,11 @@
 import {
   AVG_LYRIC_CHAR_WIDTH_PX,
   LEADING_NOTE_GAP_PX,
-  MAX_UNCROWDED_STRETCH,
   MIN_NOTE_WIDTH,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
+  barMinWidthCss,
   calculateGuitarTabMinWidth,
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
@@ -13,7 +13,6 @@ import {
   calculateStaffVocalNaturalWidth,
   computeMinimumEntryAdvance,
   measureFlexValue,
-  widenToUncrowded,
 } from './staffWidth';
 
 const TYPICAL_DESCRIBE_END_X = 90;
@@ -254,11 +253,12 @@ describe('calculateStaffVocalNaturalWidth', () => {
   });
 });
 
-describe('widenToUncrowded', () => {
-  it('widens as far as the bar needs, up to the limit, and never narrows', () => {
-    expect(widenToUncrowded(200, 150)).toBe(200);
-    expect(widenToUncrowded(200, 220)).toBe(220);
-    expect(widenToUncrowded(200, 900)).toBe(200 * MAX_UNCROWDED_STRETCH);
+describe('barMinWidthCss', () => {
+  it('asks for up to its container only when the bar needs more than its floor', () => {
+    expect(barMinWidthCss(120, 90, '100%')).toBe('120px');
+    expect(barMinWidthCss(120, 200, '100%')).toBe(
+      'max(120px, min(100%, 200px))'
+    );
   });
 });
 

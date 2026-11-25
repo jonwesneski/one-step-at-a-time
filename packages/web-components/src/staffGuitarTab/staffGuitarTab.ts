@@ -1,18 +1,14 @@
 import { barlineGlyphWidth } from '../rules/barlineRules';
 import { computeBeatOffsets } from '../rules/beatRules';
 import {
-  computeMeasureProportionalOffsets,
-  computeUncrowdedWidth,
-  computeRoomAfterEntries,
+  columnOffsetAt,
   computeSpacingWeights,
-  mergeColumnRooms,
-  type ColumnRoom,
-  type OffsetLimit,
+  layOutBar,
+  type VoiceRooms,
 } from '../rules/spacingRules';
 import {
   calculateGuitarTabMinWidth,
   calculateStaffNaturalWidth,
-  widenToUncrowded,
 } from '../rules/staffWidth';
 import {
   MARKER_BEAT_EPSILON,
@@ -92,8 +88,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #describeContainer: SVGGElement;
     #barlinesContainer: SVGGElement;
     #ownBarlineSlotLefts: BarlineSlotLeft[] = [];
-    #ownColumnRooms: ColumnRoom[] = [];
-    // Least width at which every entry keeps its proportional place.
+    #ownVoiceRooms: VoiceRooms[] | null = null;
+    // Least widths the bar's entries fit in at all, and fit in with none moved
+    // for what follows it.
+    #requiredWidth = 0;
     #uncrowdedWidth = 0;
     #describeEndX = 0;
     #ownDescribeEndX = 0;
@@ -119,8 +117,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#barlinesContainer.setAttribute('class', 'barlines-container');
     }
 
-    override get ownColumnRooms(): readonly ColumnRoom[] {
-      return this.#ownColumnRooms;
+    override get ownVoiceRooms(): readonly VoiceRooms[] | null {
+      return this.#ownVoiceRooms;
     }
 
     override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
@@ -265,17 +263,23 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         this.reportStaffWidths(null);
         return;
       }
-      const minWidth =
+      const minWidth = Math.max(
+        this.#requiredWidth,
         calculateGuitarTabMinWidth(this.#describeEndX, elements.length) +
-        totalMarkerWidth(this.measureMarkerBeats) +
-        this.endBarlineReserve +
-        this.endWarningSpace.reserved;
+          totalMarkerWidth(this.measureMarkerBeats) +
+          this.endBarlineReserve +
+          this.endWarningSpace.reserved
+      );
       const { totalWeight } = computeSpacingWeights(elements);
-      const naturalWidth = widenToUncrowded(
+      const naturalWidth = Math.max(
         calculateStaffNaturalWidth(minWidth, totalWeight),
         this.#uncrowdedWidth
       );
-      this.reportStaffWidths({ minWidth, naturalWidth });
+      this.reportStaffWidths({
+        minWidth,
+        naturalWidth,
+        uncrowdedWidth: this.#uncrowdedWidth,
+      });
     }
 
     #spaceElements(assignedElements: GuitarNoteElementType[]) {
@@ -306,66 +310,44 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // this tab), take room in the measure, so the tab leaves the same room
       // to stay aligned with the other staves.
       const markers = this.measureMarkerBeats;
-      const proportionalWidth =
-        remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers);
 
       // What each entry needs after it, as on the classical staff.
-      const voice = {
-        beatOffsets,
-        rooms: assignedElements.map((_, i) => {
-          const nextBeat = beatOffsets[i + 1] ?? Number.POSITIVE_INFINITY;
-          return (
-            MIN_NOTE_WIDTH +
-            totalMarkerWidth(
-              markers.filter(
-                ({ beat }) =>
-                  beat > beatOffsets[i] + MARKER_BEAT_EPSILON &&
-                  beat <= nextBeat + MARKER_BEAT_EPSILON
-              )
-            )
-          );
-        }),
-      };
-      const limitsOf = (columns: readonly ColumnRoom[]): OffsetLimit[] =>
-        columns.map(({ beat, roomAfter }) => ({
-          beat,
-          offset:
-            remainingWidth -
-            LEADING_NOTE_GAP_PX -
-            markerWidthReached(markers, beat) -
-            roomAfter,
-        }));
-      const { columns } = computeRoomAfterEntries([voice]);
-      const ownLimits = limitsOf(columns);
-      const markersWidth = totalMarkerWidth(markers);
-      this.#uncrowdedWidth =
+      this.#ownVoiceRooms =
+        assignedElements.length === 0
+          ? []
+          : [
+              {
+                beatOffsets,
+                rooms: assignedElements.map((_, i) => {
+                  const nextBeat =
+                    beatOffsets[i + 1] ?? Number.POSITIVE_INFINITY;
+                  return (
+                    MIN_NOTE_WIDTH +
+                    totalMarkerWidth(
+                      markers.filter(
+                        ({ beat }) =>
+                          beat > beatOffsets[i] + MARKER_BEAT_EPSILON &&
+                          beat <= nextBeat + MARKER_BEAT_EPSILON
+                      )
+                    )
+                  );
+                }),
+                lead: markerWidthReached(markers, beatOffsets[0]),
+              },
+            ];
+      const { placeOf, columns, requiredWidth, uncrowdedWidth } = layOutBar(
+        [...this.#ownVoiceRooms, ...this.sharedVoiceRooms],
+        markers,
+        measureCapacity,
+        remainingWidth - LEADING_NOTE_GAP_PX
+      );
+      const fixedWidth =
         this.#describeEndX +
         LEADING_NOTE_GAP_PX +
-        markersWidth +
         this.endBarlineReserve +
-        this.endWarningSpace.reserved +
-        computeUncrowdedWidth(
-          columns.map(({ beat, roomAfter }) => ({
-            beat,
-            roomAfter:
-              roomAfter + markerWidthReached(markers, beat) - markersWidth,
-          })),
-          measureCapacity
-        );
-      this.#ownColumnRooms = columns.filter(
-        ({ beat }, i) =>
-          beat > 0 &&
-          ownLimits[i].offset < (beat / measureCapacity) * proportionalWidth
-      );
-      const limits = limitsOf(
-        mergeColumnRooms([columns, this.sharedColumnRooms])
-      );
-      const measureOffsets = computeMeasureProportionalOffsets(
-        beatOffsets,
-        measureCapacity,
-        proportionalWidth,
-        limits
-      );
+        this.endWarningSpace.reserved;
+      this.#requiredWidth = fixedWidth + requiredWidth;
+      this.#uncrowdedWidth = fixedWidth + uncrowdedWidth;
 
       // A barline's slot sits just before the entries on its beat, at the
       // measure's shared x so it runs through every staff.
@@ -375,17 +357,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (marker.kind !== 'barline' || marker.barlineType === null) {
           return;
         }
-        const [offset] = computeMeasureProportionalOffsets(
-          [Math.max(0, marker.beat)],
-          measureCapacity,
-          proportionalWidth,
-          limits
-        );
         const ownLeft =
           this.#describeEndX +
           LEADING_NOTE_GAP_PX +
           totalMarkerWidth(markers.slice(0, index)) +
-          offset;
+          placeOf(Math.max(0, marker.beat));
         ownSlotLefts.push({ beat: marker.beat, left: ownLeft });
         const shared = this.measureBarlineSlotLefts.find(
           (slot) => Math.abs(slot.beat - marker.beat) <= MARKER_BEAT_EPSILON
@@ -412,8 +388,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         let x =
           this.#describeEndX +
           LEADING_NOTE_GAP_PX +
-          markerWidthReached(markers, beatOffsets[i]) +
-          measureOffsets[i];
+          columnOffsetAt(columns, beatOffsets[i]);
         for (const slot of slots) {
           if (slot.marker.beat <= beatOffsets[i] + MARKER_BEAT_EPSILON) {
             x = Math.max(x, slot.left + slot.marker.width);

@@ -494,8 +494,6 @@ export function resolveEnclosingArc(
       floorHeight: (baseBulgeHeight * 2) / 3,
       maxHeight: bulgeHeight,
       step: ENCLOSING_ARC_SEARCH_STEP_PX,
-      clearance: 0,
-      preferShallow: true,
     }
   );
   return { bulgeHeight: maxBulgeHeight, controlHeights };
@@ -803,13 +801,6 @@ export type SlurCurveSearchOptions = {
   maxHeight: number;
   /** Search granularity; coarsened so each control has at most ~25 values. */
   step: number;
-  clearance: number;
-  sampleCount?: number;
-  /**
-   * Tries shallow lopsided shapes before deep symmetric ones, leaving out any
-   * that bends back on itself.
-   */
-  preferShallow?: boolean;
 };
 
 export type SlurCurveResolution = {
@@ -819,14 +810,11 @@ export type SlurCurveResolution = {
 };
 
 const MAX_HEIGHTS_PER_CONTROL = 25;
-const DEFAULT_SAMPLE_COUNT = 48;
+const CURVE_SAMPLE_COUNT = 48;
 
 /**
- * Finds the flattest, most symmetric cubic slur shape on `side` that keeps
- * `clearance` from every obstacle. Candidates are tried in order of their
- * taller control height, then their asymmetry; the first clear one wins.
- * When none is clear, the least-colliding candidate is returned so the caller
- * can compare it against the other side.
+ * The shallowest convex cubic on `side` that touches no obstacle, or the
+ * least-colliding one when none is clear.
  */
 export function resolveSlurCurve(
   from: CurvePoint,
@@ -835,29 +823,18 @@ export function resolveSlurCurve(
   obstacles: readonly ObstacleRect[],
   options: SlurCurveSearchOptions
 ): SlurCurveResolution {
-  const {
-    minHeight,
-    floorHeight,
-    clearance,
-    sampleCount = DEFAULT_SAMPLE_COUNT,
-    preferShallow = false,
-  } = options;
+  const { minHeight, floorHeight } = options;
   const maxHeight = Math.max(options.maxHeight, floorHeight);
   const step = Math.max(
     options.step,
     (maxHeight - minHeight) / (MAX_HEIGHTS_PER_CONTROL - 1)
   );
 
-  const minX = Math.min(from.x, to.x) - clearance;
-  const maxX = Math.max(from.x, to.x) + clearance;
-  const paddedObstacles = obstacles
-    .filter((rect) => rect.right >= minX && rect.left <= maxX)
-    .map((rect) => ({
-      left: rect.left - clearance,
-      top: rect.top - clearance,
-      right: rect.right + clearance,
-      bottom: rect.bottom + clearance,
-    }));
+  const minX = Math.min(from.x, to.x);
+  const maxX = Math.max(from.x, to.x);
+  const nearObstacles = obstacles.filter(
+    (rect) => rect.right >= minX && rect.left <= maxX
+  );
 
   const heights: number[] = [floorHeight];
   for (let height = minHeight; height <= maxHeight + 1e-6; height += step) {
@@ -870,10 +847,7 @@ export function resolveSlurCurve(
   for (const h1 of heights) {
     for (const h2 of heights) {
       const convex = h1 <= 2 * h2 && h2 <= 2 * h1;
-      if (
-        Math.max(h1, h2) >= floorHeight - 1e-6 &&
-        (convex || !preferShallow)
-      ) {
+      if (Math.max(h1, h2) >= floorHeight - 1e-6 && convex) {
         candidates.push([h1, h2]);
       }
     }
@@ -881,17 +855,18 @@ export function resolveSlurCurve(
   if (candidates.length === 0) {
     candidates.push([floorHeight, floorHeight]);
   }
-  candidates.sort((a, b) =>
-    preferShallow
-      ? Math.hypot(...a) - Math.hypot(...b)
-      : Math.max(...a) - Math.max(...b) ||
-        Math.abs(a[0] - a[1]) - Math.abs(b[0] - b[1])
-  );
+  candidates.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 
   let best: SlurCurveResolution | null = null;
   for (const controlHeights of candidates) {
-    const points = sampleCubicSlur(from, to, side, controlHeights, sampleCount);
-    const collisions = countPolylineCollisions(points, paddedObstacles);
+    const points = sampleCubicSlur(
+      from,
+      to,
+      side,
+      controlHeights,
+      CURVE_SAMPLE_COUNT
+    );
+    const collisions = countPolylineCollisions(points, nearObstacles);
     if (collisions === 0) {
       return { controlHeights, collisions };
     }

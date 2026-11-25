@@ -282,86 +282,45 @@ describe('segmentIntersectsRect', () => {
 });
 
 describe('resolveSlurCurve', () => {
-  const options = {
-    minHeight: 0,
-    floorHeight: 10,
-    maxHeight: 200,
-    step: 5,
-    clearance: 4,
-  };
+  const options = { minHeight: 0, floorHeight: 10, maxHeight: 200, step: 5 };
+  const from = { x: 0, y: 100 };
+  const to = { x: 300, y: 100 };
 
-  const clearance = (
-    points: { x: number; y: number }[],
-    box: ObstacleRect
-  ): number =>
-    Math.min(
-      ...points.map((point) =>
-        Math.hypot(
-          Math.max(box.left - point.x, 0, point.x - box.right),
-          Math.max(box.top - point.y, 0, point.y - box.bottom)
-        )
-      )
-    );
-
-  it('returns the flattest symmetric shape when nothing is in the way', () => {
-    const result = resolveSlurCurve(
-      { x: 0, y: 100 },
-      { x: 300, y: 100 },
+  it('returns the shallowest convex shape when nothing is in the way', () => {
+    const { controlHeights, collisions } = resolveSlurCurve(
+      from,
+      to,
       'above',
       [],
       options
     );
-    expect(result).toEqual({ controlHeights: [10, 10], collisions: 0 });
+    expect(collisions).toBe(0);
+    expect(Math.max(...controlHeights)).toBe(10);
+    expect(Math.min(...controlHeights)).toBeGreaterThanOrEqual(5);
   });
 
-  it('rises steeply when it must pass under one obstacle and over another', () => {
-    const from = { x: 0, y: 100 };
-    const to = { x: 300, y: 100 };
-    // Low-left obstacle the curve passes under, high-right one it climbs over.
-    const passUnder = rect(30, 40, 50, 75);
-    const passOver = rect(240, 60, 260, 99);
-    const result = resolveSlurCurve(
-      from,
-      to,
-      'above',
-      [passUnder, passOver],
-      options
-    );
-
-    expect(result.collisions).toBe(0);
-    expect(result.controlHeights[1]).toBeGreaterThan(result.controlHeights[0]);
-    const points = sampleCubicSlur(
-      from,
-      to,
-      'above',
-      result.controlHeights,
-      200
-    );
-    expect(clearance(points, passUnder)).toBeGreaterThan(options.clearance - 1);
-    expect(clearance(points, passOver)).toBeGreaterThan(options.clearance - 1);
-  });
-
-  it('handles a right-to-left pair', () => {
-    const from = { x: 300, y: 100 };
-    const to = { x: 0, y: 100 };
+  it('rises past an obstacle, in either direction', () => {
     const obstacle = rect(140, 70, 160, 95);
-    const result = resolveSlurCurve(from, to, 'above', [obstacle], options);
-
-    expect(result.collisions).toBe(0);
-    const points = sampleCubicSlur(
-      from,
-      to,
-      'above',
-      result.controlHeights,
-      200
-    );
-    expect(clearance(points, obstacle)).toBeGreaterThan(options.clearance - 1);
+    for (const [start, end] of [
+      [from, to],
+      [to, from],
+    ]) {
+      const { controlHeights, collisions } = resolveSlurCurve(
+        start,
+        end,
+        'above',
+        [obstacle],
+        options
+      );
+      expect(collisions).toBe(0);
+      expect(Math.max(...controlHeights)).toBeGreaterThan(30);
+    }
   });
 
   it('reports collisions when boxed in on its side', () => {
     const result = resolveSlurCurve(
-      { x: 0, y: 100 },
-      { x: 300, y: 100 },
+      from,
+      to,
       'above',
       [rect(-10, -500, 310, 95)],
       options

@@ -384,12 +384,16 @@ function bendEndYs(
 }
 
 // Targets too close to share a column stand in columns side by side.
-function bendTargetColumns(
-  targets: readonly { y: number; width: number }[]
-): { columnOf: number[]; lefts: number[]; width: number } {
+function bendTargetColumns(targets: readonly { y: number; width: number }[]): {
+  columnOf: number[];
+  lefts: number[];
+  width: number;
+} {
   const columns: { ys: number[]; width: number }[] = [];
   const columnOf = targets.map(() => 0);
-  const order = targets.map((_, i) => i).sort((a, b) => targets[a].y - targets[b].y);
+  const order = targets
+    .map((_, i) => i)
+    .sort((a, b) => targets[a].y - targets[b].y);
   for (const i of order) {
     const { y, width } = targets[i];
     let column = columns.findIndex(({ ys }) =>

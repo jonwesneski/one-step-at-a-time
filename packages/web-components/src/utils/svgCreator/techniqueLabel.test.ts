@@ -1,13 +1,13 @@
 /**
  * @jest-environment jsdom
  */
+import { SVG_NS } from '../consts';
 import {
   TECHNIQUE_LABEL_CHAR_WIDTH_PX,
   TECHNIQUE_LABEL_FONT_SIZE_PX,
   TECHNIQUE_LABEL_GAP_PX,
   TECHNIQUE_LABEL_LINE_HEIGHT_PX,
 } from '../notationDimensions';
-import { SVG_NS } from '../consts';
 import {
   appendTechniqueLabels,
   createTechniqueLabel,

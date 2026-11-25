@@ -1,5 +1,14 @@
 import { DurationType } from '../types/theory';
-import { MIN_NOTE_WIDTH, PIXELS_PER_BEAT } from '../utils/notationDimensions';
+import {
+  LAST_ENTRY_GAP_PX,
+  MIN_NOTE_WIDTH,
+  PIXELS_PER_BEAT,
+} from '../utils/notationDimensions';
+import {
+  type MarkerBeat,
+  markerWidthReached,
+  totalMarkerWidth,
+} from './streamMarkerRules';
 import { durationToFactor } from './theoryConsts';
 
 /**
@@ -97,6 +106,7 @@ function lowerConvexHull(points: readonly OffsetLimit[]): OffsetLimit[] {
 /** Room (px) the entries from a beat on need before the end of the bar. */
 export type ColumnRoom = { beat: number; roomAfter: number };
 
+/** One voice's spacing needs, on any staff of the measure. */
 export type VoiceRooms = {
   beatOffsets: readonly number[];
   /**
@@ -104,43 +114,28 @@ export type VoiceRooms = {
    * of the notes area.
    */
   rooms: readonly number[];
+  /** Least distance (px) from the start of the notes area to the first entry. */
+  lead: number;
 };
 
 const ROOM_BEAT_EPSILON = 1e-9;
 
-/** The room a beat needs, given rooms known for some beats. */
-export function columnRoomAt(
-  columns: readonly ColumnRoom[],
-  beat: number
-): number {
-  return columns.reduce(
-    (room, column) =>
-      column.beat >= beat - ROOM_BEAT_EPSILON
-        ? Math.max(room, column.roomAfter)
-        : room,
-    0
-  );
-}
-
 /**
  * Each entry's room to the end of the notes area, per voice, and each beat's.
- * Entries sharing a beat share its room, so columns stay aligned; `shared`
- * is the room other staves need. A run of entries on one beat (an arpeggio's)
- * takes the beat's room at its first.
+ * Entries sharing a beat share its room, so columns stay aligned. A run of
+ * entries on one beat (an arpeggio's) takes the beat's room at its first.
  */
-export function computeRoomAfterEntries(
-  voices: readonly VoiceRooms[],
-  shared: readonly ColumnRoom[] = []
-): { roomAfter: number[][]; columns: ColumnRoom[] } {
+export function computeRoomAfterEntries(voices: readonly VoiceRooms[]): {
+  roomAfter: number[][];
+  columns: ColumnRoom[];
+} {
   const roomAfter = voices.map(({ rooms }) => rooms.map(() => 0));
-  const beats = [...new Set(voices.flatMap((voice) => [...voice.beatOffsets]))]
-    .sort((a, b) => b - a)
-    .filter((beat, i, all) => i === 0 || all[i - 1] - beat > ROOM_BEAT_EPSILON);
+  const beats = columnBeats(voices).reverse();
   const columns: ColumnRoom[] = [];
   let later = 0;
   for (const beat of beats) {
     const firsts: { voice: number; index: number }[] = [];
-    let column = Math.max(later, columnRoomAt(shared, beat));
+    let column = later;
     voices.forEach(({ beatOffsets, rooms }, voice) => {
       for (let i = rooms.length - 1; i >= 0; i--) {
         if (Math.abs(beatOffsets[i] - beat) > ROOM_BEAT_EPSILON) {
@@ -164,22 +159,72 @@ export function computeRoomAfterEntries(
   return { roomAfter, columns };
 }
 
-/** What every staff of a measure needs, the most at each beat. */
-export function mergeColumnRooms(
-  staves: readonly (readonly ColumnRoom[])[]
-): ColumnRoom[] {
-  const merged: ColumnRoom[] = [];
-  for (const column of staves.flat()) {
-    const existing = merged.find(
-      ({ beat }) => Math.abs(beat - column.beat) <= ROOM_BEAT_EPSILON
+function columnBeats(voices: readonly VoiceRooms[]): number[] {
+  return [...new Set(voices.flatMap((voice) => [...voice.beatOffsets]))]
+    .sort((a, b) => a - b)
+    .filter((beat, i, all) => i === 0 || beat - all[i - 1] > ROOM_BEAT_EPSILON);
+}
+
+/** Where a beat's entries start, in px from the start of the notes area. */
+export type ColumnOffset = { beat: number; offset: number };
+
+/**
+ * Each beat's place: the one `beatPlace` gives it, or later where any voice's
+ * entry on it has to clear the one before.
+ */
+export function computeColumnOffsets(
+  voices: readonly VoiceRooms[],
+  beatPlace: (beat: number) => number
+): ColumnOffset[] {
+  const next = voices.map(({ lead }) => ({ index: 0, offset: lead }));
+  return columnBeats(voices).map((beat) => {
+    const onBeat = voices.flatMap(({ beatOffsets }, voice) =>
+      Math.abs(beatOffsets[next[voice].index] - beat) <= ROOM_BEAT_EPSILON
+        ? [voice]
+        : []
     );
-    if (existing === undefined) {
-      merged.push({ ...column });
-    } else {
-      existing.roomAfter = Math.max(existing.roomAfter, column.roomAfter);
+    const offset = Math.max(
+      beatPlace(beat),
+      ...onBeat.map((voice) => next[voice].offset)
+    );
+    for (const voice of onBeat) {
+      const { beatOffsets, rooms } = voices[voice];
+      const entry = next[voice];
+      entry.offset = offset;
+      while (Math.abs(beatOffsets[entry.index] - beat) <= ROOM_BEAT_EPSILON) {
+        entry.offset += rooms[entry.index];
+        entry.index++;
+      }
     }
-  }
-  return merged.sort((a, b) => a.beat - b.beat);
+    return { beat, offset };
+  });
+}
+
+/** A beat's place among computed columns. */
+export function columnOffsetAt(
+  columns: readonly ColumnOffset[],
+  beat: number
+): number {
+  return (
+    columns.find((column) => Math.abs(column.beat - beat) <= ROOM_BEAT_EPSILON)
+      ?.offset ?? 0
+  );
+}
+
+/**
+ * Least width (px) of the notes area that holds every voice, given each
+ * beat's room (from `computeRoomAfterEntries`).
+ */
+export function computeRequiredWidth(
+  voices: readonly VoiceRooms[],
+  columns: readonly ColumnRoom[]
+): number {
+  return voices.reduce((width, { beatOffsets, lead }) => {
+    const column = columns.find(
+      ({ beat }) => Math.abs(beat - beatOffsets[0]) <= ROOM_BEAT_EPSILON
+    );
+    return Math.max(width, lead + (column?.roomAfter ?? 0));
+  }, 0);
 }
 
 /**
@@ -197,6 +242,73 @@ export function computeUncrowdedWidth(
         : width,
     0
   );
+}
+
+// ─── The bar as a whole ─────────────────────────────────────────────────────
+
+export type BarSpacing = {
+  /** Per voice, in `voices` order. */
+  roomAfter: number[][];
+  /** A beat's place from its share of the bar, before any marker's room. */
+  placeOf: (beat: number) => number;
+  /** Where each beat's entries start, markers included. */
+  columns: ColumnOffset[];
+  /** Least notes-area width that holds the bar. */
+  requiredWidth: number;
+  /** Least notes-area width at which no beat is moved to fit what follows. */
+  uncrowdedWidth: number;
+};
+
+/**
+ * Lays out a bar's beats from every voice on every staff of the measure, so
+ * each staff given the same voices puts them in the same places. Offsets and
+ * widths are from the start of the notes area. The beats share all of it but
+ * LAST_ENTRY_GAP_PX, kept whether or not the bar is full, so the last entry of
+ * an evenly filled bar has its gap already and moves nothing.
+ */
+export function layOutBar(
+  voices: readonly VoiceRooms[],
+  markers: readonly MarkerBeat[],
+  measureCapacity: number,
+  notesWidth: number
+): BarSpacing {
+  const markersWidth = totalMarkerWidth(markers);
+  const sharedWidth = notesWidth - markersWidth - LAST_ENTRY_GAP_PX;
+  const { roomAfter, columns: rooms } = computeRoomAfterEntries(voices);
+  const limits = rooms.map(({ beat, roomAfter: room }) => ({
+    beat,
+    offset: notesWidth - markerWidthReached(markers, beat) - room,
+  }));
+  const placeOf = (beat: number): number =>
+    computeMeasureProportionalOffsets(
+      [beat],
+      measureCapacity,
+      sharedWidth,
+      limits
+    )[0];
+  return {
+    roomAfter,
+    placeOf,
+    columns: computeColumnOffsets(
+      voices,
+      (beat) => markerWidthReached(markers, beat) + placeOf(beat)
+    ),
+    requiredWidth: computeRequiredWidth(voices, rooms),
+    uncrowdedWidth:
+      markersWidth +
+      LAST_ENTRY_GAP_PX +
+      computeUncrowdedWidth(
+        rooms.map(({ beat, roomAfter: room }) => ({
+          beat,
+          roomAfter:
+            room +
+            markerWidthReached(markers, beat) -
+            markersWidth -
+            LAST_ENTRY_GAP_PX,
+        })),
+        measureCapacity
+      ),
+  };
 }
 
 // ─── Sizing preference ──────────────────────────────────────────────────────

@@ -78,9 +78,9 @@ import {
   resolveSharedStemPairs,
   type SharedStemEntry,
 } from '../rules/sharedStemRules';
-import { mergeColumnRooms, type ColumnRoom } from '../rules/spacingRules';
+import type { VoiceRooms } from '../rules/spacingRules';
 import { resolveStaffGroups } from '../rules/staffGroupRules';
-import { measureFlexValue } from '../rules/staffWidth';
+import { barMinWidthCss, measureFlexValue } from '../rules/staffWidth';
 import {
   barlineTypeConflicts,
   MARKER_BEAT_EPSILON,
@@ -98,6 +98,7 @@ import {
   type TupletBracketGeometry,
 } from '../rules/tupletRules';
 import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
+import type { StaffWidths } from '../staffBase';
 import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
@@ -155,6 +156,7 @@ import {
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
+import { isRowFlexItem } from '../utils/isRowFlexItem';
 import {
   ARPEGGIO_CHORD_GAP_PX,
   BASE_STEM_LENGTH_PX,
@@ -367,10 +369,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #staffConnectorObserver: ResizeObserver;
-    #staffWidths = new Map<
-      EventTarget,
-      { minWidth: number; naturalWidth: number }
-    >();
+    #staffWidths = new Map<EventTarget, StaffWidths>();
     // Elements #redrawSharedStems set noStem on, so a pair that stops
     // resolving gets its own stems back.
     #sharedStemSuppressedElements = new Set<NoteOrChordElementType>();
@@ -384,7 +383,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
     #boundSyncMarkerBeats = () => this.#syncMarkerBeats();
     #boundSyncBarlineSlots = () => {
-      this.#syncColumnRooms();
+      this.#syncVoiceRooms();
       this.#syncBarlineSlots();
     };
     #lastTabMirrorWarnings = new Set<string>();
@@ -494,22 +493,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
-    // Every staff keeps its entries as far from the end of the bar as the most
-    // crowded staff needs, so same-beat entries stay aligned.
-    #syncColumnRooms(): void {
+    // Every staff places its beats from what every staff's entries need, so
+    // same-beat entries stay aligned.
+    #syncVoiceRooms(): void {
       const staves = Array.from(this.children).filter(
         (child) =>
-          isStaffNodeName(child.nodeName) && 'measureColumnRooms' in child
+          isStaffNodeName(child.nodeName) && 'measureVoiceRooms' in child
       ) as unknown as {
-        ownColumnRooms: readonly ColumnRoom[];
-        measureColumnRooms: readonly ColumnRoom[];
+        ownVoiceRooms: readonly VoiceRooms[] | null;
+        measureVoiceRooms: readonly VoiceRooms[];
       }[];
-      const shared = mergeColumnRooms(
-        staves.map((staff) => staff.ownColumnRooms)
-      );
-      for (const staff of staves) {
-        staff.measureColumnRooms = shared;
+      const own = staves.map((staff) => staff.ownVoiceRooms);
+      // Wait for every staff, rather than lay each one out again per sibling.
+      if (own.includes(null)) {
+        return;
       }
+      staves.forEach((staff, i) => {
+        staff.measureVoiceRooms = own.flatMap((rooms, k) =>
+          k === i ? [] : rooms ?? []
+        );
+      });
     }
 
     // A mid-bar barline runs through every staff at one x: each staff places
@@ -568,15 +571,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #onStaffMinWidth = (event: Event): void => {
-      const customEvent = event as CustomEvent<{
-        minWidth: number;
-        naturalWidth: number;
-      }>;
+      const customEvent = event as CustomEvent<StaffWidths>;
       if (customEvent.target) {
-        this.#staffWidths.set(customEvent.target, {
-          minWidth: customEvent.detail.minWidth,
-          naturalWidth: customEvent.detail.naturalWidth,
-        });
+        this.#staffWidths.set(customEvent.target, customEvent.detail);
       }
       const widths = [...this.#staffWidths.values()];
       const maxMinWidth = Math.max(...widths.map((w) => w.minWidth));
@@ -586,7 +583,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // below the absolute floor), set apart from the basis so a crowded measure
       // can still shrink toward it before the row wraps.
       this.style.flex = measureFlexValue(maxNaturalWidth);
-      this.style.minWidth = `${Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX)}px`;
+      const minWidth = Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX);
+      // In a row of measures the basis asks for the same room.
+      this.style.minWidth =
+        this.closest(MUSIC_COMPOSITION) !== null || isRowFlexItem(this)
+          ? `${minWidth}px`
+          : barMinWidthCss(
+              minWidth,
+              Math.max(...widths.map((w) => w.uncrowdedWidth)),
+              'calc(100% - var(--measure-decoration-width, 0px))'
+            );
       // Connectors run after double-stemmed beams: a slur reads the drawn
       // beam polygon to avoid crossing it.
       this.#pushBarlinesToStaves();
@@ -945,25 +951,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           :host(.has-group-connector) {
-            margin-left: ${Math.max(
+            --measure-decoration-width: ${Math.max(
               BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX,
               BRACKET_WIDTH_PX
             )}px;
           }
 
           :host(.has-staff-label) {
-            margin-left: ${STAFF_LABEL_WIDTH_PX + STAFF_LABEL_LEFT_MARGIN_PX}px;
+            --measure-decoration-width: ${
+              STAFF_LABEL_WIDTH_PX + STAFF_LABEL_LEFT_MARGIN_PX
+            }px;
           }
 
           /* Combined reservation is summed, not jointly tuned — a v1
              simplification when a measure has both a brace/bracket and a
              staff label (see packages/web-components/CLAUDE.md). */
           :host(.has-group-connector.has-staff-label) {
-            margin-left: ${
+            --measure-decoration-width: ${
               Math.max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX) +
               STAFF_LABEL_WIDTH_PX +
               STAFF_LABEL_LEFT_MARGIN_PX
             }px;
+          }
+
+          :host(.has-group-connector),
+          :host(.has-staff-label) {
+            margin-left: var(--measure-decoration-width);
           }
 
           /* A one-column grid so staves' vertical-space margins add up
@@ -1033,63 +1046,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             position: absolute;
           }
 
-          .arpeggio-connectors {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .connectors-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .shared-dynamics-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .double-stemmed-beams-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .cross-staff-tremolos-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .cross-staff-tuplets-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .shared-stems-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .endings-overlay {
+          /* An svg with no size of its own is 300 x 150px, which would make
+             the page scroll past a narrow bar at the end of a row. */
+          .measure-content > svg {
             position: absolute;
             inset: 0;
             width: 100%;

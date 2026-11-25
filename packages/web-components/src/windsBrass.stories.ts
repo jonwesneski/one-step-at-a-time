@@ -434,8 +434,181 @@ export const MissingOrd: Story = {
 };
 
 /**
+ * A diagonal line with `gliss.` is as continuous a slide as the instrument
+ * allows. Where a smooth one isn't possible, the chromatic pitches are written
+ * out with `quasi gliss.` (`glissando-label`) and no line.
+ */
+export const ConventionalAndQuasiGlissando: Story = {
+  name: 'Conventional And Quasi Glissando (Reference)',
+  render: () => html`
+    <div style="max-width: 400px">
+      <music-composition time="4/4">
+        <music-measure>
+          <music-staff clef="treble">
+            <music-note
+              note="E"
+              octave="4"
+              duration="half"
+              glissando="start"
+              glissando-hint="gliss"
+            ></music-note>
+            <music-note
+              note="C"
+              octave="5"
+              duration="half"
+              glissando="end"
+            ></music-note>
+          </music-staff>
+        </music-measure>
+      </music-composition>
+      <music-composition time="2/4">
+        <music-measure>
+          <music-staff clef="bass">
+            <music-tuplet ratio="3">
+              <music-note
+                note="Eb"
+                octave="3"
+                duration="eighth"
+                slur="start"
+                glissando-label="quasi-gliss"
+              ></music-note>
+              <music-note note="C" octave="3" duration="eighth"></music-note>
+              <music-note note="Bb" octave="2" duration="eighth"></music-note>
+            </music-tuplet>
+            <music-note note="G" octave="2" duration="sixteenth"></music-note>
+            <music-note note="F" octave="2" duration="sixteenth"></music-note>
+            <music-note note="E" octave="2" duration="sixteenth"></music-note>
+            <music-note
+              note="Eb"
+              octave="2"
+              duration="sixteenth"
+              slur="end"
+            ></music-note>
+          </music-staff>
+        </music-measure>
+      </music-composition>
+    </div>
+  `,
+};
+
+/**
+ * A pitch bend (lip glissando) is a line after the notehead, shaped like its
+ * contour: to the next note, free, to a pitch in parentheses, a dip over the
+ * barline, and a wave. `glissando-label` says `lip`, `bend` or anything else.
+ */
+export const PitchBends: Story = {
+  name: 'Pitch Bends (Reference)',
+  render: () => html`
+    <music-composition time="2/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="G"
+            octave="4"
+            duration="dotted-quarter"
+            glissando="start"
+            slur="start"
+          ></music-note>
+          <music-note
+            note="F"
+            octave="4"
+            duration="eighth"
+            glissando="end"
+            slur="end"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="Bb"
+            octave="4"
+            duration="quarter"
+            bend="down"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="C#"
+            octave="5"
+            duration="half"
+            bend-to="C#"
+            bend-to-quarter-tone="up"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="E"
+            octave="5"
+            duration="half"
+            glissando="start"
+            glissando-shape="dip"
+            glissando-label="bend down|¼-tone"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="E"
+            octave="5"
+            duration="quarter"
+            glissando="end"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="G"
+            octave="4"
+            duration="quarter"
+            bend="wave"
+            glissando-label="bend pitch ¼-tone"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/**
+ * A chromatic scale is written in full, here as grace notes, with `chrom.` (or
+ * `chromatic`) so the player doesn't slide over the pitches between.
+ */
+export const ChromaticGlissando: Story = {
+  name: 'Chromatic Glissando (Reference)',
+  render: () => html`
+    <div style="max-width: 400px">
+      <music-composition time="3/8">
+        <music-measure>
+          <music-staff clef="bass">
+            <music-note note="G" octave="3" duration="quarter"></music-note>
+            <music-note
+              note="C"
+              octave="4"
+              duration="eighth"
+              articulation="staccato"
+              grace="G#,A,A#,B"
+              grace-octave="3,3,3,3"
+              grace-duration="sixteenth"
+              grace-type="appoggiatura"
+              glissando-label="chrom"
+            ></music-note>
+          </music-staff>
+        </music-measure>
+      </music-composition>
+    </div>
+  `,
+};
+
+/**
  * Still to come: verbal instructions are plain staff text, which isn't
- * implemented yet.
+ * implemented yet, and some glissando detail.
  */
 export const StillToCome: Story = {
   render: () => html`
@@ -443,9 +616,11 @@ export const StillToCome: Story = {
       Verbal instructions need staff text, which isn&rsquo;t implemented yet:
       <em>legato</em> (the woodwind alternative to tenutos over a reiterated
       pitch) and tonguing instructions such as <em>double-tongue</em>,
-      <em>triple-tongue</em>, <em>t&ndash;k</em> and <em>soft-tongued</em>.
-      Growl, half-valve, stopped/open horn and mutes are tracked in
-      <code>TODO.md</code> &sect;6 &ldquo;Wind &amp; Brass Techniques&rdquo;.
+      <em>triple-tongue</em>, <em>t&ndash;k</em> and <em>soft-tongued</em>. So
+      does defining what a quarter-tone arrow means. Trombone positions and
+      glissando text along its line are not implemented. Growl, half-valve,
+      stopped/open horn and mutes are tracked in <code>TODO.md</code> &sect;6
+      &ldquo;Wind &amp; Brass Techniques&rdquo;.
     </p>
   `,
 };

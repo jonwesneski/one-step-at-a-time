@@ -5,7 +5,8 @@ import {
   type ResolvedEndBarline,
   type StartRepeatMode,
 } from './rules/barlineRules';
-import type { ColumnRoom } from './rules/spacingRules';
+import type { VoiceRooms } from './rules/spacingRules';
+import { barMinWidthCss } from './rules/staffWidth';
 import {
   MARKER_BEAT_EPSILON,
   type MarkerBeat,
@@ -38,8 +39,8 @@ import {
   NOTE_TAGS,
   STAFF_EVENTS,
 } from './utils/consts';
+import { isRowFlexItem } from './utils/isRowFlexItem';
 import {
-  BARLINE_THIN_PX,
   STAFF_BOTTOM_MARGIN,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -70,8 +71,15 @@ export type BarlineSlotLeft = { beat: number; left: number };
 /** Px an end-of-measure warning area takes, and how much of it the strut counts. */
 export type EndWarningSpace = { width: number; reserved: number };
 
-/** A staff's collision floor and the width it would rather have. */
-export type StaffWidths = { minWidth: number; naturalWidth: number };
+/**
+ * A staff's collision floor, the width it would rather have, and the least at
+ * which none of its entries are moved to fit what follows them.
+ */
+export type StaffWidths = {
+  minWidth: number;
+  naturalWidth: number;
+  uncrowdedWidth: number;
+};
 
 const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
 
@@ -99,22 +107,32 @@ function sameBarlineSlotLefts(
   );
 }
 
-function sameColumnRooms(
-  a: readonly ColumnRoom[],
-  b: readonly ColumnRoom[]
+function sameVoiceRooms(
+  a: readonly VoiceRooms[],
+  b: readonly VoiceRooms[]
 ): boolean {
+  const close = (x: number, y: number): boolean =>
+    Math.abs(x - y) <= BARLINE_SLOT_TOLERANCE_PX;
   return (
     a.length === b.length &&
-    a.every(
-      (column, i) =>
-        Math.abs(column.beat - b[i].beat) <= MARKER_BEAT_EPSILON &&
-        Math.abs(column.roomAfter - b[i].roomAfter) <= BARLINE_SLOT_TOLERANCE_PX
-    )
+    a.every((voice, i) => {
+      const other = b[i];
+      return (
+        close(voice.lead, other.lead) &&
+        voice.rooms.length === other.rooms.length &&
+        voice.rooms.every((room, k) => close(room, other.rooms[k])) &&
+        voice.beatOffsets.every(
+          (beat, k) =>
+            Math.abs(beat - other.beatOffsets[k]) <= MARKER_BEAT_EPSILON
+        )
+      );
+    })
   );
 }
 
 // What a staff with no <music-measure> around it needs, which sizes itself.
 const STRUT_WIDTH_PROPERTY = '--staff-strut-width';
+const UNCROWDED_WIDTH_PROPERTY = '--staff-uncrowded-width';
 
 const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
 const ROW_ALIGNMENT_SOURCE = 'row-alignment';
@@ -288,29 +306,28 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected sharedBarlineSlotLefts: readonly BarlineSlotLeft[] = [];
 
-  // The room this staff's entries need before the end of the bar, from each
-  // beat whose entries would otherwise sit too late for what follows; empty
-  // when nothing is crowded. Own content only, never another staff's, so the
-  // exchange through the ancestor <music-measure> ends on the next pass.
-  get ownColumnRooms(): readonly ColumnRoom[] {
-    return [];
+  // The room each voice's entries need on this staff, null until it has laid
+  // them out. Own content only, and the same at any width, so the exchange
+  // through the ancestor <music-measure> ends on the next pass.
+  get ownVoiceRooms(): readonly VoiceRooms[] | null {
+    return null;
   }
 
-  // What any staff of the measure needs, so beat columns stay aligned when
-  // only one is crowded.
-  get measureColumnRooms(): readonly ColumnRoom[] {
-    return this.sharedColumnRooms;
+  // The other staves' voices. Every staff places the measure's beats from all
+  // of them, so same-beat entries line up however crowded any one staff is.
+  get measureVoiceRooms(): readonly VoiceRooms[] {
+    return this.sharedVoiceRooms;
   }
 
-  set measureColumnRooms(value: readonly ColumnRoom[]) {
-    if (sameColumnRooms(this.sharedColumnRooms, value)) {
+  set measureVoiceRooms(value: readonly VoiceRooms[]) {
+    if (sameVoiceRooms(this.sharedVoiceRooms, value)) {
       return;
     }
-    this.sharedColumnRooms = [...value];
+    this.sharedVoiceRooms = [...value];
     this.onMeasureLayoutChange();
   }
 
-  protected sharedColumnRooms: readonly ColumnRoom[] = [];
+  protected sharedVoiceRooms: readonly VoiceRooms[] = [];
 
   // The barline this staff draws at its right edge, set by its
   // <music-measure> (and adjusted by <music-composition> where two bars
@@ -433,14 +450,29 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
   }
 
   // The widths this staff's entries want, or null with none. The ancestor
-  // <music-measure> sizes itself to its widest staff; a staff without one
-  // keeps to its own minimum.
+  // <music-measure> sizes itself to its widest staff. A staff without one keeps
+  // to its own minimum, and takes up to its container before squeezing its
+  // entries; as a flex item it asks through its basis, so it can still shrink
+  // beside other items.
   protected reportStaffWidths(widths: StaffWidths | null): void {
-    const style = (this as unknown as HTMLElement).style;
+    const host = this as unknown as HTMLElement;
+    const { style } = host;
     if (widths === null || this.closest(MUSIC_MEASURE) !== null) {
       style.removeProperty(STRUT_WIDTH_PROPERTY);
+      style.removeProperty(UNCROWDED_WIDTH_PROPERTY);
     } else {
-      style.setProperty(STRUT_WIDTH_PROPERTY, `${Math.ceil(widths.minWidth)}px`);
+      const minWidth = Math.ceil(widths.minWidth);
+      const uncrowdedWidth = Math.ceil(widths.uncrowdedWidth);
+      if (isRowFlexItem(host)) {
+        style.setProperty(STRUT_WIDTH_PROPERTY, `${minWidth}px`);
+        style.setProperty(UNCROWDED_WIDTH_PROPERTY, `${uncrowdedWidth}px`);
+      } else {
+        style.setProperty(
+          STRUT_WIDTH_PROPERTY,
+          barMinWidthCss(minWidth, uncrowdedWidth, '100%')
+        );
+        style.removeProperty(UNCROWDED_WIDTH_PROPERTY);
+      }
     }
     if (widths !== null) {
       this.dispatchEvent(
@@ -555,7 +587,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.shadowRoot!.innerHTML = `
       <style>
       :host {
-          flex: var(--flex-staff-basis, 1 1 280px);
+          flex: var(--flex-staff-basis, 1 1 max(280px, var(${UNCROWDED_WIDTH_PROPERTY}, 0px)));
           min-width: var(--flex-staff-minw, var(${STRUT_WIDTH_PROPERTY}, 0));
           box-sizing: border-box;
           display: block;
@@ -571,7 +603,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           position: absolute;
           inset: 0;
           top: -1px;
-          width: 100%;
           height: ${this.staffHeight}px;
           display: block;
           border-top: ${STAFF_LINE_THICKNESS_PX}px solid currentColor;
@@ -622,9 +653,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#endBarlineSvg.setAttribute('class', 'end-barline');
     this.#endBarlineSvg.setAttribute(
       'style',
-      // The plain barline is the container's 1px right border, just outside
-      // the wrapper, so a drawn end barline ends at the same edge.
-      `position: absolute; top: 0; right: -${BARLINE_THIN_PX}px; width: 0; height: 100%; overflow: visible; pointer-events: none; color: currentColor;`
+      'position: absolute; top: 0; right: 0; width: 0; height: 100%; overflow: visible; pointer-events: none; color: currentColor;'
     );
     wrapper.appendChild(this.#endBarlineSvg);
     this.#drawEndBarline();

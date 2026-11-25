@@ -118,23 +118,26 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 
 ## 6. Wind & Brass Techniques
 
-|          | Name              | Notation                    | Description                                  |
-| -------- | ----------------- | --------------------------- | -------------------------------------------- |
-| &#x2610; | Tongue            | `t` or `Tu`                 | Articulate note with tongue                  |
-| &#x2610; | Double Tongue     | `T-K`                       | Rapid double articulation                    |
-| &#x2610; | Triple Tongue     | `T-K-T`                     | Rapid triple articulation                    |
-| &#x2611; | Flutter Tongue    | `flz.` or `flutter`         | Roll the tongue while playing                |
-| &#x2610; | Growl             | `growl`                     | Sing into instrument while playing           |
-| &#x2610; | Multiphonics      | Special notation            | Produce multiple pitches simultaneously      |
-| &#x2610; | Half-valve        | `(+)` or special mark       | Depress valve halfway for microtone/effect   |
-| &#x2611; | Glissando         | `gliss.`                    | Slide between pitches (trombones especially) |
-| &#x2610; | Stopped (Horn)    | `+`                         | Hand stops bell (French Horn)                |
-| &#x2610; | Open (Horn)       | `o`                         | Remove hand from bell                        |
-| &#x2610; | Mute              | `con sord.`                 | Use a mute                                   |
-| &#x2610; | Remove Mute       | `senza sord.`               | Take off the mute                            |
-| &#x2610; | Sforzando Tongue  | `sfz` + note                | Explosive tongued attack                     |
-| &#x2611; | Breath Mark       | `✓` (`breath-mark="tick"`)  | Break in the sound after the note            |
-| &#x2611; | Comma Breath Mark | `’` (`breath-mark="comma"`) | Short pause or lift within a phrase          |
+|          | Name                       | Notation                                    | Description                                                       |
+| -------- | -------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
+| &#x2610; | Tongue                     | `t` or `Tu`                                 | Articulate note with tongue                                       |
+| &#x2610; | Double Tongue              | `T-K`                                       | Rapid double articulation                                         |
+| &#x2610; | Triple Tongue              | `T-K-T`                                     | Rapid triple articulation                                         |
+| &#x2611; | Flutter Tongue             | `flz.` or `flutter`                         | Roll the tongue while playing                                     |
+| &#x2610; | Growl                      | `growl`                                     | Sing into instrument while playing                                |
+| &#x2610; | Multiphonics               | Special notation                            | Produce multiple pitches simultaneously                           |
+| &#x2610; | Half-valve                 | `(+)` or special mark                       | Depress valve halfway for microtone/effect                        |
+| &#x2611; | Glissando                  | `gliss.`                                    | Slide between pitches (trombones especially)                      |
+| &#x2611; | Quasi Glissando            | `quasi gliss.` (`glissando-label`)          | Chromatic pitches written out where a smooth slide isn't possible |
+| &#x2611; | Chromatic Glissando        | `chrom.` (`glissando-label`)                | Semitones written in full, as measured or grace notes             |
+| &#x2611; | Pitch Bend / Lip Glissando | Line after the notehead (`bend`, `bend-to`) | Alter the pitch by embouchure or throat                           |
+| &#x2610; | Stopped (Horn)             | `+`                                         | Hand stops bell (French Horn)                                     |
+| &#x2610; | Open (Horn)                | `o`                                         | Remove hand from bell                                             |
+| &#x2610; | Mute                       | `con sord.`                                 | Use a mute                                                        |
+| &#x2610; | Remove Mute                | `senza sord.`                               | Take off the mute                                                 |
+| &#x2610; | Sforzando Tongue           | `sfz` + note                                | Explosive tongued attack                                          |
+| &#x2611; | Breath Mark                | `✓` (`breath-mark="tick"`)                  | Break in the sound after the note                                 |
+| &#x2611; | Comma Breath Mark          | `’` (`breath-mark="comma"`)                 | Short pause or lift within a phrase                               |
 
 ---
 
@@ -160,18 +163,18 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 
 ## 8. Pitch Modifiers & Microtones
 
-|          | Name                 | Symbol          | Description                  |
-| -------- | -------------------- | --------------- | ---------------------------- |
-| &#x2611; | Sharp                | `â™¯`           | Raise pitch one semitone     |
-| &#x2611; | Flat                 | `â™­`           | Lower pitch one semitone     |
-| &#x2611; | Natural              | `â™®`           | Cancel previous accidental   |
-| &#x2611; | Double Sharp         | `ð„ª`           | Raise pitch two semitones    |
-| &#x2611; | Double Flat          | `ð„«`           | Lower pitch two semitones    |
-| &#x2610; | Quarter-tone Sharp   | `â†‘â™¯` or `+` | Raise by a quarter tone      |
-| &#x2610; | Quarter-tone Flat    | `â†“â™­` or `-` | Lower by a quarter tone      |
-| &#x2610; | Three-quarter Sharp  | Special symbol  | Raise by three quarter tones |
-| &#x2610; | Three-quarter Flat   | Special symbol  | Lower by three quarter tones |
-| &#x2610; | Pitch Bend (generic) | Arrow + note    | Vague directional pitch bend |
+|          | Name                 | Symbol                             | Description                  |
+| -------- | -------------------- | ---------------------------------- | ---------------------------- |
+| &#x2611; | Sharp                | `â™¯`                              | Raise pitch one semitone     |
+| &#x2611; | Flat                 | `â™­`                              | Lower pitch one semitone     |
+| &#x2611; | Natural              | `â™®`                              | Cancel previous accidental   |
+| &#x2611; | Double Sharp         | `ð„ª`                              | Raise pitch two semitones    |
+| &#x2611; | Double Flat          | `ð„«`                              | Lower pitch two semitones    |
+| &#x2611; | Quarter-tone Sharp   | `quarter-tone="up"` on a natural   | Raise by a quarter tone      |
+| &#x2611; | Quarter-tone Flat    | `quarter-tone="down"` on a natural | Lower by a quarter tone      |
+| &#x2611; | Three-quarter Sharp  | `quarter-tone="up"` on a sharp     | Raise by three quarter tones |
+| &#x2611; | Three-quarter Flat   | `quarter-tone="down"` on a flat    | Lower by three quarter tones |
+| &#x2611; | Pitch Bend (generic) | Line after the note (`bend`)       | Vague directional pitch bend |
 
 ---
 

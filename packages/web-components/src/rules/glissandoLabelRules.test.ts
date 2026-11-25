@@ -82,8 +82,8 @@ describe('arcTopUnder', () => {
     expect(
       arcTopUnder({ ...arc, openStart: true }, { left: 100, right: 110 })
     ).toBe(30);
-    expect(
-      arcTopUnder({ ...arc, openStart: true, openEnd: true }, atEnd)
-    ).toBe(30);
+    expect(arcTopUnder({ ...arc, openStart: true, openEnd: true }, atEnd)).toBe(
+      30
+    );
   });
 });
