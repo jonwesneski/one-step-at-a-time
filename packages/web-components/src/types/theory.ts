@@ -460,6 +460,20 @@ export type TremoloLabel =
 export type BreathMark = 'tick' | 'comma';
 
 /**
+ * Where an unpitched sound is drawn: in the space above the stave (`top`),
+ * below it (`bottom`), or at its `written` note.
+ */
+export type UnpitchedPlacement = 'top' | 'bottom' | 'written';
+
+/** A mark through a note's stem: `cross`, air through the instrument. */
+export type StemMark = 'cross';
+
+/**
+ * How a reminder accidental is drawn: `bracketed` (in parentheses) or `plain`.
+ */
+export type AccidentalReminder = 'bracketed' | 'plain';
+
+/**
  * Which of a minim two-note tremolo's beams join its stems: `all` of them, or
  * only the `outer` one. Unset leaves every beam detached.
  */

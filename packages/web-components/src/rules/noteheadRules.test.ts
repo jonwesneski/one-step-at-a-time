@@ -1,5 +1,9 @@
 import type { DurationType, NoteheadType } from '../types/theory';
 import {
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_TOP_LINE_Y,
+} from '../utils/notationDimensions';
+import {
   forcedStemUp,
   isTriangle,
   resolveChordToneNoteheads,
@@ -7,10 +11,12 @@ import {
   resolveNoteheadGlyph,
   resolveStemTipY,
   resolveTriangleStaffYs,
+  resolveUnpitchedStaffY,
   suppressesAccidental,
   suppressesLedgerLines,
   triangleDurationWarning,
   triangleUnsupportedWarning,
+  unpitchedWarnings,
   type TrianglePlacementEntry,
 } from './noteheadRules';
 
@@ -284,5 +290,33 @@ describe('resolveStemTipY', () => {
         stemExtensionPx: 5,
       })
     ).toBe(3);
+  });
+});
+
+describe('unpitched notes', () => {
+  it('stand in the space outside the stave, or at the written note', () => {
+    expect(resolveUnpitchedStaffY('top', 80)).toBe(STAFF_TOP_LINE_Y - 5);
+    expect(resolveUnpitchedStaffY('bottom', 10)).toBe(STAFF_BOTTOM_LINE_Y + 5);
+    expect(resolveUnpitchedStaffY('written', 10)).toBe(10);
+  });
+
+  it('warn about an unknown value, a triangle, and each attribute without a pitch to act on', () => {
+    const warn = (
+      value: string | null,
+      placement: 'top' | null,
+      notehead: NoteheadType | null,
+      ignored: string[] = []
+    ) => unpitchedWarnings({ value, placement, notehead, ignored });
+    expect(warn(null, null, null)).toEqual([]);
+    expect(warn('high', null, null)).toEqual([
+      expect.stringContaining('unpitched="high"'),
+    ]);
+    expect(warn('top', 'top', 'triangle-up', ['trill'])).toEqual([
+      expect.stringContaining('triangle-up'),
+    ]);
+    expect(warn('top', 'top', 'x', ['trill', 'bend-to'])).toEqual([
+      expect.stringContaining('trill'),
+      expect.stringContaining('bend-to'),
+    ]);
   });
 });

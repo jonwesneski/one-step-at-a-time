@@ -47,21 +47,27 @@ type Candidate = {
   beatOffset: number;
 };
 
+// An unpitched sound isn't a pitch to merge.
 function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
   if (isNoteNodeName(element.nodeName)) {
-    return (element as NoteElementType).notehead === 'normal';
+    const note = element as NoteElementType;
+    return note.notehead === 'normal' && (note.unpitched ?? null) === null;
   }
-  return (element as ChordElementType).toneNoteheads.every(
-    (notehead) => notehead === 'normal'
+  const chord = element as ChordElementType;
+  return (
+    chord.toneNoteheads.every((notehead) => notehead === 'normal') &&
+    (chord.toneUnpitched ?? []).every((placement) => placement === null)
   );
 }
 
 // A reminder belongs to one tone, and merged tones dedupe by pitch.
 function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
   return (
-    element.accidentalReminder ||
+    element.accidentalReminder !== null ||
     (isChordNodeName(element.nodeName) &&
-      (element as ChordElementType).toneAccidentalReminders.some(Boolean))
+      (element as ChordElementType).toneAccidentalReminders.some(
+        (reminder) => reminder !== null
+      ))
   );
 }
 
@@ -139,6 +145,7 @@ function combineKey(element: NoteOrChordElementType): string {
     element.articulationRepeat ?? false,
     element.breathMark ?? null,
     element.swell ?? false,
+    element.stemMark ?? null,
   ]);
 }
 

@@ -2652,3 +2652,71 @@ test.describe('quarter-tone arrows under a beam', () => {
     expect(restored).toEqual(plain);
   });
 });
+
+test.describe('unpitched notes', () => {
+  test('marking a note unpitched moves it above the stave and drops its accidental, and back', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.style.width = '600px';
+      host.innerHTML = `<music-staff clef="treble">
+        <music-note note="F#" octave="4" duration="quarter"></music-note>
+        <music-note note="F" octave="4" duration="quarter"></music-note>
+      </music-staff>`;
+    });
+    await waitForRedrawCycle(page);
+
+    const read = async (unpitched: string | null) => {
+      await page.evaluate((value) => {
+        const note = document.querySelector('music-note');
+        if (value === null) {
+          note?.removeAttribute('unpitched');
+        } else {
+          note?.setAttribute('unpitched', value);
+        }
+      }, unpitched);
+      await waitForRedrawCycle(page);
+      return page.evaluate(() => {
+        const [first, second] = Array.from(
+          document.querySelectorAll('music-note')
+        );
+        const topLine =
+          document
+            .querySelector('music-staff')
+            ?.shadowRoot?.querySelector('.staff-container')
+            ?.getBoundingClientRect().top ?? 0;
+        return {
+          headCenter: (() => {
+            const head = first.shadowRoot
+              ?.querySelector('.head')
+              ?.getBoundingClientRect();
+            return (
+              (head === undefined ? 0 : (head.top + head.bottom) / 2) - topLine
+            );
+          })(),
+          ownAccidental:
+            first.shadowRoot?.querySelector('.accidental') !== null,
+          nextAccidental:
+            second.shadowRoot?.querySelector('.accidental') !== null,
+        };
+      });
+    };
+
+    const pitched = await read(null);
+    expect(pitched.ownAccidental).toBe(true);
+    expect(pitched.nextAccidental).toBe(true);
+
+    const unpitched = await read('top');
+    expect(unpitched.headCenter).toBeLessThan(0);
+    expect(pitched.headCenter).toBeGreaterThan(0);
+    expect(unpitched.ownAccidental).toBe(false);
+    expect(unpitched.nextAccidental).toBe(false);
+
+    const back = await read(null);
+    expect(back).toEqual(pitched);
+  });
+});

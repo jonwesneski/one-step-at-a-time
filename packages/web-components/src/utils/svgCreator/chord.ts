@@ -57,6 +57,7 @@ import {
   GRACE_MAIN_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
+  STEM_CROSS_SIZE_PX,
   STEM_OVERLAP_PX,
   TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -94,6 +95,7 @@ import {
   type NoteDotLayout,
   type NoteProps,
 } from './note';
+import { createStemCrossSvg } from './stemMark';
 import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
 import { createTremoloNumeral, createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
@@ -161,6 +163,7 @@ export const createChordSvg = ({
   trillFinishSlur = 'to-main',
   augmentationDotRows = null,
   tremoloStrokeCount = 0,
+  stemCross = false,
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
@@ -292,10 +295,11 @@ export const createChordSvg = ({
   if (stemUp && !stemless && !noStem) {
     inkTopY = Math.min(inkTopY, stemOuterY);
   }
-  if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
-    const { centerYs } = resolveStrokePlacement({
+  if ((tremoloStrokeCount > 0 || stemCross) && (stemless || !noStem)) {
+    const { centerYs, crossCenterY } = resolveStrokePlacement({
       headY: nearestHeadY,
       stemUp,
+      stemCross,
       strokeCount: tremoloStrokeCount,
       staff: STAFF_BAND,
       stemLengthPx: stemless ? null : nearestHeadStemLengthPx,
@@ -312,12 +316,21 @@ export const createChordSvg = ({
       chordToneHeadCenterY(y, stemUp, base, noFlags)
     );
     svg.setAttribute('overflow', 'visible');
-    svg.appendChild(createTremoloStrokes(centerX, strokeYs));
+    if (crossCenterY !== null) {
+      const crossY = chordToneHeadCenterY(crossCenterY, stemUp, base, noFlags);
+      svg.appendChild(createStemCrossSvg(centerX, crossY));
+      if (stemless && stemUp) {
+        inkTopY = Math.min(inkTopY, crossY - STEM_CROSS_SIZE_PX / 2);
+      }
+    }
+    if (strokeYs.length > 0) {
+      svg.appendChild(createTremoloStrokes(centerX, strokeYs));
+    }
     const outerStrokeY = strokeYs[strokeYs.length - 1];
-    if (stemless && stemUp) {
+    if (stemless && stemUp && outerStrokeY !== undefined) {
       inkTopY = Math.min(inkTopY, outerStrokeY - TREMOLO_STROKE_HALF_HEIGHT_PX);
     }
-    if (tremoloTuplet !== null) {
+    if (tremoloTuplet !== null && outerStrokeY !== undefined) {
       const outerEdgeY = stemless
         ? outerStrokeY + outward * TREMOLO_STROKE_HALF_HEIGHT_PX
         : stemOuterY;

@@ -1,4 +1,13 @@
-import type { DurationType, NoteheadType } from '../types/theory';
+import type {
+  DurationType,
+  NoteheadType,
+  UnpitchedPlacement,
+} from '../types/theory';
+import {
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_TOP_LINE_Y,
+  STAFF_Y_STEP,
+} from '../utils/notationDimensions';
 import {
   durationToBase,
   isOpenDuration,
@@ -222,4 +231,48 @@ export function resolveStemTipY({
     : stemExtensionPx + (lowestHeadY - highestHeadY) + flagExtensionPx;
   const length = baseStemLengthPx + extension;
   return stemUp ? lowestHeadY - length : highestHeadY + length;
+}
+
+/**
+ * Where an unpitched sound sits: in the space just above the top line or below
+ * the bottom one, or at its written position.
+ */
+export function resolveUnpitchedStaffY(
+  placement: UnpitchedPlacement,
+  writtenStaffY: number
+): number {
+  switch (placement) {
+    case 'top':
+      return STAFF_TOP_LINE_Y - STAFF_Y_STEP;
+    case 'bottom':
+      return STAFF_BOTTOM_LINE_Y + STAFF_Y_STEP;
+    case 'written':
+      return writtenStaffY;
+  }
+}
+
+/** Warnings for an `unpitched` note, one per attribute that doesn't apply. */
+export function unpitchedWarnings(input: {
+  value: string | null;
+  placement: UnpitchedPlacement | null;
+  notehead: NoteheadType | null;
+  ignored: readonly string[];
+}): string[] {
+  const { value, placement, notehead, ignored } = input;
+  if (value === null) {
+    return [];
+  }
+  if (placement === null) {
+    return [
+      `unpitched="${value}" isn't top, bottom or written; drawing the note at its pitch`,
+    ];
+  }
+  if (isTriangle(notehead)) {
+    return [
+      `unpitched is ignored on notehead="${notehead}", which places itself`,
+    ];
+  }
+  return ignored.map(
+    (name) => `${name} is ignored on an unpitched note, which has no pitch`
+  );
 }

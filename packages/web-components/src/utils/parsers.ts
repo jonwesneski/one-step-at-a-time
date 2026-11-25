@@ -1,5 +1,6 @@
 import type { ConnectorRole, TieValue } from '../types/elements';
 import type {
+  AccidentalReminder,
   ArpeggioType,
   ArticulationType,
   BarlineType,
@@ -30,6 +31,7 @@ import type {
   SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
   TieStyle,
   TimeSignature,
@@ -41,8 +43,10 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  UnpitchedPlacement,
 } from '../types/theory';
 import {
+  ACCIDENTAL_REMINDERS,
   ACCIDENTAL_TYPES,
   ARPEGGIOS,
   ARTICULATIONS,
@@ -70,6 +74,7 @@ import {
   SLUR_STYLES,
   STAFF_GROUPS,
   STEM_DIRECTIONS,
+  STEM_MARKS,
   STRESSES,
   TIE_STYLES,
   TIMES,
@@ -81,6 +86,7 @@ import {
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
+  UNPITCHED_PLACEMENTS,
 } from './consts';
 
 const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
@@ -402,6 +408,41 @@ export const parseTremoloTuplet = (value: string | null): number | null => {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 2 ? parsed : null;
 };
+
+const VALID_UNPITCHED_PLACEMENTS = new Set<string>(UNPITCHED_PLACEMENTS);
+
+/** A bare attribute is `written`; null for an unknown value. */
+export const parseUnpitched = (
+  value: string | null
+): UnpitchedPlacement | null =>
+  value === ''
+    ? 'written'
+    : value !== null && VALID_UNPITCHED_PLACEMENTS.has(value)
+    ? (value as UnpitchedPlacement)
+    : null;
+
+export const parseStemMark = (value: string | null): StemMark | null =>
+  value !== null && (STEM_MARKS as string[]).includes(value)
+    ? (value as StemMark)
+    : null;
+
+/**
+ * A bare attribute is `bracketed`; so is an unknown value, which the element
+ * warns about (`isAccidentalReminder`).
+ */
+export const parseAccidentalReminder = (
+  value: string | null
+): AccidentalReminder | null =>
+  value === null
+    ? null
+    : (ACCIDENTAL_REMINDERS as string[]).includes(value)
+    ? (value as AccidentalReminder)
+    : 'bracketed';
+
+export const isAccidentalReminder = (value: string | null): boolean =>
+  value === null ||
+  value === '' ||
+  (ACCIDENTAL_REMINDERS as string[]).includes(value);
 
 export const parseBreathMark = (value: string | null): BreathMark | null =>
   value !== null && VALID_BREATH_MARKS.has(value)

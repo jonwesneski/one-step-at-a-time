@@ -42,6 +42,7 @@ import type {
   TieValue,
 } from '../types/elements';
 import type {
+  AccidentalReminder,
   AccidentalType,
   ArpeggioType,
   ArticulationType,
@@ -68,6 +69,7 @@ import type {
   QuarterTone,
   SlurStyle,
   StemDirection,
+  StemMark,
   StressType,
   TieStyle,
   TremoloLabel,
@@ -75,6 +77,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  UnpitchedPlacement,
 } from '../types/theory';
 import {
   addLedgerLines,
@@ -138,7 +141,12 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
-import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
+import {
+  parseAccidentalReminder,
+  parseDuration,
+  parseStemMark,
+  warnIfInvalidDuration,
+} from '../utils/parsers';
 import type { LedgerHeadExtent } from '../utils/svgCreator';
 import {
   chordAugmentationDotLayout,
@@ -173,7 +181,8 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
- * @attr {boolean} accidental-reminder - Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone.
+ * @attr {AccidentalReminder} accidental-reminder - Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.
+ * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end (see `<music-note>`).
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
  * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -253,6 +262,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'dynamic-shared',
       'dynamic-reminder',
       'accidental-reminder',
+      'stem-mark',
       'quarter-tone',
       'crescendo',
       'decrescendo',
@@ -502,14 +512,22 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
   // Per tone, in `notes` order: the chord's own `accidental-reminder`, or
   // a slotted <music-note>'s.
-  get toneAccidentalReminders(): boolean[] {
+  get toneAccidentalReminders(): (AccidentalReminder | null)[] {
     const chordReminder = this.accidentalReminder;
     const noteElements = Array.from(this.querySelectorAll(this.childNoteTag));
     return this.notes.map(
       (_, i) =>
-        chordReminder ||
-        ((noteElements[i] as NoteElementType | undefined)?.accidentalReminder ??
-          false)
+        (noteElements[i] as NoteElementType | undefined)?.accidentalReminder ??
+        chordReminder
+    );
+  }
+
+  // Per tone, in `notes` order: a slotted <music-note>'s own `unpitched`.
+  get toneUnpitched(): (UnpitchedPlacement | null)[] {
+    const noteElements = Array.from(this.querySelectorAll(this.childNoteTag));
+    return this.notes.map(
+      (_, i) =>
+        (noteElements[i] as NoteElementType | undefined)?.unpitched ?? null
     );
   }
 
@@ -685,11 +703,29 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     this.toggleAttribute('dynamic-reminder', value);
   }
 
-  get accidentalReminder(): boolean {
-    return this.readsAttribute('accidental-reminder');
+  get accidentalReminder(): AccidentalReminder | null {
+    return parseAccidentalReminder(this.readAttribute('accidental-reminder'));
   }
-  set accidentalReminder(value: boolean) {
-    this.toggleAttribute('accidental-reminder', value);
+  set accidentalReminder(value: AccidentalReminder | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('accidental-reminder');
+    } else {
+      this.setAttribute(
+        'accidental-reminder',
+        value === true || value === 'bracketed' ? '' : value
+      );
+    }
+  }
+
+  get stemMark(): StemMark | null {
+    return parseStemMark(this.readAttribute('stem-mark'));
+  }
+  set stemMark(value: StemMark | null) {
+    if (value === null) {
+      this.removeAttribute('stem-mark');
+    } else {
+      this.setAttribute('stem-mark', value);
+    }
   }
 
   get crescendo(): HairpinRole | null {
@@ -1489,6 +1525,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         'notehead',
         'instrument',
         'accidental-reminder',
+        'unpitched',
         'quarter-tone',
         'bend',
         'bend-to',
@@ -1739,6 +1776,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     if (
       name === 'chord' ||
       name === 'accidental-reminder' ||
+      name === 'stem-mark' ||
       name === 'arpeggio' ||
       name === 'arpeggio-for' ||
       name === 'arpeggio-hairpin' ||
@@ -2031,6 +2069,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishNotes: this.#buildTrillFinishDescriptors(this.notes),
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
+        stemCross: this.stemMark === 'cross',
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
@@ -2039,12 +2078,19 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         bends: this.#standaloneBends(),
       });
       chordSvg.setAttribute('overflow', 'visible');
+      // An unpitched tone takes no ledger line.
+      const unpitched = this.toneUnpitched;
+      const pitched = (_: unknown, i: number) => unpitched[i] === null;
       addLedgerLines(
         chordSvg,
-        this.#staffYCoordinates,
+        this.#staffYCoordinates.filter(pitched),
         this.#stemUp,
         STAFF_Y_PADDING - NOTE_HEAD_Y_OFFSET_CORRECTION,
-        this.#ledgerHeadExtent(this.#staffYCoordinates, toneNoteheads)
+        this.#ledgerHeadExtent(
+          this.#staffYCoordinates,
+          toneNoteheads,
+          unpitched
+        )
       );
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
@@ -2075,10 +2121,16 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
       const standaloneYCoordinates = this.#resolveStandaloneYCoordinates();
       const stemUp = Math.max(...standaloneYCoordinates) > MIDDLE_STAFF_Y;
-      // Standalone, a reminder brackets each tone's own accidental.
+      // Standalone, a reminder shows each tone's own accidental.
       const reminders = this.toneAccidentalReminders;
+      const unpitched = this.toneUnpitched;
       const noteAccidentals = this.#resolveStandaloneNoteAccidentals().map(
-        (accidental, i) => (reminders[i] ? accidental ?? 'natural' : accidental)
+        (accidental, i) =>
+          unpitched[i] !== null
+            ? null
+            : reminders[i] !== null
+            ? accidental ?? 'natural'
+            : accidental
       );
 
       const [chordSvg] = createChordSvg({
@@ -2095,13 +2147,16 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         arpeggioHairpinTo: this.arpeggioHairpinTo,
         stemUp,
         noteAccidentals,
-        noteAccidentalsParenthesized: reminders,
+        noteAccidentalsParenthesized: reminders.map(
+          (reminder) => reminder === 'bracketed'
+        ),
         noteheads: toneNoteheads,
         noFlags: false,
         noStem: this.#noStem,
         // Standalone, nothing else lengthens the stem for tremolo strokes.
         stemExtension: unbeamedTremoloStemExtensionPx({
           tremolo: this.tremolo,
+          stemCross: this.stemMark === 'cross',
           duration: this.duration,
           headYs: standaloneYCoordinates,
           stemUp,
@@ -2117,6 +2172,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishNotes: this.#buildTrillFinishDescriptors(notes),
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
+        stemCross: this.stemMark === 'cross',
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
@@ -2185,7 +2241,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   // Ledger lines span the widest head in the chord.
   #ledgerHeadExtent(
     staffYCoordinates: readonly number[],
-    toneNoteheads: NoteheadType[]
+    toneNoteheads: NoteheadType[],
+    unpitched: readonly (UnpitchedPlacement | null)[] = []
   ): LedgerHeadExtent {
     const geometries = (
       toneNoteheads.length > 0 ? toneNoteheads : (['normal'] as const)
@@ -2206,10 +2263,11 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       cxPx: widest.cx * NOTE_SCALE,
       halfWidthPx: widest.halfWidth * NOTE_SCALE,
       all: chordHeadExtentPx(heads),
-      tones: staffYCoordinates.map((staffY, index) => ({
-        staffY,
-        ...chordToneHeadExtentPx(heads, index),
-      })),
+      tones: staffYCoordinates.flatMap((staffY, index) =>
+        (unpitched[index] ?? null) === null
+          ? [{ staffY, ...chordToneHeadExtentPx(heads, index) }]
+          : []
+      ),
     };
   }
 

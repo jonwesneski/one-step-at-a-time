@@ -1724,6 +1724,21 @@ export const TREMOLO_TAIL_ROOM_PX = STAFF_LINE_SPACING * 1.5;
  */
 export const TREMOLO_STROKE_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
+/** Height and width (px) of a stem's `cross`. = 0.9 × STAFF_LINE_SPACING */
+export const STEM_CROSS_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Stroke width (px) of a stem cross's arms. = 0.1 × STAFF_LINE_SPACING */
+export const STEM_CROSS_STROKE_WIDTH_PX = STAFF_LINE_SPACING * 0.1;
+
+/** How far (px) in from a plain stem's end a cross is centred. = 1 × STAFF_LINE_SPACING */
+export const STEM_CROSS_END_INSET_PX = STAFF_LINE_SPACING;
+
+/** Least gap (px) between a stem cross and its notehead. = 0.5 × STAFF_LINE_SPACING */
+export const STEM_CROSS_HEAD_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between a stem cross and the tremolo stroke beyond it. = 0.3 × STAFF_LINE_SPACING */
+export const STEM_CROSS_STROKE_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
 /**
  * Length (px) of plain stem left past the outermost stroke.
  * = 0.5 × STAFF_LINE_SPACING

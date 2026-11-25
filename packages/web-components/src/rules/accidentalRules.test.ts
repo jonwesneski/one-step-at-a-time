@@ -854,3 +854,65 @@ describe('computeNoteAccidentals — bend targets', () => {
     expect(noteShowAccidentals.get(after)).toBeNull();
   });
 });
+
+describe('computeNoteAccidentals — unpitched notes', () => {
+  it('neither shows an accidental nor changes the bar, nor do its grace notes', () => {
+    const unpitched = makeNote({ note: 'F#' });
+    unpitched.setAttribute('unpitched', 'top');
+    unpitched.setAttribute('grace', 'Bb');
+    const later = makeNote({ note: 'F' });
+    const lastB = makeNote({ note: 'B' });
+
+    const { noteShowAccidentals, graceShowAccidentals } =
+      computeNoteAccidentals([unpitched, later, lastB], 'C', 'major');
+
+    expect(noteShowAccidentals.get(unpitched)).toBeNull();
+    expect(graceShowAccidentals.get(unpitched)).toEqual([null]);
+    expect(noteShowAccidentals.get(later)).toBeNull();
+    expect(noteShowAccidentals.get(lastB)).toBeNull();
+  });
+
+  it('skips only the chord tone that is unpitched', () => {
+    const chord = makeChord({
+      notes: [
+        { note: 'C#', octave: 4 },
+        { note: 'E#', octave: 4 },
+      ],
+    });
+    chord.querySelectorAll('music-note')[1].setAttribute('unpitched', '');
+    const { chordNoteAccidentals } = computeNoteAccidentals(
+      [chord],
+      'C',
+      'major'
+    );
+    expect(chordNoteAccidentals.get(chord)).toEqual(['sharp', null]);
+  });
+});
+
+describe('computeNoteAccidentals — plain reminders', () => {
+  it('shows the accidental in force without parentheses', () => {
+    const note = makeNote({ note: 'Bb', octave: 4, duration: 'quarter' });
+    note.setAttribute('accidental-reminder', 'plain');
+    const { noteShowAccidentals, parenthesizedAccidentals } =
+      computeNoteAccidentals([note], 'F', 'major');
+    expect(noteShowAccidentals.get(note)).toBe('flat');
+    expect(parenthesizedAccidentals.has(note)).toBe(false);
+  });
+
+  it('takes a chord tone’s own reminder over the chord’s', () => {
+    const chord = makeChord({
+      notes: [
+        { note: 'C', octave: 4 },
+        { note: 'E', octave: 4 },
+      ],
+    });
+    chord.setAttribute('accidental-reminder', 'plain');
+    chord
+      .querySelectorAll('music-note')[1]
+      .setAttribute('accidental-reminder', '');
+    const { chordNoteAccidentals, chordParenthesizedAccidentals } =
+      computeNoteAccidentals([chord], 'C', 'major');
+    expect(chordNoteAccidentals.get(chord)).toEqual(['natural', 'natural']);
+    expect(chordParenthesizedAccidentals.get(chord)).toEqual([false, true]);
+  });
+});

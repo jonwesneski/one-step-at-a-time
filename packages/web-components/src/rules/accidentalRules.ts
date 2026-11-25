@@ -15,6 +15,7 @@ import {
   NoteElementType,
 } from '../types/elements';
 import {
+  AccidentalReminder,
   AccidentalType,
   ConventionalAccidentalType,
   Mode,
@@ -155,6 +156,17 @@ export function computeNoteAccidentals(
     if (pitches == null || pitches.length === 0) {
       return;
     }
+    // An unpitched note's grace notes are unpitched too.
+    if (
+      isNoteNodeName(hostElement.nodeName) &&
+      (hostElement as NoteElementType).unpitched != null
+    ) {
+      target.set(
+        hostElement,
+        pitches.map(() => null)
+      );
+      return;
+    }
     const resolved = pitches.map((pitch, i) => {
       const letter = pitch[0].toUpperCase();
       const accidental = pitchAccidental(pitch, quarterTones?.[i] ?? null);
@@ -215,13 +227,15 @@ export function computeNoteAccidentals(
         graceShowAccidentals,
         noteElement
       );
-      // A triangle's nominal pitch is undefined, so like a tied note it neither
-      // shows an accidental nor changes the measure's state. Its ornaments do.
+      // A triangle's or an unpitched note's nominal pitch is undefined, so like
+      // a tied note it neither shows an accidental nor changes the measure's
+      // state. A triangle's ornaments do.
       // A dotted tie across a barline is not literal enough to carry the
       // accidental, so its end note shows it again.
       if (
         (noteElement.tie === 'end' && !noteElement.dottedTieAcrossBarline) ||
-        isTriangle(noteElement.notehead)
+        isTriangle(noteElement.notehead) ||
+        noteElement.unpitched != null
       ) {
         noteShowAccidentals.set(noteElement, null);
         resolveBendTarget(noteElement);
@@ -282,7 +296,13 @@ export function computeNoteAccidentals(
       const parenthesized: boolean[] = [];
       const reminders = chordElement.toneAccidentalReminders;
       const quarterTones = chordElement.toneQuarterTones;
+      const unpitched = chordElement.toneUnpitched ?? [];
       chordElement.notes.forEach((chordNote, toneIndex) => {
+        if (unpitched[toneIndex] != null) {
+          accidentals.push(null);
+          parenthesized.push(false);
+          return;
+        }
         const letter = chordNote.value[0].toUpperCase();
         const noteAccidental = pitchAccidental(
           chordNote.value,
@@ -292,7 +312,7 @@ export function computeNoteAccidentals(
         const shown = withReminder(
           resolveAccidental(noteAccidental, effectiveState),
           noteAccidental,
-          reminders[toneIndex] ?? false
+          reminders[toneIndex] ?? null
         );
         accidentals.push(shown.accidental);
         parenthesized.push(shown.parenthesized);
@@ -579,17 +599,21 @@ export function accidentalInkRect(
   };
 }
 
-// A reminder shows the accidental already in force, in parentheses: the
-// note's own, or a natural. One that is required anyway draws plainly.
-function withReminder(
+// A reminder shows the accidental already in force: the note's own, or a
+// natural, in parentheses unless `plain`. One that is required anyway draws
+// plainly.
+export function withReminder(
   shown: AccidentalType | null,
   noteAccidental: AccidentalType | null,
-  reminder: boolean
+  reminder: AccidentalReminder | null
 ): { accidental: AccidentalType | null; parenthesized: boolean } {
-  if (!reminder || shown !== null) {
+  if (reminder === null || shown !== null) {
     return { accidental: shown, parenthesized: false };
   }
-  return { accidental: noteAccidental ?? 'natural', parenthesized: true };
+  return {
+    accidental: noteAccidental ?? 'natural',
+    parenthesized: reminder === 'bracketed',
+  };
 }
 
 // Given the note's actual accidental and the currently-in-effect state for that

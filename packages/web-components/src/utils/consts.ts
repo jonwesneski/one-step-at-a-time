@@ -1,4 +1,5 @@
 import type {
+  AccidentalReminder,
   ArpeggioType,
   ArticulationType,
   BarlineType,
@@ -32,6 +33,7 @@ import type {
   SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
   TieStyle,
   TimeSignature,
@@ -45,6 +47,7 @@ import type {
   TrillLineMode,
   TupletPlacement,
   TupletRatio,
+  UnpitchedPlacement,
   VocalType,
 } from '../types/theory';
 
@@ -464,6 +467,19 @@ export const TREMOLO_LABELS: TremoloLabel[] = [
 ];
 
 export const BREATH_MARKS: BreathMark[] = ['tick', 'comma'];
+
+export const UNPITCHED_PLACEMENTS: UnpitchedPlacement[] = [
+  'top',
+  'bottom',
+  'written',
+];
+
+export const STEM_MARKS: StemMark[] = ['cross'];
+
+export const ACCIDENTAL_REMINDERS: AccidentalReminder[] = [
+  'bracketed',
+  'plain',
+];
 
 export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
 

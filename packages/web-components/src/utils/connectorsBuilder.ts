@@ -444,6 +444,16 @@ const validateTiePitch = (
   if (!isNoteNodeName(start.tagName) || !isNoteNodeName(end.tagName)) {
     return undefined;
   }
+  // Unpitched notes tie by where they stand.
+  const startPlacement = (start as NoteElementType).unpitched ?? null;
+  const endPlacement = (end as NoteElementType).unpitched ?? null;
+  if (
+    startPlacement !== null &&
+    startPlacement !== 'written' &&
+    startPlacement === endPlacement
+  ) {
+    return undefined;
+  }
   const startValue = (start as NoteElementType).note;
   const endValue = (end as NoteElementType).note;
   if (startValue && endValue && startValue !== endValue) {

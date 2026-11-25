@@ -152,6 +152,10 @@ export function buildBeamsRenderer(
         lowestHeadStaffY: lowest,
         minimumStemPx: beamedTremoloMinimumStemPx({
           tremolo: tremoloOf(element),
+          stemCross:
+            element.nodeName !== MUSIC_REST_NODE &&
+            (element as NoteElementType | ChordElementType).stemMark ===
+              'cross',
           duration: element.duration,
           nearestHeadY: stemUp ? highest : lowest,
           stemUp,

@@ -2530,3 +2530,31 @@ describe('glissando-shape', () => {
     expect(relayout).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('unpitched tones and stem marks', () => {
+  it('gives an unpitched tone no ledger line', () => {
+    const staff = makeStaff();
+    const chord = renderChordByNotes(staff, [
+      { value: 'A', octave: 4 },
+      { value: 'C', octave: 6 },
+    ]);
+    expect(chord.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(2);
+    chord.querySelectorAll('music-note')[1].setAttribute('unpitched', '');
+    const slot = (staff as any).shadowRoot.querySelector('slot');
+    slot.dispatchEvent(new Event('slotchange'));
+    expect(chord.toneUnpitched).toEqual([null, 'written']);
+    expect(chord.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(0);
+  });
+
+  it('draws a stem cross', () => {
+    const staff = makeStaff();
+    const chord = renderChordByNotes(staff, [
+      { value: 'E', octave: 4 },
+      { value: 'G', octave: 4 },
+    ]);
+    chord.setAttribute('stem-mark', 'cross');
+    const slot = (staff as any).shadowRoot.querySelector('slot');
+    slot.dispatchEvent(new Event('slotchange'));
+    expect(chord.shadowRoot!.querySelector('.stem-cross')).not.toBeNull();
+  });
+});

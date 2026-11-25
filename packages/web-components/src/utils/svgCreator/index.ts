@@ -132,3 +132,4 @@ export { createTupletBracketSvg, createTupletNumeralText } from './tuplet';
 export { createUnisonBracketSvg } from './unison';
 
 export { createParenthesisSvg } from './parenthesis';
+export { createStemCrossSvg } from './stemMark';

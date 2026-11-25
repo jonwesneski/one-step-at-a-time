@@ -139,6 +139,16 @@ export function rebaseGraceSteps(
   }
 }
 
+// An unpitched note's grace notes stand where it does, without accidentals.
+export function flattenUnpitchedGraces(
+  graceNotes: GraceNoteDescriptor[]
+): void {
+  for (const graceNote of graceNotes) {
+    graceNote.relativeStaffSteps = 0;
+    graceNote.accidental = null;
+  }
+}
+
 // Width (px) an accidental column adds in front of a grace head, at grace
 // scale. Past the first of a group it also keeps off the head before it.
 function graceAccidentalWidth(

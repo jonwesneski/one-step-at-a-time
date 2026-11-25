@@ -21,6 +21,7 @@ import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
+  flattenUnpitchedGraces,
   rebaseGraceSteps,
   type GraceNoteDescriptor,
 } from '../rules/graceRules';
@@ -31,6 +32,7 @@ import {
   suppressesLedgerLines,
   triangleDurationWarning,
   triangleUnsupportedWarning,
+  unpitchedWarnings,
 } from '../rules/noteheadRules';
 import {
   articulationRepeatCount,
@@ -53,6 +55,7 @@ import type {
   UnisonPart,
 } from '../types/elements';
 import type {
+  AccidentalReminder,
   AccidentalType,
   ArpeggioType,
   ArticulationType,
@@ -78,6 +81,7 @@ import type {
   QuarterTone,
   SlurStyle,
   StemDirection,
+  StemMark,
   StressType,
   TieStyle,
   TremoloLabel,
@@ -85,6 +89,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  UnpitchedPlacement,
 } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
@@ -149,7 +154,14 @@ import {
   TREMOLO_LABELS,
 } from '../utils/consts';
 import { MaybeHTMLElement } from '../utils/maybeHTMLElement';
-import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
+import {
+  isAccidentalReminder,
+  parseAccidentalReminder,
+  parseDuration,
+  parseStemMark,
+  parseUnpitched,
+  warnIfInvalidDuration,
+} from '../utils/parsers';
 import {
   NOTE_SVG_WIDTH,
   noteAugmentationDotLayout,
@@ -182,7 +194,9 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} swell - A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
- * @attr {boolean} accidental-reminder - Shows the accidental already in force in parentheses, "(♮)", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.
+ * @attr {AccidentalReminder} accidental-reminder - Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, "(♮)", `plain` without. An accidental that is required anyway draws plainly.
+ * @attr {UnpitchedPlacement} unpitched - Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place.
+ * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
  * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -300,6 +314,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'slur-group',
       'stem-direction',
       'notehead',
+      'unpitched',
+      'stem-mark',
       'grace-notehead',
       'tremolo',
       'tremolo-tuplet',
@@ -633,7 +649,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   }
 
   get bendTo(): Note | null {
-    return parseNote(this.readAttribute('bend-to'));
+    return this.unpitched === null
+      ? parseNote(this.readAttribute('bend-to'))
+      : null;
   }
   set bendTo(value: Note | null) {
     if (value === null) {
@@ -683,11 +701,46 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     this.toggleAttribute('dynamic-reminder', value);
   }
 
-  get accidentalReminder(): boolean {
-    return this.readsAttribute('accidental-reminder');
+  get accidentalReminder(): AccidentalReminder | null {
+    return parseAccidentalReminder(this.readAttribute('accidental-reminder'));
   }
-  set accidentalReminder(value: boolean) {
-    this.toggleAttribute('accidental-reminder', value);
+  set accidentalReminder(value: AccidentalReminder | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('accidental-reminder');
+    } else {
+      this.setAttribute(
+        'accidental-reminder',
+        value === true || value === 'bracketed' ? '' : value
+      );
+    }
+  }
+
+  // Null on a triangle, which places itself.
+  get unpitched(): UnpitchedPlacement | null {
+    return isTriangle(this.notehead)
+      ? null
+      : parseUnpitched(this.readAttribute('unpitched'));
+  }
+  set unpitched(value: UnpitchedPlacement | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('unpitched');
+    } else {
+      this.setAttribute(
+        'unpitched',
+        value === true || value === 'written' ? '' : value
+      );
+    }
+  }
+
+  get stemMark(): StemMark | null {
+    return parseStemMark(this.readAttribute('stem-mark'));
+  }
+  set stemMark(value: StemMark | null) {
+    if (value === null) {
+      this.removeAttribute('stem-mark');
+    } else {
+      this.setAttribute('stem-mark', value);
+    }
   }
 
   get crescendo(): HairpinRole | null {
@@ -974,6 +1027,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
     return unbeamedTremoloStemExtensionPx({
       tremolo: this.tremolo,
+      stemCross: this.stemMark === 'cross',
       duration: this.duration,
       headYs: [0],
       stemUp: this.stemUp,
@@ -1090,7 +1144,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   // `tie` chain — see NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE in
   // attributeChangedCallback.
   get trill(): boolean {
-    return this.readsAttribute('trill');
+    return this.readsAttribute('trill') && this.unpitched === null;
   }
   set trill(value: boolean) {
     if (value) {
@@ -1359,7 +1413,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   // resolves the span over its own element stream — see
   // NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE in attributeChangedCallback.
   get octaveShift(): OctaveShiftAmount | null {
-    return parseOctaveShiftAmount(this.readAttribute('octave-shift'));
+    return this.unpitched === null
+      ? parseOctaveShiftAmount(this.readAttribute('octave-shift'))
+      : null;
   }
   set octaveShift(value: OctaveShiftAmount | null) {
     if (value === null) {
@@ -1719,6 +1775,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'grace-articulation' ||
       name === 'grace-notehead' ||
       name === 'notehead' ||
+      name === 'unpitched' ||
+      name === 'stem-mark' ||
       name === 'grace-type' ||
       name === 'grace-duration' ||
       name === 'grace-slur' ||
@@ -1789,6 +1847,44 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         })
       );
     }
+  }
+
+  #lastAttributeWarnings = new Set<string>();
+
+  // Each warning once while it holds.
+  #warnOnce(warnings: readonly string[]): void {
+    for (const warning of warnings) {
+      if (!this.#lastAttributeWarnings.has(warning)) {
+        console.warn(`[music-note] ${warning}`);
+      }
+    }
+    this.#lastAttributeWarnings = new Set(warnings);
+  }
+
+  #attributeWarnings(): string[] {
+    const reminder = this.readAttribute('accidental-reminder');
+    return [
+      ...(isAccidentalReminder(reminder)
+        ? []
+        : [
+            `accidental-reminder="${reminder}" isn't bracketed or plain; drawing it bracketed`,
+          ]),
+      ...(this.readAttribute('stem-mark') !== null && this.stemMark === null
+        ? [
+            `stem-mark="${this.readAttribute(
+              'stem-mark'
+            )}" isn't cross; drawing no mark`,
+          ]
+        : []),
+      ...unpitchedWarnings({
+        value: this.readAttribute('unpitched'),
+        placement: parseUnpitched(this.readAttribute('unpitched')),
+        notehead: this.notehead,
+        ignored: ['octave-shift', 'trill', 'bend-to'].filter((name) =>
+          this.readsAttribute(name)
+        ),
+      }),
+    ];
   }
 
   // A value that doesn't parse warns as soon as it's set. Attributes that
@@ -1966,18 +2062,21 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       console.warn(`[music-note] ${durationWarning}`);
     }
     this.#lastNoteheadWarning = durationWarning;
+    this.#warnOnce(this.#attributeWarnings());
     const stemUp = this.stemUp;
+    const unpitched = this.unpitched !== null;
 
     let accidental: AccidentalType | undefined;
     let accidentalParenthesized = false;
-    if (suppressesAccidental(notehead)) {
+    if (suppressesAccidental(notehead) || unpitched) {
       accidental = undefined;
     } else if (this.#showAccidental === undefined) {
       accidental = pitchAccidental(this.note, this.quarterTone) ?? undefined;
-      // Standalone, a reminder brackets the note's own accidental.
-      if (this.accidentalReminder) {
+      // Standalone, a reminder shows the note's own accidental.
+      const reminder = this.accidentalReminder;
+      if (reminder !== null) {
         accidental ??= 'natural';
-        accidentalParenthesized = true;
+        accidentalParenthesized = reminder === 'bracketed';
       }
     } else if (this.#showAccidental !== null) {
       accidental = this.#showAccidental;
@@ -2021,6 +2120,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         this.tremolo === null
           ? 0
           : resolveStrokeCount(this.tremolo, this.duration),
+      stemCross: this.stemMark === 'cross',
       tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
@@ -2029,7 +2129,11 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       bend: this.#standaloneBend(),
     });
 
-    if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
+    if (
+      this.#staffY !== null &&
+      !suppressesLedgerLines(notehead) &&
+      !unpitched
+    ) {
       const { cx, halfWidth } = noteHeadGeometry(
         stemUp,
         this.duration,
@@ -2210,6 +2314,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   }
 
   #rebaseOrnamentSteps(ornaments: GraceNoteDescriptor[]): void {
+    if (this.unpitched !== null) {
+      flattenUnpitchedGraces(ornaments);
+      return;
+    }
     if (this.#staffY !== null && this.#nominalStaffY !== null) {
       rebaseGraceSteps(ornaments, this.#staffY, this.#nominalStaffY);
     }

@@ -52,6 +52,7 @@ const DRUM_SHARED_ATTRIBUTES = [
   'articulation-repeat',
   'stress',
   'stem-direction',
+  'stem-mark',
   'beam-group',
   'shared-stem-for',
   'tremolo',
@@ -114,6 +115,7 @@ export const DRUM_CHORD_ATTRIBUTES: readonly string[] = DRUM_SHARED_ATTRIBUTES;
 export const PITCH_ONLY_NOTE_ATTRIBUTES: readonly string[] = [
   'note',
   'octave',
+  'unpitched',
   ...PITCH_ONLY_SHARED_ATTRIBUTES,
 ];
 export const PITCH_ONLY_CHORD_ATTRIBUTES: readonly string[] = [

@@ -6,6 +6,8 @@ import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  STEM_CROSS_END_INSET_PX,
+  STEM_CROSS_SIZE_PX,
   TREMOLO_BEAM_MAX_LENGTH_PX,
   TREMOLO_BEAM_MIN_LENGTH_PX,
   TREMOLO_BEAM_STEM_GAP_PX,
@@ -761,5 +763,111 @@ describe('tremoloDetachedSpan', () => {
     const { x1, x2 } = tremoloDetachedSpan([0, 4]);
     expect(x1).toBeGreaterThanOrEqual(0);
     expect(x2).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('a stem cross', () => {
+  const cross = (
+    input: Partial<Parameters<typeof resolveStrokePlacement>[0]> = {}
+  ) =>
+    resolveStrokePlacement({
+      headY: E4,
+      stemUp: true,
+      strokeCount: 0,
+      staff: STAFF_BAND,
+      stemLengthPx: BASE_STEM_LENGTH_PX,
+      ending: { kind: 'plain' },
+      canLengthenStem: true,
+      stemCross: true,
+      ...input,
+    });
+
+  it('stands a space in from a plain stem’s end, without lengthening it', () => {
+    const placement = cross();
+    expect(placement.centerYs).toEqual([]);
+    expect(placement.crossCenterY).toBeCloseTo(
+      E4 - BASE_STEM_LENGTH_PX + STEM_CROSS_END_INSET_PX
+    );
+    expect(placement.stemFloorPx).toBeCloseTo(BASE_STEM_LENGTH_PX);
+  });
+
+  it('keeps clear of a tail’s root and the beams', () => {
+    const plain = cross().crossCenterY ?? 0;
+    const tailed = cross({ ending: { kind: 'tail', flagCount: 1 } });
+    const beamed = cross({ ending: { kind: 'beam', beamCount: 2 } });
+    expect(tailed.crossCenterY).toBeGreaterThan(plain);
+    expect(beamed.crossCenterY).toBeGreaterThan(plain);
+    expect(E4 - BASE_STEM_LENGTH_PX + TREMOLO_TAIL_ROOM_PX).toBeLessThanOrEqual(
+      (tailed.crossCenterY ?? 0) - STEM_CROSS_SIZE_PX / 2
+    );
+  });
+
+  it('lengthens a stem too short for it, or stays on one already drawn', () => {
+    const short = 15;
+    const lengthened = cross({ stemLengthPx: short });
+    expect(lengthened.stemFloorPx).toBeGreaterThan(short);
+    expect(E4 - (lengthened.crossCenterY ?? 0)).toBeGreaterThan(
+      STEM_CROSS_SIZE_PX
+    );
+    const drawn = cross({ stemLengthPx: short, canLengthenStem: false });
+    expect(E4 - (drawn.crossCenterY ?? 0)).toBeLessThan(short);
+  });
+
+  it('goes between tremolo strokes and the head', () => {
+    const placement = cross({ strokeCount: 2, headY: C5, stemUp: false });
+    const [first] = placement.centerYs;
+    expect(placement.crossCenterY).toBeGreaterThan(C5);
+    expect(placement.crossCenterY).toBeLessThan(first - HALF_HEIGHT);
+    expect(
+      first -
+        HALF_HEIGHT -
+        ((placement.crossCenterY ?? 0) + STEM_CROSS_SIZE_PX / 2)
+    ).toBeGreaterThan(0);
+  });
+
+  it('takes a stemless head’s notional stem side and counts as its ink', () => {
+    const placement = cross({ stemLengthPx: null, stemUp: false, headY: C5 });
+    expect(placement.crossCenterY).toBeGreaterThan(C5);
+    expect(
+      stemlessTremoloReachPx({
+        tremolo: null,
+        stemCross: true,
+        tuplet: null,
+        duration: 'whole',
+        headY: C5,
+        stemUp: false,
+      })
+    ).toBeCloseTo((placement.crossCenterY ?? 0) - C5 + STEM_CROSS_SIZE_PX / 2);
+  });
+
+  it('makes a beamed or unbeamed stem long enough', () => {
+    expect(
+      unbeamedTremoloStemExtensionPx({
+        tremolo: null,
+        stemCross: true,
+        duration: 'sixteenth',
+        headYs: [E4],
+        stemUp: true,
+        staff: STAFF_BAND,
+        stemExtensionPx: 0,
+      })
+    ).toBeGreaterThan(0);
+    expect(
+      beamedTremoloMinimumStemPx({
+        tremolo: null,
+        stemCross: true,
+        duration: 'sixteenth',
+        nearestHeadY: E4,
+        stemUp: true,
+      })
+    ).toBeGreaterThan(0);
+    expect(
+      beamedTremoloMinimumStemPx({
+        tremolo: null,
+        duration: 'sixteenth',
+        nearestHeadY: E4,
+        stemUp: true,
+      })
+    ).toBeUndefined();
   });
 });

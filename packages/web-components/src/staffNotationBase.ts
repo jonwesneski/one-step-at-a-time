@@ -77,6 +77,7 @@ import {
   computeFirstGraceHeadX,
   computeGraceFootprintWidth,
   computeGraceLayout,
+  flattenUnpitchedGraces,
 } from './rules/graceRules';
 import type {
   CrossStaffDynamicsOverride,
@@ -103,6 +104,7 @@ import {
   resolveNoteheadGlyph,
   resolveStemTipY,
   resolveTriangleStaffYs,
+  resolveUnpitchedStaffY,
   type TrianglePlacementEntry,
 } from './rules/noteheadRules';
 import {
@@ -613,6 +615,10 @@ function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
 // The outermost of rows or reaches on one side of the stave.
 const outermost = (ys: readonly number[], above: boolean): number =>
   above ? Math.min(...ys) : Math.max(...ys);
+
+const isUnpitchedNote = (element: Element): boolean =>
+  isNoteNodeName(element.nodeName) &&
+  (element as NoteElementType).unpitched !== null;
 
 // A staff Y's height in the transcription containers.
 const containerYOfStaffY = (staffY: number): number =>
@@ -2107,6 +2113,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (reference.swell) {
       chord.setAttribute('swell', '');
     }
+    if (reference.stemMark !== null) {
+      chord.setAttribute('stem-mark', reference.stemMark);
+    }
     for (const tone of group.tones) {
       const note = document.createElement(MUSIC_NOTE);
       note.setAttribute('note', tone.value);
@@ -2145,19 +2154,32 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const beatOffset = beatOffsets[i];
       if (isNoteNodeName(element.nodeName)) {
         const noteElement = element as NoteElementType;
+        const written = this.#noteToYCoordinateAtBeatOffset(
+          noteElement.note,
+          noteElement.octave ?? undefined,
+          beatOffset
+        );
+        const unpitched = noteElement.unpitched ?? null;
         noteStaffYCoords.set(
           noteElement,
-          this.#noteToYCoordinateAtBeatOffset(
-            noteElement.note,
-            noteElement.octave ?? undefined,
-            beatOffset
-          )
+          unpitched === null
+            ? written
+            : resolveUnpitchedStaffY(unpitched, written)
         );
       } else if (isChordNodeName(element.nodeName)) {
         const chordElement = element as ChordElementType;
+        const unpitched = chordElement.toneUnpitched ?? [];
         chordStaffYCoords.set(
           chordElement,
-          this.#resolveChordStaffYCoordinates(chordElement.notes, beatOffset)
+          this.#resolveChordStaffYCoordinates(
+            chordElement.notes,
+            beatOffset
+          ).map((written, tone) => {
+            const placement = unpitched[tone] ?? null;
+            return placement === null
+              ? written
+              : resolveUnpitchedStaffY(placement, written);
+          })
         );
       }
     }
@@ -2422,6 +2444,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
       return unbeamedTremoloStemExtensionPx({
         tremolo: element.tremolo,
+        stemCross: element.stemMark === 'cross',
         duration: element.duration,
         headYs,
         stemUp: stemDirections[i],
@@ -2471,6 +2494,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
       return tremoloInkPastStemPx({
         tremolo: noteOrChord.tremolo ?? null,
+        stemCross: noteOrChord.stemMark === 'cross',
         tuplet: noteOrChord.tremoloTuplet ?? null,
         duration: element.duration,
         headY: stemDirections[i] ? Math.min(...headYs) : Math.max(...headYs),
@@ -3845,6 +3869,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             ? ownAccidental
             : note.showAccidental,
         notehead: resolveNoteheadGlyph(note.notehead, duration),
+        unpitched: note.unpitched !== null,
         isChord: false,
       };
     }
@@ -3861,6 +3886,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       duration: durationToBase[duration],
       pitchAccidental: null,
       shownAccidental: null,
+      unpitched: chord.toneUnpitched.some((placement) => placement !== null),
       isChord: true,
       tones: chord.notes.map((tone, index) => {
         const { left, right } = chordToneHeadExtentPx(headInput, index);
@@ -5633,6 +5659,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       descriptors,
       element.resolvedGraceAccidentals
     );
+    if (isUnpitchedNote(element)) {
+      flattenUnpitchedGraces(descriptors);
+    }
     return above
       ? graceInkTopY(
           descriptors,
@@ -6196,6 +6225,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           reach,
           stemlessTremoloReachPx({
             tremolo: noteOrChord.tremolo ?? null,
+            stemCross: noteOrChord.stemMark === 'cross',
             tuplet: noteOrChord.tremoloTuplet ?? null,
             duration: noteOrChord.duration,
             headY:
@@ -6834,11 +6864,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const xCenter = noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
     if (isNoteNodeName(element.nodeName)) {
       const noteElement = element as NoteElementType;
-      const rawY = this.noteToYCoordinate(
-        noteElement.note,
-        noteElement.octave ?? 4,
-        index
-      );
+      const rawY =
+        state.noteStaffYCoords.get(noteElement) ??
+        this.noteToYCoordinate(
+          noteElement.note,
+          noteElement.octave ?? 4,
+          index
+        );
       return {
         xCenter,
         y: STAFF_Y_PADDING + rawY - NOTE_HEAD_Y_OFFSET_CORRECTION,

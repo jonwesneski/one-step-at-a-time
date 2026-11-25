@@ -1,9 +1,13 @@
 import {
+  isAccidentalReminder,
+  parseAccidentalReminder,
   parseAccidentalType,
   parseEnding,
   parseEndingNumbering,
   parseGraceQuarterTones,
   parseQuarterTone,
+  parseStemMark,
+  parseUnpitched,
 } from './parsers';
 
 describe('parseEnding', () => {
@@ -49,5 +53,28 @@ describe('quarter-tones', () => {
   it('keeps arrows out of an authored accidental', () => {
     expect(parseAccidentalType('sharp')).toBe('sharp');
     expect(parseAccidentalType('sharp-up')).toBeNull();
+  });
+});
+
+describe('special-technique attributes', () => {
+  it('read a bare unpitched as written and drop an unknown one', () => {
+    expect(parseUnpitched('')).toBe('written');
+    expect(parseUnpitched('top')).toBe('top');
+    expect(parseUnpitched('high')).toBeNull();
+    expect(parseUnpitched(null)).toBeNull();
+  });
+
+  it('read a bare or unknown accidental-reminder as bracketed, flagging the unknown', () => {
+    expect(parseAccidentalReminder('')).toBe('bracketed');
+    expect(parseAccidentalReminder('plain')).toBe('plain');
+    expect(parseAccidentalReminder('yes')).toBe('bracketed');
+    expect(parseAccidentalReminder(null)).toBeNull();
+    expect(isAccidentalReminder('plain')).toBe(true);
+    expect(isAccidentalReminder('yes')).toBe(false);
+  });
+
+  it('read cross as the only stem mark', () => {
+    expect(parseStemMark('cross')).toBe('cross');
+    expect(parseStemMark('slash')).toBeNull();
   });
 });

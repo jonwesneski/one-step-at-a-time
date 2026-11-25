@@ -61,6 +61,7 @@ import {
   STACKED_TAIL_LENGTH_PX,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  STEM_CROSS_SIZE_PX,
   STEM_OVERLAP_PX,
   STEM_STROKE_WIDTH_PX,
   TREMOLO_NUMERAL_GAP_PX,
@@ -85,6 +86,7 @@ import {
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
+import { createStemCrossSvg } from './stemMark';
 import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
 import { createTremoloNumeral, createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
@@ -222,6 +224,8 @@ export type NoteProps = {
   omitsHead?: boolean;
   // Tremolo strokes to draw (resolved from the `tremolo` value); 0 for none.
   tremoloStrokeCount?: number;
+  // A `stem-mark="cross"`.
+  stemCross?: boolean;
   // Tuplet numeral beyond the stem's end (or the strokes on a stemless head).
   tremoloTuplet?: number | null;
   // Times the articulation's length mark repeats across a row.
@@ -292,6 +296,7 @@ export const createNoteSvg = ({
   augmentationDotShiftPx = 0,
   omitsHead = false,
   tremoloStrokeCount = 0,
+  stemCross = false,
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
@@ -512,13 +517,14 @@ export const createNoteSvg = ({
   if (stemUp && !stemless && !noStem) {
     inkTopY = Math.min(inkTopY, stemTipY * NOTE_SCALE);
   }
-  if (tremoloStrokeCount > 0 && (stemless || !noStem)) {
+  if ((tremoloStrokeCount > 0 || stemCross) && (stemless || !noStem)) {
     // Standalone, the head stands in for staff Y 0 and nothing snaps to lines.
     const headStaffY = staffY ?? 0;
     const ending = stemEndingFor(duration, noFlags);
-    const { centerYs } = resolveStrokePlacement({
+    const { centerYs, crossCenterY } = resolveStrokePlacement({
       headY: headStaffY,
       stemUp,
+      stemCross,
       strokeCount: tremoloStrokeCount,
       staff: staffY === null ? null : STAFF_BAND,
       stemLengthPx: stemless
@@ -532,15 +538,24 @@ export const createNoteSvg = ({
     const strokeX = (stemless ? headGeometry.cx : stemX) * NOTE_SCALE;
     const strokeYs = centerYs.map((y) => headCenterPxY + y - headStaffY);
     svg.setAttribute('overflow', 'visible');
-    svg.appendChild(createTremoloStrokes(strokeX, strokeYs));
-    if (stemless && stemUp) {
+    if (crossCenterY !== null) {
+      const crossY = headCenterPxY + crossCenterY - headStaffY;
+      svg.appendChild(createStemCrossSvg(strokeX, crossY));
+      if (stemless && stemUp) {
+        inkTopY = Math.min(inkTopY, crossY - STEM_CROSS_SIZE_PX / 2);
+      }
+    }
+    if (strokeYs.length > 0) {
+      svg.appendChild(createTremoloStrokes(strokeX, strokeYs));
+    }
+    if (stemless && stemUp && strokeYs.length > 0) {
       inkTopY = Math.min(
         inkTopY,
         strokeYs[strokeYs.length - 1] - TREMOLO_STROKE_HALF_HEIGHT_PX
       );
     }
 
-    if (tremoloTuplet !== null) {
+    if (tremoloTuplet !== null && strokeYs.length > 0) {
       const outward = stemUp ? -1 : 1;
       const outerEdgeY = stemless
         ? strokeYs[strokeYs.length - 1] +

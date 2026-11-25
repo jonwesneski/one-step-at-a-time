@@ -53,6 +53,7 @@ export * from './types/theory';
  * build pickers/controls without importing from deep paths.
  */
 export {
+  ACCIDENTAL_REMINDERS,
   ACCIDENTAL_TYPES,
   ARPEGGIOS,
   ARPEGGIO_UNMATCHED_MODES,
@@ -87,6 +88,7 @@ export {
   SLUR_STYLES,
   STAFF_GROUPS,
   STEM_DIRECTIONS,
+  STEM_MARKS,
   STRESSES,
   TIE_STYLES,
   TIE_VALUES,
@@ -101,5 +103,6 @@ export {
   TRILL_LINE_MODES,
   TUPLET_PLACEMENTS,
   TUPLET_RATIOS,
+  UNPITCHED_PLACEMENTS,
   VOICES,
 } from './utils/consts';

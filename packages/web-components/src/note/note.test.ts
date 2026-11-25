@@ -3302,3 +3302,61 @@ describe('glissando-shape', () => {
     expect(relayout).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('unpitched, stem-mark and plain reminders', () => {
+  it('draws an unpitched note with no ledger line or accidental, at the top of the stave', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'F#', 6);
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(3);
+    note.setAttribute('unpitched', 'top');
+    expect((note as NoteElementType).staffY).toBe(25);
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(0);
+    expect(note.shadowRoot!.querySelector('.accidental')).toBeNull();
+  });
+
+  it('round-trips the enumerated attributes', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.accidentalReminder = true;
+    expect(note.getAttribute('accidental-reminder')).toBe('');
+    expect(note.accidentalReminder).toBe('bracketed');
+    note.accidentalReminder = 'plain';
+    expect(note.accidentalReminder).toBe('plain');
+    note.unpitched = true;
+    expect(note.unpitched).toBe('written');
+    note.notehead = 'triangle-up';
+    expect(note.unpitched).toBeNull();
+    note.stemMark = 'cross';
+    expect(note.getAttribute('stem-mark')).toBe('cross');
+  });
+
+  it('ignores a trill, an octave sign and a bend target on an unpitched note, warning once each', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('trill', '');
+    note.setAttribute('octave-shift', '8va');
+    note.setAttribute('bend-to', 'D');
+    document.body.appendChild(note);
+    note.setAttribute('unpitched', '');
+    expect(note.trill).toBe(false);
+    expect(note.octaveShift).toBeNull();
+    expect(note.bendTo).toBeNull();
+    const ignored = warn.mock.calls.filter(([message]) =>
+      String(message).includes('ignored on an unpitched note')
+    );
+    expect(ignored).toHaveLength(3);
+    warn.mockRestore();
+  });
+
+  it('draws a cross through the stem, standalone too', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('stem-mark', 'cross');
+    document.body.appendChild(note);
+    expect(note.shadowRoot!.querySelectorAll('.stem-cross line')).toHaveLength(
+      2
+    );
+    const staff = makeStaff();
+    const inStaff = renderNote(staff, 'E', 4);
+    inStaff.setAttribute('stem-mark', 'cross');
+    expect(inStaff.shadowRoot!.querySelector('.stem-cross')).not.toBeNull();
+  });
+});

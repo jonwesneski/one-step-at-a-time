@@ -41,6 +41,8 @@ export type UnisonPartDescriptor = {
   shownAccidental: AccidentalType | null;
   // The glyph drawn for the head; null for the plain oval.
   notehead?: NoteheadGlyph | null;
+  // An unpitched note or tone never shares a head.
+  unpitched?: boolean;
   isChord: boolean;
   // A chord part: one entry per tone, so the tone at the unison is found by
   // staff Y (the fields above are then unused).
@@ -98,7 +100,12 @@ export function canShareNotehead(
   a: UnisonPartInput,
   b: UnisonPartInput
 ): boolean {
-  if ((a.isChord && b.isChord) || a.direction === b.direction) {
+  if (
+    (a.isChord && b.isChord) ||
+    a.direction === b.direction ||
+    a.unpitched ||
+    b.unpitched
+  ) {
     return false;
   }
   const headClass = headClassOf(a.duration);

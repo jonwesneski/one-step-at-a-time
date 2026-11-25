@@ -205,6 +205,26 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('combines a stem cross only with another, never an unpitched note', () => {
+    const crossed = (pitch: string) => {
+      const element = note(pitch, 4);
+      element.setAttribute('stem-mark', 'cross');
+      return element;
+    };
+    const combine = (first: NoteElementType, second: NoteElementType): number =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(crossed('C'), crossed('E'))).toBe(1);
+    expect(combine(crossed('C'), note('E', 4))).toBe(0);
+    const unpitched = note('E', 4);
+    unpitched.setAttribute('unpitched', '');
+    expect(combine(note('C', 4), unpitched)).toBe(0);
+  });
+
   it('excludes a trilled note from combining', () => {
     const v1Note = note('C', 4);
     const v2Note = note('E', 4);

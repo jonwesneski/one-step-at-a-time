@@ -2,6 +2,7 @@ import type { ResolvedBend } from '../rules/glissandoRules';
 import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
+  AccidentalReminder,
   AccidentalType,
   ArpeggioType,
   ArticulationType,
@@ -34,6 +35,7 @@ import type {
   SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
   TieStyle,
   TimeSignature,
@@ -47,6 +49,7 @@ import type {
   TrillLineMode,
   TupletPlacement,
   TupletRatio,
+  UnpitchedPlacement,
 } from './theory';
 
 export type NoteLetterOctave = `${NoteLetter}${Octave}`;
@@ -86,6 +89,9 @@ export interface INoteElement {
   // Raises or lowers `note` by a quarter-tone, drawn as an arrow on its
   // accidental; null for an ordinary pitch.
   quarterTone: QuarterTone | null;
+  /** An unpitched sound: no accidental or ledger line, at `top`, `bottom` or its written note. */
+  get unpitched(): UnpitchedPlacement | null;
+  set unpitched(value: UnpitchedPlacement | boolean | null);
   octave: Octave | null;
   stemUp: boolean;
   // Author override for stemUp; null leaves the pitch, voice or beam-group
@@ -175,8 +181,14 @@ export interface INoteElement {
   dynamicShared: boolean;
   /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
   dynamicReminder: boolean;
-  /** Shows the accidental in force in parentheses, as a reminder. */
-  accidentalReminder: boolean;
+  /**
+   * Shows the accidental in force as a reminder, in parentheses or plain.
+   * Null when unset.
+   */
+  get accidentalReminder(): AccidentalReminder | null;
+  set accidentalReminder(value: AccidentalReminder | boolean | null);
+  /** A mark through the stem. */
+  stemMark: StemMark | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -383,7 +395,9 @@ export interface IChordElement {
   /** Per tone: the bend it draws, its own or the chord's. */
   readonly toneBends: (ResolvedBend | null)[];
   /** Per tone: the chord's `accidental-reminder`, or the tone's own. */
-  readonly toneAccidentalReminders: boolean[];
+  readonly toneAccidentalReminders: (AccidentalReminder | null)[];
+  /** Per tone: a slotted note's own `unpitched`. */
+  readonly toneUnpitched: (UnpitchedPlacement | null)[];
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -414,8 +428,14 @@ export interface IChordElement {
   dynamicShared: boolean;
   /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
   dynamicReminder: boolean;
-  /** Shows the accidental in force in parentheses, as a reminder. */
-  accidentalReminder: boolean;
+  /**
+   * Shows the accidental in force as a reminder, in parentheses or plain.
+   * Null when unset.
+   */
+  get accidentalReminder(): AccidentalReminder | null;
+  set accidentalReminder(value: AccidentalReminder | boolean | null);
+  /** A mark through the stem. */
+  stemMark: StemMark | null;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.

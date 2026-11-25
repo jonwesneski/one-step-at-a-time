@@ -72,6 +72,15 @@ describe('canShareNotehead', () => {
     );
   });
 
+  it('never shares an unpitched head', () => {
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { unpitched: true }),
+        part(2, 'down', 'quarter')
+      )
+    ).toBe(false);
+  });
+
   it('shares a head between a chord and a note, but never between two chords', () => {
     expect(
       canShareNotehead(

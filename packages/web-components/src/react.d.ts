@@ -5,6 +5,7 @@
  *   /// <reference types="@one-step-at-a-time/web-components/react" />
  */
 import type {
+  AccidentalReminder,
   ArpeggioType,
   ArticulationType,
   BarlineType,
@@ -45,6 +46,7 @@ import type {
   SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
   TieStyle,
   TieValue,
@@ -59,6 +61,7 @@ import type {
   TrillLineMode,
   TupletPlacement,
   TupletRatio,
+  UnpitchedPlacement,
   VocalType,
 } from '@one-step-at-a-time/web-components';
 import 'react';
@@ -85,6 +88,7 @@ type DrumNotationProps = {
   articulation?: ArticulationType;
   'articulation-repeat'?: boolean;
   stress?: StressType;
+  'stem-mark'?: StemMark;
   'stem-direction'?: StemDirection;
   'beam-group'?: string;
   'shared-stem-for'?: string;
@@ -216,7 +220,8 @@ declare module 'react' {
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
         'dynamic-reminder'?: boolean;
-        'accidental-reminder'?: boolean;
+        'accidental-reminder'?: boolean | AccidentalReminder;
+        'stem-mark'?: StemMark;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -293,7 +298,9 @@ declare module 'react' {
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
         'dynamic-reminder'?: boolean;
-        'accidental-reminder'?: boolean;
+        unpitched?: boolean | UnpitchedPlacement;
+        'accidental-reminder'?: boolean | AccidentalReminder;
+        'stem-mark'?: StemMark;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;

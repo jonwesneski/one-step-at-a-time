@@ -579,7 +579,15 @@
               "kind": "field",
               "name": "toneAccidentalReminders",
               "type": {
-                "text": "boolean[]"
+                "text": "(AccidentalReminder | null)[]"
+              },
+              "readonly": true
+            },
+            {
+              "kind": "field",
+              "name": "toneUnpitched",
+              "type": {
+                "text": "(UnpitchedPlacement | null)[]"
               },
               "readonly": true
             },
@@ -694,7 +702,14 @@
               "kind": "field",
               "name": "accidentalReminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemMark",
+              "type": {
+                "text": "StemMark | null"
               }
             },
             {
@@ -1392,6 +1407,13 @@
                   "type": {
                     "text": "NoteheadType[]"
                   }
+                },
+                {
+                  "name": "unpitched",
+                  "default": "[]",
+                  "type": {
+                    "text": "readonly (UnpitchedPlacement | null)[]"
+                  }
                 }
               ]
             },
@@ -1581,9 +1603,16 @@
             {
               "name": "accidental-reminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder"
               },
-              "description": "Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone."
+              "description": "Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched."
+            },
+            {
+              "name": "stem-mark",
+              "type": {
+                "text": "StemMark"
+              },
+              "description": "`cross` draws a small × through the stem, near its end (see `<music-note>`)."
             },
             {
               "name": "quarter-tone"
@@ -3292,7 +3321,19 @@
               "kind": "field",
               "name": "toneAccidentalReminders",
               "type": {
-                "text": "boolean[]"
+                "text": "(AccidentalReminder | null)[]"
+              },
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "toneUnpitched",
+              "type": {
+                "text": "(UnpitchedPlacement | null)[]"
               },
               "readonly": true,
               "inheritedFrom": {
@@ -3471,7 +3512,18 @@
               "kind": "field",
               "name": "accidentalReminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemMark",
+              "type": {
+                "text": "StemMark | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -4485,6 +4537,13 @@
                   "type": {
                     "text": "NoteheadType[]"
                   }
+                },
+                {
+                  "name": "unpitched",
+                  "default": "[]",
+                  "type": {
+                    "text": "readonly (UnpitchedPlacement | null)[]"
+                  }
                 }
               ],
               "inheritedFrom": {
@@ -4932,9 +4991,20 @@
             {
               "name": "accidental-reminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder"
               },
-              "description": "Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone.",
+              "description": "Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "stem-mark",
+              "type": {
+                "text": "StemMark"
+              },
+              "description": "`cross` draws a small × through the stem, near its end (see `<music-note>`).",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -6050,7 +6120,29 @@
               "kind": "field",
               "name": "accidentalReminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unpitched",
+              "type": {
+                "text": "UnpitchedPlacement | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemMark",
+              "type": {
+                "text": "StemMark | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -6815,6 +6907,52 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#lastAttributeWarnings",
+              "privacy": "private",
+              "default": "new Set<string>()",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#warnOnce",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "warnings",
+                  "type": {
+                    "text": "readonly string[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#attributeWarnings",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "string[]"
+                }
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutTremolo",
               "privacy": "private",
@@ -7431,9 +7569,9 @@
             {
               "name": "accidental-reminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder"
               },
-              "description": "Shows the accidental already in force in parentheses, \"(♮)\", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.",
+              "description": "Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, \"(♮)\", `plain` without. An accidental that is required anyway draws plainly.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -7775,6 +7913,28 @@
                 "text": "'bracketed' | 'line-only'"
               },
               "description": "Controls an octave-transposition span's numeral restatement after a system break. `bracketed` (default) redraws it in parentheses; `line-only` resumes with no restated numeral. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the span.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "unpitched",
+              "type": {
+                "text": "UnpitchedPlacement"
+              },
+              "description": "Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "stem-mark",
+              "type": {
+                "text": "StemMark"
+              },
+              "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -9691,7 +9851,21 @@
               "kind": "field",
               "name": "accidentalReminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "unpitched",
+              "type": {
+                "text": "UnpitchedPlacement | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "stemMark",
+              "type": {
+                "text": "StemMark | null"
               }
             },
             {
@@ -10188,6 +10362,40 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#lastAttributeWarnings",
+              "privacy": "private",
+              "default": "new Set<string>()"
+            },
+            {
+              "kind": "method",
+              "name": "#warnOnce",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "warnings",
+                  "type": {
+                    "text": "readonly string[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#attributeWarnings",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "string[]"
+                }
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutTremolo",
               "privacy": "private",
@@ -10509,9 +10717,9 @@
             {
               "name": "accidental-reminder",
               "type": {
-                "text": "boolean"
+                "text": "AccidentalReminder"
               },
-              "description": "Shows the accidental already in force in parentheses, \"(♮)\", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly."
+              "description": "Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, \"(♮)\", `plain` without. An accidental that is required anyway draws plainly."
             },
             {
               "name": "quarter-tone",
@@ -10799,6 +11007,20 @@
                 "text": "NoteheadType"
               },
               "description": "Notehead shape: `normal` (default); `x` (\"x-head\", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the \"harmonic\" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` (\"highest / lowest possible note\"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position."
+            },
+            {
+              "name": "unpitched",
+              "type": {
+                "text": "UnpitchedPlacement"
+              },
+              "description": "Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place."
+            },
+            {
+              "name": "stem-mark",
+              "type": {
+                "text": "StemMark"
+              },
+              "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head."
             },
             {
               "name": "grace-notehead",

@@ -607,20 +607,163 @@ export const ChromaticGlissando: Story = {
 };
 
 /**
- * Still to come: verbal instructions are plain staff text, which isn't
- * implemented yet, and some glissando detail.
+ * Breath, key and valve noise has no pitch. `unpitched="top"` sits in the
+ * space above the stave and `"bottom"` below it; bare `unpitched` keeps the
+ * written note. None draws an accidental or a ledger line, or changes the
+ * accidentals after it. Grace notes stand with their note (bar 2), and a
+ * chord can hold an unpitched tone (bar 3, a jet whistle's cross). In bar 4
+ * the key signature's F♯ is still in force after an unpitched F.
  */
-export const StillToCome: Story = {
+export const UnpitchedSounds: Story = {
   render: () => html`
-    <p>
-      Verbal instructions need staff text, which isn&rsquo;t implemented yet:
-      <em>legato</em> (the woodwind alternative to tenutos over a reiterated
-      pitch) and tonguing instructions such as <em>double-tongue</em>,
-      <em>triple-tongue</em>, <em>t&ndash;k</em> and <em>soft-tongued</em>. So
-      does defining what a quarter-tone arrow means. Trombone positions and
-      glissando text along its line are not implemented. Growl, half-valve,
-      stopped/open horn and mutes are tracked in <code>TODO.md</code> &sect;6
-      &ldquo;Wind &amp; Brass Techniques&rdquo;.
-    </p>
+    <music-composition time="2/4">
+      <music-measure>
+        <music-staff clef="treble" label="Horn">
+          <music-note
+            unpitched="top"
+            notehead="diamond"
+            duration="half"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-rest duration="quarter"></music-rest>
+          <music-note
+            unpitched="top"
+            notehead="x"
+            duration="eighth"
+            grace="G,G,G"
+            grace-notehead="x,x,x"
+            grace-type="appoggiatura"
+            grace-duration="sixteenth"
+            grace-slur="none"
+          ></music-note>
+          <music-rest duration="eighth"></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-chord duration="quarter" stem-direction="down">
+            <music-note
+              note="A"
+              octave="4"
+              notehead="diamond-white"
+            ></music-note>
+            <music-note note="C" octave="6" notehead="x" unpitched></music-note>
+          </music-chord>
+          <music-rest duration="quarter"></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" key-sig="G">
+          <music-note
+            note="F"
+            octave="4"
+            duration="quarter"
+            notehead="x"
+            unpitched
+          ></music-note>
+          <music-note note="F#" octave="4" duration="eighth"></music-note>
+          <music-note
+            unpitched="bottom"
+            notehead="x"
+            duration="eighth"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/**
+ * \`stem-mark="cross"\`: air blown through the instrument with the written
+ * fingering. The cross stands a space in from the stem's end, clear of a
+ * tail or the beams, and the stem lengthens when it must (the beamed
+ * semiquaver). With tremolo strokes it goes between them and the head. A
+ * semibreve takes it on the notional stem.
+ */
+export const CrossedStems: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure>
+        <music-staff clef="treble" label="Trumpet">
+          <music-note
+            note="Bb"
+            octave="3"
+            duration="half"
+            stem-mark="cross"
+          ></music-note>
+          <music-note
+            note="G"
+            octave="3"
+            duration="half"
+            stem-mark="cross"
+            tie="start"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="G"
+            octave="3"
+            duration="quarter"
+            stem-mark="cross"
+            tie="end"
+          ></music-note>
+          <music-note
+            note="Ab"
+            octave="3"
+            duration="dotted-half"
+            stem-mark="cross"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="C"
+            octave="5"
+            duration="eighth"
+            stem-mark="cross"
+          ></music-note>
+          <music-note
+            note="E"
+            octave="4"
+            duration="sixteenth"
+            stem-mark="cross"
+          ></music-note>
+          <music-note note="G" octave="4" duration="sixteenth"></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="eighth"
+            stem-mark="cross"
+          ></music-note>
+          <music-note
+            note="C"
+            octave="5"
+            duration="quarter"
+            stem-mark="cross"
+            tremolo="2"
+          ></music-note>
+          <music-chord duration="quarter" stem-mark="cross">
+            <music-note note="E" octave="4"></music-note>
+            <music-note note="G" octave="4"></music-note>
+          </music-chord>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note
+            note="E"
+            octave="5"
+            duration="whole"
+            stem-mark="cross"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
   `,
 };
