@@ -35,6 +35,7 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  SwellShape,
   TextPlacement,
   TextStyle,
   TieStyle,
@@ -395,7 +396,12 @@ export const ARPEGGIO_UNMATCHED_MODES = ['lv', 'skip'] as const;
 export const ARPEGGIO_RUN_DEFAULT_DURATION: DurationType = 'thirtysecond';
 
 /** Accepted values of the `tie` attribute on `<music-note>` / `<music-chord>`. */
-export const TIE_VALUES = ['start', 'end', 'laissez-vibrer'] as const;
+export const TIE_VALUES = [
+  'start',
+  'continue',
+  'end',
+  'laissez-vibrer',
+] as const;
 
 export const GRACE_TYPES: GraceType[] = [
   'acciaccatura',
@@ -486,6 +492,8 @@ export const ACCIDENTAL_REMINDERS: AccidentalReminder[] = [
 export const TEXT_PLACEMENTS: TextPlacement[] = ['above', 'below'];
 
 export const TEXT_STYLES: TextStyle[] = ['normal', 'italic'];
+
+export const SWELL_SHAPES: SwellShape[] = ['both', 'crescendo', 'diminuendo'];
 
 export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
 

@@ -19,6 +19,7 @@ import {
 import {
   BASE_STEM_LENGTH_PX,
   DYNAMICS_BASELINE_Y,
+  DYNAMICS_CHAR_WIDTH_PX,
   MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   MIN_STEM_LENGTH_PX,
@@ -2022,6 +2023,137 @@ describe('staffNotationBase swells', () => {
     );
     expect(swellWarnings).toHaveLength(1);
     warn.mockRestore();
+  });
+});
+
+describe('swells over tie chains', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  // Each wedge's left and right x.
+  const wedges = (staff: any): { left: number; right: number }[] =>
+    Array.from(
+      staff.shadowRoot.querySelectorAll('.dynamics-container .swell .hairpin')
+    ).map((hairpin: any) => {
+      const xs = Array.from(hairpin.querySelectorAll('path')).flatMap(
+        (path: any) => {
+          const [, x1, , , x2] = path.getAttribute('d').split(' ');
+          return [Number(x1), Number(x2)];
+        }
+      );
+      return { left: Math.min(...xs), right: Math.max(...xs) };
+    });
+  const leftOf = (element: Element) =>
+    parseFloat((element as HTMLElement).style.left);
+
+  it('covers the whole chain, its gap over the middle beat', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell></music-note>
+      <music-note note="E" octave="4" duration="quarter" tie="continue"></music-note>
+      <music-note note="E" octave="4" duration="quarter" tie="end"></music-note>`);
+    const notes = Array.from(staff.children) as Element[];
+    const [crescendo, diminuendo] = wedges(staff);
+    expect(wedges(staff)).toHaveLength(2);
+    // The chain starts at the first note: its offset maps notes into the frame.
+    const offset = leftOf(notes[0]) - crescendo.left;
+    const middleBeatX = leftOf(notes[1]) - offset;
+    expect(crescendo.right).toBeLessThan(middleBeatX);
+    expect(diminuendo.left).toBeGreaterThan(middleBeatX);
+    expect(diminuendo.right).toBeGreaterThan(leftOf(notes[2]) - offset);
+  });
+
+  it('draws one wedge for a crescendo alone', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell="crescendo"></music-note>
+      <music-note note="E" octave="4" duration="half" tie="end"></music-note>`);
+    expect(wedges(staff)).toHaveLength(1);
+  });
+
+  it('lets the earlier swell of a chain win, with one warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell></music-note>
+      <music-note note="E" octave="4" duration="half" tie="end" swell></music-note>`);
+    expect(
+      staff.shadowRoot.querySelectorAll('.dynamics-container .swell')
+    ).toHaveLength(1);
+    staff.onStaffResize();
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('an earlier swell')
+      )
+    ).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('ends before its dynamic-end, drawn at the end of the chain', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell="crescendo" dynamic="p" dynamic-end="f"></music-note>
+      <music-note note="E" octave="4" duration="quarter" tie="end"></music-note>
+      <music-note note="G" octave="4" duration="quarter"></music-note>`);
+    const notes = Array.from(staff.children) as Element[];
+    const end = staff.shadowRoot.querySelector(
+      '.dynamics-container .dynamic-end'
+    );
+    expect(end?.textContent).toBe('f');
+    const endX = Number(end.getAttribute('x'));
+    const [crescendo] = wedges(staff);
+    expect(crescendo.right).toBeLessThan(endX - DYNAMICS_CHAR_WIDTH_PX / 2);
+    const dynamics = Array.from(
+      staff.shadowRoot.querySelectorAll('.dynamics-container .dynamic-marking')
+    ) as Element[];
+    const start = dynamics.find((marking) => marking.textContent === 'p');
+    // Past the tied note's head, before the next note.
+    expect(endX - Number(start?.getAttribute('x'))).toBeGreaterThan(
+      leftOf(notes[1]) - leftOf(notes[0])
+    );
+    expect(endX - Number(start?.getAttribute('x'))).toBeLessThan(
+      leftOf(notes[2]) - leftOf(notes[0])
+    );
+  });
+
+  it('keeps room after a lone note for its dynamic-end', () => {
+    const minWidth = (markup: string) => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      staff.innerHTML = markup;
+      document.body.appendChild(staff);
+      let width = 0;
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+        width = (event as CustomEvent).detail.minWidth;
+      });
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => Array.from(staff.children);
+      slot.dispatchEvent(new Event('slotchange'));
+      return width;
+    };
+    const eighths = (first: string) =>
+      `<music-note note="E" octave="4" duration="eighth" ${first}></music-note>` +
+      '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+        7
+      );
+    expect(minWidth(eighths('dynamic="p" dynamic-end="ff"'))).toBeGreaterThan(
+      minWidth(eighths('dynamic="p"'))
+    );
   });
 });
 

@@ -17,7 +17,7 @@ const SUPPORTED = new Set(DRUM_CHORD_ATTRIBUTES);
  * @customElement music-drum-chord
  * @attr {DurationType} duration - Note value for every stroke, optionally dotted. Defaults to `quarter`.
  * @attr {NoteheadType} notehead - Notehead for every stroke that doesn't take one from its instrument or set its own.
- * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a "let ring" tie.
+ * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for a "let ring" tie.
  * @attr {boolean} lv-label - Adds an "l.v." label to a `laissez-vibrer` tie.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this chord starts as a dotted line. Defaults to `solid`.
  * @attr {SlurStyle} slur-style - `dotted` draws the slur this chord starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
@@ -25,7 +25,8 @@ const SUPPORTED = new Set(DRUM_CHORD_ATTRIBUTES);
  * @attr {string} slur-group - Joins this chord to the other members of one slur phrase that crosses staves.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved ties/slurs.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
- * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
+ * @attr {SwellShape} swell - A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins.
+ * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the chord's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both staves of a pair.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets as a reminder.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.

@@ -23,7 +23,7 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @attr {PercussionInstrument} instrument - Drumset instrument: `kick`, `snare`, `hi-hat`, `ride`, `crash`, `floor-tom`, `mid-tom`, `high-tom` or `hi-hat-pedal`. Sets the staff position and notehead (x for cymbals).
  * @attr {DurationType} duration - Note value, optionally dotted (`dotted-quarter`). Defaults to `quarter`.
  * @attr {NoteheadType} notehead - Overrides the instrument's notehead, e.g. `x` on the snare for a cross-stick.
- * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a "let ring" tie, as on a crash.
+ * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for a "let ring" tie, as on a crash.
  * @attr {boolean} lv-label - Adds an "l.v." label to a `laissez-vibrer` tie.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line. Defaults to `solid`.
  * @attr {SlurStyle} slur-style - `dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
@@ -31,7 +31,8 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @attr {string} slur-group - Joins this note to the other members of one slur phrase that crosses staves.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved ties/slurs.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
- * @attr {boolean} swell - A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.
+ * @attr {SwellShape} swell - A swell under this note over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a note tied into, it covers the rest of the chain; with swells on two notes of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any note of the chain wins.
+ * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the note's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both staves of a pair.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets as a reminder.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.

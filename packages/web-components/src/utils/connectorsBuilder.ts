@@ -510,76 +510,82 @@ export const pairConnectors = (
         }
       }
 
-      const role = readRole(note, CONNECTOR_ATTRS[kind]);
-      if (role === null) {
-        continue;
-      }
-
-      if (role === 'start') {
-        stacks[kind].push({
-          kind,
-          role,
-          note,
-          id: note.getAttribute('id'),
-          forId: null,
-          startIndex: noteIndex,
-        });
-        continue;
-      }
-
-      // role === 'end'
-      const forId = note.getAttribute('for');
-      const stack = stacks[kind];
-      let startEntry: ConnectorEndpoint | undefined;
-
-      if (forId) {
-        const idx = stack.findIndex((entry) => entry.id === forId);
-        if (idx >= 0) {
-          startEntry = stack.splice(idx, 1)[0];
-        } else {
-          console.warn(
-            `[connectorsBuilder] ${kind} end with for="${forId}" has no matching start; falling back to stack top`
-          );
+      // A chain's middle note ends one tie and starts the next.
+      const roles: ConnectorRole[] =
+        kind === 'tie' && note.getAttribute('tie') === 'continue'
+          ? ['end', 'start']
+          : [readRole(note, CONNECTOR_ATTRS[kind])].filter(
+              (role): role is ConnectorRole => role !== null
+            );
+      for (const role of roles) {
+        if (role === 'start') {
+          stacks[kind].push({
+            kind,
+            role,
+            note,
+            id: note.getAttribute('id'),
+            forId: null,
+            startIndex: noteIndex,
+          });
+          continue;
         }
-      }
 
-      if (!startEntry) {
-        startEntry = stack.pop();
-      }
+        // role === 'end'
+        const forId = note.getAttribute('for');
+        const stack = stacks[kind];
+        let startEntry: ConnectorEndpoint | undefined;
 
-      if (!startEntry) {
-        console.warn(
-          `[connectorsBuilder] orphan ${kind} end (no matching start)`
-        );
-        continue;
-      }
+        if (forId) {
+          const idx = stack.findIndex((entry) => entry.id === forId);
+          if (idx >= 0) {
+            startEntry = stack.splice(idx, 1)[0];
+          } else {
+            console.warn(
+              `[connectorsBuilder] ${kind} end with for="${forId}" has no matching start; falling back to stack top`
+            );
+          }
+        }
 
-      const warning =
-        kind === 'tie' ? validateTiePitch(startEntry.note, note) : undefined;
-      if (warning) {
-        console.warn(`[connectorsBuilder] ${warning}`);
-      }
+        if (!startEntry) {
+          startEntry = stack.pop();
+        }
 
-      const glissandoHint =
-        kind === 'glissando'
-          ? parseGlissandoHint(startEntry.note.getAttribute('glissando-hint'))
-          : null;
+        if (!startEntry) {
+          console.warn(
+            `[connectorsBuilder] orphan ${kind} end (no matching start)`
+          );
+          continue;
+        }
 
-      indexedPairs.push({
-        kind,
-        start: startEntry.note,
-        end: note,
-        nestingLevel: 0,
-        startIndex: startEntry.startIndex,
-        endIndex: noteIndex,
-        label: glissandoHint ? GLISSANDO_HINT_LABELS[glissandoHint] : undefined,
-        dotted:
-          kind === 'tie'
-            ? isDottedTie(startEntry.note)
-            : kind === 'slur'
-            ? isDottedSlur(startEntry.note)
+        const warning =
+          kind === 'tie' ? validateTiePitch(startEntry.note, note) : undefined;
+        if (warning) {
+          console.warn(`[connectorsBuilder] ${warning}`);
+        }
+
+        const glissandoHint =
+          kind === 'glissando'
+            ? parseGlissandoHint(startEntry.note.getAttribute('glissando-hint'))
+            : null;
+
+        indexedPairs.push({
+          kind,
+          start: startEntry.note,
+          end: note,
+          nestingLevel: 0,
+          startIndex: startEntry.startIndex,
+          endIndex: noteIndex,
+          label: glissandoHint
+            ? GLISSANDO_HINT_LABELS[glissandoHint]
             : undefined,
-      });
+          dotted:
+            kind === 'tie'
+              ? isDottedTie(startEntry.note)
+              : kind === 'slur'
+              ? isDottedSlur(startEntry.note)
+              : undefined,
+        });
+      }
     }
   });
 
@@ -947,7 +953,8 @@ const tieStartNudgePx = (note: NoteLikeElementType): number => {
         trillCapableNote.resolvedTrillPitch.accidental
       );
   }
-  const trillFinish = trillCapableNote.trillFinish;
+  // Undefined on an entry not upgraded yet, as a chain's middle note can be.
+  const trillFinish = trillCapableNote.trillFinish ?? null;
   if (trillFinish !== null && trillFinish.length > 0) {
     // Same correction; a lone finishing note's stem may reach a couple of px
     // further.

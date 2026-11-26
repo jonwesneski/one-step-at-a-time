@@ -223,6 +223,27 @@ describe('detectCombinableGroups', () => {
     expect(combine(marked('C', 'sub.'), marked('E', 'dolce'))).toBe(0);
   });
 
+  it('combines a swell and dynamic-end only when both match', () => {
+    const marked = (pitch: string, swell: string, dynamicEnd: string) => {
+      const element = note(pitch, 4);
+      element.setAttribute('swell', swell);
+      element.setAttribute('dynamic-end', dynamicEnd);
+      return element;
+    };
+    const combine = (first: NoteElementType, second: NoteElementType): number =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(marked('C', '', 'f'), marked('E', 'both', 'f'))).toBe(1);
+    expect(combine(marked('C', '', 'f'), marked('E', 'crescendo', 'f'))).toBe(
+      0
+    );
+    expect(combine(marked('C', '', 'f'), marked('E', '', 'p'))).toBe(0);
+  });
+
   it('combines a stem cross only with another, never an unpitched note', () => {
     const crossed = (pitch: string) => {
       const element = note(pitch, 4);

@@ -480,6 +480,12 @@ export type TextPlacement = 'above' | 'below';
 export type TextStyle = 'normal' | 'italic';
 
 /**
+ * Which wedges a `swell` draws over its tie chain: `both` (`< >`), or the
+ * `crescendo` or `diminuendo` alone.
+ */
+export type SwellShape = 'both' | 'crescendo' | 'diminuendo';
+
+/**
  * Which of a minim two-note tremolo's beams join its stems: `all` of them, or
  * only the `outer` one. Unset leaves every beam detached.
  */

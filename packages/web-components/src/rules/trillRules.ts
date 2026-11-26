@@ -21,6 +21,7 @@ import {
 } from './accidentalRules';
 import { LETTER_ORDER } from './graceRules';
 import { durationToFlagCountMap } from './theoryConsts';
+import { tiesOn } from './tieRules';
 
 type TrillCapableElement = NoteElementType | ChordElementType;
 
@@ -88,7 +89,7 @@ const walkTieChain = (
   let stopped = source?.trillStop ?? false;
 
   while (!stopped) {
-    if (source === null || source.tie !== 'start') {
+    if (source === null || !tiesOn(source.tie)) {
       break;
     }
     const nextIndex = index + 1;

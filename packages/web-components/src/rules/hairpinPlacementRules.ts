@@ -1,5 +1,5 @@
 import type { NoteOrChordElementType } from '../types/elements';
-import type { DynamicMarking, HairpinKind } from '../types/theory';
+import type { DynamicMarking, HairpinKind, SwellShape } from '../types/theory';
 import {
   DYNAMICS_FONT_SIZE,
   DYNAMICS_TEXT_ASCENT_RATIO,
@@ -132,11 +132,15 @@ export type StaffHairpinDefaults = {
   })[];
   unpairedStarts: (HairpinEndpoint & StaffHairpinPlacement)[];
   orphanEnds: HairpinEndpoint[];
-  // `< >` swells, each over its own note; rawEndClientX is where the swell
-  // stops (viewport px), clear of the next entry and its dynamic.
+  // Swells the staff draws, each over its tie chain (viewport px): where it
+  // ends, clear of the next entry and its dynamic or the swell's
+  // `dynamic-end` (`endText`), and where its middle beat is drawn.
   swells: (StaffHairpinPlacement & {
     element: NoteOrChordElementType;
-    rawEndClientX: number;
+    shape: SwellShape;
+    endClientX: number;
+    midClientX: number;
+    endText: HairpinEndpointText | null;
   })[];
 };
 

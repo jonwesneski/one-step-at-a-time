@@ -134,15 +134,28 @@ describe('dynamicTextHalfWidth', () => {
 });
 
 describe('createSwellSvg', () => {
-  it('draws a crescendo then a diminuendo on one line', () => {
-    const group = createSwellSvg(
+  it('draws each segment as a hairpin, open where the swell carries on', () => {
+    const group = createSwellSvg([
       {
-        crescendo: { startX: 0, endX: 45 },
-        diminuendo: { startX: 55, endX: 100 },
+        kind: 'crescendo',
+        startX: 0,
+        endX: 45,
+        centerY: 30,
+        openAtStart: false,
+        openAtEnd: false,
       },
-      30
-    );
+      {
+        kind: 'decrescendo',
+        startX: 55,
+        endX: 100,
+        centerY: 30,
+        openAtStart: false,
+        openAtEnd: true,
+      },
+    ]);
     expect(group.classList.contains('swell')).toBe(true);
     expect(group.querySelectorAll('.hairpin')).toHaveLength(2);
+    const [, , upper] = pathEnds(group);
+    expect(upper[1].y).not.toBe(30);
   });
 });

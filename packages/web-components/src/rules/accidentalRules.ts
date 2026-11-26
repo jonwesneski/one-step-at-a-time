@@ -39,6 +39,7 @@ import {
 import type { ObstacleRect } from './connectorPlacementRules';
 import { isTriangle } from './noteheadRules';
 import { MINOR_TO_RELATIVE_MAJOR } from './theoryConsts';
+import { tiedInto } from './tieRules';
 
 // ─── Suffix parsing ────────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@ export function computeNoteAccidentals(
       // A dotted tie across a barline is not literal enough to carry the
       // accidental, so its end note shows it again.
       if (
-        (noteElement.tie === 'end' && !noteElement.dottedTieAcrossBarline) ||
+        (tiedInto(noteElement.tie) && !noteElement.dottedTieAcrossBarline) ||
         isTriangle(noteElement.notehead) ||
         noteElement.unpitched != null
       ) {
@@ -278,7 +279,7 @@ export function computeNoteAccidentals(
         graceShowAccidentals,
         chordElement
       );
-      if (chordElement.tie === 'end' && !chordElement.dottedTieAcrossBarline) {
+      if (tiedInto(chordElement.tie) && !chordElement.dottedTieAcrossBarline) {
         chordNoteAccidentals.set(
           chordElement,
           chordElement.notes.map(() => null)

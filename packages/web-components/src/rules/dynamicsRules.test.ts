@@ -16,6 +16,8 @@ import {
   MUSIC_REST_NODE,
 } from '../utils/consts';
 import {
+  DYNAMIC_END_BARLINE_GAP_PX,
+  DYNAMIC_END_NEXT_GAP_PX,
   DYNAMIC_TEXT_FONT_SIZE_PX,
   DYNAMIC_TEXT_GAP_PX,
   DYNAMIC_TEXT_PUNCTUATION_GAP_PX,
@@ -29,16 +31,25 @@ import {
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
   computeHairpinXSpan,
+  dynamicEndCenterX,
   dynamicsRowY,
   dynamicTextTrailingPx,
+  hairpinEndClearOf,
+  hairpinStartClearOf,
   pairHairpins,
   pairHairpinsWithLeftovers,
   pairSharedHairpinsAcrossStaves,
   resolveChainSpans,
   resolveHairpinSegments,
-  resolveSwellSpan,
+  resolveSwellOwners,
+  resolveSwellRow,
+  resolveSwellSegments,
   splitHairpinsAtJoint,
+  swellAttributeWarning,
+  swellChain,
   swellConflicts,
+  swellGapPx,
+  swellMidpoint,
   type PositionedHairpinEndpoint,
 } from './dynamicsRules';
 import { estimateTextWidthPx } from './techniqueTextRules';
@@ -719,62 +730,277 @@ describe('hairpins meeting on one note', () => {
   });
 });
 
-describe('resolveSwellSpan', () => {
-  const plain = {
-    startMarking: null,
-    startTextCenterX: 0,
-    endMarking: null,
-    endTextCenterX: 0,
-  };
+describe('swellAttributeWarning', () => {
+  it('warns about an unknown shape or marking, quiet otherwise', () => {
+    expect(swellAttributeWarning('swell', 'louder')).toMatch(/both/);
+    expect(swellAttributeWarning('dynamic-end', 'loud')).toMatch(/dynamic/);
+    expect(swellAttributeWarning('swell', '')).toBeNull();
+    expect(swellAttributeWarning('swell', 'diminuendo')).toBeNull();
+    expect(swellAttributeWarning('dynamic-end', 'f')).toBeNull();
+    expect(swellAttributeWarning('swell', null)).toBeNull();
+  });
+});
 
-  it('splits the span at its middle with a gap between the open ends', () => {
-    const span = resolveSwellSpan({ rawStartX: 0, rawEndX: 200, ...plain });
-    expect(span).toEqual({
-      crescendo: { startX: 0, endX: 100 - SWELL_MID_GAP_PX / 2 },
-      diminuendo: { startX: 100 + SWELL_MID_GAP_PX / 2, endX: 200 },
-    });
+describe('swellChain', () => {
+  it('runs through each entry whose tie runs on', () => {
+    const elements = makeElements([
+      { tie: 'start' },
+      { tie: 'continue' },
+      { tie: 'end' },
+      {},
+    ]);
+    expect(swellChain(elements, 0)).toBe(2);
+    expect(swellChain(elements, 1)).toBe(2);
+    expect(swellChain(elements, 3)).toBe(3);
   });
 
-  it('starts after the note’s own dynamic', () => {
-    const span = resolveSwellSpan({
-      rawStartX: 0,
-      rawEndX: 200,
-      ...plain,
-      startMarking: 'p',
-      startTextCenterX: 16,
+  it('stops at a rest and at the end of the list', () => {
+    const rest = document.createElement(MUSIC_REST);
+    const elements = [
+      makeNote({ tie: 'start' }),
+      rest,
+    ] as NoteChordOrRestElementType[];
+    expect(swellChain(elements, 0)).toBe(0);
+    expect(swellChain(makeElements([{ tie: 'start' }]), 0)).toBe(0);
+  });
+});
+
+describe('resolveSwellOwners', () => {
+  it('lets the earlier swell of a chain cover the rest of it', () => {
+    const elements = makeElements([
+      { tie: 'start' },
+      { tie: 'continue', swell: '' },
+      { tie: 'end', swell: 'crescendo' },
+      { swell: '' },
+    ]);
+    expect(resolveSwellOwners(elements)).toEqual({
+      owners: [
+        { index: 1, lastIndex: 2 },
+        { index: 3, lastIndex: 3 },
+      ],
+      overridden: [2],
     });
-    expect(span!.crescendo.startX).toBeGreaterThan(16);
+  });
+});
+
+describe('swellGapPx', () => {
+  it('is a sixth of the swell, never under a space', () => {
+    expect(swellGapPx(300)).toBe(50);
+    expect(swellGapPx(30)).toBe(SWELL_MID_GAP_PX);
+  });
+});
+
+describe('swellMidpoint', () => {
+  it('is the middle beat, over the x its entry is drawn at', () => {
+    expect(
+      swellMidpoint([
+        { row: 0, startBeat: 0, endBeat: 1, startX: 0, endX: 300 },
+        { row: 0, startBeat: 1, endBeat: 1.5, startX: 300, endX: 400 },
+      ])
+    ).toEqual({ row: 0, x: 225 });
+  });
+
+  it('can fall in a later row', () => {
+    expect(
+      swellMidpoint([
+        { row: 0, startBeat: 0, endBeat: 1, startX: 500, endX: 600 },
+        { row: 1, startBeat: 1, endBeat: 3, startX: 50, endX: 250 },
+      ])
+    ).toEqual({ row: 1, x: 100 });
+  });
+});
+
+describe('resolveSwellSegments', () => {
+  const row = { startX: 0, endX: 300, centerY: 80 };
+
+  it('leaves its gap over the middle beat', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [row],
+      mid: { row: 0, x: 120 },
+    });
+    expect(segments).toEqual([
+      expect.objectContaining({ kind: 'crescendo', startX: 0, endX: 95 }),
+      expect.objectContaining({ kind: 'decrescendo', startX: 145, endX: 300 }),
+    ]);
+  });
+
+  it('draws one wedge for a crescendo or diminuendo alone', () => {
+    expect(
+      resolveSwellSegments({
+        shape: 'diminuendo',
+        rows: [row],
+        mid: { row: 0, x: 150 },
+      })
+    ).toEqual([
+      {
+        kind: 'decrescendo',
+        startX: 0,
+        endX: 300,
+        centerY: 80,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+    ]);
+  });
+
+  it('splits the wedge that holds a system break, open there', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [
+        { startX: 400, endX: 600, centerY: 80 },
+        { startX: 50, endX: 450, centerY: 300 },
+      ],
+      mid: { row: 1, x: 150 },
+    });
+    expect(segments).toEqual([
+      {
+        kind: 'crescendo',
+        startX: 400,
+        endX: 600,
+        centerY: 80,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+      {
+        kind: 'crescendo',
+        startX: 50,
+        endX: 100,
+        centerY: 300,
+        openAtStart: true,
+        openAtEnd: false,
+      },
+      {
+        kind: 'decrescendo',
+        startX: 200,
+        endX: 450,
+        centerY: 300,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+    ]);
+  });
+
+  it('keeps its gap out of a system break', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [
+        { startX: 0, endX: 300, centerY: 80 },
+        { startX: 50, endX: 350, centerY: 300 },
+      ],
+      mid: { row: 1, x: 60 },
+    });
+    expect(segments?.map(({ kind, centerY }) => [kind, centerY])).toEqual([
+      ['crescendo', 80],
+      ['decrescendo', 300],
+    ]);
+    expect(segments?.[1].startX).toBe(150);
   });
 
   it('is null when a wedge would be too short', () => {
     expect(
-      resolveSwellSpan({ rawStartX: 0, rawEndX: 30, ...plain })
+      resolveSwellSegments({
+        shape: 'both',
+        rows: [{ startX: 0, endX: 30, centerY: 80 }],
+        mid: { row: 0, x: 15 },
+      })
     ).toBeNull();
   });
 });
 
+describe('resolveSwellRow', () => {
+  it('starts after the entry’s own dynamic', () => {
+    const segments = resolveSwellRow({
+      shape: 'both',
+      rawStartX: 0,
+      endX: 200,
+      midX: 100,
+      centerY: 80,
+      startText: { marking: 'p', centerX: 16 },
+    });
+    expect(segments?.[0].startX).toBeGreaterThan(16);
+  });
+});
+
+describe('hairpin ends clear of dynamics', () => {
+  it('starts past a dynamic and its text, and ends before one', () => {
+    expect(hairpinStartClearOf(0, null)).toBe(0);
+    expect(
+      hairpinStartClearOf(0, { marking: 'p', centerX: 10, text: 'sub.' })
+    ).toBeCloseTo(
+      10 +
+        DYNAMICS_CHAR_WIDTH_PX / 2 +
+        dynamicTextTrailingPx('sub.') +
+        HAIRPIN_DYNAMIC_GAP_PX
+    );
+    expect(hairpinEndClearOf(200, { marking: 'f', centerX: 190 })).toBeCloseTo(
+      190 - DYNAMICS_CHAR_WIDTH_PX / 2 - HAIRPIN_DYNAMIC_GAP_PX
+    );
+  });
+});
+
+describe('dynamicEndCenterX', () => {
+  const input = {
+    marking: 'f' as const,
+    nextInkLeftX: null,
+    nextDynamicLeftX: null,
+    barlineX: 400,
+    minCenterX: 0,
+  };
+  const half = DYNAMICS_CHAR_WIDTH_PX / 2;
+
+  it('ends 1.5 spaces before the barline, or half a space before the next entry', () => {
+    expect(dynamicEndCenterX(input)).toBeCloseTo(
+      400 - DYNAMIC_END_BARLINE_GAP_PX - half
+    );
+    expect(dynamicEndCenterX({ ...input, nextInkLeftX: 300 })).toBeCloseTo(
+      300 - DYNAMIC_END_NEXT_GAP_PX - half
+    );
+  });
+
+  it("moves left to keep clear of the next entry's dynamic", () => {
+    expect(
+      dynamicEndCenterX({ ...input, nextInkLeftX: 300, nextDynamicLeftX: 280 })
+    ).toBeCloseTo(280 - DYNAMIC_END_NEXT_GAP_PX - half);
+  });
+
+  it('never moves left of its entry', () => {
+    expect(dynamicEndCenterX({ ...input, minCenterX: 395 })).toBe(395);
+  });
+});
+
 describe('swellConflicts', () => {
-  it('finds a swell note that a hairpin starts, ends or runs over', () => {
+  it('finds a swell whose chain a hairpin starts, ends or runs over', () => {
     const elements = makeElements([
       { crescendo: 'start', swell: '' },
-      { swell: '' },
+      { swell: '', tie: 'start' },
+      { tie: 'end' },
       { crescendo: 'end' },
       { swell: '' },
     ]);
-    const pairs = pairHairpins(elements, makeXPositions(4));
-    expect(swellConflicts(elements, pairs)).toEqual([elements[0], elements[1]]);
+    const pairs = pairHairpins(elements, makeXPositions(5));
+    const { owners } = resolveSwellOwners(elements);
+    expect(swellConflicts(elements, owners, pairs)).toEqual([
+      elements[0],
+      elements[1],
+    ]);
   });
 
-  it('counts a hairpin end whose partner is outside the elements', () => {
+  it('counts a hairpin end in the chain whose partner is outside the elements', () => {
     const elements = makeElements([
-      { swell: '' },
-      { crescendo: 'start', swell: '' },
+      { swell: '', tie: 'start' },
+      { tie: 'end', crescendo: 'start' },
     ]);
-    const element = elements[1] as NoteElementType;
-    expect(swellConflicts(elements, [])).toEqual([]);
+    const { owners } = resolveSwellOwners(elements);
+    expect(swellConflicts(elements, owners, [])).toEqual([]);
     expect(
-      swellConflicts(elements, [], [{ kind: 'crescendo', element, index: 1 }])
-    ).toEqual([element]);
+      swellConflicts(
+        elements,
+        owners,
+        [],
+        [{ element: elements[1] as NoteElementType }]
+      )
+    ).toEqual([elements[0]]);
   });
 });
 

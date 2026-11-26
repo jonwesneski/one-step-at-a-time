@@ -220,8 +220,7 @@ export function flattenSlotElements(
             '`beam-group` and `shared-stem-for` are ignored on a two-note tremolo member',
           ]
         : []),
-      ...(note.getAttribute('tie') === 'start' ||
-      note.getAttribute('tie') === 'end'
+      ...(['start', 'continue', 'end'].includes(note.getAttribute('tie') ?? '')
         ? [
             'tying two-note tremolos is impractical; slur the whole figure instead',
           ]

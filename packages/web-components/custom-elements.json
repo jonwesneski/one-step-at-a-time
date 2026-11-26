@@ -906,7 +906,14 @@
               "kind": "field",
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicEnd",
+              "type": {
+                "text": "DynamicMarking | null"
               }
             },
             {
@@ -1549,9 +1556,9 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end' | 'laissez-vibrer'"
+                "text": "'start' | 'continue' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
+              "description": "Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
             },
             {
               "name": "lv-label",
@@ -1622,6 +1629,13 @@
                 "text": "string"
               },
               "description": "Italic text straight after the dynamic, on its baseline. Needs `dynamic`."
+            },
+            {
+              "name": "dynamic-end",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "A second dynamic at the end of the chord's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it."
             },
             {
               "name": "bend",
@@ -2021,9 +2035,9 @@
             {
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape"
               },
-              "description": "A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins."
+              "description": "A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins."
             }
           ],
           "superclass": {
@@ -2466,12 +2480,170 @@
                 "type": {
                   "text": "boolean"
                 }
-              }
+              },
+              "parameters": [
+                {
+                  "name": "swells",
+                  "type": {
+                    "text": "readonly CrossBarSwell[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
               "name": "#redrawHairpins",
-              "privacy": "private"
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "swells",
+                  "type": {
+                    "text": "readonly CrossBarSwell[]"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#crossBarSwells",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      swells: CrossBarSwell[];\n      covered: NoteOrChordElementType[];\n    }"
+                }
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedSwells",
+              "privacy": "private",
+              "default": "new WeakSet<Element>()"
+            },
+            {
+              "kind": "method",
+              "name": "#warnSwellOnce",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                },
+                {
+                  "name": "message",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#updateSwellContinuations",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "{\n      swells,\n      covered,\n    }",
+                  "type": {
+                    "text": "{\n      swells: readonly CrossBarSwell[];\n      covered: readonly NoteOrChordElementType[];\n    }"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#drawCrossBarSwells",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "swells",
+                  "type": {
+                    "text": "readonly CrossBarSwell[]"
+                  }
+                },
+                {
+                  "name": "overlay",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                },
+                {
+                  "name": "obstaclesOf",
+                  "type": {
+                    "text": "() => EntryObstacles"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#sharedSegmentY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "segment",
+                  "type": {
+                    "text": "HairpinSegment"
+                  }
+                },
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "HTMLElement | null"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                },
+                {
+                  "name": "startText",
+                  "type": {
+                    "text": "HairpinEndpointText | null"
+                  }
+                },
+                {
+                  "name": "endText",
+                  "type": {
+                    "text": "HairpinEndpointText | null"
+                  }
+                },
+                {
+                  "name": "obstaclesOf",
+                  "type": {
+                    "text": "() => EntryObstacles"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -3921,7 +4093,18 @@
               "kind": "field",
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicEnd",
+              "type": {
+                "text": "DynamicMarking | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -4800,9 +4983,9 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end' | 'laissez-vibrer'"
+                "text": "'start' | 'continue' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a \"let ring\" tie.",
+              "description": "Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for a \"let ring\" tie.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -4888,9 +5071,20 @@
             {
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape"
               },
-              "description": "A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.",
+              "description": "A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "dynamic-end",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "A second dynamic at the end of the chord's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -6614,7 +6808,18 @@
               "kind": "field",
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicEnd",
+              "type": {
+                "text": "DynamicMarking | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -7468,9 +7673,9 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end' | 'laissez-vibrer'"
+                "text": "'start' | 'continue' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Start or end of a tie, or `laissez-vibrer` (alias `lv`) for a \"let ring\" tie, as on a crash.",
+              "description": "Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for a \"let ring\" tie, as on a crash.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -7556,9 +7761,20 @@
             {
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape"
               },
-              "description": "A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.",
+              "description": "A swell under this note over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a note tied into, it covers the rest of the chain; with swells on two notes of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any note of the chain wins.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "dynamic-end",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "A second dynamic at the end of the note's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -10338,7 +10554,14 @@
               "kind": "field",
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicEnd",
+              "type": {
+                "text": "DynamicMarking | null"
               }
             },
             {
@@ -10958,9 +11181,9 @@
             {
               "name": "tie",
               "type": {
-                "text": "'start' | 'end' | 'laissez-vibrer'"
+                "text": "'start' | 'continue' | 'end' | 'laissez-vibrer'"
               },
-              "description": "Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
+              "description": "Start or end of a tie to the same pitch, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for an open-ended \"let ring\" tie."
             },
             {
               "name": "lv-label",
@@ -11031,6 +11254,13 @@
                 "text": "string"
               },
               "description": "Italic text straight after the dynamic, on its baseline (\", ma distinto\"). It moves with the marking and runs on over later bars of its row. Needs `dynamic`."
+            },
+            {
+              "name": "dynamic-end",
+              "type": {
+                "text": "DynamicMarking"
+              },
+              "description": "A second dynamic at the end of the note's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it."
             },
             {
               "name": "bend",
@@ -11441,9 +11671,9 @@
             {
               "name": "swell",
               "type": {
-                "text": "boolean"
+                "text": "SwellShape"
               },
-              "description": "A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins."
+              "description": "A swell under this note over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a note tied into, it covers the rest of the chain; with swells on two notes of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any note of the chain wins."
             }
           ],
           "superclass": {
@@ -12452,6 +12682,19 @@
             },
             {
               "kind": "field",
+              "name": "#swellContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "SwellContinuations"
+              },
+              "default": "{ covered: new Set(), dynamicEnds: new Map(), }",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#flutterCarryIn",
               "privacy": "private",
               "type": {
@@ -12968,6 +13211,40 @@
                   "text": "StaffHairpinDefaults"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "swellEntryGeometry",
+              "return": {
+                "type": {
+                  "text": "{ x: number; startX: number; endX: number; beats: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "description": "For a swell the composition draws over a barline (client px): where an\nentry of its chain stands, its length in beats, and where the swell may\nstart (clear of the entry's dynamic) and end (before the next entry, its\ndynamic, and a `dynamic-end` this staff draws there). Null when this\nstaff doesn't draw the entry.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "swellContinuations",
+              "type": {
+                "text": "SwellContinuations"
+              },
+              "description": "Set by the ancestor <music-composition> for swells over a barline: the\nentries whose own swell an earlier bar's covers, and the `dynamic-end`\nof a chain that ends on one of this staff's entries. Compared by content.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -14474,6 +14751,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {
@@ -16080,11 +16385,139 @@
             },
             {
               "kind": "method",
-              "name": "#swellSpan",
+              "name": "#staffSwells",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "SwellSpan | null"
+                  "text": "SwellOwner[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellCarriesOn",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "lastIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicEndsOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    at: number;\n    marking: DynamicMarking;\n    owner: NoteOrChordElementType;\n  }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#beatLength",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#ownDynamicText",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinEndpointText | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "x",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellEnd",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    rawEndX: number;\n    endX: number;\n    dynamicEnd: HairpinEndpointText | null;\n  }"
                 }
               },
               "parameters": [
@@ -16101,9 +16534,123 @@
                   }
                 },
                 {
-                  "name": "i",
+                  "name": "owner",
+                  "type": {
+                    "text": "SwellOwner"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellMidX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "type": {
+                    "text": "SwellOwner"
+                  }
+                },
+                {
+                  "name": "rawEndX",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellSegments",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinSegment[] | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "type": {
+                    "text": "SwellOwner"
+                  }
+                },
+                {
+                  "name": "centerY",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicEndCenterX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "at",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "marking",
+                  "type": {
+                    "text": "DynamicMarking"
                   }
                 }
               ],
@@ -17687,6 +18234,20 @@
               }
             },
             {
+              "kind": "method",
+              "name": "#hasDynamicText",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
               "kind": "field",
               "name": "borrowedInkBands",
               "type": {
@@ -17845,6 +18406,34 @@
             },
             {
               "kind": "method",
+              "name": "#warnSwellOnce",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "message",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#conflictingSwells",
               "privacy": "private",
               "return": {
@@ -17863,6 +18452,12 @@
                   "name": "pairing",
                   "type": {
                     "text": "ReturnType<typeof pairHairpinsWithLeftovers>"
+                  }
+                },
+                {
+                  "name": "owners",
+                  "type": {
+                    "text": "readonly SwellOwner[]"
                   }
                 }
               ],
@@ -21462,6 +22057,19 @@
             },
             {
               "kind": "field",
+              "name": "#swellContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "SwellContinuations"
+              },
+              "default": "{ covered: new Set(), dynamicEnds: new Map(), }",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#flutterCarryIn",
               "privacy": "private",
               "type": {
@@ -21978,6 +22586,40 @@
                   "text": "StaffHairpinDefaults"
                 }
               },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "swellEntryGeometry",
+              "return": {
+                "type": {
+                  "text": "{ x: number; startX: number; endX: number; beats: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "description": "For a swell the composition draws over a barline (client px): where an\nentry of its chain stands, its length in beats, and where the swell may\nstart (clear of the entry's dynamic) and end (before the next entry, its\ndynamic, and a `dynamic-end` this staff draws there). Null when this\nstaff doesn't draw the entry.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "swellContinuations",
+              "type": {
+                "text": "SwellContinuations"
+              },
+              "description": "Set by the ancestor <music-composition> for swells over a barline: the\nentries whose own swell an earlier bar's covers, and the `dynamic-end`\nof a chain that ends on one of this staff's entries. Compared by content.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -23454,6 +24096,34 @@
                   "name": "voiceKey",
                   "type": {
                     "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicsReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
                   }
                 },
                 {
@@ -25060,11 +25730,139 @@
             },
             {
               "kind": "method",
-              "name": "#swellSpan",
+              "name": "#staffSwells",
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "SwellSpan | null"
+                  "text": "SwellOwner[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellCarriesOn",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "lastIndex",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicEndsOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    at: number;\n    marking: DynamicMarking;\n    owner: NoteOrChordElementType;\n  }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#beatLength",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#ownDynamicText",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinEndpointText | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "x",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellEnd",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n    rawEndX: number;\n    endX: number;\n    dynamicEnd: HairpinEndpointText | null;\n  }"
                 }
               },
               "parameters": [
@@ -25081,9 +25879,123 @@
                   }
                 },
                 {
-                  "name": "i",
+                  "name": "owner",
+                  "type": {
+                    "text": "SwellOwner"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellMidX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "type": {
+                    "text": "SwellOwner"
+                  }
+                },
+                {
+                  "name": "rawEndX",
                   "type": {
                     "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#swellSegments",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "HairpinSegment[] | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "type": {
+                    "text": "SwellOwner"
+                  }
+                },
+                {
+                  "name": "centerY",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#dynamicEndCenterX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "at",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "marking",
+                  "type": {
+                    "text": "DynamicMarking"
                   }
                 }
               ],
@@ -26653,6 +27565,20 @@
               }
             },
             {
+              "kind": "method",
+              "name": "#hasDynamicText",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
               "kind": "field",
               "name": "borrowedInkBands",
               "type": {
@@ -26811,6 +27737,34 @@
             },
             {
               "kind": "method",
+              "name": "#warnSwellOnce",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "NoteOrChordElementType"
+                  }
+                },
+                {
+                  "name": "message",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#conflictingSwells",
               "privacy": "private",
               "return": {
@@ -26829,6 +27783,12 @@
                   "name": "pairing",
                   "type": {
                     "text": "ReturnType<typeof pairHairpinsWithLeftovers>"
+                  }
+                },
+                {
+                  "name": "owners",
+                  "type": {
+                    "text": "readonly SwellOwner[]"
                   }
                 }
               ],

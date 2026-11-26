@@ -48,7 +48,7 @@ import {
   computeHairpinXSpan,
   pairSharedHairpinsAcrossStaves,
   resolveChainSpans,
-  resolveSwellSpan,
+  resolveSwellRow,
 } from '../rules/dynamicsRules';
 import {
   type EndingSegment,
@@ -1817,6 +1817,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       };
       const leftX = (element: NoteOrChordElementType) =>
         element.getBoundingClientRect().left - measureRect.left;
+      // A swell's `dynamic-end`, from viewport px to this measure's.
+      const measureEndText = (
+        text: HairpinEndpointText | null
+      ): HairpinEndpointText | null =>
+        text === null
+          ? null
+          : { ...text, centerX: text.centerX - measureRect.left };
       const spanFor = (
         start: NoteOrChordElementType,
         end: NoteOrChordElementType,
@@ -1986,7 +1993,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         placeText(endText, y);
       }
 
-      // A shared `< >` swell over one note, in the gap like a shared hairpin.
+      // A shared swell over its tie chain, in the gap like a shared hairpin.
       defaults.forEach((staffDefaults, staffIndex) => {
         for (const swell of staffDefaults.swells) {
           const element = swell.element;
@@ -2002,50 +2009,46 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 centerX: textCenterX(element, element.dynamic, -1, gap),
               }
             : null;
-          const span = resolveSwellSpan({
+          const endText = measureEndText(swell.endText);
+          const segments = resolveSwellRow({
+            shape: swell.shape,
             rawStartX: leftX(element),
-            rawEndX: swell.rawEndClientX - measureRect.left,
-            startMarking: startText?.marking ?? null,
-            startBracketed: startText?.bracketed,
-            startDynamicText: startText?.text ?? null,
-            startTextCenterX: startText?.centerX ?? 0,
-            endMarking: null,
-            endTextCenterX: 0,
+            endX: swell.endClientX - measureRect.left,
+            midX: swell.midClientX - measureRect.left,
+            centerY: 0,
+            startText,
           });
-          if (span === null) {
+          if (segments === null) {
             continue;
           }
           const y =
             resolveSharedHairpinY({
               kind: 'crescendo',
-              startX: span.crescendo.startX,
-              endX: span.diminuendo.endX,
+              startX: segments[0].startX,
+              endX: segments[segments.length - 1].endX,
               openHeight: HAIRPIN_OPEN_HEIGHT,
               topGapEdgeY: gap.topGapEdgeY,
               bottomGapEdgeY: gap.bottomGapEdgeY,
               beamSlices,
               obstacles,
               startText,
-              endText: null,
+              endText,
             }) ?? gap.belowSystemY;
           override(staves[staffIndex], element, {
             hairpin: 'measure',
             marking: 'measure',
           });
-          placeHairpin(
-            'crescendo',
-            { x: span.crescendo.startX, y },
-            { x: span.crescendo.endX, y },
-            false
-          );
-          placeHairpin(
-            'decrescendo',
-            { x: span.diminuendo.startX, y },
-            { x: span.diminuendo.endX, y },
-            false
-          );
+          for (const segment of segments) {
+            placeHairpin(
+              segment.kind,
+              { x: segment.startX, y },
+              { x: segment.endX, y },
+              false
+            );
+          }
           placedEndpoints.add(element);
           placeText(startText, y);
+          placeText(endText, y);
         }
       });
 
@@ -2172,25 +2175,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             continue;
           }
           const startText = endpointText(element, -1);
-          const span = resolveSwellSpan({
+          const endText = measureEndText(swell.endText);
+          const segments = resolveSwellRow({
+            shape: swell.shape,
             rawStartX: leftX(element),
-            rawEndX: swell.rawEndClientX - measureRect.left,
-            startMarking: startText?.marking ?? null,
-            startBracketed: startText?.bracketed,
-            startDynamicText: startText?.text ?? null,
-            startTextCenterX: startText?.centerX ?? 0,
-            endMarking: null,
-            endTextCenterX: 0,
+            endX: swell.endClientX - measureRect.left,
+            midX: swell.midClientX - measureRect.left,
+            centerY: 0,
+            startText,
           });
-          if (span === null) {
+          if (segments === null) {
             continue;
           }
           chains.push({
-            kinds: ['crescendo', 'decrescendo'],
-            spans: [
-              { ...span.crescendo, startText, endText: null },
-              { ...span.diminuendo, startText: null, endText: null },
-            ],
+            kinds: segments.map((segment) => segment.kind),
+            spans: segments.map((segment, index) => ({
+              startX: segment.startX,
+              endX: segment.endX,
+              startText: index === 0 ? startText : null,
+              endText: index === segments.length - 1 ? endText : null,
+            })),
             side: swell.side,
             baselineClientY: swell.baselineClientY,
             handOver: () =>

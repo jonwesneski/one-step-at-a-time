@@ -1,7 +1,7 @@
 import {
   dynamicTextGapPx,
   dynamicTextHalfWidth,
-  type SwellSpan,
+  type HairpinSegment,
 } from '../../rules/dynamicsRules';
 import {
   hairpinWedgeEdges,
@@ -120,32 +120,26 @@ export function createHairpinSvg(
   return group;
 }
 
-/** A `< >` swell: a crescendo then a diminuendo on one centre line. */
+/** A swell: its wedges, each a hairpin segment (`resolveSwellSegments`). */
 export function createSwellSvg(
-  span: SwellSpan,
-  centerY: number,
+  segments: readonly HairpinSegment[],
   openHeight: number = HAIRPIN_OPEN_HEIGHT
 ): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('swell');
-  group.appendChild(
-    createHairpinSvg(
-      'crescendo',
-      span.crescendo.startX,
-      span.crescendo.endX,
-      centerY,
-      openHeight
-    )
-  );
-  group.appendChild(
-    createHairpinSvg(
-      'decrescendo',
-      span.diminuendo.startX,
-      span.diminuendo.endX,
-      centerY,
-      openHeight
-    )
-  );
+  for (const segment of segments) {
+    group.appendChild(
+      createHairpinSvg(
+        segment.kind,
+        segment.startX,
+        segment.endX,
+        segment.centerY,
+        openHeight,
+        segment.openAtStart,
+        segment.openAtEnd
+      )
+    );
+  }
   return group;
 }
 

@@ -420,6 +420,17 @@ describe('pairConnectors', () => {
     expect(pairs[0].end).toBe(b);
   });
 
+  it('ties a chain through a middle note with tie="continue"', () => {
+    const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
+    const b = makeNote({ note: 'C', octave: '4', tie: 'continue' });
+    const c = makeNote({ note: 'C', octave: '4', tie: 'end' });
+    const pairs = pairConnectors([a, b, c]);
+    expect(pairs.map((pair) => [pair.start, pair.end])).toEqual([
+      [a, b],
+      [b, c],
+    ]);
+  });
+
   it('marks a tie dotted when its start sets tie-style="dotted"', () => {
     const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
     a.setAttribute('tie-style', 'dotted');

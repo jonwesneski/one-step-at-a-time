@@ -4688,3 +4688,119 @@ test.describe('technique text over a row', () => {
     expect((await readText(page)).right).toBeCloseTo(oneRow.right, 0);
   });
 });
+
+test.describe('swell over a tie chain', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const bar = (content: string) =>
+    `<music-measure><music-staff clef="treble">${content}</music-staff></music-measure>`;
+  const whole = (attrs = '') =>
+    `<music-note note="E" octave="4" duration="whole" ${attrs}></music-note>`;
+  const chain = `<music-composition time="4/4">${
+    bar(whole('id="first" tie="start" swell')) +
+    bar(whole('id="middle" tie="continue"')) +
+    bar(whole('id="last" tie="end"')) +
+    bar(whole())
+  }</music-composition>`;
+  // The swell's wedges over the barlines, and the rows they stand in.
+  const readSwell = (page: Page) =>
+    page.evaluate(() => {
+      const overlay = document
+        .querySelector('music-composition')
+        ?.shadowRoot?.querySelector('.connectors-overlay');
+      const wedges = Array.from(
+        overlay?.querySelectorAll('.swell .hairpin') ?? [],
+        (wedge) => wedge.getBoundingClientRect()
+      );
+      const staffSwells = Array.from(
+        document.querySelectorAll('music-staff')
+      ).flatMap((staff) =>
+        Array.from(
+          staff.shadowRoot?.querySelectorAll('.dynamics-container .swell') ?? []
+        )
+      );
+      return {
+        wedges: wedges.map(({ left, right }) => ({ left, right })),
+        rows: new Set(wedges.map(({ top }) => Math.round(top))).size,
+        staffSwells: staffSwells.length,
+      };
+    });
+
+  test('becomes two rows of wedges when its bars wrap, and one again when they fit', async ({
+    page,
+  }) => {
+    await setHost(page, 1000, chain);
+    const wide = await readSwell(page);
+    expect(wide.wedges).toHaveLength(2);
+    expect(wide.rows).toBe(1);
+
+    await setWidth(page, 420);
+    const narrow = await readSwell(page);
+    expect(narrow.rows).toBeGreaterThan(1);
+    expect(narrow.wedges.length).toBeGreaterThan(2);
+
+    await setWidth(page, 1000);
+    expect(await readSwell(page)).toEqual(wide);
+  });
+
+  test('keeps its gap at the middle beat as the width changes', async ({
+    page,
+  }) => {
+    const twoBars = `<music-composition time="4/4">${
+      bar(whole('tie="start" swell')) + bar(whole('id="second" tie="end"'))
+    }</music-composition>`;
+    const gapAgainstMiddleBeat = async () => {
+      const { wedges } = await readSwell(page);
+      const second = await page.evaluate(
+        () =>
+          document.getElementById('second')?.getBoundingClientRect().left ?? 0
+      );
+      return (wedges[0].right + wedges[1].left) / 2 - second;
+    };
+    await setHost(page, 1000, twoBars);
+    const wide = await gapAgainstMiddleBeat();
+    await setWidth(page, 700);
+    const narrower = await gapAgainstMiddleBeat();
+    expect(Math.abs(narrower - wide)).toBeLessThan(2);
+  });
+
+  test('shrinks to its own note when the tie is removed', async ({ page }) => {
+    await setHost(page, 1000, chain);
+    expect((await readSwell(page)).wedges).toHaveLength(2);
+
+    await page.evaluate(() => {
+      document.getElementById('first')?.removeAttribute('tie');
+      document.getElementById('middle')?.removeAttribute('tie');
+      document.getElementById('last')?.removeAttribute('tie');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const untied = await readSwell(page);
+    expect(untied.wedges).toHaveLength(0);
+    expect(untied.staffSwells).toBe(1);
+  });
+});

@@ -48,6 +48,7 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  SwellShape,
   TextPlacement,
   TextStyle,
   TieStyle,
@@ -89,7 +90,9 @@ type DrumNotationProps = {
   'technique-text'?: string;
   'technique-text-placement'?: TextPlacement;
   'technique-text-style'?: TextStyle;
-  swell?: boolean;
+  swell?: boolean | SwellShape;
+  // A second dynamic at the end of the entry's span.
+  'dynamic-end'?: DynamicMarking;
   crescendo?: HairpinRole;
   decrescendo?: HairpinRole;
   diminuendo?: HairpinRole;
@@ -289,7 +292,8 @@ declare module 'react' {
         'tie-style'?: TieStyle;
         'slur-style'?: SlurStyle;
         'breath-mark'?: BreathMark;
-        swell?: boolean;
+        swell?: boolean | SwellShape;
+        'dynamic-end'?: DynamicMarking;
       };
       'music-drum-note': WebComponentNoChildrenProps &
         DrumNotationProps & {
@@ -374,7 +378,8 @@ declare module 'react' {
         'tie-style'?: TieStyle;
         'slur-style'?: SlurStyle;
         'breath-mark'?: BreathMark;
-        swell?: boolean;
+        swell?: boolean | SwellShape;
+        'dynamic-end'?: DynamicMarking;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

@@ -9,6 +9,7 @@ import {
   generateMinorKeySignatureYCoordinates,
   generateYCoordinates,
 } from '../rules/theoryHelpers';
+import { tiedInto } from '../rules/tieRules';
 import { StaffNotationElementBase } from '../staffNotationBase';
 import type {
   LyricSyllablePosition,
@@ -31,6 +32,7 @@ import {
   LYRICS_VERSE_SPACING_PX,
   LYRICS_WRAPPER_OVERLAP_PX,
 } from '../utils/notationDimensions';
+import { parseTieValue } from '../utils/parsers';
 import {
   createBassClefSvg,
   createTreble8ClefSvg,
@@ -289,7 +291,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return entries.filter(
         (entry) =>
           entry.closest(MUSIC_VOICE) === voice &&
-          entry.getAttribute('tie') !== 'end'
+          !tiedInto(parseTieValue(entry.getAttribute('tie')))
       );
     }
 

@@ -33,6 +33,7 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  SwellShape,
   TextPlacement,
   TextStyle,
   TieStyle,
@@ -78,6 +79,7 @@ import {
   STEM_DIRECTIONS,
   STEM_MARKS,
   STRESSES,
+  SWELL_SHAPES,
   TEXT_PLACEMENTS,
   TEXT_STYLES,
   TIE_STYLES,
@@ -182,7 +184,12 @@ export const parseHairpinKind = (value: string | null): HairpinKind | null => {
 
 // `tie` accepts `start` / `end` plus `laissez-vibrer` (alias `lv`).
 export const parseTieValue = (value: string | null): TieValue | null => {
-  if (value === 'start' || value === 'end' || value === 'laissez-vibrer') {
+  if (
+    value === 'start' ||
+    value === 'continue' ||
+    value === 'end' ||
+    value === 'laissez-vibrer'
+  ) {
     return value;
   }
   if (value === 'lv') {
@@ -459,6 +466,19 @@ export const parseTextStyle = (value: string | null): TextStyle | null =>
   value !== null && (TEXT_STYLES as string[]).includes(value)
     ? (value as TextStyle)
     : null;
+
+// A bare `swell` is `both`.
+export const parseSwellShape = (value: string | null): SwellShape | null => {
+  if (value === null) {
+    return null;
+  }
+  if (value === '') {
+    return 'both';
+  }
+  return (SWELL_SHAPES as string[]).includes(value)
+    ? (value as SwellShape)
+    : null;
+};
 
 export const parseBreathMark = (value: string | null): BreathMark | null =>
   value !== null && VALID_BREATH_MARKS.has(value)

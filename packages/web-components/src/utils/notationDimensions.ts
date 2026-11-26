@@ -822,10 +822,37 @@ export const HAIRPIN_DYNAMIC_GAP_PX = 4;
 export const HAIRPIN_JOINT_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Gap (px) between the two open ends of a `< >` swell under one note.
+ * Shortest gap (px) between the two open ends of a `< >` swell; a longer swell
+ * leaves a sixth of its length (SWELL_MID_GAP_SHARE).
  * = 1 × STAFF_LINE_SPACING
  */
 export const SWELL_MID_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Share of a swell's length left open between its wedges (figures: 10–25%).
+ * = 1/6
+ */
+export const SWELL_MID_GAP_SHARE = 1 / 6;
+
+/**
+ * Gap (px) from a `dynamic-end`'s right edge to the next entry's ink, or to
+ * the next entry's own dynamic.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DYNAMIC_END_NEXT_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) from a `dynamic-end`'s right edge to the barline.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const DYNAMIC_END_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * How far (px) a hairpin's axis on a dynamics row sits above the row's
+ * baseline, level with the middle of the letters standing on it.
+ * = 0.3 × DYNAMICS_FONT_SIZE
+ */
+export const HAIRPIN_AXIS_RISE_PX = DYNAMICS_FONT_SIZE * 0.3;
 
 /**
  * Shortest wedge (px) a swell draws; shorter reads as a mark, not a hairpin.

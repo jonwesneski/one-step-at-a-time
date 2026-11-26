@@ -146,7 +146,8 @@ function combineKey(element: NoteOrChordElementType): string {
     element.tremoloLabel ?? null,
     element.articulationRepeat ?? false,
     element.breathMark ?? null,
-    element.swell ?? false,
+    element.swell ?? null,
+    element.dynamicEnd ?? null,
     element.stemMark ?? null,
   ]);
 }

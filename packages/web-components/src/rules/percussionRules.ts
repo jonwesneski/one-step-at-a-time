@@ -62,6 +62,7 @@ const DRUM_SHARED_ATTRIBUTES = [
   'technique-text-placement',
   'technique-text-style',
   'dynamic-text',
+  'dynamic-end',
 ];
 
 // Attributes <music-note>/<music-chord> have and the drum elements withhold:

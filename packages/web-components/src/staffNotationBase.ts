@@ -42,14 +42,21 @@ import {
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
+  dynamicEndCenterX,
+  dynamicEndReachPx,
   dynamicsRowY,
   dynamicTextHalfWidth,
   dynamicTextTrailingPx,
+  hairpinEndClearOf,
   type HairpinPair,
+  type HairpinSegment,
+  hairpinStartClearOf,
   pairHairpinsWithLeftovers,
-  resolveSwellSpan,
+  resolveSwellOwners,
+  resolveSwellRow,
   swellConflicts,
-  type SwellSpan,
+  swellMidpoint,
+  type SwellOwner,
 } from './rules/dynamicsRules';
 import {
   flutterEntryOf,
@@ -85,6 +92,7 @@ import type {
   CrossStaffDynamicsOverride,
   DynamicsPlacement,
   DynamicsSide,
+  HairpinEndpointText,
   SharedDynamicsRows,
   StaffHairpinDefaults,
   StaffHairpinPlacement,
@@ -160,6 +168,7 @@ import {
   isStemlessDuration,
 } from './rules/theoryConsts';
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
+import { tiesOn } from './rules/tieRules';
 import {
   STAFF_BAND,
   stemlessTremoloReachPx,
@@ -335,6 +344,8 @@ import {
   COURTESY_CLEF_SCALE,
   COURTESY_CLEF_WIDTH_PX,
   CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
+  DYNAMIC_END_BARLINE_GAP_PX,
+  DYNAMIC_END_NEXT_GAP_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
@@ -343,6 +354,7 @@ import {
   GLISSANDO_WAVE_AMPLITUDE_PX,
   GRACE_MAIN_GAP_PX,
   GRACE_SCALE,
+  HAIRPIN_AXIS_RISE_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_CANCEL_GAP_PX,
@@ -691,6 +703,12 @@ export type TechniqueTextRunOn = { maxRight: number; inkY: number | null };
  */
 export type CarriedTechniqueText = PlacedAboveStaffRect & { above: boolean };
 
+/** What the composition hands a staff for swells over a barline. */
+export type SwellContinuations = {
+  covered: ReadonlySet<Element>;
+  dynamicEnds: ReadonlyMap<Element, DynamicMarking>;
+};
+
 /** A placed technique text, reported to the ancestor <music-composition>. */
 export type TechniqueTextPlacement = PlacedAboveStaffRect & {
   element: Element;
@@ -987,6 +1005,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // in the voice containers' frame (which starts at the describe area's end).
   #notesAreaEndX = 0;
   #warnedSwells = new WeakSet<NoteOrChordElementType>();
+  #swellContinuations: SwellContinuations = {
+    covered: new Set(),
+    dynamicEnds: new Map(),
+  };
   #flutterCarryIn: ReadonlySet<VoiceNumber> = new Set();
   #flutterTongued = new Set<NoteChordOrRestElementType>();
   #warnedFlutterCancels = new WeakSet<NoteChordOrRestElementType>();
@@ -1640,26 +1662,99 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         result.unpairedStarts.push({ ...placement, ...start });
       }
       result.orphanEnds.push(...pairing.orphanEnds);
-      const conflicting = this.#conflictingSwells(state, pairing);
-      state.elements.forEach((element, i) => {
-        if (
-          element.nodeName === MUSIC_REST_NODE ||
-          !(element as NoteOrChordElementType).swell ||
-          conflicting.has(element as NoteOrChordElementType)
-        ) {
-          return;
+      const owners = this.#staffSwells(state);
+      const conflicting = this.#conflictingSwells(state, pairing, owners);
+      for (const owner of owners) {
+        const element = state.elements[owner.index] as NoteOrChordElementType;
+        const shape = element.swell;
+        if (shape === null || conflicting.has(element)) {
+          continue;
         }
-        const span = this.#swellSpan(voiceKey, state, i);
-        if (span !== null) {
-          result.swells.push({
-            ...placement,
-            element: element as NoteOrChordElementType,
-            rawEndClientX: containerLeft + span.diminuendo.endX,
-          });
-        }
-      });
+        const end = this.#swellEnd(voiceKey, state, owner);
+        result.swells.push({
+          ...placement,
+          element,
+          shape,
+          endClientX: containerLeft + end.endX,
+          midClientX:
+            containerLeft + this.#swellMidX(state, owner, end.rawEndX),
+          endText:
+            end.dynamicEnd === null
+              ? null
+              : {
+                  ...end.dynamicEnd,
+                  centerX: containerLeft + end.dynamicEnd.centerX,
+                },
+        });
+      }
     }
     return result;
+  }
+
+  /**
+   * For a swell the composition draws over a barline (client px): where an
+   * entry of its chain stands, its length in beats, and where the swell may
+   * start (clear of the entry's dynamic) and end (before the next entry, its
+   * dynamic, and a `dynamic-end` this staff draws there). Null when this
+   * staff doesn't draw the entry.
+   */
+  swellEntryGeometry(
+    element: Element
+  ): { x: number; startX: number; endX: number; beats: number } | null {
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const index = state.elements.indexOf(
+        element as NoteChordOrRestElementType
+      );
+      if (index < 0 || element.nodeName === MUSIC_REST_NODE) {
+        continue;
+      }
+      const containerLeft =
+        this.transcribeContainer.getBoundingClientRect().left +
+        this.describeEndX;
+      const x = state.noteXPositions.get(index) ?? 0;
+      const end = this.#swellEnd(voiceKey, state, {
+        index,
+        lastIndex: index,
+      });
+      return {
+        x: containerLeft + x,
+        startX:
+          containerLeft +
+          hairpinStartClearOf(
+            x,
+            this.#ownDynamicText(element as NoteOrChordElementType, x)
+          ),
+        endX: containerLeft + end.endX,
+        beats: this.#beatLength(state, index),
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Set by the ancestor <music-composition> for swells over a barline: the
+   * entries whose own swell an earlier bar's covers, and the `dynamic-end`
+   * of a chain that ends on one of this staff's entries. Compared by content.
+   */
+  get swellContinuations(): SwellContinuations {
+    return this.#swellContinuations;
+  }
+
+  set swellContinuations(value: SwellContinuations) {
+    const current = this.#swellContinuations;
+    const sameCovered =
+      current.covered.size === value.covered.size &&
+      [...value.covered].every((element) => current.covered.has(element));
+    const sameEnds =
+      current.dynamicEnds.size === value.dynamicEnds.size &&
+      [...value.dynamicEnds].every(
+        ([element, marking]) => current.dynamicEnds.get(element) === marking
+      );
+    if (sameCovered && sameEnds) {
+      return;
+    }
+    this.#swellContinuations = value;
+    this.#renderNotes();
   }
 
   constructor() {
@@ -2175,8 +2270,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (reference.breathMark !== null) {
       chord.setAttribute('breath-mark', reference.breathMark);
     }
-    if (reference.swell) {
-      chord.setAttribute('swell', '');
+    if ((reference.swell ?? null) !== null) {
+      chord.setAttribute('swell', reference.swell as string);
+    }
+    if ((reference.dynamicEnd ?? null) !== null) {
+      chord.setAttribute('dynamic-end', reference.dynamicEnd as string);
     }
     if (reference.stemMark !== null) {
       chord.setAttribute('stem-mark', reference.stemMark);
@@ -2291,7 +2389,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             notehead,
             tiedFromPrevious:
               isNoteNodeName(previous?.nodeName ?? '') &&
-              (previous as NoteElementType).tie === 'start',
+              tiesOn((previous as NoteElementType).tie),
           };
         }
       }
@@ -4034,10 +4132,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // beside the note share the gap.
     const gapReserve = Math.max(
       breathMark === null ? 0 : breathMarkReservedWidthPx(breathMark),
-      element.nodeName !== MUSIC_REST_NODE &&
-        (element as NoteOrChordElementType).swell
-        ? SWELL_MIN_SPAN_PX + HAIRPIN_DYNAMIC_GAP_PX - NOTE_SVG_WIDTH
-        : 0,
+      this.#dynamicsReserve(state, index),
       this.#glissandoReserve(state, index),
       this.#bendReserve(voiceKey, state, index)
     );
@@ -4045,6 +4140,57 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#rightwardInkFootprint(voiceKey, state, index) +
       Math.max(0, gapReserve)
     );
+  }
+
+  // Room (px) past an entry's SVG box for a swell over just this entry and a
+  // `dynamic-end` at its end: the start dynamic, the shortest swell and the
+  // end marking, each a gap apart.
+  #dynamicsReserve(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    if (element.nodeName === MUSIC_REST_NODE) {
+      return 0;
+    }
+    const noteOrChord = element as NoteOrChordElementType;
+    const oneEntrySwell = this.#staffSwells(state).some(
+      (owner) => owner.index === index && owner.lastIndex === index
+    );
+    const dynamicEnd = this.#dynamicEndsOf(state).find(
+      (end) => end.at === index
+    );
+    if (!oneEntrySwell && dynamicEnd === undefined) {
+      return 0;
+    }
+    const headCenter = NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
+    const startClear =
+      noteOrChord.dynamic === null
+        ? 0
+        : headCenter +
+          dynamicTextHalfWidth(
+            noteOrChord.dynamic,
+            noteOrChord.dynamicReminder
+          ) +
+          dynamicTextTrailingPx(noteOrChord.dynamicText) +
+          HAIRPIN_DYNAMIC_GAP_PX;
+    const endGap =
+      index === state.elements.length - 1
+        ? DYNAMIC_END_BARLINE_GAP_PX
+        : DYNAMIC_END_NEXT_GAP_PX;
+    const endReach =
+      dynamicEnd === undefined
+        ? 0
+        : dynamicEndReachPx(dynamicEnd.marking) -
+          DYNAMIC_END_NEXT_GAP_PX +
+          endGap;
+    const reach = oneEntrySwell
+      ? startClear + SWELL_MIN_SPAN_PX + HAIRPIN_DYNAMIC_GAP_PX + endReach
+      : Math.max(
+          startClear,
+          headCenter -
+            (dynamicEnd === undefined
+              ? 0
+              : dynamicTextHalfWidth(dynamicEnd.marking))
+        ) + endReach;
+    return reach - NOTE_SVG_WIDTH;
   }
 
   // Room (px) past an entry's SVG box for the glissando line it starts: the
@@ -5675,7 +5821,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
       state.elements.forEach((element, i) => {
         const y = this.#tieReachY(state, i, above);
-        if (y === null || (element as NoteOrChordElementType).tie !== 'start') {
+        if (y === null || !tiesOn((element as NoteOrChordElementType).tie)) {
           return;
         }
         const next = i + 1 < state.elements.length;
@@ -6392,44 +6538,216 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       : centerX;
   }
 
-  // Entry i's swell, from its start to just before the next entry (or the
-  // end of the notes area), clear of both entries' dynamics. Null when it
-  // has no room.
-  #swellSpan(
+  // Swells this staff draws, each with the last entry of its chain. One
+  // whose chain runs on past the bar inside a composition is the
+  // composition's, as is one an earlier bar's swell covers.
+  #staffSwells(state: VoiceRenderState): SwellOwner[] {
+    return resolveSwellOwners(state.elements).owners.filter(
+      (owner) =>
+        !this.#swellCarriesOn(state, owner.lastIndex) &&
+        !this.#swellContinuations.covered.has(state.elements[owner.index])
+    );
+  }
+
+  #swellCarriesOn(state: VoiceRenderState, lastIndex: number): boolean {
+    return (
+      this.closest(MUSIC_COMPOSITION) !== null &&
+      lastIndex === state.elements.length - 1 &&
+      tiesOn((state.elements[lastIndex] as NoteOrChordElementType).tie ?? null)
+    );
+  }
+
+  // Each `dynamic-end` this staff draws, at the entry whose span it ends: its
+  // own, its swell's chain's last, or one the composition hands over.
+  #dynamicEndsOf(state: VoiceRenderState): {
+    at: number;
+    marking: DynamicMarking;
+    owner: NoteOrChordElementType;
+  }[] {
+    const ends: {
+      at: number;
+      marking: DynamicMarking;
+      owner: NoteOrChordElementType;
+    }[] = [];
+    const { owners } = resolveSwellOwners(state.elements);
+    state.elements.forEach((element, index) => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return;
+      }
+      const noteOrChord = element as NoteOrChordElementType;
+      const inherited = this.#swellContinuations.dynamicEnds.get(element);
+      if (inherited !== undefined) {
+        ends.push({ at: index, marking: inherited, owner: noteOrChord });
+      }
+      const marking = noteOrChord.dynamicEnd ?? null;
+      if (marking === null) {
+        return;
+      }
+      const owner = owners.find((candidate) => candidate.index === index);
+      const at = owner?.lastIndex ?? index;
+      if (owner !== undefined && this.#swellCarriesOn(state, at)) {
+        return;
+      }
+      ends.push({ at, marking, owner: noteOrChord });
+    });
+    return ends;
+  }
+
+  #beatLength(state: VoiceRenderState, i: number): number {
+    return i + 1 < state.beatOffsets.length
+      ? state.beatOffsets[i + 1] - state.beatOffsets[i]
+      : durationContribution(
+          state.elements[i],
+          i,
+          state.tupletsByIndex,
+          new Set(),
+          state.tremoloScaleByIndex
+        );
+  }
+
+  // An entry's own dynamic as a hairpin endpoint, centred under its head.
+  #ownDynamicText(
+    element: NoteOrChordElementType,
+    x: number
+  ): HairpinEndpointText | null {
+    return element.dynamic === null
+      ? null
+      : {
+          marking: element.dynamic,
+          bracketed: element.dynamicReminder,
+          text: element.dynamicText ?? null,
+          centerX: x + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
+        };
+  }
+
+  // Where a swell over a chain ending at `lastIndex` stops: `rawEndX` before
+  // the next entry's ink (or the end of the notes area), `endX` also short of
+  // the chain's `dynamic-end`, else the next entry's dynamic.
+  #swellEnd(
     voiceKey: VoiceKey,
     state: VoiceRenderState,
-    i: number
-  ): SwellSpan | null {
-    const element = state.elements[i] as NoteOrChordElementType;
-    const x = state.noteXPositions.get(i) ?? 0;
-    const next = this.#nextEntryAfter(voiceKey, state, i);
+    owner: SwellOwner
+  ): {
+    rawEndX: number;
+    endX: number;
+    dynamicEnd: HairpinEndpointText | null;
+  } {
+    const { lastIndex } = owner;
+    const next = this.#nextEntryAfter(voiceKey, state, lastIndex);
+    const nextElement = next === null ? null : next.state.elements[next.index];
+    const nextX =
+      next === null ? null : next.state.noteXPositions.get(next.index) ?? 0;
+    const rawEndX =
+      nextElement === null || nextX === null
+        ? this.#notesAreaEndX - HAIRPIN_DYNAMIC_GAP_PX
+        : nextX -
+          this.#entryLeftwardExtent(nextElement) -
+          HAIRPIN_DYNAMIC_GAP_PX;
+    const marking =
+      this.#dynamicEndsOf(state).find((end) => end.at === lastIndex)?.marking ??
+      null;
+    const dynamicEnd =
+      marking === null
+        ? null
+        : {
+            marking,
+            centerX: this.#dynamicEndCenterX(
+              voiceKey,
+              state,
+              lastIndex,
+              marking
+            ),
+          };
+    const nextDynamic =
+      nextElement === null ||
+      nextX === null ||
+      nextElement.nodeName === MUSIC_REST_NODE
+        ? null
+        : this.#ownDynamicText(nextElement as NoteOrChordElementType, nextX);
+    return {
+      rawEndX,
+      endX: hairpinEndClearOf(rawEndX, dynamicEnd ?? nextDynamic),
+      dynamicEnd,
+    };
+  }
+
+  // Where the middle beat of a swell's chain is drawn.
+  #swellMidX(
+    state: VoiceRenderState,
+    owner: SwellOwner,
+    rawEndX: number
+  ): number {
+    const xOf = (k: number) => state.noteXPositions.get(k) ?? 0;
+    const pieces = [];
+    for (let k = owner.index; k <= owner.lastIndex; k++) {
+      pieces.push({
+        row: 0,
+        startBeat: state.beatOffsets[k],
+        endBeat: state.beatOffsets[k] + this.#beatLength(state, k),
+        startX: xOf(k),
+        endX: k < owner.lastIndex ? xOf(k + 1) : rawEndX,
+      });
+    }
+    return swellMidpoint(pieces).x;
+  }
+
+  #swellSegments(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    owner: SwellOwner,
+    centerY: number
+  ): HairpinSegment[] | null {
+    const element = state.elements[owner.index] as NoteOrChordElementType;
+    if (element.swell === null) {
+      return null;
+    }
+    const x = state.noteXPositions.get(owner.index) ?? 0;
+    const end = this.#swellEnd(voiceKey, state, owner);
+    return resolveSwellRow({
+      shape: element.swell,
+      rawStartX: x,
+      endX: end.endX,
+      midX: this.#swellMidX(state, owner, end.rawEndX),
+      centerY,
+      startText: this.#ownDynamicText(element, x),
+    });
+  }
+
+  // A `dynamic-end` at the end of entry `at`'s span, clear of the next
+  // entry's ink and own dynamic, or of the barline.
+  #dynamicEndCenterX(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    at: number,
+    marking: DynamicMarking
+  ): number {
+    const element = state.elements[at];
+    const next = this.#nextEntryAfter(voiceKey, state, at);
     const nextElement = next === null ? null : next.state.elements[next.index];
     const nextX =
       next === null ? null : next.state.noteXPositions.get(next.index) ?? 0;
     const nextDynamic =
-      nextElement === null || nextElement.nodeName === MUSIC_REST_NODE
+      nextElement === null ||
+      nextX === null ||
+      nextElement.nodeName === MUSIC_REST_NODE
         ? null
-        : (nextElement as NoteOrChordElementType).dynamic;
-    return resolveSwellSpan({
-      rawStartX: x,
-      rawEndX:
+        : this.#ownDynamicText(nextElement as NoteOrChordElementType, nextX);
+    return dynamicEndCenterX({
+      marking,
+      nextInkLeftX:
         nextElement === null || nextX === null
-          ? this.#notesAreaEndX - HAIRPIN_DYNAMIC_GAP_PX
-          : nextX -
-            this.#entryLeftwardExtent(nextElement) -
-            HAIRPIN_DYNAMIC_GAP_PX,
-      startMarking: element.dynamic,
-      startBracketed: element.dynamicReminder,
-      startDynamicText: element.dynamicText ?? null,
-      startTextCenterX: x + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
-      endMarking: nextDynamic,
-      endBracketed:
-        nextDynamic !== null &&
-        (nextElement as NoteOrChordElementType).dynamicReminder,
-      endTextCenterX:
-        (nextX ?? 0) +
+          ? null
+          : nextX - this.#entryLeftwardExtent(nextElement),
+      nextDynamicLeftX:
+        nextDynamic === null
+          ? null
+          : nextDynamic.centerX -
+            dynamicTextHalfWidth(nextDynamic.marking, nextDynamic.bracketed),
+      barlineX: this.#notesAreaEndX,
+      minCenterX:
+        (state.noteXPositions.get(at) ?? 0) +
         NOTE_SVG_WIDTH / 2 +
-        (nextElement === null ? 0 : entryCenterShiftPx(nextElement)),
+        entryCenterShiftPx(element),
     });
   }
 
@@ -6782,40 +7100,57 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
     const pairing = this.#pairVoiceHairpins(state);
     const voicePairs = pairing.pairs;
-    const conflicting = this.#conflictingSwells(state, pairing);
-    state.elements.forEach((element, i) => {
-      if (
-        element.nodeName === MUSIC_REST_NODE ||
-        !(element as NoteOrChordElementType).swell
-      ) {
-        return;
-      }
-      const noteOrChord = element as NoteOrChordElementType;
-      const span = conflicting.has(noteOrChord)
-        ? null
-        : this.#swellSpan(voiceKey, state, i);
-      if (span === null) {
-        if (!this.#warnedSwells.has(noteOrChord)) {
-          this.#warnedSwells.add(noteOrChord);
-          console.warn(
-            conflicting.has(noteOrChord)
-              ? '[music-staff] swell is not drawn: a hairpin starts, ends or runs over the same note'
-              : '[music-staff] swell is not drawn: its dynamics leave no room for it',
-            noteOrChord
-          );
-        }
-        return;
-      }
-      this.#warnedSwells.delete(noteOrChord);
+    const owners = this.#staffSwells(state);
+    const conflicting = this.#conflictingSwells(state, pairing, owners);
+    const { overridden } = resolveSwellOwners(state.elements);
+    for (const index of overridden) {
+      this.#warnSwellOnce(
+        state.elements[index] as NoteOrChordElementType,
+        '[music-staff] swell is not drawn: an earlier swell on its tie chain covers it'
+      );
+    }
+    for (const owner of owners) {
+      const noteOrChord = state.elements[owner.index] as NoteOrChordElementType;
       const side =
         this.#crossStaffDynamicsOverrides?.get(noteOrChord)?.hairpin ??
         defaultSide;
-      if (side !== 'measure') {
-        container.appendChild(
-          createSwellSvg(span, baselineFor(side), HAIRPIN_OPEN_HEIGHT)
+      const segments = conflicting.has(noteOrChord)
+        ? null
+        : this.#swellSegments(
+            voiceKey,
+            state,
+            owner,
+            side === 'measure' ? 0 : baselineFor(side) - HAIRPIN_AXIS_RISE_PX
+          );
+      if (segments === null) {
+        this.#warnSwellOnce(
+          noteOrChord,
+          conflicting.has(noteOrChord)
+            ? '[music-staff] swell is not drawn: a hairpin starts, ends or runs over its tie chain'
+            : '[music-staff] swell is not drawn: its dynamics leave no room for it'
         );
+        continue;
       }
-    });
+      this.#warnedSwells.delete(noteOrChord);
+      if (side !== 'measure') {
+        container.appendChild(createSwellSvg(segments, HAIRPIN_OPEN_HEIGHT));
+      }
+    }
+
+    for (const { at, marking, owner } of this.#dynamicEndsOf(state)) {
+      const side =
+        this.#crossStaffDynamicsOverrides?.get(owner)?.hairpin ?? defaultSide;
+      if (side === 'measure') {
+        continue;
+      }
+      const markingSvg = createDynamicMarkingSvg(
+        marking,
+        this.#dynamicEndCenterX(voiceKey, state, at, marking),
+        baselineFor(side)
+      );
+      markingSvg.classList.add('dynamic-end');
+      container.appendChild(markingSvg);
+    }
 
     for (const pair of voicePairs) {
       if (pair.errors.length > 0) {
@@ -6830,7 +7165,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           pair.kind,
           pair.startX,
           pair.endX,
-          baselineFor(side),
+          baselineFor(side) - HAIRPIN_AXIS_RISE_PX,
           HAIRPIN_OPEN_HEIGHT
         )
       );
@@ -7809,7 +8144,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         noteOrChord.decrescendo === 'start';
       const endsHairpin =
         noteOrChord.crescendo === 'end' || noteOrChord.decrescendo === 'end';
-      if (startsHairpin || noteOrChord.swell) {
+      if (
+        startsHairpin ||
+        noteOrChord.swell !== null ||
+        (noteOrChord.dynamicEnd ?? null) !== null ||
+        this.#swellContinuations.dynamicEnds.has(element)
+      ) {
         add(override?.hairpin ?? defaultSide);
       } else if (endsHairpin && override === undefined) {
         sides.add(defaultSide);
@@ -8586,15 +8926,24 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     });
   }
 
+  #warnSwellOnce(element: NoteOrChordElementType, message: string): void {
+    if (!this.#warnedSwells.has(element)) {
+      this.#warnedSwells.add(element);
+      console.warn(message, element);
+    }
+  }
+
   // An unmatched hairpin end draws nothing on a staff on its own, so only one
   // an ancestor may complete rules a swell out.
   #conflictingSwells(
     state: VoiceRenderState,
-    pairing: ReturnType<typeof pairHairpinsWithLeftovers>
+    pairing: ReturnType<typeof pairHairpinsWithLeftovers>,
+    owners: readonly SwellOwner[]
   ): ReadonlySet<NoteOrChordElementType> {
     return new Set(
       swellConflicts(
         state.elements,
+        owners,
         pairing.pairs,
         this.#hairpinsCanLeaveStaff()
           ? [...pairing.unpairedStarts, ...pairing.orphanEnds]

@@ -2307,9 +2307,13 @@ describe('chord symbol changes', () => {
     document.body.innerHTML =
       '<music-chord chord="Cmaj" duration="whole"></music-chord>';
     const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
-    expect(chord.swell).toBe(false);
+    expect(chord.swell).toBeNull();
     chord.swell = true;
-    expect(chord.hasAttribute('swell')).toBe(true);
+    expect(chord.swell).toBe('both');
+    chord.swell = 'diminuendo';
+    expect(chord.getAttribute('swell')).toBe('diminuendo');
+    chord.dynamicEnd = 'ff';
+    expect(chord.getAttribute('dynamic-end')).toBe('ff');
   });
 
   it('redraws connectors when `for` changes', () => {

@@ -5,6 +5,7 @@ import type {
 } from '../types/elements';
 import type { TremoloLabel } from '../types/theory';
 import { FLUTTER_TONGUE_LABELS, MUSIC_REST_NODE } from '../utils/consts';
+import { tiedInto } from './tieRules';
 
 export type FlutterEntry = {
   tremolo: boolean;
@@ -59,7 +60,7 @@ export function resolveFlutterPassages(
     }
     if (entry.tremolo) {
       flutterTongued.add(i);
-    } else if (entry.tie === 'end' && flutterTongued.has(i - 1)) {
+    } else if (tiedInto(entry.tie) && flutterTongued.has(i - 1)) {
       missingCancels.push(i);
     }
   });

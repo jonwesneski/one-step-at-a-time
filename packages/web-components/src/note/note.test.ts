@@ -1977,12 +1977,48 @@ describe('swell', () => {
     const handler = jest.fn();
     noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
 
-    expect(noteElement.swell).toBe(false);
+    expect(noteElement.swell).toBeNull();
     noteElement.swell = true;
-    expect(noteElement.hasAttribute('swell')).toBe(true);
+    expect(noteElement.getAttribute('swell')).toBe('');
+    expect(noteElement.swell).toBe('both');
     expect(handler).toHaveBeenCalledTimes(1);
+    noteElement.swell = 'crescendo';
+    expect(noteElement.swell).toBe('crescendo');
     noteElement.swell = false;
     expect(noteElement.hasAttribute('swell')).toBe(false);
+  });
+
+  it('reads an unknown shape as none, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('swell', 'louder');
+    expect(noteElement.swell).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/swell="louder"/));
+    warn.mockRestore();
+  });
+
+  it('round-trips dynamic-end and re-lays out its staff', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    expect(noteElement.dynamicEnd).toBeNull();
+    noteElement.dynamicEnd = 'f';
+    expect(noteElement.getAttribute('dynamic-end')).toBe('f');
+    expect(handler).toHaveBeenCalledTimes(1);
+    noteElement.dynamicEnd = null;
+    expect(noteElement.hasAttribute('dynamic-end')).toBe(false);
+  });
+});
+
+describe('tie', () => {
+  it('reads continue, the middle of a tie chain', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('tie', 'continue');
+    expect(noteElement.tie).toBe('continue');
   });
 });
 

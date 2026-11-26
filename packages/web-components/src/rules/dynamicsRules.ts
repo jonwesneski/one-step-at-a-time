@@ -4,9 +4,11 @@ import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
 } from '../types/elements';
-import type { DynamicMarking, HairpinKind } from '../types/theory';
+import type { DynamicMarking, HairpinKind, SwellShape } from '../types/theory';
 import { HAIRPIN_KINDS, MUSIC_REST_NODE } from '../utils/consts';
 import {
+  DYNAMIC_END_BARLINE_GAP_PX,
+  DYNAMIC_END_NEXT_GAP_PX,
   DYNAMIC_REMINDER_BRACKET_WIDTH_PX,
   DYNAMIC_TEXT_FONT_SIZE_PX,
   DYNAMIC_TEXT_GAP_PX,
@@ -22,14 +24,17 @@ import {
   HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_JOINT_GAP_PX,
   SWELL_MID_GAP_PX,
+  SWELL_MID_GAP_SHARE,
   SWELL_MIN_WEDGE_PX,
 } from '../utils/notationDimensions';
+import { parseDynamicMarking, parseSwellShape } from '../utils/parsers';
 import {
   NOTE_SVG_WIDTH,
   noteHeadCenterShiftPx,
 } from '../utils/svgCreator/note';
 import type { HairpinEndpointText } from './hairpinPlacementRules';
 import { estimateTextWidthPx } from './techniqueTextRules';
+import { tiesOn } from './tieRules';
 
 const ROW_TOLERANCE_PX = 5;
 
@@ -495,66 +500,312 @@ export function resolveHairpinSegments(
   ];
 }
 
-export type SwellSpan = {
-  crescendo: { startX: number; endX: number };
-  diminuendo: { startX: number; endX: number };
-};
-
-/**
- * A `< >` swell over one note's own span: louder to the middle, then softer,
- * with SWELL_MID_GAP_PX between the open ends. Both ends clear an adjacent
- * dynamic as a hairpin's do. Null when either wedge would be shorter than
- * SWELL_MIN_WEDGE_PX or the dynamics leave no room.
- */
-export function resolveSwellSpan(input: {
-  rawStartX: number;
-  rawEndX: number;
-  startMarking: DynamicMarking | null;
-  startBracketed?: boolean;
-  startDynamicText?: string | null;
-  startTextCenterX: number;
-  endMarking: DynamicMarking | null;
-  endBracketed?: boolean;
-  endTextCenterX: number;
-}): SwellSpan | null {
-  const span = computeHairpinXSpan(input);
-  if (span.collided) {
+/** What is wrong with a `swell` or `dynamic-end` value; null when nothing. */
+export function swellAttributeWarning(
+  name: string,
+  value: string | null
+): string | null {
+  if (value === null) {
     return null;
   }
-  const midX = (span.startX + span.endX) / 2;
-  const crescendo = { startX: span.startX, endX: midX - SWELL_MID_GAP_PX / 2 };
-  const diminuendo = { startX: midX + SWELL_MID_GAP_PX / 2, endX: span.endX };
-  if (crescendo.endX - crescendo.startX < SWELL_MIN_WEDGE_PX) {
-    return null;
+  if (name === 'swell' && parseSwellShape(value) === null) {
+    return `swell="${value}" is not both, crescendo or diminuendo; ignoring it`;
   }
-  return { crescendo, diminuendo };
+  if (name === 'dynamic-end' && parseDynamicMarking(value) === null) {
+    return `dynamic-end="${value}" is not a dynamic marking; ignoring it`;
+  }
+  return null;
 }
 
 /**
- * Swell notes that a hairpin also starts, ends or runs over: the two would
- * overlap, so the hairpin wins. `openEnds` are the hairpin ends whose partner
- * is outside `elements` (another staff or measure).
+ * The last entry of the tie chain from `index`: an entry whose tie runs on
+ * (`start`, `continue`) holds through the next. A rest ends it.
+ */
+export function swellChain(
+  elements: readonly NoteChordOrRestElementType[],
+  index: number
+): number {
+  let last = index;
+  while (
+    last + 1 < elements.length &&
+    elements[last].nodeName !== MUSIC_REST_NODE &&
+    elements[last + 1].nodeName !== MUSIC_REST_NODE &&
+    tiesOn((elements[last] as NoteOrChordElementType).tie)
+  ) {
+    last++;
+  }
+  return last;
+}
+
+export type SwellOwner = { index: number; lastIndex: number };
+
+/**
+ * Each swell with the entries it covers: its tie chain from itself on. A swell
+ * on an entry an earlier one covers is `overridden`.
+ */
+export function resolveSwellOwners(
+  elements: readonly NoteChordOrRestElementType[]
+): { owners: SwellOwner[]; overridden: number[] } {
+  const owners: SwellOwner[] = [];
+  const overridden: number[] = [];
+  elements.forEach((element, index) => {
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      ((element as NoteOrChordElementType).swell ?? null) === null
+    ) {
+      return;
+    }
+    const covering = owners[owners.length - 1];
+    if (covering !== undefined && index <= covering.lastIndex) {
+      overridden.push(index);
+      return;
+    }
+    owners.push({ index, lastIndex: swellChain(elements, index) });
+  });
+  return { owners, overridden };
+}
+
+/** The gap (px) between a `< >` swell's wedges, for a swell `length` long. */
+export function swellGapPx(length: number): number {
+  return Math.max(SWELL_MID_GAP_PX, length * SWELL_MID_GAP_SHARE);
+}
+
+/**
+ * One entry of a swell's chain: its beats and the x it is drawn over, in the
+ * row (index) of its system it stands in.
+ */
+export type SwellPiece = {
+  row: number;
+  startBeat: number;
+  endBeat: number;
+  startX: number;
+  endX: number;
+};
+
+/** Where the middle beat of a swell's chain is drawn. */
+export function swellMidpoint(pieces: readonly SwellPiece[]): {
+  row: number;
+  x: number;
+} {
+  const first = pieces[0];
+  const last = pieces[pieces.length - 1];
+  const beat = (first.startBeat + last.endBeat) / 2;
+  const piece = pieces.find((candidate) => beat < candidate.endBeat) ?? last;
+  const share =
+    piece.endBeat > piece.startBeat
+      ? (beat - piece.startBeat) / (piece.endBeat - piece.startBeat)
+      : 0;
+  return {
+    row: piece.row,
+    x: piece.startX + share * (piece.endX - piece.startX),
+  };
+}
+
+/** The stretch of a swell in one row of its system. */
+export type SwellRow = { startX: number; endX: number; centerY: number };
+
+/**
+ * A swell's wedges as hairpin segments, one per wedge and row. `rows` run
+ * from the drawn start (clear of the start's dynamic) to the drawn end; `mid`
+ * is where its middle beat is drawn, where the gap of a `< >` is centred. A
+ * wedge carried over a system break is open there, as a hairpin is. Null when
+ * a wedge would be shorter than SWELL_MIN_WEDGE_PX.
+ */
+export function resolveSwellSegments(input: {
+  shape: SwellShape;
+  rows: readonly SwellRow[];
+  mid: { row: number; x: number };
+}): HairpinSegment[] | null {
+  const { shape, rows, mid } = input;
+  const lengths = rows.map((row) => Math.max(0, row.endX - row.startX));
+  const offsets = lengths.map((_, index) =>
+    lengths.slice(0, index).reduce((sum, length) => sum + length, 0)
+  );
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  if (shape !== 'both') {
+    if (total < SWELL_MIN_WEDGE_PX) {
+      return null;
+    }
+    return wedgeSegments(
+      shape === 'crescendo' ? 'crescendo' : 'decrescendo',
+      0,
+      total,
+      rows,
+      offsets,
+      lengths
+    );
+  }
+  const gap = swellGapPx(total);
+  const lowest = SWELL_MIN_WEDGE_PX + gap / 2;
+  const highest = total - SWELL_MIN_WEDGE_PX - gap / 2;
+  if (highest < lowest) {
+    return null;
+  }
+  const midRow = Math.min(Math.max(mid.row, 0), rows.length - 1);
+  let center = Math.min(
+    Math.max(offsets[midRow] + mid.x - rows[midRow].startX, lowest),
+    highest
+  );
+  // The gap stays in one row: one straddling a break moves the shorter way.
+  for (const boundary of offsets.slice(1)) {
+    if (center - gap / 2 < boundary && boundary < center + gap / 2) {
+      const before = boundary - gap / 2;
+      const after = boundary + gap / 2;
+      const candidates = [before, after]
+        .filter((candidate) => candidate >= lowest && candidate <= highest)
+        .sort((x, y) => Math.abs(x - center) - Math.abs(y - center));
+      center = candidates[0] ?? center;
+    }
+  }
+  return [
+    ...wedgeSegments('crescendo', 0, center - gap / 2, rows, offsets, lengths),
+    ...wedgeSegments(
+      'decrescendo',
+      center + gap / 2,
+      total,
+      rows,
+      offsets,
+      lengths
+    ),
+  ];
+}
+
+// One wedge from `from` to `to` along a swell's rows laid end to end.
+function wedgeSegments(
+  kind: HairpinKind,
+  from: number,
+  to: number,
+  rows: readonly SwellRow[],
+  offsets: readonly number[],
+  lengths: readonly number[]
+): HairpinSegment[] {
+  return rows.flatMap((row, index) => {
+    const start = Math.max(from, offsets[index]);
+    const end = Math.min(to, offsets[index] + lengths[index]);
+    if (end <= start) {
+      return [];
+    }
+    return [
+      {
+        kind,
+        startX: row.startX + start - offsets[index],
+        endX: row.startX + end - offsets[index],
+        centerY: row.centerY,
+        openAtStart: start > from,
+        openAtEnd: kind === 'decrescendo' && end < to,
+      },
+    ];
+  });
+}
+
+/** A hairpin's start, clear of its start dynamic and that one's text. */
+export function hairpinStartClearOf(
+  rawStartX: number,
+  text: HairpinEndpointText | null
+): number {
+  return text === null
+    ? rawStartX
+    : Math.max(
+        rawStartX,
+        text.centerX +
+          dynamicTextHalfWidth(text.marking, text.bracketed) +
+          dynamicTextTrailingPx(text.text) +
+          HAIRPIN_DYNAMIC_GAP_PX
+      );
+}
+
+/** A hairpin's end, short of its end dynamic. */
+export function hairpinEndClearOf(
+  rawEndX: number,
+  text: HairpinEndpointText | null
+): number {
+  return text === null
+    ? rawEndX
+    : Math.min(
+        rawEndX,
+        text.centerX -
+          dynamicTextHalfWidth(text.marking, text.bracketed) -
+          HAIRPIN_DYNAMIC_GAP_PX
+      );
+}
+
+/**
+ * A swell within one row: from `rawStartX`, clear of its start dynamic, to
+ * `endX`, its gap over `midX`. Null when it has no room.
+ */
+export function resolveSwellRow(input: {
+  shape: SwellShape;
+  rawStartX: number;
+  endX: number;
+  midX: number;
+  centerY: number;
+  startText: HairpinEndpointText | null;
+}): HairpinSegment[] | null {
+  const { shape, rawStartX, endX, midX, centerY, startText } = input;
+  return resolveSwellSegments({
+    shape,
+    rows: [
+      { startX: hairpinStartClearOf(rawStartX, startText), endX, centerY },
+    ],
+    mid: { row: 0, x: midX },
+  });
+}
+
+/**
+ * Centre x of a `dynamic-end`: its right edge half a space before the next
+ * entry's ink and own dynamic, or 1.5 spaces before the barline with no next
+ * entry. Never left of `minCenterX`.
+ */
+export function dynamicEndCenterX(input: {
+  marking: DynamicMarking;
+  nextInkLeftX: number | null;
+  nextDynamicLeftX: number | null;
+  barlineX: number;
+  minCenterX: number;
+}): number {
+  const { marking, nextInkLeftX, nextDynamicLeftX, barlineX, minCenterX } =
+    input;
+  const right = Math.min(
+    nextInkLeftX === null
+      ? barlineX - DYNAMIC_END_BARLINE_GAP_PX
+      : nextInkLeftX - DYNAMIC_END_NEXT_GAP_PX,
+    nextDynamicLeftX === null
+      ? Infinity
+      : nextDynamicLeftX - DYNAMIC_END_NEXT_GAP_PX
+  );
+  return Math.max(minCenterX, right - dynamicTextHalfWidth(marking));
+}
+
+/**
+ * Room (px) a `dynamic-end` needs after its head's centre: its letters and the
+ * gap to the next entry.
+ */
+export function dynamicEndReachPx(marking: DynamicMarking): number {
+  return 2 * dynamicTextHalfWidth(marking) + DYNAMIC_END_NEXT_GAP_PX;
+}
+
+/**
+ * Swells that a hairpin also starts, ends or runs over somewhere in their
+ * chain: the two would overlap, so the hairpin wins. `openEnds` are the
+ * hairpin ends whose partner is outside `elements` (another staff or
+ * measure).
  */
 export function swellConflicts(
   elements: readonly NoteChordOrRestElementType[],
-  pairs: readonly HairpinPair[],
-  openEnds: readonly HairpinEndpoint[] = []
+  owners: readonly SwellOwner[],
+  pairs: readonly Pick<HairpinPair, 'startElement' | 'endElement'>[],
+  openEnds: readonly Pick<HairpinEndpoint, 'element'>[] = []
 ): NoteOrChordElementType[] {
   const open = new Set<Element>(openEnds.map((end) => end.element));
   const spans = pairs.map((pair) => [
     elements.indexOf(pair.startElement),
     elements.indexOf(pair.endElement),
   ]);
-  return elements.flatMap((element, index) => {
-    if (
-      element.nodeName === MUSIC_REST_NODE ||
-      !(element as NoteOrChordElementType).swell
-    ) {
-      return [];
-    }
-    return open.has(element) ||
-      spans.some(([start, end]) => start <= index && index <= end)
-      ? [element as NoteOrChordElementType]
+  return owners.flatMap(({ index, lastIndex }) => {
+    const covered = elements.slice(index, lastIndex + 1);
+    return covered.some((element) => open.has(element)) ||
+      spans.some(([start, end]) => start <= lastIndex && index <= end)
+      ? [elements[index] as NoteOrChordElementType]
       : [];
   });
 }

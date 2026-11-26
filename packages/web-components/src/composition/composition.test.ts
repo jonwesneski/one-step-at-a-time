@@ -12,6 +12,7 @@ import {
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_STAFF,
+  MUSIC_VOICE,
 } from '../utils/consts';
 
 afterEach(() => {
@@ -789,5 +790,97 @@ describe(`${MUSIC_COMPOSITION} flutter-tongue passages`, () => {
       expect.stringMatching(/^\[music-composition\] measure 3: /),
     ]);
     warn.mockRestore();
+  });
+});
+
+describe(`${MUSIC_COMPOSITION} swells over a barline`, () => {
+  const note = (attributes: Record<string, string>): Element => {
+    const element = document.createElement(MUSIC_NOTE);
+    element.setAttribute('octave', '4');
+    element.setAttribute('duration', 'whole');
+    for (const [attribute, value] of Object.entries(attributes)) {
+      element.setAttribute(attribute, value);
+    }
+    return element;
+  };
+  const voice = (...notes: Element[]): Element => {
+    const element = document.createElement(MUSIC_VOICE);
+    element.append(...notes);
+    return element;
+  };
+
+  it("hands a dynamic-end to the bar its own voice's chain ends in", async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const upperEnd = note({ note: 'E' });
+    const lowerEnd = note({ note: 'C', tie: 'end' });
+    addMeasure(composition, {}, () => [
+      voice(note({ note: 'E', tie: 'start' })),
+      voice(note({ note: 'C', tie: 'start', swell: '', 'dynamic-end': 'f' })),
+    ]);
+    const second = addMeasure(composition, {}, () => [
+      voice(upperEnd),
+      voice(lowerEnd),
+    ]);
+    await nextFrame();
+
+    expect([...second.swellContinuations.dynamicEnds]).toEqual([
+      [lowerEnd, 'f'],
+    ]);
+  });
+
+  it('covers a later swell on the chain, with one warning', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const covered = note({ note: 'C', tie: 'continue', swell: '' });
+    const first = addMeasure(composition, {}, () => [
+      note({ note: 'C', tie: 'start', swell: '' }),
+    ]);
+    const second = addMeasure(composition, {}, () => [covered]);
+    addMeasure(composition, {}, () => [note({ note: 'C', tie: 'end' })]);
+    await nextFrame();
+    await nextFrame();
+
+    expect([...second.swellContinuations.covered]).toEqual([covered]);
+    expect([...first.swellContinuations.covered]).toEqual([]);
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('an earlier swell')
+      )
+    ).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('keeps each staff of a measure to its own track', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const ends: Element[] = [];
+    const stavesOf = (lowerAttributes: Record<string, string>) => {
+      const measure = document.createElement(MUSIC_MEASURE);
+      const staves = [{}, lowerAttributes].map((attributes) => {
+        const staff = document.createElement(MUSIC_STAFF) as any;
+        const element = note({ note: 'C', ...attributes });
+        staff.append(element);
+        measure.appendChild(staff);
+        return { staff, element };
+      });
+      composition.appendChild(measure);
+      for (const { staff, element } of staves) {
+        const slot = staff.shadowRoot.querySelector('slot');
+        slot.assignedElements = () => [element];
+        slot.dispatchEvent(new Event('slotchange'));
+      }
+      return staves;
+    };
+    stavesOf({ tie: 'start', swell: '', 'dynamic-end': 'p' });
+    const [upper, lower] = stavesOf({ tie: 'end' });
+    ends.push(lower.element);
+    await nextFrame();
+
+    expect([...upper.staff.swellContinuations.dynamicEnds]).toEqual([]);
+    expect([...lower.staff.swellContinuations.dynamicEnds]).toEqual([
+      [ends[0], 'p'],
+    ]);
   });
 });

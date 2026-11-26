@@ -9,6 +9,7 @@ import {
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { swellAttributeWarning } from '../rules/dynamicsRules';
 import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
 import {
   bendConsistencyWarning,
@@ -84,6 +85,7 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  SwellShape,
   TextPlacement,
   TextStyle,
   TieStyle,
@@ -136,6 +138,7 @@ import {
   parseSlurStyle,
   parseStemDirection,
   parseStress,
+  parseSwellShape,
   parseTieStyle,
   parseTieValue,
   parseTremolo,
@@ -185,7 +188,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {QuarterTone} quarter-tone - `up` / `down`: raises or lowers `note` by a quarter-tone, drawn as an arrow on its accidental (on a natural for a plain letter). On a note slotted in a chord it marks just that tone.
  * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
  * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`.
- * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+ * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
  * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
  * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
  * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
@@ -201,7 +204,8 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {QuarterTone} bend-to-quarter-tone - `up` / `down`: raises or lowers `bend-to` by a quarter-tone.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
- * @attr {boolean} swell - A `< >` swell under this note: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the note wins.
+ * @attr {SwellShape} swell - A swell under this note over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a note tied into, it covers the rest of the chain; with swells on two notes of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any note of the chain wins.
+ * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the note's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, "(♮)", `plain` without. An accidental that is required anyway draws plainly.
@@ -280,6 +284,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'technique-text-placement',
       'technique-text-style',
       'dynamic-text',
+      'dynamic-end',
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
@@ -1031,11 +1036,26 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
-  get swell(): boolean {
-    return this.readsAttribute('swell');
+  get swell(): SwellShape | null {
+    return parseSwellShape(this.readAttribute('swell'));
   }
-  set swell(value: boolean) {
-    this.toggleAttribute('swell', value);
+  set swell(value: SwellShape | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('swell');
+    } else {
+      this.setAttribute('swell', value === true ? '' : value);
+    }
+  }
+
+  get dynamicEnd(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('dynamic-end'));
+  }
+  set dynamicEnd(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-end');
+    } else {
+      this.setAttribute('dynamic-end', value);
+    }
   }
 
   get breathMark(): BreathMark | null {
@@ -1642,6 +1662,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     if (textWarning !== null) {
       console.warn(`[music-note] ${textWarning}`);
     }
+    const swellWarning = swellAttributeWarning(name, newValue);
+    if (swellWarning !== null) {
+      console.warn(`[music-note] ${swellWarning}`);
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1859,6 +1883,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'dynamic-end' ||
       name === 'glissando-label' ||
       name === 'technique-text' ||
       name === 'technique-text-placement' ||

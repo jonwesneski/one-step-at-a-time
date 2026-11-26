@@ -1,5 +1,6 @@
 import { pitchAccidental } from '../rules/accidentalRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { swellAttributeWarning } from '../rules/dynamicsRules';
 import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
 import {
   bendConsistencyWarning,
@@ -72,6 +73,7 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  SwellShape,
   TextPlacement,
   TextStyle,
   TieStyle,
@@ -118,6 +120,7 @@ import {
   parseSlurStyle,
   parseStemDirection,
   parseStress,
+  parseSwellShape,
   parseTieStyle,
   parseTieValue,
   parseTremolo,
@@ -172,7 +175,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @customElement music-chord
  * @attr {Chord} chord - Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`.
  * @attr {DurationType} duration - Note value for the chord, optionally dotted (`dotted-half`); every notehead takes the chord's dots. Defaults to `quarter`.
- * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+ * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
  * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
  * @attr {'start' | 'end'} slur - Marks this chord as the start or end of a slur.
  * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
@@ -188,7 +191,8 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {QuarterTone} bend-to-quarter-tone - Applies to `bend-to`.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
- * @attr {boolean} swell - A `< >` swell under this chord: louder to the middle of its duration, then softer. A hairpin starting, ending or running over the chord wins.
+ * @attr {SwellShape} swell - A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins.
+ * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the chord's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.
@@ -269,6 +273,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'technique-text-placement',
       'technique-text-style',
       'dynamic-text',
+      'dynamic-end',
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
@@ -1043,11 +1048,26 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     return root instanceof ShadowRoot && isStaffNodeName(root.host.nodeName);
   }
 
-  get swell(): boolean {
-    return this.readsAttribute('swell');
+  get swell(): SwellShape | null {
+    return parseSwellShape(this.readAttribute('swell'));
   }
-  set swell(value: boolean) {
-    this.toggleAttribute('swell', value);
+  set swell(value: SwellShape | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('swell');
+    } else {
+      this.setAttribute('swell', value === true ? '' : value);
+    }
+  }
+
+  get dynamicEnd(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('dynamic-end'));
+  }
+  set dynamicEnd(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-end');
+    } else {
+      this.setAttribute('dynamic-end', value);
+    }
   }
 
   get breathMark(): BreathMark | null {
@@ -1662,6 +1682,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     if (textWarning !== null) {
       console.warn(`[music-chord] ${textWarning}`);
     }
+    const swellWarning = swellAttributeWarning(name, newValue);
+    if (swellWarning !== null) {
+      console.warn(`[music-chord] ${swellWarning}`);
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1871,6 +1895,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'dynamic-end' ||
       name === 'glissando-label' ||
       name === 'technique-text' ||
       name === 'technique-text-placement' ||

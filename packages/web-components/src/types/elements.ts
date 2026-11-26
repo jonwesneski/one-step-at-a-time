@@ -37,6 +37,7 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  SwellShape,
   TextPlacement,
   TextStyle,
   TieStyle,
@@ -60,11 +61,12 @@ export type NoteLetterOctave = `${NoteLetter}${Octave}`;
 export type ConnectorRole = 'start' | 'end';
 
 /**
- * Value of the `tie` attribute: a `start`/`end` endpoint, or `laissez-vibrer`
+ * Value of the `tie` attribute: a `start`/`end` endpoint, `continue` for the
+ * middle of a tie chain (tied into and on), or `laissez-vibrer`
  * — an open-ended tie curving off the notehead into empty space, for a note
  * left to ring (not held to a matching next notehead).
  */
-export type TieValue = ConnectorRole | 'laissez-vibrer';
+export type TieValue = ConnectorRole | 'continue' | 'laissez-vibrer';
 
 // The three array-valued grace properties reflect a comma-separated string
 // attribute. Reads return the parsed array (internal renderers rely on that);
@@ -113,8 +115,10 @@ export interface INoteElement {
   slurStyle: SlurStyle;
   // A breath mark after this element; null for none.
   breathMark: BreathMark | null;
-  // A `< >` swell over this element's own duration.
-  swell: boolean;
+  // A swell over this element's tie chain (its own duration when untied).
+  // Setting `true` writes the bare attribute, which reads back as `both`.
+  get swell(): SwellShape | null;
+  set swell(value: SwellShape | boolean | null);
   // Set by the composition on the end of a dotted tie that crosses a barline,
   // which shows its accidental again.
   dottedTieAcrossBarline: boolean;
@@ -185,6 +189,8 @@ export interface INoteElement {
   dynamicReminder: boolean;
   /** Text after `dynamic`, on its baseline. */
   dynamicText: string | null;
+  /** A second dynamic at the end of this entry's span (its swell's chain). */
+  dynamicEnd: DynamicMarking | null;
   /** Technique text over (or under) this entry, `|` starting a new line. */
   techniqueText: string | null;
   techniqueTextPlacement: TextPlacement;
@@ -369,7 +375,8 @@ export interface IChordElement {
   // See INoteElement.breathMark.
   breathMark: BreathMark | null;
   // See INoteElement.swell.
-  swell: boolean;
+  get swell(): SwellShape | null;
+  set swell(value: SwellShape | boolean | null);
   // See INoteElement.dottedTieAcrossBarline.
   dottedTieAcrossBarline: boolean;
   // Default for every tone; a slotted <music-note>'s own notehead overrides
@@ -438,6 +445,8 @@ export interface IChordElement {
   dynamicReminder: boolean;
   /** Text after `dynamic`, on its baseline. */
   dynamicText: string | null;
+  /** A second dynamic at the end of this entry's span (its swell's chain). */
+  dynamicEnd: DynamicMarking | null;
   /** Technique text over (or under) this entry, `|` starting a new line. */
   techniqueText: string | null;
   techniqueTextPlacement: TextPlacement;
