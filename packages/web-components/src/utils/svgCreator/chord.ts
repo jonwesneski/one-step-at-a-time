@@ -13,6 +13,7 @@ import {
   augmentationDotRowWidthPx,
   resolveChordDotStaffYs,
 } from '../../rules/augmentationDotRules';
+import { contourMinLengthPx } from '../../rules/bendContourRules';
 import {
   computeAdjacentDisplacements,
   type HeadExtent,
@@ -458,7 +459,13 @@ export const createChordSvg = ({
         noStem,
         stemExtension,
       }),
-      limit: { kind: 'length', length: BEND_STANDALONE_LENGTH_PX },
+      limit: {
+        kind: 'length',
+        length: Math.max(
+          BEND_STANDALONE_LENGTH_PX,
+          ...bends.map((bend) => contourMinLengthPx(bend?.contour?.length ?? 0))
+        ),
+      },
       targetWidthPx: bendTargetWidthPx,
     });
     if (layout !== null) {

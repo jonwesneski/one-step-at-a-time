@@ -36,6 +36,12 @@ import {
   quarterToneOf,
 } from './accidentalRules';
 import { isOnStaffLine } from './augmentationDotRules';
+import {
+  type ContourPitch,
+  contourMinLengthPx,
+  contourPoints,
+  contourSteps,
+} from './bendContourRules';
 import { diatonicStepsBetween } from './graceRules';
 import { noteSemitoneMap } from './theoryConsts';
 
@@ -178,7 +184,15 @@ export type BendTarget = {
   steps: number;
 };
 
-export type ResolvedBend = { shape: BendShape; target: BendTarget | null };
+export type ResolvedBend = {
+  shape: BendShape;
+  target: BendTarget | null;
+  /**
+   * A `bend-contour`'s pitches, in diatonic steps up from the note (negative
+   * below); the target, if any, follows as its last point.
+   */
+  contour?: readonly number[] | null;
+};
 
 /** The line a bend draws; `up` and `down` only say which way it runs. */
 export const bendLineShape = (shape: BendShape): GlissandoShape =>
@@ -258,10 +272,11 @@ export function bendTargetDirection(
 }
 
 /**
- * The bend a note draws from its `bend` and `bend-to`. A target alone makes a
- * straight bend; an `up` or `down` it disagrees with follows the target. A
- * plain target letter takes a natural when the note's own accidental would
- * carry over to it.
+ * The bend a note draws from its `bend`, `bend-to` and `bend-contour`. A
+ * target alone makes a straight bend; an `up` or `down` it disagrees with
+ * follows the target. A plain target letter takes a natural when the note's
+ * own accidental would carry over to it. A contour replaces `bend`, its
+ * target its last point.
  */
 export function resolveBend(
   bend: BendShape | null,
@@ -269,8 +284,27 @@ export function resolveBend(
   bendToQuarterTone: QuarterTone | null,
   note: Note,
   octave: Octave,
-  quarterTone: QuarterTone | null
+  quarterTone: QuarterTone | null,
+  contour: readonly ContourPitch[] | null = null
 ): ResolvedBend | null {
+  if (contour !== null) {
+    const target =
+      bendTo === null
+        ? null
+        : resolveBend(
+            null,
+            bendTo,
+            bendToQuarterTone,
+            note,
+            octave,
+            quarterTone
+          )?.target ?? null;
+    return {
+      shape: 'up',
+      target,
+      contour: contourSteps(note[0] as NoteLetter, octave, contour),
+    };
+  }
   if (bendTo === null) {
     return bend === null ? null : { shape: bend, target: null };
   }
@@ -311,17 +345,48 @@ export function resolveBend(
  * Room (px) a bend keeps between its note's ink and the next note's; targets
  * stand in it, after the line.
  */
-export function bendReserveWidthPx(targetWidth: number): number {
+export function bendReserveWidthPx(
+  targetWidth: number,
+  lineLength: number = GLISSANDO_MIN_LENGTH_PX
+): number {
   return (
-    GLISSANDO_MIN_LENGTH_PX +
+    lineLength +
     2 * GLISSANDO_GAP_PX +
     (targetWidth > 0 ? targetWidth + GLISSANDO_GAP_PX : 0)
   );
 }
 
+/** The shortest line (px) a note's or chord's bends reserve room for. */
+export function bendLineLengthPx(
+  heads: readonly Pick<BendHead, 'bend'>[]
+): number {
+  return Math.max(
+    GLISSANDO_MIN_LENGTH_PX,
+    ...heads.map(({ bend }) => contourMinLengthPx(bend.contour?.length ?? 0))
+  );
+}
+
+/** A contour's heights (container Y), from its head and the target's. */
+export function contourYs(head: Pick<BendHead, 'y' | 'bend'>): number[] | null {
+  const { contour, target } = head.bend;
+  if (contour === undefined || contour === null) {
+    return null;
+  }
+  return [
+    ...contour.map((steps) => head.y - steps * STAFF_Y_STEP),
+    ...(target === null ? [] : [head.y + targetOffsetY(target)]),
+  ];
+}
+
 export type BendHead = {
-  /** The head's centre, and its dot, or null with none. */
+  /**
+   * The head's centre, and its dot, or null with none. A contour's heights
+   * are measured from `y`; a head moved off its written pitch (an unpitched
+   * note above or below the stave) gives its written pitch's centre in
+   * `contourFromY`.
+   */
   y: number;
+  contourFromY?: number;
   dotY: number | null;
   /** Null outside a staff, where there are no lines to keep off. */
   staffY: number | null;
@@ -460,6 +525,8 @@ export type BendLine = {
   to: LinePoint;
   shape: GlissandoShape;
   target: BendTargetPlacement | null;
+  /** A contour's points, `from` first and `to` last; null for a plain bend. */
+  contour: LinePoint[] | null;
 };
 
 export type BendLayout = { lines: BendLine[]; rightX: number };
@@ -504,7 +571,9 @@ export function layoutBends({
   const linesFrom = (startRight: number): BendLine[] | null => {
     const spare =
       limit.kind === 'barline'
-        ? limit.left - startRight - bendReserveWidthPx(columns.width)
+        ? limit.left -
+          startRight -
+          bendReserveWidthPx(columns.width, bendLineLengthPx(heads))
         : 0;
     const lineEnd =
       limit.kind === 'length'
@@ -524,13 +593,31 @@ export function layoutBends({
       return null;
     }
     return heads.map((head, i): BendLine => {
-      const { fromY, toY } = bendEndYs(head, heads, lineEnd - fromX);
+      const ys = contourYs({ ...head, y: head.contourFromY ?? head.y });
+      const { fromY, toY } =
+        ys === null
+          ? bendEndYs(head, heads, lineEnd - fromX)
+          : {
+              fromY: glissandoEndYs({
+                startHeadY: head.y,
+                endHeadY: ys[0],
+                startDotY: head.dotY,
+                startOnLine: isOnLine(head.staffY),
+                endOnLine: false,
+                shape: 'straight',
+              }).fromY,
+              toY: ys[ys.length - 1],
+            };
       const { shape, target } = head.bend;
       const column = targeted.findIndex((candidate) => candidate.head === i);
       return {
         from: { x: fromX, y: fromY },
         to: { x: lineEnd, y: toY },
-        shape: bendLineShape(shape),
+        contour:
+          ys === null
+            ? null
+            : contourPoints({ x: fromX, y: fromY }, lineEnd, ys),
+        shape: ys === null ? bendLineShape(shape) : 'straight',
         target:
           target === null
             ? null
@@ -567,9 +654,10 @@ export function layoutBends({
 
 // A tail hangs from the stem's tip down to bottomY, left of `right`.
 function crossesTail(
-  { from, to, shape }: BendLine,
+  { from, to: end, shape, contour }: BendLine,
   tail: { right: number; bottomY: number }
 ): boolean {
+  const to = contour?.[1] ?? end;
   const x = Math.min(tail.right, to.x);
   const yAtTail = from.y + ((to.y - from.y) * (x - from.x)) / (to.x - from.x);
   return (
@@ -609,6 +697,7 @@ export function bendDotYs(
 export function bendConsistencyWarning({
   bend,
   bendTo,
+  contour = false,
   glissando,
   isChord,
   inTremoloGroup,
@@ -617,6 +706,8 @@ export function bendConsistencyWarning({
 }: {
   bend: BendShape | null;
   bendTo: Note | null;
+  /** Whether a `bend-contour` is set. */
+  contour?: boolean;
   glissando: ConnectorRole | null;
   isChord: boolean;
   inTremoloGroup: boolean;
@@ -624,10 +715,10 @@ export function bendConsistencyWarning({
   /** Which way the target lies; null with none. */
   targetDirection: 'up' | 'down' | null;
 }): string | null {
-  if (bend === null && bendTo === null) {
+  if (bend === null && bendTo === null && !contour) {
     return null;
   }
-  const name = bend === null ? 'bend-to' : 'bend';
+  const name = contour ? 'bend-contour' : bend === null ? 'bend-to' : 'bend';
   if (glissando === 'start') {
     return `${name} is ignored on a glissando="start"; the glissando's line is drawn`;
   }
@@ -636,6 +727,9 @@ export function bendConsistencyWarning({
   }
   if (onTriangle) {
     return `${name} is ignored on a triangle notehead, which has no definite pitch to bend`;
+  }
+  if (contour && bend !== null) {
+    return `bend="${bend}" is ignored beside bend-contour; the contour is drawn`;
   }
   if (isChord && bendTo !== null) {
     return 'bend-to is ignored on a chord; bend draws a line after each head';

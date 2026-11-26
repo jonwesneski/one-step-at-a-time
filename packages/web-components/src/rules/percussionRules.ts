@@ -76,6 +76,7 @@ const PITCH_ONLY_SHARED_ATTRIBUTES = [
   'bend',
   'bend-to',
   'bend-to-quarter-tone',
+  'bend-contour',
   'accidental-reminder',
   'quarter-tone',
   'arpeggio',

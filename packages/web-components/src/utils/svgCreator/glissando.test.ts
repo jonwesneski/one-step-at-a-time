@@ -9,6 +9,7 @@ import {
   GLISSANDO_LINE_THICKNESS_PX,
   GLISSANDO_WAVE_AMPLITUDE_PX,
   GLISSANDO_WAVELENGTH_PX,
+  STAFF_LINE_THICKNESS_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
 } from '../notationDimensions';
 import {
@@ -92,7 +93,30 @@ describe('createGlissandoLineSvg', () => {
 });
 
 describe('createBendSvg', () => {
-  const line = { from, to, shape: 'straight' as const, target: null };
+  const line = {
+    from,
+    to,
+    shape: 'straight' as const,
+    target: null,
+    contour: null,
+  };
+
+  it('draws a contour as a curve at stave-line weight', () => {
+    const bend = createBendSvg({
+      lines: [
+        {
+          ...line,
+          contour: [from, { x: 100, y: 20 }, to],
+        },
+      ],
+      rightX: 200,
+    });
+    const path = bend.querySelector('.bend-contour');
+    expect(path?.getAttribute('d')).toMatch(/^M 0 50 C .+ C .+ 200 50$/);
+    expect(path?.getAttribute('stroke-width')).toBe(
+      `${STAFF_LINE_THICKNESS_PX}`
+    );
+  });
 
   it('draws each head’s own line, and no target without one', () => {
     const bend = createBendSvg({

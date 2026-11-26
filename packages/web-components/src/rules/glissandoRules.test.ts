@@ -1,6 +1,7 @@
 import type { BendShape, Note, Octave, QuarterTone } from '../types/theory';
 import {
   BEND_BARLINE_GAP_PX,
+  BEND_CONTOUR_POINT_PX,
   BEND_FREE_MAX_TRAVEL_PX,
   BEND_FREE_SLOPE,
   BEND_FREE_TRAVEL_PX,
@@ -14,10 +15,12 @@ import {
   GLISSANDO_MIN_LENGTH_PX,
   GLISSANDO_OFF_LINE_PX,
   GLISSANDO_WAVELENGTH_PX,
+  STAFF_Y_STEP,
 } from '../utils/notationDimensions';
 import {
   bendConsistencyWarning,
   bendDotYs,
+  bendLineLengthPx,
   bendReserveWidthPx,
   bendTargetsWidthPx,
   glissandoDipWidthPx,
@@ -225,6 +228,15 @@ describe('resolveBend', () => {
     expect(resolve('C', { bendTo: 'D', bend: 'down' })?.shape).toBe('up');
   });
 
+  it('replaces bend with a contour, its target the last point', () => {
+    const withContour = resolveBend('wave', 'D', null, 'C', 4, null, [
+      { letter: 'G', octave: 4 },
+      { letter: 'A', octave: 3 },
+    ]);
+    expect(withContour?.contour).toEqual([4, -2]);
+    expect(withContour?.target?.steps).toBe(1);
+  });
+
   it("cancels the note's own accidental on a plain target letter", () => {
     expect(resolve('C#', { bendTo: 'C' })?.target?.accidental).toBe('natural');
     expect(resolve('C', { bendTo: 'D' })?.target?.accidental).toBeNull();
@@ -236,6 +248,18 @@ describe('bendReserveWidthPx', () => {
     const free = GLISSANDO_MIN_LENGTH_PX + 2 * GLISSANDO_GAP_PX;
     expect(bendReserveWidthPx(0)).toBe(free);
     expect(bendReserveWidthPx(18)).toBe(free + 18 + GLISSANDO_GAP_PX);
+  });
+
+  it('keeps a longer line for a contour', () => {
+    expect(bendReserveWidthPx(0, 100)).toBe(100 + 2 * GLISSANDO_GAP_PX);
+    expect(
+      bendLineLengthPx([
+        { bend: { shape: 'up', target: null, contour: Array(8).fill(1) } },
+      ])
+    ).toBe(8 * BEND_CONTOUR_POINT_PX);
+    expect(bendLineLengthPx([{ bend: { shape: 'up', target: null } }])).toBe(
+      GLISSANDO_MIN_LENGTH_PX
+    );
   });
 });
 
@@ -273,6 +297,60 @@ describe('layoutBends', () => {
   };
   const lineOf = (input: Partial<Parameters<typeof layoutBends>[0]>) =>
     linesOf(input)[0];
+
+  it('passes a contour through its pitches, evenly spaced, from the dot', () => {
+    const line = lineOf({
+      heads: [
+        {
+          ...headAt({}, { dotY: 47 }),
+          bend: { shape: 'up', target: null, contour: [2, -1] },
+        },
+      ],
+    });
+    const fromX = 20 + GLISSANDO_GAP_PX;
+    const toX = 70 - GLISSANDO_GAP_PX;
+    expect(line.contour).toEqual([
+      { x: fromX, y: 47 },
+      { x: (fromX + toX) / 2, y: 50 - 2 * STAFF_Y_STEP },
+      { x: toX, y: 50 + STAFF_Y_STEP },
+    ]);
+    expect(line.to).toEqual({ x: toX, y: 50 + STAFF_Y_STEP });
+  });
+
+  it('measures a contour from the written pitch of a head drawn elsewhere', () => {
+    const line = lineOf({
+      heads: [
+        {
+          ...headAt({}, { y: 20, staffY: null }),
+          contourFromY: 60,
+          bend: { shape: 'up', target: null, contour: [0] },
+        },
+      ],
+    });
+    expect(line.from.y).toBe(20);
+    expect(line.to.y).toBe(60);
+  });
+
+  it('ends a contour on its bracketed target', () => {
+    const line = lineOf({
+      heads: [
+        {
+          ...headAt(),
+          bend: {
+            shape: 'up',
+            target: { letter: 'C', octave: 4, accidental: null, steps: 3 },
+            contour: [1],
+          },
+        },
+      ],
+    });
+    expect(line.contour?.map(({ y }) => y)).toEqual([
+      50,
+      50 - STAFF_Y_STEP,
+      50 - 3 * STAFF_Y_STEP,
+    ]);
+    expect(line.target?.centerY).toBe(50 - 3 * STAFF_Y_STEP);
+  });
 
   it('runs from its note to the next ink, half a space from each', () => {
     const { from, to } = lineOf({});
@@ -479,5 +557,16 @@ describe('bendConsistencyWarning', () => {
     expect(
       bendConsistencyWarning({ ...fine, bend: null, glissando: 'start' })
     ).toBeNull();
+  });
+
+  it('refuses a contour where it refuses a bend, and ignores bend beside it', () => {
+    const contour = { ...fine, bend: null, contour: true };
+    expect(bendConsistencyWarning(contour)).toBeNull();
+    expect(
+      bendConsistencyWarning({ ...contour, glissando: 'start' })
+    ).toContain('bend-contour is ignored on a glissando');
+    expect(bendConsistencyWarning({ ...contour, bend: 'up' })).toContain(
+      'bend="up" is ignored beside bend-contour'
+    );
   });
 });

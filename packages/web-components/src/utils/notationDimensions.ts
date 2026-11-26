@@ -1963,6 +1963,18 @@ export const BEND_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
 /** Length (px) of a standalone note's bend. = 5 × STAFF_LINE_SPACING */
 export const BEND_STANDALONE_LENGTH_PX = STAFF_LINE_SPACING * 5;
 
+/**
+ * Length (px) a `bend-contour` reserves per pitch, beyond the shortest bend.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const BEND_CONTOUR_POINT_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * Stroke width (px) of a `bend-contour`: a stave line's weight.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const BEND_CONTOUR_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
+
 /** Size of a bend's target notehead and its accidental, against full-size ones. */
 export const BEND_TARGET_SCALE = 0.75;
 

@@ -2447,6 +2447,27 @@ describe('bend', () => {
     expect(element.shadowRoot!.querySelectorAll('.bend-line')).toHaveLength(2);
   });
 
+  it('takes a contour on a slotted tone only, warning on the chord', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_CHORD) as ChordElementType;
+    element.innerHTML = `
+      <music-note note="A" octave="4"></music-note>
+      <music-note note="C" octave="6" bend-contour="A4"></music-note>`;
+    element.setAttribute('bend-contour', 'G5');
+    document.body.appendChild(element);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('bend-contour is ignored on a chord')
+    );
+    expect(element.toneBends.map((bend) => bend?.contour ?? null)).toEqual([
+      null,
+      [-9],
+    ]);
+    expect(element.shadowRoot!.querySelectorAll('.bend-contour')).toHaveLength(
+      1
+    );
+    warn.mockRestore();
+  });
+
   it('redraws when a slotted tone’s bend changes', async () => {
     const element = document.createElement(MUSIC_CHORD) as ChordElementType;
     element.innerHTML = `

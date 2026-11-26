@@ -1,4 +1,5 @@
 import { pitchAccidental } from '../rules/accidentalRules';
+import { parseBendContour } from '../rules/bendContourRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
 import { swellAttributeWarning } from '../rules/dynamicsRules';
 import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
@@ -188,6 +189,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} dynamic-text - Italic text straight after the dynamic, on its baseline. Needs `dynamic`.
  * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after each of this chord's heads, ending inside its own duration. A slotted note's own `bend` / `bend-to` replaces it for that tone. Ignored, with a warning, beside `glissando="start"` and on a `<music-tremolo>` member.
  * @attr {Note} bend-to - Notes only, slotted ones included: ignored, with a warning, on a chord.
+ * @attr {string} bend-contour - Slotted notes only, one line a tone: ignored, with a warning, on a chord.
  * @attr {QuarterTone} bend-to-quarter-tone - Applies to `bend-to`.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
@@ -277,6 +279,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
+      'bend-contour',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
@@ -570,7 +573,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       }
       const bend = tone?.bend ?? null;
       const bendTo = tone?.bendTo ?? null;
-      return bend === null && bendTo === null
+      const contour = parseBendContour(tone?.bendContour ?? null);
+      return bend === null && bendTo === null && contour === null
         ? this.bend && { shape: this.bend, target: null }
         : resolveBend(
             bend,
@@ -578,7 +582,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
             tone.bendToQuarterTone,
             value,
             octave ?? 4,
-            tone.quarterTone
+            tone.quarterTone,
+            contour
           );
     });
   }
@@ -1612,6 +1617,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         'bend',
         'bend-to',
         'bend-to-quarter-tone',
+        'bend-contour',
         'glissando',
       ],
     });
@@ -1988,6 +1994,12 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     if (invalid !== null) {
       console.warn(
         `[music-chord] ${changed}="${newValue}" ${invalid}; ignoring it`
+      );
+      return;
+    }
+    if (changed === 'bend-contour' && newValue !== null) {
+      console.warn(
+        '[music-chord] bend-contour is ignored on a chord; put it on a slotted note, one line a tone'
       );
       return;
     }

@@ -1659,6 +1659,13 @@
               "description": "Applies to `bend-to`."
             },
             {
+              "name": "bend-contour",
+              "type": {
+                "text": "string"
+              },
+              "description": "Slotted notes only, one line a tone: ignored, with a warning, on a chord."
+            },
+            {
               "name": "dynamic",
               "type": {
                 "text": "DynamicMarking"
@@ -5377,6 +5384,17 @@
               }
             },
             {
+              "name": "bend-contour",
+              "type": {
+                "text": "string"
+              },
+              "description": "Slotted notes only, one line a tone: ignored, with a warning, on a chord.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "name": "accidental-reminder",
               "type": {
                 "text": "AccidentalReminder"
@@ -6498,6 +6516,17 @@
               "name": "bendTo",
               "type": {
                 "text": "Note | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bendContour",
+              "type": {
+                "text": "string | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -8072,6 +8101,17 @@
                 "text": "QuarterTone"
               },
               "description": "`up` / `down`: raises or lowers `bend-to` by a quarter-tone.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "bend-contour",
+              "type": {
+                "text": "string"
+              },
+              "description": "Approximate pitches a free line passes through after the note, comma-separated with their octaves (`G5,B4,D6`; an accidental is ignored): evenly spaced along the line, the last at its end, joined by a smooth curve that is level at each peak and trough. One pitch draws a straight line. `bend` beside it is ignored, with a warning; `bend-to` becomes its last point, drawn in parentheses. On a note slotted in a chord it bends just that tone. Allowed on an unpitched note.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -10360,6 +10400,13 @@
             },
             {
               "kind": "field",
+              "name": "bendContour",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "bendToQuarterTone",
               "type": {
                 "text": "QuarterTone | null"
@@ -11282,6 +11329,13 @@
                 "text": "QuarterTone"
               },
               "description": "`up` / `down`: raises or lowers `bend-to` by a quarter-tone."
+            },
+            {
+              "name": "bend-contour",
+              "type": {
+                "text": "string"
+              },
+              "description": "Approximate pitches a free line passes through after the note, comma-separated with their octaves (`G5,B4,D6`; an accidental is ignored): evenly spaced along the line, the last at its end, joined by a smooth curve that is level at each peak and trough. One pitch draws a straight line. `bend` beside it is ignored, with a warning; `bend-to` becomes its last point, drawn in parentheses. On a note slotted in a chord it bends just that tone. Allowed on an unpitched note."
             },
             {
               "name": "dynamic",
@@ -12638,7 +12692,7 @@
               "kind": "field",
               "name": "#bendInk",
               "privacy": "private",
-              "default": "new Map< NoteChordOrRestElementType, { left: number; right: number; top: number } >()",
+              "default": "new Map< NoteChordOrRestElementType, { left: number; right: number; top: number; bottom: number; // Contours, which a label clears only where it passes over them. contours: CubicSegment[][]; } >()",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -14828,6 +14882,34 @@
               "return": {
                 "type": {
                   "text": "BendHead[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#contourYsOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
                 }
               },
               "parameters": [
@@ -22013,7 +22095,7 @@
               "kind": "field",
               "name": "#bendInk",
               "privacy": "private",
-              "default": "new Map< NoteChordOrRestElementType, { left: number; right: number; top: number } >()",
+              "default": "new Map< NoteChordOrRestElementType, { left: number; right: number; top: number; bottom: number; // Contours, which a label clears only where it passes over them. contours: CubicSegment[][]; } >()",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -24173,6 +24255,34 @@
               "return": {
                 "type": {
                   "text": "BendHead[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#contourYsOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
                 }
               },
               "parameters": [

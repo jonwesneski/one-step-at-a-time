@@ -1,3 +1,4 @@
+import { contourPath, contourSegments } from '../../rules/bendContourRules';
 import {
   glissandoDipWidthPx,
   glissandoHalfWaveCount,
@@ -7,6 +8,7 @@ import {
 import type { AccidentalType, GlissandoShape } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  BEND_CONTOUR_THICKNESS_PX,
   BEND_TARGET_GAP_PX,
   BEND_TARGET_LEDGER_OVERHANG_PX,
   BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
@@ -110,8 +112,9 @@ export function createBendTargetSvg(props: WrittenNoteProps): SVGGElement {
 export function createBendSvg({ lines }: BendLayout): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('bend');
-  for (const { target, ...line } of lines) {
-    const path = createGlissandoPath(line);
+  for (const { target, contour, ...line } of lines) {
+    const path =
+      contour === null ? createGlissandoPath(line) : createContourPath(contour);
     path.classList.add('bend-line');
     group.appendChild(path);
     if (target !== null) {
@@ -119,6 +122,17 @@ export function createBendSvg({ lines }: BendLayout): SVGGElement {
     }
   }
   return group;
+}
+
+// A `bend-contour`: a monotone curve through its points.
+function createContourPath(points: readonly LinePoint[]): SVGPathElement {
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', contourPath(contourSegments(points)));
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', `${BEND_CONTOUR_THICKNESS_PX}`);
+  path.classList.add('bend-contour');
+  return path;
 }
 
 const pointText = ({ x, y }: LinePoint): string => `${x} ${y}`;

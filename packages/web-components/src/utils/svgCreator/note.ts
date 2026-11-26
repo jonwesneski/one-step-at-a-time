@@ -1,3 +1,4 @@
+import { contourMinLengthPx } from '../../rules/bendContourRules';
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
 import {
@@ -671,7 +672,13 @@ export const createNoteSvg = ({
         dotLayout?.rightEdgeX ?? -Infinity
       ),
       tail: tail && { right: tail.rightX, bottomY: tail.bottomY },
-      limit: { kind: 'length', length: BEND_STANDALONE_LENGTH_PX },
+      limit: {
+        kind: 'length',
+        length: Math.max(
+          BEND_STANDALONE_LENGTH_PX,
+          contourMinLengthPx(bend.contour?.length ?? 0)
+        ),
+      },
       targetWidthPx: bendTargetWidthPx,
     });
     if (layout !== null) {

@@ -316,6 +316,8 @@ declare module 'react' {
         bend?: BendShape;
         'bend-to'?: Note;
         'bend-to-quarter-tone'?: QuarterTone;
+        // Approximate pitches a free line passes through, `G5,B4`.
+        'bend-contour'?: string;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;

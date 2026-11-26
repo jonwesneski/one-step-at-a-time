@@ -182,6 +182,8 @@ export interface INoteElement {
   bendTo: Note | null;
   /** Raises or lowers `bendTo` by a quarter-tone. */
   bendToQuarterTone: QuarterTone | null;
+  // Approximate pitches a free line passes through after the note (`G5,B4`).
+  bendContour: string | null;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;

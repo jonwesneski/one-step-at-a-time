@@ -4804,3 +4804,88 @@ test.describe('swell over a tie chain', () => {
     expect(untied.staffSwells).toBe(1);
   });
 });
+
+test.describe('bend contour', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const markup = `<music-composition time="3/4"><music-measure><music-staff clef="treble">
+    <music-note note="A" octave="4" duration="dotted-half" bend-contour="G5,B4,D6,E5"></music-note>
+  </music-staff></music-measure></music-composition>`;
+  // The contour's knots: where each cubic ends, client px.
+  const readKnots = (page: Page) =>
+    page.evaluate(() => {
+      const path = document
+        .querySelector('music-staff')
+        ?.shadowRoot?.querySelector<SVGPathElement>('.bend-contour');
+      if (!path) {
+        return [];
+      }
+      const matrix = path.getScreenCTM();
+      const numbers = (path.getAttribute('d') ?? '')
+        .replace(/[MC]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .map(Number);
+      const points: { x: number; y: number }[] = [];
+      // M x y, then 6 numbers per cubic, its end last.
+      points.push({ x: numbers[0], y: numbers[1] });
+      for (let i = 2; i + 5 < numbers.length; i += 6) {
+        points.push({ x: numbers[i + 4], y: numbers[i + 5] });
+      }
+      return points.map(({ x, y }) => ({
+        x: (matrix?.a ?? 1) * x + (matrix?.e ?? 0),
+        y: (matrix?.d ?? 1) * y + (matrix?.f ?? 0),
+      }));
+    });
+
+  test('keeps its pitches and spreads as the bar widens', async ({ page }) => {
+    await setHost(page, 500, markup);
+    const narrow = await readKnots(page);
+    expect(narrow).toHaveLength(5);
+    await setWidth(page, 900);
+    const wide = await readKnots(page);
+    expect(wide.map(({ y }) => y)).toEqual(narrow.map(({ y }) => y));
+    const spread = (points: { x: number }[]) =>
+      points[points.length - 1].x - points[0].x;
+    expect(spread(wide)).toBeGreaterThan(spread(narrow) + 100);
+  });
+
+  test('moves its points with the clef', async ({ page }) => {
+    await setHost(page, 700, markup);
+    const treble = await readKnots(page);
+    await page.evaluate(() =>
+      document.querySelector('music-staff')?.setAttribute('clef', 'bass')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const bass = await readKnots(page);
+    expect(bass).toHaveLength(treble.length);
+    // Each pitch stands where the new clef puts it.
+    for (let i = 1; i < bass.length; i++) {
+      expect(bass[i].y).not.toBeCloseTo(treble[i].y, 0);
+    }
+  });
+});

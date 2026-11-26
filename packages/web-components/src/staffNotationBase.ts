@@ -29,6 +29,12 @@ import {
   computeTremoloScaleByIndex,
   durationContribution,
 } from './rules/beatRules';
+import {
+  contourSegments,
+  contourTopUnder,
+  type CubicSegment,
+  parseBendContour,
+} from './rules/bendContourRules';
 import { breathMarkBottomY, breathMarkCenterX } from './rules/breathMarkRules';
 import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
 import {
@@ -72,8 +78,11 @@ import {
   bendDotYs,
   type BendHead,
   type BendLimit,
+  type BendLine,
+  bendLineLengthPx,
   bendReserveWidthPx,
   bendTargetsWidthPx,
+  contourYs,
   glissandoReserveWidthPx,
   layoutBends,
   type LinePoint,
@@ -639,6 +648,19 @@ function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
 const outermost = (ys: readonly number[], above: boolean): number =>
   above ? Math.min(...ys) : Math.max(...ys);
 
+// Heights a space apart over the range of `ys`, so a head anywhere in it is
+// within a space of one.
+const spanOfYs = (ys: readonly number[]): number[] => {
+  if (ys.length === 0) {
+    return [];
+  }
+  const [low, high] = [Math.min(...ys), Math.max(...ys)];
+  const count = Math.ceil((high - low) / STAFF_LINE_SPACING);
+  return Array.from({ length: count + 1 }, (_, i) =>
+    Math.min(high, low + i * STAFF_LINE_SPACING)
+  );
+};
+
 const outermostOrNull = (
   ys: readonly number[],
   above: boolean
@@ -996,7 +1018,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // The box of each drawn bend (container px), target included.
   #bendInk = new Map<
     NoteChordOrRestElementType,
-    { left: number; right: number; top: number }
+    {
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+      // Contours, which a label clears only where it passes over them.
+      contours: CubicSegment[][];
+    }
   >();
   // What a bend never crosses: this staff's clef changes and every barline
   // (container px).
@@ -4244,12 +4273,46 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       headYs,
       this.#augmentationDotRowYs(state, index).map(containerYOfStaffY)
     );
+    // A contour is measured from the written pitch, in the clef in force at
+    // the note, wherever its head is drawn.
+    const writtenY = (head: number): number => {
+      const { value, octave } = isChordNodeName(element.nodeName)
+        ? (element as ChordElementType).notes[head]
+        : {
+            value: (element as NoteElementType).note,
+            octave: (element as NoteElementType).octave,
+          };
+      return containerYOfStaffY(
+        this.#noteToYCoordinateAtBeatOffset(
+          value,
+          octave ?? undefined,
+          state.beatOffsets[index]
+        )
+      );
+    };
     return staffYs.flatMap((staffY, head) => {
       const bend = bends[head] ?? null;
       return bend === null
         ? []
-        : [{ y: headYs[head], dotY: dotYs[head], staffY, bend }];
+        : [
+            {
+              y: headYs[head],
+              dotY: dotYs[head],
+              staffY,
+              bend,
+              ...((bend.contour ?? null) === null
+                ? {}
+                : { contourFromY: writtenY(head) }),
+            },
+          ];
     });
+  }
+
+  // The heights (container Y) a contour on entry `index` passes through.
+  #contourYsOf(state: VoiceRenderState, index: number): number[] {
+    return this.#bendsOf(state, index).flatMap(
+      (head) => contourYs({ ...head, y: head.contourFromY ?? head.y }) ?? []
+    );
   }
 
   // Per head, kept for the render pass: layout asks for it often.
@@ -4298,7 +4361,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               note.bendToQuarterTone,
               note.note,
               note.octave ?? 4,
-              note.quarterTone
+              note.quarterTone,
+              parseBendContour(note.bendContour ?? null)
             ),
             this.#bendTargetAccidentals.get(note)
           ),
@@ -4374,7 +4438,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return Math.max(
       0,
       Math.max(inkRight, tail?.right ?? -Infinity) +
-        bendReserveWidthPx(bendTargetsWidthPx(heads, bendTargetWidthPx)) -
+        bendReserveWidthPx(
+          bendTargetsWidthPx(heads, bendTargetWidthPx),
+          bendLineLengthPx(heads)
+        ) -
         blankBefore -
         NOTE_SVG_WIDTH -
         this.#rightwardInkFootprint(voiceKey, state, index)
@@ -6135,8 +6202,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       },
       this.#graceInkY(state, j, above)
     );
-    if (above) {
-      const bendInk = this.#bendInk.get(element) ?? null;
+    const bendInk = this.#bendInk.get(element) ?? null;
+    if (bendInk !== null && bendInk.contours.length > 0) {
+      for (const segments of bendInk.contours) {
+        consider(bendInk, contourTopUnder(segments, span, above));
+      }
+    } else if (above) {
       consider(bendInk, bendInk?.top ?? null);
     }
     return outermostOrNull(tops, above);
@@ -6277,6 +6348,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             ...heads.flatMap(({ y, bend: { target } }) =>
               target === null ? [] : [y - target.steps * STAFF_Y_STEP]
             ),
+            ...spanOfYs(this.#contourYsOf(state, i)),
           ]),
           targetWidthPx: bendTargetWidthPx,
         });
@@ -6292,16 +6364,35 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           continue;
         }
         container.appendChild(createBendSvg(layout));
+        const amplitude = ({ shape }: BendLine) =>
+          shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0;
         this.#bendInk.set(element, {
           left: layout.lines[0].from.x,
           right: layout.rightX,
           top: Math.min(
             ...layout.lines.map(
-              ({ from, to, shape }) =>
-                Math.min(from.y, to.y) -
-                (shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0)
+              (line) =>
+                Math.min(
+                  line.from.y,
+                  line.to.y,
+                  ...(line.contour ?? []).map(({ y }) => y)
+                ) - amplitude(line)
             ),
             this.#bendTargetReachY(state, i, true) ?? Infinity
+          ),
+          bottom: Math.max(
+            ...layout.lines.map(
+              (line) =>
+                Math.max(
+                  line.from.y,
+                  line.to.y,
+                  ...(line.contour ?? []).map(({ y }) => y)
+                ) + amplitude(line)
+            ),
+            this.#bendTargetReachY(state, i, false) ?? -Infinity
+          ),
+          contours: layout.lines.flatMap(({ contour }) =>
+            contour === null ? [] : [contourSegments(contour)]
           ),
         });
       }
@@ -7919,6 +8010,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       ...state.elements.flatMap(
         (_, index) => this.#bendTargetReachY(state, index, above) ?? []
       ),
+      ...state.elements.flatMap((_, index) => {
+        const ys = this.#contourYsOf(state, index);
+        return ys.length === 0
+          ? []
+          : [above ? Math.min(...ys) : Math.max(...ys)];
+      }),
     ];
     if (tipYs.length === 0) {
       return null;

@@ -74,7 +74,9 @@ function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
 // Merged tones dedupe by pitch and don't carry an arrow.
 function hasBend(element: NoteOrChordElementType): boolean {
   return isNoteNodeName(element.nodeName)
-    ? (element.bend ?? null) !== null || (element.bendTo ?? null) !== null
+    ? (element.bend ?? null) !== null ||
+        (element.bendTo ?? null) !== null ||
+        ((element as NoteElementType).bendContour ?? null) !== null
     : (element as ChordElementType).toneBends.some((bend) => bend !== null);
 }
 

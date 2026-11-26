@@ -1808,6 +1808,23 @@ describe('bend', () => {
     warn.mockRestore();
   });
 
+  it('draws a contour standalone, warning about bad pitches and a bend beside it', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'A');
+    noteElement.setAttribute('bend', 'down');
+    noteElement.bendContour = 'G5,H4,B4';
+    expect(noteElement.getAttribute('bend-contour')).toBe('G5,H4,B4');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"H4"'));
+    document.body.appendChild(noteElement);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('bend="down" is ignored beside bend-contour')
+    );
+    const contour = noteElement.shadowRoot!.querySelector('.bend-contour');
+    expect(contour?.getAttribute('d')).toMatch(/^M [^C]+ C [^C]+ C [^C]+$/);
+    warn.mockRestore();
+  });
+
   it('warns once connected about a target that lies the other way', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;

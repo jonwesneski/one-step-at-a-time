@@ -223,6 +223,19 @@ describe('detectCombinableGroups', () => {
     expect(combine(marked('C', 'sub.'), marked('E', 'dolce'))).toBe(0);
   });
 
+  it('never combines a note with a bend contour', () => {
+    const contoured = note('C', 4);
+    contoured.setAttribute('bend-contour', 'G4');
+    expect(
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([contoured], [0])],
+          [2, voiceInput([note('E', 4)], [0])],
+        ])
+      )
+    ).toHaveLength(0);
+  });
+
   it('combines a swell and dynamic-end only when both match', () => {
     const marked = (pitch: string, swell: string, dynamicEnd: string) => {
       const element = note(pitch, 4);

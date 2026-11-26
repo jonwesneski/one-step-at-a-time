@@ -27,6 +27,7 @@ import {
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
+  STAFF_Y_STEP,
   TECHNIQUE_LABEL_FONT_SIZE_PX,
   TECHNIQUE_LABEL_GAP_PX,
   TRIANGLE_OUTSIDE_STAFF_PX,
@@ -1957,6 +1958,37 @@ describe('staffNotationBase bends', () => {
       document.body.innerHTML = '';
     }
     warn.mockRestore();
+  });
+
+  it('keeps room above the stave for a contour’s highest pitch', () => {
+    const contour = (pitches: string) =>
+      renderStaff(
+        `<music-note note="A" octave="4" duration="whole" bend-contour="${pitches}"></music-note>`
+      ).staff.contentVerticalSpace.top;
+    const low = contour('B4,G4');
+    document.body.innerHTML = '';
+    const high = contour('B4,E6,G4');
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('keeps its points where a later clef change leaves its note', () => {
+    const endOf = (later: string) => {
+      const { staff } = renderStaff(
+        `<music-note note="A" octave="4" duration="quarter" bend-contour="C5,E5"></music-note>
+         <music-note note="A" octave="4" duration="quarter"></music-note>
+         ${later}
+         <music-note note="A" octave="3" duration="half"></music-note>`
+      );
+      const d =
+        staff.shadowRoot.querySelector('.bend-contour')?.getAttribute('d') ??
+        '';
+      document.body.innerHTML = '';
+      return d.trim().split(' ').map(Number);
+    };
+    const plain = endOf('');
+    const [, , fromY] = plain;
+    expect(plain.pop()).toBeCloseTo(fromY - 4 * STAFF_Y_STEP, 0);
+    expect(endOf('<music-clef type="bass"></music-clef>')).toEqual(endOf(''));
   });
 
   it('stops a bend before a mid-bar barline', () => {

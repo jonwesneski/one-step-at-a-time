@@ -8,6 +8,10 @@ import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
+import {
+  bendContourWarning,
+  parseBendContour,
+} from '../rules/bendContourRules';
 import { slurStyleWarning } from '../rules/connectorPlacementRules';
 import { swellAttributeWarning } from '../rules/dynamicsRules';
 import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
@@ -201,6 +205,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} dynamic-text - Italic text straight after the dynamic, on its baseline (", ma distinto"). It moves with the marking and runs on over later bars of its row. Needs `dynamic`.
  * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando="start"`, on a `<music-tremolo>` member and on a triangle notehead. On a note slotted in a chord it bends just that tone, whatever the chord's own `bend`.
  * @attr {Note} bend-to - The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there.
+ * @attr {string} bend-contour - Approximate pitches a free line passes through after the note, comma-separated with their octaves (`G5,B4,D6`; an accidental is ignored): evenly spaced along the line, the last at its end, joined by a smooth curve that is level at each peak and trough. One pitch draws a straight line. `bend` beside it is ignored, with a warning; `bend-to` becomes its last point, drawn in parentheses. On a note slotted in a chord it bends just that tone. Allowed on an unpitched note.
  * @attr {QuarterTone} bend-to-quarter-tone - `up` / `down`: raises or lowers `bend-to` by a quarter-tone.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
@@ -288,6 +293,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
+      'bend-contour',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
@@ -719,6 +725,17 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('bend-to');
     } else {
       this.setAttribute('bend-to', value);
+    }
+  }
+
+  get bendContour(): string | null {
+    return this.readAttribute('bend-contour');
+  }
+  set bendContour(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('bend-contour');
+    } else {
+      this.setAttribute('bend-contour', value);
     }
   }
 
@@ -1891,6 +1908,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'bend' ||
       name === 'bend-to' ||
       name === 'bend-to-quarter-tone' ||
+      name === 'bend-contour' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -2076,12 +2094,19 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       );
       return;
     }
+    if (changed === 'bend-contour') {
+      const contourWarning = bendContourWarning(newValue);
+      if (contourWarning !== null) {
+        console.warn(`[music-note] ${contourWarning}`);
+      }
+    }
     if (
       !this.isConnected ||
       (changed !== null &&
         changed !== 'bend' &&
         changed !== 'bend-to' &&
         changed !== 'bend-to-quarter-tone' &&
+        changed !== 'bend-contour' &&
         changed !== 'glissando')
     ) {
       return;
@@ -2089,6 +2114,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     const warning = bendConsistencyWarning({
       bend: this.bend,
       bendTo: this.bendTo,
+      contour: parseBendContour(this.bendContour) !== null,
       glissando: this.glissando,
       isChord: false,
       inTremoloGroup: this.closest(MUSIC_TREMOLO) !== null,
@@ -2319,7 +2345,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.bendToQuarterTone,
       this.note,
       this.octave ?? 4,
-      this.quarterTone
+      this.quarterTone,
+      parseBendContour(this.bendContour)
     );
   }
 
